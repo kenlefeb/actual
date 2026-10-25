@@ -954,6 +954,105 @@ describe('API CRUD operations', () => {
     expect(transactions).toHaveLength(1);
   });
 
+  test('transaction mutations finish before immediate reads and budget close', async () => {
+    const accountId = await api.createAccount(
+      { name: 'mutation-check' },
+      100000,
+    );
+    const group = await api.createCategoryGroup({ name: 'Mutation checks' });
+    const groceries = await api.createCategory({
+      name: 'Groceries',
+      group_id: group,
+    });
+    const software = await api.createCategory({
+      name: 'Software',
+      group_id: group,
+    });
+    await api.importTransactions(accountId, [
+      {
+        date: '2026-10-25',
+        amount: -9900,
+        imported_id: 'mutation-split',
+        account: accountId,
+        subtransactions: [
+          {
+            amount: -4000,
+            category: groceries,
+            notes: 'Groceries #Ken #Ethan',
+          },
+          { amount: -5900, category: software, notes: 'Software #Ken #Wendee' },
+        ],
+      },
+      {
+        date: '2026-10-25',
+        amount: -500,
+        imported_id: 'mutation-delete',
+        account: accountId,
+      },
+    ]);
+    const before = await api.getTransactions(
+      accountId,
+      '2026-10-01',
+      '2026-10-31',
+    );
+    const parent = before.find(
+      transaction => transaction.imported_id === 'mutation-split',
+    );
+    const disposable = before.find(
+      transaction => transaction.imported_id === 'mutation-delete',
+    );
+    assert(parent);
+    assert(disposable);
+    const child = parent.subtransactions?.find(
+      transaction => transaction.amount === -4000,
+    );
+    assert(child);
+
+    await api.updateTransaction(child.id, {
+      notes: 'Verified edit #Ken #Ethan',
+    });
+    const after = await api.getTransactions(
+      accountId,
+      '2026-10-01',
+      '2026-10-31',
+    );
+    expect(
+      after.find(transaction => transaction.id === parent.id)?.subtransactions,
+    ).toEqual(
+      parent.subtransactions?.map(transaction =>
+        transaction.id === child.id
+          ? { ...transaction, notes: 'Verified edit #Ken #Ethan' }
+          : transaction,
+      ),
+    );
+    await api.deleteTransaction(disposable.id);
+    expect(
+      await api.getTransactions(accountId, '2026-10-01', '2026-10-31'),
+    ).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: disposable.id })]),
+    );
+    expect(await api.getAccountBalance(accountId)).toBe(90100);
+
+    await api.shutdown();
+    await api.init({ dataDir: path.join(__dirname, '/mocks/budgets/') });
+    await api.loadBudget(budgetName);
+    const restored = await api.getTransactions(
+      accountId,
+      '2026-10-01',
+      '2026-10-31',
+    );
+    expect(
+      restored.find(transaction => transaction.id === parent.id)
+        ?.subtransactions,
+    ).toEqual(
+      after.find(transaction => transaction.id === parent.id)?.subtransactions,
+    );
+    expect(restored.some(transaction => transaction.id === disposable.id)).toBe(
+      false,
+    );
+    expect(await api.getAccountBalance(accountId)).toBe(90100);
+  });
+
   // apis: mergeTransactions
   test('Transactions: successfully merge two transactions', async () => {
     const accountId = await api.createAccount({ name: 'test-account' }, 0);

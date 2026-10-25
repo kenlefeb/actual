@@ -189,6 +189,76 @@ describe('API handlers', () => {
     });
   });
 
+  describe('transaction mutation completion', () => {
+    beforeEach(global.emptyDatabase());
+
+    beforeEach(async () => {
+      await prefs.loadPrefs();
+      await db.insertAccount({ id: 'mutation-account', name: 'Checking' });
+      await db.insertTransaction({
+        id: 'mutation-transaction',
+        account: 'mutation-account',
+        date: '2026-10-25',
+        amount: -9900,
+        notes: 'Original note',
+      });
+    });
+
+    test.each(['update', 'delete'] as const)(
+      '%s awaits the asynchronous batch result',
+      async operation => {
+        let complete: () => void = () => undefined;
+        const transaction = await db.getTransaction('mutation-transaction');
+        assert(transaction);
+        const result = {
+          added: [],
+          updated: [transaction],
+          deleted: [transaction],
+          errors: [],
+        };
+        const batch = new Promise<typeof result>(resolve => {
+          complete = () => resolve(result);
+        });
+        handlers['transactions-batch-update'] = vi.fn(() => batch);
+
+        const pending =
+          operation === 'update'
+            ? handlers['api/transaction-update']({
+                id: 'mutation-transaction',
+                fields: { notes: 'Updated note' },
+              })
+            : handlers['api/transaction-delete']({
+                id: 'mutation-transaction',
+              });
+
+        complete();
+        await expect(pending).resolves.toEqual([transaction]);
+        expect(handlers['transactions-batch-update']).toHaveBeenCalledOnce();
+      },
+    );
+
+    test.each(['update', 'delete'] as const)(
+      '%s propagates batch failures to the caller',
+      async operation => {
+        handlers['transactions-batch-update'] = vi
+          .fn()
+          .mockRejectedValue(new Error('Batch write failed'));
+
+        const pending =
+          operation === 'update'
+            ? handlers['api/transaction-update']({
+                id: 'mutation-transaction',
+                fields: { notes: 'Updated note' },
+              })
+            : handlers['api/transaction-delete']({
+                id: 'mutation-transaction',
+              });
+
+        await expect(pending).rejects.toThrow('Batch write failed');
+      },
+    );
+  });
+
   describe('api/rule-create', () => {
     beforeEach(global.emptyDatabase());
 

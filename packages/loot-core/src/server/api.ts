@@ -588,14 +588,18 @@ handlers['api/transaction-update'] = withMutation(async function ({
     q('transactions').filter({ id }).select('*').options({ splits: 'grouped' }),
   );
   const transactions = ungroupTransactions(data);
+  const transaction = transactions.find(transaction => transaction.id === id);
 
-  if (transactions.length === 0) {
+  if (!transaction) {
     return [];
   }
 
-  // @ts-expect-error - fix me
-  const { diff } = updateTransaction(transactions, { id, ...fields });
-  return handlers['transactions-batch-update'](diff)['updated'];
+  const { diff } = updateTransaction(transactions, {
+    ...transaction,
+    ...fields,
+    id,
+  });
+  return (await handlers['transactions-batch-update'](diff))['updated'];
 });
 
 handlers['api/transaction-delete'] = withMutation(async function ({ id }) {
@@ -610,7 +614,7 @@ handlers['api/transaction-delete'] = withMutation(async function ({ id }) {
   }
 
   const { diff } = deleteTransaction(transactions, id);
-  return handlers['transactions-batch-update'](diff)['deleted'];
+  return (await handlers['transactions-batch-update'](diff))['deleted'];
 });
 
 handlers['api/transactions-merge'] = withMutation(async function ({ ids }) {

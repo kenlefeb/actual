@@ -617,3 +617,10 @@ package list in `.github/workflows/cut-release-branch.yml`. Settings must show t
 custom client and server versions. Preserve the upstream base version separately
 in `actual-hosting/source.json`; update its `buildVersion`, patch hashes and
 provenance before building. Never publish changed source under an existing version.
+
+Every new private application version must have fresh release notes in
+`actual-hosting/release-notes/<buildVersion>.md`, following Actual’s published
+Features, Enhancements, Bugfixes and Maintenance format. The title must identify
+“Ken’s Actual fork”; explicitly state this is an unofficial fork prerelease and
+identify its upstream base. Run the hosting repository’s release-note checks and
+include the note with the release artifact. Never reuse a prior version’s note.

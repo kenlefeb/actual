@@ -9,7 +9,7 @@ import { ListBox, ListBoxItem, Popover } from 'react-aria-components';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { SvgAdd } from '@actual-app/components/icons/v0';
-import { Input } from '@actual-app/components/input';
+import { defaultInputClassName } from '@actual-app/components/input';
 import { styles } from '@actual-app/components/styles';
 import { theme } from '@actual-app/components/theme';
 import { send } from '@actual-app/core/platform/client/connection';
@@ -45,7 +45,7 @@ export function TagAutocomplete({
     (itemId: string) => autocompleteId + '|' + itemId,
     [autocompleteId],
   );
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const [cursorPosition, setCursorPosition] = useCursorPosition(inputRef);
   const [startIdx, endIdx] = useCurrentWordRange(inputValue, cursorPosition);
@@ -116,7 +116,11 @@ export function TagAutocomplete({
     setCursorPosition(startIdx + tagObj.tag.length + 1 + space.length);
   }
 
-  function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+  function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === 'Enter' && e.shiftKey && !e.ctrlKey && !e.metaKey) {
+      e.stopPropagation();
+      return;
+    }
     if (!showPopup) {
       onKeyDown?.(e);
       return;
@@ -151,14 +155,28 @@ export function TagAutocomplete({
 
   return (
     <>
-      <Input
+      <textarea
         ref={inputRef}
         name="notes"
         aria-label={t('Notes')}
         aria-expanded={showPopup}
         aria-controls={id('popover')}
         role="combobox"
-        style={inputStyle}
+        className={defaultInputClassName}
+        rows={3}
+        title={t('Shift+Enter for a new line')}
+        style={{
+          ...inputStyle,
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: 'calc(100% - 2px)',
+          minHeight: 80,
+          zIndex: 1,
+          resize: 'vertical',
+          whiteSpace: 'pre-wrap',
+          overflow: 'auto',
+        }}
         value={inputValue}
         onChange={e => {
           setIsOpen(true);
@@ -167,8 +185,10 @@ export function TagAutocomplete({
         tabIndex={-1}
         onKeyDown={handleKeyDown}
         onFocus={() => setIsOpen(true)}
-        onBlur={onBlur}
-        onUpdate={onUpdate}
+        onBlur={event => {
+          onUpdate?.(event.currentTarget.value);
+          onBlur?.(event);
+        }}
         autoComplete="off"
       />
 

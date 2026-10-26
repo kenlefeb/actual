@@ -2300,7 +2300,10 @@ function NotesCell({
           }
           style={{ ...styles.tooltip }}
           placement="bottom start"
-          triggerProps={{ delay: 500, isDisabled: !isTruncated }}
+          triggerProps={{
+            delay: 500,
+            isDisabled: !isTruncated && !displayedNote.includes('\n'),
+          }}
         >
           <UnexposedCellContent {...props} ref={setTextRef} />
         </Tooltip>

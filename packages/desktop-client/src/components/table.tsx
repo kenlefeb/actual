@@ -1371,7 +1371,7 @@ export function useTableNavigator<T extends TableItem>(
         switch (e.key) {
           case 'ArrowUp':
           case 'k':
-            if (e.target.tagName !== 'INPUT') {
+            if (!['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
               e.preventDefault();
               onMove('up');
             }
@@ -1379,7 +1379,7 @@ export function useTableNavigator<T extends TableItem>(
 
           case 'ArrowDown':
           case 'j':
-            if (e.target.tagName !== 'INPUT') {
+            if (!['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
               e.preventDefault();
               onMove('down');
             }

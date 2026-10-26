@@ -52,6 +52,26 @@ test('mobile note retains document boundaries and opens a receipt without enteri
     await expect(
       page.getByRole('textbox', { name: 'Notes', exact: true }).nth(1),
     ).toHaveValue('Software #Ken #Wendee');
+    const softwareNote = 'Software #Ken #Wendee\nSPLIT PHONE CHECK';
+    await page
+      .getByRole('textbox', { name: 'Notes', exact: true })
+      .nth(1)
+      .fill(softwareNote);
+    await page.getByRole('heading', { name: 'Split', exact: true }).click();
+    await page
+      .getByRole('button', { name: 'Save changes', exact: true })
+      .click();
+    await item.click();
+    await expect(notes).toHaveValue(note);
+    await expect(
+      page.getByRole('textbox', { name: 'Notes', exact: true }).nth(0),
+    ).toHaveValue('Groceries #Ken #Ethan');
+    await expect(
+      page.getByRole('textbox', { name: 'Notes', exact: true }).nth(1),
+    ).toHaveValue(softwareNote);
+    await expect(
+      page.getByRole('textbox', { name: 'Notes', exact: true }).nth(1),
+    ).toHaveJSProperty('tagName', 'TEXTAREA');
     await page.getByRole('button', { name: 'Back', exact: true }).click();
     const listURL = page.url();
     const receipt = page.getByRole('link', {
@@ -66,6 +86,31 @@ test('mobile note retains document boundaries and opens a receipt without enteri
     await opened.close();
     await item.click();
     await expect(notes).toHaveValue(note);
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const parentNote = page
+      .getByTestId('transaction-table')
+      .getByTestId('notes')
+      .filter({ hasText: 'MOBILE RECEIPT CHECK' });
+    await parentNote.hover();
+    await expect(page.getByRole('tooltip')).toContainText(
+      'PAPERWORK:synthetic-id',
+    );
+    await parentNote.click();
+    const desktopNote = page.getByRole('combobox', {
+      name: 'Notes',
+      exact: true,
+    });
+    await expect(desktopNote).toHaveValue(note);
+    await desktopNote.press('Tab');
+    await parentNote.click();
+    await expect(desktopNote).toHaveValue(note);
+    await desktopNote.press('End');
+    await desktopNote.press('Shift+Enter');
+    await desktopNote.pressSequentially('Desktop check');
+    await desktopNote.press('Tab');
+    await parentNote.click();
+    await expect(desktopNote).toHaveValue(note + '\nDesktop check');
   } finally {
     await page.close();
   }

@@ -308,7 +308,7 @@ function prettyDate(date: string) {
 }
 
 function renderTransactions(extraProps?: Partial<LiveTransactionTableProps>) {
-  let transactions = generateTransactions(5, [6]);
+  let transactions = extraProps?.transactions ?? generateTransactions(5, [6]);
   // Hardcoding the first value makes it easier for tests to do
   // various this
   transactions[0].amount = -2777;
@@ -374,13 +374,15 @@ function queryField(
 
 async function _editField(field: Element, container: HTMLElement) {
   // We only short-circuit this for inputs
-  const input = field.querySelector(`input`);
+  const input = field.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+    `input, textarea`,
+  );
   if (input) {
     expect(container.ownerDocument.activeElement).toBe(input);
     return input;
   }
 
-  let element: HTMLInputElement;
+  let element: HTMLInputElement | HTMLTextAreaElement;
   const buttonQuery = 'button,div[data-testid=cell-button]';
 
   if (field.querySelector(buttonQuery)) {
@@ -390,7 +392,9 @@ async function _editField(field: Element, container: HTMLElement) {
     expect(element).toBeTruthy();
   } else {
     await userEvent.click(field.querySelector('div')!);
-    element = field.querySelector('input')!;
+    element = field.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      'input, textarea',
+    )!;
     expect(element).toBeTruthy();
     expect(container.ownerDocument.activeElement).toBe(element);
   }
@@ -466,7 +470,9 @@ function expectToBeEditingField(
   } else {
     field = queryField(container, name, '', rowIndex);
   }
-  const input: HTMLInputElement = field.querySelector(':focus')!;
+  const input = field.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+    ':focus',
+  )!;
   expect(input).toBeTruthy();
   expect(container.ownerDocument.activeElement).toBe(input);
   return input;
@@ -691,10 +697,10 @@ describe('Transactions', () => {
     await userEvent.type(input, '[Tab]');
     expectToBeEditingField(container, 'notes', 2);
 
-    // Shift+enter/tab goes up/left
+    // Shift+Enter inserts a note newline; Shift+Tab still moves left
     input = await editField(container, 'notes', 2);
     await userEvent.type(input, '{Shift>}[Enter]{/Shift}');
-    expectToBeEditingField(container, 'notes', 1);
+    expectToBeEditingField(container, 'notes', 2);
 
     input = await editField(container, 'payee', 2);
     await userEvent.type(input, '{Shift>}[Tab]{/Shift}');
@@ -1045,7 +1051,11 @@ describe('Transactions', () => {
     updateProps({ isAdding: true });
     expect(queryByTestId('new-transaction')).toBeTruthy();
 
-    let input = queryNewField(container, 'date', 'input');
+    let input: HTMLInputElement | HTMLTextAreaElement = queryNewField(
+      container,
+      'date',
+      'input',
+    );
 
     // The date input should exist and have a default value
     expect(input).toBeTruthy();
@@ -1661,6 +1671,27 @@ describe('Transactions', () => {
     expect(queryField(container, 'credit', '', 2).textContent).toBe('0.00');
   });
 
+  test('preserves parent line breaks when opening and blurring its note', async () => {
+    const transactions = generateTransactions(3, [0]);
+    transactions[0].notes = 'Receipt\nMOBILE MULTILINE PILOT';
+    const { container, getTransactions } = renderTransactions({ transactions });
+    const before = structuredClone(getTransactions());
+    const input = await editField(container, 'notes', 0);
+    expect(input).toHaveValue(transactions[0].notes);
+    fireEvent.blur(input);
+    expect(getTransactions()).toEqual(before);
+  });
+
+  test('edits multiple lines with Shift+Enter without saving early', async () => {
+    const transactions = generateTransactions(1);
+    transactions[0].notes = 'First';
+    const { container, getTransactions } = renderTransactions({ transactions });
+    const input = await editField(container, 'notes', 0);
+    await userEvent.click(input);
+    await userEvent.keyboard('{End}{Shift>}{Enter}{/Shift}Second{Tab}');
+    expect(getTransactions()[0].notes).toBe('First\nSecond');
+  });
+
   describe('Tag Autocomplete', () => {
     test('adding a tag at the end of the note', async () => {
       const { container, getTransactions } = renderTransactions();
@@ -1808,6 +1839,16 @@ describe('Transactions', () => {
       expect(
         within(tooltip).getByRole('button', { name: '#groceries' }),
       ).toBeInTheDocument();
+    });
+
+    test('shows all lines even when the note fits horizontally', async () => {
+      isOverflowing = false;
+      const transactions = generateTransactions(1);
+      transactions[0].notes = 'First\nSecond';
+      const { container } = renderTransactions({ transactions });
+      await userEvent.hover(queryField(container, 'notes', 'span', 0));
+      const tooltip = await screen.findByRole('tooltip');
+      expect(tooltip.textContent).toBe('First\nSecond');
     });
 
     test('does not show a tooltip when the note fits without truncation', async () => {

@@ -606,3 +606,14 @@ When running the app for manual testing or demos, use **"View demo"** on the ini
 - Lage caches test results in `.lage/`. If tests behave unexpectedly, clear with `rm -rf .lage`.
 - Native modules (`better-sqlite3`, `bcrypt`) require build tools (`gcc`, `make`, `python3`). These are pre-installed in the Cloud VM.
 - All yarn commands must be run from the repository root, never from child workspaces.
+
+## Private customized build versions
+
+Every changed customized build must use a new semantic version with a prerelease
+suffix until Ken explicitly approves a stable release. Current series starts at
+`26.10.1-alpha.1`; use `alpha.2`, `alpha.3`, etc. for subsequent changes in this
+patch series. Keep all seven release-package versions aligned, following the
+package list in `.github/workflows/cut-release-branch.yml`. Settings must show the
+custom client and server versions. Preserve the upstream base version separately
+in `actual-hosting/source.json`; update its `buildVersion`, patch hashes and
+provenance before building. Never publish changed source under an existing version.

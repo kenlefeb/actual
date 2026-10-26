@@ -25,7 +25,7 @@ Prepare focused upstream branches from current upstream before submitting. Exclu
 
 [26.10.1-alpha.1](release-notes/26.10.1-alpha.1.md) and [26.10.1-alpha.2](release-notes/26.10.1-alpha.2.md) record the existing fork releases. These are historical copies; this documentation-only migration does not create a new application version.
 
-The separate private `kenlefeb/actual-hosting` repository retains CI, pinned patches, image promotion, backups, restoration, API helpers and paperwork integration. Its patch `sourceCommit` identifiers now resolve in this fork. Current deployment still uses the tested patch-based pipeline; switching CI to direct fork builds is a separate change requiring fresh build and restore checks. Do not copy credentials, server data, `.state`, or real paperwork into this public fork.
+The separate private `kenlefeb/actual-hosting` repository retains CI, pinned patches, image promotion, backups, restoration, API helpers and paperwork integration. Its patch `sourceCommit` identifiers now resolve in this fork. Starting with alpha.3, CI builds directly from a pinned development commit, verifies branch ancestry and records the commit in each artifact. Historical patch files remain only for recovery of earlier releases. Do not copy credentials, server data, `.state`, or real paperwork into this public fork.
 
 Start the existing local development service from the sibling hosting checkout:
 

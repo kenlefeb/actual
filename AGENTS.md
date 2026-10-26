@@ -615,7 +615,7 @@ suffix until Ken explicitly approves a stable release. Current series starts at
 patch series. Keep all seven release-package versions aligned, following the
 package list in `.github/workflows/cut-release-branch.yml`. Settings must show the
 custom client and server versions. Preserve the upstream base version separately
-in `actual-hosting/source.json`; update its `buildVersion`, patch hashes and
+in `actual-hosting/source.json`; update its `buildVersion`, fork commit and
 provenance before building. Never publish changed source under an existing version.
 
 Every new private application version must have fresh release notes in

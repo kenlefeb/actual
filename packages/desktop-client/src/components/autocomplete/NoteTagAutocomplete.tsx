@@ -17,7 +17,7 @@ import { addNotification } from '#notifications/notificationsSlice';
 import { useDispatch } from '#redux';
 
 type NoteTagAutocompleteProps = {
-  inputRef: RefObject<HTMLInputElement | null>;
+  inputRef: RefObject<HTMLInputElement | HTMLTextAreaElement | null>;
 };
 
 export function NoteTagAutocomplete({ inputRef }: NoteTagAutocompleteProps) {

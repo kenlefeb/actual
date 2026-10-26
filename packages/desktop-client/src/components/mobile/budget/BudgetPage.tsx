@@ -604,7 +604,7 @@ export function BudgetPage() {
       <SheetNameProvider name={monthUtils.sheetForMonth(startMonth)}>
         <SyncRefresh
           onSync={async () => {
-            void dispatch(sync());
+            await dispatch(sync());
           }}
         >
           {({ onRefresh }) => (

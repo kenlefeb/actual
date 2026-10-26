@@ -76,7 +76,8 @@ test.describe('Mobile Transactions', () => {
 - text: Date
 - textbox [disabled]: 2025-10-31
 - text: Cleared Notes
-- textbox [disabled]: just a note`);
+- textbox "Notes" [disabled]: just a note
+- text: just a note`);
   });
 
   test('creates a transaction from `/accounts/:id` page', async () => {

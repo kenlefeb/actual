@@ -31,6 +31,7 @@ import { FeatureErrorFallback } from './FeatureErrorFallback';
 import { GlobalKeys } from './GlobalKeys';
 import { MobileBankSyncAccountEditPage } from './mobile/banksync/MobileBankSyncAccountEditPage';
 import { MobileNavTabs } from './mobile/MobileNavTabs';
+import { MobileSyncStatus } from './mobile/MobileSyncStatus';
 import { TransactionEdit } from './mobile/transactions/TransactionEdit';
 import { NotificationsPage } from './news/NotificationsPage';
 import { Notifications } from './Notifications';
@@ -249,7 +250,12 @@ export function FinancesApp() {
                   />
                   <Notifications />
                   <BankSyncStatus />
-                  {isNarrowWidth && <MobilePageHeaderSlot />}
+                  {isNarrowWidth && (
+                    <>
+                      <MobilePageHeaderSlot />
+                      <MobileSyncStatus />
+                    </>
+                  )}
 
                   <Routes>
                     <Route

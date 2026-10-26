@@ -4,11 +4,11 @@ import type { RefObject } from 'react';
 import { useRefEventListener } from './useRefEventListener';
 
 export function useInputRefValue(
-  inputRef: RefObject<HTMLInputElement | null>,
+  inputRef: RefObject<HTMLInputElement | HTMLTextAreaElement | null>,
 ): [string, (newValue: string) => void] {
   const [value, setValue] = useState('');
-  useRefEventListener(inputRef, 'input', e =>
-    setValue((e.target as HTMLInputElement).value),
+  useRefEventListener(inputRef, 'input', () =>
+    setValue(inputRef.current?.value ?? ''),
   );
   useEffect(
     () => setValue(inputRef.current?.value ?? ''),
@@ -27,7 +27,9 @@ export function useInputRefValue(
     // meaning no event will get fired. Or Something.
     // oxlint-disable-next-line typescript/unbound-method
     const nativeSetter = Object.getOwnPropertyDescriptor(
-      window.HTMLInputElement.prototype,
+      inputRef.current instanceof HTMLTextAreaElement
+        ? window.HTMLTextAreaElement.prototype
+        : window.HTMLInputElement.prototype,
       'value',
     )?.set;
     nativeSetter?.call(inputRef.current, newValue);

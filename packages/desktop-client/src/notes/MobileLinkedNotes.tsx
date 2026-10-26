@@ -6,6 +6,7 @@ import { theme } from '@actual-app/components/theme';
 import { isElectron } from '@actual-app/core/shared/environment';
 import { css } from '@emotion/css';
 
+import { Link } from '#components/common/Link';
 import { addNotification } from '#notifications/notificationsSlice';
 import { useDispatch } from '#redux';
 
@@ -49,18 +50,25 @@ export function MobileLinkedNotes({
           }),
         );
       }
-    } else {
-      // Open URL in browser
-      const normalizedUrl = normalizeUrl(url);
-      window.Actual?.openURLInBrowser(normalizedUrl);
     }
   };
 
   return (
     <>
-      <Text className={linkStyles} onClick={handleClick}>
-        {displayText}
-      </Text>
+      {isFilePath ? (
+        <Text className={linkStyles} onClick={handleClick}>
+          {displayText}
+        </Text>
+      ) : (
+        <Link
+          variant="external"
+          to={normalizeUrl(url)}
+          className={linkStyles}
+          onClick={event => event.stopPropagation()}
+        >
+          {displayText}
+        </Link>
+      )}
       {separator}
     </>
   );

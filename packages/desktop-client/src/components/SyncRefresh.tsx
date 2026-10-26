@@ -14,8 +14,11 @@ export function SyncRefresh({ onSync, children }: SyncRefreshProps) {
 
   async function onSync_() {
     setSyncing(true);
-    await onSync();
-    setSyncing(false);
+    try {
+      await onSync();
+    } finally {
+      setSyncing(false);
+    }
   }
 
   return <>{children({ refreshing: syncing, onRefresh: onSync_ })}</>;

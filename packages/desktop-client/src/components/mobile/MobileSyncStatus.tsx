@@ -17,7 +17,8 @@ export function MobileSyncStatus() {
   const { isSyncing, syncState } = useSyncStatus();
   const local =
     server === 'no-server' || syncState === 'disabled' || syncState === 'local';
-  const offline = server === 'offline' || syncState === 'offline';
+  const offline =
+    syncState === 'offline' || (syncState === null && server === 'offline');
   const label = local
     ? t('Local file — not syncing')
     : isSyncing

@@ -36,12 +36,16 @@ describe('MobileSyncStatus', () => {
       </TestProviders>,
     );
     expect(screen.getByRole('status')).toHaveTextContent('Server online');
-    await act(() => backend.emit({ type: 'start' }));
+    await act(async () => {
+      backend.emit({ type: 'start' });
+    });
     expect(screen.getByRole('status')).toHaveTextContent('Syncing…');
     expect(
       screen.getByRole('button', { name: 'Sync with server' }),
     ).toBeDisabled();
-    await act(() => backend.emit({ type: 'success' }));
+    await act(async () => {
+      backend.emit({ type: 'success' });
+    });
     expect(screen.getByRole('status')).toHaveTextContent('Synced');
     expect(
       screen.getByRole('button', { name: 'Sync with server' }),
@@ -54,15 +58,41 @@ describe('MobileSyncStatus', () => {
         <MobileSyncStatus />
       </TestProviders>,
     );
-    await act(() => backend.emit({ type: 'error', subtype: 'network' }));
+    await act(async () => {
+      backend.emit({ type: 'error', subtype: 'network' });
+    });
     expect(screen.getByRole('status')).toHaveTextContent(
       'Offline — changes saved on this device',
     );
     expect(
       screen.getByRole('button', { name: 'Sync with server' }),
     ).toBeEnabled();
-    await act(() => backend.emit({ type: 'start' }));
-    await act(() => backend.emit({ type: 'error', subtype: 'out-of-sync' }));
+    await act(async () => {
+      backend.emit({ type: 'start' });
+    });
+    await act(async () => {
+      backend.emit({ type: 'error', subtype: 'out-of-sync' });
+    });
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Sync failed — try again',
+    );
+  });
+
+  it('uses completed sync results after reconnecting from an offline launch', async () => {
+    backend.status = 'offline';
+    render(
+      <TestProviders>
+        <MobileSyncStatus />
+      </TestProviders>,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('Offline');
+    await act(async () => {
+      backend.emit({ type: 'success' });
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('Synced');
+    await act(async () => {
+      backend.emit({ type: 'error', subtype: 'out-of-sync' });
+    });
     expect(screen.getByRole('status')).toHaveTextContent(
       'Sync failed — try again',
     );

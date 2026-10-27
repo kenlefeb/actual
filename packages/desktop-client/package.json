@@ -102,6 +102,7 @@
     "#hooks/useSplitsExpanded": "./src/hooks/useSplitsExpanded.tsx",
     "#hooks/useSpreadsheet": "./src/hooks/useSpreadsheet.tsx",
     "#hooks/*": "./src/hooks/*.ts",
+    "#data/*": "./src/data/*",
     "#auth/AuthProvider": "./src/auth/AuthProvider.tsx",
     "#auth/ProtectedRoute": "./src/auth/ProtectedRoute.tsx",
     "#auth/*": "./src/auth/*.ts",

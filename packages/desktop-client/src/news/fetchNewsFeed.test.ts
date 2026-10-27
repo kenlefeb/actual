@@ -1,7 +1,14 @@
 import type * as PlatformModule from '@actual-app/core/shared/platform';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { fetchNewsFeed, getNewsFeedUrl } from './fetchNewsFeed';
+import forkNews from '#data/fork-news.json';
+import upstreamNews from '#data/news.json';
+
+import {
+  fetchNewsFeed,
+  getNewsFeedUrl,
+  mergeNewsEntries,
+} from './fetchNewsFeed';
 import { newsFeedFixture } from './fixtures';
 
 vi.mock('../data/news.json?url', () => ({ default: '/assets/news.json' }));
@@ -85,5 +92,60 @@ describe('fetchNewsFeed', () => {
 
     stubResponse(newsFeedFixture, false);
     await expect(fetchNewsFeed()).rejects.toThrow('HTTP 500');
+  });
+});
+
+describe('bundled news feed', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it('merges bundled upstream and fork entries newest first without fetching', async () => {
+    vi.stubEnv('REACT_APP_NEWS_FEED_URL', '');
+    vi.stubEnv('REACT_APP_NEWS_FEED_BUNDLED', 'true');
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const { entries } = await fetchNewsFeed();
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(entries.map(e => e.id)).toEqual(
+      [...forkNews.entries, ...upstreamNews.entries]
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .map(e => e.id),
+    );
+    expect(entries[0].id).toBe(forkNews.entries[0].id);
+  });
+
+  it('keeps fork entries ahead of same-day upstream entries', () => {
+    const upstream = {
+      ...newsFeedFixture.entries[0],
+      id: 'up',
+      date: '2026-10-26',
+    };
+    const fork = {
+      ...newsFeedFixture.entries[0],
+      id: 'fork',
+      date: '2026-10-26',
+    };
+    expect(mergeNewsEntries([upstream], [fork]).map(e => e.id)).toEqual([
+      'fork',
+      'up',
+    ]);
+  });
+
+  it('still prefers an explicit URL override', async () => {
+    vi.stubEnv('REACT_APP_NEWS_FEED_URL', 'http://localhost:3000/news.json');
+    vi.stubEnv('REACT_APP_NEWS_FEED_BUNDLED', 'true');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(newsFeedFixture),
+      }),
+    );
+    await expect(fetchNewsFeed()).resolves.toEqual(newsFeedFixture);
   });
 });

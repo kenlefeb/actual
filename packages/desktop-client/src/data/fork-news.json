@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "id": "fork-release-26.10.1-alpha.8",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.8 — Ken's Actual fork",
+      "date": "2026-10-27",
+      "version": "26.10.1-alpha.8",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.8.md",
+      "body": "**Unofficial fork prerelease.** Based on Actual 26.10.0 (`2bebdbaae0b701120a8cad9d56aafd64fa04c577`); not an official Actual Budget release.\n\nA schedule's date can now follow another schedule. With **Business calendars** turned on under Settings → Experimental features, choose \"Relative to another schedule\" as a schedule's date and set an offset, such as a deposit \"2 business days before Payday\".",
+      "details": "#### Features\n\n- Date a schedule relative to another schedule: a number of days or business days before or after it, counted from the other schedule's moved date.\n\n#### Enhancements\n\n- Business days can follow a chosen business calendar, and the result can again be moved before or after non-business days.\n- Next dates, upcoming dates, account previews, posted transactions, forecasts, budget templates and transaction matching all use relative dates.\n- Descriptions read, for example, \"2 business days before Payday (U.S. Federal Holidays)\".\n- Editing the other schedule or a business calendar updates relative schedules; undo restores both.\n- If the other schedule is deleted, the relative schedule shows \"Source schedule was deleted\" until you choose another one or delete it.\n\n#### Bugfixes\n\n- No fork bug fixes in this release; earlier improvements are retained.\n\n#### Maintenance\n\n- Record relative schedule dates as an OpenSpec specification with tests for date math, matching, previews, the schedule editor and source changes.\n\n#### Known limitations\n\n- Experimental and off by default.\n- A relative schedule cannot be the source of another relative schedule, and offsets go up to 366.\n- Skipping or posting the source schedule does not skip or post relative schedules.\n- If the source schedule is deleted on another device, relative schedules there update their next dates the next time they are recomputed.\n- Releases published on the same day may show the \"What's new\" message for any of them; the Notifications page lists all.\n- Synthetic staging only; no real financial data or production paperwork migration. No iPhone acceptance test is claimed."
+    },
+    {
       "id": "fork-release-26.10.1-alpha.7",
       "type": "release",
       "title": "Release 26.10.1-alpha.7 — Ken's Actual fork",

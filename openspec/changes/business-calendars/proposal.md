@@ -10,7 +10,7 @@ Paychecks and many bills fall on "business days", but Actual only knows Saturday
 - A calendar defines its non-working weekdays and a set of holiday rules, such as a fixed date ("July 4"), an nth weekday of a month ("4th Thursday of November") and a last weekday of a month ("last Monday of May").
 - A holiday rule can carry an observance shift for weekend holidays (for example Saturday to Friday, Sunday to Monday, or no shift).
 - Each calendar can add or remove specific dates for a given year (exceptions), such as a one-off company closure or a late-published holiday.
-- Provide at least one preset calendar (US Federal Reserve) that users can copy and edit.
+- Provide preset calendars that users can copy and edit: U.S. Federal Holidays and U.S. Federal Reserve.
 - Answer whether a date is a business day in a calendar, and find the nearest business day on or before / on or after a date.
 - Provide a desktop screen to create, view and edit calendars, and to preview a year's resulting non-business days. Mobile management is deferred until schedules use calendars.
 - Ship behind an experimental feature flag, fully translated, so it can be contributed upstream.
@@ -33,8 +33,8 @@ None.
 
 ## Impact
 
-- Data: new synced budget tables for calendars, holiday rules and exceptions, with a migration; existing budgets are unaffected until a calendar is created.
+- Data: one new synced budget table for calendars (rules and exceptions stored as JSON), with a migration; existing budgets are unaffected until a calendar is created.
 - Code: `packages/loot-core` (model types, server handlers, business-day evaluation in shared code so client and server agree) and `packages/desktop-client` (desktop calendar management UI, experimental feature flag).
 - API: no public `@actual-app/api` methods in this change; automation access arrives with the schedule changes that consume calendars.
 - No change to existing schedules or `skipWeekend` behavior in this change.
-- Upstream-ready: US Federal Reserve is the only preset; other regions are built by users from the same rule types.
+- Upstream-ready: U.S. Federal Holidays and U.S. Federal Reserve are the only presets; other regions are built by users from the same rule types.

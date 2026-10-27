@@ -12,7 +12,7 @@ See proposal.md for motivation and specs/business-calendars/spec.md for required
 
 **Non-Goals:**
 - Using calendars in schedules, accounts or paychecks (follow-up changes).
-- Mobile management screens, public API methods, importing calendars (iCal) or locale-specific presets beyond US Federal Reserve.
+- Mobile management screens, public API methods, importing calendars (iCal) or locale-specific presets beyond U.S. Federal Holidays and U.S. Federal Reserve.
 - Movable feasts (for example Easter-based holidays); users add them as yearly exceptions for now.
 
 ## Decisions
@@ -33,17 +33,17 @@ A single `business_calendars` table: `id`, `name`, `non_working_days` (JSON arra
 `nearest-weekday` moves a Saturday holiday to the preceding Friday and a Sunday holiday to the following Monday; `sunday-to-monday` moves only Sunday; `none` never moves. The shift applies only when the holiday falls on a non-working weekday of that calendar, and steps one day at a time to the closest working weekday in the shift direction. To catch spillover (January 1 observed on December 31), `getHolidays(year)` evaluates rules for `year - 1`, `year` and `year + 1` and keeps observed dates inside `year`.
 
 ### Presets as code, copied on create
-Presets live in `shared/business-calendar-presets.ts` as plain calendar definitions. "Create from preset" inserts a new row with copied rules, so later preset fixes never silently change a user's calendar. US Federal Reserve: the 11 holidays in the spec, all `sunday-to-monday`, weekend Saturday and Sunday. Holiday names are translated at display time in the client.
+Presets live in `shared/business-calendar-presets.ts` as plain calendar definitions. "Create from preset" inserts a new row with copied rules, so later preset fixes never silently change a user's calendar. U.S. Federal Holidays: the 11 holidays in the spec, all `nearest-weekday` (OPM observance), weekend Saturday and Sunday; Inauguration Day is omitted because it applies only around Washington, D.C. U.S. Federal Reserve: the same rules with `sunday-to-monday`, derived from the federal list so the two cannot drift. Because loot-core has no i18n and holiday names become user-editable data, the client copies the preset, replaces its calendar and holiday names with translations keyed by preset and holiday id, and sends the full calendar to `business-calendar-create`.
 
 ### Server handlers
-`business-calendars-get`, `business-calendars-create` (optionally `{ presetId }`), `business-calendars-update` and `business-calendars-delete`, wrapped in `mutator(undoable(...))` like `tags/app.ts`. The server validates input at this boundary: at least one working weekday, valid month/day combinations, `nth` from 1 to 4, unique exception dates, and ISO dates.
+`business-calendars-get`, `business-calendar-create`, `business-calendar-update` and `business-calendar-delete` (singular for mutations, matching account groups), wrapped in `mutator(undoable(...))` like `tags/app.ts`. The server validates input at this boundary: at least one working weekday, valid month/day combinations, `nth` from 1 to 4, unique exception dates, and ISO dates.
 
 ### Desktop UI behind `businessCalendars` flag
 A "Business calendars" button on the Schedules page header (desktop only, flag on) opens a `BusinessCalendarsModal` listing calendars with create, create-from-preset, rename and delete. Selecting a calendar opens an editor with weekday toggles, a holiday rule list, an exceptions list and a year picker with the preview from `getHolidays`. Built with `@actual-app/components` and `Trans`, matching `AccountGroupsModal`.
 
 ## Risks / Trade-offs
 
-- [Observance rules vary more than three options cover (for example a Monday-only shift for Saturday holidays)] → The three cover US Federal Reserve and common employer policies; exceptions handle the rest, and the `observance` field can gain values without a migration.
+- [Observance rules vary more than three options cover (for example a Monday-only shift for Saturday holidays)] → The three cover U.S. federal, Federal Reserve-style and common employer policies; exceptions handle the rest, and the `observance` field can gain values without a migration.
 - [Rule JSON drifts from the TypeScript type over time] → Validate on write in the server handlers and parse defensively on read, ignoring unknown rule kinds instead of failing the calendar.
 - [Upstream may prefer a different entry point than the Schedules page] → The modal is self-contained, so moving the entry point is a one-line change.
 

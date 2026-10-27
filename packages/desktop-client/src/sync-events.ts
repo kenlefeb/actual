@@ -11,6 +11,7 @@ import {
   closeAndDownloadBudget,
   uploadBudget,
 } from './budgetfiles/budgetfilesSlice';
+import { businessCalendarQueries } from './business-calendars';
 import { pushModal } from './modals/modalsSlice';
 import { addNotification } from './notifications/notificationsSlice';
 import type { Notification } from './notifications/notificationsSlice';
@@ -137,6 +138,12 @@ export function listenForSyncEvent(store: AppStore, queryClient: QueryClient) {
       if (tables.includes('account_groups')) {
         void queryClient.invalidateQueries({
           queryKey: accountGroupQueries.lists(),
+        });
+      }
+
+      if (tables.includes('business_calendars')) {
+        void queryClient.invalidateQueries({
+          queryKey: businessCalendarQueries.lists(),
         });
       }
     } else if (event.type === 'error') {

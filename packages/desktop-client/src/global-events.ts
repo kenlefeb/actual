@@ -8,6 +8,7 @@ import { accountQueries } from './accounts';
 import { setAppState } from './app/appSlice';
 import { categoryQueries } from './budget';
 import { closeBudgetUI } from './budgetfiles/budgetfilesSlice';
+import { businessCalendarQueries } from './business-calendars';
 import { closeModal, pushModal, replaceModal } from './modals/modalsSlice';
 import type { Modal } from './modals/modalsSlice';
 import {
@@ -80,6 +81,14 @@ export function handleGlobalEvents(store: AppStore, queryClient: QueryClient) {
       promises.push(
         queryClient.invalidateQueries({
           queryKey: accountQueries.lists(),
+        }),
+      );
+    }
+
+    if (tables.includes('business_calendars')) {
+      promises.push(
+        queryClient.invalidateQueries({
+          queryKey: businessCalendarQueries.lists(),
         }),
       );
     }

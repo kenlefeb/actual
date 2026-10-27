@@ -69,12 +69,27 @@ A calendar SHALL allow specific dates to be marked as non-business days or as bu
 - **WHEN** a user marks a date that a holiday rule produces as a business day
 - **THEN** that date is a business day in the calendar
 
-### Requirement: US Federal Reserve preset
-The system SHALL offer a US Federal Reserve preset containing the Federal Reserve holidays with Sunday-to-Monday observance and Saturday holidays not shifted. Creating a calendar from the preset SHALL produce an independent, editable copy.
+### Requirement: U.S. Federal Holidays preset
+The system SHALL offer a U.S. Federal Holidays preset containing the eleven annual federal holidays, with Saturday holidays observed the preceding Friday and Sunday holidays the following Monday. Creating a calendar from the preset SHALL produce an independent, editable copy.
 
 #### Scenario: Create from preset
-- **WHEN** a user creates a calendar from the US Federal Reserve preset
+- **WHEN** a user creates a calendar from the U.S. Federal Holidays preset
 - **THEN** the new calendar contains New Year's Day, Martin Luther King Jr. Day, Washington's Birthday, Memorial Day, Juneteenth, Independence Day, Labor Day, Columbus Day, Veterans Day, Thanksgiving Day and Christmas Day
+
+#### Scenario: Saturday holiday observed on Friday
+- **WHEN** a calendar created from the preset is checked for July 2026
+- **THEN** Friday, July 3, 2026 is not a business day
+
+### Requirement: U.S. Federal Reserve preset
+The system SHALL offer a U.S. Federal Reserve preset with the same eleven holidays, observing Sunday holidays the following Monday and not moving Saturday holidays. Creating a calendar from it SHALL produce an independent, editable copy.
+
+#### Scenario: Saturday holiday not moved
+- **WHEN** a calendar created from the Federal Reserve preset is checked for July 2026
+- **THEN** Friday, July 3, 2026 is a business day
+
+#### Scenario: Sunday holiday moved to Monday
+- **WHEN** a calendar created from the Federal Reserve preset is checked for July 2027
+- **THEN** Monday, July 5, 2027 is not a business day
 
 #### Scenario: Editing a copy
 - **WHEN** a user edits a calendar created from the preset
@@ -95,8 +110,8 @@ For any calendar and date, the system SHALL answer whether the date is a busines
 The calendar editor SHALL show every non-business day other than regular non-working weekdays for a chosen year, with the name of the holiday or exception that causes it.
 
 #### Scenario: Preview a year
-- **WHEN** a user previews 2026 for a calendar created from the US Federal Reserve preset
-- **THEN** the preview lists each 2026 Federal Reserve holiday on its observed date with its name
+- **WHEN** a user previews 2026 for a calendar created from the U.S. Federal Holidays preset
+- **THEN** the preview lists each 2026 federal holiday on its observed date with its name
 
 ### Requirement: Experimental feature flag
 Business calendar management SHALL only be available when its experimental feature is enabled in Settings, and SHALL be managed on desktop layouts.

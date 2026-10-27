@@ -3,6 +3,7 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
+import { useResponsive } from '@actual-app/components/hooks/useResponsive';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
 import { send } from '@actual-app/core/platform/client/connection';
@@ -12,6 +13,7 @@ import type { ScheduleEntity } from '@actual-app/core/types/models';
 import { Search } from '#components/common/Search';
 import { FeatureErrorFallback } from '#components/FeatureErrorFallback';
 import { Page } from '#components/Page';
+import { useFeatureFlag } from '#hooks/useFeatureFlag';
 import { useSchedules } from '#hooks/useSchedules';
 import { pushModal } from '#modals/modalsSlice';
 import { useDispatch } from '#redux';
@@ -24,6 +26,8 @@ export function Schedules() {
 
   const dispatch = useDispatch();
   const [filter, setFilter] = useState('');
+  const businessCalendarsEnabled = useFeatureFlag('businessCalendars');
+  const { isNarrowWidth } = useResponsive();
 
   const onEdit = useCallback(
     (id: ScheduleEntity['id']) => {
@@ -143,6 +147,15 @@ export function Schedules() {
             <Button onPress={onChangeUpcomingLength}>
               <Trans>Change upcoming length</Trans>
             </Button>
+            {businessCalendarsEnabled && !isNarrowWidth && (
+              <Button
+                onPress={() =>
+                  dispatch(pushModal({ modal: { name: 'business-calendars' } }))
+                }
+              >
+                <Trans>Business calendars</Trans>
+              </Button>
+            )}
           </View>
           <Button variant="primary" onPress={onAdd}>
             <Trans>Add new schedule</Trans>

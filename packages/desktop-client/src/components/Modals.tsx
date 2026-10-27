@@ -19,6 +19,7 @@ import { AccountReconcileModal } from './modals/AccountReconcileModal';
 import { AkahuInitialiseModal } from './modals/AkahuInitialiseModal';
 import { BudgetAutomationsModal } from './modals/BudgetAutomationsModal';
 import { BudgetPageMenuModal } from './modals/BudgetPageMenuModal';
+import { BusinessCalendarsModal } from './modals/BusinessCalendarsModal';
 import { CategoryAutocompleteModal } from './modals/CategoryAutocompleteModal';
 import { CategoryGroupAutocompleteModal } from './modals/CategoryGroupAutocompleteModal';
 import { CategoryGroupMenuModal } from './modals/CategoryGroupMenuModal';
@@ -276,6 +277,9 @@ export function Modals() {
 
         case 'schedules-upcoming-length':
           return <UpcomingLength key={key} />;
+
+        case 'business-calendars':
+          return <BusinessCalendarsModal key={key} />;
 
         case 'schedule-posts-offline-notification':
           return <PostsOfflineNotification key={key} />;

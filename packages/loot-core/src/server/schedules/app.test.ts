@@ -5,9 +5,14 @@ import { aqlQuery } from '#server/aql';
 import * as db from '#server/db';
 import { loadMappings } from '#server/db/mappings';
 import { loadRules, updateRule } from '#server/transactions/transaction-rules';
+import { undo } from '#server/undo';
 import { setBusinessCalendars } from '#shared/business-calendar-lookup';
 import { businessCalendarPresets } from '#shared/business-calendar-presets';
 import { q } from '#shared/query';
+import {
+  getScheduleDate,
+  setScheduleDates,
+} from '#shared/schedule-date-lookup';
 import { getNextDate } from '#shared/schedules';
 
 import {
@@ -15,6 +20,7 @@ import {
   areConditionValuesEqual,
   createSchedule,
   deleteSchedule,
+  loadScheduleDateLookup,
   app as schedulesApp,
   setNextDate,
   skipNextDate,
@@ -1179,5 +1185,155 @@ describe('schedule business calendars', () => {
         count: 1,
       }),
     ).toEqual(['2026-07-03']);
+  });
+});
+
+describe('relative schedules', () => {
+  const federal = {
+    id: 'federal',
+    name: 'U.S. Federal Holidays',
+    ...businessCalendarPresets[0].calendar,
+  };
+  const paydayDate = {
+    start: '2026-01-15',
+    frequency: 'monthly' as const,
+    skipWeekend: true,
+    weekendSolveMode: 'before' as const,
+    businessCalendarId: 'federal',
+  };
+  const relativeTo = (scheduleId: string) => ({
+    relativeTo: {
+      scheduleId,
+      offset: 2,
+      unit: 'business-days' as const,
+      direction: 'before' as const,
+    },
+    businessCalendarId: 'federal',
+  });
+  const nextDate = async (id: string) =>
+    (await aqlQuery(q('schedules').filter({ id }).calculate('next_date'))).data;
+
+  beforeEach(() => {
+    MockDate.set(new Date(2026, 10, 1));
+    setBusinessCalendars([federal]);
+  });
+
+  afterEach(() => {
+    setBusinessCalendars([]);
+    setScheduleDates([]);
+    MockDate.reset();
+  });
+
+  it('computes the next date of a schedule relative to another', async () => {
+    const payday = await createSchedule({
+      conditions: [{ op: 'isapprox', field: 'date', value: paydayDate }],
+    });
+    const deposit = await createSchedule({
+      conditions: [
+        { op: 'isapprox', field: 'date', value: relativeTo(payday) },
+      ],
+    });
+
+    // Tests fix "today" at 2017-01-01, so stored next dates are the first
+    // occurrences: payday Thu Jan 15, 2026 and two business days before it
+    expect(await nextDate(payday)).toBe('2026-01-15');
+    expect(await nextDate(deposit)).toBe('2026-01-13');
+    expect(
+      await schedulesApp.handlers['schedule/get-upcoming-dates']({
+        config: relativeTo(payday),
+        count: 2,
+      }),
+    ).toEqual(['2026-11-10', '2026-12-11']);
+  });
+
+  it('rejects a schedule relative to itself or to a relative schedule', async () => {
+    const payday = await createSchedule({
+      conditions: [{ op: 'isapprox', field: 'date', value: paydayDate }],
+    });
+    const deposit = await createSchedule({
+      conditions: [
+        { op: 'isapprox', field: 'date', value: relativeTo(payday) },
+      ],
+    });
+
+    await expect(
+      createSchedule({
+        conditions: [
+          { op: 'isapprox', field: 'date', value: relativeTo(deposit) },
+        ],
+      }),
+    ).rejects.toThrow('another relative schedule');
+    await expect(
+      updateSchedule({
+        schedule: { id: deposit },
+        conditions: [
+          { op: 'isapprox', field: 'date', value: relativeTo(deposit) },
+        ],
+      }),
+    ).rejects.toThrow('relative to itself');
+    await expect(
+      updateSchedule({
+        schedule: { id: payday },
+        conditions: [
+          { op: 'isapprox', field: 'date', value: relativeTo('other') },
+        ],
+      }),
+    ).rejects.toThrow('Other schedules are relative to this one');
+    const huge = relativeTo(payday);
+    huge.relativeTo.offset = 1_000_000_000;
+    await expect(
+      createSchedule({
+        conditions: [{ op: 'isapprox', field: 'date', value: huge }],
+      }),
+    ).rejects.toThrow('whole number from 0 to 366');
+  });
+
+  it('follows source edits and deletion, and undo restores dates', async () => {
+    const create = schedulesApp.handlers['schedule/create'];
+    const payday = await create({
+      conditions: [{ op: 'isapprox', field: 'date', value: paydayDate }],
+    });
+    const deposit = await create({
+      conditions: [
+        { op: 'isapprox', field: 'date', value: relativeTo(payday) },
+      ],
+    });
+    expect(await nextDate(deposit)).toBe('2026-01-13');
+
+    // Skipping the source does not move the relative schedule
+    await schedulesApp.handlers['schedule/skip-next-date']({ id: payday });
+    expect(await nextDate(deposit)).toBe('2026-01-13');
+
+    // Payday moves to the 20th. Recomputed next dates use the real clock
+    // (mocked to Nov 1, 2026): payday Fri Nov 20 -> deposit Wed Nov 18
+    await schedulesApp.handlers['schedule/update']({
+      schedule: { id: payday },
+      conditions: [
+        {
+          op: 'isapprox',
+          field: 'date',
+          value: { ...paydayDate, start: '2026-01-20' },
+        },
+      ],
+    });
+    expect(await nextDate(deposit)).toBe('2026-11-18');
+
+    await schedulesApp.handlers['schedule/delete']({ id: payday });
+    expect(await nextDate(deposit)).toBeFalsy();
+
+    await undo();
+    await vi.waitFor(async () =>
+      expect(await nextDate(deposit)).toBe('2026-11-18'),
+    );
+  });
+
+  it('loads schedule dates when a budget opens', async () => {
+    const payday = await createSchedule({
+      conditions: [{ op: 'isapprox', field: 'date', value: paydayDate }],
+    });
+    setScheduleDates([]);
+
+    await loadScheduleDateLookup();
+    expect(getScheduleDate(payday)).toEqual(paydayDate);
   });
 });

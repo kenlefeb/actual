@@ -317,13 +317,14 @@ export const objects = {
     },
     {
       name: 'date',
-      type: 'date | RecurConfig',
+      type: 'date | RecurConfig | RelativeDateConfig',
       required: true,
       description: (
         <span>
           Mandatory field when creating a schedule. If the schedule is a single
           occurrence just supply the date. otherwise refer to RecurConfig
-          details below.
+          details below, or RelativeDateConfig (experimental) for a date taken
+          from another schedule.
         </span>
       ),
     },
@@ -425,6 +426,43 @@ export const objects = {
           weekends. Falls back to weekends if the calendar does not exist.
         </span>
       ),
+    },
+  ],
+
+  relativeDateConfig: [
+    {
+      name: 'relativeTo',
+      type: '{ scheduleId, offset, unit, direction }',
+      required: true,
+      description: (
+        <span>
+          Experimental. Each occurrence of the schedule <code>scheduleId</code>{' '}
+          produces one occurrence of this schedule, <code>offset</code> units{' '}
+          <code>before</code> or <code>after</code> it. <code>unit</code> is{' '}
+          <code>'days'</code> or <code>'business-days'</code>. The source may
+          not itself be relative.
+        </span>
+      ),
+    },
+    {
+      name: 'businessCalendarId',
+      type: types.id,
+      description: (
+        <span>
+          Calendar used to count business days and for the move below; weekends
+          only when omitted.
+        </span>
+      ),
+    },
+    {
+      name: 'skipWeekend',
+      type: 'bool',
+      description: 'Move the resulting date off non-business days.',
+    },
+    {
+      name: 'weekendSolveMode',
+      type: `'before' | 'after'`,
+      description: 'Direction of that move.',
     },
   ],
 

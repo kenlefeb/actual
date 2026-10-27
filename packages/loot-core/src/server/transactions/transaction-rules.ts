@@ -1,4 +1,5 @@
 // @ts-strict-ignore
+import { addYears, subYears } from 'date-fns';
 
 import { logger } from '#platform/server/log';
 import { aqlQuery, schemaConfig } from '#server/aql';
@@ -38,6 +39,7 @@ import {
   subDays,
 } from '#shared/months';
 import { q } from '#shared/query';
+import { getRelativeOccurrences } from '#shared/relative-dates';
 import { getApproxNumberThreshold, sortNumbers } from '#shared/rules';
 import { extractTagsForFilter } from '#shared/tags';
 import { ungroupTransaction } from '#shared/transactions';
@@ -558,7 +560,31 @@ export function conditionsToAQL(
       case 'isapprox':
       case 'is':
         if (type === 'date') {
-          if (value.type === 'recur') {
+          if (value.type === 'relative') {
+            // Past and upcoming occurrences derived from the source schedule
+            const today = parseDate(currentDay());
+            const dates = getRelativeOccurrences(
+              value.config,
+              subYears(today, 5),
+              addYears(today, 1),
+            ).slice(-recurDateBounds); // bounded like repeating dates
+            if (dates.length === 0) {
+              // No source (deleted): match nothing
+              return { date: '0000-00-00' };
+            }
+            return {
+              $or: dates.map(d =>
+                op === 'isapprox'
+                  ? {
+                      $and: [
+                        { date: { $gte: subDays(d, 2) } },
+                        { date: { $lte: addDays(d, 2) } },
+                      ],
+                    }
+                  : { date: d },
+              ),
+            };
+          } else if (value.type === 'recur') {
             const dates = value.schedule
               .occurrences({ take: recurDateBounds })
               .toArray()

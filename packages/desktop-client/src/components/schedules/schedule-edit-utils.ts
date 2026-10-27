@@ -1,3 +1,4 @@
+import { isRelativeDate } from '@actual-app/core/shared/relative-dates';
 import { extractScheduleConds } from '@actual-app/core/shared/schedules';
 import type {
   RuleConditionEntity,
@@ -36,6 +37,13 @@ export function updateScheduleConditions(
   // Validate
   if (fields.date == null) {
     return { error: t('Date is required'), conditions: [] };
+  }
+
+  if (isRelativeDate(fields.date) && !fields.date.relativeTo.scheduleId) {
+    return {
+      error: t('Choose the schedule this date is relative to'),
+      conditions: [],
+    };
   }
 
   if (fields.amount == null) {

@@ -11,6 +11,7 @@ import {
   subDays,
   yearFromDate,
 } from '#shared/months';
+import { getRelativeOccurrences } from '#shared/relative-dates';
 import {
   FIELD_TYPES,
   getApproxNumberThreshold,
@@ -34,19 +35,23 @@ export const CONDITION_TYPES = {
       const parsed =
         typeof value === 'string'
           ? parseDateString(value)
-          : value.frequency != null
-            ? parseRecurDate(value)
-            : null;
+          : value.relativeTo != null
+            ? { type: 'relative', config: value }
+            : value.frequency != null
+              ? parseRecurDate(value)
+              : null;
       assert(
         parsed,
         'date-format',
         `Invalid date format (field: ${fieldName})`,
       );
 
-      // Approximate only works with exact & recurring dates
+      // Approximate only works with exact, recurring & relative dates
       if (op === 'isapprox') {
         assert(
-          parsed.type === 'date' || parsed.type === 'recur',
+          parsed.type === 'date' ||
+            parsed.type === 'recur' ||
+            parsed.type === 'relative',
           'date-format',
           `Invalid date value for "isapprox" (field: ${fieldName})`,
         );
@@ -274,6 +279,18 @@ export class Condition {
         if (type === 'date') {
           if (fieldValue == null) {
             return false;
+          }
+
+          if (this.value.type === 'relative') {
+            const fieldDate = parseDate(fieldValue);
+            return this.op === 'isapprox'
+              ? getRelativeOccurrences(
+                  this.value.config,
+                  dateFns.subDays(fieldDate, 2),
+                  dateFns.addDays(fieldDate, 2),
+                ).length > 0
+              : getRelativeOccurrences(this.value.config, fieldDate, fieldDate)
+                  .length > 0;
           }
 
           if (this.value.type === 'recur') {

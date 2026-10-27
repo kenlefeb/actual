@@ -162,7 +162,9 @@ export function MobileScheduleEditPage() {
 
   // This is derived from the date
   const repeats =
-    state.fields.date && typeof state.fields.date !== 'string'
+    state.fields.date &&
+    typeof state.fields.date !== 'string' &&
+    'frequency' in state.fields.date
       ? !!state.fields.date.frequency
       : false;
 

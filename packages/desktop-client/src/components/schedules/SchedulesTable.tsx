@@ -12,7 +12,11 @@ import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
 import { format as monthUtilFormat } from '@actual-app/core/shared/months';
 import { getNormalisedString } from '@actual-app/core/shared/normalisation';
-import { getScheduledAmount } from '@actual-app/core/shared/schedules';
+import { isRelativeDate } from '@actual-app/core/shared/relative-dates';
+import {
+  getScheduledAmount,
+  isRepeatingDate,
+} from '@actual-app/core/shared/schedules';
 import type { ScheduleStatuses } from '@actual-app/core/shared/schedules';
 import type { ScheduleEntity } from '@actual-app/core/types/models';
 
@@ -25,6 +29,7 @@ import { useContextMenu } from '#hooks/useContextMenu';
 import { useDateFormat } from '#hooks/useDateFormat';
 import { useFormat } from '#hooks/useFormat';
 import { usePayees } from '#hooks/usePayees';
+import { useScheduleDateLookup } from '#hooks/useScheduleDateLookup';
 
 import { StatusBadge } from './StatusBadge';
 type SchedulesTableProps = {
@@ -153,9 +158,12 @@ function ScheduleRow({
   minimal,
   statuses,
   dateFormat,
+  isSourceMissing,
 }: {
   schedule: ScheduleEntity;
   dateFormat: string;
+  // A relative schedule whose source schedule was deleted
+  isSourceMissing: boolean;
 } & Pick<
   SchedulesTableProps,
   'onSelect' | 'onAction' | 'minimal' | 'statuses'
@@ -239,9 +247,13 @@ function ScheduleRow({
         <DisplayId type="accounts" id={schedule._account} />
       </Field>
       <Field width={110} name="date">
-        {schedule.next_date
-          ? monthUtilFormat(schedule.next_date, dateFormat)
-          : null}
+        {isSourceMissing ? (
+          <Text style={{ color: theme.warningText }}>
+            <Trans>Source schedule was deleted</Trans>
+          </Text>
+        ) : schedule.next_date ? (
+          monthUtilFormat(schedule.next_date, dateFormat)
+        ) : null}
       </Field>
       <Field width={120} name="status" style={{ alignItems: 'flex-start' }}>
         <StatusBadge status={statuses.get(schedule.id)} />
@@ -249,11 +261,9 @@ function ScheduleRow({
       <ScheduleAmountCell amount={schedule._amount} op={schedule._amountOp} />
       {!minimal && (
         <Field width={80} style={{ textAlign: 'center' }}>
-          {schedule._date &&
-            typeof schedule._date === 'object' &&
-            schedule._date.frequency && (
-              <SvgCheck style={{ width: 13, height: 13 }} />
-            )}
+          {isRepeatingDate(schedule._date) && (
+            <SvgCheck style={{ width: 13, height: 13 }} />
+          )}
         </Field>
       )}
       {!minimal && (
@@ -308,6 +318,16 @@ export function SchedulesTable({
 
   const dateFormat = useDateFormat() || 'MM/dd/yyyy';
   const [showCompleted, setShowCompleted] = useState(false);
+  // All schedules, not just this table's: a relative schedule's source may be
+  // filtered out of it
+  const scheduleLookup = useScheduleDateLookup();
+  const existingScheduleIds = new Set(
+    scheduleLookup.schedules.filter(s => !s.tombstone).map(s => s.id),
+  );
+  const isSourceMissing = (schedule: ScheduleEntity) =>
+    !scheduleLookup.isLoading &&
+    isRelativeDate(schedule._date) &&
+    !existingScheduleIds.has(schedule._date.relativeTo.scheduleId);
 
   const { data: payees } = usePayees();
   const { data: accounts = [] } = useAccounts();
@@ -395,6 +415,7 @@ export function SchedulesTable({
     return (
       <ScheduleRow
         schedule={item as ScheduleEntity}
+        isSourceMissing={isSourceMissing(item as ScheduleEntity)}
         {...{ statuses, dateFormat, onSelect, onAction, minimal }}
       />
     );

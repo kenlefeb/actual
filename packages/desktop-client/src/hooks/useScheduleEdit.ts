@@ -10,6 +10,7 @@ import {
 } from '@actual-app/core/shared/schedules';
 import type {
   RecurConfig,
+  RelativeDateConfig,
   ScheduleEntity,
   TransactionEntity,
 } from '@actual-app/core/types/models';
@@ -52,7 +53,7 @@ type ScheduleEditAction =
   | {
       type: 'set-field';
       field: 'date';
-      value: string | RecurConfig;
+      value: string | RecurConfig | RelativeDateConfig;
     }
   | {
       type: 'set-field';
@@ -219,7 +220,9 @@ function createScheduleEditReducer(useGetScheduledAmount: boolean = false) {
       }
 
       case 'form-error': {
-        return { ...state, error: action.error };
+        return state.error === action.error
+          ? state
+          : { ...state, error: action.error };
       }
 
       case 'switch-transactions': {
@@ -368,6 +371,8 @@ export function useScheduleEdit({
         dispatch({ type: 'form-error', error: updated.error });
         return;
       }
+      // Clear an error left from an earlier, incomplete edit
+      dispatch({ type: 'form-error', error: null });
 
       // *Extremely* gross hack because the rules are not mapped to
       // public names automatically. We really should be doing that

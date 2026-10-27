@@ -764,6 +764,10 @@ Delete a rule.
 
 <StructType fields={objects.recurConfig} />
 
+#### RelativeDateConfig
+
+<StructType fields={objects.relativeDateConfig} />
+
 #### Methods
 
 #### `getSchedules`

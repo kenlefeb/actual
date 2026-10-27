@@ -9,6 +9,7 @@ import { getBusinessCalendar } from './business-calendar-lookup';
 import { getNearestBusinessDay } from './business-calendars';
 import * as monthUtils from './months';
 import { q } from './query';
+import { getNextRelativeDate } from './relative-dates';
 
 export const DEFAULT_UPCOMING_SCHEDULE_DAYS = '7';
 
@@ -294,6 +295,9 @@ export function getNextDate(
 
   if (value.type === 'date') {
     return value.date;
+  } else if (value.type === 'relative') {
+    // Relative dates already include their own move off non-business days
+    return getNextRelativeDate(value.config, start);
   } else if (value.type === 'recur') {
     let dates = value.schedule.occurrences({ start, take: 1 }).toArray();
 
@@ -423,6 +427,17 @@ export function getUpcomingDays(
   }
 }
 
+/** Whether a schedule date repeats; relative dates follow a repeating source. */
+export function isRepeatingDate(
+  date: ScheduleEntity['_date'] | null | undefined,
+): boolean {
+  return (
+    typeof date === 'object' &&
+    date !== null &&
+    ('relativeTo' in date || !!date.frequency)
+  );
+}
+
 export function scheduleIsRecurring(dateCond: Condition | null) {
   if (!dateCond) {
     return false;
@@ -430,7 +445,7 @@ export function scheduleIsRecurring(dateCond: Condition | null) {
   const cond = new Condition(dateCond.op, 'date', dateCond.value, null);
   const value = cond.getValue();
 
-  return value.type === 'recur';
+  return value.type === 'recur' || value.type === 'relative';
 }
 
 export type ScheduleStatusType = ReturnType<typeof getStatus>;

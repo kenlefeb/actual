@@ -2,7 +2,10 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import * as monthUtils from '@actual-app/core/shared/months';
-import { getUpcomingDays } from '@actual-app/core/shared/schedules';
+import {
+  getUpcomingDays,
+  isRepeatingDate,
+} from '@actual-app/core/shared/schedules';
 import type { ScheduleStatusType } from '@actual-app/core/shared/schedules';
 import type {
   CategoryEntity,
@@ -95,9 +98,7 @@ export function useCategoryScheduleGoalTemplateIndicator({
     return {
       schedule,
       scheduleStatus,
-      isScheduleRecurring: !!(
-        typeof schedule?._date === 'object' && schedule?._date?.frequency
-      ),
+      isScheduleRecurring: isRepeatingDate(schedule?._date),
       description,
     };
   }, [locale, month, scheduleStatuses, schedules, t, upcomingDays]);

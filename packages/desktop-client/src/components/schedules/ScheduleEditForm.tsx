@@ -14,9 +14,11 @@ import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
 import * as monthUtils from '@actual-app/core/shared/months';
+import { isRelativeDate } from '@actual-app/core/shared/relative-dates';
 import { UPCOMING_LENGTH_PRESET_OPTIONS } from '@actual-app/core/shared/schedules';
 import type {
   RecurConfig,
+  RelativeDateConfig,
   ScheduleEntity,
   TransactionEntity,
 } from '@actual-app/core/types/models';
@@ -24,6 +26,7 @@ import type {
 import { Checkbox, FormField, FormLabel } from '#components/forms';
 import { OpSelect } from '#components/rules/RuleEditor';
 import { CustomUpcomingLength } from '#components/schedules/CustomUpcomingLength';
+import { RelativeDateEditor } from '#components/schedules/RelativeDateEditor';
 import { DateSelect } from '#components/select/DateSelect';
 import { RecurringSchedulePicker } from '#components/select/RecurringSchedulePicker';
 import { SelectedItemsButton } from '#components/table';
@@ -31,6 +34,7 @@ import { SimpleTransactionsTable } from '#components/transactions/SimpleTransact
 import { AmountInput, BetweenAmountInput } from '#components/util/AmountInput';
 import { GenericInput } from '#components/util/GenericInput';
 import { useDateFormat } from '#hooks/useDateFormat';
+import { useFeatureFlag } from '#hooks/useFeatureFlag';
 import { useLocale } from '#hooks/useLocale';
 import { SelectedProvider } from '#hooks/useSelected';
 import type { Actions } from '#hooks/useSelected';
@@ -40,7 +44,7 @@ export type ScheduleFormFields = {
   account: null | string;
   amount: null | number | { num1: number; num2: number };
   amountOp: null | string;
-  date: null | string | RecurConfig;
+  date: null | string | RecurConfig | RelativeDateConfig;
   posts_transaction: boolean;
   custom_upcoming_length: null | string;
   name: null | string;
@@ -65,7 +69,7 @@ export type ScheduleEditFormDispatch =
   | {
       type: 'set-field';
       field: 'date';
-      value: string | RecurConfig;
+      value: string | RecurConfig | RelativeDateConfig;
     }
   | {
       type: 'set-field';
@@ -121,6 +125,30 @@ export function ScheduleEditForm({
   const { t } = useTranslation();
   const dateFormat = useDateFormat() || 'MM/dd/yyyy';
   const { isNarrowWidth } = useResponsive();
+  const businessCalendarsEnabled = useFeatureFlag('businessCalendars');
+  const isRelative = isRelativeDate(fields.date);
+  // An existing relative date stays editable even with the flag off
+  const showDateType = businessCalendarsEnabled || isRelative;
+  const dateType = isRelative ? 'relative' : repeats ? 'repeats' : 'once';
+
+  function onDateTypeChange(type: 'once' | 'repeats' | 'relative') {
+    if (type === 'relative') {
+      dispatch({
+        type: 'set-field',
+        field: 'date',
+        value: {
+          relativeTo: {
+            scheduleId: '',
+            offset: 0,
+            unit: 'business-days',
+            direction: 'before',
+          },
+        },
+      });
+    } else {
+      dispatch({ type: 'set-repeats', repeats: type === 'repeats' });
+    }
+  }
 
   return (
     <>
@@ -245,7 +273,10 @@ export function ScheduleEditForm({
         </SpaceBetween>
 
         <View style={{ marginTop: 20 }}>
-          <FormLabel title={t('Date')} />
+          <FormLabel
+            title={t('Date')}
+            htmlFor={showDateType ? 'form_date_type' : undefined}
+          />
         </View>
 
         <SpaceBetween
@@ -254,8 +285,16 @@ export function ScheduleEditForm({
             justifyContent: 'space-between',
           }}
         >
-          <View style={{ width: '13.44rem' }}>
-            {repeats ? (
+          <View style={{ width: isRelative ? undefined : '13.44rem' }}>
+            {isRelativeDate(fields.date) ? (
+              <RelativeDateEditor
+                value={fields.date}
+                scheduleId={schedule.id}
+                onChange={value =>
+                  dispatch({ type: 'set-field', field: 'date', value })
+                }
+              />
+            ) : repeats ? (
               <RecurringSchedulePicker
                 // @ts-expect-error fix me
                 value={fields.date}
@@ -306,16 +345,34 @@ export function ScheduleEditForm({
               userSelect: 'none',
             }}
           >
-            <Checkbox
-              id="form_repeats"
-              checked={repeats}
-              onChange={e => {
-                dispatch({ type: 'set-repeats', repeats: e.target.checked });
-              }}
-            />
-            <label htmlFor="form_repeats" style={{ userSelect: 'none' }}>
-              <Trans>Repeats</Trans>
-            </label>
+            {showDateType ? (
+              <Select
+                id="form_date_type"
+                options={[
+                  ['once', t('One date')],
+                  ['repeats', t('Repeats')],
+                  ['relative', t('Relative to another schedule')],
+                ]}
+                value={dateType}
+                onChange={onDateTypeChange}
+              />
+            ) : (
+              <>
+                <Checkbox
+                  id="form_repeats"
+                  checked={repeats}
+                  onChange={e => {
+                    dispatch({
+                      type: 'set-repeats',
+                      repeats: e.target.checked,
+                    });
+                  }}
+                />
+                <label htmlFor="form_repeats" style={{ userSelect: 'none' }}>
+                  <Trans>Repeats</Trans>
+                </label>
+              </>
+            )}
           </View>
         </SpaceBetween>
 

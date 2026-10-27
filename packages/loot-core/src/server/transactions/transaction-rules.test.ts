@@ -3,6 +3,7 @@ import * as db from '#server/db';
 import { loadMappings } from '#server/db/mappings';
 // @ts-strict-ignore
 import { q } from '#shared/query';
+import { setScheduleDates } from '#shared/schedule-date-lookup';
 
 import {
   actionsReferenceBalance,
@@ -824,6 +825,36 @@ describe('Transaction rules', () => {
     ]);
 
     expect(transactions.map(t => t.id)).toEqual(['2']);
+  });
+
+  test('relative dates search around their computed occurrences', () => {
+    const deposit = {
+      relativeTo: {
+        scheduleId: 'payday',
+        offset: 2,
+        unit: 'business-days',
+        direction: 'before',
+      },
+    };
+    setScheduleDates([
+      ['payday', { start: '2016-12-15', frequency: 'monthly' }],
+    ]);
+    const { filters } = conditionsToAQL([
+      { field: 'date', op: 'isapprox', value: deposit },
+    ]);
+    // Sun Jan 15, 2017 payday -> Thu Jan 12 deposit, matched within 2 days
+    expect(filters[0].$or).toContainEqual({
+      $and: [
+        { date: { $gte: '2017-01-10' } },
+        { date: { $lte: '2017-01-14' } },
+      ],
+    });
+
+    setScheduleDates([]);
+    expect(
+      conditionsToAQL([{ field: 'date', op: 'isapprox', value: deposit }])
+        .filters,
+    ).toEqual([{ date: '0000-00-00' }]);
   });
 
   test('and sub expression builds $and condition', async () => {

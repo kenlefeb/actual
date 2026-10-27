@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { getMonthYearFormat } from '@actual-app/core/shared/months';
+import { isRelativeDate } from '@actual-app/core/shared/relative-dates';
 import { format as formatDate, parseISO } from 'date-fns';
 
 import { Link } from '#components/common/Link';
@@ -104,7 +105,7 @@ export function Value<T>({
           return format(value, 'financial');
         case 'date':
           if (value) {
-            if (value.frequency) {
+            if (value.frequency || isRelativeDate(value)) {
               return getRecurringDescription(value, dateFormat, locale);
             }
             return formatDate(parseISO(value), dateFormat);

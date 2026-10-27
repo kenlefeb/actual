@@ -17,6 +17,7 @@ import { Text } from '@actual-app/components/text';
 import { TextOneLine } from '@actual-app/components/text-one-line';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
+import { isRepeatingDate } from '@actual-app/core/shared/schedules';
 import { isPreviewId } from '@actual-app/core/shared/transactions';
 import { integerToCurrency } from '@actual-app/core/shared/util';
 import type { IntegerAmount } from '@actual-app/core/shared/util';
@@ -424,11 +425,7 @@ function PayeeIcons({ transaction, transferAccount }: PayeeIconsProps) {
     useCachedSchedules();
   const isPreview = isPreviewId(id);
   const schedule = schedules.find(s => s.id === scheduleId);
-  const isScheduleRecurring =
-    schedule &&
-    schedule._date &&
-    typeof schedule._date === 'object' &&
-    !!schedule._date.frequency;
+  const isScheduleRecurring = isRepeatingDate(schedule?._date);
 
   if (isSchedulesLoading) {
     return null;

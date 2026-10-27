@@ -1,4 +1,8 @@
-import type { RecurConfig, ScheduleEntity } from './schedule';
+import type {
+  RecurConfig,
+  RelativeDateConfig,
+  ScheduleEntity,
+} from './schedule';
 
 export type NewRuleEntity = {
   stage: 'pre' | null | 'post';
@@ -19,7 +23,7 @@ export type FieldValueTypes = {
   amount: number;
   category: string;
   category_group: string;
-  date: string | RecurConfig;
+  date: string | RecurConfig | RelativeDateConfig;
   notes: string;
   payee: string;
   payee_name: string;

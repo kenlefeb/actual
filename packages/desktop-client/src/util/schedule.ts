@@ -1,9 +1,12 @@
 // @ts-strict-ignore
 import { getBusinessCalendar } from '@actual-app/core/shared/business-calendar-lookup';
 import * as monthUtils from '@actual-app/core/shared/months';
+import { isRelativeDate } from '@actual-app/core/shared/relative-dates';
+import { getScheduleName } from '@actual-app/core/shared/schedule-date-lookup';
 import type {
   PayeeEntity,
   RecurConfig,
+  RelativeDateConfig,
   ScheduleEntity,
 } from '@actual-app/core/types/models';
 import type { Locale } from 'date-fns';
@@ -47,11 +50,60 @@ function prettyDayName(day) {
   return days[day];
 }
 
+function getRelativeDescription(config: RelativeDateConfig) {
+  const { scheduleId, offset, unit, direction } = config.relativeTo;
+  const name = getScheduleName(scheduleId) ?? t('another schedule');
+  const before = direction === 'before';
+  let description: string;
+  if (unit === 'business-days') {
+    if (offset === 1) {
+      description = before
+        ? t('1 business day before {{name}}', { name })
+        : t('1 business day after {{name}}', { name });
+    } else {
+      description = before
+        ? t('{{offset}} business days before {{name}}', { offset, name })
+        : t('{{offset}} business days after {{name}}', { offset, name });
+    }
+  } else if (offset === 1) {
+    description = before
+      ? t('1 day before {{name}}', { name })
+      : t('1 day after {{name}}', { name });
+  } else {
+    description = before
+      ? t('{{offset}} days before {{name}}', { offset, name })
+      : t('{{offset}} days after {{name}}', { offset, name });
+  }
+
+  const calendarName = getBusinessCalendar(config.businessCalendarId)?.name;
+  if (calendarName) {
+    description = t('{{description}} ({{calendar}})', {
+      description,
+      calendar: calendarName,
+    });
+  }
+  if (config.skipWeekend) {
+    description =
+      config.weekendSolveMode === 'before'
+        ? t('{{description}} (then moved before non-business days)', {
+            description,
+          })
+        : t('{{description}} (then moved after non-business days)', {
+            description,
+          });
+  }
+  return description;
+}
+
 export function getRecurringDescription(
-  config: RecurConfig,
+  config: RecurConfig | RelativeDateConfig,
   dateFormat: string,
   locale: Locale,
 ) {
+  if (isRelativeDate(config)) {
+    return getRelativeDescription(config);
+  }
+
   const interval = config.interval || 1;
 
   let endModeSuffix = '';

@@ -21,6 +21,21 @@ export type RecurConfig = {
   businessCalendarId?: string;
 };
 
+/** A date taken from another schedule's occurrences, offset by an amount. */
+export type RelativeDateConfig = {
+  relativeTo: {
+    scheduleId: string;
+    offset: number;
+    unit: 'days' | 'business-days';
+    direction: 'before' | 'after';
+  };
+  // Counts business days in this calendar; also used by the move below
+  businessCalendarId?: string;
+  // Optional final move off non-business days, as for repeating dates
+  skipWeekend?: boolean;
+  weekendSolveMode?: 'before' | 'after';
+};
+
 export type ScheduleEntity = {
   id: string;
   name?: string;
@@ -38,7 +53,7 @@ export type ScheduleEntity = {
   _account: AccountEntity['id'];
   _amount: number | { num1: number; num2: number };
   _amountOp: string;
-  _date: RecurConfig | string;
+  _date: RecurConfig | RelativeDateConfig | string;
   _conditions: RuleConditionEntity[];
   _actions: RuleActionEntity[];
   _has_splits?: boolean;

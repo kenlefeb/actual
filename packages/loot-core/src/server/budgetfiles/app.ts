@@ -19,6 +19,7 @@ import type { ImportableBudgetType } from '#server/importers';
 import { app as mainApp } from '#server/main-app';
 import { mutator } from '#server/mutators';
 import * as prefs from '#server/prefs';
+import { loadScheduleDateLookup } from '#server/schedules/app';
 import { getServer } from '#server/server-config';
 import * as sheet from '#server/sheet';
 import {
@@ -655,6 +656,7 @@ async function _loadBudget(id: Budget['id']): Promise<{
   // Load all the in-memory state
   await mappings.loadMappings();
   await loadBusinessCalendars();
+  await loadScheduleDateLookup();
   await rules.loadRules();
   syncMigrations.listen();
   mainApp.startServices();

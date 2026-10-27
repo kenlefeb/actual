@@ -51,7 +51,10 @@ import { send } from '@actual-app/core/platform/client/connection';
 import { memoizeOne } from '@actual-app/core/shared/memoize';
 import * as monthUtils from '@actual-app/core/shared/months';
 import { q } from '@actual-app/core/shared/query';
-import { DEFAULT_UPCOMING_SCHEDULE_DAYS } from '@actual-app/core/shared/schedules';
+import {
+  DEFAULT_UPCOMING_SCHEDULE_DAYS,
+  isRepeatingDate,
+} from '@actual-app/core/shared/schedules';
 import {
   addSplitTransaction,
   deleteTransaction,
@@ -923,11 +926,7 @@ function PayeeIcons({
     return null;
   }
 
-  const recurring =
-    schedule &&
-    schedule._date &&
-    typeof schedule._date === 'object' &&
-    !!schedule._date.frequency;
+  const recurring = isRepeatingDate(schedule?._date);
   const isDeposit = transaction.amount > 0;
 
   return (

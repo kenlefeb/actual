@@ -24,6 +24,11 @@ import { undoable } from '#server/undo';
 import { RSchedule } from '#server/util/rschedule';
 import { currentDay, dayFromDate } from '#shared/months';
 import { q } from '#shared/query';
+import { getRelativeOccurrences, isRelativeDate } from '#shared/relative-dates';
+import {
+  getScheduleDate,
+  setScheduleDates,
+} from '#shared/schedule-date-lookup';
 import {
   DEFAULT_UPCOMING_SCHEDULE_DAYS,
   extractScheduleConds,
@@ -214,11 +219,15 @@ export async function setNextDate({
   conditions,
   reset,
   advance,
+  clearIfNone,
 }: {
   id: string;
   conditions?;
   reset?: boolean;
   advance?: boolean;
+  // Store an empty next date when there is none (a relative schedule whose
+  // source was deleted) instead of keeping the old one
+  clearIfNone?: boolean;
 }) {
   if (conditions == null) {
     const rule = await getRuleForSchedule(id);
@@ -240,7 +249,10 @@ export async function setNextDate({
       ? getNextDateAfter(dateCond, nextDate)
       : getNextDate(dateCond, new Date());
 
-    if (newNextDate != null && newNextDate !== nextDate) {
+    if (
+      (newNextDate != null || (clearIfNone && nextDate != null)) &&
+      newNextDate !== nextDate
+    ) {
       // Our `update` functon requires the id of the item and we don't
       // have it, so we need to query it
       const nd = await db.first<
@@ -255,12 +267,12 @@ export async function setNextDate({
         reset
           ? {
               id: nd.id,
-              base_next_date: toDateRepr(newNextDate),
+              base_next_date: newNextDate ? toDateRepr(newNextDate) : null,
               base_next_date_ts: Date.now(),
             }
           : {
               id: nd.id,
-              local_next_date: toDateRepr(newNextDate),
+              local_next_date: newNextDate ? toDateRepr(newNextDate) : null,
               local_next_date_ts: nd.base_next_date_ts,
             },
       );
@@ -301,6 +313,65 @@ async function moveSchedule({
   return {};
 }
 
+// Schedule id -> date condition value, for relative dates (see #shared/relative-dates)
+export async function refreshScheduleDateLookup() {
+  const rows = await db.all<{ id: string; conditions: string | null }>(
+    `SELECT s.id, r.conditions FROM schedules s JOIN rules r ON r.id = s.rule
+     WHERE s.tombstone = 0 AND r.tombstone = 0`,
+  );
+  setScheduleDates(
+    rows.flatMap(({ id, conditions }) => {
+      const parsed: unknown = JSON.parse(conditions ?? '[]');
+      const date = Array.isArray(parsed)
+        ? parsed.find(cond => cond?.field === 'date')?.value
+        : undefined;
+      return date == null ? [] : [[id, date] as const];
+    }),
+  );
+}
+
+let unlistenScheduleDates: (() => void) | null = null;
+
+export async function loadScheduleDateLookup() {
+  await refreshScheduleDateLookup();
+  unlistenScheduleDates?.();
+  unlistenScheduleDates = addSyncListener((_oldValues, newValues) => {
+    if (newValues.has('rules') || newValues.has('schedules')) {
+      void refreshScheduleDateLookup();
+    }
+  });
+}
+
+// Relative schedules take their dates from a source schedule, so recompute
+// their stored next dates after the source changes or is deleted. Runs inside
+// the caller's undoable mutation, so undo restores both.
+async function refreshRelativeDependents(sourceId: string) {
+  await refreshScheduleDateLookup();
+  const dependents = await db.all<{ id: string }>(
+    `SELECT s.id FROM schedules s JOIN rules r ON r.id = s.rule
+     WHERE s.tombstone = 0 AND s.completed = 0 AND r.conditions LIKE ?`,
+    [`%"scheduleId":"${sourceId}"%`],
+  );
+  for (const { id } of dependents) {
+    await setNextDate({ id, clearIfNone: true });
+  }
+}
+
+function assertValidRelativeDate(dateCond, scheduleId: string) {
+  if (!isRelativeDate(dateCond?.value)) {
+    return;
+  }
+  const sourceId = dateCond.value.relativeTo.scheduleId;
+  if (sourceId === scheduleId) {
+    throw new Error('A schedule cannot be relative to itself');
+  }
+  if (isRelativeDate(getScheduleDate(sourceId))) {
+    throw new Error(
+      'A schedule cannot be relative to another relative schedule',
+    );
+  }
+}
+
 export async function createSchedule({
   schedule = null,
   conditions = [],
@@ -317,6 +388,9 @@ export async function createSchedule({
   if (dateCond.value == null) {
     throw new Error('Date is required');
   }
+
+  await refreshScheduleDateLookup();
+  assertValidRelativeDate(dateCond, scheduleId);
 
   const nextDate = getNextDate(dateCond);
   const nextDateRepr = nextDate ? toDateRepr(nextDate) : null;
@@ -391,6 +465,8 @@ export async function updateSchedule({
     if (dateCond && dateCond.value == null) {
       throw new Error('Date is required');
     }
+    await refreshScheduleDateLookup();
+    assertValidRelativeDate(dateCond, schedule.id);
 
     // We need to get the full rule to merge in the updated
     // conditions
@@ -449,6 +525,10 @@ export async function updateSchedule({
     await db.updateWithSchema('schedules', scheduleFields);
   });
 
+  if (conditions) {
+    await refreshRelativeDependents(schedule.id);
+  }
+
   return scheduleFields.id;
 }
 
@@ -461,6 +541,8 @@ export async function deleteSchedule({ id }) {
     await db.delete_('rules', ruleId);
     await db.delete_('schedules', id);
   });
+
+  await refreshRelativeDependents(id);
 }
 
 export async function skipNextDate({ id }) {
@@ -472,6 +554,14 @@ function discoverSchedules() {
 }
 
 async function getUpcomingDates({ config, count }) {
+  if (isRelativeDate(config)) {
+    const today = d.startOfDay(new Date());
+    return getRelativeOccurrences(config, today, d.addYears(today, 3)).slice(
+      0,
+      count,
+    );
+  }
+
   const rules = recurConfigToRSchedule(config);
 
   try {

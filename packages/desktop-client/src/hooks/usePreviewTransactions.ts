@@ -12,6 +12,7 @@ import type {
 
 import { useBusinessCalendarLookup } from './useBusinessCalendarLookup';
 import { useCachedSchedules } from './useCachedSchedules';
+import { useScheduleDateLookup } from './useScheduleDateLookup';
 import { useSyncedPref } from './useSyncedPref';
 import { calculateRunningBalancesBottomUp } from './useTransactions';
 
@@ -74,6 +75,7 @@ export function usePreviewTransactions({
 
   const [upcomingLength] = useSyncedPref('upcomingScheduledTransactionLength');
   const businessCalendars = useBusinessCalendarLookup();
+  const { schedules: scheduleDates } = useScheduleDateLookup();
 
   const scheduleTransactions = useMemo(() => {
     if (isSchedulesLoading) {
@@ -95,6 +97,7 @@ export function usePreviewTransactions({
     statuses,
     upcomingLength,
     businessCalendars,
+    scheduleDates,
   ]);
 
   useEffect(() => {

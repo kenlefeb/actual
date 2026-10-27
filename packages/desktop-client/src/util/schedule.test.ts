@@ -1,4 +1,5 @@
 import { setBusinessCalendars } from '@actual-app/core/shared/business-calendar-lookup';
+import { setScheduleNames } from '@actual-app/core/shared/schedule-date-lookup';
 import { enUS } from 'date-fns/locale';
 import i18next from 'i18next';
 
@@ -378,6 +379,60 @@ describe('getRecurringDescription', () => {
     it('keeps the weekend wording when the calendar is missing', () => {
       expect(getRecurringDescription(config, 'MM/dd/yyyy', enUS)).toBe(
         'Every month on the 4th (before weekend)',
+      );
+    });
+  });
+
+  describe('relative dates', () => {
+    afterEach(() => {
+      setScheduleNames([]);
+      setBusinessCalendars([]);
+    });
+
+    const config = {
+      relativeTo: {
+        scheduleId: 'payday',
+        offset: 2,
+        unit: 'business-days' as const,
+        direction: 'before' as const,
+      },
+      businessCalendarId: 'federal',
+    };
+
+    it('names the source schedule and calendar', () => {
+      setScheduleNames([['payday', 'Payday']]);
+      setBusinessCalendars([
+        {
+          id: 'federal',
+          name: 'U.S. Federal Holidays',
+          nonWorkingDays: [0, 6],
+          holidays: [],
+          exceptions: [],
+        },
+      ]);
+      expect(getRecurringDescription(config, 'MM/dd/yyyy', enUS)).toBe(
+        '2 business days before Payday (U.S. Federal Holidays)',
+      );
+    });
+
+    it('describes days after with a move when the name is unknown', () => {
+      expect(
+        getRecurringDescription(
+          {
+            relativeTo: {
+              scheduleId: 'gone',
+              offset: 1,
+              unit: 'days',
+              direction: 'after',
+            },
+            skipWeekend: true,
+            weekendSolveMode: 'after',
+          },
+          'MM/dd/yyyy',
+          enUS,
+        ),
+      ).toBe(
+        '1 day after another schedule (then moved after non-business days)',
       );
     });
   });

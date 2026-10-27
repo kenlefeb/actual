@@ -2,7 +2,7 @@
 
 ## Context
 
-See proposal.md for motivation and specs/fork-release-news/spec.md for behavior. `packages/desktop-client/src/news/fetchNewsFeed.ts` loads `news.json` from, in order: `REACT_APP_NEWS_FEED_URL`, the bundled copy on PR previews (`REACT_APP_REVIEW_ID`), else upstream `master` on GitHub. Upstream generates the bundled `src/data/news.json` from blog posts (`yarn generate:news-feed`); autofix and the "News feed check" workflow keep it in step, so hand edits would be overwritten. The notifications page renders entries in feed order. `getReleaseToNotify` picks the newest unseen release whose version is not newer than the running one; its version comparison ignores prerelease suffixes. Vite loads `.env.production` only for production builds, and `packages/desktop-client/.gitignore` ignores `.env` but not `.env.production`.
+See proposal.md for motivation and specs/fork-release-news/spec.md for behavior. `packages/desktop-client/src/news/fetchNewsFeed.ts` loads `news.json` from, in order: `REACT_APP_NEWS_FEED_URL`, the bundled copy on PR previews (`REACT_APP_REVIEW_ID`), else upstream `master` on GitHub. Upstream generates the bundled `src/data/news.json` from blog posts (`yarn generate:news-feed`); autofix and the "News feed check" workflow keep it in step, so hand edits would be overwritten. The notifications page renders entries in feed order. `getReleaseToNotify` picks the newest unseen release whose version is not newer than the running one; its version comparison ignores prerelease suffixes. Vite loads `.env.<mode>` per build mode (the served web app uses `browser`, desktop builds `production`), and `packages/desktop-client/.gitignore` ignores `.env` but not `.env.production`.
 
 ## Goals / Non-Goals
 
@@ -24,7 +24,7 @@ Fork entries live in `packages/desktop-client/src/data/fork-news.json` using the
 - Alternative: fork blog posts flagged `in_app_notification` so upstream's generator picks them up. Rejected because it adds fork content to the docs site and still edits upstream-generated output.
 
 ### Bundled feed option merged in the client
-Add `REACT_APP_NEWS_FEED_BUNDLED`. When it is `true` and no URL override is set, `fetchNewsFeed` imports both bundled JSON files, validates them with the existing checks, and returns one feed whose entries are sorted by date, newest first (fork entries first on equal dates). No network request is made. A committed `packages/desktop-client/.env.production` sets the option, so fork release builds use it while `yarn start`, tests and Netlify previews keep upstream behavior.
+Add `REACT_APP_NEWS_FEED_BUNDLED`. When it is `true` and no URL override is set, `fetchNewsFeed` imports both bundled JSON files, validates them with the existing checks, and returns one feed whose entries are sorted by date, newest first (fork entries first on equal dates). No network request is made. Committed `packages/desktop-client/.env.browser` (the web app served by the sync server, built with `vite build --mode=browser`) and `.env.production` (desktop builds) set the option, so fork release builds use it while `yarn start`, tests and Netlify previews keep upstream behavior.
 
 - Why: pins notes to the build (no undeployed notes, works offline) with a one-line, fork-only configuration file and a small branch in existing code.
 - Alternative: point `REACT_APP_NEWS_FEED_URL` at the fork's development branch. Rejected: shows undeployed notes and the prerelease comparison bug would announce them.
@@ -44,4 +44,4 @@ Add `REACT_APP_NEWS_FEED_BUNDLED`. When it is `true` and no URL override is set,
 
 ## Migration Plan
 
-Generate entries for alpha.1 through alpha.4 when adding the file. The release that ships this change adds its own note and entry. Rollback: delete `.env.production` to return to upstream's remote feed.
+Generate entries for alpha.1 through alpha.4 when adding the file. The release that ships this change adds its own note and entry. Rollback: delete `.env.browser` and `.env.production` to return to upstream's remote feed. Correction (26.10.1-alpha.6): alpha.5 shipped only `.env.production`, which the browser-mode server build never loads, so staging still fetched upstream's feed; `.env.browser` fixes it.

@@ -23,7 +23,7 @@ Prepare focused upstream branches from current upstream before submitting. Exclu
 
 ## Releases and hosting
 
-Each release adds `release-notes/<version>.md` here, runs `yarn generate:fork-news` and commits the regenerated `packages/desktop-client/src/data/fork-news.json`, so the notes appear on the app's `/notifications` page and in its "What's new" notification. Fork production builds read that bundled feed (`packages/desktop-client/.env.production`) together with upstream's bundled `news.json`, so a deployment only shows notes for its own and earlier versions.
+Each release adds `release-notes/<version>.md` here, runs `yarn generate:fork-news` and commits the regenerated `packages/desktop-client/src/data/fork-news.json`, so the notes appear on the app's `/notifications` page and in its "What's new" notification. Fork builds read that bundled feed (`packages/desktop-client/.env.browser` for the web app the server serves, `.env.production` for desktop builds) together with upstream's bundled `news.json`, so a deployment only shows notes for its own and earlier versions.
 
 [26.10.1-alpha.1](release-notes/26.10.1-alpha.1.md) and [26.10.1-alpha.2](release-notes/26.10.1-alpha.2.md) record the existing fork releases. These are historical copies; this documentation-only migration does not create a new application version.
 

@@ -273,7 +273,10 @@ export function ScheduleEditForm({
         </SpaceBetween>
 
         <View style={{ marginTop: 20 }}>
-          <FormLabel title={t('Date')} />
+          <FormLabel
+            title={t('Date')}
+            htmlFor={showDateType ? 'form_date_type' : undefined}
+          />
         </View>
 
         <SpaceBetween

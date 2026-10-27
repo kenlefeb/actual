@@ -70,16 +70,16 @@ describe('ScheduleEditForm date type', () => {
       screen.getByRole('checkbox', { name: 'Repeats' }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'One date' }),
+      screen.queryByRole('button', { name: 'Date' }),
     ).not.toBeInTheDocument();
   });
 
   it('offers relative dates when the feature is on', () => {
     flags.businessCalendars = true;
     renderForm('2026-11-10');
-    expect(
-      screen.getByRole('button', { name: 'One date' }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Date' })).toHaveTextContent(
+      'One date',
+    );
     expect(
       screen.queryByRole('checkbox', { name: 'Repeats' }),
     ).not.toBeInTheDocument();
@@ -94,9 +94,9 @@ describe('ScheduleEditForm date type', () => {
         direction: 'before',
       },
     });
-    expect(
-      screen.getByRole('button', { name: 'Relative to another schedule' }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Date' })).toHaveTextContent(
+      'Relative to another schedule',
+    );
     expect(screen.getByRole('spinbutton', { name: 'Offset' })).toHaveValue(2);
   });
 });

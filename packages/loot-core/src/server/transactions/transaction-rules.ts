@@ -567,7 +567,7 @@ export function conditionsToAQL(
               value.config,
               subYears(today, 5),
               addYears(today, 1),
-            );
+            ).slice(-recurDateBounds); // bounded like repeating dates
             if (dates.length === 0) {
               // No source (deleted): match nothing
               return { date: '0000-00-00' };

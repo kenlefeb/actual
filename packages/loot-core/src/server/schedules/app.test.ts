@@ -1271,6 +1271,21 @@ describe('relative schedules', () => {
         ],
       }),
     ).rejects.toThrow('relative to itself');
+    await expect(
+      updateSchedule({
+        schedule: { id: payday },
+        conditions: [
+          { op: 'isapprox', field: 'date', value: relativeTo('other') },
+        ],
+      }),
+    ).rejects.toThrow('Other schedules are relative to this one');
+    const huge = relativeTo(payday);
+    huge.relativeTo.offset = 1_000_000_000;
+    await expect(
+      createSchedule({
+        conditions: [{ op: 'isapprox', field: 'date', value: huge }],
+      }),
+    ).rejects.toThrow('whole number from 0 to 366');
   });
 
   it('follows source edits and deletion, and undo restores dates', async () => {

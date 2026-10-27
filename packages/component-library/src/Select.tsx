@@ -30,6 +30,7 @@ function isValueOption<Value>(
 
 type SelectProps<Value> = {
   id?: string;
+  'aria-label'?: string;
   bare?: boolean;
   options: Array<readonly [Value, string] | SelectHeading | typeof Menu.line>;
   value: Value;
@@ -59,6 +60,7 @@ type SelectProps<Value> = {
  */
 export function Select<const Value = string>({
   id,
+  'aria-label': ariaLabel,
   bare,
   options,
   value,
@@ -82,6 +84,7 @@ export function Select<const Value = string>({
       <Button
         ref={triggerRef}
         id={id}
+        aria-label={ariaLabel}
         variant={bare ? 'bare' : 'normal'}
         isDisabled={disabled}
         onPress={() => {

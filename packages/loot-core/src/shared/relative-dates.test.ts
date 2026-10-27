@@ -51,6 +51,15 @@ describe('relative dates', () => {
     setScheduleDates([]);
   });
 
+  it('treats an invalid synced offset as zero instead of hanging', () => {
+    const huge = {
+      ...deposit,
+      relativeTo: { ...deposit.relativeTo, offset: 1_000_000_000 },
+    };
+    // Zero business days before Thu Oct 15 is Oct 15 itself
+    expect(between(huge, '2026-10-01', '2026-10-31')).toEqual(['2026-10-15']);
+  });
+
   it('counts business days before the moved source date', () => {
     // Payday Thu Oct 15 -> Tue Oct 13; payday Sun Nov 15 moves to Fri Nov 13,
     // and Wed Nov 11 is Veterans Day -> Tue Nov 10
@@ -135,6 +144,23 @@ describe('relative dates', () => {
         new Date(2026, 10, 1),
       ),
     ).toBe('2026-11-10');
+  });
+
+  it('finds the next date when recent source dates map before today', () => {
+    // Weekly Mondays from Oct 5, 2026; asked on Fri Nov 13, the Mondays
+    // searched first map to Thursdays already past, the next is Thu Nov 19
+    setScheduleDates([
+      ['weekly', { start: '2026-10-05', frequency: 'weekly' }],
+    ]);
+    const beforeWeekly: RelativeDateConfig = {
+      relativeTo: { ...deposit.relativeTo, scheduleId: 'weekly' },
+    };
+    expect(
+      getNextDate(
+        { op: 'isapprox', field: 'date', value: beforeWeekly },
+        new Date(2026, 10, 13),
+      ),
+    ).toBe('2026-11-19');
   });
 
   it('matches an imported transaction near a relative occurrence', () => {

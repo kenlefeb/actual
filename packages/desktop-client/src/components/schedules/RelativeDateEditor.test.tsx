@@ -70,7 +70,7 @@ describe('RelativeDateEditor', () => {
   it('offers only non-relative other schedules as sources', async () => {
     const onChange = renderEditor(relative(''));
     await userEvent.click(
-      screen.getByRole('button', { name: 'Choose a schedule' }),
+      screen.getByRole('button', { name: 'Source schedule' }),
     );
 
     expect(screen.getByText('Payday')).toBeInTheDocument();

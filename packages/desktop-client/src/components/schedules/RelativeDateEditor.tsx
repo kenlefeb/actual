@@ -5,7 +5,10 @@ import { Select } from '@actual-app/components/select';
 import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
-import { isRelativeDate } from '@actual-app/core/shared/relative-dates';
+import {
+  isRelativeDate,
+  MAX_RELATIVE_OFFSET,
+} from '@actual-app/core/shared/relative-dates';
 import type {
   RelativeDateConfig,
   ScheduleEntity,
@@ -40,6 +43,9 @@ export function RelativeDateEditor({
     !isLoading &&
     relativeTo.scheduleId !== '' &&
     !schedules.some(s => s.id === relativeTo.scheduleId && !s.tombstone);
+  const isCalendarMissing =
+    value.businessCalendarId != null &&
+    !calendars.some(c => c.id === value.businessCalendarId);
 
   const update = (fields: Partial<RelativeDateConfig>) =>
     onChange({ ...value, ...fields });
@@ -53,13 +59,21 @@ export function RelativeDateEditor({
           aria-label={t('Offset')}
           type="number"
           min={0}
+          max={MAX_RELATIVE_OFFSET}
+          step={1}
           value={String(relativeTo.offset)}
           onChangeValue={offset =>
-            updateRelative({ offset: Math.max(0, Number(offset) || 0) })
+            updateRelative({
+              offset: Math.min(
+                MAX_RELATIVE_OFFSET,
+                Math.max(0, Math.floor(Number(offset)) || 0),
+              ),
+            })
           }
           style={{ width: 55 }}
         />
         <Select
+          aria-label={t('Unit')}
           options={[
             ['business-days', t('business days')],
             ['days', t('days')],
@@ -68,6 +82,7 @@ export function RelativeDateEditor({
           onChange={unit => updateRelative({ unit })}
         />
         <Select
+          aria-label={t('Direction')}
           options={[
             ['before', t('before')],
             ['after', t('after')],
@@ -76,9 +91,10 @@ export function RelativeDateEditor({
           onChange={direction => updateRelative({ direction })}
         />
         <Select
+          aria-label={t('Source schedule')}
           options={[
             ...(isSourceMissing
-              ? [[relativeTo.scheduleId, t('deleted schedule')] as const]
+              ? [[relativeTo.scheduleId, t('Deleted schedule')] as const]
               : []),
             ...sources.map(
               s => [s.id, s.name || t('Unnamed schedule')] as const,
@@ -92,17 +108,23 @@ export function RelativeDateEditor({
 
       {/* Counts business days and decides the move below */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-        <Text>
-          <Trans>Business days in</Trans>
-        </Text>
-        <Select
-          options={[
-            ['', t('weekends only')],
-            ...calendars.map(c => [c.id, c.name] as const),
-          ]}
-          value={value.businessCalendarId ?? ''}
-          onChange={id => update({ businessCalendarId: id || undefined })}
-        />
+        <Trans>
+          <label htmlFor="relative_calendar" style={{ userSelect: 'none' }}>
+            Business days in
+          </label>{' '}
+          <Select
+            id="relative_calendar"
+            options={[
+              ['', t('weekends only')],
+              ...calendars.map(c => [c.id, c.name] as const),
+              ...(isCalendarMissing && value.businessCalendarId
+                ? [[value.businessCalendarId, t('missing calendar')] as const]
+                : []),
+            ]}
+            value={value.businessCalendarId ?? ''}
+            onChange={id => update({ businessCalendarId: id || undefined })}
+          />
+        </Trans>
       </View>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
@@ -111,22 +133,43 @@ export function RelativeDateEditor({
           checked={!!value.skipWeekend}
           onChange={e => update({ skipWeekend: e.target.checked })}
         />
-        <label htmlFor="relative_skipwe" style={{ userSelect: 'none' }}>
-          <Trans>Then move</Trans>
-        </label>
-        <Select
-          options={[
-            ['before', t('before')],
-            ['after', t('after')],
-          ]}
-          value={value.weekendSolveMode ?? 'after'}
-          onChange={weekendSolveMode => update({ weekendSolveMode })}
-          disabled={!value.skipWeekend}
-        />
-        <Text>
-          <Trans>non-business days</Trans>
-        </Text>
+        <Trans>
+          <label htmlFor="relative_skipwe" style={{ userSelect: 'none' }}>
+            Then move
+          </label>{' '}
+          <Select
+            id="relative_solve"
+            options={[
+              ['before', t('before')],
+              ['after', t('after')],
+            ]}
+            value={value.weekendSolveMode ?? 'after'}
+            onChange={weekendSolveMode => update({ weekendSolveMode })}
+            disabled={!value.skipWeekend}
+          />{' '}
+          <label htmlFor="relative_solve" style={{ userSelect: 'none' }}>
+            non-business days
+          </label>
+        </Trans>
       </View>
+
+      {!isLoading && sources.length === 0 && !isSourceMissing && (
+        <Text role="note" style={{ color: theme.warningText }}>
+          <Trans>
+            No schedule can be a source yet. Create a schedule with its own date
+            first.
+          </Trans>
+        </Text>
+      )}
+
+      {isCalendarMissing && (
+        <Text role="note" style={{ color: theme.warningText }}>
+          <Trans>
+            The business calendar was deleted. Weekends are used until you
+            choose another calendar.
+          </Trans>
+        </Text>
+      )}
 
       {isSourceMissing && (
         <Text role="note" style={{ color: theme.warningText }}>

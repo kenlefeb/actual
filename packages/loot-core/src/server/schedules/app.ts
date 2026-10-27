@@ -24,7 +24,12 @@ import { undoable } from '#server/undo';
 import { RSchedule } from '#server/util/rschedule';
 import { currentDay, dayFromDate } from '#shared/months';
 import { q } from '#shared/query';
-import { getRelativeOccurrences, isRelativeDate } from '#shared/relative-dates';
+import {
+  getRelativeOccurrences,
+  isRelativeDate,
+  isValidRelativeOffset,
+  MAX_RELATIVE_OFFSET,
+} from '#shared/relative-dates';
 import {
   getScheduleDate,
   setScheduleDates,
@@ -321,7 +326,13 @@ export async function refreshScheduleDateLookup() {
   );
   setScheduleDates(
     rows.flatMap(({ id, conditions }) => {
-      const parsed: unknown = JSON.parse(conditions ?? '[]');
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(conditions ?? '[]');
+      } catch {
+        // A malformed rule is skipped here, as rule loading does
+        return [];
+      }
       const date = Array.isArray(parsed)
         ? parsed.find(cond => cond?.field === 'date')?.value
         : undefined;
@@ -347,27 +358,40 @@ export async function loadScheduleDateLookup() {
 // the caller's undoable mutation, so undo restores both.
 async function refreshRelativeDependents(sourceId: string) {
   await refreshScheduleDateLookup();
-  const dependents = await db.all<{ id: string }>(
-    `SELECT s.id FROM schedules s JOIN rules r ON r.id = s.rule
-     WHERE s.tombstone = 0 AND s.completed = 0 AND r.conditions LIKE ?`,
-    [`%"scheduleId":"${sourceId}"%`],
-  );
-  for (const { id } of dependents) {
+  for (const { id } of await getRelativeDependents(sourceId)) {
     await setNextDate({ id, clearIfNone: true });
   }
 }
 
-function assertValidRelativeDate(dateCond, scheduleId: string) {
+function getRelativeDependents(sourceId: string) {
+  return db.all<{ id: string }>(
+    `SELECT s.id FROM schedules s JOIN rules r ON r.id = s.rule
+     WHERE s.tombstone = 0 AND s.completed = 0 AND r.conditions LIKE ?`,
+    [`%"scheduleId":"${sourceId}"%`],
+  );
+}
+
+async function assertValidRelativeDate(dateCond, scheduleId: string) {
   if (!isRelativeDate(dateCond?.value)) {
     return;
   }
-  const sourceId = dateCond.value.relativeTo.scheduleId;
+  const { scheduleId: sourceId, offset } = dateCond.value.relativeTo;
+  if (!isValidRelativeOffset(offset)) {
+    throw new Error(
+      `A relative date's offset must be a whole number from 0 to ${MAX_RELATIVE_OFFSET}`,
+    );
+  }
   if (sourceId === scheduleId) {
     throw new Error('A schedule cannot be relative to itself');
   }
   if (isRelativeDate(getScheduleDate(sourceId))) {
     throw new Error(
       'A schedule cannot be relative to another relative schedule',
+    );
+  }
+  if ((await getRelativeDependents(scheduleId)).length > 0) {
+    throw new Error(
+      'Other schedules are relative to this one, so it cannot be relative itself',
     );
   }
 }
@@ -390,7 +414,7 @@ export async function createSchedule({
   }
 
   await refreshScheduleDateLookup();
-  assertValidRelativeDate(dateCond, scheduleId);
+  await assertValidRelativeDate(dateCond, scheduleId);
 
   const nextDate = getNextDate(dateCond);
   const nextDateRepr = nextDate ? toDateRepr(nextDate) : null;
@@ -466,7 +490,7 @@ export async function updateSchedule({
       throw new Error('Date is required');
     }
     await refreshScheduleDateLookup();
-    assertValidRelativeDate(dateCond, schedule.id);
+    await assertValidRelativeDate(dateCond, schedule.id);
 
     // We need to get the full rule to merge in the updated
     // conditions

@@ -22,6 +22,22 @@ const WEEKENDS_ONLY: BusinessCalendarEntity = {
   exceptions: [],
 };
 
+// Keeps occurrence windows and business-day walks bounded, even for synced data
+export const MAX_RELATIVE_OFFSET = 366;
+
+export function isValidRelativeOffset(offset: unknown): offset is number {
+  return (
+    Number.isInteger(offset) &&
+    (offset as number) >= 0 &&
+    (offset as number) <= MAX_RELATIVE_OFFSET
+  );
+}
+
+function getOffset(config: RelativeDateConfig) {
+  const { offset } = config.relativeTo;
+  return isValidRelativeOffset(offset) ? offset : 0;
+}
+
 export function isRelativeDate(
   date: ScheduleEntity['_date'] | null | undefined,
 ): date is RelativeDateConfig {
@@ -49,6 +65,29 @@ type ParsedRecur = {
   };
 };
 
+// Lookup entries keep their identity until the next refresh, so rule checks
+// over many transactions parse each source once
+const parsedSources = new WeakMap<
+  RecurConfig,
+  ParsedRecur['schedule'] | null
+>();
+
+function parseSource(source: RecurConfig) {
+  if (!parsedSources.has(source)) {
+    const value: { type: string } = new Condition(
+      'isapprox',
+      'date',
+      source,
+      null,
+    ).getValue();
+    parsedSources.set(
+      source,
+      value.type === 'recur' ? (value as ParsedRecur).schedule : null,
+    );
+  }
+  return parsedSources.get(source) ?? null;
+}
+
 function sourceOccurrences(
   source: string | RecurConfig,
   query: OccurrenceQuery,
@@ -59,16 +98,10 @@ function sourceOccurrences(
       (!query.start || day >= query.start) && (!query.end || day <= query.end);
     return query.reverse || inRange ? [source] : [];
   }
-  const value: { type: string } = new Condition(
-    'isapprox',
-    'date',
-    source,
-    null,
-  ).getValue();
-  if (value.type !== 'recur') {
+  const schedule = parseSource(source);
+  if (!schedule) {
     return [];
   }
-  const { schedule } = value as ParsedRecur;
   return schedule
     .occurrences(query)
     .toArray()
@@ -86,7 +119,8 @@ function sourceOccurrences(
 }
 
 function applyOffset(day: string, config: RelativeDateConfig): string {
-  const { offset, unit, direction } = config.relativeTo;
+  const { unit, direction } = config.relativeTo;
+  const offset = getOffset(config);
   const step = direction === 'before' ? -1 : 1;
   if (unit === 'days') {
     return monthUtils.addDays(day, step * offset);
@@ -97,7 +131,11 @@ function applyOffset(day: string, config: RelativeDateConfig): string {
     return getNearestBusinessDay(calendar, day, direction);
   }
   let current = day;
-  for (let counted = 0; counted < offset;) {
+  // Bounded so a calendar without business days cannot loop forever
+  for (let i = 0, counted = 0; counted < offset; i++) {
+    if (i > offset * 7 + 366) {
+      throw new Error(`No ${offset} business days ${direction} ${day}`);
+    }
     current = monthUtils.addDays(current, step);
     if (isBusinessDay(calendar, current)) {
       counted++;
@@ -136,7 +174,7 @@ export function getRelativeOccurrences(
   }
   // Wide enough for the offset (business days can span weekends and
   // holidays) plus moves of either schedule
-  const pad = config.relativeTo.offset * 2 + 14;
+  const pad = getOffset(config) * 2 + 14;
   const first = monthUtils.dayFromDate(from);
   const last = monthUtils.dayFromDate(to);
   const days = sourceOccurrences(source, {
@@ -161,19 +199,24 @@ export function getNextRelativeDate(
   if (source == null || isRelativeDate(source)) {
     return null;
   }
-  const pad = config.relativeTo.offset * 2 + 14;
-  const startDay = monthUtils.dayFromDate(start);
-  // A few source occurrences from just before `start` cover offsets that
-  // move a later source occurrence back across `start`
-  const ahead = sourceOccurrences(source, {
+  // Search a year from the first source occurrence that can still land on or
+  // after `start`: a daily or weekly source can map several occurrences to
+  // before `start`, and a source may not begin for years
+  const pad = getOffset(config) * 2 + 14;
+  const [first] = sourceOccurrences(source, {
     start: d.subDays(start, pad),
-    take: 4,
-  })
-    .map(day => toRelativeDay(day, config))
-    .filter(day => day >= startDay)
-    .sort();
-  if (ahead.length > 0) {
-    return ahead[0];
+    take: 1,
+  });
+  if (first) {
+    const from = d.max([start, d.subDays(monthUtils.parseDate(first), pad)]);
+    const [next] = getRelativeOccurrences(
+      config,
+      from,
+      d.addDays(from, 366 + pad),
+    );
+    if (next) {
+      return next;
+    }
   }
   const [last] = sourceOccurrences(source, { reverse: true, take: 1 }).map(
     day => toRelativeDay(day, config),

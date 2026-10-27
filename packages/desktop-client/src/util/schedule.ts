@@ -77,14 +77,20 @@ function getRelativeDescription(config: RelativeDateConfig) {
 
   const calendarName = getBusinessCalendar(config.businessCalendarId)?.name;
   if (calendarName) {
-    description += ` (${calendarName})`;
+    description = t('{{description}} ({{calendar}})', {
+      description,
+      calendar: calendarName,
+    });
   }
   if (config.skipWeekend) {
-    description +=
-      ' ' +
-      (config.weekendSolveMode === 'before'
-        ? t('(then moved before non-business days)')
-        : t('(then moved after non-business days)'));
+    description =
+      config.weekendSolveMode === 'before'
+        ? t('{{description}} (then moved before non-business days)', {
+            description,
+          })
+        : t('{{description}} (then moved after non-business days)', {
+            description,
+          });
   }
   return description;
 }

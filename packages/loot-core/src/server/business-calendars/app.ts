@@ -50,13 +50,15 @@ function parseJsonArray<T>(value: string | null): T[] {
 let unlistenSync: (() => void) | null = null;
 
 // Stored next dates are computed once, so recompute them for active schedules
-// that use a business calendar whenever calendars change. This runs inside the
+// that use a business calendar, directly or through a relative date's source,
+// whenever calendars change. This runs inside the
 // same undoable mutation, so undo restores both.
 async function refreshCalendarScheduleDates() {
   const schedules = await db.all<{ id: string }>(
     `SELECT s.id FROM schedules s JOIN rules r ON r.id = s.rule
      WHERE s.tombstone = 0 AND s.completed = 0
-       AND r.conditions LIKE '%businessCalendarId%'`,
+       AND (r.conditions LIKE '%businessCalendarId%'
+         OR r.conditions LIKE '%"relativeTo"%')`,
   );
   for (const { id } of schedules) {
     await setNextDate({ id });

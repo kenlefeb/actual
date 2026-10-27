@@ -628,3 +628,11 @@ Features, Enhancements, Bugfixes and Maintenance format. The title must identify
 “Ken’s Actual fork”; explicitly state this is an unofficial fork prerelease and
 identify its upstream base. Run the hosting repository’s release-note checks and
 include the note with the release artifact. Never reuse a prior version’s note.
+
+Every release's notes must also appear on the in-app `/notifications` page. Copy
+the note to `fork/release-notes/<buildVersion>.md`, run `yarn generate:fork-news`
+and commit the regenerated `packages/desktop-client/src/data/fork-news.json`
+with the version bump. `src/news/forkNews.test.ts` fails when the feed is stale or
+has no entry for the current package version. Fork production builds read this
+bundled feed (`packages/desktop-client/.env.production`); do not edit upstream's
+generated `news.json`.

@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "id": "fork-release-26.10.1-alpha.5",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.5 — Ken's Actual fork",
+      "date": "2026-10-27",
+      "version": "26.10.1-alpha.5",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.5.md",
+      "body": "**Unofficial fork prerelease.** Based on Actual 26.10.0 (`2bebdbaae0b701120a8cad9d56aafd64fa04c577`); not an official Actual Budget release.\n\nFork release notes now appear in the app. Open the bell (Notifications) to read what changed in each fork release, and see a \"What's new\" message the first time you run a new release.",
+      "details": "#### Features\n\n- Show each fork release's notes on the Notifications page, newest first, followed by upstream Actual's announcements included in this build.\n- Show \"What's new in Actual <version>\" the first time a new fork release runs.\n\n#### Enhancements\n\n- Read release notes from the build itself, so a deployment only lists notes for its own and earlier versions and works without reaching GitHub.\n\n#### Bugfixes\n\n- No fork bug fixes in this release; business calendars and earlier mobile and desktop improvements are retained.\n\n#### Maintenance\n\n- Generate the in-app release entries from `fork/release-notes` with `yarn generate:fork-news`; a test fails when a release has no entry.\n- Record the rule that every release's notes appear in the app.\n\n#### Known limitations\n\n- Releases published on the same day (alpha.4 and alpha.5) may show the \"What's new\" message for either one; the Notifications page lists both.\n- Fork release cards link to the note on GitHub but are labeled \"View on actualbudget.org\".\n- Upstream announcements after Actual 26.9.0 are not included until the fork merges newer upstream code.\n- Schedules using business calendars are not part of this release.\n- Synthetic staging only; no real financial data or production paperwork migration. No iPhone acceptance test is claimed."
+    },
+    {
+      "id": "fork-release-26.10.1-alpha.4",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.4 — Ken's Actual fork",
+      "date": "2026-10-27",
+      "version": "26.10.1-alpha.4",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.4.md",
+      "body": "**Unofficial fork prerelease.** Based on Actual 26.10.0 (`2bebdbaae0b701120a8cad9d56aafd64fa04c577`); not an official Actual Budget release.\n\nAdds experimental business calendars, the first step toward paycheck scheduling. Turn on **Business calendars** under Settings → Experimental features, then open **Business calendars** on the desktop Schedules page.",
+      "details": "#### Features\n\n- Define business calendars with non-working weekdays, holidays (fixed date, nth weekday or last weekday of a month) and per-year exceptions such as one-off closures.\n- Choose how weekend holidays are observed: Saturday to Friday and Sunday to Monday, Sunday to Monday only, or not moved.\n- Copy the U.S. Federal Holidays or U.S. Federal Reserve preset and edit it; preview each year's non-business days.\n\n#### Enhancements\n\n- Calendars are stored in the budget, sync between devices and support undo.\n\n#### Bugfixes\n\n- No fork bug fixes in this release; existing mobile and desktop note, split and sync improvements are retained.\n\n#### Maintenance\n\n- Record existing fork behavior as OpenSpec specifications and add tests for desktop note Enter handling and sync-disabled mobile status.\n- Add a `business_calendars` table migration; existing budgets are unchanged until a calendar is created.\n- Exclude OpenSpec-generated files from formatting checks.\n\n#### Known limitations\n\n- Experimental and off by default; calendars are managed on desktop only.\n- Schedules and paychecks do not use calendars yet; that arrives in later releases.\n- Holidays tied to Easter must be added as yearly exceptions.\n- Synthetic staging only; no real financial data or production paperwork migration. No iPhone acceptance test is claimed."
+    },
+    {
+      "id": "fork-release-26.10.1-alpha.3",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.3 — Ken's Actual fork",
+      "date": "2026-10-26",
+      "version": "26.10.1-alpha.3",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.3.md",
+      "body": "**Unofficial fork prerelease.** Based on Actual 26.10.0 (`2bebdbaae0b701120a8cad9d56aafd64fa04c577`); not an official Actual Budget release.\n\nBuild the application and agent API directly from a verified commit on the fork’s development branch, preserving the existing mobile and desktop improvements.",
+      "details": "#### Features\n\n- Retain mobile receipt links and explicit synchronization feedback.\n\n#### Enhancements\n\n- Retain multiline transaction notes on mobile and desktop.\n\n#### Bugfixes\n\n- Include the existing awaited API mutations and sparse split-update fixes in the common fork source used by both builds.\n\n#### Maintenance\n\n- Replace patch application with a pinned commit from `kenlefeb/actual` development.\n- Verify the checkout, development-branch ancestry and all seven package versions before building.\n- Preserve authenticated deployment checks, original transaction IDs, backup hashes and independent restoration checks.\n\n#### Known limitations\n\n- Synthetic staging only; no real financial data or production paperwork migration.\n- The commit is deliberately pinned; advancing development does not silently change an existing release.\n- No new iPhone acceptance test is claimed by this pipeline release."
+    },
+    {
+      "id": "fork-release-26.10.1-alpha.2",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.2 — Ken's Actual fork",
+      "date": "2026-10-26",
+      "version": "26.10.1-alpha.2",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.2.md",
+      "body": "**Unofficial fork prerelease.** For Ken’s synthetic staging evaluation, based on Actual 26.10.0 (`2bebdbaae0b701120a8cad9d56aafd64fa04c577`). This is not an official Actual Budget release.\n\nDesktop transaction notes now retain and expose multiple lines, including notes created on the phone. This fixes a reproduced desktop editing path that removed line breaks; the original phone-pilot incident has no client event trace establishing its exact origin.",
+      "details": "#### Features\n\n- No new product features; this release corrects transaction-note behavior.\n\n#### Enhancements\n\n- Show a multiline desktop note editor. Use Shift+Enter for a new line; Enter and Tab retain table navigation.\n- Display the full multiline note on hover even when it fits horizontally. The transaction table retains its compact row layout.\n\n#### Bugfixes\n\n- Replace the single-line desktop input that stripped newlines when editing or blurring a note.\n- Keep typing and arrow keys inside the multiline editor; retain beneficiary tag completion and existing quick-entry shortcuts.\n\n#### Maintenance\n\n- Add failing-before/fixed-after regressions for newline preservation, multiline editing and full-note previews.\n- Extend browser acceptance to edit a mobile split without changing its parent or sibling, then edit the same multiline parent note on desktop.\n- Align all seven package versions and Settings on `26.10.1-alpha.2` and include the desktop regressions in release CI.\n\n#### Known limitations\n\n- Synthetic staging only. No migration of real financial records or production paperwork.\n- This release prevents the reproduced newline loss; it cannot infer missing line breaks in arbitrary historical notes.\n- Automated mobile-browser checks do not replace acceptance on Ken’s installed iPhone PWA."
+    },
+    {
+      "id": "fork-release-26.10.1-alpha.1",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.1 — Ken's Actual fork",
+      "date": "2026-10-26",
+      "version": "26.10.1-alpha.1",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.1.md",
+      "body": "**Unofficial fork prerelease.** Maintained for Ken’s synthetic staging evaluation; this is not an official Actual Budget release. Based on [Actual 26.10.0](https://actualbudget.org/blog/release-26.10.0/) (`2bebdbaae0b701120a8cad9d56aafd64fa04c577`).\n\nThis first versioned fork release improves mobile notes, receipt navigation and sync feedback, and makes the customized version visible in Settings.\n\n- Open receipt links from mobile transaction notes without copying the URL.\n- See a persistent mobile synchronization status and control.\n- Preserve line breaks while editing parent and split notes.",
+      "details": "#### Features\n\n- Add a persistent mobile Sync/status bar and tappable external note links. Source: `3b1a54d`.\n\n#### Enhancements\n\n- Use multiline mobile parent and split note editors.\n- Align the seven release packages and Settings on `26.10.1-alpha.1`; retain upstream provenance separately. Source: `cda16fb`.\n\n#### Bugfixes\n\n- Await refresh completion and clear the busy state after failure.\n- Prefer completed sync events over cached startup connectivity after an offline launch.\n\n#### Maintenance\n\n- Add semantic prerelease guards and automated Settings-version acceptance.\n- Verify the $901 synthetic fixture, two splits and exact IDs/notes after deployment and independent restoration.\n- Publish a separate API-client maintenance artifact with asynchronous completion and sparse-split mutation fixes; this is not a new production agent service.\n\n#### Known limitations\n\n- Synthetic staging only; no real-budget migration or production document authorization.\n- Phone receipt tapping passed. Multiline phone editing and the wider mobile pilot remain open.\n- The existing demo-based mobile prefill setup remains unresolved; focused native-budget browser acceptance passes."
+    }
+  ]
+}

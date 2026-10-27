@@ -29,6 +29,6 @@
       "path": "../plugins-service"
     }
   ],
-  "include": ["**/*.ts", "src/**/*.tsx", "src/**/*.js"],
+  "include": ["**/*.ts", "src/**/*.tsx", "src/**/*.js", "src/data/*.json"],
   "exclude": ["node_modules", "build", "**/service-worker/**", "e2e"]
 }

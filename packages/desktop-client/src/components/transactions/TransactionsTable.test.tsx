@@ -1692,6 +1692,17 @@ describe('Transactions', () => {
     expect(getTransactions()[0].notes).toBe('First\nSecond');
   });
 
+  test('saves a multiline note with Enter and moves to the next row', async () => {
+    const transactions = generateTransactions(2);
+    transactions[0].notes = 'First';
+    const { container, getTransactions } = renderTransactions({ transactions });
+    const input = await editField(container, 'notes', 0);
+    await userEvent.click(input);
+    await userEvent.keyboard('{End}{Shift>}{Enter}{/Shift}Second{Enter}');
+    expect(getTransactions()[0].notes).toBe('First\nSecond');
+    expectToBeEditingField(container, 'notes', 1);
+  });
+
   describe('Tag Autocomplete', () => {
     test('adding a tag at the end of the note', async () => {
       const { container, getTransactions } = renderTransactions();

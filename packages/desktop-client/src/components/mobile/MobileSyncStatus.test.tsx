@@ -112,4 +112,21 @@ describe('MobileSyncStatus', () => {
       screen.queryByRole('button', { name: 'Sync with server' }),
     ).not.toBeInTheDocument();
   });
+
+  it('treats a sync-disabled file as local even when the server is online', async () => {
+    render(
+      <TestProviders>
+        <MobileSyncStatus />
+      </TestProviders>,
+    );
+    await act(async () => {
+      backend.emit({ type: 'success', syncDisabled: true });
+    });
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Local file — not syncing',
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Sync with server' }),
+    ).not.toBeInTheDocument();
+  });
 });

@@ -4,6 +4,16 @@
   "trailingComma": "all",
   "arrowParens": "avoid",
   "printWidth": 80,
+  "ignorePatterns": [
+    "openspec/",
+    ".agents/skills/openspec-*/",
+    ".claude/skills/openspec-*/",
+    ".claude/commands/opsx/",
+    ".cursor/skills/openspec-*/",
+    ".cursor/commands/opsx-*.md",
+    ".github/skills/openspec-*/",
+    ".github/prompts/opsx-*.prompt.md"
+  ],
   "experimentalSortImports": {
     "groups": [
       "react",

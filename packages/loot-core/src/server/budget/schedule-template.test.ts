@@ -1,6 +1,8 @@
 import * as db from '#server/db';
 import { Rule } from '#server/rules';
 import { getRuleForSchedule } from '#server/schedules/app';
+import { setBusinessCalendars } from '#shared/business-calendar-lookup';
+import { businessCalendarPresets } from '#shared/business-calendar-presets';
 import type { Currency } from '#shared/currencies';
 import type { CategoryEntity } from '#types/models';
 
@@ -34,6 +36,7 @@ type RuleSpec = {
   amount: number;
   frequency: 'monthly' | 'yearly' | 'weekly' | 'daily';
   interval?: number;
+  businessCalendarId?: string;
 };
 
 function makeRule({
@@ -42,6 +45,7 @@ function makeRule({
   amount,
   frequency,
   interval = 1,
+  businessCalendarId,
 }: RuleSpec): Rule {
   return new Rule({
     id,
@@ -56,8 +60,9 @@ function makeRule({
           interval,
           frequency,
           patterns: [],
-          skipWeekend: false,
+          skipWeekend: businessCalendarId != null,
           weekendSolveMode: 'before',
+          businessCalendarId,
           endMode: 'never',
           endOccurrences: 1,
           endDate: '2099-01-01',
@@ -688,5 +693,50 @@ describe('runSchedule', () => {
       defaultCurrency,
     );
     expect(result.to_budget).toBe(0);
+  });
+
+  describe('with a business calendar', () => {
+    afterEach(() => setBusinessCalendars([]));
+
+    it('counts a payment moved into the month by a holiday', async () => {
+      setBusinessCalendars([
+        {
+          id: 'federal',
+          name: 'Federal',
+          ...businessCalendarPresets[0].calendar,
+        },
+      ]);
+      const template_lines = [
+        {
+          type: 'schedule',
+          name: 'Test Schedule',
+          priority: 0,
+          directive: 'template',
+        } as const,
+      ];
+      // January 1 2027 (a Friday holiday) moves back to December 31 2026
+      const run = async (businessCalendarId?: string) => {
+        mockSingleSchedule({
+          start: '2026-01-01',
+          amount: -10000,
+          frequency: 'monthly',
+          businessCalendarId,
+        });
+        return runSchedule(
+          template_lines,
+          '2026-12-01',
+          0,
+          0,
+          0,
+          0,
+          [],
+          defaultCategory,
+          defaultCurrency,
+        );
+      };
+
+      expect((await run('federal')).to_budget).toBe(20000);
+      expect((await run()).to_budget).toBe(10000);
+    });
   });
 });

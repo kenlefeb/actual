@@ -177,6 +177,7 @@ async function createScheduleList(
                 getDateWithSkippedWeekend(
                   monthUtils._parse(nextBaseDate),
                   dateConditions.value.weekendSolveMode,
+                  dateConditions.value.businessCalendarId,
                 ),
               )
             : nextBaseDate;
@@ -194,6 +195,7 @@ async function createScheduleList(
                   getDateWithSkippedWeekend(
                     monthUtils._parse(nextBaseDate),
                     dateConditions.value.weekendSolveMode,
+                    dateConditions.value.businessCalendarId,
                   ),
                 )
               : nextBaseDate;

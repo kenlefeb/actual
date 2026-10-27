@@ -17,6 +17,8 @@ export type RecurConfig = {
   endOccurrences?: number;
   endDate?: string;
   weekendSolveMode?: 'before' | 'after';
+  // When set with skipWeekend, skip this business calendar's non-business days
+  businessCalendarId?: string;
 };
 
 export type ScheduleEntity = {

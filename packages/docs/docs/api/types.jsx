@@ -415,6 +415,17 @@ export const objects = {
         </span>
       ),
     },
+    {
+      name: 'businessCalendarId',
+      type: types.id,
+      description: (
+        <span>
+          Experimental. When <code>skipWeekend</code> is true, dates move off
+          the non-business days of this business calendar instead of only
+          weekends. Falls back to weekends if the calendar does not exist.
+        </span>
+      ),
+    },
   ],
 
   payee: [

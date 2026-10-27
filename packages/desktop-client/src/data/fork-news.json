@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "id": "fork-release-26.10.1-alpha.7",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.7 — Ken's Actual fork",
+      "date": "2026-10-27",
+      "version": "26.10.1-alpha.7",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.7.md",
+      "body": "**Unofficial fork prerelease.** Based on Actual 26.10.0 (`2bebdbaae0b701120a8cad9d56aafd64fa04c577`); not an official Actual Budget release.\n\nSchedules can now skip holidays, not just weekends. With **Business calendars** turned on under Settings → Experimental features, a recurring schedule's \"Move schedule before/after\" option can use one of your business calendars, so a bill or paycheck due on a holiday moves to the nearest business day.",
+      "details": "#### Features\n\n- Move a recurring schedule's dates before or after the non-business days of a chosen business calendar, such as U.S. Federal Holidays, instead of only weekends.\n\n#### Enhancements\n\n- Next dates, upcoming dates, account previews, posted transactions, forecasts and budget schedule templates all use the chosen calendar.\n- The schedule's description names the calendar, for example \"(before non-business days in U.S. Federal Holidays)\".\n- Editing or deleting a calendar updates the next dates of schedules that use it; undo restores both.\n\n#### Bugfixes\n\n- No fork bug fixes in this release; earlier improvements are retained.\n\n#### Maintenance\n\n- Record schedule business-day behavior as an OpenSpec specification with tests for date moves, previews, templates, the schedule editor and calendar changes.\n\n#### Known limitations\n\n- Experimental and off by default. If a schedule's calendar is deleted, it falls back to weekends and the editor says so.\n- Matching bank-imported transactions to schedules is unchanged.\n- Business calendars are managed on desktop only; mobile can choose a calendar in the schedule editor.\n- Releases published on the same day may show the \"What's new\" message for any of them; the Notifications page lists all.\n- Synthetic staging only; no real financial data or production paperwork migration. No iPhone acceptance test is claimed."
+    },
+    {
       "id": "fork-release-26.10.1-alpha.6",
       "type": "release",
       "title": "Release 26.10.1-alpha.6 — Ken's Actual fork",

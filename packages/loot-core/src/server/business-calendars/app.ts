@@ -3,7 +3,10 @@ import * as d from 'date-fns';
 import { createApp } from '#server/app';
 import * as db from '#server/db';
 import { mutator } from '#server/mutators';
+import { setNextDate } from '#server/schedules/app';
+import { addSyncListener } from '#server/sync';
 import { undoable } from '#server/undo';
+import { setBusinessCalendars } from '#shared/business-calendar-lookup';
 import type {
   BusinessCalendarEntity,
   BusinessCalendarException,
@@ -44,6 +47,38 @@ function parseJsonArray<T>(value: string | null): T[] {
   }
 }
 
+let unlistenSync: (() => void) | null = null;
+
+// Stored next dates are computed once, so recompute them for active schedules
+// that use a business calendar whenever calendars change. This runs inside the
+// same undoable mutation, so undo restores both.
+async function refreshCalendarScheduleDates() {
+  const schedules = await db.all<{ id: string }>(
+    `SELECT s.id FROM schedules s JOIN rules r ON r.id = s.rule
+     WHERE s.tombstone = 0 AND s.completed = 0
+       AND r.conditions LIKE '%businessCalendarId%'`,
+  );
+  for (const { id } of schedules) {
+    await setNextDate({ id });
+  }
+}
+
+async function refreshBusinessCalendarLookup() {
+  setBusinessCalendars(await getBusinessCalendars());
+}
+
+// Keep the synchronous lookup used by schedule date math in step with the
+// table, including changes from undo and other devices
+export async function loadBusinessCalendars() {
+  await refreshBusinessCalendarLookup();
+  unlistenSync?.();
+  unlistenSync = addSyncListener((_oldValues, newValues) => {
+    if (newValues.has('business_calendars')) {
+      void refreshBusinessCalendarLookup();
+    }
+  });
+}
+
 async function getBusinessCalendars(): Promise<BusinessCalendarEntity[]> {
   const rows = await db.all<db.DbBusinessCalendar>(
     'SELECT * FROM business_calendars WHERE tombstone = 0 ORDER BY name, id',
@@ -67,7 +102,10 @@ async function createBusinessCalendar({
 > {
   const fields = { name, nonWorkingDays, holidays, exceptions };
   validateCalendar(fields);
-  return db.insertWithUUID('business_calendars', toRow(fields));
+  const id = await db.insertWithUUID('business_calendars', toRow(fields));
+  await refreshBusinessCalendarLookup();
+  await refreshCalendarScheduleDates();
+  return id;
 }
 
 async function updateBusinessCalendar({
@@ -76,12 +114,16 @@ async function updateBusinessCalendar({
 }: Pick<BusinessCalendarEntity, 'id'> & Partial<CalendarFields>) {
   validateCalendar(fields);
   await db.update('business_calendars', { id, ...toRow(fields) });
+  await refreshBusinessCalendarLookup();
+  await refreshCalendarScheduleDates();
 }
 
 async function deleteBusinessCalendar({
   id,
 }: Pick<BusinessCalendarEntity, 'id'>) {
   await db.delete_('business_calendars', id);
+  await refreshBusinessCalendarLookup();
+  await refreshCalendarScheduleDates();
 }
 
 function toRow(

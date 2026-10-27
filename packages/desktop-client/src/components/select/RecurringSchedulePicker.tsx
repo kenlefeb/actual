@@ -24,7 +24,9 @@ import type {
 
 import { Modal } from '#components/common/Modal';
 import { Checkbox } from '#components/forms';
+import { useBusinessCalendarLookup } from '#hooks/useBusinessCalendarLookup';
 import { useDateFormat } from '#hooks/useDateFormat';
+import { useFeatureFlag } from '#hooks/useFeatureFlag';
 import { useLocale } from '#hooks/useLocale';
 import { getRecurringDescription } from '#util/schedule';
 
@@ -402,6 +404,28 @@ function RecurringScheduleTooltip({
 
   const { config } = state;
 
+  const businessCalendarsEnabled = useFeatureFlag('businessCalendars');
+  const businessCalendars = useBusinessCalendarLookup();
+  const isCalendarMissing =
+    config.businessCalendarId != null &&
+    !businessCalendars.some(c => c.id === config.businessCalendarId);
+  // A stored calendar stays visible (and switchable) even with the flag off
+  const showCalendarSelect =
+    businessCalendarsEnabled || config.businessCalendarId != null;
+  const skipDayOptions: Array<readonly [string, string]> = [
+    ['', t('weekends')],
+    ...businessCalendars.map(
+      calendar =>
+        [
+          calendar.id,
+          t('non-business days in {{name}}', { name: calendar.name }),
+        ] as const,
+    ),
+    ...(isCalendarMissing && config.businessCalendarId
+      ? [[config.businessCalendarId, t('missing calendar')] as const]
+      : []),
+  ];
+
   const updateField = <Field extends keyof RecurConfig>(
     field: Field,
     value: StateConfig[Field],
@@ -537,35 +561,78 @@ function RecurringScheduleTooltip({
               });
             }}
           />
-          <Trans>
-            <label
-              htmlFor="form_skipwe"
-              style={{
-                userSelect: 'none',
-                marginRight: 5,
-              }}
-            >
-              Move schedule{' '}
-            </label>
-            <Select
-              id="solve_dropdown"
-              options={[
-                ['before', t('before')],
-                ['after', t('after')],
-              ]}
-              value={state.config.weekendSolveMode}
-              onChange={value => dispatch({ type: 'set-weekend-solve', value })}
-              disabled={!skipWeekend}
-            />
-            <label
-              htmlFor="solve_dropdown"
-              style={{ userSelect: 'none', marginLeft: 5 }}
-            >
-              {' '}
-              {{ beforeOrAfter: '' } as TransObjectLiteral} weekend
-            </label>
-          </Trans>
+          {showCalendarSelect ? (
+            <>
+              <label
+                htmlFor="form_skipwe"
+                style={{ userSelect: 'none', marginRight: 5 }}
+              >
+                <Trans>Move schedule</Trans>
+              </label>
+              <Select
+                id="solve_dropdown"
+                options={[
+                  ['before', t('before')],
+                  ['after', t('after')],
+                ]}
+                value={state.config.weekendSolveMode}
+                onChange={value =>
+                  dispatch({ type: 'set-weekend-solve', value })
+                }
+                disabled={!skipWeekend}
+              />
+              <Select
+                id="skip_days_dropdown"
+                options={skipDayOptions}
+                value={config.businessCalendarId ?? ''}
+                onChange={value =>
+                  updateField('businessCalendarId', value || undefined)
+                }
+                disabled={!skipWeekend}
+                style={{ marginLeft: 5 }}
+              />
+            </>
+          ) : (
+            <Trans>
+              <label
+                htmlFor="form_skipwe"
+                style={{
+                  userSelect: 'none',
+                  marginRight: 5,
+                }}
+              >
+                Move schedule{' '}
+              </label>
+              <Select
+                id="solve_dropdown"
+                options={[
+                  ['before', t('before')],
+                  ['after', t('after')],
+                ]}
+                value={state.config.weekendSolveMode}
+                onChange={value =>
+                  dispatch({ type: 'set-weekend-solve', value })
+                }
+                disabled={!skipWeekend}
+              />
+              <label
+                htmlFor="solve_dropdown"
+                style={{ userSelect: 'none', marginLeft: 5 }}
+              >
+                {' '}
+                {{ beforeOrAfter: '' } as TransObjectLiteral} weekend
+              </label>
+            </Trans>
+          )}
         </View>
+        {isCalendarMissing && (
+          <Text role="note" style={{ color: theme.warningText }}>
+            <Trans>
+              The chosen business calendar no longer exists, so dates move off
+              weekends only.
+            </Trans>
+          </Text>
+        )}
       </SpaceBetween>
       <SchedulePreview previewDates={previewDates} />
       <div
@@ -603,6 +670,7 @@ export function RecurringSchedulePicker({
   const [isOpen, setIsOpen] = useState(false);
   const dateFormat = useDateFormat() || 'MM/dd/yyyy';
   const locale = useLocale();
+  const businessCalendars = useBusinessCalendarLookup();
 
   function onSave(config: RecurConfig) {
     onChange(config);
@@ -611,7 +679,9 @@ export function RecurringSchedulePicker({
 
   const recurringDescription = useMemo(
     () => getRecurringDescription(value, dateFormat, locale),
-    [locale, value, dateFormat],
+    // businessCalendars: the description names the chosen calendar
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+    [locale, value, dateFormat, businessCalendars],
   );
 
   const tooltip = (

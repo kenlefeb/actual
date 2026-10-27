@@ -1,4 +1,5 @@
 // @ts-strict-ignore
+import { getBusinessCalendar } from '@actual-app/core/shared/business-calendar-lookup';
 import * as monthUtils from '@actual-app/core/shared/months';
 import type {
   PayeeEntity,
@@ -73,11 +74,16 @@ export function getRecurringDescription(
       break;
   }
 
-  const weekendSolveModeString = config.weekendSolveMode
-    ? config.weekendSolveMode === 'after'
-      ? t('(after weekend)')
-      : t('(before weekend)')
-    : '';
+  const calendarName = getBusinessCalendar(config.businessCalendarId)?.name;
+  const weekendSolveModeString = !config.weekendSolveMode
+    ? ''
+    : calendarName
+      ? config.weekendSolveMode === 'after'
+        ? t('(after non-business days in {{name}})', { name: calendarName })
+        : t('(before non-business days in {{name}})', { name: calendarName })
+      : config.weekendSolveMode === 'after'
+        ? t('(after weekend)')
+        : t('(before weekend)');
 
   const weekendSolveSuffix = config.skipWeekend ? weekendSolveModeString : '';
 

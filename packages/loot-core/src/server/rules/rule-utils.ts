@@ -228,6 +228,7 @@ export function parseRecurDate(desc) {
         data: {
           skipWeekend: desc.skipWeekend,
           weekendSolve: desc.weekendSolveMode,
+          businessCalendarId: desc.businessCalendarId,
         },
       }),
     };

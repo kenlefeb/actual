@@ -9,6 +9,7 @@ import * as fs from '#platform/server/fs';
 import { logger } from '#platform/server/log';
 import { createApp } from '#server/app';
 import * as budget from '#server/budget/base';
+import { loadBusinessCalendars } from '#server/business-calendars/app';
 import * as cloudStorage from '#server/cloud-storage';
 import * as db from '#server/db';
 import * as mappings from '#server/db/mappings';
@@ -653,6 +654,7 @@ async function _loadBudget(id: Budget['id']): Promise<{
 
   // Load all the in-memory state
   await mappings.loadMappings();
+  await loadBusinessCalendars();
   await rules.loadRules();
   syncMigrations.listen();
   mainApp.startServices();

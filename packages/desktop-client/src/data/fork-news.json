@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "id": "fork-release-26.10.1-alpha.6",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.6 — Ken's Actual fork",
+      "date": "2026-10-27",
+      "version": "26.10.1-alpha.6",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.6.md",
+      "body": "**Unofficial fork prerelease.** Based on Actual 26.10.0 (`2bebdbaae0b701120a8cad9d56aafd64fa04c577`); not an official Actual Budget release.\n\nFork release notes now actually appear on the Notifications page of the web app served by Actual's server. Alpha.5 added them, but its setting only applied to desktop builds, so the server's web app still showed upstream's feed.",
+      "details": "#### Features\n\n- No new features; this release makes alpha.5's in-app fork release notes work on the server's web app.\n\n#### Enhancements\n\n- No enhancements beyond the fix below.\n\n#### Bugfixes\n\n- Read the bundled fork and upstream release notes in the web app built for the server (browser build mode), instead of fetching upstream's feed from GitHub.\n\n#### Maintenance\n\n- Verify the bundled feed with the same browser build mode the server image uses.\n\n#### Known limitations\n\n- Releases published on the same day (alpha.4, alpha.5 and alpha.6) may show the \"What's new\" message for any of them; the Notifications page lists all.\n- Fork release cards link to the note on GitHub but are labeled \"View on actualbudget.org\".\n- Upstream announcements after Actual 26.9.0 are not included until the fork merges newer upstream code.\n- Schedules using business calendars are not part of this release.\n- Synthetic staging only; no real financial data or production paperwork migration. No iPhone acceptance test is claimed."
+    },
+    {
       "id": "fork-release-26.10.1-alpha.5",
       "type": "release",
       "title": "Release 26.10.1-alpha.5 — Ken's Actual fork",

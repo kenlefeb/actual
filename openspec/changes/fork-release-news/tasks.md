@@ -8,7 +8,7 @@
 ## 2. Bundled feed
 
 - [x] 2.1 Add the `REACT_APP_NEWS_FEED_BUNDLED` option to `fetchNewsFeed.ts`: when `true` and no URL override is set, import the bundled `news.json` and `fork-news.json`, validate them, and return entries merged newest first (fork first on equal dates) without a network request; extend `fetchNewsFeed.test.ts` for the bundled path, ordering, and that the override and preview paths are unchanged; verify the tests pass
-- [x] 2.2 Commit `packages/desktop-client/.env.production` setting `REACT_APP_NEWS_FEED_BUNDLED=true`; verify with `yarn workspace @actual-app/web build` that the built app contains the fork entry titles and no request to `raw.githubusercontent.com/actualbudget` is needed for the feed
+- [x] 2.2 Commit `packages/desktop-client/.env.browser` (served web app, `--mode=browser`) and `.env.production` (desktop) setting `REACT_APP_NEWS_FEED_BUNDLED=true`; verify with `yarn workspace @actual-app/web build:browser` (the mode the server image uses) that the built app contains the fork entry titles and no request to `raw.githubusercontent.com/actualbudget` is needed for the feed
 
 ## 3. Release rule documentation
 

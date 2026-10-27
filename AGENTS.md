@@ -634,5 +634,6 @@ the note to `fork/release-notes/<buildVersion>.md`, run `yarn generate:fork-news
 and commit the regenerated `packages/desktop-client/src/data/fork-news.json`
 with the version bump. `src/news/forkNews.test.ts` fails when the feed is stale or
 has no entry for the current package version. Fork production builds read this
-bundled feed (`packages/desktop-client/.env.production`); do not edit upstream's
+bundled feed (`packages/desktop-client/.env.browser` for the served web app,
+`.env.production` for desktop builds); do not edit upstream's
 generated `news.json`.

@@ -14,6 +14,10 @@ const REPO_NEWS_FEED_URL =
  *
  * 1. `REACT_APP_NEWS_FEED_URL` - explicit override, e.g. in a local `.env`
  *    file in `packages/desktop-client`.
+ *
+ * Without an override, `REACT_APP_NEWS_FEED_BUNDLED=true` (set for fork
+ * builds in `.env.browser` and `.env.production`) skips fetching entirely and
+ * `fetchNewsFeed` reads the bundled upstream and fork feeds instead.
  * 2. Netlify PR previews (`REACT_APP_REVIEW_ID` is set) serve the copy in
  *    their own build, i.e. exactly the file committed on the PR branch. This
  *    also works for PRs from forks, whose branches aren't on GitHub upstream.
@@ -66,9 +70,45 @@ function isNewsFeed(value: unknown): value is NewsFeed {
   );
 }
 
+/**
+ * Upstream and fork entries combined, newest first. The sort is stable, so
+ * fork entries stay ahead of upstream ones published the same day.
+ */
+export function mergeNewsEntries(
+  upstream: NewsEntry[],
+  fork: NewsEntry[],
+): NewsEntry[] {
+  return [...fork, ...upstream].sort((a, b) => b.date.localeCompare(a.date));
+}
+
+/**
+ * The feeds bundled into this build: upstream's `news.json` plus the fork's
+ * release entries. Pins notes to the installed version and needs no network.
+ */
+async function loadBundledNewsFeed(): Promise<NewsFeed> {
+  const [{ default: upstream }, { default: fork }] = await Promise.all([
+    import('#data/news.json'),
+    import('#data/fork-news.json'),
+  ]);
+  if (!isNewsFeed(upstream) || !isNewsFeed(fork)) {
+    throw new Error('Unsupported bundled news feed format');
+  }
+  return {
+    schemaVersion: NEWS_FEED_SCHEMA_VERSION,
+    entries: mergeNewsEntries(upstream.entries, fork.entries),
+  };
+}
+
 export async function fetchNewsFeed(): Promise<NewsFeed> {
   if (Platform.isPlaywright) {
     return newsFeedFixture;
+  }
+
+  if (
+    !import.meta.env.REACT_APP_NEWS_FEED_URL &&
+    import.meta.env.REACT_APP_NEWS_FEED_BUNDLED === 'true'
+  ) {
+    return loadBundledNewsFeed();
   }
 
   const response = await fetch(await getNewsFeedUrl());

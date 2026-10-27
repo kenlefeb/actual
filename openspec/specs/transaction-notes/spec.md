@@ -17,7 +17,7 @@ Transaction notes SHALL keep their line breaks when opened, edited, blurred and 
 - **THEN** the saved value equals the original, including every line break
 
 ### Requirement: Desktop multiline note entry
-The desktop note editor SHALL insert a new line on Shift+Enter without saving, while Tab and Shift+Tab SHALL save the note and move between table fields.
+The desktop note editor SHALL insert a new line on Shift+Enter without saving, while Tab and Shift+Tab SHALL save the note and move between table fields, and plain Enter SHALL save the note and move to the same field in the next row.
 
 #### Scenario: Add a line and move on
 - **WHEN** a user presses Shift+Enter, types more text and presses Tab
@@ -26,6 +26,11 @@ The desktop note editor SHALL insert a new line on Shift+Enter without saving, w
 #### Scenario: Shift+Tab after a new line
 - **WHEN** a user inserts a new line with Shift+Enter and then presses Shift+Tab
 - **THEN** focus moves to the previous field
+
+#### Scenario: Enter saves and moves down
+- **WHEN** a user edits a multiline note and presses Enter
+- **THEN** the note is saved with all of its line breaks
+- **AND** focus moves to the note field of the next row
 
 ### Requirement: Full note on hover
 The desktop transaction table SHALL show the complete note, with all its lines, on hover even when the note fits horizontally, while rows keep their compact height.

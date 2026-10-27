@@ -53,7 +53,7 @@ Saving a paycheck SHALL create or update, in one undoable step, a pay schedule o
 - **THEN** "Acme Paycheck" has one transaction of 2,250.00 split into 3,000.00 "Income", -450.00 "Taxes", -120.00 "Insurance" and a -180.00 transfer to "Retirement", and the budget shows 3,000.00 income in November
 
 ### Requirement: Deposit schedules
-The same step SHALL keep one deposit schedule per direct deposit on its receiving account, for that deposit's amount, dated by the account's early-deposit rule relative to the pay schedule. Its transactions SHALL be transfers from the clearing account. Deposit schedules SHALL match imports by approximate amount and date and SHALL NOT post automatically. Paycheck schedules SHALL appear in the schedules list named after the paycheck and behave like any schedule.
+The same step SHALL keep one deposit schedule per direct deposit on its receiving account, for that deposit's amount, dated by the account's early-deposit rule relative to the pay schedule. Its transactions SHALL be transfers from the clearing account. Deposit schedules SHALL match imports by approximate amount and date. Paycheck schedules SHALL appear in the schedules list named after the paycheck and behave like any schedule.
 
 #### Scenario: Pay date and deposit dates
 - **GIVEN** the "Acme" paycheck, "Checking" deposits arrive 2 business days early in "U.S. Federal Reserve", and "Savings" deposits arrive 0 days early in "U.S. Federal Reserve"
@@ -67,6 +67,27 @@ The same step SHALL keep one deposit schedule per direct deposit on its receivin
 #### Scenario: Deposit far from the expected amount
 - **WHEN** bank sync imports a 2,600.00 deposit to "Checking" on November 10, 2026
 - **THEN** it does not link to the deposit schedule
+
+### Requirement: Posting deposits automatically
+Each direct deposit SHALL have a "Post automatically" option, off by default. When on, its deposit schedule posts the transfer from the clearing account on the deposit date. The editor SHALL note that a posted deposit merges with a bank-synced import only when the amounts are exactly equal, so deposits that vary should stay off.
+
+#### Scenario: Off by default
+- **WHEN** the user adds a deposit to "Checking"
+- **THEN** "Post automatically" is off and no transaction is added to "Checking" until a deposit is imported or entered
+
+#### Scenario: Manual account
+- **GIVEN** "Savings" is not bank-synced and its fixed 225.00 deposit posts automatically
+- **WHEN** November 13, 2026 arrives
+- **THEN** "Savings" has a 225.00 transfer from "Acme Paycheck" dated November 13, 2026
+
+#### Scenario: Exact import merges with the posted deposit
+- **GIVEN** the "Savings" deposit posted 225.00 on November 13, 2026
+- **WHEN** bank sync imports a 225.00 deposit to "Savings" on November 13, 2026
+- **THEN** the import merges into the posted transfer and "Savings" has one deposit
+
+#### Scenario: The editor explains the trade-off
+- **WHEN** the user turns on "Post automatically" for a deposit
+- **THEN** the editor notes that a bank-synced deposit merges only when its amount is exactly the same
 
 ### Requirement: Editing and deleting paychecks
 Opening a paycheck's schedule SHALL offer to edit the paycheck. Saving changes SHALL update its schedules in one undoable step and SHALL NOT change transactions already posted or linked. Deleting a paycheck SHALL delete its schedules and keep its clearing account and existing transactions. Undo SHALL restore the previous paycheck and schedules.

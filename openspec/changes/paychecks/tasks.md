@@ -8,15 +8,15 @@
 ## 2. Server
 
 - [ ] 2.1 Add `account/set-business-days` with validation (0–10 whole days) and test that it stores and undoes; verify it passes
-- [ ] 2.2 Add `writePaycheckSchedules` and the `paycheck/create`, `paycheck/update`, `paycheck/delete` handlers as undoable mutations, creating the clearing account when asked; test the spec's November 2026 pay and deposit dates, the posted split transaction (amounts, categories, transfer to "Retirement"), editing gross pay leaving posted transactions unchanged, removing a deposit, deleting a paycheck keeping the clearing account, and undo; verify they pass
+- [ ] 2.2 Add `writePaycheckSchedules` and the `paycheck/create`, `paycheck/update`, `paycheck/delete` handlers as undoable mutations, creating the clearing account when asked; test the spec's November 2026 pay and deposit dates, the posted split transaction (amounts, categories, transfer to "Retirement"), editing gross pay leaving posted transactions unchanged, removing a deposit, a deposit with "Post automatically" on posting its transfer on the deposit date (and off posting nothing), deleting a paycheck keeping the clearing account, and undo; verify they pass
 - [ ] 2.3 Rewrite affected paychecks' schedules from `account/set-business-days`; test the 2-to-1 business days example and its undo; verify they pass
-- [ ] 2.4 Test that an imported 2,031.40 Checking deposit on November 10, 2026 links to the deposit schedule and becomes a transfer from the clearing account, and that 2,600.00 does not; verify they pass
+- [ ] 2.4 Test that an imported 2,031.40 Checking deposit on November 10, 2026 links to the deposit schedule and becomes a transfer from the clearing account, that 2,600.00 does not, and that an exact 225.00 import merges with an automatically posted Savings deposit; verify they pass
 - [ ] 2.5 Add `paycheck/skip-next` and test the November 1 skip example; verify it passes
 
 ## 3. Client
 
 - [ ] 3.1 Add the account "Business days" modal and menu item behind the flag, with the deleted-calendar note and days validation; add component tests; verify they pass
-- [ ] 3.2 Add `PaycheckEditModal` (clearing account, pay dates, gross pay, deductions, deposits, live totals and errors) and "Add paycheck" on the schedules page behind the flag; add component tests for live totals, a validation error and the flag-off view; verify they pass
+- [ ] 3.2 Add `PaycheckEditModal` (clearing account, pay dates, gross pay, deductions, deposits with "Post automatically" and its exact-amount note, live totals and errors) and "Add paycheck" on the schedules page behind the flag; add component tests for live totals, a validation error and the flag-off view; verify they pass
 - [ ] 3.3 In the schedule editor, show "Part of paycheck … Edit paycheck" for paycheck schedules and offer "Skip next paycheck" and "Delete paycheck" in the paycheck editor; add tests; verify they pass
 - [ ] 3.4 Run `yarn generate:i18n` and verify the new strings are extracted
 

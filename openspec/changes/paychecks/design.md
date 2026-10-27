@@ -24,7 +24,7 @@ A schedule is a rule plus a `schedules` row. The rule's conditions hold the acco
 
 ### Storage
 A migration adds `business_calendar_id TEXT` and `deposit_days_early INTEGER DEFAULT 0` to `accounts`. It also creates `paychecks (id, name, definition TEXT, tombstone)`, synced like other tables.
-- `definition` is JSON: payee, clearing account, date `RecurConfig` (without a calendar), skip mode, gross amount and category, deductions, and deposits (`{ id, account, kind: 'fixed' | 'percent' | 'remainder', value }`).
+- `definition` is JSON: payee, clearing account, date `RecurConfig` (without a calendar), skip mode, gross amount and category, deductions, and deposits (`{ id, account, kind: 'fixed' | 'percent' | 'remainder', value, postAutomatically }`).
 - It also records the generated schedule ids: `paySchedule`, and `schedule` per deposit.
 - Why JSON: the definition is edited and validated as a whole. Nothing queries inside it except "which paychecks use account X", which a `LIKE` on the account id answers.
 - Alternative: normalized deduction and deposit tables. Rejected because they add sync surface for data that is never queried on its own.
@@ -42,7 +42,7 @@ A migration adds `business_calendar_id TEXT` and `deposit_days_early INTEGER DEF
   - Amount: `isapprox` deposit amount.
   - Date: `isapprox` with a `RelativeDateConfig`: the pay schedule, `deposit_days_early` business days before, and the account's calendar.
   - Action: set the payee to the clearing account's transfer payee, so a linked import becomes a transfer.
-  - `posts_transaction` is false.
+  - `posts_transaction` follows the deposit's `postAutomatically`, off by default. Bank import deduplication merges a posted transaction only with an import of the exact same amount within 7 days (`accounts/sync.ts`), while the schedule rule links imports within ±7.5%. Off is safe for varying deposits; on suits manual accounts and steady amounts.
 - Schedules missing from the stored ids are created, existing ones get their conditions and actions replaced, and ones no longer in the definition are deleted.
 - Schedule names: "<paycheck>" for pay, "<paycheck> → <account>" for deposits.
 - Why regenerate rather than patch: every input (definition, account calendar, early days) flows through one function, so account changes and edits cannot diverge.

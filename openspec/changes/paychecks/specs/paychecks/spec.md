@@ -76,7 +76,7 @@ Each direct deposit SHALL have a "Post automatically" option, off by default. Wh
 - **THEN** "Post automatically" is off and no transaction is added to "Checking" until a deposit is imported or entered
 
 #### Scenario: Manual account
-- **GIVEN** "Savings" is not bank-synced and its fixed 225.00 deposit posts automatically
+- **GIVEN** "Savings" is not bank-synced and its 225.00 (10%) deposit posts automatically
 - **WHEN** November 13, 2026 arrives
 - **THEN** "Savings" has a 225.00 transfer from "Acme Paycheck" dated November 13, 2026
 

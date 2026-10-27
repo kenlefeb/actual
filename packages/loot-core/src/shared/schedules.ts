@@ -5,6 +5,8 @@ import * as d from 'date-fns';
 import { Condition } from '#server/rules';
 import type { RuleConditionEntity, ScheduleEntity } from '#types/models';
 
+import { getBusinessCalendar } from './business-calendar-lookup';
+import { getNearestBusinessDay } from './business-calendars';
 import * as monthUtils from './months';
 import { q } from './query';
 
@@ -307,6 +309,7 @@ export function getNextDate(
         date = getDateWithSkippedWeekend(
           date,
           value.schedule.data.weekendSolve,
+          value.schedule.data.businessCalendarId,
         );
       }
       return monthUtils.dayFromDate(date);
@@ -340,7 +343,18 @@ export function getNextDateAfter(dateCond, afterDate: string): string | null {
 export function getDateWithSkippedWeekend(
   date: Date,
   solveMode: 'after' | 'before',
+  businessCalendarId?: string,
 ) {
+  const calendar = getBusinessCalendar(businessCalendarId);
+  if (calendar) {
+    return monthUtils.parseDate(
+      getNearestBusinessDay(
+        calendar,
+        monthUtils.dayFromDate(date),
+        solveMode === 'before' ? 'before' : 'after',
+      ),
+    );
+  }
   if (d.isWeekend(date)) {
     if (solveMode === 'after') {
       return d.nextMonday(date);

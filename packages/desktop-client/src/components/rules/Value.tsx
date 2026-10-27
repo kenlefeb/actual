@@ -11,6 +11,7 @@ import { format as formatDate, parseISO } from 'date-fns';
 import { Link } from '#components/common/Link';
 import { FinancialText } from '#components/FinancialText';
 import { useAccounts } from '#hooks/useAccounts';
+import { useBusinessCalendarLookup } from '#hooks/useBusinessCalendarLookup';
 import { useCategories } from '#hooks/useCategories';
 import { useDateFormat } from '#hooks/useDateFormat';
 import { useFormat } from '#hooks/useFormat';
@@ -55,6 +56,8 @@ export function Value<T>({
   };
   const ValueText = field === 'amount' ? FinancialText : Text;
   const locale = useLocale();
+  // Re-render recurrence descriptions when business calendars load or change
+  useBusinessCalendarLookup();
 
   function getData() {
     if (dataProp) {

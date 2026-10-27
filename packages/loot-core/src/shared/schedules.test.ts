@@ -2,9 +2,12 @@ import MockDate from 'mockdate';
 
 import type { RuleConditionEntity, ScheduleEntity } from '#types/models';
 
+import { setBusinessCalendars } from './business-calendar-lookup';
+import { businessCalendarPresets } from './business-calendar-presets';
 import * as monthUtils from './months';
 import {
   computeSchedulePreviewTransactions,
+  getDateWithSkippedWeekend,
   getHasTransactionsQuery,
   getNextDate,
   getNextDateAfter,
@@ -496,6 +499,81 @@ describe('schedules', () => {
 
       const result = getNextDate(dateCond, new Date(2017, 0, 1));
       expect(result).toBeNull();
+    });
+  });
+
+  describe('business calendar date moves', () => {
+    const federal = {
+      id: 'federal',
+      name: 'U.S. Federal Holidays',
+      ...businessCalendarPresets[0].calendar,
+    };
+    const day = (date: Date) => monthUtils.dayFromDate(date);
+    const parse = (date: string) => monthUtils.parseDate(date);
+
+    beforeEach(() => setBusinessCalendars([federal]));
+    afterEach(() => setBusinessCalendars([]));
+
+    it('moves a holiday occurrence to the previous business day', () => {
+      // July 4 2026 is a Saturday; July 3 is the observed federal holiday
+      expect(
+        day(
+          getDateWithSkippedWeekend(parse('2026-07-04'), 'before', 'federal'),
+        ),
+      ).toBe('2026-07-02');
+    });
+
+    it('moves a holiday occurrence to the next business day', () => {
+      // January 19 2026 is Martin Luther King Jr. Day
+      expect(
+        day(getDateWithSkippedWeekend(parse('2026-01-19'), 'after', 'federal')),
+      ).toBe('2026-01-20');
+    });
+
+    it('leaves a business day unchanged', () => {
+      expect(
+        day(
+          getDateWithSkippedWeekend(parse('2026-07-06'), 'before', 'federal'),
+        ),
+      ).toBe('2026-07-06');
+    });
+
+    it('falls back to weekends for a missing calendar', () => {
+      expect(
+        day(getDateWithSkippedWeekend(parse('2026-07-04'), 'before', 'gone')),
+      ).toBe('2026-07-03');
+      expect(
+        day(getDateWithSkippedWeekend(parse('2026-01-19'), 'after', 'gone')),
+      ).toBe('2026-01-19');
+    });
+
+    it('keeps weekend-only behavior without a calendar', () => {
+      expect(
+        day(getDateWithSkippedWeekend(parse('2026-07-04'), 'before')),
+      ).toBe('2026-07-03');
+    });
+
+    it('getNextDate applies the chosen calendar', () => {
+      const dateCond = {
+        op: 'isapprox',
+        value: {
+          start: '2026-01-04',
+          frequency: 'monthly',
+          skipWeekend: true,
+          weekendSolveMode: 'before',
+          businessCalendarId: 'federal',
+        },
+      };
+      expect(getNextDate(dateCond, new Date(2026, 6, 1))).toBe('2026-07-02');
+      expect(
+        getNextDate(
+          {
+            ...dateCond,
+            value: { ...dateCond.value, businessCalendarId: undefined },
+          },
+          new Date(2026, 6, 1),
+        ),
+      ).toBe('2026-07-03');
     });
   });
 

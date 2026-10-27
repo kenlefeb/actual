@@ -5,6 +5,8 @@ import { aqlQuery } from '#server/aql';
 import * as db from '#server/db';
 import { loadMappings } from '#server/db/mappings';
 import { loadRules, updateRule } from '#server/transactions/transaction-rules';
+import { setBusinessCalendars } from '#shared/business-calendar-lookup';
+import { businessCalendarPresets } from '#shared/business-calendar-presets';
 import { q } from '#shared/query';
 import { getNextDate } from '#shared/schedules';
 
@@ -1139,5 +1141,43 @@ describe('schedule app', () => {
         await schedulesApp.stopServices();
       }
     });
+  });
+});
+
+describe('schedule business calendars', () => {
+  afterEach(() => {
+    setBusinessCalendars([]);
+    MockDate.reset();
+  });
+
+  it("upcoming dates move off the chosen calendar's non-business days", async () => {
+    MockDate.set(new Date(2026, 5, 15));
+    setBusinessCalendars([
+      {
+        id: 'federal',
+        name: 'Federal',
+        ...businessCalendarPresets[0].calendar,
+      },
+    ]);
+    const config = {
+      start: '2026-01-04',
+      frequency: 'monthly' as const,
+      skipWeekend: true,
+      weekendSolveMode: 'before' as const,
+      businessCalendarId: 'federal',
+    };
+
+    expect(
+      await schedulesApp.handlers['schedule/get-upcoming-dates']({
+        config,
+        count: 2,
+      }),
+    ).toEqual(['2026-07-02', '2026-08-04']);
+    expect(
+      await schedulesApp.handlers['schedule/get-upcoming-dates']({
+        config: { ...config, businessCalendarId: undefined },
+        count: 1,
+      }),
+    ).toEqual(['2026-07-03']);
   });
 });

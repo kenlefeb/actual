@@ -10,6 +10,7 @@ import type {
   TransactionEntity,
 } from '@actual-app/core/types/models';
 
+import { useBusinessCalendarLookup } from './useBusinessCalendarLookup';
 import { useCachedSchedules } from './useCachedSchedules';
 import { useSyncedPref } from './useSyncedPref';
 import { calculateRunningBalancesBottomUp } from './useTransactions';
@@ -72,6 +73,7 @@ export function usePreviewTransactions({
   const [error, setError] = useState<Error | undefined>(undefined);
 
   const [upcomingLength] = useSyncedPref('upcomingScheduledTransactionLength');
+  const businessCalendars = useBusinessCalendarLookup();
 
   const scheduleTransactions = useMemo(() => {
     if (isSchedulesLoading) {
@@ -84,7 +86,16 @@ export function usePreviewTransactions({
       upcomingLength,
       filter,
     );
-  }, [filter, isSchedulesLoading, schedules, statuses, upcomingLength]);
+    // businessCalendars: date math reads them through the shared lookup
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    filter,
+    isSchedulesLoading,
+    schedules,
+    statuses,
+    upcomingLength,
+    businessCalendars,
+  ]);
 
   useEffect(() => {
     let isUnmounted = false;

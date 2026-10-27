@@ -1,3 +1,4 @@
+import { setBusinessCalendars } from '@actual-app/core/shared/business-calendar-lookup';
 import { enUS } from 'date-fns/locale';
 import i18next from 'i18next';
 
@@ -346,5 +347,38 @@ describe('getRecurringDescription', () => {
         enUS,
       ),
     ).toBe('Every 2 weeks on Monday, 2 times (before weekend)');
+  });
+
+  describe('with a business calendar', () => {
+    afterEach(() => setBusinessCalendars([]));
+
+    const config = {
+      start: '2026-01-04',
+      frequency: 'monthly' as const,
+      skipWeekend: true,
+      weekendSolveMode: 'before' as const,
+      businessCalendarId: 'federal',
+    };
+
+    it('names the calendar', () => {
+      setBusinessCalendars([
+        {
+          id: 'federal',
+          name: 'U.S. Federal Holidays',
+          nonWorkingDays: [0, 6],
+          holidays: [],
+          exceptions: [],
+        },
+      ]);
+      expect(getRecurringDescription(config, 'MM/dd/yyyy', enUS)).toBe(
+        'Every month on the 4th (before non-business days in U.S. Federal Holidays)',
+      );
+    });
+
+    it('keeps the weekend wording when the calendar is missing', () => {
+      expect(getRecurringDescription(config, 'MM/dd/yyyy', enUS)).toBe(
+        'Every month on the 4th (before weekend)',
+      );
+    });
   });
 });

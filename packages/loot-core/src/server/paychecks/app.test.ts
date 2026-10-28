@@ -537,6 +537,38 @@ describe('paychecks', () => {
     expect(await amount(pay)).toBe(225000);
   });
 
+  it('rejects a deleted transfer account before writing anything', async () => {
+    const { id, pay } = await createAcme();
+    const paycheck = await getPaycheck(id);
+    if (!paycheck) throw new Error('Missing paycheck');
+    // As a forced delete of an account with transactions does
+    await db.deleteAccount({ id: 'retirement' });
+    await db.deleteTransferPayee({ id: 'transfer-retirement' });
+    const tables = () =>
+      Promise.all(
+        ['schedules', 'rules', 'accounts', 'payees'].map(table =>
+          db.all(`SELECT * FROM ${table}`),
+        ),
+      );
+    const before = await tables();
+    await expect(
+      handlers['paycheck-create']({
+        name: 'Acme 2',
+        definition: acme({ clearingAccount: '' }),
+        newClearingAccountName: 'Acme Paycheck',
+      }),
+    ).rejects.toThrow('transfer account for 401(k) no longer exists');
+    await expect(
+      handlers['paycheck-update']({
+        id,
+        name: 'Acme',
+        definition: { ...paycheck.definition, grossAmount: 320000 },
+      }),
+    ).rejects.toThrow('transfer account for 401(k) no longer exists');
+    expect(await tables()).toEqual(before);
+    expect(await amount(pay)).toBe(225000);
+  });
+
   it('rejects a paycheck whose schedule name is taken', async () => {
     await schedulesApp.handlers['schedule/create']({
       schedule: { name: 'Acme' },

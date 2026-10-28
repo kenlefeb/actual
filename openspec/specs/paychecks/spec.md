@@ -42,6 +42,13 @@ A paycheck SHALL NOT be saved when deductions exceed gross pay, fixed and percen
 - **WHEN** the user saves a new or existing paycheck with a deposit to each
 - **THEN** the paycheck is not saved, the editor says the deposit accounts need different names, and no schedules, rules or accounts are added or changed
 
+A deduction's transfer account SHALL exist; otherwise the paycheck is rejected before anything is written.
+
+#### Scenario: Deleted transfer account
+- **GIVEN** the "401(k)" deduction transfers to "Retirement", and "Retirement" was deleted on another device while the editor was open
+- **WHEN** the user saves a new paycheck with a new clearing account, or saves an existing paycheck
+- **THEN** the paycheck is not saved, the editor says the transfer account for "401(k)" no longer exists, and no accounts, payees, schedules or rules are added or changed
+
 #### Scenario: Deposits that do not add up
 - **WHEN** net pay is 2,250.00 and the only deposit is a fixed 2,000.00 to "Checking"
 - **THEN** the paycheck is not saved and the editor says the deposits must add up to net pay or include a remainder

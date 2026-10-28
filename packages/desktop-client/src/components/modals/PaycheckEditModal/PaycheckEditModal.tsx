@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
@@ -113,10 +113,15 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
   const [isNewAccount, setIsNewAccount] = useState(!paycheck);
   const [isConfirmingSkip, setIsConfirmingSkip] = useState(false);
   const dateFormat = useDateFormat() || 'MM/dd/yyyy';
+  // Memoized by hand: the compiler skips this component, and a new query on
+  // every render re-subscribes and re-renders without end
+  const paySchedule = paycheck?.definition.paySchedule ?? null;
+  const paySchedulesQuery = useMemo(
+    () => q('schedules').filter({ id: paySchedule }).select('*'),
+    [paySchedule],
+  );
   const { schedules: paySchedules } = useSchedules({
-    query: q('schedules')
-      .filter({ id: paycheck?.definition.paySchedule ?? null })
-      .select('*'),
+    query: paySchedulesQuery,
   });
   const nextPayDate = paySchedules[0]?.next_date;
   const [newAccountName, setNewAccountName] = useState('');

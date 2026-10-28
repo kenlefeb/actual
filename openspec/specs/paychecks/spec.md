@@ -114,6 +114,10 @@ Opening a paycheck's schedule SHALL offer to edit the paycheck. Saving changes S
 - **WHEN** the user changes "Acme" gross pay to 3,200.00
 - **THEN** future pay and deposit schedules use the new amounts and November's posted transactions are unchanged
 
+#### Scenario: Change how often pay arrives
+- **WHEN** the user opens "Acme" pay dates, changes "Repeat every 1 month" to "Repeat every 1 week" and applies
+- **THEN** the editor shows a weekly pay pattern, and saving moves the pay and deposit schedules to weekly dates
+
 #### Scenario: Remove a deposit
 - **WHEN** the user removes the "Savings" deposit and saves
 - **THEN** the "Savings" deposit schedule is deleted and "Checking" becomes the whole net pay

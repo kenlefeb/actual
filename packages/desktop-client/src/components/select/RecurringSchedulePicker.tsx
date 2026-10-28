@@ -397,12 +397,16 @@ function RecurringScheduleTooltip({
     : false;
   const dateFormat = useDateFormat() || 'MM/dd/yyyy';
 
+  // Reset only when the dates change: a caller that rebuilds an equal value on
+  // every render must not wipe the user's edit in progress
+  const currentConfigKey = JSON.stringify(currentConfig);
   useEffect(() => {
     dispatch({
       type: 'replace-config',
       config: parseConfig(currentConfig),
     });
-  }, [currentConfig]);
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentConfigKey]);
 
   const { config } = state;
 

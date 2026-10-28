@@ -55,6 +55,28 @@ async function openPicker(value: RecurConfig, onChange = vi.fn()) {
   return onChange;
 }
 
+describe('RecurringSchedulePicker editing', () => {
+  it('keeps a change in progress when the parent re-renders with the same dates', async () => {
+    const { rerender } = render(
+      <TestProviders>
+        <RecurringSchedulePicker value={{ ...baseConfig }} onChange={vi.fn()} />
+      </TestProviders>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Every month/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Months' }));
+    await userEvent.click(screen.getByText('Weeks'));
+
+    // A parent that isn't memoized passes an equal but new object
+    rerender(
+      <TestProviders>
+        <RecurringSchedulePicker value={{ ...baseConfig }} onChange={vi.fn()} />
+      </TestProviders>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Weeks' })).toBeInTheDocument();
+  });
+});
+
 describe('RecurringSchedulePicker business calendars', () => {
   beforeEach(() => {
     state.flag = true;

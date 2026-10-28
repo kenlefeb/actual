@@ -186,6 +186,16 @@ describe('PaycheckEditModal', () => {
     );
   });
 
+  it('shows the saved next pay date, which includes skips', () => {
+    state.paychecks = [
+      acme([
+        { id: 'checking', account: 'checking', kind: 'remainder', value: 0 },
+      ]),
+    ];
+    renderModal();
+    expect(screen.getByText('Next paycheck: 11/13/2026')).toBeInTheDocument();
+  });
+
   it('asks before skipping and names the paycheck date', async () => {
     state.paychecks = [
       acme([

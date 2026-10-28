@@ -820,7 +820,8 @@ class AccountInternal extends PureComponent<
       | 'toggle-reconciled'
       | 'toggle-net-worth-chart'
       | 'manage-columns'
-      | 'account-group',
+      | 'account-group'
+      | 'business-days',
   ) => {
     const accountId = this.props.accountId!;
     const account = this.props.accounts.find(
@@ -858,6 +859,13 @@ class AccountInternal extends PureComponent<
         break;
       case 'close':
         void this.props.dispatch(openAccountCloseModal({ accountId }));
+        break;
+      case 'business-days':
+        this.props.dispatch(
+          pushModal({
+            modal: { name: 'account-business-days', options: { accountId } },
+          }),
+        );
         break;
       case 'account-group':
         this.props.dispatch(

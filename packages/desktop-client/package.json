@@ -19,6 +19,7 @@
     "#accounts": "./src/accounts/index.ts",
     "#budget": "./src/budget/index.ts",
     "#business-calendars": "./src/business-calendars/index.ts",
+    "#paychecks": "./src/paychecks/index.ts",
     "#payees": "./src/payees/index.ts",
     "#queries": "./src/queries/index.ts",
     "#redux": "./src/redux/index.ts",

@@ -15,6 +15,7 @@ import { businessCalendarQueries } from './business-calendars';
 import { pushModal } from './modals/modalsSlice';
 import { addNotification } from './notifications/notificationsSlice';
 import type { Notification } from './notifications/notificationsSlice';
+import { paycheckQueries } from './paychecks';
 import { payeeQueries } from './payees';
 import { loadPrefs } from './prefs/prefsSlice';
 import type { AppStore } from './redux/store';
@@ -138,6 +139,12 @@ export function listenForSyncEvent(store: AppStore, queryClient: QueryClient) {
       if (tables.includes('account_groups')) {
         void queryClient.invalidateQueries({
           queryKey: accountGroupQueries.lists(),
+        });
+      }
+
+      if (tables.includes('paychecks')) {
+        void queryClient.invalidateQueries({
+          queryKey: paycheckQueries.lists(),
         });
       }
 

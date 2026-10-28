@@ -10,6 +10,10 @@ export type AccountEntity = {
   last_reconciled: string | null;
   tombstone: 0 | 1;
   account_group_id: AccountGroupEntity['id'] | null;
+  // Business days of the institution behind the account (paychecks)
+  business_calendar_id?: string | null;
+  // Business days early that direct deposits arrive, 0 to 10
+  deposit_days_early?: number | null;
 
   // Sync fields
   account_id: string | null;

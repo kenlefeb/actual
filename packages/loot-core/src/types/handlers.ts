@@ -11,6 +11,7 @@ import type { FiltersHandlers } from '#server/filters/app';
 import type { ForecastHandlers } from '#server/forecast/app';
 import type { FormulasHandlers } from '#server/formulas/app';
 import type { NotesHandlers } from '#server/notes/app';
+import type { PaychecksHandlers } from '#server/paychecks/app';
 import type { PayeesHandlers } from '#server/payees/app';
 import type { PreferencesHandlers } from '#server/preferences/app';
 import type { ReportsHandlers } from '#server/reports/app';
@@ -43,6 +44,7 @@ export type Handlers = {} & ServerHandlers &
   AccountHandlers &
   AccountGroupsHandlers &
   BusinessCalendarsHandlers &
+  PaychecksHandlers &
   PayeesHandlers &
   SpreadsheetHandlers &
   SyncHandlers &

@@ -13,6 +13,7 @@ import { useDispatch } from '#redux';
 
 import { EditSyncAccount } from './banksync/EditSyncAccount';
 import { AccountAutocompleteModal } from './modals/AccountAutocompleteModal';
+import { AccountBusinessDaysModal } from './modals/AccountBusinessDaysModal';
 import { AccountGroupsModal } from './modals/AccountGroupsModal';
 import { AccountMenuModal } from './modals/AccountMenuModal';
 import { AccountReconcileModal } from './modals/AccountReconcileModal';
@@ -72,6 +73,7 @@ import { NotesModal } from './modals/NotesModal';
 import { OpenIDEnableModal } from './modals/OpenIDEnableModal';
 import { OutOfSyncMigrationsModal } from './modals/OutOfSyncMigrationsModal';
 import { PasswordEnableModal } from './modals/PasswordEnableModal';
+import { PaycheckEditModal } from './modals/PaycheckEditModal';
 import { PayeeAutocompleteModal } from './modals/PayeeAutocompleteModal';
 import { PluggyAiInitialiseModal } from './modals/PluggyAiInitialiseModal';
 import { ScheduledTransactionMenuModal } from './modals/ScheduledTransactionMenuModal';
@@ -280,6 +282,12 @@ export function Modals() {
 
         case 'business-calendars':
           return <BusinessCalendarsModal key={key} />;
+
+        case 'account-business-days':
+          return <AccountBusinessDaysModal key={key} {...modal.options} />;
+
+        case 'paycheck-edit':
+          return <PaycheckEditModal key={key} {...modal.options} />;
 
         case 'schedule-posts-offline-notification':
           return <PostsOfflineNotification key={key} />;

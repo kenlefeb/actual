@@ -46,8 +46,17 @@ esac
 # token followed by "issue create", matching the real CLI form
 # (`gh [flags] issue create …`); like the git checks below this is best-effort,
 # not evasion-proof (a hand-rolled `gh api` call is out of scope).
+# Fork-only exception: Ken's private backlog in kenlefeb/actual-hosting, named
+# explicitly with -R/--repo. Never upstream this (fork/README.md).
 case " $cmd " in
   *" gh "*"issue create"*)
+    case " $cmd " in
+      *" -R kenlefeb/actual-hosting "* | *" --repo kenlefeb/actual-hosting "* | *" --repo=kenlefeb/actual-hosting "*)
+        case "$cmd" in
+          *actualbudget/*) ;;
+          *) exit 0 ;;
+        esac ;;
+    esac
     block "Blocked: agents must not create GitHub issues — filing an issue is a human decision (.github/agents/pr-and-commit-rules.md). Share the proposed issue title and body with the user instead." ;;
 esac
 

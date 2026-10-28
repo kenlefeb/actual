@@ -34,6 +34,7 @@ type GenericInputProps = {
   ref?: Ref<HTMLInputElement>;
   style?: CSSProperties;
   inputStyle?: CSSProperties;
+  'aria-label'?: string;
 } & (
   | ((
       | {
@@ -122,6 +123,7 @@ export const GenericInput = ({
   ref,
   style,
   inputStyle,
+  'aria-label': ariaLabel,
   ...props
 }: GenericInputProps) => {
   const dispatch = useDispatch();
@@ -158,6 +160,7 @@ export const GenericInput = ({
               updateOnValueChange={isNarrowWidth}
               inputProps={{
                 ref,
+                'aria-label': ariaLabel,
                 ...(showPlaceholder ? { placeholder: t('nothing') } : null),
                 onClick: () => {
                   if (!isNarrowWidth) {
@@ -200,6 +203,7 @@ export const GenericInput = ({
                   updateOnValueChange={isNarrowWidth}
                   inputProps={{
                     ref,
+                    'aria-label': ariaLabel,
                     ...(showPlaceholder ? { placeholder: t('nothing') } : null),
                     onClick: () => {
                       if (!isNarrowWidth) {
@@ -242,6 +246,7 @@ export const GenericInput = ({
               showHiddenCategories
               inputProps={{
                 ref,
+                'aria-label': ariaLabel,
                 ...(showPlaceholder ? { placeholder: t('nothing') } : null),
                 onClick: () => {
                   if (!isNarrowWidth) {

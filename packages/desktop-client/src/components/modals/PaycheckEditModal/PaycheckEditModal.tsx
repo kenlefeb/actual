@@ -8,9 +8,13 @@ import { Select } from '@actual-app/components/select';
 import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
-import { currentDay } from '@actual-app/core/shared/months';
+import {
+  currentDay,
+  format as monthUtilFormat,
+} from '@actual-app/core/shared/months';
 import { computePaycheck } from '@actual-app/core/shared/paychecks';
 import type { PaycheckError } from '@actual-app/core/shared/paychecks';
+import { q } from '@actual-app/core/shared/query';
 import type {
   PaycheckDeduction,
   PaycheckDefinition,
@@ -32,9 +36,11 @@ import { AmountInput } from '#components/util/AmountInput';
 import { GenericInput } from '#components/util/GenericInput';
 import { useAccounts } from '#hooks/useAccounts';
 import { useBusinessCalendars } from '#hooks/useBusinessCalendars';
+import { useDateFormat } from '#hooks/useDateFormat';
 import { useFormat } from '#hooks/useFormat';
 import { usePaychecks } from '#hooks/usePaychecks';
 import { usePayeesById } from '#hooks/usePayees';
+import { useSchedules } from '#hooks/useSchedules';
 import { pushModal } from '#modals/modalsSlice';
 import {
   useDeletePaycheckMutation,
@@ -105,6 +111,14 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
   // A new paycheck creates an on-budget clearing account unless the user
   // picks an existing one
   const [isNewAccount, setIsNewAccount] = useState(!paycheck);
+  const [isConfirmingSkip, setIsConfirmingSkip] = useState(false);
+  const dateFormat = useDateFormat() || 'MM/dd/yyyy';
+  const { schedules: paySchedules } = useSchedules({
+    query: q('schedules')
+      .filter({ id: paycheck?.definition.paySchedule ?? null })
+      .select('*'),
+  });
+  const nextPayDate = paySchedules[0]?.next_date;
   const [newAccountName, setNewAccountName] = useState('');
 
   const { netAmount, depositAmounts, errors } = computePaycheck(definition);
@@ -205,6 +219,7 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
               </Field>
               <Field label={t('Employer')}>
                 <GenericInput
+                  aria-label={t('Employer')}
                   type="id"
                   field="payee"
                   value={definition.payee ?? ''}
@@ -217,6 +232,7 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
               <Field label={t('Clearing account')}>
                 {paycheck ? (
                   <GenericInput
+                    aria-label={t('Clearing account')}
                     type="id"
                     field="account"
                     value={definition.clearingAccount}
@@ -247,6 +263,7 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
                       />
                     ) : (
                       <GenericInput
+                        aria-label={t('Existing clearing account')}
                         type="id"
                         field="account"
                         value={definition.clearingAccount}
@@ -306,6 +323,7 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
               </Field>
               <Field label={t('Income category')}>
                 <GenericInput
+                  aria-label={t('Income category')}
                   type="id"
                   field="category"
                   value={definition.incomeCategory ?? ''}
@@ -375,6 +393,10 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
                           <Trans>Transfer to</Trans>
                         </Text>
                         <GenericInput
+                          aria-label={t(
+                            'Deduction {{number}} transfer account',
+                            { number: index + 1 },
+                          )}
                           type="id"
                           field="account"
                           value={deduction.transferAccount}
@@ -388,6 +410,9 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
                       <Trans>Category</Trans>
                     </Text>
                     <GenericInput
+                      aria-label={t('Deduction {{number}} category', {
+                        number: index + 1,
+                      })}
                       type="id"
                       field="category"
                       value={deduction.category ?? ''}
@@ -448,6 +473,9 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
                   >
                     <View style={{ flex: 1 }}>
                       <GenericInput
+                        aria-label={t('Deposit {{number}} account', {
+                          number: index + 1,
+                        })}
                         type="id"
                         field="account"
                         value={deposit.account}
@@ -489,7 +517,8 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
                         type="number"
                         min={0}
                         max={100}
-                        value={String(deposit.value)}
+                        // Uncontrolled so a half-typed "12." keeps its decimal point
+                        defaultValue={String(deposit.value)}
                         onChangeValue={value =>
                           updateDeposit(deposit.id, {
                             value: Math.max(0, Number(value) || 0),
@@ -617,17 +646,37 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
                   >
                     <Trans>Delete paycheck</Trans>
                   </Button>
-                  <Button
-                    isDisabled={isEdited}
-                    onPress={() =>
-                      skipNext.mutate(
-                        { id: paycheck.id },
-                        { onSuccess: () => state.close() },
-                      )
-                    }
-                  >
-                    <Trans>Skip next paycheck</Trans>
-                  </Button>
+                  {isConfirmingSkip ? (
+                    <>
+                      <Text>
+                        {nextPayDate
+                          ? t('Skip the paycheck on {{date}}?', {
+                              date: monthUtilFormat(nextPayDate, dateFormat),
+                            })
+                          : t('Skip the next paycheck?')}
+                      </Text>
+                      <Button onPress={() => setIsConfirmingSkip(false)}>
+                        <Trans>Keep it</Trans>
+                      </Button>
+                      <Button
+                        onPress={() =>
+                          skipNext.mutate(
+                            { id: paycheck.id },
+                            { onSuccess: () => state.close() },
+                          )
+                        }
+                      >
+                        <Trans>Skip it</Trans>
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      isDisabled={isEdited}
+                      onPress={() => setIsConfirmingSkip(true)}
+                    >
+                      <Trans>Skip next paycheck</Trans>
+                    </Button>
+                  )}
                 </>
               )}
               <View style={{ flex: 1 }} />

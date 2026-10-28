@@ -200,7 +200,7 @@ export function AccountAutocomplete({
       suggestions={accountSuggestions}
       inputProps={{
         ...inputProps,
-        'aria-label': t('Account'),
+        'aria-label': inputProps?.['aria-label'] ?? t('Account'),
       }}
       renderItems={(items, getItemProps, highlightedIndex) => (
         <AccountList

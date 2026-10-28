@@ -10,6 +10,7 @@ import { PaycheckEditModal } from './PaycheckEditModal';
 const state = vi.hoisted(() => ({
   paychecks: [] as PaycheckEntity[],
   mutate: vi.fn(),
+  scheduleQueries: [] as unknown[],
 }));
 
 vi.mock('#hooks/usePaychecks', () => ({
@@ -17,7 +18,10 @@ vi.mock('#hooks/usePaychecks', () => ({
 }));
 
 vi.mock('#hooks/useSchedules', () => ({
-  useSchedules: () => ({ schedules: [{ next_date: '2026-11-13' }] }),
+  useSchedules: ({ query }: { query: unknown }) => {
+    state.scheduleQueries.push(query);
+    return { schedules: [{ next_date: '2026-11-13' }] };
+  },
 }));
 
 vi.mock('#paychecks', () => ({
@@ -67,7 +71,7 @@ function acme(deposits: PaycheckEntity['definition']['deposits']) {
 }
 
 function renderModal() {
-  render(
+  return render(
     <TestProviders>
       <PaycheckEditModal paycheckId="acme" />
     </TestProviders>,
@@ -223,5 +227,19 @@ describe('PaycheckEditModal', () => {
       { id: 'acme' },
       expect.anything(),
     );
+  });
+
+  it('keeps the same schedules query across renders', async () => {
+    state.paychecks = [
+      acme([
+        { id: 'checking', account: 'checking', kind: 'remainder', value: 0 },
+      ]),
+    ];
+    state.scheduleQueries = [];
+    renderModal();
+    await userEvent.type(screen.getByLabelText('Name'), ' Corp');
+
+    // A new query on every render re-subscribes and re-renders without end
+    expect(new Set(state.scheduleQueries).size).toBe(1);
   });
 });

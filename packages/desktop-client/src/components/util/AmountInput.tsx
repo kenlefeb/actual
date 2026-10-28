@@ -22,6 +22,7 @@ import { useMergedRefs } from '#hooks/useMergedRefs';
 
 type AmountInputProps = {
   id?: string;
+  'aria-label'?: string;
   ref?: Ref<HTMLInputElement>;
   value: IntegerAmount;
   zeroSign?: '-' | '+';
@@ -44,6 +45,7 @@ type AmountInputProps = {
 
 export function AmountInput({
   id,
+  'aria-label': ariaLabel,
   ref,
   value: initialValue,
   zeroSign = '-', // + or -
@@ -199,6 +201,7 @@ export function AmountInput({
 
       <Input
         id={id}
+        aria-label={ariaLabel}
         ref={mergedRef}
         inputMode="decimal"
         value={value}

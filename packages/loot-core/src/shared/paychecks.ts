@@ -1,5 +1,8 @@
 import type { PaycheckDefinition, PaycheckDeposit } from '#types/models';
 
+// Most business days early an account's direct deposits can arrive
+export const MAX_DEPOSIT_DAYS_EARLY = 10;
+
 export type PaycheckError =
   | 'deductions-exceed-gross'
   | 'deposits-exceed-net'

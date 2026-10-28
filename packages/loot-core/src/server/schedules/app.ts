@@ -481,6 +481,7 @@ export async function updateSchedule({
     }
   }
   let rule;
+  let isDateChanged = false;
 
   // This must be outside the `batchMessages` call because we change
   // and then read data
@@ -525,16 +526,17 @@ export async function updateSchedule({
       // or date changed. We check account because we don't update
       // schedules automatically for closed account, and the user
       // might switch accounts from a closed one
+      isDateChanged = !areConditionValuesEqual(
+        stripType(oldConditions.find(c => c.field === 'date') || {}),
+        stripType(newConditions.find(c => c.field === 'date') || {}),
+      );
       if (
         resetNextDate ||
         !areScheduleConditionsEqual(
           oldConditions.find(c => c.field === 'account'),
           newConditions.find(c => c.field === 'account'),
         ) ||
-        !areConditionValuesEqual(
-          stripType(oldConditions.find(c => c.field === 'date') || {}),
-          stripType(newConditions.find(c => c.field === 'date') || {}),
-        )
+        isDateChanged
       ) {
         await setNextDate({
           id: schedule.id,
@@ -549,7 +551,9 @@ export async function updateSchedule({
     await db.updateWithSchema('schedules', scheduleFields);
   });
 
-  if (conditions) {
+  // Relative schedules depend only on their source's dates, so other edits
+  // keep their next dates (and any skips)
+  if (isDateChanged) {
     await refreshRelativeDependents(schedule.id);
   }
 

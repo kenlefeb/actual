@@ -7,6 +7,7 @@ import { Select } from '@actual-app/components/select';
 import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
+import { MAX_DEPOSIT_DAYS_EARLY } from '@actual-app/core/shared/paychecks';
 import type { AccountEntity } from '@actual-app/core/types/models';
 
 import {
@@ -18,8 +19,6 @@ import {
 import { useAccount } from '#hooks/useAccount';
 import { useBusinessCalendars } from '#hooks/useBusinessCalendars';
 import { useSetAccountBusinessDaysMutation } from '#paychecks';
-
-const MAX_DAYS_EARLY = 10;
 
 type AccountBusinessDaysModalProps = {
   accountId: AccountEntity['id'];
@@ -45,7 +44,7 @@ export function AccountBusinessDaysModal({
     daysEarly.trim() !== '' &&
     Number.isInteger(days) &&
     days >= 0 &&
-    days <= MAX_DAYS_EARLY;
+    days <= MAX_DEPOSIT_DAYS_EARLY;
   const isCalendarMissing =
     calendarId !== '' && !calendars.some(c => c.id === calendarId);
 
@@ -100,7 +99,7 @@ export function AccountBusinessDaysModal({
                 id="account-days-early"
                 type="number"
                 min={0}
-                max={MAX_DAYS_EARLY}
+                max={MAX_DEPOSIT_DAYS_EARLY}
                 step={1}
                 value={daysEarly}
                 onChangeValue={setDaysEarly}

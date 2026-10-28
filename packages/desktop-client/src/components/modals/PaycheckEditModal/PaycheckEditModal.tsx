@@ -30,8 +30,11 @@ import { Checkbox } from '#components/forms';
 import { RecurringSchedulePicker } from '#components/select/RecurringSchedulePicker';
 import { AmountInput } from '#components/util/AmountInput';
 import { GenericInput } from '#components/util/GenericInput';
+import { useAccounts } from '#hooks/useAccounts';
+import { useBusinessCalendars } from '#hooks/useBusinessCalendars';
 import { useFormat } from '#hooks/useFormat';
 import { usePaychecks } from '#hooks/usePaychecks';
+import { usePayeesById } from '#hooks/usePayees';
 import { pushModal } from '#modals/modalsSlice';
 import {
   useDeletePaycheckMutation,
@@ -85,23 +88,65 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
   const deletePaycheck = useDeletePaycheckMutation();
   const skipNext = useSkipNextPaycheckMutation();
 
-  const [name, setName] = useState(paycheck?.name ?? '');
+  const { data: accounts = [] } = useAccounts();
+  const { data: calendars = [] } = useBusinessCalendars();
+  const { data: payeesById = {} } = usePayeesById();
+
+  const [name, setNameValue] = useState(paycheck?.name ?? '');
   const [definition, setDefinition] = useState<PaycheckDefinition>(
     paycheck?.definition ?? newDefinition,
   );
+  // Errors show and skipping waits once the user has changed something
+  const [isEdited, setIsEdited] = useState(false);
+  const setName = (value: string) => {
+    setIsEdited(true);
+    setNameValue(value);
+  };
   // A new paycheck creates an on-budget clearing account unless the user
   // picks an existing one
   const [isNewAccount, setIsNewAccount] = useState(!paycheck);
   const [newAccountName, setNewAccountName] = useState('');
 
   const { netAmount, depositAmounts, errors } = computePaycheck(definition);
+  const accountById = new Map(accounts.map(a => [a.id, a]));
+  const clearing = accountById.get(definition.clearingAccount);
+  const employerName = definition.payee
+    ? payeesById[definition.payee]?.name
+    : undefined;
+  // A new clearing account is named after the employer unless renamed
+  const clearingName =
+    newAccountName.trim() ||
+    (employerName
+      ? t('{{employer}} Paycheck', { employer: employerName })
+      : '');
+  const daysEarlyText = (accountId: string) => {
+    const account = accountById.get(accountId);
+    if (!account) return null;
+    const calendar =
+      calendars.find(c => c.id === account.business_calendar_id)?.name ??
+      t('weekends only');
+    return t(
+      'Business days early: {{days}} ({{calendar}}), set on the account',
+      {
+        days: account.deposit_days_early ?? 0,
+        calendar,
+      },
+    );
+  };
   const formErrors = [
     ...(!name.trim() ? [t('Enter a name for the paycheck.')] : []),
-    ...(isNewAccount && !newAccountName.trim()
+    ...(isNewAccount && !clearingName
       ? [t('Enter a name for the new clearing account.')]
       : []),
     ...(!isNewAccount && !definition.clearingAccount
       ? [t('Choose the clearing account.')]
+      : []),
+    ...(!isNewAccount && clearing && (clearing.offbudget || clearing.closed)
+      ? [t('The clearing account must be an open on-budget account.')]
+      : []),
+    ...(new Set(definition.deposits.map(d => d.account)).size !==
+    definition.deposits.length
+      ? [t('Each deposit must go to a different account.')]
       : []),
     ...(definition.deductions.some(d => d.transferAccount === '')
       ? [t('Choose an account for each transfer deduction.')]
@@ -117,8 +162,10 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
     ...errors.map(error => errorMessage(error, t)),
   ];
 
-  const update = (fields: Partial<PaycheckDefinition>) =>
+  const update = (fields: Partial<PaycheckDefinition>) => {
+    setIsEdited(true);
     setDefinition(current => ({ ...current, ...fields }));
+  };
   const updateDeduction = (id: string, fields: Partial<PaycheckDeduction>) =>
     update({
       deductions: definition.deductions.map(d =>
@@ -148,7 +195,7 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
             rightContent={<ModalCloseButton onPress={() => state.close()} />}
           />
           <View style={{ gap: 15 }}>
-            <View style={{ flexDirection: 'row', gap: 15 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 15 }}>
               <Field label={t('Name')} htmlFor="paycheck-name">
                 <Input
                   id="paycheck-name"
@@ -166,7 +213,7 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
               </Field>
             </View>
 
-            <View style={{ flexDirection: 'row', gap: 15 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 15 }}>
               <Field label={t('Clearing account')}>
                 {paycheck ? (
                   <GenericInput
@@ -189,9 +236,14 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
                     {isNewAccount ? (
                       <Input
                         aria-label={t('New clearing account name')}
-                        placeholder={t('For example, Acme Paycheck')}
+                        placeholder={
+                          clearingName || t('For example, Acme Paycheck')
+                        }
                         value={newAccountName}
-                        onChangeValue={setNewAccountName}
+                        onChangeValue={value => {
+                          setIsEdited(true);
+                          setNewAccountName(value);
+                        }}
                       />
                     ) : (
                       <GenericInput
@@ -208,7 +260,14 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
               </Field>
               <Field label={t('Pay dates')}>
                 <RecurringSchedulePicker
-                  value={definition.date}
+                  // Shown as moved, the way the pay schedule saves it
+                  value={{
+                    ...definition.date,
+                    skipWeekend: true,
+                    weekendSolveMode: definition.weekendSolveMode,
+                    businessCalendarId:
+                      clearing?.business_calendar_id ?? undefined,
+                  }}
                   hideSkipWeekend
                   onChange={date => update({ date })}
                 />
@@ -236,7 +295,7 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
               </Field>
             </View>
 
-            <View style={{ flexDirection: 'row', gap: 15 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 15 }}>
               <Field label={t('Gross pay')} htmlFor="paycheck-gross">
                 <AmountInput
                   id="paycheck-gross"
@@ -261,7 +320,12 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
               {definition.deductions.map((deduction, index) => (
                 <View
                   key={deduction.id}
-                  style={{ flexDirection: 'row', gap: 5, alignItems: 'center' }}
+                  style={{
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    gap: 5,
+                    alignItems: 'center',
+                  }}
                 >
                   <Input
                     aria-label={t('Deduction {{number}} name', {
@@ -275,6 +339,9 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
                     style={{ flex: 1 }}
                   />
                   <AmountInput
+                    aria-label={t('Deduction {{number}} amount', {
+                      number: index + 1,
+                    })}
                     value={deduction.amount}
                     sign="+"
                     onUpdate={amount =>
@@ -303,15 +370,23 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
                   />
                   <View style={{ flex: 1, gap: 5 }}>
                     {deduction.transferAccount != null && (
-                      <GenericInput
-                        type="id"
-                        field="account"
-                        value={deduction.transferAccount}
-                        onChange={transferAccount =>
-                          updateDeduction(deduction.id, { transferAccount })
-                        }
-                      />
+                      <>
+                        <Text style={{ color: theme.pageTextSubdued }}>
+                          <Trans>Transfer to</Trans>
+                        </Text>
+                        <GenericInput
+                          type="id"
+                          field="account"
+                          value={deduction.transferAccount}
+                          onChange={transferAccount =>
+                            updateDeduction(deduction.id, { transferAccount })
+                          }
+                        />
+                      </>
                     )}
+                    <Text style={{ color: theme.pageTextSubdued }}>
+                      <Trans>Category</Trans>
+                    </Text>
                     <GenericInput
                       type="id"
                       field="category"
@@ -366,6 +441,7 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
                   <View
                     style={{
                       flexDirection: 'row',
+                      flexWrap: 'wrap',
                       gap: 5,
                       alignItems: 'center',
                     }}
@@ -396,6 +472,9 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
                     />
                     {deposit.kind === 'fixed' && (
                       <AmountInput
+                        aria-label={t('Deposit {{number}} fixed amount', {
+                          number: index + 1,
+                        })}
                         value={deposit.value}
                         sign="+"
                         onUpdate={value => updateDeposit(deposit.id, { value })}
@@ -446,6 +525,7 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
                   <View
                     style={{
                       flexDirection: 'row',
+                      flexWrap: 'wrap',
                       gap: 5,
                       alignItems: 'center',
                     }}
@@ -463,6 +543,11 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
                       <Trans>Post automatically</Trans>
                     </label>
                   </View>
+                  {deposit.account && (
+                    <Text style={{ color: theme.pageTextSubdued }}>
+                      {daysEarlyText(deposit.account)}
+                    </Text>
+                  )}
                   {deposit.postAutomatically && (
                     <Text role="note" style={{ color: theme.pageTextSubdued }}>
                       <Trans>
@@ -489,7 +574,7 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
               </Button>
             </Section>
 
-            {formErrors.length > 0 && (
+            {isEdited && formErrors.length > 0 && (
               <View role="alert" style={{ gap: 3 }}>
                 {formErrors.map(error => (
                   <Text key={error} style={{ color: theme.errorText }}>
@@ -533,6 +618,7 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
                     <Trans>Delete paycheck</Trans>
                   </Button>
                   <Button
+                    isDisabled={isEdited}
                     onPress={() =>
                       skipNext.mutate(
                         { id: paycheck.id },
@@ -560,7 +646,7 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
                         ? { ...definition, clearingAccount: '' }
                         : definition,
                       newClearingAccountName: isNewAccount
-                        ? newAccountName.trim()
+                        ? clearingName
                         : undefined,
                     },
                     { onSuccess: () => state.close() },
@@ -609,7 +695,7 @@ function Field({
   children: ReactNode;
 }) {
   return (
-    <View style={{ flex: 1, gap: 5 }}>
+    <View style={{ flex: 1, minWidth: 260, gap: 5 }}>
       <label htmlFor={htmlFor} style={{ fontWeight: 600 }}>
         {label}
       </label>

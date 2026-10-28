@@ -10,7 +10,7 @@ import {
 } from '#server/schedules/app';
 import { updateRule } from '#server/transactions/transaction-rules';
 import { undoable } from '#server/undo';
-import { computePaycheck } from '#shared/paychecks';
+import { computePaycheck, MAX_DEPOSIT_DAYS_EARLY } from '#shared/paychecks';
 import type {
   AccountEntity,
   PaycheckDefinition,
@@ -39,21 +39,24 @@ app.method(
   mutator(undoable(setAccountBusinessDays)),
 );
 
-export const MAX_DEPOSIT_DAYS_EARLY = 10;
-
-function toPaycheck(row: db.DbPaycheck): PaycheckEntity {
-  return {
-    id: row.id,
-    name: row.name,
-    definition: JSON.parse(row.definition) as PaycheckDefinition,
-  };
+// Null for a malformed (e.g. corrupt synced) row, which is skipped
+function toPaycheck(row: db.DbPaycheck): PaycheckEntity | null {
+  try {
+    return {
+      id: row.id,
+      name: row.name,
+      definition: JSON.parse(row.definition) as PaycheckDefinition,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function getPaychecks(): Promise<PaycheckEntity[]> {
   const rows = await db.all<db.DbPaycheck>(
     'SELECT * FROM paychecks WHERE tombstone = 0 ORDER BY name, id',
   );
-  return rows.map(toPaycheck);
+  return rows.flatMap(row => toPaycheck(row) ?? []);
 }
 
 async function getPaycheck(id: PaycheckEntity['id']) {
@@ -61,10 +64,11 @@ async function getPaycheck(id: PaycheckEntity['id']) {
     'SELECT * FROM paychecks WHERE id = ? AND tombstone = 0',
     [id],
   );
-  if (!row) {
+  const paycheck = row && toPaycheck(row);
+  if (!paycheck) {
     throw new Error('Paycheck not found');
   }
-  return toPaycheck(row);
+  return paycheck;
 }
 
 async function getAccount(id: AccountEntity['id']) {
@@ -89,17 +93,82 @@ async function getTransferPayee(account: AccountEntity['id']) {
   return payee.id;
 }
 
-function validate(name: string, definition: PaycheckDefinition) {
+const isCents = (value: unknown) =>
+  Number.isSafeInteger(value) && (value as number) >= 0;
+
+// Checks a definition from the client or sync before anything is written
+async function validate(
+  name: string,
+  definition: PaycheckDefinition,
+  previous?: PaycheckDefinition,
+  { isNewClearingAccount = false } = {},
+) {
   if (!name.trim()) {
     throw new Error('A paycheck needs a name');
+  }
+  const { deductions, deposits } = definition;
+  if (!Array.isArray(deductions) || !Array.isArray(deposits)) {
+    throw new Error('Invalid paycheck: deductions and deposits are lists');
+  }
+  if (
+    !isCents(definition.grossAmount) ||
+    deductions.some(d => !isCents(d.amount)) ||
+    deposits.some(d =>
+      d.kind === 'percent'
+        ? !Number.isFinite(d.value) || d.value < 0 || d.value > 100
+        : d.kind === 'fixed'
+          ? !isCents(d.value)
+          : d.kind !== 'remainder',
+    )
+  ) {
+    throw new Error('Invalid paycheck: amounts must be zero or more');
   }
   const { errors } = computePaycheck(definition);
   if (errors.length > 0) {
     throw new Error(`Invalid paycheck: ${errors.join(', ')}`);
   }
-  if (definition.deposits.some(d => d.account === definition.clearingAccount)) {
+  if (new Set(deposits.map(d => d.id)).size !== deposits.length) {
+    throw new Error('Invalid paycheck: duplicate deposit');
+  }
+  if (new Set(deposits.map(d => d.account)).size !== deposits.length) {
+    throw new Error('Each deposit must go to a different account');
+  }
+  if (deposits.some(d => d.account === definition.clearingAccount)) {
     throw new Error('A deposit cannot go to the clearing account');
   }
+
+  if (!isNewClearingAccount) {
+    const clearing = await getAccount(definition.clearingAccount);
+    if (clearing.offbudget || clearing.closed) {
+      throw new Error('The clearing account must be an open on-budget account');
+    }
+  }
+  const names = [name];
+  for (const deposit of deposits) {
+    const account = await getAccount(deposit.account);
+    if (account.closed) {
+      throw new Error(`Cannot deposit to closed account ${account.name}`);
+    }
+    names.push(depositScheduleName(name, account.name));
+  }
+  // Names are unique among schedules, so check before writing any of them
+  const own = [
+    previous?.paySchedule,
+    ...(previous?.deposits ?? []).map(d => d.schedule),
+  ].filter((id): id is string => !!id);
+  const taken = await db.all<{ name: string }>(
+    `SELECT name FROM schedules WHERE tombstone = 0 AND name IN (${names
+      .map(() => '?')
+      .join(', ')}) AND id NOT IN (${own.map(() => '?').join(', ') || "''"})`,
+    [...names, ...own],
+  );
+  if (taken.length > 0) {
+    throw new Error(`A schedule named "${taken[0].name}" already exists`);
+  }
+}
+
+function depositScheduleName(paycheck: string, account: string) {
+  return `${paycheck} → ${account}`;
 }
 
 async function replaceActions(scheduleId: string, actions: RuleActionEntity[]) {
@@ -124,11 +193,8 @@ async function writeSchedule(
     ])) != null;
   // A schedule deleted outside the paycheck is recreated
   const scheduleId = exists
-    ? await updateSchedule({
-        schedule: { id, ...fields },
-        conditions,
-        resetNextDate: true,
-      })
+    ? // Next dates (and skips) change only when the dates do
+      await updateSchedule({ schedule: { id, ...fields }, conditions })
     : await createSchedule({ schedule: fields, conditions });
   await replaceActions(scheduleId, actions);
   return scheduleId;
@@ -177,7 +243,8 @@ async function writePaycheckSchedules(
   }
 
   const paySchedule = await writeSchedule(
-    definition.paySchedule ?? previous?.paySchedule,
+    // Schedule ids come only from the stored definition, never the caller
+    previous?.paySchedule,
     { name, posts_transaction: true },
     [
       ...(definition.payee
@@ -224,9 +291,9 @@ async function writePaycheckSchedules(
   for (const deposit of definition.deposits) {
     const account = await getAccount(deposit.account);
     const schedule = await writeSchedule(
-      deposit.schedule ?? previousSchedules.get(deposit.id),
+      previousSchedules.get(deposit.id),
       {
-        name: `${name} → ${account.name}`,
+        name: depositScheduleName(name, account.name),
         posts_transaction: !!deposit.postAutomatically,
       },
       [
@@ -276,17 +343,18 @@ async function createPaycheck({
   // Creates an on-budget clearing account with this name
   newClearingAccountName?: string;
 }): Promise<PaycheckEntity['id']> {
-  let clearingAccount = definition.clearingAccount;
+  const fields = { ...definition, paySchedule: null };
+  await validate(name, fields, undefined, {
+    isNewClearingAccount: !!newClearingAccountName,
+  });
   if (newClearingAccountName) {
-    clearingAccount = await db.insertAccount({
+    fields.clearingAccount = await db.insertAccount({
       name: newClearingAccountName,
       offbudget: 0,
       closed: 0,
     });
-    await db.insertPayee({ name: '', transfer_acct: clearingAccount });
+    await db.insertPayee({ name: '', transfer_acct: fields.clearingAccount });
   }
-  const fields = { ...definition, clearingAccount };
-  validate(name, fields);
   const written = await writePaycheckSchedules(name, fields);
   return db.insertWithUUID('paychecks', {
     name,
@@ -303,8 +371,8 @@ async function updatePaycheck({
   name: string;
   definition: PaycheckDefinition;
 }) {
-  validate(name, definition);
   const previous = await getPaycheck(id);
+  await validate(name, definition, previous.definition);
   const written = await writePaycheckSchedules(
     name,
     definition,
@@ -375,11 +443,16 @@ async function setAccountBusinessDays({
     'SELECT * FROM paychecks WHERE tombstone = 0 AND definition LIKE ?',
     [`%"${id}"%`],
   );
-  for (const paycheck of rows.map(toPaycheck)) {
-    await writePaycheckSchedules(
+  for (const paycheck of rows.flatMap(row => toPaycheck(row) ?? [])) {
+    const written = await writePaycheckSchedules(
       paycheck.name,
       paycheck.definition,
       paycheck.definition,
     );
+    // Keeps ids of schedules recreated after being deleted elsewhere
+    await db.update('paychecks', {
+      id: paycheck.id,
+      definition: JSON.stringify(written),
+    });
   }
 }

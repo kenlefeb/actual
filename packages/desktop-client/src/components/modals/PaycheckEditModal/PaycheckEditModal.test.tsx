@@ -1,5 +1,6 @@
 import type { PaycheckEntity } from '@actual-app/core/types/models';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { TestProviders } from '#mocks';
@@ -84,17 +85,23 @@ describe('PaycheckEditModal', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('explains why a paycheck cannot be saved', () => {
+  it('explains why a paycheck cannot be saved once edited', async () => {
     state.paychecks = [
       acme([
         { id: 'checking', account: 'checking', kind: 'fixed', value: 200000 },
       ]),
     ];
     renderModal();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+    await userEvent.type(screen.getByLabelText('Name'), ' Corp');
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Deposits must add up to net pay or include a remainder.',
     );
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Skip next paycheck' }),
+    ).toBeDisabled();
   });
 
   it('notes the exact-amount merge for deposits that post automatically', () => {

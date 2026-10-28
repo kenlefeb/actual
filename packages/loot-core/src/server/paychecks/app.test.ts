@@ -439,4 +439,86 @@ describe('paychecks', () => {
     expect((await scheduleRow(checking)).next_date).toBe('2026-11-25');
     expect((await scheduleRow(savings)).next_date).toBe('2026-11-30');
   });
+
+  it('keeps a skipped paycheck skipped when it is saved again', async () => {
+    const { id, pay, checking } = await createAcme();
+    await handlers['paycheck-skip-next']({ id });
+    const paycheck = await getPaycheck(id);
+    if (!paycheck) throw new Error('Missing paycheck');
+    await handlers['paycheck-update']({
+      id,
+      name: 'Acme pay',
+      definition: { ...paycheck.definition, grossAmount: 310000 },
+    });
+    expect((await scheduleRow(pay)).next_date).toBe('2026-11-30');
+    expect((await scheduleRow(checking)).next_date).toBe('2026-11-25');
+  });
+
+  it('ignores schedule ids sent by the client', async () => {
+    const rent = await schedulesApp.handlers['schedule/create']({
+      schedule: { name: 'Rent' },
+      conditions: [{ op: 'is', field: 'date', value: '2026-12-01' }],
+    });
+    const id = await handlers['paycheck-create']({
+      name: 'Acme',
+      definition: { ...acme(), paySchedule: rent },
+    });
+    expect((await getPaycheck(id))?.definition.paySchedule).not.toBe(rent);
+    await handlers['paycheck-delete']({ id });
+    expect((await scheduleRow(rent))?.name).toBe('Rent');
+  });
+
+  it('rejects a paycheck before writing anything', async () => {
+    const schedulesBefore = await db.all('SELECT id FROM schedules');
+    const accountsBefore = await db.all('SELECT id FROM accounts');
+    await expect(
+      handlers['paycheck-create']({
+        name: 'Acme',
+        definition: acme({
+          deposits: [
+            { id: 'a', account: 'checking', kind: 'fixed', value: 20000 },
+            { id: 'b', account: 'checking', kind: 'remainder', value: 0 },
+          ],
+        }),
+        newClearingAccountName: 'Acme Paycheck',
+      }),
+    ).rejects.toThrow('different account');
+    await expect(
+      handlers['paycheck-create']({
+        name: 'Acme',
+        definition: acme({ grossAmount: -5 }),
+      }),
+    ).rejects.toThrow('amounts must be zero or more');
+    await expect(
+      handlers['paycheck-create']({
+        name: 'Acme',
+        definition: acme({ clearingAccount: 'retirement' }),
+      }),
+    ).rejects.toThrow('open on-budget account');
+    expect(await db.all('SELECT id FROM schedules')).toEqual(schedulesBefore);
+    expect(await db.all('SELECT id FROM accounts')).toEqual(accountsBefore);
+  });
+
+  it('rejects a paycheck whose schedule name is taken', async () => {
+    await schedulesApp.handlers['schedule/create']({
+      schedule: { name: 'Acme' },
+      conditions: [{ op: 'is', field: 'date', value: '2026-12-01' }],
+    });
+    await expect(createAcme()).rejects.toThrow('"Acme" already exists');
+  });
+
+  it('records schedules recreated by an account change', async () => {
+    const { id, checking } = await createAcme();
+    await schedulesApp.handlers['schedule/delete']({ id: checking });
+    await handlers['account-set-business-days']({
+      id: 'checking',
+      businessCalendarId: 'reserve',
+      depositDaysEarly: 1,
+    });
+    const recreated = (await getPaycheck(id))?.definition.deposits.find(
+      d => d.account === 'checking',
+    )?.schedule;
+    expect(recreated).not.toBe(checking);
+    expect(await scheduleRow(recreated)).toBeDefined();
+  });
 });

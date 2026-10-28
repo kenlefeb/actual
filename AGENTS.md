@@ -276,7 +276,7 @@ directory (e.g. `.claude/skills/impeccable/`) is missing, install it with
 ### 7. Impatient Programming
 
 If the developer has a local copy of `./primer.md`, then incorporate its rules into the developer workflow.
-If there is no copy of `/primer.md`, then ignore this section.
+If there is no copy of `./primer.md`, then ignore this section.
 
 ## Code Style & Conventions
 

@@ -34,6 +34,12 @@ Percent deposits SHALL be rounded to the cent, and the single remainder deposit 
 - **WHEN** net pay is 1,000.01 with deposits 33% to "Savings" and the remainder to "Checking"
 - **THEN** "Savings" is 330.00 and "Checking" is 670.01
 
+Percent deposits totalling 100% with no remainder SHALL add up to net pay to the cent: the last percent deposit SHALL receive net pay minus all other deposits.
+
+#### Scenario: Odd-cent 50/50 split
+- **WHEN** net pay is 100.01 with deposits 50% to "Savings" and 50% to "Checking" and no remainder
+- **THEN** "Savings" is 50.01, "Checking" is 50.00, and the paycheck saves
+
 ### Requirement: Paycheck validation
 A paycheck SHALL NOT be saved when deductions exceed gross pay, fixed and percent deposits exceed net pay, percents total more than 100, more than one deposit is the remainder, or deposits without a remainder do not add up to net pay. The editor SHALL say which rule failed.
 

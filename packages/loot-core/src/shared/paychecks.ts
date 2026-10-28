@@ -62,6 +62,18 @@ export function computePaycheck({
   for (const deposit of remainders) {
     depositAmounts.set(deposit.id, netAmount - assigned);
   }
+  // Without a remainder, percents totalling 100 give the last one the rounding
+  // (compared in hundredths so float sums like 33.33 + 33.33 + 33.34 match)
+  const lastPercent = deposits.filter(d => d.kind === 'percent').at(-1);
+  if (
+    remainders.length === 0 &&
+    lastPercent &&
+    Math.round(percentTotal * 100) === 10000
+  ) {
+    const rounded = depositAmounts.get(lastPercent.id) ?? 0;
+    depositAmounts.set(lastPercent.id, rounded + netAmount - assigned);
+    assigned = netAmount;
+  }
 
   if (deposits.length === 0) {
     errors.push('no-deposits');

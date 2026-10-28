@@ -45,6 +45,46 @@ describe('computePaycheck', () => {
 
   it.each([
     [
+      [50, 50],
+      [5001, 5000],
+    ],
+    [
+      [33.33, 33.33, 33.34],
+      [3333, 3333, 3335],
+    ],
+  ])(
+    'gives an odd cent to the last of percents %j totalling 100',
+    (percents, expected) => {
+      const totals = computePaycheck({
+        grossAmount: 10001,
+        deductions: [],
+        deposits: percents.map((p, i) => deposit(`d${i}`, 'percent', p)),
+      });
+      expect(
+        percents.map((_, i) => totals.depositAmounts.get(`d${i}`)),
+      ).toEqual(expected);
+      expect(totals.errors).toEqual([]);
+    },
+  );
+
+  it.each([
+    ['deposits-do-not-add-up', [50, 40]],
+    ['percents-exceed-100', [60, 50]],
+  ] as const)(
+    'reports %s for percents %j without a remainder',
+    (error, percents) => {
+      expect(
+        computePaycheck({
+          grossAmount: 10001,
+          deductions: [],
+          deposits: percents.map((p, i) => deposit(`d${i}`, 'percent', p)),
+        }).errors,
+      ).toContain(error);
+    },
+  );
+
+  it.each([
+    [
       'deductions-exceed-gross',
       { grossAmount: 1000, deposits: [deposit('checking', 'remainder')] },
     ],

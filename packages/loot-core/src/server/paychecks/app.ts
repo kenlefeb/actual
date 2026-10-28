@@ -143,6 +143,18 @@ async function validate(
       throw new Error('The clearing account must be an open on-budget account');
     }
   }
+  for (const { name: deduction, transferAccount } of deductions) {
+    if (
+      transferAccount &&
+      !(await db.first(
+        `SELECT a.id FROM accounts a JOIN payees p ON p.transfer_acct = a.id
+         WHERE a.id = ? AND a.tombstone = 0 AND p.tombstone = 0`,
+        [transferAccount],
+      ))
+    ) {
+      throw new Error(`The transfer account for ${deduction} no longer exists`);
+    }
+  }
   const names = [name];
   for (const deposit of deposits) {
     const account = await getAccount(deposit.account);
@@ -150,6 +162,9 @@ async function validate(
       throw new Error(`Cannot deposit to closed account ${account.name}`);
     }
     names.push(depositScheduleName(name, account.name));
+  }
+  if (new Set(names).size !== names.length) {
+    throw new Error('Deposit accounts need different names');
   }
   // Names are unique among schedules, so check before writing any of them
   const own = [

@@ -275,8 +275,10 @@ directory (e.g. `.claude/skills/impeccable/`) is missing, install it with
 
 ### 7. Impatient Programming
 
-If the developer has a local copy of `./primer.md`, then incorporate its rules into the developer workflow.
-If there is no copy of `./primer.md`, then ignore this section.
+Follow [`primer.md`](primer.md) (fork-only): its rules are part of the developer
+workflow. Commit and PR types are `fix` (a defect in code that's live in
+production) or `refine` (everything else), after the `[AI]` prefix, e.g.
+`[AI] refine(agents): …`.
 
 ## Code Style & Conventions
 

@@ -143,6 +143,18 @@ async function validate(
       throw new Error('The clearing account must be an open on-budget account');
     }
   }
+  for (const { name: deduction, transferAccount } of deductions) {
+    if (
+      transferAccount &&
+      !(await db.first(
+        `SELECT a.id FROM accounts a JOIN payees p ON p.transfer_acct = a.id
+         WHERE a.id = ? AND a.tombstone = 0 AND p.tombstone = 0`,
+        [transferAccount],
+      ))
+    ) {
+      throw new Error(`The transfer account for ${deduction} no longer exists`);
+    }
+  }
   const names = [name];
   for (const deposit of deposits) {
     const account = await getAccount(deposit.account);

@@ -35,7 +35,12 @@ Percent deposits SHALL be rounded to the cent, and the single remainder deposit 
 - **THEN** "Savings" is 330.00 and "Checking" is 670.01
 
 ### Requirement: Paycheck validation
-A paycheck SHALL NOT be saved when deductions exceed gross pay, fixed and percent deposits exceed net pay, percents total more than 100, more than one deposit is the remainder, or deposits without a remainder do not add up to net pay. The editor SHALL say which rule failed.
+A paycheck SHALL NOT be saved when deductions exceed gross pay, fixed and percent deposits exceed net pay, percents total more than 100, more than one deposit is the remainder, or deposits without a remainder do not add up to net pay. The editor SHALL say which rule failed. An invalid paycheck SHALL be rejected before anything is written, including when two deposit accounts share a name (their deposit schedules would share a name).
+
+#### Scenario: Deposit accounts that share a name
+- **GIVEN** two different accounts are both named "Savings"
+- **WHEN** the user saves a new or existing paycheck with a deposit to each
+- **THEN** the paycheck is not saved, the editor says the deposit accounts need different names, and no schedules, rules or accounts are added or changed
 
 #### Scenario: Deposits that do not add up
 - **WHEN** net pay is 2,250.00 and the only deposit is a fixed 2,000.00 to "Checking"

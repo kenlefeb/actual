@@ -151,6 +151,9 @@ async function validate(
     }
     names.push(depositScheduleName(name, account.name));
   }
+  if (new Set(names).size !== names.length) {
+    throw new Error('Deposit accounts need different names');
+  }
   // Names are unique among schedules, so check before writing any of them
   const own = [
     previous?.paySchedule,

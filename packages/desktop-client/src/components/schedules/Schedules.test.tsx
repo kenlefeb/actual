@@ -5,11 +5,11 @@ import { TestProviders } from '#mocks';
 
 import { Schedules } from '.';
 
-const flags = vi.hoisted(() => ({ businessCalendars: false }));
+const flags = vi.hoisted(() => ({ paychecks: false }));
 
 vi.mock('#hooks/useFeatureFlag', () => ({
   useFeatureFlag: (name: string) =>
-    name === 'businessCalendars' ? flags.businessCalendars : false,
+    name === 'paychecks' ? flags.paychecks : false,
 }));
 
 vi.mock('#hooks/useSchedules', () => ({
@@ -32,11 +32,11 @@ function renderPage() {
 
 describe('Schedules page paychecks', () => {
   beforeEach(() => {
-    flags.businessCalendars = false;
+    flags.paychecks = false;
   });
 
   it('offers "Add paycheck" when the feature is on', () => {
-    flags.businessCalendars = true;
+    flags.paychecks = true;
     renderPage();
     expect(
       screen.getByRole('button', { name: 'Add paycheck' }),

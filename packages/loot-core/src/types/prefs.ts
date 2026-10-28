@@ -13,7 +13,8 @@ export type FeatureFlag =
   | 'akahuBankSync'
   | 'mobileCalculator'
   | 'monteCarloReport'
-  | 'businessCalendars';
+  | 'businessCalendars'
+  | 'paychecks';
 
 /**
  * Cross-device preferences. These sync across devices when they are changed.

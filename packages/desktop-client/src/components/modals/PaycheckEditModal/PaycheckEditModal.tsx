@@ -12,7 +12,10 @@ import {
   currentDay,
   format as monthUtilFormat,
 } from '@actual-app/core/shared/months';
-import { computePaycheck } from '@actual-app/core/shared/paychecks';
+import {
+  computePaycheck,
+  MAX_DEPOSIT_DAYS_EARLY,
+} from '@actual-app/core/shared/paychecks';
 import type { PaycheckError } from '@actual-app/core/shared/paychecks';
 import { q } from '@actual-app/core/shared/query';
 import type {
@@ -45,9 +48,12 @@ import { pushModal } from '#modals/modalsSlice';
 import {
   useDeletePaycheckMutation,
   useSavePaycheckMutation,
+  useSetAccountBusinessDaysMutation,
   useSkipNextPaycheckMutation,
 } from '#paychecks';
 import { useDispatch } from '#redux';
+
+import { PaycheckYearToDate } from './PaycheckYearToDate';
 
 type PaycheckEditModalProps = {
   paycheckId?: PaycheckEntity['id'];
@@ -93,6 +99,7 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
   const savePaycheck = useSavePaycheckMutation();
   const deletePaycheck = useDeletePaycheckMutation();
   const skipNext = useSkipNextPaycheckMutation();
+  const setBusinessDays = useSetAccountBusinessDaysMutation();
 
   const { data: accounts = [] } = useAccounts();
   const { data: calendars = [] } = useBusinessCalendars();
@@ -125,6 +132,10 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
   });
   const nextPayDate = paySchedules[0]?.next_date;
   const [newAccountName, setNewAccountName] = useState('');
+  // Days early typed for deposit accounts, saved to the accounts on save
+  const [daysEarlyInput, setDaysEarlyInput] = useState<Record<string, string>>(
+    {},
+  );
 
   const { netAmount, depositAmounts, errors } = computePaycheck(definition);
   const accountById = new Map(accounts.map(a => [a.id, a]));
@@ -149,20 +160,22 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
     (employerName
       ? t('{{employer}} Paycheck', { employer: employerName })
       : '');
-  const daysEarlyText = (accountId: string) => {
-    const account = accountById.get(accountId);
-    if (!account) return null;
-    const calendar =
-      calendars.find(c => c.id === account.business_calendar_id)?.name ??
-      t('weekends only');
-    return t(
-      'Business days early: {{days}} ({{calendar}}), set on the account',
-      {
-        days: account.deposit_days_early ?? 0,
-        calendar,
-      },
-    );
-  };
+  const calendarName = (accountId: string) =>
+    calendars.find(
+      c => c.id === accountById.get(accountId)?.business_calendar_id,
+    )?.name ?? t('weekends only');
+  const savedDaysEarly = (accountId: string) =>
+    accountById.get(accountId)?.deposit_days_early ?? 0;
+  // Changed values for accounts still deposited to; null when not a valid number
+  const changedDaysEarly = definition.deposits.flatMap(({ account }) => {
+    const input = daysEarlyInput[account];
+    if (input === undefined || !accountById.has(account)) return [];
+    const days = input.trim() === '' ? NaN : Number(input);
+    const isValid =
+      Number.isInteger(days) && days >= 0 && days <= MAX_DEPOSIT_DAYS_EARLY;
+    if (isValid && days === savedDaysEarly(account)) return [];
+    return [{ account, days: isValid ? days : null }];
+  });
   const formErrors = [
     ...(!name.trim() ? [t('Enter a name for the paycheck.')] : []),
     ...(isNewAccount && !clearingName
@@ -189,8 +202,41 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
     )
       ? [t('A deposit cannot go to the clearing account.')]
       : []),
+    ...(changedDaysEarly.some(d => d.days === null)
+      ? [
+          t('Business days early must be a whole number from 0 to {{max}}.', {
+            max: MAX_DEPOSIT_DAYS_EARLY,
+          }),
+        ]
+      : []),
     ...errors.map(error => errorMessage(error, t)),
   ];
+
+  const save = async (close: () => void) => {
+    try {
+      await savePaycheck.mutateAsync({
+        id: paycheck?.id,
+        name: name.trim(),
+        definition: isNewAccount
+          ? { ...definition, clearingAccount: '' }
+          : definition,
+        newClearingAccountName: isNewAccount ? clearingName : undefined,
+      });
+      // After the paycheck, so a rejected paycheck leaves accounts unchanged;
+      // each account change rewrites every paycheck depositing to it
+      for (const { account, days } of changedDaysEarly) {
+        await setBusinessDays.mutateAsync({
+          id: account,
+          businessCalendarId:
+            accountById.get(account)?.business_calendar_id ?? null,
+          depositDaysEarly: days ?? 0,
+        });
+      }
+      close();
+    } catch {
+      // The mutation has already shown the error
+    }
+  };
 
   const update = (fields: Partial<PaycheckDefinition>) => {
     setIsEdited(true);
@@ -589,9 +635,52 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
                       <Trans>Post automatically</Trans>
                     </label>
                   </View>
-                  {deposit.account && (
-                    <Text style={{ color: theme.pageTextSubdued }}>
-                      {daysEarlyText(deposit.account)}
+                  {accountById.has(deposit.account) && (
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        flexWrap: 'wrap',
+                        gap: 5,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <label htmlFor={`deposit-days-${deposit.id}`}>
+                        <Trans>Business days early</Trans>
+                      </label>
+                      <Input
+                        id={`deposit-days-${deposit.id}`}
+                        type="number"
+                        min={0}
+                        max={MAX_DEPOSIT_DAYS_EARLY}
+                        step={1}
+                        value={
+                          daysEarlyInput[deposit.account] ??
+                          String(savedDaysEarly(deposit.account))
+                        }
+                        onChangeValue={value => {
+                          setIsEdited(true);
+                          setDaysEarlyInput(current => ({
+                            ...current,
+                            [deposit.account]: value,
+                          }));
+                        }}
+                        style={{ width: 60 }}
+                      />
+                      <Text style={{ color: theme.pageTextSubdued }}>
+                        {t('Calendar: {{calendar}}', {
+                          calendar: calendarName(deposit.account),
+                        })}
+                      </Text>
+                    </View>
+                  )}
+                  {changedDaysEarly.some(
+                    d => d.account === deposit.account,
+                  ) && (
+                    <Text role="note" style={{ color: theme.pageTextSubdued }}>
+                      {t(
+                        'Applies to every paycheck depositing to {{account}}.',
+                        { account: accountById.get(deposit.account)?.name },
+                      )}
                     </Text>
                   )}
                   {deposit.postAutomatically && (
@@ -619,6 +708,8 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
                 <Trans>Add deposit</Trans>
               </Button>
             </Section>
+
+            {paycheck && <PaycheckYearToDate paycheckId={paycheck.id} />}
 
             {isEdited && formErrors.length > 0 && (
               <View role="alert" style={{ gap: 3 }}>
@@ -703,21 +794,7 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
               <Button
                 variant="primary"
                 isDisabled={formErrors.length > 0}
-                onPress={() =>
-                  savePaycheck.mutate(
-                    {
-                      id: paycheck?.id,
-                      name: name.trim(),
-                      definition: isNewAccount
-                        ? { ...definition, clearingAccount: '' }
-                        : definition,
-                      newClearingAccountName: isNewAccount
-                        ? clearingName
-                        : undefined,
-                    },
-                    { onSuccess: () => state.close() },
-                  )
-                }
+                onPress={() => save(() => state.close())}
               >
                 <Trans>Save</Trans>
               </Button>

@@ -1,5 +1,9 @@
-import type { PaycheckEntity } from '@actual-app/core/types/models';
-import { render, screen } from '@testing-library/react';
+import type {
+  AccountEntity,
+  PaycheckEntity,
+  PaycheckYearToDate,
+} from '@actual-app/core/types/models';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -10,7 +14,15 @@ import { PaycheckEditModal } from './PaycheckEditModal';
 const state = vi.hoisted(() => ({
   paychecks: [] as PaycheckEntity[],
   mutate: vi.fn(),
+  saveAsync: vi.fn(),
+  setBusinessDaysAsync: vi.fn(),
   scheduleQueries: [] as unknown[],
+  accounts: [] as Partial<AccountEntity>[],
+  yearToDate: [] as PaycheckYearToDate[],
+}));
+
+vi.mock('#hooks/useAccounts', () => ({
+  useAccounts: () => ({ data: state.accounts }),
 }));
 
 vi.mock('#hooks/usePaychecks', () => ({
@@ -25,9 +37,18 @@ vi.mock('#hooks/useSchedules', () => ({
 }));
 
 vi.mock('#paychecks', () => ({
-  useSavePaycheckMutation: () => ({ mutate: state.mutate }),
+  useSavePaycheckMutation: () => ({ mutateAsync: state.saveAsync }),
   useDeletePaycheckMutation: () => ({ mutate: state.mutate }),
   useSkipNextPaycheckMutation: () => ({ mutate: state.mutate }),
+  useSetAccountBusinessDaysMutation: () => ({
+    mutateAsync: state.setBusinessDaysAsync,
+  }),
+  paycheckQueries: {
+    yearToDate: (id: string) => ({
+      queryKey: ['year-to-date', id, state.yearToDate],
+      queryFn: () => state.yearToDate,
+    }),
+  },
 }));
 
 // Autocompletes and the date picker load data of their own
@@ -241,5 +262,102 @@ describe('PaycheckEditModal', () => {
 
     // A new query on every render re-subscribes and re-renders without end
     expect(new Set(state.scheduleQueries).size).toBe(1);
+  });
+
+  it('saves a changed days early to the account, noting it applies to every paycheck', async () => {
+    state.paychecks = [
+      acme([
+        { id: 'checking', account: 'checking', kind: 'remainder', value: 0 },
+      ]),
+    ];
+    state.accounts = [
+      {
+        id: 'checking',
+        name: 'Checking',
+        business_calendar_id: 'reserve',
+        deposit_days_early: 2,
+      },
+    ];
+    state.saveAsync.mockReset().mockResolvedValue(undefined);
+    state.setBusinessDaysAsync.mockReset().mockResolvedValue(undefined);
+    renderModal();
+
+    const days = screen.getByLabelText('Business days early');
+    expect(days).toHaveValue(2);
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+
+    await userEvent.clear(days);
+    await userEvent.type(days, '1');
+    expect(
+      screen.getByText('Applies to every paycheck depositing to Checking.'),
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(state.setBusinessDaysAsync).toHaveBeenCalledWith({
+        id: 'checking',
+        businessCalendarId: 'reserve',
+        depositDaysEarly: 1,
+      }),
+    );
+    // The paycheck saves first, so a rejected paycheck leaves the account alone
+    expect(state.saveAsync.mock.invocationCallOrder[0]).toBeLessThan(
+      state.setBusinessDaysAsync.mock.invocationCallOrder[0],
+    );
+    state.accounts = [];
+  });
+
+  it('rejects days early outside 0 to 10', async () => {
+    state.paychecks = [
+      acme([
+        { id: 'checking', account: 'checking', kind: 'remainder', value: 0 },
+      ]),
+    ];
+    state.accounts = [{ id: 'checking', name: 'Checking' }];
+    renderModal();
+    const days = screen.getByLabelText('Business days early');
+    await userEvent.clear(days);
+    await userEvent.type(days, '11');
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Business days early must be a whole number from 0 to 10.',
+    );
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    state.accounts = [];
+  });
+
+  it('shows year-to-date totals for this year and last year', async () => {
+    state.paychecks = [
+      acme([
+        { id: 'checking', account: 'checking', kind: 'remainder', value: 0 },
+      ]),
+    ];
+    state.yearToDate = [
+      {
+        year: 2026,
+        gross: 300000,
+        deductions: [{ name: 'Federal tax', amount: 45000 }],
+        net: 255000,
+      },
+      {
+        year: 2025,
+        gross: 7250000,
+        deductions: [
+          { name: 'Federal tax', amount: 1080000 },
+          { name: 'Health', amount: 288000 },
+        ],
+        net: 5882000,
+      },
+    ];
+    renderModal();
+
+    const rows = await screen.findAllByRole('row');
+    expect(rows.map(row => row.textContent)).toEqual([
+      'Total20262025',
+      'Gross pay3,000.0072,500.00',
+      'Federal tax450.0010,800.00',
+      'Health0.002,880.00',
+      'Net pay2,550.0058,820.00',
+    ]);
+    state.yearToDate = [];
   });
 });

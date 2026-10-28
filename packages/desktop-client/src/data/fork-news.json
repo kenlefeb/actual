@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "id": "fork-release-26.10.1-alpha.11",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.11 — Ken's Actual fork",
+      "date": "2026-10-28",
+      "version": "26.10.1-alpha.11",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.11.md",
+      "body": "**Unofficial fork prerelease.** Based on Actual 26.10.0 (`2bebdbaae0b701120a8cad9d56aafd64fa04c577`); not an official Actual Budget release.\n\nThe paycheck editor now shows when the next paycheck is due.",
+      "details": "#### Features\n\n- No new fork features in this release; earlier features are retained.\n\n#### Enhancements\n\n- The paycheck editor shows \"Next paycheck\" under its pay dates, so a skipped paycheck is visible. The \"Upcoming dates\" list above it shows the repeating pattern and does not reflect skips.\n\n#### Bugfixes\n\n- No other fork bug fixes in this release; earlier improvements are retained.\n\n#### Maintenance\n\n- Add a test for the paycheck editor's next pay date.\n\n#### Known limitations\n\n- Experimental and off by default; the paycheck editor is desktop only.\n- \"Upcoming dates\" in schedule and paycheck editors does not reflect skipped dates.\n- Each deposit must go to a different account, and every paycheck repeats its defined amounts; edit a posted transaction for a one-off change.\n- Imported deposits more than about 7.5% from the expected amount do not link automatically.\n- Releases published on the same day may show the \"What's new\" message for any of them; the Notifications page lists all.\n- Synthetic staging only; no real financial data or production paperwork migration. No iPhone acceptance test is claimed."
+    },
+    {
       "id": "fork-release-26.10.1-alpha.10",
       "type": "release",
       "title": "Release 26.10.1-alpha.10 — Ken's Actual fork",

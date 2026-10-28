@@ -19,7 +19,11 @@ The migration preserves application files, tests and fixture bytes exactly. It d
 | Desktop multiline notes and safe split editing          | `4039c27`                                          | Desktop regressions and mobile-to-desktop browser acceptance |
 | Fork versions and release policy                        | `cda16fb`, `0283c60`, version changes in `4039c27` | Settings browser check                                       |
 
-Prepare focused upstream branches from current upstream before submitting. Exclude fork version bumps, this directory, private release policy, deployment-specific documentation the agent exception for filing issues in `kenlefeb/actual-hosting` (in `scripts/agent-hooks/git-guard.sh` and `.github/agents/pr-and-commit-rules.md`) and the "Shortcut stories" section of `AGENTS.md`. Some original commits mix those concerns; do not submit the entire development branch as one upstream pull request.
+Prepare focused upstream branches from current upstream before submitting. Exclude fork version bumps, this directory, private release policy, deployment-specific documentation, the fork-only `.github/workflows/fork-ci.yml`, the agent-skills setup (`docs/agents/` and the "Agent skills" section of `CLAUDE.md`), the Impatient Programming primer (`primer.md` and the "Impatient Programming" section of `AGENTS.md`), the "Shortcut stories" section of `AGENTS.md` and the agent exception for filing issues in `kenlefeb/actual-hosting` (in `scripts/agent-hooks/git-guard.sh` and `.github/agents/pr-and-commit-rules.md`). Some original commits mix those concerns; do not submit the entire development branch as one upstream pull request.
+
+## CI
+
+Upstream's workflows run on Depot runners, which this fork lacks, so they are disabled in the fork's Actions settings rather than edited (keeping upstream syncs conflict-free). `fork-ci.yml` runs typecheck, lint and tests on GitHub-hosted runners for every PR to and push on `development`. Re-enable a workflow with `gh workflow enable <name> -R kenlefeb/actual` only after pointing it at a runner the fork has.
 
 ## Releases and hosting
 

@@ -644,3 +644,22 @@ has no entry for the current package version. Fork production builds read this
 bundled feed (`packages/desktop-client/.env.browser` for the served web app,
 `.env.production` for desktop builds); do not edit upstream's
 generated `news.json`.
+
+## Shortcut stories (fork-only)
+
+The fork's backlog lives in the Shortcut workspace `blacksmith-press`, team
+"Kenneth LeFebvre's Team", workflow "Standard" (Backlog → To Do → In Progress
+→ In Review → Done). Use the Shortcut connector when it's available; if it
+isn't, skip these steps and say so in your reply instead of guessing.
+
+- Starting a story: assign yourself and move it to In Progress.
+- Branches: use the story's Shortcut branch name (it contains `sc-<id>`) when
+  you choose the branch name. When the branch name is given to you, end the PR
+  title with `[sc-<id>]` instead, after the `[AI]` prefix and summary. Leave the
+  PR template body unmodified as usual.
+- Opening a PR: add the PR URL to the story's external links and move the story
+  to In Review.
+- PR merged into `development`: move the story to Done. Closed without merging:
+  move it back to To Do and comment why.
+- Work you find but don't do: add a Backlog story to the matching epic instead
+  of a GitHub issue. Check for an existing story first.

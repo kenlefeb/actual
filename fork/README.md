@@ -19,7 +19,7 @@ The migration preserves application files, tests and fixture bytes exactly. It d
 | Desktop multiline notes and safe split editing          | `4039c27`                                          | Desktop regressions and mobile-to-desktop browser acceptance |
 | Fork versions and release policy                        | `cda16fb`, `0283c60`, version changes in `4039c27` | Settings browser check                                       |
 
-Prepare focused upstream branches from current upstream before submitting. Exclude fork version bumps, this directory, private release policy and deployment-specific documentation. Some original commits mix those concerns; do not submit the entire development branch as one upstream pull request.
+Prepare focused upstream branches from current upstream before submitting. Exclude fork version bumps, this directory, private release policy, deployment-specific documentation and the agent exception for filing issues in `kenlefeb/actual-hosting` (in `scripts/agent-hooks/git-guard.sh` and `.github/agents/pr-and-commit-rules.md`). Some original commits mix those concerns; do not submit the entire development branch as one upstream pull request.
 
 ## Releases and hosting
 

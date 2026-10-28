@@ -33,6 +33,11 @@ block both. If you believe an issue should exist, share the proposed title
 and body with the user and let them file it. Updating existing issues (and
 commenting on them) remains allowed.
 
+Fork-only exception: agents may file backlog issues in Ken's private
+`kenlefeb/actual-hosting` repository with `gh issue create -R
+kenlefeb/actual-hosting`, using the 🤖 prefix below. Never upstream this
+exception (see `fork/README.md`).
+
 ## GitHub comment, review and issue prefix
 
 **Prefix everything you post to GitHub with the robot emoji 🤖** — pull-request

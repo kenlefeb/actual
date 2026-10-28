@@ -569,7 +569,7 @@ export function PayeeAutocomplete({
           setRawPayee('');
           setPayeeFieldFocused(false);
         },
-        'aria-label': t('Payee'),
+        'aria-label': inputProps?.['aria-label'] ?? t('Payee'),
         onFocus: () => setPayeeFieldFocused(true),
         onChangeValue: setRawPayee,
       }}

@@ -16,6 +16,10 @@ vi.mock('#hooks/usePaychecks', () => ({
   usePaychecks: () => ({ data: state.paychecks, isPlaceholderData: false }),
 }));
 
+vi.mock('#hooks/useSchedules', () => ({
+  useSchedules: () => ({ schedules: [{ next_date: '2026-11-13' }] }),
+}));
+
 vi.mock('#paychecks', () => ({
   useSavePaycheckMutation: () => ({ mutate: state.mutate }),
   useDeletePaycheckMutation: () => ({ mutate: state.mutate }),
@@ -24,7 +28,13 @@ vi.mock('#paychecks', () => ({
 
 // Autocompletes and the date picker load data of their own
 vi.mock('#components/util/GenericInput', () => ({
-  GenericInput: ({ value }: { value: string }) => <span>{value}</span>,
+  GenericInput: ({
+    value,
+    'aria-label': label,
+  }: {
+    value: string;
+    'aria-label'?: string;
+  }) => <span aria-label={label}>{value}</span>,
 }));
 vi.mock('#components/select/RecurringSchedulePicker', () => ({
   RecurringSchedulePicker: () => null,
@@ -135,5 +145,73 @@ describe('PaycheckEditModal', () => {
     expect(
       screen.getByRole('button', { name: 'Delete paycheck' }),
     ).toBeInTheDocument();
+  });
+
+  it('names each picker for screen readers', () => {
+    state.paychecks = [
+      acme([
+        { id: 'checking', account: 'checking', kind: 'remainder', value: 0 },
+      ]),
+    ];
+    renderModal();
+    expect(screen.getByLabelText('Employer')).toHaveTextContent('acme');
+    expect(screen.getByLabelText('Income category')).toHaveTextContent(
+      'income',
+    );
+    expect(screen.getByLabelText('Deduction 1 category')).toHaveTextContent(
+      'taxes',
+    );
+    expect(
+      screen.getByLabelText('Deduction 3 transfer account'),
+    ).toHaveTextContent('retirement');
+    expect(screen.getByLabelText('Deposit 1 account')).toHaveTextContent(
+      'checking',
+    );
+  });
+
+  it('keeps the decimal point while a percent is typed', async () => {
+    state.paychecks = [
+      acme([
+        { id: 'savings', account: 'savings', kind: 'percent', value: 0 },
+        { id: 'checking', account: 'checking', kind: 'remainder', value: 0 },
+      ]),
+    ];
+    renderModal();
+    const percent = screen.getByLabelText('Deposit 1 percent');
+    await userEvent.clear(percent);
+    await userEvent.type(percent, '12.5');
+    expect(percent).toHaveValue(12.5);
+    expect(screen.getByLabelText('Deposit 1 amount')).toHaveTextContent(
+      '281.25',
+    );
+  });
+
+  it('asks before skipping and names the paycheck date', async () => {
+    state.paychecks = [
+      acme([
+        { id: 'checking', account: 'checking', kind: 'remainder', value: 0 },
+      ]),
+    ];
+    state.mutate.mockClear();
+    renderModal();
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Skip next paycheck' }),
+    );
+    expect(
+      screen.getByText('Skip the paycheck on 11/13/2026?'),
+    ).toBeInTheDocument();
+    expect(state.mutate).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Keep it' }));
+    expect(state.mutate).not.toHaveBeenCalled();
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Skip next paycheck' }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Skip it' }));
+    expect(state.mutate).toHaveBeenCalledWith(
+      { id: 'acme' },
+      expect.anything(),
+    );
   });
 });

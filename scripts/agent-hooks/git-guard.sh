@@ -50,14 +50,16 @@ esac
 # explicitly with -R/--repo. Never upstream this (fork/README.md).
 case " $cmd " in
   *" gh "*"issue create"*)
+    # Fall through on the exception so the git checks below still run
+    hosting_issue=0
     case " $cmd " in
       *" -R kenlefeb/actual-hosting "* | *" --repo kenlefeb/actual-hosting "* | *" --repo=kenlefeb/actual-hosting "*)
         case "$cmd" in
           *actualbudget/*) ;;
-          *) exit 0 ;;
+          *) hosting_issue=1 ;;
         esac ;;
     esac
-    block "Blocked: agents must not create GitHub issues — filing an issue is a human decision (.github/agents/pr-and-commit-rules.md). Share the proposed issue title and body with the user instead." ;;
+    [ "$hosting_issue" -eq 1 ] || block "Blocked: agents must not create GitHub issues — filing an issue is a human decision (.github/agents/pr-and-commit-rules.md). Share the proposed issue title and body with the user instead." ;;
 esac
 
 # Everything below only applies to actual git invocations. Match `git` as a

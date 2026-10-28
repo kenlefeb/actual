@@ -309,6 +309,14 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
                     </label>
                   </Trans>
                 </View>
+                {/* Upcoming dates above follow the pattern; this one includes skips */}
+                {nextPayDate && (
+                  <Text style={{ fontWeight: 600 }}>
+                    {t('Next paycheck: {{date}}', {
+                      date: monthUtilFormat(nextPayDate, dateFormat),
+                    })}
+                  </Text>
+                )}
               </Field>
             </View>
 

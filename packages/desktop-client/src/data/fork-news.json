@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "id": "fork-release-26.10.1-alpha.10",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.10 — Ken's Actual fork",
+      "date": "2026-10-28",
+      "version": "26.10.1-alpha.10",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.10.md",
+      "body": "**Unofficial fork prerelease.** Based on Actual 26.10.0 (`2bebdbaae0b701120a8cad9d56aafd64fa04c577`); not an official Actual Budget release.\n\nPolish for the paycheck editor introduced in alpha.9.",
+      "details": "#### Features\n\n- No new fork features in this release; earlier features are retained.\n\n#### Enhancements\n\n- \"Skip next paycheck\" now asks first and names the pay date it will skip.\n- Screen readers now name each picker in the paycheck editor, such as \"Employer\", \"Income category\" and \"Deposit 2 account\".\n\n#### Bugfixes\n\n- A deposit percent with a decimal, such as 12.5%, keeps its decimal point while it is typed.\n\n#### Maintenance\n\n- Add tests for the paycheck editor's picker names, decimal percents and skip confirmation.\n\n#### Known limitations\n\n- Experimental and off by default; the paycheck editor is desktop only.\n- Each deposit must go to a different account, and every paycheck repeats its defined amounts; edit a posted transaction for a one-off change.\n- Imported deposits more than about 7.5% from the expected amount do not link automatically.\n- Releases published on the same day may show the \"What's new\" message for any of them; the Notifications page lists all.\n- Synthetic staging only; no real financial data or production paperwork migration. No iPhone acceptance test is claimed."
+    },
+    {
       "id": "fork-release-26.10.1-alpha.9",
       "type": "release",
       "title": "Release 26.10.1-alpha.9 — Ken's Actual fork",

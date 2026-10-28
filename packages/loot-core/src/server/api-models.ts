@@ -19,6 +19,9 @@ export type APIAccountEntity = Pick<AccountEntity, 'id' | 'name'> & {
   closed?: boolean;
   balance_current?: number | null;
   account_group_id?: string | null;
+  // Read-only: set in the app, which also updates paycheck deposit dates
+  business_calendar_id?: string | null;
+  deposit_days_early?: number;
 };
 
 export const accountModel = {
@@ -32,11 +35,18 @@ export const accountModel = {
       closed: account.closed ? true : false,
       balance_current: account.balance_current ?? null,
       account_group_id: account.account_group_id ?? null,
+      business_calendar_id: account.business_calendar_id ?? null,
+      deposit_days_early: account.deposit_days_early ?? 0,
     };
   },
 
   fromExternal(account: APIAccountEntity) {
-    const result = { ...account } as unknown as AccountEntity;
+    const {
+      business_calendar_id: _calendar,
+      deposit_days_early: _daysEarly,
+      ...fields
+    } = account;
+    const result = { ...fields } as unknown as AccountEntity;
     if ('offbudget' in account) {
       result.offbudget = account.offbudget ? 1 : 0;
     }

@@ -10,6 +10,7 @@ import type {
   NewRuleEntity,
   NewUserEntity,
   NoteEntity,
+  PaycheckEntity,
   RuleEntity,
   ScheduleEntity,
   SyncServerEnableBankingAccount,
@@ -670,6 +671,18 @@ export type Modal =
     }
   | {
       name: 'business-calendars';
+    }
+  | {
+      name: 'account-business-days';
+      options: {
+        accountId: AccountEntity['id'];
+      };
+    }
+  | {
+      name: 'paycheck-edit';
+      options: {
+        paycheckId?: PaycheckEntity['id'];
+      };
     }
   | {
       name: 'payee-category-learning';

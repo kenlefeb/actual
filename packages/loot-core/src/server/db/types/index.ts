@@ -36,6 +36,8 @@ export type DbAccount = {
     | 'account-missing'
     | null;
   account_group_id?: DbAccountGroup['id'] | null;
+  business_calendar_id?: string | null;
+  deposit_days_early?: number | null;
 };
 
 export type DbAccountGroup = {
@@ -52,6 +54,14 @@ export type DbBusinessCalendar = {
   non_working_days: string;
   holidays: string;
   exceptions: string;
+  tombstone: 1 | 0;
+};
+
+export type DbPaycheck = {
+  id: string;
+  name: string;
+  // JSON-encoded PaycheckDefinition
+  definition: string;
   tombstone: 1 | 0;
 };
 

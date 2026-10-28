@@ -28,6 +28,7 @@ import { app as formulasApp } from './formulas/app';
 import { app } from './main-app';
 import { mutator, runHandler } from './mutators';
 import { app as notesApp } from './notes/app';
+import { app as paychecksApp } from './paychecks/app';
 import { app as payeesApp } from './payees/app';
 import { get } from './post';
 import { app as preferencesApp } from './preferences/app';
@@ -148,6 +149,7 @@ app.combine(
   accountsApp,
   accountGroupsApp,
   businessCalendarsApp,
+  paychecksApp,
   payeesApp,
   spreadsheetApp,
   syncApp,

@@ -181,6 +181,27 @@ export const objects = {
         </span>
       ),
     },
+    {
+      name: 'business_calendar_id',
+      type: 'id | null',
+      description: (
+        <span>
+          Read-only. The business calendar of the institution behind the
+          account, used for paycheck deposit dates. Defaults to{' '}
+          <code>null</code> (weekends only)
+        </span>
+      ),
+    },
+    {
+      name: 'deposit_days_early',
+      type: 'number',
+      description: (
+        <span>
+          Read-only. How many business days early paycheck direct deposits
+          arrive in this account, from 0 to 10. Defaults to <code>0</code>
+        </span>
+      ),
+    },
   ],
 
   accountGroup: [

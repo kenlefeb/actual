@@ -79,6 +79,8 @@ export const schema = {
     last_sync: f('string'),
     bank_sync_status: f('string'),
     account_group_id: f('id', { ref: 'account_groups' }),
+    business_calendar_id: f('string'),
+    deposit_days_early: f('integer'),
   },
   account_groups: {
     id: f('id'),
@@ -92,6 +94,12 @@ export const schema = {
     non_working_days: f('json'),
     holidays: f('json'),
     exceptions: f('json'),
+    tombstone: f('boolean'),
+  },
+  paychecks: {
+    id: f('id'),
+    name: f('string'),
+    definition: f('json'),
     tombstone: f('boolean'),
   },
   categories: {

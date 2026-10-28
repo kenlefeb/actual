@@ -157,9 +157,24 @@ export function Schedules() {
               </Button>
             )}
           </View>
-          <Button variant="primary" onPress={onAdd}>
-            <Trans>Add new schedule</Trans>
-          </Button>
+          <View style={{ flexDirection: 'row', gap: '1em' }}>
+            {businessCalendarsEnabled && !isNarrowWidth && (
+              <Button
+                onPress={() =>
+                  dispatch(
+                    pushModal({
+                      modal: { name: 'paycheck-edit', options: {} },
+                    }),
+                  )
+                }
+              >
+                <Trans>Add paycheck</Trans>
+              </Button>
+            )}
+            <Button variant="primary" onPress={onAdd}>
+              <Trans>Add new schedule</Trans>
+            </Button>
+          </View>
         </View>
       </Page>
     </ErrorBoundary>

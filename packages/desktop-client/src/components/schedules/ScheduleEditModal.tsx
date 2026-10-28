@@ -21,6 +21,7 @@ import type { Modal as ModalType } from '#modals/modalsSlice';
 import { aqlQuery } from '#queries/aqlQuery';
 import { useDispatch } from '#redux';
 
+import { PaycheckScheduleNote } from './PaycheckScheduleNote';
 import { updateScheduleConditions } from './schedule-edit-utils';
 import { ScheduleEditForm } from './ScheduleEditForm';
 
@@ -229,6 +230,7 @@ export function ScheduleEditModal({ id, transaction }: ScheduleEditModalProps) {
               <ModalCloseButton onPress={() => modalState.close()} />
             }
           />
+          <PaycheckScheduleNote scheduleId={schedule.id} />
           <ScheduleEditForm
             fields={state.fields}
             dispatch={dispatch}

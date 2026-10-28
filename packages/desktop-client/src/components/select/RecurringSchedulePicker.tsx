@@ -372,10 +372,12 @@ function MonthlyPatterns({
 
 function RecurringScheduleTooltip({
   config: currentConfig,
+  hideSkipWeekend,
   onClose,
   onSave,
 }: {
   config: RecurConfig;
+  hideSkipWeekend?: boolean;
   onClose: () => void;
   onSave: (config: RecurConfig) => void;
 }) {
@@ -538,102 +540,104 @@ function RecurringScheduleTooltip({
         config.patterns.length > 0 && (
           <MonthlyPatterns config={config} dispatch={dispatch} />
         )}
-      <SpaceBetween
-        direction="vertical"
-        style={{ marginTop: 5, alignItems: 'flex-start' }}
-      >
-        <View
-          style={{
-            marginTop: 5,
-            flex: 1,
-            flexDirection: 'row',
-            alignItems: 'center',
-            userSelect: 'none',
-          }}
+      {!hideSkipWeekend && (
+        <SpaceBetween
+          direction="vertical"
+          style={{ marginTop: 5, alignItems: 'flex-start' }}
         >
-          <Checkbox
-            id="form_skipwe"
-            checked={skipWeekend}
-            onChange={e => {
-              dispatch({
-                type: 'set-skip-weekend',
-                skipWeekend: e.target.checked,
-              });
+          <View
+            style={{
+              marginTop: 5,
+              flex: 1,
+              flexDirection: 'row',
+              alignItems: 'center',
+              userSelect: 'none',
             }}
-          />
-          {showCalendarSelect ? (
-            <>
-              <label
-                htmlFor="form_skipwe"
-                style={{ userSelect: 'none', marginRight: 5 }}
-              >
-                <Trans>Move schedule</Trans>
-              </label>
-              <Select
-                id="solve_dropdown"
-                options={[
-                  ['before', t('before')],
-                  ['after', t('after')],
-                ]}
-                value={state.config.weekendSolveMode}
-                onChange={value =>
-                  dispatch({ type: 'set-weekend-solve', value })
-                }
-                disabled={!skipWeekend}
-              />
-              <Select
-                id="skip_days_dropdown"
-                options={skipDayOptions}
-                value={config.businessCalendarId ?? ''}
-                onChange={value =>
-                  updateField('businessCalendarId', value || undefined)
-                }
-                disabled={!skipWeekend}
-                style={{ marginLeft: 5 }}
-              />
-            </>
-          ) : (
-            <Trans>
-              <label
-                htmlFor="form_skipwe"
-                style={{
-                  userSelect: 'none',
-                  marginRight: 5,
-                }}
-              >
-                Move schedule{' '}
-              </label>
-              <Select
-                id="solve_dropdown"
-                options={[
-                  ['before', t('before')],
-                  ['after', t('after')],
-                ]}
-                value={state.config.weekendSolveMode}
-                onChange={value =>
-                  dispatch({ type: 'set-weekend-solve', value })
-                }
-                disabled={!skipWeekend}
-              />
-              <label
-                htmlFor="solve_dropdown"
-                style={{ userSelect: 'none', marginLeft: 5 }}
-              >
-                {' '}
-                {{ beforeOrAfter: '' } as TransObjectLiteral} weekend
-              </label>
-            </Trans>
+          >
+            <Checkbox
+              id="form_skipwe"
+              checked={skipWeekend}
+              onChange={e => {
+                dispatch({
+                  type: 'set-skip-weekend',
+                  skipWeekend: e.target.checked,
+                });
+              }}
+            />
+            {showCalendarSelect ? (
+              <>
+                <label
+                  htmlFor="form_skipwe"
+                  style={{ userSelect: 'none', marginRight: 5 }}
+                >
+                  <Trans>Move schedule</Trans>
+                </label>
+                <Select
+                  id="solve_dropdown"
+                  options={[
+                    ['before', t('before')],
+                    ['after', t('after')],
+                  ]}
+                  value={state.config.weekendSolveMode}
+                  onChange={value =>
+                    dispatch({ type: 'set-weekend-solve', value })
+                  }
+                  disabled={!skipWeekend}
+                />
+                <Select
+                  id="skip_days_dropdown"
+                  options={skipDayOptions}
+                  value={config.businessCalendarId ?? ''}
+                  onChange={value =>
+                    updateField('businessCalendarId', value || undefined)
+                  }
+                  disabled={!skipWeekend}
+                  style={{ marginLeft: 5 }}
+                />
+              </>
+            ) : (
+              <Trans>
+                <label
+                  htmlFor="form_skipwe"
+                  style={{
+                    userSelect: 'none',
+                    marginRight: 5,
+                  }}
+                >
+                  Move schedule{' '}
+                </label>
+                <Select
+                  id="solve_dropdown"
+                  options={[
+                    ['before', t('before')],
+                    ['after', t('after')],
+                  ]}
+                  value={state.config.weekendSolveMode}
+                  onChange={value =>
+                    dispatch({ type: 'set-weekend-solve', value })
+                  }
+                  disabled={!skipWeekend}
+                />
+                <label
+                  htmlFor="solve_dropdown"
+                  style={{ userSelect: 'none', marginLeft: 5 }}
+                >
+                  {' '}
+                  {{ beforeOrAfter: '' } as TransObjectLiteral} weekend
+                </label>
+              </Trans>
+            )}
+          </View>
+          {isCalendarMissing && (
+            <Text role="note" style={{ color: theme.warningText }}>
+              <Trans>
+                The chosen business calendar no longer exists, so dates move off
+                weekends only.
+              </Trans>
+            </Text>
           )}
-        </View>
-        {isCalendarMissing && (
-          <Text role="note" style={{ color: theme.warningText }}>
-            <Trans>
-              The chosen business calendar no longer exists, so dates move off
-              weekends only.
-            </Trans>
-          </Text>
-        )}
-      </SpaceBetween>
+        </SpaceBetween>
+      )}
       <SchedulePreview previewDates={previewDates} />
       <div
         style={{ display: 'flex', marginTop: 15, justifyContent: 'flex-end' }}
@@ -656,12 +660,15 @@ function RecurringScheduleTooltip({
 type RecurringSchedulePickerProps = {
   value: RecurConfig;
   buttonStyle?: CSSProperties;
+  // For callers that decide the move off non-business days themselves
+  hideSkipWeekend?: boolean;
   onChange: (config: RecurConfig) => void;
 };
 
 export function RecurringSchedulePicker({
   value,
   buttonStyle,
+  hideSkipWeekend,
   onChange,
 }: RecurringSchedulePickerProps) {
   const { t } = useTranslation();
@@ -687,6 +694,7 @@ export function RecurringSchedulePicker({
   const tooltip = (
     <RecurringScheduleTooltip
       config={value}
+      hideSkipWeekend={hideSkipWeekend}
       onClose={() => setIsOpen(false)}
       onSave={onSave}
     />

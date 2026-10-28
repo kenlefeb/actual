@@ -48,10 +48,10 @@ A migration adds `business_calendar_id TEXT` and `deposit_days_early INTEGER DEF
 - Why regenerate rather than patch: every input (definition, account calendar, early days) flows through one function, so account changes and edits cannot diverge.
 
 ### Account settings
-`account/set-business-days` updates the two columns. It then rewrites the schedules of every paycheck whose definition mentions the account (as clearing or receiving account), all in one undoable mutation. A small desktop modal from the account menu edits the settings, and the account type documents the fields.
+`account-set-business-days` updates the two columns. It then rewrites the schedules of every paycheck whose definition mentions the account (as clearing or receiving account), all in one undoable mutation. A small desktop modal from the account menu edits the settings, and the account type documents the fields.
 
 ### Skip next paycheck
-`paycheck/skip-next` calls the existing `skipNextDate` for the pay schedule and each deposit schedule inside one mutation.
+`paycheck-skip-next` calls the existing `skipNextDate` for the pay schedule and each deposit schedule inside one mutation.
 
 ### Editor
 A desktop `PaycheckEditModal` offers:

@@ -734,7 +734,8 @@ type AccountMenuProps = {
       | 'toggle-reconciled'
       | 'toggle-net-worth-chart'
       | 'manage-columns'
-      | 'account-group',
+      | 'account-group'
+      | 'business-days',
   ) => void;
 };
 
@@ -749,6 +750,7 @@ function AccountMenu({
   const { t } = useTranslation();
   const syncServerStatus = useSyncServerStatus();
   const newSidebarUIEnabled = useFeatureFlag('newSidebarUI');
+  const businessCalendarsEnabled = useFeatureFlag('businessCalendars');
 
   return (
     <Menu
@@ -782,6 +784,9 @@ function AccountMenu({
                 text: t('Set account group'),
               } as const,
             ]
+          : []),
+        ...(businessCalendarsEnabled
+          ? [{ name: 'business-days', text: t('Business days') } as const]
           : []),
         {
           name: 'toggle-reconciled',

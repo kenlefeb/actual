@@ -129,6 +129,17 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
   const { netAmount, depositAmounts, errors } = computePaycheck(definition);
   const accountById = new Map(accounts.map(a => [a.id, a]));
   const clearing = accountById.get(definition.clearingAccount);
+  // Shown as moved, the way the pay schedule saves it
+  const clearingCalendarId = clearing?.business_calendar_id ?? undefined;
+  const payDates = useMemo(
+    () => ({
+      ...definition.date,
+      skipWeekend: true,
+      weekendSolveMode: definition.weekendSolveMode,
+      businessCalendarId: clearingCalendarId,
+    }),
+    [definition.date, definition.weekendSolveMode, clearingCalendarId],
+  );
   const employerName = definition.payee
     ? payeesById[definition.payee]?.name
     : undefined;
@@ -282,14 +293,7 @@ function PaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
               </Field>
               <Field label={t('Pay dates')}>
                 <RecurringSchedulePicker
-                  // Shown as moved, the way the pay schedule saves it
-                  value={{
-                    ...definition.date,
-                    skipWeekend: true,
-                    weekendSolveMode: definition.weekendSolveMode,
-                    businessCalendarId:
-                      clearing?.business_calendar_id ?? undefined,
-                  }}
+                  value={payDates}
                   hideSkipWeekend
                   onChange={date => update({ date })}
                 />

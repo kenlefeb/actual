@@ -88,7 +88,16 @@ This section is how primer rule 27, "Green merges itself", applies to this
 team: a PR merges itself once it is both approved and green.
 
 - Open PRs without auto-merge.
-- Once a PR is approved, the Director turns on auto-merge, or merges it when the
-  repo has no required check.
+- Once a PR is approved, the Director turns on auto-merge. Only in a repo that
+  has no required check at all does the Director merge it directly. Required
+  checks are never removed in order to merge.
 - A failing check or unresolved `Changes requested` blocks the merge. Nobody
   merges past it.
+
+## Repository settings
+
+Settings changes aren't PRs, so they don't go through the review matrix. A
+change to branch protection, required checks, Actions enablement or repository
+secrets needs a Security Analyst approval, recorded as a comment on its Shortcut
+story, before it's made. The story also records a snapshot of the old settings
+and the rollback command. sc-568 is the example.

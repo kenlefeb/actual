@@ -16,6 +16,12 @@ const state = vi.hoisted(() => ({
   mutate: vi.fn(),
 }));
 
+const responsive = vi.hoisted(() => ({ isNarrowWidth: false }));
+
+vi.mock('@actual-app/components/hooks/useResponsive', () => ({
+  useResponsive: () => ({ isNarrowWidth: responsive.isNarrowWidth }),
+}));
+
 vi.mock('#hooks/useAccount', () => ({ useAccount: () => state.account }));
 
 vi.mock('#hooks/useBusinessCalendars', () => ({
@@ -40,6 +46,24 @@ describe('AccountBusinessDaysModal', () => {
   beforeEach(() => {
     state.account.business_calendar_id = 'reserve';
     state.mutate.mockClear();
+    responsive.isNarrowWidth = false;
+    state.account.name = 'Checking';
+  });
+
+  // shortcut: jsdom does no layout, so the phone-width fit is checked by hand (task 3.2).
+  it('saves the calendar and days early at narrow width', async () => {
+    responsive.isNarrowWidth = true;
+    renderModal();
+    const days = screen.getByLabelText(
+      'Direct deposits arrive this many business days early',
+    );
+    await userEvent.clear(days);
+    await userEvent.type(days, '3');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(state.mutate).toHaveBeenCalledWith(
+      { id: 'checking', businessCalendarId: 'reserve', depositDaysEarly: 3 },
+      expect.anything(),
+    );
   });
 
   it('saves the calendar and days early', async () => {
@@ -55,6 +79,40 @@ describe('AccountBusinessDaysModal', () => {
       { id: 'checking', businessCalendarId: 'reserve', depositDaysEarly: 1 },
       expect.anything(),
     );
+  });
+
+  it('shows the whole account name as a sheet title with no close button at narrow width', () => {
+    responsive.isNarrowWidth = true;
+    state.account.name = 'Capital One Checking';
+    renderModal();
+    expect(
+      screen.getByRole('heading', {
+        name: 'Business days: Capital One Checking',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /close/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps the desktop close button at wide width', () => {
+    renderModal();
+    expect(screen.getByRole('button', { name: /close/i })).toBeInTheDocument();
+  });
+
+  it('gives every control a touch-sized height at narrow width', () => {
+    responsive.isNarrowWidth = true;
+    renderModal();
+    for (const control of [
+      screen.getByLabelText('Business calendar'),
+      screen.getByLabelText(
+        'Direct deposits arrive this many business days early',
+      ),
+      screen.getByRole('button', { name: 'Cancel' }),
+      screen.getByRole('button', { name: 'Save' }),
+    ]) {
+      expect(control).toHaveStyle({ minHeight: '40px' });
+    }
   });
 
   it.each(['11', '1.5', '-1'])('rejects %s days early', async value => {

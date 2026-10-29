@@ -1,5 +1,6 @@
 import { MemoryRouter, Route, Routes } from 'react-router';
 
+import { theme } from '@actual-app/components/theme';
 import type { PaycheckEntity } from '@actual-app/core/types/models';
 import { render, renderHook, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -216,6 +217,49 @@ describe('MobilePaycheckPage', () => {
       { id: 'acme' },
       expect.anything(),
     );
+  });
+
+  it('counts one deduction in the singular', () => {
+    state.paychecks = [acme];
+    renderPage('acme');
+    expect(
+      screen.getByRole('button', { name: /^Deductions/ }),
+    ).toHaveTextContent('1 deduction · 450.00');
+  });
+
+  it('gives the editor controls 40px touch targets', async () => {
+    const user = userEvent.setup();
+    state.paychecks = [acme];
+    renderPage('acme');
+    await user.click(screen.getByRole('button', { name: /^Deductions/ }));
+    await user.click(screen.getByRole('button', { name: /^Direct deposits/ }));
+    await user.click(screen.getByRole('button', { name: /^Details/ }));
+    await user.click(screen.getByRole('button', { name: /^Gross pay/ }));
+    const touchTarget = { minHeight: '40px', minWidth: '40px' };
+    for (const control of [
+      screen.getByRole('button', { name: 'Remove deduction 1' }),
+      screen.getByRole('button', { name: 'Remove deposit 1' }),
+      screen.getByRole('button', { name: 'Add deduction' }),
+      screen.getByRole('button', { name: 'Add deposit' }),
+      screen.getByRole('button', { name: 'Delete paycheck' }),
+      screen.getByRole('button', { name: 'Skip next paycheck' }),
+      screen.getByLabelText('Name'),
+      screen.getByLabelText('Gross pay'),
+      screen.getByLabelText('Deduction 1 amount'),
+      screen.getByLabelText('Deposit 1 amount type'),
+    ]) {
+      expect(control).toHaveStyle(touchTarget);
+    }
+  });
+
+  it('sets Delete paycheck apart as a destructive action', () => {
+    state.paychecks = [acme];
+    renderPage('acme');
+    const remove = screen.getByRole('button', { name: 'Delete paycheck' });
+    expect(remove).toHaveStyle({ color: theme.errorText });
+    expect(
+      screen.getByRole('button', { name: 'Skip next paycheck' }),
+    ).not.toHaveStyle({ color: theme.errorText });
   });
 
   it('opens from the Paychecks section as its own page on a phone', () => {

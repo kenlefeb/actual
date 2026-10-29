@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
+import { useResponsive } from '@actual-app/components/hooks/useResponsive';
 import { Input } from '@actual-app/components/input';
 import { Select } from '@actual-app/components/select';
 import { Text } from '@actual-app/components/text';
@@ -18,6 +19,7 @@ import { GenericInput } from '#components/util/GenericInput';
 import { useDateFormat } from '#hooks/useDateFormat';
 import { useFormat } from '#hooks/useFormat';
 import type { PaycheckForm } from '#hooks/usePaycheckForm';
+import { useTouchTargetStyle } from '#hooks/useTouchTargetStyle';
 
 // The paycheck editor's fields, laid out by the desktop modal and the mobile page
 
@@ -25,10 +27,12 @@ type FormProps = { form: PaycheckForm };
 
 export function PaycheckNameFields({ form }: FormProps) {
   const { t } = useTranslation();
+  const touch = useTouchTargetStyle();
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 15 }}>
       <Field label={t('Name')} htmlFor="paycheck-name">
         <Input
+          style={touch}
           id="paycheck-name"
           value={form.name}
           onChangeValue={form.setName}
@@ -36,6 +40,7 @@ export function PaycheckNameFields({ form }: FormProps) {
       </Field>
       <Field label={t('Employer')}>
         <GenericInput
+          style={{ '& input': touch }}
           aria-label={t('Employer')}
           type="id"
           field="payee"
@@ -49,6 +54,7 @@ export function PaycheckNameFields({ form }: FormProps) {
 
 export function PaycheckScheduleFields({ form }: FormProps) {
   const { t } = useTranslation();
+  const touch = useTouchTargetStyle();
   const dateFormat = useDateFormat() || 'MM/dd/yyyy';
   const { definition, update, nextPayDate } = form;
   return (
@@ -56,6 +62,7 @@ export function PaycheckScheduleFields({ form }: FormProps) {
       <Field label={t('Clearing account')}>
         {form.paycheck ? (
           <GenericInput
+            style={{ '& input': touch }}
             aria-label={t('Clearing account')}
             type="id"
             field="account"
@@ -65,6 +72,7 @@ export function PaycheckScheduleFields({ form }: FormProps) {
         ) : (
           <View style={{ gap: 5 }}>
             <Select
+              style={touch}
               aria-label={t('Clearing account')}
               options={[
                 ['new', t('New clearing account')],
@@ -75,6 +83,7 @@ export function PaycheckScheduleFields({ form }: FormProps) {
             />
             {form.isNewAccount ? (
               <Input
+                style={touch}
                 aria-label={t('New clearing account name')}
                 placeholder={
                   form.clearingName || t('For example, Acme Paycheck')
@@ -84,6 +93,7 @@ export function PaycheckScheduleFields({ form }: FormProps) {
               />
             ) : (
               <GenericInput
+                style={{ '& input': touch }}
                 aria-label={t('Existing clearing account')}
                 type="id"
                 field="account"
@@ -104,6 +114,7 @@ export function PaycheckScheduleFields({ form }: FormProps) {
           <Trans>
             <label htmlFor="paycheck-solve">Move</label>{' '}
             <Select
+              style={touch}
               id="paycheck-solve"
               options={[
                 ['before', t('before')],
@@ -132,11 +143,13 @@ export function PaycheckScheduleFields({ form }: FormProps) {
 
 export function PaycheckGrossFields({ form }: FormProps) {
   const { t } = useTranslation();
+  const touch = useTouchTargetStyle();
   const { definition, update } = form;
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 15 }}>
       <Field label={t('Gross pay')} htmlFor="paycheck-gross">
         <AmountInput
+          inputStyle={touch}
           id="paycheck-gross"
           value={definition.grossAmount}
           sign="+"
@@ -145,6 +158,7 @@ export function PaycheckGrossFields({ form }: FormProps) {
       </Field>
       <Field label={t('Income category')}>
         <GenericInput
+          style={{ '& input': touch }}
           aria-label={t('Income category')}
           type="id"
           field="category"
@@ -160,6 +174,7 @@ export function PaycheckGrossFields({ form }: FormProps) {
 
 export function PaycheckDeductionFields({ form }: FormProps) {
   const { t } = useTranslation();
+  const touch = useTouchTargetStyle();
   const { updateDeduction } = form;
   return (
     <>
@@ -180,7 +195,7 @@ export function PaycheckDeductionFields({ form }: FormProps) {
             placeholder={t('Name')}
             value={deduction.name}
             onChangeValue={name => updateDeduction(deduction.id, { name })}
-            style={{ flex: 1 }}
+            style={{ flex: 1, ...touch }}
           />
           <AmountInput
             aria-label={t('Deduction {{number}} amount', {
@@ -190,8 +205,10 @@ export function PaycheckDeductionFields({ form }: FormProps) {
             sign="+"
             onUpdate={amount => updateDeduction(deduction.id, { amount })}
             style={{ width: 110 }}
+            inputStyle={touch}
           />
           <Select
+            style={touch}
             aria-label={t('Deduction {{number}} goes to', {
               number: index + 1,
             })}
@@ -213,6 +230,7 @@ export function PaycheckDeductionFields({ form }: FormProps) {
                   <Trans>Transfer to</Trans>
                 </Text>
                 <GenericInput
+                  style={{ '& input': touch }}
                   aria-label={t('Deduction {{number}} transfer account', {
                     number: index + 1,
                   })}
@@ -229,6 +247,7 @@ export function PaycheckDeductionFields({ form }: FormProps) {
               <Trans>Category</Trans>
             </Text>
             <GenericInput
+              style={{ '& input': touch }}
               aria-label={t('Deduction {{number}} category', {
                 number: index + 1,
               })}
@@ -244,6 +263,7 @@ export function PaycheckDeductionFields({ form }: FormProps) {
           </View>
           <Button
             variant="bare"
+            style={touch}
             aria-label={t('Remove deduction {{number}}', {
               number: index + 1,
             })}
@@ -253,7 +273,10 @@ export function PaycheckDeductionFields({ form }: FormProps) {
           </Button>
         </View>
       ))}
-      <Button style={{ alignSelf: 'flex-start' }} onPress={form.addDeduction}>
+      <Button
+        style={{ alignSelf: 'flex-start', ...touch }}
+        onPress={form.addDeduction}
+      >
         <Trans>Add deduction</Trans>
       </Button>
     </>
@@ -272,6 +295,7 @@ export function PaycheckNetPay({ form }: FormProps) {
 
 export function PaycheckDepositFields({ form }: FormProps) {
   const { t } = useTranslation();
+  const touch = useTouchTargetStyle();
   const format = useFormat();
   const { accountById, updateDeposit } = form;
   return (
@@ -288,6 +312,7 @@ export function PaycheckDepositFields({ form }: FormProps) {
           >
             <View style={{ flex: 1 }}>
               <GenericInput
+                style={{ '& input': touch }}
                 aria-label={t('Deposit {{number}} account', {
                   number: index + 1,
                 })}
@@ -298,6 +323,7 @@ export function PaycheckDepositFields({ form }: FormProps) {
               />
             </View>
             <Select
+              style={touch}
               aria-label={t('Deposit {{number}} amount type', {
                 number: index + 1,
               })}
@@ -318,6 +344,7 @@ export function PaycheckDepositFields({ form }: FormProps) {
                 sign="+"
                 onUpdate={value => updateDeposit(deposit.id, { value })}
                 style={{ width: 110 }}
+                inputStyle={touch}
               />
             )}
             {deposit.kind === 'percent' && (
@@ -335,7 +362,7 @@ export function PaycheckDepositFields({ form }: FormProps) {
                     value: Math.max(0, Number(value) || 0),
                   })
                 }
-                style={{ width: 70 }}
+                style={{ width: 70, ...touch }}
               />
             )}
             <FinancialText
@@ -348,6 +375,7 @@ export function PaycheckDepositFields({ form }: FormProps) {
             </FinancialText>
             <Button
               variant="bare"
+              style={touch}
               aria-label={t('Remove deposit {{number}}', {
                 number: index + 1,
               })}
@@ -402,7 +430,7 @@ export function PaycheckDepositFields({ form }: FormProps) {
                 onChangeValue={value =>
                   form.setDaysEarlyInput(deposit.account, value)
                 }
-                style={{ width: 60 }}
+                style={{ width: 60, ...touch }}
               />
               <Text style={{ color: theme.pageTextSubdued }}>
                 {t('Calendar: {{calendar}}', {
@@ -429,7 +457,10 @@ export function PaycheckDepositFields({ form }: FormProps) {
           )}
         </View>
       ))}
-      <Button style={{ alignSelf: 'flex-start' }} onPress={form.addDeposit}>
+      <Button
+        style={{ alignSelf: 'flex-start', ...touch }}
+        onPress={form.addDeposit}
+      >
         <Trans>Add deposit</Trans>
       </Button>
     </>
@@ -456,12 +487,30 @@ export function PaycheckActions({
 }: FormProps & { close: () => void }) {
   const { t } = useTranslation();
   const dateFormat = useDateFormat() || 'MM/dd/yyyy';
+  const { isNarrowWidth } = useResponsive();
+  const touch = useTouchTargetStyle();
   if (!form.paycheck) return null;
+  // On a phone, Delete looks destructive and sits apart, below Skip
+  const deleteButton = (
+    <Button
+      style={
+        isNarrowWidth
+          ? {
+              ...touch,
+              marginTop: 20,
+              color: theme.errorText,
+              borderColor: theme.errorText,
+            }
+          : undefined
+      }
+      onPress={() => form.confirmDelete(close)}
+    >
+      <Trans>Delete paycheck</Trans>
+    </Button>
+  );
   return (
     <>
-      <Button onPress={() => form.confirmDelete(close)}>
-        <Trans>Delete paycheck</Trans>
-      </Button>
+      {!isNarrowWidth && deleteButton}
       {form.isConfirmingSkip ? (
         <>
           <Text>
@@ -471,21 +520,23 @@ export function PaycheckActions({
                 })
               : t('Skip the next paycheck?')}
           </Text>
-          <Button onPress={() => form.setIsConfirmingSkip(false)}>
+          <Button style={touch} onPress={() => form.setIsConfirmingSkip(false)}>
             <Trans>Keep it</Trans>
           </Button>
-          <Button onPress={() => form.skipNext(close)}>
+          <Button style={touch} onPress={() => form.skipNext(close)}>
             <Trans>Skip it</Trans>
           </Button>
         </>
       ) : (
         <Button
+          style={touch}
           isDisabled={form.isEdited}
           onPress={() => form.setIsConfirmingSkip(true)}
         >
           <Trans>Skip next paycheck</Trans>
         </Button>
       )}
+      {isNarrowWidth && deleteButton}
     </>
   );
 }

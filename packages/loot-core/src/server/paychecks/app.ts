@@ -69,6 +69,28 @@ export async function getPaychecks(): Promise<PaycheckEntity[]> {
   return rows.flatMap(row => toPaycheck(row) ?? []);
 }
 
+/**
+ * The live paycheck that generated a schedule, as its pay schedule or a
+ * deposit schedule (ADR 2), or null. The API refuses edits of these schedules.
+ */
+export async function getPaycheckManagingSchedule(
+  scheduleId: string,
+): Promise<Pick<PaycheckEntity, 'id' | 'name'> | null> {
+  const rows = await db.all<db.DbPaycheck>(
+    'SELECT * FROM paychecks WHERE tombstone = 0 AND definition LIKE ?',
+    [`%"${scheduleId}"%`],
+  );
+  // The LIKE also matches the id elsewhere in the definition
+  const paycheck = rows
+    .flatMap(row => toPaycheck(row) ?? [])
+    .find(
+      ({ definition }) =>
+        definition.paySchedule === scheduleId ||
+        definition.deposits.some(d => d.schedule === scheduleId),
+    );
+  return paycheck ? { id: paycheck.id, name: paycheck.name } : null;
+}
+
 async function getPaycheck(id: PaycheckEntity['id']) {
   const row = await db.first<db.DbPaycheck>(
     'SELECT * FROM paychecks WHERE id = ? AND tombstone = 0',

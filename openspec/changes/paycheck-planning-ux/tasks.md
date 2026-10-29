@@ -22,8 +22,8 @@
 
 ## 4. Editor additions
 
-- [ ] 4.1 Make each deposit's business days early editable in the editor, saving through `account-set-business-days` with the "applies to every paycheck depositing to <account>" note; verify with an editor test and a server test for "Change days early in the editor"
-- [ ] 4.2 Add a loot-core query for year-to-date totals of a paycheck's posted pay transactions (gross, each deduction by name, net) for the current and previous year, and show them in the editor; verify with a server test for "Check against a W-2" (including an edited transaction) and an editor test
+- [x] 4.1 Make each deposit's business days early editable in the editor, saving through `account-set-business-days` with the "applies to every paycheck depositing to <account>" note; verify with an editor test and a server test for "Change days early in the editor"
+- [x] 4.2 Add a loot-core query for year-to-date totals of a paycheck's posted pay transactions (gross, each deduction by name, net) for the current and previous year, and show them in the editor; verify with a server test for "Check against a W-2" (including an edited transaction) and an editor test
 
 ## 5. Mobile paycheck editor
 

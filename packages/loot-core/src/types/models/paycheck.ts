@@ -47,3 +47,12 @@ export type PaycheckEntity = {
   name: string;
   definition: PaycheckDefinition;
 };
+
+// Totals of a paycheck's posted pay transactions in one calendar year
+export type PaycheckYearToDate = {
+  year: number;
+  gross: number;
+  // Positive totals, by the deduction split's notes
+  deductions: { name: string; amount: number }[];
+  net: number;
+};

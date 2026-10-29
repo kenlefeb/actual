@@ -1,5 +1,8 @@
 import { send } from '@actual-app/core/platform/client/connection';
-import type { PaycheckEntity } from '@actual-app/core/types/models';
+import type {
+  PaycheckEntity,
+  PaycheckYearToDate,
+} from '@actual-app/core/types/models';
 import { queryOptions } from '@tanstack/react-query';
 
 export const paycheckQueries = {
@@ -11,5 +14,11 @@ export const paycheckQueries = {
       queryFn: () => send('paychecks-get'),
       placeholderData: [],
       staleTime: Infinity,
+    }),
+  // Refetched each time the editor opens: posted transactions change outside it
+  yearToDate: (id: PaycheckEntity['id']) =>
+    queryOptions<PaycheckYearToDate[]>({
+      queryKey: [...paycheckQueries.all(), 'year-to-date', id],
+      queryFn: () => send('paycheck-year-to-date', { id }),
     }),
 };

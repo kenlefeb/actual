@@ -592,3 +592,117 @@ describe('paychecks', () => {
     expect(await scheduleRow(recreated)).toBeDefined();
   });
 });
+
+describe('editor additions', () => {
+  it('moves every paycheck depositing to an account when its days early change', async () => {
+    const acmePaycheck = await createAcme();
+    await addAccount('side-clearing');
+    const sideId = await handlers['paycheck-create']({
+      name: 'Side gig',
+      definition: acme({
+        payee: null,
+        clearingAccount: 'side-clearing',
+        deductions: [],
+        deposits: [
+          { id: 'checking', account: 'checking', kind: 'remainder', value: 0 },
+        ],
+      }),
+    });
+    const sideChecking =
+      (await getPaycheck(sideId))?.definition.deposits[0].schedule ?? '';
+    expect(await upcoming(acmePaycheck.checking)).toEqual([
+      '2026-11-10',
+      '2026-11-25',
+    ]);
+    expect(await upcoming(sideChecking)).toEqual(['2026-11-10', '2026-11-25']);
+
+    MockDate.set(new Date(2026, 10, 1, 12));
+    await handlers['account-set-business-days']({
+      id: 'checking',
+      businessCalendarId: 'reserve',
+      depositDaysEarly: 1,
+    });
+    expect(
+      await db.first<db.DbAccount>('SELECT * FROM accounts WHERE id = ?', [
+        'checking',
+      ]),
+    ).toMatchObject({ deposit_days_early: 1 });
+    expect(await upcoming(acmePaycheck.checking)).toEqual([
+      '2026-11-12',
+      '2026-11-27',
+    ]);
+    expect(await upcoming(sideChecking)).toEqual(['2026-11-12', '2026-11-27']);
+  });
+
+  it('totals posted pay transactions by year, including edits', async () => {
+    const { id, pay } = await createAcme();
+    let count = 0;
+    const post = async (date: string) => {
+      const parent = await db.insertTransaction({
+        id: `pay-${++count}`,
+        account: 'clearing',
+        amount: 225000,
+        date,
+        schedule: pay,
+        is_parent: true,
+      });
+      const splits = [
+        { amount: 300000, notes: null },
+        { amount: -45000, notes: 'Federal tax' },
+        { amount: -12000, notes: 'Health' },
+        { amount: -18000, notes: '401(k)' },
+      ];
+      for (const [index, split] of splits.entries()) {
+        await db.insertTransaction({
+          id: `${parent}-${index + 1}`,
+          account: 'clearing',
+          date,
+          is_child: true,
+          parent_id: parent,
+          ...split,
+        });
+      }
+      return parent;
+    };
+    for (let month = 1; month <= 12; month++) {
+      const mm = String(month).padStart(2, '0');
+      await post(`2025-${mm}-15`);
+      await post(`2025-${mm}-28`);
+    }
+    // A 500.00 bonus added to gross pay on one paycheck
+    await db.updateTransaction({ id: 'pay-5-1', amount: 350000 });
+    await db.updateTransaction({ id: 'pay-5', amount: 275000 });
+    // This year's paycheck posted by the schedule itself
+    await schedulesApp.handlers['schedule/post-transaction']({ id: pay });
+    // Outside both years, and a transaction not from the pay schedule
+    await post('2024-12-31');
+    await db.insertTransaction({
+      account: 'clearing',
+      amount: 1000,
+      date: '2025-06-01',
+    });
+
+    expect(await handlers['paycheck-year-to-date']({ id })).toEqual([
+      {
+        year: 2026,
+        gross: 300000,
+        deductions: [
+          { name: 'Federal tax', amount: 45000 },
+          { name: 'Health', amount: 12000 },
+          { name: '401(k)', amount: 18000 },
+        ],
+        net: 225000,
+      },
+      {
+        year: 2025,
+        gross: 7250000,
+        deductions: [
+          { name: 'Federal tax', amount: 1080000 },
+          { name: 'Health', amount: 288000 },
+          { name: '401(k)', amount: 432000 },
+        ],
+        net: 5450000,
+      },
+    ]);
+  });
+});

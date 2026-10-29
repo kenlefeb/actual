@@ -15,6 +15,7 @@ import type {
   AccountEntity,
   PaycheckDefinition,
   PaycheckEntity,
+  PaycheckYearToDate,
   RuleActionEntity,
   RuleConditionEntity,
 } from '#types/models';
@@ -25,6 +26,7 @@ export type PaychecksHandlers = {
   'paycheck-update': typeof updatePaycheck;
   'paycheck-delete': typeof deletePaycheck;
   'paycheck-skip-next': typeof skipNextPaycheck;
+  'paycheck-year-to-date': typeof getYearToDate;
   'account-set-business-days': typeof setAccountBusinessDays;
 };
 
@@ -34,6 +36,7 @@ app.method('paycheck-create', mutator(undoable(createPaycheck)));
 app.method('paycheck-update', mutator(undoable(updatePaycheck)));
 app.method('paycheck-delete', mutator(undoable(deletePaycheck)));
 app.method('paycheck-skip-next', mutator(undoable(skipNextPaycheck)));
+app.method('paycheck-year-to-date', getYearToDate);
 app.method(
   'account-set-business-days',
   mutator(undoable(setAccountBusinessDays)),
@@ -427,6 +430,77 @@ async function skipNextPaycheck({ id }: { id: PaycheckEntity['id'] }) {
       await skipNextDate({ id: schedule });
     }
   }
+}
+
+/**
+ * Totals the pay schedule's posted transactions, as edited, for the current
+ * and previous calendar year (current first).
+ */
+async function getYearToDate({
+  id,
+}: {
+  id: PaycheckEntity['id'];
+}): Promise<PaycheckYearToDate[]> {
+  const { definition } = await getPaycheck(id);
+  const year = new Date().getFullYear();
+  const totals = [year, year - 1].map(y => ({
+    year: y,
+    gross: 0,
+    deductions: new Map<string, number>(),
+    net: 0,
+  }));
+  if (!definition.paySchedule) {
+    return totals.map(t => ({ ...t, deductions: [] }));
+  }
+
+  const rows = await db.all<
+    Pick<
+      db.DbViewTransactionInternal,
+      'id' | 'date' | 'amount' | 'notes' | 'parent_id' | 'is_child'
+    >
+  >(
+    `SELECT t.id, t.date, t.amount, t.notes, t.parent_id, t.is_child
+     FROM v_transactions_internal t
+     LEFT JOIN v_transactions_internal p ON p.id = t.parent_id
+     WHERE t.tombstone = 0 AND t.date >= ? AND t.date <= ?
+       AND ((p.schedule = ? AND p.tombstone = 0)
+         OR (t.is_child = 0 AND t.schedule = ?))`,
+    [
+      (year - 1) * 10000 + 101,
+      year * 10000 + 1231,
+      definition.paySchedule,
+      definition.paySchedule,
+    ],
+  );
+  const parents = new Set(rows.flatMap(r => (r.is_child ? [r.parent_id] : [])));
+  for (const row of rows) {
+    const total = totals.find(t => t.year === Math.floor(row.date / 10000));
+    if (!total) continue;
+    if (!row.is_child) {
+      total.net += row.amount;
+      // An unsplit transaction is all gross pay
+      if (!parents.has(row.id)) total.gross += row.amount;
+    } else if (row.amount >= 0) {
+      // Split 1 is gross pay; positive splits added by edits (bonuses) count too
+      total.gross += row.amount;
+    } else {
+      const name = row.notes ?? '';
+      total.deductions.set(
+        name,
+        (total.deductions.get(name) ?? 0) - row.amount,
+      );
+    }
+  }
+  // In the paycheck's order; renamed or removed deductions after them
+  const order = definition.deductions.map(d => d.name);
+  const rank = (name: string) =>
+    order.includes(name) ? order.indexOf(name) : order.length;
+  return totals.map(t => ({
+    ...t,
+    deductions: [...t.deductions]
+      .map(([name, amount]) => ({ name, amount }))
+      .sort((a, b) => rank(a.name) - rank(b.name)),
+  }));
 }
 
 async function setAccountBusinessDays({

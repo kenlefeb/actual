@@ -90,13 +90,19 @@ export function MobilePageHeader({
           flexBasis: '50%',
           fontSize: 17,
           fontWeight: 500,
-          overflowY: 'auto',
+          // Lets a long title shrink to its share of the header and clip
+          minWidth: 0,
+          overflow: 'hidden',
           display: 'flex',
           margin: 0,
           padding: 0,
         }}
       >
-        {title}
+        {typeof title === 'string' ? (
+          <span style={styles.ellipsisText}>{title}</span>
+        ) : (
+          title
+        )}
       </h1>
       <View
         style={{

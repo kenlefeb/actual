@@ -44,9 +44,6 @@ when nothing else does:
 The Release & Operations Engineer may also approve CI workflows and
 actual-hosting deploy scripts, but the Security Analyst must still approve them.
 
-A Developer may approve another Developer's PR only when it's a small change to
-UI text or styling, and the Tester still approves anything else in it.
-
 If the author is itself a required role (say, the Architect writes a spec),
 another required role, or a second agent in the same role, approves instead.
 

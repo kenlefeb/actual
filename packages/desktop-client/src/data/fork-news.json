@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "id": "fork-release-26.10.1-alpha.16",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.16 — Ken's Actual fork",
+      "date": "2026-10-29",
+      "version": "26.10.1-alpha.16",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.16.md",
+      "body": "**Unofficial fork prerelease.** Based on Actual 26.10.0 (`2bebdbaae0b701120a8cad9d56aafd64fa04c577`); not an official Actual Budget release.\n\nPaychecks posted early are matched to the right pay dates, so a second early paycheck no longer shows as skipped.",
+      "details": "#### Features\n\n- No new fork features in this release; earlier features are retained.\n\n#### Enhancements\n\n- No new fork enhancements in this release.\n\n#### Bugfixes\n\n- When two paychecks are both posted before their pay dates, each one counts for its own pay date, so the second no longer shows as \"Skipped\".\n\n#### Maintenance\n\n- Tests cover paychecks posted early, including history from earlier pay periods.\n\n#### Known limitations\n\n- Experimental.\n- \"Upcoming dates\" in schedule and paycheck editors does not reflect skipped dates.\n- Each deposit must go to a different account, and every paycheck repeats its defined amounts; edit a posted transaction for a one-off change.\n- Imported deposits more than about 7.5% from the expected amount do not link automatically.\n- A new paycheck with older paychecks linked to it, or a duplicate of the latest paycheck, can hide the next skipped date.\n- The mobile business calendar editor uses the desktop editor's layout.\n- Releases published on the same day may show the \"What's new\" message for any of them; the Notifications page lists all.\n- Synthetic staging only; no real financial data or production paperwork migration. No iPhone acceptance test is claimed."
+    },
+    {
       "id": "fork-release-26.10.1-alpha.15",
       "type": "release",
       "title": "Release 26.10.1-alpha.15 — Ken's Actual fork",

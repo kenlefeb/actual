@@ -252,6 +252,34 @@ describe('MobilePaycheckPage', () => {
     }
   });
 
+  it('keeps the amount fields from shrinking on a phone', async () => {
+    const user = userEvent.setup();
+    state.paychecks = [
+      {
+        ...acme,
+        definition: {
+          ...acme.definition,
+          deposits: [
+            { id: 'savings', account: 'savings', kind: 'fixed', value: 10000 },
+            ...acme.definition.deposits.slice(1),
+          ],
+        },
+      },
+    ];
+    renderPage('acme');
+    await user.click(screen.getByRole('button', { name: /^Deductions/ }));
+    await user.click(screen.getByRole('button', { name: /^Direct deposits/ }));
+    // jsdom does no layout, so this checks the style that keeps 110px:
+    // AmountInput's own `flex: 1` would otherwise override the width
+    for (const label of ['Deduction 1 amount', 'Deposit 1 fixed amount']) {
+      expect(screen.getByLabelText(label).parentElement).toHaveStyle({
+        width: '110px',
+        flexGrow: '0',
+        flexShrink: '0',
+      });
+    }
+  });
+
   it('sets Delete paycheck apart as a destructive action', () => {
     state.paychecks = [acme];
     renderPage('acme');

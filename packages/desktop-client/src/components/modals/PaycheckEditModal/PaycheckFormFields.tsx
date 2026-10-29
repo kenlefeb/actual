@@ -204,7 +204,7 @@ export function PaycheckDeductionFields({ form }: FormProps) {
             value={deduction.amount}
             sign="+"
             onUpdate={amount => updateDeduction(deduction.id, { amount })}
-            style={{ width: 110 }}
+            style={{ width: 110, flex: 'none' }}
             inputStyle={touch}
           />
           <Select
@@ -223,7 +223,14 @@ export function PaycheckDeductionFields({ form }: FormProps) {
               })
             }
           />
-          <View style={{ flex: 1, gap: 5 }}>
+          <View
+            style={{
+              flex: 1,
+              gap: 5,
+              // On a phone the category drops to its own line instead of squeezing
+              ...(touch.minWidth && { minWidth: 120 }),
+            }}
+          >
             {deduction.transferAccount != null && (
               <>
                 <Text style={{ color: theme.pageTextSubdued }}>
@@ -343,7 +350,7 @@ export function PaycheckDepositFields({ form }: FormProps) {
                 value={deposit.value}
                 sign="+"
                 onUpdate={value => updateDeposit(deposit.id, { value })}
-                style={{ width: 110 }}
+                style={{ width: 110, flex: 'none' }}
                 inputStyle={touch}
               />
             )}

@@ -43,6 +43,7 @@ import {
   getNextDateAfter,
   getScheduledAmount,
   getStatus,
+  isRepeatingDate,
   recurConfigToRSchedule,
 } from '#shared/schedules';
 import type {
@@ -760,12 +761,9 @@ async function hasTransactionForSchedule(
   return data.filter(Boolean).some(row => row.schedule === schedule.id);
 }
 
+// Relative dates repeat with their source, so they advance after posting too
 function isRecurringSchedule(schedule: ScheduleEntity): boolean {
-  return (
-    schedule._date != null &&
-    typeof schedule._date === 'object' &&
-    'frequency' in schedule._date
-  );
+  return isRepeatingDate(schedule._date);
 }
 
 async function advanceRecurringScheduleFromNextDate(

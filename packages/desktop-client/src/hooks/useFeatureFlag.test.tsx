@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 import * as connection from '@actual-app/core/platform/client/connection';
 import type { SyncedPrefs } from '@actual-app/core/types/prefs';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTestAppStore, resetTestProviders, TestProviders } from '#mocks';
@@ -32,11 +32,8 @@ describe('useFeatureFlag("paychecks")', () => {
         : undefined) as typeof connection.send);
   });
 
-  it('is off when unset with no calendars or paychecks', async () => {
+  it('is off when unset with no calendars or paychecks', () => {
     const { result } = renderPaychecksFlag({});
-    await waitFor(() =>
-      expect(connection.send).toHaveBeenCalledWith('paychecks-get'),
-    );
     expect(result.current).toBe(false);
   });
 
@@ -47,10 +44,29 @@ describe('useFeatureFlag("paychecks")', () => {
     expect(result.current).toBe(true);
   });
 
-  it('is on when unset and a paycheck exists (upgrade)', async () => {
+  it('Upgrade with business calendars off: unset paychecks with a paycheck is off', () => {
     paychecks = [{ id: 'acme' }];
-    const { result } = renderPaychecksFlag({});
-    await waitFor(() => expect(result.current).toBe(true));
+    for (const prefs of [{}, { 'flags.businessCalendars': 'false' }]) {
+      const { result } = renderPaychecksFlag(prefs);
+      expect(result.current).toBe(false);
+    }
+    expect(connection.send).not.toHaveBeenCalledWith('paychecks-get');
+  });
+
+  it('Acme stays hidden while business calendars are off: paychecks on needs business calendars on', () => {
+    const { result } = renderPaychecksFlag({
+      'flags.paychecks': 'true',
+      'flags.businessCalendars': 'false',
+    });
+    expect(result.current).toBe(false);
+  });
+
+  it('is on when set on with business calendars on', () => {
+    const { result } = renderPaychecksFlag({
+      'flags.paychecks': 'true',
+      'flags.businessCalendars': 'true',
+    });
+    expect(result.current).toBe(true);
   });
 
   it('stays off when explicitly turned off', async () => {

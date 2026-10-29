@@ -36,7 +36,7 @@ Each row SHALL offer "Skip next paycheck". It SHALL ask for confirmation naming 
 - **THEN** the app asks "Skip the paycheck on November 13, 2026?" and nothing is skipped until the user confirms
 
 ### Requirement: Skipped paychecks are shown
-When a paycheck's next occurrence has been skipped, its row SHALL show "Skipped: <date>" and show the following occurrence as the next paycheck. Undo SHALL restore the skipped occurrence. An occurrence whose pay transaction was posted before its pay date is paid, not skipped. Each posted pay transaction pays one occurrence: the earliest unpaid occurrence on or after its date.
+When a paycheck's next occurrence has been skipped, its row SHALL show "Skipped: <date>" and show the following occurrence as the next paycheck. Undo SHALL restore the skipped occurrence. An occurrence whose pay transaction was posted before its pay date is paid, not skipped. Each pay transaction posted after the last pay date on or before today pays one later occurrence: the earliest unpaid occurrence on or after its date.
 
 #### Scenario: Unpaid leave is visible
 - **GIVEN** the user skipped the November 13, 2026 "Acme" paycheck

@@ -119,11 +119,14 @@ export function planPaycheck(
     monthUtils.parseDate(monthUtils.addDays(today, 366)),
   );
   const next = pay.next_date;
-  // Each pay transaction pays one occurrence: the earliest unpaid one on or
-  // after its date, so several paychecks posted early each count once
+  // Each pay transaction posted after the last pay date up to today pays one
+  // later occurrence: the earliest unpaid one on or after its date, so several
+  // paychecks posted early each count once and older history can't shift them
+  const anchor = occurrences.filter(o => o <= today).pop() ?? '';
+  const upcoming = occurrences.filter(o => o > anchor);
   const paid = new Set<string>();
-  for (const posted of [...postedDates].sort()) {
-    const date = occurrences.find(o => o >= posted && !paid.has(o));
+  for (const posted of postedDates.filter(d => d > anchor).sort()) {
+    const date = upcoming.find(o => o >= posted && !paid.has(o));
     if (date) {
       paid.add(date);
     }

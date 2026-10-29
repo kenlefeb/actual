@@ -652,6 +652,9 @@ The fork's backlog lives in the Shortcut workspace `blacksmith-press`, team
 → In Review → Done). Use the Shortcut connector when it's available; if it
 isn't, skip these steps and say so in your reply instead of guessing.
 
+- Picking work: a story in To Do is ready, so start it without asking. Backlog
+  stories aren't refined yet: don't start them or move them to To Do yourself;
+  ask Ken to refine the backlog instead.
 - Starting a story: assign yourself and move it to In Progress.
 - Branches: use the story's Shortcut branch name (it contains `sc-<id>`) when
   you choose the branch name. When the branch name is given to you, end the PR

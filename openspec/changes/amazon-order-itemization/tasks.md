@@ -14,6 +14,7 @@
 
 - [ ] 2.1 Write failing tests in `amazon-orders/parse.test.ts`, named after the spec scenarios: "Not an order export", "Split shipment", and gift-card detection for "Order paid partly by a gift card". Verify they fail.
 - [ ] 2.2 Implement the adapter and the charge grouping (design decisions 1 and 2) in `amazon-orders/parse.ts`, in integer cents. Verify that 2.1 passes, and that a missing field's error names it.
+- [ ] 2.3 Make `amazon-orders-parse` delete its `/uploads` copy on the web build after reading it, on success and on failure (design decision 3). Test it with the web platform's fs, and verify that the file is gone in both cases.
 
 ## 3. Match charges to transactions
 
@@ -24,9 +25,10 @@
   - "Two equal candidates";
   - "Payee is a hint, not a filter";
   - "Two same-day orders of the same amount";
-  - "Paid with a card that isn't in the budget".
+  - "Paid with a card that isn't in the budget";
+  - "Transfer is never a candidate".
 
-  Add one more test: an off-budget account's transaction is never a candidate. Verify they fail.
+  Add two more tests: an off-budget account's transaction is never a candidate, and a split parent of the exact amount without a marker shows "Already split". Verify they fail.
 - [ ] 3.2 Implement the query and the one-to-one assignment (design decision 4). Verify that 3.1 passes.
 
 ## 4. Apply a match as a split
@@ -38,18 +40,24 @@
   - "Undo apply-all";
   - "Rule sets the category from the note";
   - "Import the same export twice";
-  - "Bank sync updates the date". This one calls `reconcileTransactions` on the itemized transaction.
+  - "A free item";
+  - "Single-item charge";
+  - "Rule that sets a new payee": no payee row is added;
+  - "Bank sync updates the date": calls `reconcileTransactions` on the itemized transaction, and pins that a rule's category can land on the split parent (existing upstream behavior);
+  - "Bank file imported again": calls `reconcileTransactions` with a file-style row (no `imported_id`) for an itemized multi-line charge and for an annotated single-item charge, and checks that each matches the original transaction.
 
   Also cover:
-  - apply skips, with a reason, a transaction whose amount changed or that was split after the review;
-  - a rule that would rename the payee leaves the parent's payee alone.
+  - apply skips, with a reason, a transaction whose amount changed, that was split or that became a transfer after the review;
+  - a rule that would rename the payee leaves the parent's payee alone;
+  - a schedule's own rule never sets a line's category.
 
   Verify they fail.
-- [ ] 4.2 Implement `amazon-orders-apply` (design decisions 5 to 8) as one undoable mutation, and register `amazon-orders-parse` and `amazon-orders-apply` in the app's handlers. Verify that 4.1 passes, along with the existing `server/accounts` and `server/transactions` tests.
+- [ ] 4.2 Add the category-only rules helper next to `runRules` (design decision 8), with unit tests: it returns the category of the last matching `set category` rule, ignores schedule rules, and inserts no payee. Verify that the tests and the existing `transaction-rules` tests pass.
+- [ ] 4.3 Implement `amazon-orders-apply` (design decisions 5 to 7) as one undoable mutation, and register `amazon-orders-parse` and `amazon-orders-apply` in the app's handlers. Verify that 4.1 passes, along with the existing `server/accounts` and `server/transactions` tests.
 
 ## 5. Flag, entry point and review
 
-- [ ] 5.1 Add the `amazonOrderItemization` flag (off by default) to the `FeatureFlag` type, `useFeatureFlag` defaults and the Experimental settings page. Write the test "Hidden when the feature is off" for the accounts menu. Verify it fails before the menu item exists and passes after.
+- [ ] 5.1 Add the `amazonOrderItemization` flag (off by default) to the `FeatureFlag` type, `useFeatureFlag` defaults and the Experimental settings page. Write the tests "Hidden when the feature is off" for the accounts menu, and "Turned off after applying": an applied split stays unchanged after the flag is turned off. Verify that the first fails before the menu item exists, and that both pass after.
 - [ ] 5.2 Add the "Import Amazon orders" menu item and the review modal (design decision 9), with tests named after the scenarios:
   - "Offered when the feature is on";
   - "Import stays on the device", which spies on the network connection and checks that no request leaves the worker;

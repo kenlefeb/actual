@@ -17,12 +17,17 @@ Amazon order itemization SHALL be available only when its experimental feature f
 - **WHEN** the user turns the flag on in Experimental settings
 - **THEN** the accounts page offers "Import Amazon orders"
 
+#### Scenario: Turned off after applying
+- **GIVEN** the user applied matches while the flag was on
+- **WHEN** the user turns the flag off
+- **THEN** the import is no longer offered, and the applied splits, their notes and the order links stay as ordinary transactions
+
 ### Requirement: Import an order export on the device
-The app SHALL import Amazon's order-history export as a file the user chooses. It SHALL read and parse it on the user's device, make no network request for it, ask for no Amazon credentials, and keep neither the raw file nor its rows after the review closes.
+The app SHALL import Amazon's order-history export as a file the user chooses. It SHALL read and parse it on the user's device, make no network request for it, ask for no Amazon credentials, and keep neither the raw file, any copy of it the app made, nor its rows after the review closes.
 
 #### Scenario: Import stays on the device
 - **WHEN** the user imports an order export and closes the review without applying anything
-- **THEN** no request was sent to Amazon or any other service, and the budget holds no trace of the export
+- **THEN** no request was sent to Amazon or any other service, the budget holds no trace of the export, and the app keeps no copy of the file
 
 ### Requirement: Required order fields
 An imported file SHALL provide, for each item, the order id, ship or charge date, item name, quantity, item price, tax, shipping and discounts, and payment method. A file without these fields SHALL be rejected with a message naming the missing ones, and nothing SHALL be matched.
@@ -40,12 +45,17 @@ The app SHALL group an order's items by shipment into charges. A charge's amount
 - **THEN** the review shows two charges for 111-0000001: $12.96 shipped November 2 and $32.40 shipped November 4
 
 ### Requirement: Match by amount and date
-A charge SHALL match an expense transaction of exactly its amount, dated from one day before to five days after its ship date. The transaction SHALL be in an on-budget account, not deleted, and not already split or a split line. Off-budget accounts SHALL NOT be searched.
+A charge SHALL match an expense transaction of exactly its amount, dated from one day before to five days after its ship date. The transaction SHALL be in an on-budget account, not deleted, not a transfer, and not already split or a split line. Off-budget accounts SHALL NOT be searched.
 
 #### Scenario: Already split by hand
 - **GIVEN** a $32.40 charge shipped November 4, and the only −$32.40 transaction on November 5 was already split by the user
 - **WHEN** the export is imported
-- **THEN** the charge is not matched to it, and the user's split is untouched
+- **THEN** the charge shows "Already split", it can't be applied, and the user's split is untouched
+
+#### Scenario: Transfer is never a candidate
+- **GIVEN** a $25.00 charge shipped November 3, and the only −$25.00 transaction on November 4 is a transfer from Checking to a card account
+- **WHEN** the export is imported
+- **THEN** the charge is not matched, and the transfer is untouched
 
 #### Scenario: Charge posts two days after shipping
 - **GIVEN** a $32.40 charge shipped November 4 and a −$32.40 "AMZN Mktp US" card transaction on November 6
@@ -102,7 +112,7 @@ Importing and reviewing SHALL NOT change the budget. Only the user applying a ma
 - **THEN** no transaction in the budget has changed
 
 ### Requirement: Applying itemizes the transaction
-Applying a match SHALL turn the transaction into a split with one line per item. Each line's note SHALL be the item name and quantity. The lines SHALL add up exactly to the transaction amount: tax, shipping and discounts are shared out in proportion to item prices, and any rounding remainder goes to the largest line.
+Applying a match of two or more items SHALL turn the transaction into a split with one line per item. Each line's note SHALL be the item name and quantity. The lines SHALL add up exactly to the transaction amount: tax, shipping and discounts are shared out in proportion to item prices, and any rounding remainder goes to the largest line.
 
 #### Scenario: Apply a two-item charge
 - **GIVEN** a −$32.40 transaction matched to a charge of a $20.00 lamp and a $10.00 bulb pack ×2, with $2.40 tax
@@ -113,6 +123,22 @@ Applying a match SHALL turn the transaction into a split with one line per item.
 - **GIVEN** a −$10.00 transaction matched to three $3.33 items with $0.01 tax
 - **WHEN** the user applies the match
 - **THEN** the three lines add up to exactly −$10.00
+
+### Requirement: No zero-amount lines
+Applying SHALL NOT write a split line of zero. An item whose share comes to zero SHALL be named in the largest line's note instead of getting its own line.
+
+#### Scenario: A free item
+- **GIVEN** a −$20.00 transaction matched to a $20.00 kettle and a $0.00 sample
+- **WHEN** the user applies the match
+- **THEN** no $0.00 line is written, and the sample is named in the kettle's note
+
+### Requirement: One-line charges are annotated, not split
+When a match leaves only one line, from one item or because the other lines would be zero, applying SHALL NOT split the transaction. It SHALL add that line's note, the order link and the marker to the transaction's own notes, and set its category as for a line.
+
+#### Scenario: Single-item charge
+- **GIVEN** a −$12.96 transaction matched to a charge of one $12.00 book with $0.96 tax
+- **WHEN** the user applies the match
+- **THEN** the transaction isn't split, and its notes name "Book ×1", the order link and the marker
 
 ### Requirement: Parent keeps its bank fields
 Applying SHALL leave the transaction's account, date, amount, payee, imported id, cleared and reconciled state unchanged. It SHALL add a link to the Amazon order and an order marker to the parent's notes, keeping any existing note text.
@@ -130,12 +156,17 @@ Applying one match or all selected matches SHALL be one undoable step that resto
 - **THEN** all five transactions are back to how they were before
 
 ### Requirement: Rules can categorize items
-Applying SHALL run the budget's transaction rules on each new split line and keep only the category they set, so a rule matching a line's note can categorize it. The rules SHALL NOT change any other field of the line or the parent. Lines that no rule categorizes SHALL stay uncategorized.
+Applying SHALL evaluate the budget's transaction rules against each new line and set only the category they would set, so a rule matching a line's note can categorize it. It SHALL NOT change any other field, create payees or other records, or use a schedule's own rule. Lines that no rule categorizes SHALL stay uncategorized.
 
 #### Scenario: Rule sets the category from the note
 - **GIVEN** a rule "if notes contain 'Bulb' then category is Household"
 - **WHEN** the user applies a match with a "Bulb pack ×2" line
 - **THEN** that line's category is Household
+
+#### Scenario: Rule that sets a new payee
+- **GIVEN** a rule "if notes contain 'Gift' then set payee to 'Gifts'", and no payee named "Gifts"
+- **WHEN** the user applies a match with a "Gift wrap ×1" line
+- **THEN** no "Gifts" payee is created, and the transaction's payee is unchanged
 
 ### Requirement: Already itemized charges are skipped
 A transaction whose notes carry the marker for an order SHALL NOT be offered again for that order's charges. Importing the same export twice SHALL show those charges as "Already itemized" and SHALL NOT apply them again.
@@ -152,3 +183,8 @@ When bank sync or a file import later updates an itemized transaction, its split
 - **GIVEN** an itemized transaction
 - **WHEN** bank sync updates its date and cleared state
 - **THEN** the split lines and notes are unchanged and the lines take the new date and cleared state
+
+#### Scenario: Bank file imported again
+- **GIVEN** an itemized transaction, in an account filled from bank files, with no imported id
+- **WHEN** the user imports the same bank file row again
+- **THEN** the row matches the itemized transaction, no new transaction is added, and its lines and notes are unchanged

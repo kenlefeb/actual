@@ -1,5 +1,3 @@
-import { useMemo } from 'react';
-
 import { setBusinessCalendars } from '@actual-app/core/shared/business-calendar-lookup';
 import { q } from '@actual-app/core/shared/query';
 import {
@@ -16,10 +14,11 @@ import { useQuery } from './useQuery';
 const NO_SCHEDULES: ScheduleEntity[] = [];
 
 /**
- * Fills the shared lookup of every schedule's date (and name) used by
- * relative dates, and returns the schedules (with their loading state) so
- * callers re-run date math when they change. Reads all schedules, because a relative schedule's source is
- * often filtered out of an account's schedule list.
+ * Every schedule (with its loading state), for the shared lookup of each
+ * schedule's date (and name) used by relative dates. Callers pass them to
+ * `withScheduleLookups` around the date math that reads the lookup. Reads all
+ * schedules, because a relative schedule's source is often filtered out of an
+ * account's schedule list.
  */
 export function useScheduleDateLookup() {
   const { data, isLoading } = useQuery<ScheduleEntity>(
@@ -28,8 +27,8 @@ export function useScheduleDateLookup() {
   );
   // A stable empty list while loading, so callers don't recompute every render
   const schedules = data ?? NO_SCHEDULES;
-  // Synchronous on purpose: callers compute dates in the same render
-  useMemo(() => applyScheduleDateLookup(schedules), [schedules]);
+  // Filling the lookup here would be a memo with an unused result, which the
+  // React Compiler drops (sc-811)
   return { schedules, isLoading };
 }
 

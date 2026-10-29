@@ -667,4 +667,6 @@ isn't, skip these steps and say so in your reply instead of guessing.
   failures, vulnerability scan findings (`yarn npm audit`, Dependabot, code
   scanning) and new compiler or lint warnings included. Group findings with one
   cause into one story. A defect you fix right away needs no story. File only
-  defects in fork changes; upstream's own problems are upstream's.
+  defects in fork changes; upstream's own problems are upstream's, except
+  vulnerability findings in code that runs on the production server (the sync
+  server and the web app it serves), which get a story too.

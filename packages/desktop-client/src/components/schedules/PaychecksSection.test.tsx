@@ -20,6 +20,9 @@ import { PaychecksSection } from './PaychecksSection';
 const state = vi.hoisted(() => ({
   paychecks: [] as PaycheckEntity[],
   schedules: [] as Partial<ScheduleEntity>[],
+  // Posted transactions linked to pay schedules
+  payTransactions: [] as { schedule: string; date: string }[],
+  today: '2026-11-02',
   clearing: [] as PaycheckClearingStatus[],
   skip: vi.fn(),
   pushModal: vi.fn(),
@@ -28,7 +31,11 @@ const state = vi.hoisted(() => ({
 // Tests otherwise pin today to 2017-01-01
 vi.mock('@actual-app/core/shared/months', async importOriginal => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  currentDay: () => '2026-11-02',
+  currentDay: () => state.today,
+}));
+
+vi.mock('#hooks/useQuery', () => ({
+  useQuery: () => ({ data: state.payTransactions, isLoading: false }),
 }));
 
 vi.mock('#hooks/usePaychecks', () => ({
@@ -196,6 +203,8 @@ describe('PaychecksSection', () => {
     state.paychecks = [acme];
     state.clearing = [];
     withPayNextDate('2026-11-13');
+    state.payTransactions = [];
+    state.today = '2026-11-02';
     state.skip.mockReset();
     state.pushModal.mockReset();
   });
@@ -299,9 +308,24 @@ describe('PaychecksSection', () => {
 
   it('shows a skipped paycheck, and the next one after it', () => {
     withPayNextDate('2026-11-30');
+    // The last paycheck, posted on its date, doesn't count for November 13
+    state.payTransactions = [{ schedule: 'acme-pay', date: '2026-10-30' }];
     renderSection();
     const section = screen.getByRole('region', { name: 'Paychecks' });
     expect(section).toHaveTextContent('Skipped: Friday, November 13');
+    expect(
+      screen.getByRole('button', { name: 'Edit paycheck Acme' }),
+    ).toHaveTextContent('Monday, November 30, 2026');
+  });
+
+  it('shows a paycheck posted before its pay date as paid, not skipped', () => {
+    state.today = '2026-11-12';
+    // Posting moved the pay schedule on to its next occurrence
+    withPayNextDate('2026-11-30');
+    state.payTransactions = [{ schedule: 'acme-pay', date: '2026-11-12' }];
+    renderSection();
+    const section = screen.getByRole('region', { name: 'Paychecks' });
+    expect(section).not.toHaveTextContent('Skipped');
     expect(
       screen.getByRole('button', { name: 'Edit paycheck Acme' }),
     ).toHaveTextContent('Monday, November 30, 2026');

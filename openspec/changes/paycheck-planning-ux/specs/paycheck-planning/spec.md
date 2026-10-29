@@ -36,12 +36,17 @@ Each row SHALL offer "Skip next paycheck". It SHALL ask for confirmation naming 
 - **THEN** the app asks "Skip the paycheck on November 13, 2026?" and nothing is skipped until the user confirms
 
 ### Requirement: Skipped paychecks are shown
-When a paycheck's next occurrence has been skipped, its row SHALL show "Skipped: <date>" and show the following occurrence as the next paycheck. Undo SHALL restore the skipped occurrence.
+When a paycheck's next occurrence has been skipped, its row SHALL show "Skipped: <date>" and show the following occurrence as the next paycheck. Undo SHALL restore the skipped occurrence. An occurrence whose pay transaction was posted before its pay date is paid, not skipped.
 
 #### Scenario: Unpaid leave is visible
 - **GIVEN** the user skipped the November 13, 2026 "Acme" paycheck
 - **WHEN** the user opens the Schedules page
 - **THEN** the "Acme" row shows "Skipped: Friday, November 13" and Monday, November 30 as the next paycheck
+
+#### Scenario: Paycheck posted before its pay date
+- **GIVEN** on Thursday, November 12, 2026 the user posted the "Acme" paycheck due Friday, November 13, 2026
+- **WHEN** the user opens the Schedules page that day
+- **THEN** the "Acme" row shows Monday, November 30 as the next paycheck and does not show "Skipped"
 
 ### Requirement: Clearing account warning on the row
 When a paycheck's clearing account warning is active (see `paychecks` "Clearing account"), its row SHALL show the warning's amount and the deposit still missing.

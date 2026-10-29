@@ -5,26 +5,56 @@ import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
 import { currentDay } from '@actual-app/core/shared/months';
+import { q } from '@actual-app/core/shared/query';
+import type {
+  PaycheckEntity,
+  TransactionEntity,
+} from '@actual-app/core/types/models';
 
 import { useBusinessCalendarLookup } from '#hooks/useBusinessCalendarLookup';
 import { usePaychecks } from '#hooks/usePaychecks';
+import { useQuery } from '#hooks/useQuery';
 import { useScheduleDateLookup } from '#hooks/useScheduleDateLookup';
 
 import { PaycheckRow, planPaycheck, useOpenPaycheck } from './PaycheckRow';
 
+// Stable while loading, so the transactions query isn't rebuilt every render
+const NO_PAYCHECKS: PaycheckEntity[] = [];
+
 export function PaychecksSection() {
   const openPaycheck = useOpenPaycheck();
-  const { data: paychecks = [] } = usePaychecks();
+  const { data: paychecks = NO_PAYCHECKS } = usePaychecks();
   // Fill the lookups the deposit date math reads
   const { schedules } = useScheduleDateLookup();
   useBusinessCalendarLookup();
+
+  // Posted pay transactions tell a paycheck posted early from a skipped one
+  const payTransactions =
+    useQuery<Pick<TransactionEntity, 'schedule' | 'date'>>(
+      () =>
+        q('transactions')
+          .filter({
+            schedule: {
+              $oneof: paychecks.flatMap(p => p.definition.paySchedule ?? []),
+            },
+          })
+          .select(['schedule', 'date']),
+      [paychecks],
+    ).data ?? [];
 
   const today = currentDay();
   const scheduleById = new Map(schedules.map(s => [s.id, s]));
   const rows = paychecks
     .map(paycheck => ({
       paycheck,
-      plan: planPaycheck(paycheck, scheduleById, today),
+      plan: planPaycheck(
+        paycheck,
+        scheduleById,
+        today,
+        payTransactions.flatMap(t =>
+          t.schedule === paycheck.definition.paySchedule ? t.date : [],
+        ),
+      ),
     }))
     // Paychecks without a next date (e.g. ended) go last
     .sort((a, b) =>

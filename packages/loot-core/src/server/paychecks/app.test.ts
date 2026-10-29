@@ -13,7 +13,7 @@ import { q } from '#shared/query';
 import { setScheduleDates } from '#shared/schedule-date-lookup';
 import type { PaycheckDefinition } from '#types/models';
 
-import { app } from './app';
+import { app, getPaycheckManagingSchedule } from './app';
 
 const handlers = app.handlers;
 
@@ -857,5 +857,30 @@ describe('clearing account', () => {
     expect((await status()).isWarning).toBe(false);
     MockDate.set(new Date(2026, 11, 3));
     expect((await status()).isWarning).toBe(true);
+  });
+});
+
+describe('getPaycheckManagingSchedule', () => {
+  it('finds the paycheck for its pay and deposit schedules', async () => {
+    const { id, pay, checking, savings } = await createAcme();
+    for (const schedule of [pay, checking, savings]) {
+      expect(await getPaycheckManagingSchedule(schedule)).toEqual({
+        id,
+        name: 'Acme',
+      });
+    }
+  });
+
+  it('ignores an id that only appears elsewhere in the definition', async () => {
+    await createAcme();
+    // "checking" is a deposit account id in the definition, not a schedule
+    expect(await getPaycheckManagingSchedule('checking')).toBeNull();
+    expect(await getPaycheckManagingSchedule('unrelated')).toBeNull();
+  });
+
+  it("ignores a deleted paycheck's schedules", async () => {
+    const { id, pay } = await createAcme();
+    await handlers['paycheck-delete']({ id });
+    expect(await getPaycheckManagingSchedule(pay)).toBeNull();
   });
 });

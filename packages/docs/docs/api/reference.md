@@ -726,11 +726,13 @@ Create a rule. Returns the new rule, including the `id`.
 
 Update a rule. Unlike other update methods, this requires the full rule object including `id`. Returns the updated rule.
 
+The rule of a schedule that a paycheck generated can't be updated: the app manages those schedules, and the call fails with an error naming the paycheck.
+
 #### `deleteRule`
 
-<Method name="deleteRule" args={[{ name: 'id', type: 'id' }]} returns="Promise<null>" />
+<Method name="deleteRule" args={[{ name: 'id', type: 'id' }]} returns="Promise<boolean>" />
 
-Delete a rule.
+Delete a rule. Resolves to `true` once the rule is deleted. A rule that belongs to a schedule isn't deleted, and the call resolves to `false`.
 
 #### Examples
 
@@ -787,11 +789,15 @@ Create schedule based on information filled in the schedule object. Please refer
 
 <Method name="updateSchedule" args={[{ name: 'id', type: 'id' }, { name: 'fields', type: 'object' }]} returns="Promise<schedule>" />
 
-Update fields of a rule. `fields` can specify any field described in [`Schedule`](#schedule). Returns the updated rule.
+Update fields of a schedule. `fields` can specify any field described in [`Schedule`](#schedule). Returns the updated schedule.
+
+Schedules that a paycheck generated are managed by the app and regenerated each time the paycheck is saved, so this call fails for them with an error naming the paycheck. Edit the paycheck in the app instead.
 
 #### `deleteSchedule`
 
 <Method name="deleteSchedule" args={[{ name: 'id', type: 'id' }]} returns="Promise<null>" />
+
+Delete a schedule. Like `updateSchedule`, this fails for a schedule that a paycheck generated.
 
 #### `getScheduleDates`
 

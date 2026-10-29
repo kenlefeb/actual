@@ -33,6 +33,10 @@ Opening a paycheck's schedule SHALL offer to edit the paycheck. Saving changes S
 - **WHEN** an API script calls `updateRule` on the rule of the "Acme" pay schedule
 - **THEN** the call fails with the same error, and the rule is unchanged
 
+#### Scenario: A script deletes the rule behind Acme's pay schedule
+- **WHEN** an API script calls `deleteRule` on the rule of the "Acme" pay schedule
+- **THEN** the call resolves to `false` without deleting anything, as it already does for the rule of any schedule, and the rule and the pay schedule still exist
+
 #### Scenario: A script edits and deletes the Rent schedule
 - **GIVEN** a "Rent" schedule that no paycheck lists
 - **WHEN** an API script updates its amount and then deletes it

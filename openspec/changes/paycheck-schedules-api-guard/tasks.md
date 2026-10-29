@@ -10,6 +10,7 @@
   - "A script edits Acme's Checking deposit schedule": `updateSchedule` rejects with the exact message and the schedule is unchanged.
   - "A script deletes Acme's pay schedule": `deleteSchedule` rejects and the schedule is still listed by `getSchedules`.
   - "A script edits the rule behind Acme's pay schedule": `updateRule` rejects and the rule is unchanged.
+  - "A script deletes the rule behind Acme's pay schedule": `deleteRule` resolves to `false` and the rule and schedule still exist. This already passes; it pins the existing behaviour.
   - "A script edits and deletes the Rent schedule": both succeed.
 - [ ] 2.2 Add `getPaycheckManagingSchedule` to `server/paychecks/app.ts` (a `LIKE` query, then an exact id match on `paySchedule` and `deposits[].schedule`), with unit tests:
   - a deposit schedule id and the pay schedule id each return the paycheck;
@@ -20,7 +21,13 @@
 
 ## 3. Docs
 
-- [ ] 3.1 In `packages/docs/docs/api/reference.md`, state the rule under `updateSchedule`, `deleteSchedule` and `updateRule`, and fix "rule" to "schedule" in the `updateSchedule` description. Verify that `yarn workspace docs build` succeeds (or the docs lint, if the build is too slow)
+- [ ] 3.1 In `packages/docs/docs/api/reference.md`, state the rule under `updateSchedule`, `deleteSchedule` and `updateRule`. Under `deleteRule`, say that a rule that belongs to a schedule isn't deleted and the call resolves to `false`. Fix "rule" to "schedule" in the `updateSchedule` description. Verify that `yarn workspace docs build` succeeds (or the docs lint, if the build is too slow)
+- [ ] 3.2 Update ADR 2 (`docs/adr/0002-paycheck-definition-is-source-of-truth.md`). Replace "API scripts can still edit or delete generated schedules; sc-558 will make the API refuse that" with the real rule:
+  - `updateSchedule`, `deleteSchedule` and `updateRule` fail for a paycheck's schedules with the paycheck error;
+  - `deleteRule` resolves to `false` for any scheduled rule;
+  - `internal.send` and the internal `schedule/*` handlers are out of scope.
+
+  Verify the ADR no longer says the API can edit generated schedules
 
 ## 4. Integration checks
 

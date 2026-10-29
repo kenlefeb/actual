@@ -8,7 +8,7 @@ See proposal.md, specs/paychecks/spec.md and ADR 2 (`docs/adr/0002-paycheck-defi
   - `api/schedule-update` (line 1054) loads the schedule, applies `fields` (name, posts_transaction, payee, account, amount, date) and calls the internal `schedule/update`.
   - `api/schedule-delete` (line 1196) calls `schedule/delete`.
   - `api/rule-update` (line 989) calls `rule-update`, which can rewrite a schedule's rule, and so its conditions.
-  - `api/rule-delete` already fails for a rule that has a schedule (`transactions/transaction-rules.ts` `deleteRule`).
+  - `api/rule-delete` (line 1002) already refuses a rule that has a schedule, but without an error. It calls `rule-delete` (`server/rules/app.ts:129`) and then `deleteRule` (`server/transactions/transaction-rules.ts:238-250`). That returns `false` without deleting when `SELECT id FROM schedules WHERE rule = ?` finds a schedule, and the API call resolves to `false`. This is upstream behaviour for every schedule's rule, so this change keeps it and only specifies it ("A script deletes the rule behind Acme's pay schedule").
   - Every one of these is wrapped in `withMutation`.
 - **How the app reaches them:**
   - Paycheck save, delete and skip run `paycheck-create`, `paycheck-update`, `paycheck-delete` and `paycheck-skip-next` (`server/paychecks/app.ts`). These call the internal schedule functions directly (`writePaycheckSchedules`, `deleteSchedule`, `setNextDate`).
@@ -54,7 +54,9 @@ For the Product Owner to confirm (recommendations given):
 
 1. **`updateRule` on a paycheck schedule's rule:** recommendation: refuse it too, as specified, because it changes the schedule's dates and amounts. If the PO wants the narrower scope, drop the "edits the rule" scenario and the `api/rule-update` guard.
 2. **Error wording:** the story's sentence, used for all three calls.
-3. **API scope:** only `updateSchedule`, `deleteSchedule` and `updateRule`. `createSchedule` can't target an existing schedule, and the API has no skip or post calls.
+3. **API scope:** only `updateSchedule`, `deleteSchedule` and `updateRule` get the new guard. `createSchedule` can't target an existing schedule, and the API has no skip or post calls.
+
+Decided in the PR #74 review (the Product Owner and the Solution Architect): all three as recommended. The PO also asked for `deleteRule`. It already refuses the rule of any schedule (resolving to `false`, with no error), so the spec now covers it with that existing behaviour and no new guard. Turning that `false` into the paycheck error would change upstream's API for every schedule's rule, so it's not planned here.
 
 ## Risks / Trade-offs
 

@@ -187,8 +187,9 @@ tickets.
 - **Blocking**: Shortcut's native story relation, added with
   `stories-add-relation` ("blocks"). A ticket is unblocked when every blocker is
   Done.
-- **Frontier query**: the epic's stories not Done, with no open blocker and no
-  owner. First in epic order wins.
+- **Frontier query**: the epic's stories in Spec-Driven Ready to Do
+  (500000220) that aren't blocked, have no owner and aren't labelled
+  `ready-for-human`. First in epic order wins.
 - **Claim**: `stories-assign-current-user`, then move the story to In Progress.
   Do this before any other write.
 - **Resolve**: comment the answer, move the story to Done, then add a context

@@ -1,9 +1,9 @@
-# Spec Delta
+# paycheck-planning Specification
 
 ## Purpose
 Shows each paycheck as one plannable item — when the next one arrives and what lands in which account — at the top of the Schedules page on desktop and mobile, so planning doesn't require reading generated schedules.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Paychecks section
 With the `paychecks` experimental feature on, the Schedules page SHALL show a Paychecks section above the schedules list on desktop and mobile layouts, with one row per paycheck ordered by next pay date. Each row SHALL show the paycheck's name, its next pay date and net pay, and for each direct deposit the receiving account, amount and expected date. Selecting a row SHALL open that paycheck's editor.
@@ -61,8 +61,24 @@ Each pay transaction dated after the second-to-last pay date on or before today 
 - **WHEN** the user opens the Schedules page that day
 - **THEN** the "Acme" row shows "Skipped: Monday, November 30" and no other skipped paycheck
 
+### Requirement: Pay history before a pay schedule starts
+Until two pay dates have passed, only pay transactions dated after one pay period before the first pay date SHALL pay an occurrence, so history linked to a new or re-dated pay schedule doesn't hide its skips.
+
+#### Scenario: Older paychecks linked to a new pay schedule
+- **GIVEN** the "Acme" pay schedule starts Friday, November 13, 2026, its next date is December 15, and paychecks from November and December 2025 are linked to it
+- **WHEN** the user opens the Schedules page on Tuesday, November 10, 2026
+- **THEN** the "Acme" row shows "Skipped: Friday, November 13" and "Skipped: Monday, November 30"
+
+### Requirement: Duplicate of the latest paycheck
+A duplicate of the latest paycheck (for example, imported twice) SHALL pay the next occurrence, like a paycheck posted early, because the two can't be told apart. Known limit: this hides that occurrence's skip.
+
+#### Scenario: Latest paycheck imported twice
+- **GIVEN** the "Acme" paycheck due Friday, November 13, 2026 was imported twice and the November 30 paycheck never arrived
+- **WHEN** the user opens the Schedules page on Friday, November 20, 2026
+- **THEN** the "Acme" row does not show "Skipped"
+
 ### Requirement: Clearing account warning on the row
-When a paycheck's clearing account warning is active (see `paychecks` "Clearing account"), its row SHALL show the warning's amount and the deposit still missing.
+When a paycheck's clearing account warning is active (see `paychecks` "Clearing account warning"), its row SHALL show the warning's amount and the deposit still missing.
 
 #### Scenario: Missing deposit on the row
 - **GIVEN** the November 13, 2026 "Acme" pay posted and the "Checking" deposit never arrived

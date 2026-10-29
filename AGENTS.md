@@ -695,5 +695,7 @@ never copy one into the other (details in `docs/agents/issue-tracker.md`):
   links to the archive path and file a Backlog story for every follow-up or
   deferred item it lists.
 - `yarn check:openspec-shortcut` (run by Fork CI) fails when a change has no
-  stories, a group heading lacks one, or a PR ticks a change's tasks without
-  naming one of its stories.
+  stories, a group heading lacks one, a PR ticks a change's tasks without
+  naming one of its stories, or a PR names no story at all in its title
+  (`[sc-<id>]`) or branch (`sc-<id>`). File a story first, even for a release
+  or a small fix.

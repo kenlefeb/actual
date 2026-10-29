@@ -28,7 +28,7 @@ Each calendar SHALL define which weekdays are non-working, defaulting to Saturda
 - **THEN** the change is rejected with an explanation
 
 ### Requirement: Rule-based holidays
-A calendar SHALL support named holiday rules of three kinds: a fixed month and day, the nth (first to fourth) weekday of a month, and the last given weekday of a month. Each rule SHALL produce one holiday per year.
+A calendar SHALL support named holiday rules of four kinds: a fixed month and day, the nth (first to fourth) weekday of a month, the last given weekday of a month, and a whole number of days (from -100 to 100) from Western (Gregorian) Easter Sunday. Each rule SHALL produce one holiday per year.
 
 #### Scenario: Fixed date
 - **WHEN** a calendar has a fixed-date rule for July 4
@@ -41,6 +41,26 @@ A calendar SHALL support named holiday rules of three kinds: a fixed month and d
 #### Scenario: Last weekday
 - **WHEN** a calendar has a rule for the last Monday of May
 - **THEN** May 25, 2026 is a holiday in it
+
+#### Scenario: Good Friday
+- **WHEN** a calendar has a rule for 2 days before Easter Sunday
+- **THEN** April 3, 2026 and March 26, 2027 are holidays in it
+
+#### Scenario: Easter Monday
+- **WHEN** a calendar has a rule for 1 day after Easter Sunday
+- **THEN** April 6, 2026 is a holiday in it
+
+#### Scenario: Easter Sunday dates
+- **WHEN** Western Easter Sunday is computed
+- **THEN** it is March 31, 2024; April 20, 2025; April 5, 2026; April 25, 2038; March 22, 1818; and March 22, 2285
+
+#### Scenario: Easter-relative rule on a non-working weekday
+- **WHEN** a rule for Easter Sunday itself uses Saturday-to-Friday, Sunday-to-Monday observance
+- **THEN** the following Monday is the non-business day, as for any other Sunday holiday
+
+#### Scenario: Offset out of range
+- **WHEN** a user saves an Easter-relative rule whose offset is outside -100 to 100 or not a whole number
+- **THEN** the change is rejected with an explanation
 
 ### Requirement: Holiday observance
 Each holiday rule SHALL have an observance setting for holidays falling on a non-working weekday: no shift, Sunday to the following Monday only, or Saturday to the preceding Friday and Sunday to the following Monday. The observed date SHALL be the non-business day, and may fall in an adjacent year.
@@ -113,7 +133,7 @@ The calendar editor SHALL show every non-business day other than regular non-wor
 - **THEN** the preview lists each 2026 federal holiday on its observed date with its name
 
 ### Requirement: Experimental feature flag
-Business calendar management SHALL only be available when its experimental feature is enabled in Settings, and SHALL be managed on desktop layouts.
+Business calendar management SHALL only be available when its experimental feature is enabled in Settings. It SHALL be managed in a dialog on desktop layouts and on full pages on narrow (mobile) layouts.
 
 #### Scenario: Feature disabled
 - **WHEN** the business calendars experimental feature is off
@@ -122,3 +142,45 @@ Business calendar management SHALL only be available when its experimental featu
 #### Scenario: Feature enabled
 - **WHEN** the feature is on and a user opens the Schedules page on a desktop layout
 - **THEN** a control to manage business calendars is available
+
+#### Scenario: Feature enabled on a phone
+- **WHEN** the feature is on and a user opens the Schedules page on a narrow layout
+- **THEN** a control to manage business calendars is available, and it opens the calendar list page instead of a dialog
+
+### Requirement: Easter rules in the editor
+The desktop calendar editor SHALL let users choose the Easter-relative kind for a holiday rule and set its day offset, and the year preview SHALL show the resulting dates.
+
+#### Scenario: Add Good Friday
+- **WHEN** a user changes a holiday rule to "Days from Easter" with offset -2 and previews 2026
+- **THEN** the preview lists Friday, April 3, 2026 with the rule's name, and saving stores the rule with kind `easter` and offset -2
+
+#### Scenario: Invalid offset in the editor
+- **WHEN** a user enters 150 as the days from Easter
+- **THEN** the field keeps showing 150, the editor explains that a whole number from -100 to 100 is needed, and the calendar cannot be saved until it is corrected
+
+### Requirement: Mobile calendar management
+On narrow layouts, the calendar list page SHALL list the budget's calendars and let users create an empty calendar or copy a preset, and each calendar SHALL open a full-page editor with the same capabilities and validation as the desktop editor: name, non-working weekdays, holiday rules of every kind with observance, per-year exceptions, the year preview, save and delete. It SHALL use the same stored data and server operations as desktop.
+
+#### Scenario: Create a calendar on a phone
+- **WHEN** a user taps "Copy U.S. Federal Holidays preset" on the calendar list page
+- **THEN** a calendar with the preset's rules is created and its editor page opens
+
+#### Scenario: Edit a rule on a phone
+- **WHEN** a user changes a holiday rule to "Days from Easter" with offset -2 and saves
+- **THEN** the calendar is saved with that rule, exactly as the desktop editor saves it, and the user returns to the list
+
+#### Scenario: Validation on a phone
+- **WHEN** a user marks all seven weekdays as non-working, or enters 150 days from Easter
+- **THEN** the editor explains the problem as on desktop, and an invalid Easter offset cannot be saved
+
+#### Scenario: Delete on a phone
+- **WHEN** a user taps "Delete calendar" on the editor page
+- **THEN** the app asks for confirmation, and deletes the calendar and returns to the list only if the user confirms
+
+#### Scenario: Unknown calendar
+- **WHEN** a calendar page address names a calendar that does not exist
+- **THEN** the user is sent to the calendar list page
+
+#### Scenario: Wide layout
+- **WHEN** a calendar page address is opened on a desktop layout
+- **THEN** the user is sent to the Schedules page, where the dialog is used

@@ -23,7 +23,7 @@ Prepare focused upstream branches from current upstream before submitting. Exclu
 
 ## CI
 
-Upstream's workflows run on Depot runners, which this fork lacks, so they are disabled in the fork's Actions settings rather than edited (keeping upstream syncs conflict-free). `fork-ci.yml` runs typecheck, lint and tests on GitHub-hosted runners for every PR to and push on `development`, plus `yarn check:openspec-shortcut` (`fork/scripts/check-openspec-shortcut.mjs`), which checks that OpenSpec changes name their Shortcut stories (see `docs/agents/issue-tracker.md`). `semgrep.yml` runs Semgrep for the `blacksmith_press` org: new findings on each PR, a full scan on each push to `development`; it needs the `SEMGREP_APP_TOKEN` secret. Re-enable a workflow with `gh workflow enable <name> -R kenlefeb/actual` only after pointing it at a runner the fork has.
+Upstream's workflows run on Depot runners, which this fork lacks, so they are disabled in the fork's Actions settings rather than edited (keeping upstream syncs conflict-free). `fork-ci.yml` runs typecheck, lint and tests on GitHub-hosted runners for every PR to and push on `development`, plus `yarn check:openspec-shortcut` (`fork/scripts/check-openspec-shortcut.mjs`), which checks that OpenSpec changes name their Shortcut stories and, on pull requests, that every pull request names a story in its title or branch (bots exempt; see `docs/agents/issue-tracker.md`). `semgrep.yml` runs Semgrep for the `blacksmith_press` org: new findings on each PR, a full scan on each push to `development`; it needs the `SEMGREP_APP_TOKEN` secret. Re-enable a workflow with `gh workflow enable <name> -R kenlefeb/actual` only after pointing it at a runner the fork has.
 
 ## Releases and hosting
 

@@ -32,7 +32,7 @@
 
 ## 6. Release (sc-491)
 
-- [ ] 6.1 Update fork release notes and the in-app fork news for the release that ships these slices; verify with `yarn generate:fork-news` and `src/news/forkNews.test.ts`
+- [x] 6.1 Update fork release notes and the in-app fork news for the release that ships these slices; verify with `yarn generate:fork-news` and `src/news/forkNews.test.ts`
 
 ## Workflow follow-up
 

@@ -29,9 +29,6 @@ describe('ExperimentalFeatures paychecks toggle', () => {
       </TestProviders>,
     );
 
-    await userEvent.click(
-      screen.getByText('I understand the risks, show experimental features'),
-    );
     await userEvent.click(screen.getByRole('checkbox', { name: 'Paychecks' }));
 
     await waitFor(() =>
@@ -56,9 +53,6 @@ describe('ExperimentalFeatures paychecks toggle', () => {
       </TestProviders>,
     );
 
-    await userEvent.click(
-      screen.getByText('I understand the risks, show experimental features'),
-    );
     await userEvent.click(screen.getByRole('checkbox', { name: 'Paychecks' }));
 
     await waitFor(() =>

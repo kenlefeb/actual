@@ -8,6 +8,7 @@ import {
   fetchNewsFeed,
   getNewsFeedUrl,
   mergeNewsEntries,
+  UNSUPPORTED_NEWS_FEED_FORMAT,
 } from './fetchNewsFeed';
 import { newsFeedFixture } from './fixtures';
 
@@ -71,24 +72,18 @@ describe('fetchNewsFeed', () => {
 
   it('rejects feeds with malformed entries', async () => {
     stubResponse({ schemaVersion: 1, entries: [null] });
-    await expect(fetchNewsFeed()).rejects.toThrow(
-      'Unsupported news feed format',
-    );
+    await expect(fetchNewsFeed()).rejects.toThrow(UNSUPPORTED_NEWS_FEED_FORMAT);
 
     stubResponse({
       ...newsFeedFixture,
       entries: [{ ...newsFeedFixture.entries[0], type: 'other' }],
     });
-    await expect(fetchNewsFeed()).rejects.toThrow(
-      'Unsupported news feed format',
-    );
+    await expect(fetchNewsFeed()).rejects.toThrow(UNSUPPORTED_NEWS_FEED_FORMAT);
   });
 
   it('rejects other schema versions and HTTP errors', async () => {
     stubResponse({ ...newsFeedFixture, schemaVersion: 2 });
-    await expect(fetchNewsFeed()).rejects.toThrow(
-      'Unsupported news feed format',
-    );
+    await expect(fetchNewsFeed()).rejects.toThrow(UNSUPPORTED_NEWS_FEED_FORMAT);
 
     stubResponse(newsFeedFixture, false);
     await expect(fetchNewsFeed()).rejects.toThrow('HTTP 500');

@@ -305,6 +305,7 @@ async function linkSimpleFinAccount({
     bank.bank_id,
     startingDate,
     startingBalance,
+    getPrefs()?.cloudFileId,
   );
 
   await handleSyncResponse(syncRes, id);
@@ -896,7 +897,7 @@ async function goCardlessStatus() {
   );
 }
 
-async function simpleFinStatus() {
+async function simpleFinStatus(): Promise<BankSyncProviderStatus> {
   const userToken = await asyncStorage.getItem('user-token');
 
   if (!userToken) {
@@ -908,11 +909,13 @@ async function simpleFinStatus() {
     throw new Error('Failed to get server config.');
   }
 
+  const fileId = getPrefs()?.cloudFileId;
   return post(
     serverConfig.SIMPLEFIN_SERVER + '/status',
     {},
     {
       'X-ACTUAL-TOKEN': userToken,
+      ...(fileId ? { 'X-Actual-File-Id': fileId } : {}),
     },
   );
 }
@@ -973,12 +976,14 @@ async function simpleFinAccounts() {
     throw new Error('Failed to get server config.');
   }
 
+  const fileId = getPrefs()?.cloudFileId;
   try {
     return await post(
       serverConfig.SIMPLEFIN_SERVER + '/accounts',
       {},
       {
         'X-ACTUAL-TOKEN': userToken,
+        ...(fileId ? { 'X-Actual-File-Id': fileId } : {}),
       },
       60000,
     );
@@ -1281,7 +1286,7 @@ async function createGoCardlessWebToken({
   }
 }
 
-type SyncResponse = {
+export type SyncResponse = {
   newTransactions: Array<TransactionEntity['id']>;
   matchedTransactions: Array<TransactionEntity['id']>;
   updatedAccounts: Array<AccountEntity['id']>;
@@ -1416,8 +1421,21 @@ function getBankSyncStatusFromError(
       return 'timed-out';
     }
 
+    if (err.category === 'SERVER_DOWN') {
+      return 'server-down';
+    }
+
     if (err.category === 'ACCOUNT_MISSING') {
       return 'account-missing';
+    }
+
+    if (
+      err.category === 'GOCARDLESS_NOT_CONFIGURED' ||
+      err.category === 'NOT_CONFIGURED' ||
+      err.code === 'GOCARDLESS_NOT_CONFIGURED' ||
+      err.code === 'NOT_CONFIGURED'
+    ) {
+      return 'not-configured';
     }
   }
 
@@ -1557,6 +1575,7 @@ async function simpleFinBatchSync({
         id: a.id,
         account_id: a.account_id || null,
       })),
+      getPrefs()?.cloudFileId,
     );
     for (const syncResponse of syncResponses) {
       const account = accounts.find(a => a.id === syncResponse.accountId);

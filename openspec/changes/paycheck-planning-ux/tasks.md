@@ -16,9 +16,9 @@
 
 ## 3. Clearing account marking and warning
 
-- [ ] 3.1 Add a loot-core handler that returns, per clearing account, its paycheck, balance, the latest posted pay date and the deposits not yet linked for it, and whether the warning is active (expected date + 2 business days of the deposit account's calendar passed and balance ≠ 0); verify with server tests for "Missing deposit" and "No warning while imports may still arrive"
-- [ ] 3.2 Show the paycheck icon beside clearing accounts in the sidebar (classic and redesigned) and the note/warning at the top of the clearing account's register; verify with sidebar and account component tests for "Marked as a clearing account"
-- [ ] 3.3 Show the active warning on the paycheck's row; verify with the "Missing deposit on the row" scenario test
+- [x] 3.1 Add a loot-core handler that returns, per clearing account, its paycheck, balance, the latest posted pay date and the deposits not yet linked for it, and whether the warning is active (expected date + 2 business days of the deposit account's calendar passed and balance ≠ 0); verify with server tests for "Missing deposit" and "No warning while imports may still arrive"
+- [x] 3.2 Show the paycheck icon beside clearing accounts in the sidebar (classic and redesigned) and the note/warning at the top of the clearing account's register; verify with sidebar and account component tests for "Marked as a clearing account"
+- [x] 3.3 Show the active warning on the paycheck's row; verify with the "Missing deposit on the row" scenario test
 
 ## 4. Editor additions
 

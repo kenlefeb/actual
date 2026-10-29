@@ -4,15 +4,16 @@ import { setBusinessCalendars } from '@actual-app/core/shared/business-calendar-
 import { setScheduleDates } from '@actual-app/core/shared/schedule-date-lookup';
 import type {
   AccountEntity,
+  PaycheckClearingStatus,
   PaycheckEntity,
   RecurConfig,
   ScheduleEntity,
 } from '@actual-app/core/types/models';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { TestProviders } from '#mocks';
+import { resetTestProviders, TestProviders } from '#mocks';
 
 import { PaychecksSection } from './PaychecksSection';
 
@@ -22,6 +23,7 @@ const state = vi.hoisted(() => ({
   // Posted transactions linked to pay schedules
   payTransactions: [] as { schedule: string; date: string }[],
   today: '2026-11-02',
+  clearing: [] as PaycheckClearingStatus[],
   skip: vi.fn(),
   pushModal: vi.fn(),
 }));
@@ -57,12 +59,19 @@ vi.mock('#hooks/useAccounts', () => ({
     data: [
       { id: 'checking', name: 'Checking' },
       { id: 'savings', name: 'Savings' },
+      { id: 'clearing', name: 'Acme Paycheck' },
     ] as Partial<AccountEntity>[],
   }),
 }));
 
 vi.mock('#paychecks', () => ({
   useSkipNextPaycheckMutation: () => ({ mutate: state.skip }),
+  paycheckQueries: {
+    clearingStatus: () => ({
+      queryKey: ['clearing-status'],
+      queryFn: async () => state.clearing,
+    }),
+  },
 }));
 
 vi.mock('#modals/modalsSlice', async importOriginal => ({
@@ -190,7 +199,9 @@ describe('PaychecksSection', () => {
         exceptions: [],
       },
     ]);
+    resetTestProviders();
     state.paychecks = [acme];
+    state.clearing = [];
     withPayNextDate('2026-11-13');
     state.payTransactions = [];
     state.today = '2026-11-02';
@@ -343,6 +354,49 @@ describe('PaychecksSection', () => {
     expect(
       within(section).getByRole('button', { name: 'Edit paycheck Acme' }),
     ).toHaveTextContent('Friday, November 13, 2026');
+  });
+
+  it('warns on the row about a missing deposit', async () => {
+    state.clearing = [
+      {
+        paycheck: 'acme',
+        clearingAccount: 'clearing',
+        balance: 202500,
+        payDate: '2026-11-13',
+        missingDeposits: [
+          { id: 'checking', account: 'checking', expectedDate: '2026-11-10' },
+        ],
+        isWarning: true,
+      },
+    ];
+    renderSection();
+    const section = screen.getByRole('region', { name: 'Paychecks' });
+    await waitFor(() =>
+      expect(section).toHaveTextContent(
+        '2,025.00 is still in "Acme Paycheck", waiting on the deposit to Checking.',
+      ),
+    );
+  });
+
+  it('does not warn on the row while deposits may still arrive', async () => {
+    state.clearing = [
+      {
+        paycheck: 'acme',
+        clearingAccount: 'clearing',
+        balance: 225000,
+        payDate: '2026-11-30',
+        missingDeposits: [
+          { id: 'checking', account: 'checking', expectedDate: '2026-11-25' },
+        ],
+        isWarning: false,
+      },
+    ];
+    renderSection();
+    // Let the status query settle before checking nothing rendered
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(
+      screen.getByRole('region', { name: 'Paychecks' }),
+    ).not.toHaveTextContent('is still in');
   });
 
   it('offers to set up the first paycheck', async () => {

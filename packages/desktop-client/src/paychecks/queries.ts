@@ -1,5 +1,6 @@
 import { send } from '@actual-app/core/platform/client/connection';
 import type {
+  PaycheckClearingStatus,
   PaycheckEntity,
   PaycheckYearToDate,
 } from '@actual-app/core/types/models';
@@ -20,5 +21,11 @@ export const paycheckQueries = {
     queryOptions<PaycheckYearToDate[]>({
       queryKey: [...paycheckQueries.all(), 'year-to-date', id],
       queryFn: () => send('paycheck-year-to-date', { id }),
+    }),
+  // Depends on transactions too, so sync events invalidate it on their changes
+  clearingStatus: () =>
+    queryOptions<PaycheckClearingStatus[]>({
+      queryKey: [...paycheckQueries.all(), 'clearing-status'],
+      queryFn: () => send('paychecks-clearing-status'),
     }),
 };

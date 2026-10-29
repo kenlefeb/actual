@@ -49,6 +49,7 @@ import { markAccountRead } from '#accounts/accountsSlice';
 import * as reconciliation from '#accounts/reconciliation';
 import { FeatureErrorFallback } from '#components/FeatureErrorFallback';
 import type { SavedFilter } from '#components/filters/SavedFilterMenuButton';
+import { ClearingAccountNote } from '#components/schedules/ClearingAccount';
 import type {
   TransactionTableColumn,
   TransactionTableColumnId,
@@ -1919,6 +1920,7 @@ class AccountInternal extends PureComponent<
                 onMakeAsNonSplitTransactions={this.onMakeAsNonSplitTransactions}
                 onMergeTransactions={this.onMergeTransactions}
               />
+              {account && <ClearingAccountNote accountId={account.id} />}
 
               <View style={{ flex: 1 }}>
                 <TransactionList

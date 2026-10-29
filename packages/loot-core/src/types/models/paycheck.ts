@@ -56,3 +56,20 @@ export type PaycheckYearToDate = {
   deductions: { name: string; amount: number }[];
   net: number;
 };
+
+// A clearing account after its paycheck's latest posted pay date
+export type PaycheckClearingStatus = {
+  paycheck: PaycheckEntity['id'];
+  clearingAccount: AccountEntity['id'];
+  balance: number;
+  // Null before the first pay transaction posts
+  payDate: string | null;
+  // Deposits for that pay date with no linked transaction yet
+  missingDeposits: {
+    id: PaycheckDeposit['id'];
+    account: AccountEntity['id'];
+    expectedDate: string;
+  }[];
+  // The balance should be zero by now and isn't
+  isWarning: boolean;
+};

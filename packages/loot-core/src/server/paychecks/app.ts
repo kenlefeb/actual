@@ -5,14 +5,19 @@ import {
   createSchedule,
   deleteSchedule,
   getRuleForSchedule,
+  refreshScheduleDateLookup,
   skipNextDate,
   updateSchedule,
 } from '#server/schedules/app';
 import { updateRule } from '#server/transactions/transaction-rules';
 import { undoable } from '#server/undo';
+import * as monthUtils from '#shared/months';
 import { computePaycheck, MAX_DEPOSIT_DAYS_EARLY } from '#shared/paychecks';
+import { isRelativeDate, toRelativeDay } from '#shared/relative-dates';
+import { getScheduleDate } from '#shared/schedule-date-lookup';
 import type {
   AccountEntity,
+  PaycheckClearingStatus,
   PaycheckDefinition,
   PaycheckEntity,
   PaycheckYearToDate,
@@ -27,6 +32,7 @@ export type PaychecksHandlers = {
   'paycheck-delete': typeof deletePaycheck;
   'paycheck-skip-next': typeof skipNextPaycheck;
   'paycheck-year-to-date': typeof getYearToDate;
+  'paychecks-clearing-status': typeof getClearingStatus;
   'account-set-business-days': typeof setAccountBusinessDays;
 };
 
@@ -37,6 +43,7 @@ app.method('paycheck-update', mutator(undoable(updatePaycheck)));
 app.method('paycheck-delete', mutator(undoable(deletePaycheck)));
 app.method('paycheck-skip-next', mutator(undoable(skipNextPaycheck)));
 app.method('paycheck-year-to-date', getYearToDate);
+app.method('paychecks-clearing-status', getClearingStatus);
 app.method(
   'account-set-business-days',
   mutator(undoable(setAccountBusinessDays)),
@@ -501,6 +508,96 @@ async function getYearToDate({
       .map(([name, amount]) => ({ name, amount }))
       .sort((a, b) => rank(a.name) - rank(b.name)),
   }));
+}
+
+// Business days a deposit may arrive after its expected date (imports lag)
+const DEPOSIT_GRACE_BUSINESS_DAYS = 2;
+
+/**
+ * For each paycheck, its clearing account's balance and the deposits not yet
+ * linked for its latest posted pay date. The warning is active once those
+ * deposits (or all, if none is missing) are more than the grace period past
+ * their expected date on the deposit account's calendar and the balance is
+ * not zero.
+ */
+async function getClearingStatus(): Promise<PaycheckClearingStatus[]> {
+  const today = monthUtils.dayFromDate(new Date());
+  // Deposit dates read the lookup, which the sync listener refreshes async
+  await refreshScheduleDateLookup();
+  const statuses: PaycheckClearingStatus[] = [];
+  for (const { id, definition } of await getPaychecks()) {
+    const row = await db.first<{ balance: number | null }>(
+      'SELECT sum(amount) as balance FROM transactions WHERE acct = ? AND isParent = 0 AND tombstone = 0',
+      [definition.clearingAccount],
+    );
+    const balance = row?.balance ?? 0;
+    const [payDate, previousPayDate] = definition.paySchedule
+      ? (
+          await db.all<{ date: number }>(
+            `SELECT DISTINCT date FROM v_transactions_internal
+             WHERE schedule = ? AND tombstone = 0 AND is_child = 0
+             ORDER BY date DESC LIMIT 2`,
+            [definition.paySchedule],
+          )
+        ).map(r => db.fromDateRepr(r.date))
+      : [];
+
+    const deposits = [];
+    for (const deposit of payDate ? definition.deposits : []) {
+      const config = getScheduleDate(deposit.schedule);
+      const expectedFor = (day: string) =>
+        isRelativeDate(config) ? toRelativeDay(day, config) : day;
+      const expectedDate = expectedFor(payDate);
+      // Deposits for the previous pay date are on or before its expected date
+      const linked =
+        deposit.schedule &&
+        (await db.first(
+          `SELECT id FROM v_transactions_internal
+           WHERE schedule = ? AND tombstone = 0 AND is_child = 0 AND date > ?`,
+          [
+            deposit.schedule,
+            previousPayDate ? db.toDateRepr(expectedFor(previousPayDate)) : 0,
+          ],
+        ));
+      const deadline = toRelativeDay(expectedDate, {
+        relativeTo: {
+          scheduleId: deposit.schedule ?? '',
+          offset: DEPOSIT_GRACE_BUSINESS_DAYS,
+          unit: 'business-days',
+          direction: 'after',
+        },
+        businessCalendarId: isRelativeDate(config)
+          ? config.businessCalendarId
+          : undefined,
+      });
+      deposits.push({
+        id: deposit.id,
+        account: deposit.account,
+        expectedDate,
+        isMissing: !linked,
+        deadline,
+      });
+    }
+    const missing = deposits.filter(d => d.isMissing);
+    statuses.push({
+      paycheck: id,
+      clearingAccount: definition.clearingAccount,
+      balance,
+      payDate: payDate ?? null,
+      missingDeposits: missing.map(({ id, account, expectedDate }) => ({
+        id,
+        account,
+        expectedDate,
+      })),
+      isWarning:
+        balance !== 0 &&
+        deposits.length > 0 &&
+        (missing.length > 0 ? missing : deposits).every(
+          d => d.deadline < today,
+        ),
+    });
+  }
+  return statuses;
 }
 
 async function setAccountBusinessDays({

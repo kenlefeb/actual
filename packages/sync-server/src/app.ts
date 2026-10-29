@@ -40,6 +40,9 @@ if (process.env.NODE_ENV !== 'development') {
       max: 500,
       legacyHeaders: false,
       standardHeaders: true,
+      // Fork-only: safe only because this server is tailnet-only, where devices
+      // can't rotate addresses. Revert if it's ever public (Funnel, public route).
+      ipv6Subnet: false,
     }),
   );
 }

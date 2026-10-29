@@ -47,6 +47,8 @@ function CalendarList() {
   const actionStyle = {
     ...rowStyle,
     color: theme.pageTextLink,
+    // Lines the text up with the section headings
+    paddingLeft: 0,
   } as const;
 
   return (
@@ -78,21 +80,7 @@ function CalendarList() {
             </Button>
           ))}
         </Section>
-        <Section id="start-from-preset" title={t('Start from a preset')}>
-          {businessCalendarPresets.map(preset => {
-            const calendar = calendarFromPreset(t, preset);
-            return (
-              <Button
-                key={preset.id}
-                variant="bare"
-                style={actionStyle}
-                isDisabled={createCalendar.isPending}
-                onPress={() => create(calendar)}
-              >
-                <Trans>Copy {{ name: calendar.name }} preset</Trans>
-              </Button>
-            );
-          })}
+        <Section id="add-calendar" title={t('Add a calendar')}>
           <Button
             variant="bare"
             style={actionStyle}
@@ -108,6 +96,20 @@ function CalendarList() {
           >
             <Trans>New calendar</Trans>
           </Button>
+          {businessCalendarPresets.map(preset => {
+            const calendar = calendarFromPreset(t, preset);
+            return (
+              <Button
+                key={preset.id}
+                variant="bare"
+                style={actionStyle}
+                isDisabled={createCalendar.isPending}
+                onPress={() => create(calendar)}
+              >
+                <Trans>Copy {{ name: calendar.name }} preset</Trans>
+              </Button>
+            );
+          })}
         </Section>
       </View>
     </Page>

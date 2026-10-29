@@ -260,10 +260,10 @@ describe('mobile business calendars', () => {
     expect(state.navigate).toHaveBeenCalledWith(-1);
   });
 
-  it('separates saved calendars from presets in labelled sections', () => {
+  it('separates saved calendars from ways to add one in labelled sections', () => {
     renderAt('/business-calendars');
     const yours = screen.getByRole('region', { name: 'Your calendars' });
-    const presets = screen.getByRole('region', { name: 'Start from a preset' });
+    const add = screen.getByRole('region', { name: 'Add a calendar' });
 
     expect(
       within(yours).getByRole('button', { name: 'U.S. Federal Holidays' }),
@@ -271,14 +271,15 @@ describe('mobile business calendars', () => {
     expect(within(yours).queryByRole('button', { name: /preset|New/ })).toBe(
       null,
     );
+    // A blank calendar comes first, then the presets to copy
+    expect(within(add).getAllByRole('button')[0]).toHaveTextContent(
+      'New calendar',
+    );
     expect(
-      within(presets).getByRole('button', { name: 'New calendar' }),
-    ).toBeInTheDocument();
-    expect(
-      within(presets).getAllByRole('button', { name: /^Copy .* preset$/ }),
+      within(add).getAllByRole('button', { name: /^Copy .* preset$/ }),
     ).toHaveLength(businessCalendarPresets.length);
     expect(
-      within(presets).queryByRole('button', { name: 'U.S. Federal Holidays' }),
+      within(add).queryByRole('button', { name: 'U.S. Federal Holidays' }),
     ).toBe(null);
   });
 

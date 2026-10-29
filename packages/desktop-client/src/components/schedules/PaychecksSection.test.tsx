@@ -4,6 +4,7 @@ import { setBusinessCalendars } from '@actual-app/core/shared/business-calendar-
 import { setScheduleDates } from '@actual-app/core/shared/schedule-date-lookup';
 import type {
   AccountEntity,
+  BusinessCalendarEntity,
   PaycheckClearingStatus,
   PaycheckEntity,
   RecurConfig,
@@ -20,6 +21,7 @@ import { PaychecksSection } from './PaychecksSection';
 const state = vi.hoisted(() => ({
   paychecks: [] as PaycheckEntity[],
   schedules: [] as Partial<ScheduleEntity>[],
+  calendars: [] as BusinessCalendarEntity[],
   // Posted transactions linked to pay schedules
   payTransactions: [] as { schedule: string; date: string }[],
   today: '2026-11-02',
@@ -50,8 +52,9 @@ vi.mock('#hooks/usePaychecks', () => ({
   usePaychecks: () => ({ data: state.paychecks }),
 }));
 
-// The test fills the date lookup itself, as the real hook would
-vi.mock('#hooks/useScheduleDateLookup', () => ({
+// The lookups serve the test's schedules and calendars
+vi.mock('#hooks/useScheduleDateLookup', async importOriginal => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   useScheduleDateLookup: () => ({
     schedules: state.schedules,
     isLoading: false,
@@ -59,7 +62,7 @@ vi.mock('#hooks/useScheduleDateLookup', () => ({
 }));
 
 vi.mock('#hooks/useBusinessCalendarLookup', () => ({
-  useBusinessCalendarLookup: () => [],
+  useBusinessCalendarLookup: () => state.calendars,
 }));
 
 vi.mock('#hooks/useAccounts', () => ({
@@ -198,7 +201,7 @@ const paidMonths2026 = Array.from(
 
 describe('PaychecksSection', () => {
   beforeEach(() => {
-    setBusinessCalendars([
+    state.calendars = [
       {
         id: 'fed',
         name: 'U.S. Federal Reserve',
@@ -224,7 +227,8 @@ describe('PaychecksSection', () => {
         ],
         exceptions: [],
       },
-    ]);
+    ];
+    setBusinessCalendars(state.calendars);
     resetTestProviders();
     state.paychecks = [acme];
     state.clearing = [];

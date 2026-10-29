@@ -6,6 +6,8 @@ import { getRuleForSchedule } from '#server/schedules/app';
 import { prefetchBalanceOfForTransaction } from '#server/transactions/transaction-rules';
 import type { Currency } from '#shared/currencies';
 import * as monthUtils from '#shared/months';
+import { isRelativeDate } from '#shared/relative-dates';
+import { getScheduleDate } from '#shared/schedule-date-lookup';
 import {
   extractScheduleConds,
   getDateWithSkippedWeekend,
@@ -131,13 +133,14 @@ async function createScheduleList(
         ? categorySubtransactions.reduce((acc, t) => acc + t.amount, 0)
         : (postRuleAmount ?? scheduleAmount));
 
-    const target_interval = dateConditions.value.interval
-      ? dateConditions.value.interval
-      : 1;
-    const target_frequency = dateConditions.value.frequency;
+    // A relative date repeats like the schedule it follows
+    const recurDate = isRelativeDate(dateConditions.value)
+      ? getScheduleDate(dateConditions.value.relativeTo.scheduleId)
+      : dateConditions.value;
+    const target_interval = recurDate?.interval ? recurDate.interval : 1;
+    const target_frequency = recurDate?.frequency;
     const isRepeating =
-      Object(dateConditions.value) === dateConditions.value &&
-      'frequency' in dateConditions.value;
+      Object(recurDate) === recurDate && 'frequency' in recurDate;
     const num_months = monthUtils.differenceInCalendarMonths(
       next_date_string,
       current_month,

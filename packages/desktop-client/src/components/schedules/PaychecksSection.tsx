@@ -15,7 +15,10 @@ import type {
 import { useBusinessCalendarLookup } from '#hooks/useBusinessCalendarLookup';
 import { usePaychecks } from '#hooks/usePaychecks';
 import { useQuery } from '#hooks/useQuery';
-import { useScheduleDateLookup } from '#hooks/useScheduleDateLookup';
+import {
+  useScheduleDateLookup,
+  withScheduleLookups,
+} from '#hooks/useScheduleDateLookup';
 import { useTouchTargetStyle } from '#hooks/useTouchTargetStyle';
 
 import { PaycheckRow, planPaycheck, useOpenPaycheck } from './PaycheckRow';
@@ -27,9 +30,9 @@ export function PaychecksSection() {
   const openPaycheck = useOpenPaycheck();
   const touchTarget = useTouchTargetStyle();
   const { data: paychecks = NO_PAYCHECKS } = usePaychecks();
-  // Fill the lookups the deposit date math reads
+  // The lookups the deposit date math reads
   const { schedules } = useScheduleDateLookup();
-  useBusinessCalendarLookup();
+  const calendars = useBusinessCalendarLookup();
 
   // Posted pay transactions tell a paycheck posted early from a skipped one
   const payTransactions =
@@ -47,22 +50,26 @@ export function PaychecksSection() {
 
   const today = currentDay();
   const scheduleById = new Map(schedules.map(s => [s.id, s]));
-  const rows = paychecks
-    .map(paycheck => ({
-      paycheck,
-      plan: planPaycheck(
+  const rows = withScheduleLookups({ calendars, schedules }, () =>
+    paychecks
+      .map(paycheck => ({
         paycheck,
-        scheduleById,
-        today,
-        payTransactions.flatMap(t =>
-          t.schedule === paycheck.definition.paySchedule ? t.date : [],
+        plan: planPaycheck(
+          paycheck,
+          scheduleById,
+          today,
+          payTransactions.flatMap(t =>
+            t.schedule === paycheck.definition.paySchedule ? t.date : [],
+          ),
+        ),
+      }))
+      // Paychecks without a next date (e.g. ended) go last
+      .sort((a, b) =>
+        (a.plan.next?.date ?? '9999').localeCompare(
+          b.plan.next?.date ?? '9999',
         ),
       ),
-    }))
-    // Paychecks without a next date (e.g. ended) go last
-    .sort((a, b) =>
-      (a.plan.next?.date ?? '9999').localeCompare(b.plan.next?.date ?? '9999'),
-    );
+  );
 
   return (
     <section

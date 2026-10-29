@@ -14,7 +14,10 @@ import {
   getScheduleDate,
   setScheduleDates,
 } from '#shared/schedule-date-lookup';
-import { getNextDate } from '#shared/schedules';
+import {
+  computeSchedulePreviewTransactions,
+  getNextDate,
+} from '#shared/schedules';
 
 import {
   advanceSchedulesService,
@@ -1374,6 +1377,61 @@ describe('schedule business calendars', () => {
   });
 });
 
+describe('schedule business calendars: Next date and preview agree', () => {
+  afterEach(() => {
+    setBusinessCalendars([]);
+    MockDate.reset();
+  });
+
+  it('Next date and preview agree: next date, upcoming dates and preview move off a holiday', async () => {
+    // Tests fix "today" at 2017-01-01; keep the clock on the same day
+    MockDate.set(new Date(2017, 0, 1));
+    setBusinessCalendars([
+      {
+        id: 'federal',
+        name: 'U.S. Federal Holidays',
+        ...businessCalendarPresets[0].calendar,
+      },
+    ]);
+    // Mondays, moved after non-business days. The first, January 2, 2017, is
+    // the New Year's Day observance; January 16 is Martin Luther King Jr. Day
+    const config = {
+      start: '2017-01-02',
+      frequency: 'weekly' as const,
+      skipWeekend: true,
+      weekendSolveMode: 'after' as const,
+      businessCalendarId: 'federal',
+    };
+    const id = await createSchedule({
+      schedule: { custom_upcoming_length: 'oneMonth' },
+      conditions: [{ op: 'isapprox', field: 'date', value: config }],
+    });
+    const { data: schedules } = await aqlQuery(
+      q('schedules').filter({ id }).select('*'),
+    );
+
+    const nextDate = schedules[0].next_date;
+    const upcoming = await schedulesApp.handlers['schedule/get-upcoming-dates'](
+      { config, count: 4 },
+    );
+    const preview = computeSchedulePreviewTransactions(
+      schedules,
+      new Map([[id, 'upcoming']]),
+    )
+      .map(t => t.date)
+      .sort();
+
+    expect(nextDate).toBe('2017-01-03');
+    expect(upcoming).toEqual([
+      '2017-01-03',
+      '2017-01-09',
+      '2017-01-17',
+      '2017-01-23',
+    ]);
+    expect(preview.slice(0, 4)).toEqual(upcoming);
+  });
+});
+
 describe('relative schedules', () => {
   const federal = {
     id: 'federal',
@@ -1474,6 +1532,23 @@ describe('relative schedules', () => {
     ).rejects.toThrow('whole number from 0 to 366');
   });
 
+  it('Skip the source: skipping the source leaves the relative next date unchanged', async () => {
+    const payday = await createSchedule({
+      conditions: [{ op: 'isapprox', field: 'date', value: paydayDate }],
+    });
+    const deposit = await createSchedule({
+      conditions: [
+        { op: 'isapprox', field: 'date', value: relativeTo(payday) },
+      ],
+    });
+    expect(await nextDate(deposit)).toBe('2026-01-13');
+
+    await schedulesApp.handlers['schedule/skip-next-date']({ id: payday });
+
+    expect(await nextDate(payday)).not.toBe('2026-01-15');
+    expect(await nextDate(deposit)).toBe('2026-01-13');
+  });
+
   it('follows source edits and deletion, and undo restores dates', async () => {
     const create = schedulesApp.handlers['schedule/create'];
     const payday = await create({
@@ -1484,10 +1559,6 @@ describe('relative schedules', () => {
         { op: 'isapprox', field: 'date', value: relativeTo(payday) },
       ],
     });
-    expect(await nextDate(deposit)).toBe('2026-01-13');
-
-    // Skipping the source does not move the relative schedule
-    await schedulesApp.handlers['schedule/skip-next-date']({ id: payday });
     expect(await nextDate(deposit)).toBe('2026-01-13');
 
     // Payday moves to the 20th. Recomputed next dates use the real clock

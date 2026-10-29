@@ -1,3 +1,4 @@
+import { sendCatch } from '@actual-app/core/platform/client/connection';
 import { businessCalendarPresets } from '@actual-app/core/shared/business-calendar-presets';
 import type {
   BusinessCalendarEntity,
@@ -108,7 +109,7 @@ describe('RecurringSchedulePicker business calendars', () => {
     ).toBeInTheDocument();
   });
 
-  it('offers only weekends when the feature is off', async () => {
+  it('Feature disabled: offers only the weekend option', async () => {
     state.flag = false;
     await openPicker(baseConfig);
 
@@ -118,5 +119,64 @@ describe('RecurringSchedulePicker business calendars', () => {
     expect(
       screen.getByText(/weekend/, { selector: 'label' }),
     ).toBeInTheDocument();
+  });
+
+  it('shows a calendar renamed while the picker is open', async () => {
+    const value = { ...baseConfig, businessCalendarId: 'federal' };
+    const { rerender } = render(
+      <TestProviders>
+        <RecurringSchedulePicker value={value} onChange={vi.fn()} />
+      </TestProviders>,
+    );
+    await userEvent.click(
+      screen.getByRole('button', { name: /U\.S\. Federal Holidays/ }),
+    );
+    expect(
+      screen.getByRole('button', {
+        name: 'non-business days in U.S. Federal Holidays',
+      }),
+    ).toBeInTheDocument();
+
+    // The calendars query refetches after a rename on another device
+    state.calendars = [{ ...federal, name: 'Bank holidays' }];
+    rerender(
+      <TestProviders>
+        <RecurringSchedulePicker value={value} onChange={vi.fn()} />
+      </TestProviders>,
+    );
+
+    expect(
+      screen.getByRole('button', {
+        name: 'non-business days in Bank holidays',
+      }),
+    ).toBeInTheDocument();
+    // The trigger's description, behind the open popover
+    expect(
+      screen.getByText(/before non-business days in Bank holidays\)/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/U\.S\. Federal Holidays/),
+    ).not.toBeInTheDocument();
+  });
+
+  it('Feature turned off later: dates keep using the stored calendar', async () => {
+    state.flag = false;
+    const onChange = await openPicker({
+      ...baseConfig,
+      businessCalendarId: 'federal',
+    });
+
+    // The upcoming dates come from the calendar, and saving keeps it
+    expect(sendCatch).toHaveBeenLastCalledWith('schedule/get-upcoming-dates', {
+      config: expect.objectContaining({ businessCalendarId: 'federal' }),
+      count: 4,
+    });
+    expect(
+      screen.getByText('non-business days in U.S. Federal Holidays'),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ businessCalendarId: 'federal' }),
+    );
   });
 });

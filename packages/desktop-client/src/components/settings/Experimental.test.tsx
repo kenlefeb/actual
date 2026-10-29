@@ -108,9 +108,12 @@ describe('ExperimentalFeatures paychecks toggle', () => {
     });
 
     const toggle = screen.getByRole('checkbox', { name: 'Business calendars' });
-    await waitFor(() => expect(toggle).toBeDisabled());
+    // The toggle is also disabled while paychecks load; the note means loaded
+    expect(await screen.findByText(LOCK_NOTE)).toBeInTheDocument();
+    expect(toggle).toBeDisabled();
     expect(toggle).toBeChecked();
-    expect(screen.getByText(LOCK_NOTE)).toBeInTheDocument();
+    // Screen readers can't focus a disabled checkbox, so the note describes it
+    expect(toggle).toHaveAccessibleDescription(LOCK_NOTE);
   });
 
   it('Unlocked after the last paycheck is deleted', async () => {
@@ -120,11 +123,10 @@ describe('ExperimentalFeatures paychecks toggle', () => {
     });
 
     await waitFor(() =>
-      expect(connection.send).toHaveBeenCalledWith('paychecks-get'),
+      expect(
+        screen.getByRole('checkbox', { name: 'Business calendars' }),
+      ).toBeEnabled(),
     );
-    expect(
-      screen.getByRole('checkbox', { name: 'Business calendars' }),
-    ).toBeEnabled();
     expect(screen.queryByText(LOCK_NOTE)).not.toBeInTheDocument();
   });
 
@@ -144,5 +146,26 @@ describe('ExperimentalFeatures paychecks toggle', () => {
         'true',
       ),
     );
+  });
+
+  it('keeps business calendars locked while paychecks are still loading', async () => {
+    let finishLoading: ((list: Array<{ id: string }>) => void) | undefined;
+    vi.spyOn(connection, 'send').mockImplementation((async (name: string) =>
+      name === 'paychecks-get'
+        ? new Promise<Array<{ id: string }>>(resolve => {
+            finishLoading = resolve;
+          })
+        : undefined) as typeof connection.send);
+    renderSettings({
+      'flags.paychecks': 'true',
+      'flags.businessCalendars': 'true',
+    });
+    const toggle = screen.getByRole('checkbox', { name: 'Business calendars' });
+
+    expect(toggle).toBeDisabled();
+    expect(screen.queryByText(LOCK_NOTE)).not.toBeInTheDocument();
+
+    finishLoading?.([]);
+    await waitFor(() => expect(toggle).toBeEnabled());
   });
 });

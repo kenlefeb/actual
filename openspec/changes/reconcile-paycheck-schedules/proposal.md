@@ -15,8 +15,8 @@ This was reproduced with real sync messages (design.md, "Reproduction"):
 ## What Changes
 
 - **Remember which paycheck generated each schedule.** Each pay and deposit schedule a paycheck generates gets a row in a new fork-only table, `paycheck_schedules`. Each device writes its own rows, so the record survives a concurrent edit where the definition doesn't.
-- **Reconcile:** a schedule recorded for a paycheck but not listed in its definition is deleted, like a deposit the user removed. This runs:
-  - after each successful sync, before the schedules service posts anything;
+- **Reconcile, in both directions:** a schedule recorded for a paycheck but not listed in its definition is deleted, like a deposit the user removed. A schedule a live definition lists but that is missing or deleted is restored, in place when its row still exists, so a save that crossed with the other device's clean-up isn't lost. This runs:
+  - after every successful sync, not just the first of the day, queued before the schedules service posts anything;
   - when the budget loads;
   - on every paycheck save.
 - **Posted transactions stay.** Transactions already posted from such a schedule are kept, as when a deposit is removed today.

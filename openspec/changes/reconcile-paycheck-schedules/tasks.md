@@ -13,6 +13,8 @@
   - "Forecasts count each deposit once": `getNormalizedSchedules` (or `forecast/generate`) has no "Emergency" Acme deposit and each other deposit once.
   - "A deposit that already posted": the posted transfer remains.
   - "Nothing posts before the clean-up": the `sync` success event with a due, auto-posting stray posts nothing for "Emergency".
+  - "A later sync on the same day": with `lastScheduleRun` already set to today, a `sync` success event that brings in the stray still deletes it.
+  - "Saved again while the other device cleaned up": device A deletes the stray S after the merge, device B saves "Acme" again listing S before receiving that, then both sync. S is active, keeps its id, and the deposits add up to net pay.
   - "Deleted on one device, edited on the other": no "Acme" schedule is active.
   - "A user's own schedule relative to the pay date": "Gym" is kept.
 
@@ -26,15 +28,32 @@
 
 ## 3. Reconcile
 
-- [ ] 3.1 Add `reconcilePaycheckSchedules()` to `server/paychecks/app.ts`. It finds each mapped, active schedule that is unlisted in its live paycheck, or whose paycheck is deleted or missing, calls `deleteSchedule`, and tombstones the mapping row. It never touches an unmapped schedule. Unit tests: it deletes only mapped strays, keeps transactions posted from them, and a second run changes nothing.
-- [ ] 3.2 Run it in the server `sync` handler (`server/schedules/app.ts:979`) on `success` when `tables` includes `paychecks`, `paycheck_schedules` or `schedules`. Await it before `advanceSchedulesService`, inside `runMutator` and not undoable. Also run it at budget load, after the backfill, and for the saved paycheck at the end of `paycheck-update`. Verify every 1.2 test passes.
+- [ ] 3.1 Add `reconcilePaycheckSchedules()` to `server/paychecks/app.ts`, working in both directions (design.md, "Reconcile in both directions"):
+  - **Restore:** for each live paycheck, a listed schedule that is tombstoned is restored in place (clear the tombstone on the schedule, its rule and its mapping row, then rerun `writePaycheckSchedules`). A listed schedule that is missing is recreated by `writePaycheckSchedules`.
+  - **Delete:** then each mapped, active schedule that is unlisted in its live paycheck, or whose paycheck is deleted or missing, gets `deleteSchedule` and its mapping row tombstoned.
+  - It never touches an unmapped schedule.
+
+  Unit tests:
+  - it deletes only mapped strays, and keeps transactions posted from them;
+  - a tombstoned listed schedule comes back with the same id, and its posted transactions stay linked;
+  - a missing listed schedule is recreated and the definition updated;
+  - two recreates of the same deposit converge after one more reconcile;
+  - a second run changes nothing.
+- [ ] 3.2 Hook it into the schedules `sync` handler (`server/schedules/app.ts:987-1000`): on `type === 'success'`, when `tables` includes `paychecks`, `paycheck_schedules` or `schedules`, call `void runMutator(() => reconcilePaycheckSchedules())` **before** the `lastScheduleRun !== currentDay()` guard, and leave the guarded `advanceSchedulesService` call as it is. Also run it at budget load, after the backfill, and for the saved paycheck at the end of `paycheck-update`. Verify every 1.2 test passes, including "A later sync on the same day" and "Nothing posts before the clean-up".
 
 ## 4. Docs and checks
 
-- [ ] 4.1 Update ADR 2's "Concurrent edits aren't handled yet (sc-556)" to describe the mapping table and when the reconcile runs. Add `DROP TABLE paycheck_schedules` to ADR 4's "remove fork data" steps. Verify both ADRs name `paycheck_schedules`.
+- [ ] 4.1 Update ADR 2's "Concurrent edits aren't handled yet (sc-556)" to describe the mapping table, the two-way reconcile, and when it runs. In ADR 4's "remove fork data" steps, add:
+  - `DROP TABLE paycheck_schedules` to step 3;
+  - the new migration's id to step 6's `__migrations__` delete;
+  - `paycheck_schedules` to step 7's list of `dataset` values whose `messages_crdt` and `messages_pending` rows are deleted.
+
+  Verify that ADR 2 and all three ADR 4 steps name `paycheck_schedules` or its migration id.
 - [ ] 4.2 Run the loot-core tests, `yarn typecheck` and `yarn lint`; all pass. The existing `server/paychecks` tests are unchanged and pass.
 
 ## Workflow follow-up
+
+- Merge after #87 and sc-558's change, in that order. Merge each previous one in rather than rebasing.
 
 - Archive the change when sc-556 is Done.
 - File follow-ups for any Product decision the PO defers: a conflict notice (3), and a report of strays from before this change (4).

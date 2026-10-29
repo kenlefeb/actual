@@ -40,6 +40,8 @@ if (process.env.NODE_ENV !== 'development') {
       max: 500,
       legacyHeaders: false,
       standardHeaders: true,
+      // Tailnet devices can't rotate their addresses, so per-address keys are safe
+      ipv6Subnet: false,
     }),
   );
 }

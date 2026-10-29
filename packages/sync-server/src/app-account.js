@@ -34,6 +34,8 @@ const authRateLimiter = rateLimit({
   legacyHeaders: false,
   standardHeaders: true,
   skipSuccessfulRequests: true,
+  // Tailnet devices can't rotate their addresses, so per-address keys are safe
+  ipv6Subnet: false,
   message: { status: 'error', reason: 'too-many-requests' },
 });
 

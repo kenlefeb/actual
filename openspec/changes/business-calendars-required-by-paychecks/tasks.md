@@ -21,6 +21,8 @@
 
   Keep the existing "turns on business calendars with paychecks" and "leaves business calendars on when paychecks is turned off" tests. Then make `FeatureToggle` write requirements on enable and dependents on disable from `FEATURE_FLAG_REQUIRES`, remove its hard-coded `paychecks` branch and its `flags.businessCalendars` pref, and pass `disableToggle` and the note from the Business calendars row in `ExperimentalFeatures`. Verify the tests pass and that `FeatureToggle` contains no flag names
 
+- [ ] 3.2 Update ADR 6 (`docs/adr/0006-feature-flag-policy.md`): the "Dependent flags" bullet gives the new unset-`paychecks` default and says the lock and the off-cascade are built; "What the code does today" describes the requires map. Verify that the ADR names no paychecks query in `useFeatureFlag`
+
 ## 4. Integration checks
 
 - [ ] 4.1 Run the settings, flag, schedules, paychecks and mobile schedules tests in desktop-client, `yarn typecheck` and `yarn lint`; all pass

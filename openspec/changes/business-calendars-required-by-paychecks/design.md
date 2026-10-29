@@ -8,7 +8,7 @@ See proposal.md and the deltas in specs/.
 - `components/settings/Experimental.tsx` `FeatureToggle` (lines 47-73) writes `flags.<name>`, and, hard-coded, also writes `flags.businessCalendars = 'true'` when `paychecks` is turned on. Nothing handles turning `businessCalendars` off, so `paychecks` can stay on with calendars off. In that state `PaycheckFormFields.tsx:390` still shows each deposit account's calendar and days early.
 - `FeatureToggle` already supports `disableToggle`, `error` (shown only while disabled) and `note`, and other rows pass them from the feature list in `ExperimentalFeatures`.
 - Before the `paychecks` flag existed (sc-56), paychecks were shown only while `businessCalendars` was on (`git show 5f7ae1594^`, `components/schedules/index.tsx`).
-- ADR 6 (PR #71) sets the policy: gate only the UI, a flag hides UI and not data, and dependencies go in one "requires" map, with no feature branches in `useFeatureFlag` or `FeatureToggle`.
+- ADR 6 (`docs/adr/0006-feature-flag-policy.md`, merged in PR #71) sets the policy: gate only the UI, a flag hides UI and not data, and dependencies go in one "requires" map, with no feature branches in `useFeatureFlag` or `FeatureToggle`.
 
 ## Goals / Non-Goals
 
@@ -55,7 +55,7 @@ The "a paycheck exists" default is dropped (Product decisions 1). An unset flag 
 
 For the Product Owner to confirm (recommendations given):
 
-1. **Unset `paychecks` with a paycheck but calendars off:** recommendation: it counts as off ("Upgrade with business calendars off"). Today it counts as on, which is exactly the contradictory state this story removes, and the release before the flag hid paychecks in that state. Turning Paychecks on brings everything back.
+1. **Unset `paychecks` with a paycheck but calendars off:** recommendation: it counts as off ("Upgrade with business calendars off"). Today it counts as on, which is exactly the contradictory state this story removes, and the release before the flag hid paychecks in that state. Turning Paychecks on brings everything back. ADR 6 (`docs/adr/0006-feature-flag-policy.md`) still states the old default ("an unset `paychecks` flag counts as on when the budget already has a paycheck"). If this is accepted, task 3.2 updates that bullet and its "What the code does today" section.
 2. **Lock note wording and tone:** "Paychecks use business calendars. Delete your paychecks to turn this off." shown in the row's error style. Recommendation: keep the story's wording, and accept the error style or ask for a neutral one.
 3. **Synced devices:** the lock is checked on the device whose Settings are open. If another device creates a paycheck while this one turns calendars off, both flags end up off and the paycheck is hidden but kept. Recommendation: accept, since no data is lost and turning Paychecks on restores it.
 

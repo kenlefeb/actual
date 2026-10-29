@@ -56,7 +56,7 @@ jobs:
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
           if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
-            node fork/scripts/check-openspec-shortcut.mjs --base HEAD^1
+            node fork/scripts/check-openspec-shortcut.mjs --base HEAD^1 --require-story
           else
             node fork/scripts/check-openspec-shortcut.mjs
           fi

@@ -27,6 +27,8 @@ import { pushModal } from '#modals/modalsSlice';
 import { useSkipNextPaycheckMutation } from '#paychecks';
 import { useDispatch } from '#redux';
 
+import { ClearingWarning, useClearingStatus } from './ClearingAccount';
+
 type PlannedDeposit = {
   id: string;
   account: AccountEntity['id'];
@@ -123,6 +125,7 @@ export function PaycheckRow({ paycheck, plan }: PaycheckRowProps) {
   const { data: accounts = [] } = useAccounts();
   const [isShowingMore, setIsShowingMore] = useState(false);
   const [isConfirmingSkip, setIsConfirmingSkip] = useState(false);
+  const clearing = useClearingStatus(paycheck.id);
 
   const formatDate = (date: string, pattern: string) =>
     monthUtils.format(date, pattern, locale);
@@ -189,6 +192,7 @@ export function PaycheckRow({ paycheck, plan }: PaycheckRowProps) {
           {t('Skipped: {{date}}', { date: formatDate(date, 'EEEE, MMMM d') })}
         </Text>
       ))}
+      {clearing?.isWarning && <ClearingWarning status={clearing} />}
       {isShowingMore && plan.later.map(renderPaycheck)}
       {next && (
         <View

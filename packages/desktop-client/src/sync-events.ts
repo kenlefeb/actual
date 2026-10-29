@@ -148,6 +148,16 @@ export function listenForSyncEvent(store: AppStore, queryClient: QueryClient) {
         });
       }
 
+      if (
+        ['paychecks', 'transactions', 'schedules', 'rules', 'accounts'].some(
+          table => tables.includes(table),
+        )
+      ) {
+        void queryClient.invalidateQueries({
+          queryKey: paycheckQueries.clearingStatus().queryKey,
+        });
+      }
+
       if (tables.includes('business_calendars')) {
         void queryClient.invalidateQueries({
           queryKey: businessCalendarQueries.lists(),

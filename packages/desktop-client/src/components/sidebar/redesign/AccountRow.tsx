@@ -15,6 +15,7 @@ import { css } from '@emotion/css';
 
 import { useReopenAccountMutation, useUpdateAccountMutation } from '#accounts';
 import { isAccountFailedSync } from '#accounts/syncStatus';
+import { ClearingAccountIcon } from '#components/schedules/ClearingAccount';
 import { useContextMenu } from '#hooks/useContextMenu';
 import { useUpdatedAccounts } from '#hooks/useUpdatedAccounts';
 import { openAccountCloseModal, pushModal } from '#modals/modalsSlice';
@@ -191,6 +192,7 @@ export function AccountRow({
               ) : (
                 <Text style={{ flex: 1, ...styles.ellipsisText }}>
                   {account.name}
+                  <ClearingAccountIcon accountId={account.id} />
                 </Text>
               )}
               <Text style={styles.visuallyHidden}>{statusLabel}</Text>

@@ -336,21 +336,24 @@ export function BusinessCalendarEditor({
             ›
           </Button>
         </View>
-        <View role="list" aria-label={t('Year preview')}>
-          {preview.length === 0 ? (
-            <Text style={{ color: theme.pageTextSubdued }}>
-              <Trans>No holidays or exceptions this year.</Trans>
-            </Text>
-          ) : (
-            preview.map(holiday => (
-              <Text role="listitem" key={`${holiday.date}-${holiday.name}`}>
+        {preview.length === 0 ? (
+          <Text style={{ color: theme.pageTextSubdued }}>
+            <Trans>No holidays or exceptions this year.</Trans>
+          </Text>
+        ) : (
+          <ul
+            aria-label={t('Year preview')}
+            style={{ listStyle: 'none', margin: 0, padding: 0 }}
+          >
+            {preview.map(holiday => (
+              <li key={`${holiday.date}-${holiday.name}`}>
                 {d.format(d.parseISO(holiday.date), 'PPPP', { locale })}
                 {' — '}
                 {holiday.name}
-              </Text>
-            ))
-          )}
-        </View>
+              </li>
+            ))}
+          </ul>
+        )}
       </View>
 
       <View

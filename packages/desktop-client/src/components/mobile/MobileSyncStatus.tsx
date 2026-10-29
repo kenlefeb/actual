@@ -1,7 +1,6 @@
 import { Trans, useTranslation } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
-import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
 
@@ -43,8 +42,7 @@ export function MobileSyncStatus() {
         backgroundColor: theme.mobilePageBackground,
       }}
     >
-      <Text
-        role="status"
+      <output
         aria-live="polite"
         style={{
           fontSize: 12,
@@ -52,7 +50,7 @@ export function MobileSyncStatus() {
         }}
       >
         {label}
-      </Text>
+      </output>
       {!local && (
         <Button
           variant="bare"

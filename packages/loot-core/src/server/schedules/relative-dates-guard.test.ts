@@ -24,6 +24,7 @@ import type {
 import {
   advanceSchedulesService,
   createSchedule,
+  loadScheduleDateLookup,
   app as schedulesApp,
   setNextDate,
 } from './app';
@@ -113,6 +114,8 @@ beforeEach(async () => {
   MockDate.set(new Date(2017, 0, 1, 12));
   // Keeps the schedules view's _date, _amount and _account columns current
   schedulesApp.startServices();
+  // As at budget load: keeps the schedule-date lookup in step with every write
+  await loadScheduleDateLookup();
 });
 
 afterEach(async () => {
@@ -427,4 +430,24 @@ it('never completes a schedule whose source still repeats', async () => {
   const schedule = await getSchedule(id);
   expect(schedule.completed).toBe(false);
   expect(schedule.next_date).toBe('2017-01-08');
+});
+
+it('reads source dates afresh before advancing schedules', async () => {
+  MockDate.set(new Date(2016, 11, 1, 12));
+  const { id } = await createRelative('days');
+  await setNextDate({ id });
+  const { _account } = await getSchedule(id);
+  await db.insertTransaction({
+    account: _account,
+    amount: -10000,
+    date: december,
+    schedule: id,
+  });
+  MockDate.set(new Date(2017, 0, 1, 12));
+  // A stale lookup, as before a sync's refresh lands: the source looks gone
+  setScheduleDates([]);
+
+  await advanceSchedulesService(true);
+
+  expect((await getSchedule(id)).completed).toBe(false);
 });

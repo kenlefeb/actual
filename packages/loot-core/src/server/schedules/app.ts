@@ -371,14 +371,13 @@ export async function loadScheduleDateLookup() {
 // Relative schedules take their dates from a source schedule, so recompute
 // their stored next dates after the source changes or is deleted. Runs inside
 // the caller's undoable mutation, so undo restores both.
-async function refreshRelativeDependents(sourceId: string) {
-  // The lookup still holds the source's previous date until the refresh
-  const wasRepeating = isRepeatingDate(getScheduleDate(sourceId));
+// Dependents completed after a one-time source passed reopen once the source
+// starts repeating; ones completed by hand stay completed otherwise.
+async function refreshRelativeDependents(
+  sourceId: string,
+  { startsRepeating = false } = {},
+) {
   await refreshScheduleDateLookup();
-  // Dependents completed after a one-time source passed reopen once it
-  // starts repeating; ones completed by hand stay completed otherwise
-  const startsRepeating =
-    !wasRepeating && isRepeatingDate(getScheduleDate(sourceId));
   for (const { id, completed } of await getRelativeDependents(sourceId, {
     includeCompleted: startsRepeating,
   })) {
@@ -530,6 +529,7 @@ export async function updateSchedule({
   }
   let rule;
   let isDateChanged = false;
+  let startsRepeating = false;
 
   // This must be outside the `batchMessages` call because we change
   // and then read data
@@ -574,10 +574,15 @@ export async function updateSchedule({
       // or date changed. We check account because we don't update
       // schedules automatically for closed account, and the user
       // might switch accounts from a closed one
+      const oldDate = oldConditions.find(c => c.field === 'date');
+      const newDate = newConditions.find(c => c.field === 'date');
       isDateChanged = !areConditionValuesEqual(
-        stripType(oldConditions.find(c => c.field === 'date') || {}),
-        stripType(newConditions.find(c => c.field === 'date') || {}),
+        stripType(oldDate || {}),
+        stripType(newDate || {}),
       );
+      // From the rule itself: sync listeners may have refreshed the lookup
+      startsRepeating =
+        !isRepeatingDate(oldDate?.value) && isRepeatingDate(newDate?.value);
       if (
         resetNextDate ||
         !areScheduleConditionsEqual(
@@ -602,7 +607,7 @@ export async function updateSchedule({
   // Relative schedules depend only on their source's dates, so other edits
   // keep their next dates (and any skips)
   if (isDateChanged) {
-    await refreshRelativeDependents(schedule.id);
+    await refreshRelativeDependents(schedule.id, { startsRepeating });
   }
   const postsTransaction =
     scheduleFields.posts_transaction ??

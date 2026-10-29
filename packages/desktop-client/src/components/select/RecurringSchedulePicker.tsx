@@ -15,7 +15,6 @@ import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
 import { sendCatch } from '@actual-app/core/platform/client/connection';
-import { setBusinessCalendars } from '@actual-app/core/shared/business-calendar-lookup';
 import * as monthUtils from '@actual-app/core/shared/months';
 import type { RecurConfig, RecurPattern } from '@actual-app/core/types/models';
 import type {
@@ -29,6 +28,7 @@ import { useBusinessCalendarLookup } from '#hooks/useBusinessCalendarLookup';
 import { useDateFormat } from '#hooks/useDateFormat';
 import { useFeatureFlag } from '#hooks/useFeatureFlag';
 import { useLocale } from '#hooks/useLocale';
+import { withScheduleLookups } from '#hooks/useScheduleDateLookup';
 import { getRecurringDescription } from '#util/schedule';
 
 import { DateSelect } from './DateSelect';
@@ -688,12 +688,14 @@ export function RecurringSchedulePicker({
     setIsOpen(false);
   }
 
-  const recurringDescription = useMemo(() => {
-    // The description names the chosen calendar, read through the shared
-    // lookup, so bring it up to date with what this render sees first
-    setBusinessCalendars(businessCalendars);
-    return getRecurringDescription(value, dateFormat, locale);
-  }, [locale, value, dateFormat, businessCalendars]);
+  // The description names the chosen calendar
+  const recurringDescription = useMemo(
+    () =>
+      withScheduleLookups({ calendars: businessCalendars }, () =>
+        getRecurringDescription(value, dateFormat, locale),
+      ),
+    [locale, value, dateFormat, businessCalendars],
+  );
 
   const tooltip = (
     <RecurringScheduleTooltip

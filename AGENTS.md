@@ -658,17 +658,27 @@ and say so in your reply instead of guessing.
 - Picking work: what a story's state lets you do.
   - Backlog: not defined well enough to start. It goes through Explore and
     Propose before a developer can begin. Don't start it or move it on
-    yourself; ask Ken to refine the backlog instead.
+    yourself; ask the Product Owner, through the Director, to refine it.
   - Explore: explore it with `/opsx:explore` and comment what you find. Write
-    no code.
+    no code. The Product Owner then moves it to Propose, Ready to Do or back
+    to Backlog; don't move it yourself.
   - Propose: write its OpenSpec change with `/opsx:propose`, then move the
     story to Ready to Do.
   - Ready to Do: ready, so start it without asking. Pick up only stories that
-    are not blocked and not labelled `ready-for-human`. A story that is only
-    waiting on a blocker stays in Ready to Do. It is marked blocked with
-    Shortcut's blocked flag or a `blocked` label, and linked to the blocking
-    story with a "blocks" relation.
-- Starting a story: assign yourself and move it to In Progress.
+    are not blocked (no open blocker and no `blocked` label) and not labelled
+    `ready-for-human`.
+  - No spec: a story whose Specs section says "none" (hosting, CI or docs
+    chores) skips Explore and Propose. It goes straight to Ready to Do once
+    it's well defined.
+- Blocked stories: a story that is only waiting on a blocker stays in Ready to
+  Do.
+  - The blocker is a story: add a "blocks" relation from that story. Shortcut
+    then sets the story's blocked flag; it can't be set by hand.
+  - The blocker isn't a story (such as Ken's approval or an upstream merge):
+    add the `blocked` label and a comment saying what the story waits on.
+- Starting a story: assign yourself and move it to In Progress. If the story
+  has no checklist tasks, add the template's tasks now. Don't backfill other
+  stories.
 - Checklist: every story follows the story template and checklist in
   `docs/agents/issue-tracker.md`. Complete each step's task when you finish it
   and set yourself as its owner, so the record shows who did it. Never complete

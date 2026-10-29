@@ -21,9 +21,11 @@ import type {
 
 import { FinancialText } from '#components/FinancialText';
 import { useAccounts } from '#hooks/useAccounts';
+import { useDateFormat } from '#hooks/useDateFormat';
 import { useFormat } from '#hooks/useFormat';
 import { useLocale } from '#hooks/useLocale';
 import { useNavigate } from '#hooks/useNavigate';
+import { useTouchTargetStyle } from '#hooks/useTouchTargetStyle';
 import { useUndo } from '#hooks/useUndo';
 import { pushModal } from '#modals/modalsSlice';
 import { useSkipNextPaycheckMutation } from '#paychecks';
@@ -165,6 +167,8 @@ export function PaycheckRow({ paycheck, plan }: PaycheckRowProps) {
   const openPaycheck = useOpenPaycheck();
   const format = useFormat();
   const locale = useLocale();
+  const dateFormat = useDateFormat() || 'MM/dd/yyyy';
+  const touchTarget = useTouchTargetStyle();
   const { showUndoNotification } = useUndo();
   const skipNext = useSkipNextPaycheckMutation();
   const { data: accounts = [] } = useAccounts();
@@ -240,7 +244,10 @@ export function PaycheckRow({ paycheck, plan }: PaycheckRowProps) {
           }}
         >
           {plan.later.length > 0 && (
-            <Button onPress={() => setIsShowingMore(!isShowingMore)}>
+            <Button
+              style={touchTarget}
+              onPress={() => setIsShowingMore(!isShowingMore)}
+            >
               {isShowingMore ? (
                 <Trans>Show less</Trans>
               ) : (
@@ -252,13 +259,17 @@ export function PaycheckRow({ paycheck, plan }: PaycheckRowProps) {
             <>
               <Text>
                 {t('Skip the paycheck on {{date}}?', {
-                  date: formatDate(next.date, 'MMMM d, yyyy'),
+                  date: monthUtils.format(next.date, dateFormat),
                 })}
               </Text>
-              <Button onPress={() => setIsConfirmingSkip(false)}>
+              <Button
+                style={touchTarget}
+                onPress={() => setIsConfirmingSkip(false)}
+              >
                 <Trans>Keep it</Trans>
               </Button>
               <Button
+                style={touchTarget}
                 onPress={() =>
                   skipNext.mutate(
                     { id: paycheck.id },
@@ -267,7 +278,7 @@ export function PaycheckRow({ paycheck, plan }: PaycheckRowProps) {
                         setIsConfirmingSkip(false);
                         showUndoNotification({
                           message: t('Skipped the paycheck on {{date}}.', {
-                            date: formatDate(next.date, 'MMMM d, yyyy'),
+                            date: monthUtils.format(next.date, dateFormat),
                           }),
                         });
                       },
@@ -279,7 +290,10 @@ export function PaycheckRow({ paycheck, plan }: PaycheckRowProps) {
               </Button>
             </>
           ) : (
-            <Button onPress={() => setIsConfirmingSkip(true)}>
+            <Button
+              style={touchTarget}
+              onPress={() => setIsConfirmingSkip(true)}
+            >
               <Trans>Skip next paycheck</Trans>
             </Button>
           )}

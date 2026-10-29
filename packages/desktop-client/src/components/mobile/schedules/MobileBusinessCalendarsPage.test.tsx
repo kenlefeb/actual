@@ -1,5 +1,6 @@
 import { MemoryRouter, Route, Routes } from 'react-router';
 
+import { theme } from '@actual-app/components/theme';
 import { businessCalendarPresets } from '@actual-app/core/shared/business-calendar-presets';
 import type { BusinessCalendarEntity } from '@actual-app/core/types/models';
 import { render, renderHook, screen, within } from '@testing-library/react';
@@ -257,6 +258,73 @@ describe('mobile business calendars', () => {
     action.payload.modal.options.onConfirm();
     expect(state.remove.mock.calls[0][0]).toBe('federal');
     expect(state.navigate).toHaveBeenCalledWith(-1);
+  });
+
+  it('separates saved calendars from ways to add one in labelled sections', () => {
+    renderAt('/business-calendars');
+    const yours = screen.getByRole('region', { name: 'Your calendars' });
+    const add = screen.getByRole('region', { name: 'Add a calendar' });
+
+    expect(
+      within(yours).getByRole('button', { name: 'U.S. Federal Holidays' }),
+    ).toBeInTheDocument();
+    expect(within(yours).queryByRole('button', { name: /preset|New/ })).toBe(
+      null,
+    );
+    // A blank calendar comes first, then the presets to copy
+    expect(within(add).getAllByRole('button')[0]).toHaveTextContent(
+      'New calendar',
+    );
+    expect(
+      within(add).getAllByRole('button', { name: /^Copy .* preset$/ }),
+    ).toHaveLength(businessCalendarPresets.length);
+    expect(
+      within(add).queryByRole('button', { name: 'U.S. Federal Holidays' }),
+    ).toBe(null);
+  });
+
+  it('gives every list control a touch-sized target', () => {
+    renderAt('/business-calendars');
+    for (const button of within(screen.getByRole('main')).getAllByRole(
+      'button',
+    )) {
+      expect(button).toHaveStyle({ minHeight: '40px' });
+    }
+  });
+
+  it('gives every editor control a touch-sized target', async () => {
+    renderAt('/business-calendars/federal');
+    // Show the Easter offset field too
+    await userEvent.click(
+      screen.getAllByRole('button', { name: 'Holiday rule type' })[0],
+    );
+    await userEvent.click(
+      within(screen.getByRole('menu')).getByText('Days from Easter'),
+    );
+    const main = within(screen.getByRole('main'));
+    const controls = [
+      ...main.getAllByRole('button'),
+      ...main.getAllByRole('textbox'),
+      ...main.getAllByRole('spinbutton'),
+      ...main.getAllByRole('checkbox').map(box => box.closest('label')),
+      screen.getByRole('button', { name: 'Save' }),
+    ];
+    expect(main.getByRole('button', { name: 'Previous year' })).toBeVisible();
+    for (const control of controls) {
+      expect(control).toHaveStyle({ minHeight: '40px', minWidth: '40px' });
+    }
+  });
+
+  it('keeps Save in a sticky footer and Delete in the page body, in red', () => {
+    renderAt('/business-calendars/federal');
+    const main = within(screen.getByRole('main'));
+    const save = screen.getByRole('button', { name: 'Save' });
+    // The footer sits outside the scrolling page body
+    expect(main.queryByRole('button', { name: 'Save' })).toBe(null);
+    expect(save).toHaveStyle({ width: '100%' });
+
+    const remove = main.getByRole('button', { name: 'Delete calendar' });
+    expect(remove).toHaveStyle({ color: theme.errorText });
   });
 
   it('returns to the list when the calendar does not exist', () => {

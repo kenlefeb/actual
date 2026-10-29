@@ -34,6 +34,9 @@ const authRateLimiter = rateLimit({
   legacyHeaders: false,
   standardHeaders: true,
   skipSuccessfulRequests: true,
+  // Fork-only: safe only because this server is tailnet-only, where devices
+  // can't rotate addresses. Revert if it's ever public (Funnel, public route).
+  ipv6Subnet: false,
   message: { status: 'error', reason: 'too-many-requests' },
 });
 

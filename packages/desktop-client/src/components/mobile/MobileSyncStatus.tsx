@@ -1,6 +1,7 @@
 import { Trans, useTranslation } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
+import { styles } from '@actual-app/components/styles';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
 
@@ -55,6 +56,10 @@ export function MobileSyncStatus() {
         <Button
           variant="bare"
           aria-label={t('Sync with server')}
+          style={{
+            minHeight: styles.mobileMinHeight,
+            minWidth: styles.mobileMinHeight,
+          }}
           isDisabled={isSyncing}
           onPress={() => {
             void dispatch(sync());

@@ -40,6 +40,8 @@ export function BusinessCalendarEditor({
   const [draft, setDraft] = useState(calendar);
   const [weekdayError, setWeekdayError] = useState<string | null>(null);
   const [year, setYear] = useState(() => new Date().getFullYear());
+  // Ids of Easter rules whose offset field holds text that was not saved
+  const [invalidOffsets, setInvalidOffsets] = useState<string[]>([]);
 
   const weekdayName = (weekday: Weekday) =>
     d.format(new Date(2024, 0, 7 + weekday), 'EEEE', { locale });
@@ -89,6 +91,7 @@ export function BusinessCalendarEditor({
   function changeKind(index: number, kind: HolidayRule['kind']) {
     const rule = draft.holidays[index];
     const { id, name, observance } = rule;
+    setInvalidOffsets(invalidOffsets.filter(i => i !== id));
     const base = {
       id,
       name,
@@ -244,15 +247,27 @@ export function BusinessCalendarEditor({
                 // Uncontrolled so a lone "-" can be typed before the digits
                 defaultValue={String(rule.offset)}
                 onChangeValue={offset => {
+                  const others = invalidOffsets.filter(i => i !== rule.id);
                   if (
                     /^-?\d+$/.test(offset) &&
                     Math.abs(Number(offset)) <= 100
                   ) {
+                    setInvalidOffsets(others);
                     updateHoliday(index, { ...rule, offset: Number(offset) });
+                  } else {
+                    setInvalidOffsets([...others, rule.id]);
                   }
                 }}
                 style={{ width: 70 }}
               />
+            )}
+            {rule.kind === 'easter' && invalidOffsets.includes(rule.id) && (
+              <Text
+                role="alert"
+                style={{ color: theme.errorText, width: '100%' }}
+              >
+                <Trans>Enter a whole number of days from -100 to 100.</Trans>
+              </Text>
             )}
             {rule.kind === 'fixed' && (
               <Input
@@ -393,7 +408,13 @@ export function BusinessCalendarEditor({
         <Button onPress={() => onDelete(calendar.id)}>
           <Trans>Delete calendar</Trans>
         </Button>
-        <Button variant="primary" onPress={() => onSave(draft)}>
+        <Button
+          variant="primary"
+          isDisabled={draft.holidays.some(
+            h => h.kind === 'easter' && invalidOffsets.includes(h.id),
+          )}
+          onPress={() => onSave(draft)}
+        >
           <Trans>Save</Trans>
         </Button>
       </View>

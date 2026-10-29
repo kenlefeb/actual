@@ -159,7 +159,16 @@ describe('business calendars app', () => {
 
     it('rejects unknown holiday kinds and unnamed holidays', async () => {
       await expect(
-        create({ holidays: [{ ...july4, kind: 'pentecost' }] }),
+        create({
+          holidays: [
+            {
+              id: 'p',
+              name: 'Pentecost',
+              kind: 'pentecost',
+              observance: 'none',
+            },
+          ],
+        }),
       ).rejects.toThrow(/Unknown holiday kind/);
       await expect(
         create({ holidays: [{ ...july4, name: '' }] }),

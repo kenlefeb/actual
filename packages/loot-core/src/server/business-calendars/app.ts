@@ -179,6 +179,9 @@ function validateHoliday(rule: HolidayRule) {
     }
     return;
   }
+  if (!['fixed', 'nth-weekday', 'last-weekday'].includes(rule.kind)) {
+    throw new Error('Unknown holiday kind');
+  }
   if (!Number.isInteger(rule.month) || rule.month < 1 || rule.month > 12) {
     throw new Error(`Invalid month for holiday "${rule.name}"`);
   }

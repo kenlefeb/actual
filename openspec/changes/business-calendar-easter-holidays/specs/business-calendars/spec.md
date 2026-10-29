@@ -45,3 +45,7 @@ The desktop calendar editor SHALL let users choose the Easter-relative kind for 
 #### Scenario: Add Good Friday
 - **WHEN** a user changes a holiday rule to "Days from Easter" with offset -2 and previews 2026
 - **THEN** the preview lists Friday, April 3, 2026 with the rule's name, and saving stores the rule with kind `easter` and offset -2
+
+#### Scenario: Invalid offset in the editor
+- **WHEN** a user enters 150 as the days from Easter
+- **THEN** the field keeps showing 150, the editor explains that a whole number from -100 to 100 is needed, and the calendar cannot be saved until it is corrected

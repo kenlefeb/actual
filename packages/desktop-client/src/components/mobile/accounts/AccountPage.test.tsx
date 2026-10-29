@@ -82,7 +82,9 @@ describe('AccountPage', () => {
     const title = screen.getByRole('button', {
       name: 'Acme Paycheck Clearing Account',
     });
-    expect(heading).toHaveStyle({ minWidth: '0px', overflow: 'hidden' });
+    expect(heading).toHaveStyle({ minWidth: '0px' });
+    // Clipping the heading itself would cut wider titles, like the month picker
+    expect(heading).not.toHaveStyle({ overflow: 'hidden' });
     // The button may shrink below its text, so the text can be cut
     expect(title).toHaveStyle({ minWidth: '0px', flexShrink: '1' });
     expect(title.querySelector('span') ?? title).toHaveStyle({

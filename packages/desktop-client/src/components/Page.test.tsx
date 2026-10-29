@@ -16,7 +16,9 @@ describe('MobilePageHeader', () => {
 
     // The heading keeps the full title as its accessible name
     const heading = screen.getByRole('heading', { name: title });
-    expect(heading).toHaveStyle({ minWidth: '0px', overflow: 'hidden' });
+    expect(heading).toHaveStyle({ minWidth: '0px' });
+    // Clipping the heading itself would cut wider titles, like the month picker
+    expect(heading).not.toHaveStyle({ overflow: 'hidden' });
     expect(screen.getByText(title)).toHaveStyle({
       overflow: 'hidden',
       textOverflow: 'ellipsis',

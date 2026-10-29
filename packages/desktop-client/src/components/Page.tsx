@@ -90,9 +90,9 @@ export function MobilePageHeader({
           flexBasis: '50%',
           fontSize: 17,
           fontWeight: 500,
-          // Lets a long title shrink to its share of the header and clip
+          // Lets a long title shrink to its share of the header; the title's
+          // own text clips with an ellipsis, so wider controls aren't cut
           minWidth: 0,
-          overflow: 'hidden',
           display: 'flex',
           margin: 0,
           padding: 0,

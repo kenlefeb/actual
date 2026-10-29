@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
+import { useResponsive } from '@actual-app/components/hooks/useResponsive';
 import { Input } from '@actual-app/components/input';
 import { Select } from '@actual-app/components/select';
+import { styles } from '@actual-app/components/styles';
 import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
@@ -28,6 +30,9 @@ export function AccountBusinessDaysModal({
   accountId,
 }: AccountBusinessDaysModalProps) {
   const { t } = useTranslation();
+  const { isNarrowWidth } = useResponsive();
+  // At narrow width every control is at least a touch target tall.
+  const touchStyle = isNarrowWidth ? { minHeight: styles.mobileMinHeight } : {};
   const account = useAccount(accountId);
   const { data: calendars = [] } = useBusinessCalendars();
   const setBusinessDays = useSetAccountBusinessDaysMutation();
@@ -49,7 +54,7 @@ export function AccountBusinessDaysModal({
     calendarId !== '' && !calendars.some(c => c.id === calendarId);
 
   return (
-    <Modal name="account-business-days">
+    <Modal name="account-business-days" presentation="sheet">
       {({ state }) => (
         <>
           <ModalHeader
@@ -62,7 +67,7 @@ export function AccountBusinessDaysModal({
             }
             rightContent={<ModalCloseButton onPress={() => state.close()} />}
           />
-          <View style={{ gap: 12, width: 420 }}>
+          <View style={{ gap: 12, width: '100%', maxWidth: 420 }}>
             <View style={{ gap: 5 }}>
               <label htmlFor="account-business-calendar">
                 <Trans>Business calendar</Trans>
@@ -78,6 +83,7 @@ export function AccountBusinessDaysModal({
                 ]}
                 value={calendarId}
                 onChange={setCalendarId}
+                style={touchStyle}
               />
               {isCalendarMissing && (
                 <Text role="note" style={{ color: theme.warningText }}>
@@ -103,11 +109,14 @@ export function AccountBusinessDaysModal({
                 step={1}
                 value={daysEarly}
                 onChangeValue={setDaysEarly}
-                style={{ width: 80 }}
+                style={{ width: 80, ...touchStyle }}
               />
               {!isDaysValid && (
                 <Text role="alert" style={{ color: theme.errorText }}>
-                  <Trans>The number must be a whole number from 0 to 10.</Trans>
+                  <Trans>
+                    The number must be a whole number from 0 to{' '}
+                    {{ max: MAX_DEPOSIT_DAYS_EARLY }}.
+                  </Trans>
                 </Text>
               )}
             </View>
@@ -119,11 +128,12 @@ export function AccountBusinessDaysModal({
                 gap: 10,
               }}
             >
-              <Button onPress={() => state.close()}>
+              <Button style={touchStyle} onPress={() => state.close()}>
                 <Trans>Cancel</Trans>
               </Button>
               <Button
                 variant="primary"
+                style={touchStyle}
                 isDisabled={!isDaysValid}
                 onPress={() =>
                   setBusinessDays.mutate(

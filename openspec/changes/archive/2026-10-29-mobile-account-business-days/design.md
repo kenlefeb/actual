@@ -21,7 +21,7 @@ See proposal.md and specs/account-business-days/spec.md.
 ## Decisions
 
 ### Add a row to the mobile account menu sheet, through a callback
-The `account-menu` modal options gain an optional `onEditBusinessDays: (accountId) => void`, like `onEditNotes`. `AccountHeader` in `mobile/accounts/AccountPage.tsx` passes a callback that pushes the existing `account-business-days` modal with `{ accountId }`, as the desktop handler in `Account.tsx` does. `AccountMenuModal` shows a "Business days" `MobileSheetRow` after "Reconcile" when `useFeatureFlag('businessCalendars')` is on and the callback is given, and calls it on tap.
+The `account-menu` modal options gain an optional `onEditBusinessDays: (accountId) => void`, like `onEditNotes`. `AccountHeader` in `mobile/accounts/AccountPage.tsx` passes a callback that pushes the existing `account-business-days` modal with `{ accountId }`, as the desktop handler in `Account.tsx` does. `AccountMenuModal` shows a "Business days" `MobileSheetRow` after "Reconcile", with the other non-destructive rows and above "Close account", when `useFeatureFlag('businessCalendars')` is on and the callback is given, and calls it on tap.
 
 - Why a callback: it matches the sibling rows ("Edit notes", "Reconcile", "Close account"), which all open things through callbacks from `AccountPage`. It costs one option and one callback.
 - Alternative: the sheet pushes the modal itself, since the modal needs only the account id. Rejected for consistency with the sibling rows.
@@ -30,10 +30,16 @@ The `account-menu` modal options gain an optional `onEditBusinessDays: (accountI
 ### Reuse the desktop dialog
 The row opens `AccountBusinessDaysModal`, not a new mobile page. The dialog has two fields and a Save button, so it fits a phone once its width is fixed. This keeps one implementation of the days validation, the "Missing calendar" note and the save call. Saving closes the dialog and leaves the account menu sheet open underneath, as "Edit notes" does.
 
+### Open the dialog as a sheet on narrow layouts
+`AccountBusinessDaysModal` passes `presentation="sheet"` to `Modal`. `Modal` uses the sheet only when `isNarrowWidth` is true (`common/Modal.tsx`), so a phone gets a bottom sheet like the account menu it came from, and desktop keeps the centred dialog. This is the same switch `MobileSheet` uses, and it is one prop.
+
 - Alternative: a full mobile page like the paycheck editor (sc-60). Rejected for now: it would duplicate the validation for two fields.
 
 ### Make the dialog width responsive
-Change the content `View` from `width: 420` to `width: '100%', maxWidth: 420`. On desktop the modal container is at least `breakpoint_small` wide, so the content stays 420px and the desktop dialog looks the same. On a phone it fills the container. No other desktop change.
+Change the content `View` from `width: 420` to `width: '100%', maxWidth: 420`. On desktop the modal container is at least `breakpoint_small` wide, so the content stays 420px and the desktop dialog looks the same. On a phone it fills the sheet.
+
+### Touch-sized controls and the days limit
+At narrow width the calendar `Select`, the days `Input` and the Cancel and Save buttons get `minHeight: styles.mobileMinHeight` (40px). Desktop sizes are unchanged. The validation message interpolates `MAX_DEPOSIT_DAYS_EARLY` instead of hard-coding "10", so it cannot drift from the limit the input and the check use. The shown text is unchanged.
 
 ### Feature flag
 Only the row is gated, as on desktop. The modal itself is not reachable from mobile without the row.
@@ -44,11 +50,12 @@ Decided by the Product Owner in the PR #60 review:
 
 - **Entry point:** the account menu sheet (tap the account name), as a "Business days" row after Reconcile. No new control on the account page.
 - **Dialog:** the desktop dialog is reused at phone width; no full mobile page. If the number input proves awkward on a phone, that becomes its own story.
+- **Presentation (Director ruling, with the PO's agreement):** at narrow width the same dialog opens with the sheet presentation, matching the account menu sheet, instead of a centred dialog. At narrow width its controls are at least 40px tall.
 - **Tests:** component tests only, no Playwright e2e. The phone-width fit is checked only by the manual narrow-viewport step (task 3.2), because component tests run in jsdom, which does no layout.
 - **Release notes:** no upstream release note, following the `business-calendars` precedent. The fork release that ships this still needs its release note and fork-news entry.
 
 ## Risks / Trade-offs
 
-- [The number input is small on a phone] → It keeps the desktop 80px width. If that proves awkward, a larger mobile input is its own story and changes no behavior.
+- [The number input is narrow on a phone] → It keeps the desktop 80px width, now 40px tall. If that proves awkward, a larger mobile input is its own story and changes no behavior. Not planned until someone reports it.
 - [No automated check of the phone-width fit] → jsdom does no layout, so only the manual step 3.2 verifies that the dialog fits a phone.
 - [Undo on mobile] → The handler stays `undoable`, but phones have no undo shortcut. Users change the value again instead, as with other mobile account settings.

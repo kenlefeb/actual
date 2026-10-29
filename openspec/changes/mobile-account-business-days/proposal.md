@@ -24,5 +24,5 @@ None.
 
 ## Impact
 
-- Code: `packages/desktop-client` only: the mobile account menu sheet (`components/modals/AccountMenuModal.tsx`) and the width of `components/modals/AccountBusinessDaysModal/`. The `account-set-business-days` server handler and `useSetAccountBusinessDaysMutation` are reused unchanged.
+- Code: `packages/desktop-client` only: the mobile account menu sheet (`components/modals/AccountMenuModal.tsx`), its `account-menu` modal options (`modals/modalsSlice.ts`), the mobile account page that opens it (`components/mobile/accounts/AccountPage.tsx`), and the width of `components/modals/AccountBusinessDaysModal/`. The `account-set-business-days` server handler and `useSetAccountBusinessDaysMutation` are reused unchanged.
 - Data: none.

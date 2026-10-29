@@ -14,10 +14,12 @@ import { Search } from '#components/common/Search';
 import { FeatureErrorFallback } from '#components/FeatureErrorFallback';
 import { Page } from '#components/Page';
 import { useFeatureFlag } from '#hooks/useFeatureFlag';
+import { usePaycheckMembership } from '#hooks/usePaycheckMembership';
 import { useSchedules } from '#hooks/useSchedules';
 import { pushModal } from '#modals/modalsSlice';
 import { useDispatch } from '#redux';
 
+import { PaychecksSection } from './PaychecksSection';
 import { SchedulesTable } from './SchedulesTable';
 import type { ScheduleItemAction } from './SchedulesTable';
 
@@ -90,10 +92,16 @@ export function Schedules() {
     schedules,
     statuses,
   } = useSchedules({ query: schedulesQuery });
+  // A paycheck's schedules are reached from its row and editor instead
+  const { scheduleIds: paycheckScheduleIds } = usePaycheckMembership();
+  const listedSchedules = paychecksEnabled
+    ? schedules.filter(s => !paycheckScheduleIds.has(s.id))
+    : schedules;
 
   return (
     <ErrorBoundary FallbackComponent={FeatureErrorFallback}>
       <Page header={t('Schedules')}>
+        {paychecksEnabled && <PaychecksSection />}
         <View
           style={{
             flexDirection: 'row',
@@ -118,7 +126,7 @@ export function Schedules() {
 
         <SchedulesTable
           isLoading={isSchedulesLoading}
-          schedules={schedules}
+          schedules={listedSchedules}
           filter={filter}
           statuses={statuses}
           allowCompleted
@@ -159,19 +167,6 @@ export function Schedules() {
             )}
           </View>
           <View style={{ flexDirection: 'row', gap: '1em' }}>
-            {paychecksEnabled && !isNarrowWidth && (
-              <Button
-                onPress={() =>
-                  dispatch(
-                    pushModal({
-                      modal: { name: 'paycheck-edit', options: {} },
-                    }),
-                  )
-                }
-              >
-                <Trans>Add paycheck</Trans>
-              </Button>
-            )}
             <Button variant="primary" onPress={onAdd}>
               <Trans>Add new schedule</Trans>
             </Button>

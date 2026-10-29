@@ -17,10 +17,14 @@ const state = vi.hoisted(() => ({
   saveAsync: vi.fn(),
   mutate: vi.fn(),
   navigate: vi.fn(),
+  isNarrowWidth: true,
 }));
 
 vi.mock('@actual-app/components/hooks/useResponsive', () => ({
-  useResponsive: () => ({ isNarrowWidth: true, isWideWidth: false }),
+  useResponsive: () => ({
+    isNarrowWidth: state.isNarrowWidth,
+    isWideWidth: !state.isNarrowWidth,
+  }),
 }));
 
 vi.mock('#hooks/useNavigate', () => ({ useNavigate: () => state.navigate }));
@@ -142,6 +146,7 @@ describe('MobilePaycheckPage', () => {
     state.paychecks = [];
     state.saveAsync.mockReset().mockResolvedValue(undefined);
     state.navigate.mockReset();
+    state.isNarrowWidth = true;
   });
 
   it('sets up a paycheck on a phone with the same save as desktop', async () => {
@@ -278,6 +283,21 @@ describe('MobilePaycheckPage', () => {
         flexShrink: '0',
       });
     }
+  });
+
+  it('lets the amount fields stretch on desktop as before', async () => {
+    const user = userEvent.setup();
+    state.isNarrowWidth = false;
+    state.paychecks = [acme];
+    render(
+      <TestProviders>
+        <PaycheckEditModal paycheckId="acme" />
+      </TestProviders>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Add deduction' }));
+    const amount = screen.getByLabelText('Deduction 2 amount').parentElement;
+    expect(amount).toHaveStyle({ width: '110px' });
+    expect(amount).not.toHaveStyle({ flexGrow: '0' });
   });
 
   it('sets Delete paycheck apart as a destructive action', () => {

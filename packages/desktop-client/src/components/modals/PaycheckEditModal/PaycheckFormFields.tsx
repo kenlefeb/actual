@@ -204,7 +204,11 @@ export function PaycheckDeductionFields({ form }: FormProps) {
             value={deduction.amount}
             sign="+"
             onUpdate={amount => updateDeduction(deduction.id, { amount })}
-            style={{ width: 110, flex: 'none' }}
+            style={{
+              width: 110,
+              // On a phone it keeps 110px; on desktop it stretches as before
+              ...(touch.minWidth && { flex: 'none' }),
+            }}
             inputStyle={touch}
           />
           <Select
@@ -350,7 +354,11 @@ export function PaycheckDepositFields({ form }: FormProps) {
                 value={deposit.value}
                 sign="+"
                 onUpdate={value => updateDeposit(deposit.id, { value })}
-                style={{ width: 110, flex: 'none' }}
+                style={{
+                  width: 110,
+                  // On a phone it keeps 110px; on desktop it stretches as before
+                  ...(touch.minWidth && { flex: 'none' }),
+                }}
                 inputStyle={touch}
               />
             )}

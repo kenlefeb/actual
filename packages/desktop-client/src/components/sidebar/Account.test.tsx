@@ -15,6 +15,7 @@ import {
   createTestQueryClient,
   TestProviders,
 } from '#mocks';
+import { mergeSyncedPrefs } from '#prefs/prefsSlice';
 import * as bindings from '#spreadsheet/bindings';
 
 import { Account } from './Account';
@@ -138,6 +139,8 @@ describe('sidebar Account context menu', () => {
 
   it('marks a paycheck clearing account with a paycheck icon', async () => {
     const account = { ...generateAccount('Acme Paycheck'), id: 'clearing' };
+    // Paychecks count as on only while business calendars are on
+    store.dispatch(mergeSyncedPrefs({ 'flags.businessCalendars': 'true' }));
 
     await renderRow(
       <Account

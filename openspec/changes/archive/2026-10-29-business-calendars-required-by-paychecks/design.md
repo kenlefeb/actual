@@ -30,7 +30,7 @@ export const FEATURE_FLAG_REQUIRES: Partial<Record<FeatureFlag, FeatureFlag[]>> 
   paychecks: ['businessCalendars'],
 };
 ```
-For defaults, an unset flag may default to "on when its requirements are on" instead of a boolean: `paychecks: 'withRequirements'` in `DEFAULT_FEATURE_FLAG_STATE`. That's declared data, not a branch.
+For the unset default, `paychecks` defaults to `true` in `DEFAULT_FEATURE_FLAG_STATE`. Because a flag counts as on only while its requirements are on, an unset `paychecks` is on exactly when `businessCalendars` is on. That's declared data, not a branch. (The proposal planned a separate `'withRequirements'` default value; implementation showed it behaves identically to `true` under the requirement rule, so it was dropped.)
 - Alternative: a `requires` field in `types/prefs.ts` (loot-core). Rejected because flags gate only the UI (ADR 6), so the map belongs with the client's flag defaults. loot-core keeps only the flag names.
 
 ### `useFeatureFlag` applies the map generically
@@ -42,22 +42,22 @@ Turning a flag on also writes `'true'` for each flag it requires. Turning a flag
 - Writing `'false'` to `flags.paychecks`, rather than leaving it unset, keeps the user's choice when calendars are turned back on, so paychecks don't reappear by themselves.
 
 ### The paycheck lock lives on the Business calendars row in the feature list
-`ExperimentalFeatures` renders `<FeatureToggle flag="businessCalendars" disableToggle={isLocked} error={…note…}>`, where `isLocked = businessCalendarsEnabled && paychecks.length > 0`, using `usePaychecks()`. The note uses the existing `error` slot, which shows only while the toggle is disabled: "Paychecks use business calendars. Delete your paychecks to turn this off."
+`ExperimentalFeatures` renders `<FeatureToggle flag="businessCalendars" disableToggle={isLocked} disabledReason={…}>`, where `isLocked = businessCalendarsEnabled && paychecks.length > 0`, using `usePaychecks()`. `disabledReason` is a new, generic `FeatureToggle` prop. It shows only while the toggle is disabled, in the row's neutral description style: "Paychecks use business calendars. Delete your paychecks to turn this off."
 - The feature list is where feature-specific row props already live (deprecation notes, the plugins row's `disableToggle`), so the generic component stays free of paycheck code.
 - The lock applies only while calendars are on, so a budget left with calendars off can still turn them on.
 - Alternative: a generic "locked while in use" hook declared in the map. Rejected for now because there's one case, and the data query would come back into generic code.
-- Style: the `error` slot renders in `errorText`. If the Product Owner prefers a neutral tone, add an optional style to the row's details, without changing the behaviour.
+- Style: neutral, as the Product Owner decided, not the `error` slot's `errorText` or the `note` slot's `warningText`.
 
 ### Unset `paychecks` defaults with its requirement only
 The "a paycheck exists" default is dropped (Product decisions 1). An unset flag counts as on exactly when `businessCalendars` is on. This keeps "Existing paychecks stay visible on upgrade", whose budget has calendars on. It also matches what users saw before the flag: paychecks were hidden whenever calendars were off.
 
 ## Product decisions
 
-For the Product Owner to confirm (recommendations given):
+Decided by the Product Owner in the PR #73 review (https://github.com/kenlefeb/actual/pull/73#issuecomment-6508683310):
 
-1. **Unset `paychecks` with a paycheck but calendars off:** recommendation: it counts as off ("Upgrade with business calendars off"). Today it counts as on, which is exactly the contradictory state this story removes, and the release before the flag hid paychecks in that state. Turning Paychecks on brings everything back. ADR 6 (`docs/adr/0006-feature-flag-policy.md`) still states the old default ("an unset `paychecks` flag counts as on when the budget already has a paycheck"). If this is accepted, task 3.2 updates that bullet and its "What the code does today" section.
-2. **Lock note wording and tone:** "Paychecks use business calendars. Delete your paychecks to turn this off." shown in the row's error style. Recommendation: keep the story's wording, and accept the error style or ask for a neutral one.
-3. **Synced devices:** the lock is checked on the device whose Settings are open. If another device creates a paycheck while this one turns calendars off, both flags end up off and the paycheck is hidden but kept. Recommendation: accept, since no data is lost and turning Paychecks on restores it.
+1. **Unset `paychecks` with a paycheck but calendars off counts as off** ("Upgrade with business calendars off"). ADR 6 is updated to match (task 3.2). The fork release that ships this carries one plain sentence in its release note: "If your budget has paychecks but business calendars are turned off, Paychecks now starts off too. Turn on Paychecks in Settings > Experimental to see them again."
+2. **Lock note:** the story's wording, "Paychecks use business calendars. Delete your paychecks to turn this off.", in the neutral note style.
+3. **Synced devices:** the race is accepted. If another device creates a paycheck while this one turns calendars off, both flags end up off and the paycheck is hidden but kept.
 
 ## Risks / Trade-offs
 

@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "id": "fork-release-26.10.1-alpha.17",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.17 — Ken's Actual fork",
+      "date": "2026-10-29",
+      "version": "26.10.1-alpha.17",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.17.md",
+      "body": "**Unofficial fork prerelease.** Based on upstream Actual `master` at `21c2b3f703142f858af4c653a31e675ca5ff85d7` (October 26, 2026), which comes after 26.10.0 and is not itself an upstream release; not an official Actual Budget release.\n\nThis release brings in four weeks of upstream Actual changes made after 26.10.0, including security fixes for bank sync credentials. A new pay schedule no longer counts older paychecks linked to it, so its skipped paydays show again.",
+      "details": "#### Features\n\n- From upstream: choose which pages appear in the sidebar, their order and the page Actual opens on; sync linked bank accounts automatically at a chosen interval; group custom reports by tags; investment phases for Monte Carlo pots; the Porcelain theme; and South African Rand in the currency picker.\n\n#### Enhancements\n\n- The API's schedule dates (`getScheduleDates`) also work for a date relative to another schedule.\n- From upstream: 32 enhancements, including a richer result from the API's `runBankSync`. The Experimental settings use upstream's new layout; the Business calendars and Paychecks settings are unchanged.\n\n#### Bugfixes\n\n- A new or re-dated pay schedule no longer counts older paychecks linked to it, so its first skipped paydays show as \"Skipped\".\n- From upstream: 73 bug fixes, including keeping sign-in and bank connection credentials out of server request logs, preventing bank sync credentials from being reused after a budget is deleted, not leaving a budget file half-written when saving fails, and posting a schedule created or edited later on the day it is due.\n\n#### Maintenance\n\n- From upstream: dependency updates, Node.js 24.22.1 and stricter React Compiler lint rules. Three fork hooks were reworked to follow those rules.\n- Tests cover relative dates in the API's schedule dates, and paychecks with history from before their pay schedule started.\n\n#### Known limitations\n\n- Experimental.\n- Upstream changes made after 26.10.0 have not yet been through an upstream release.\n- \"Upcoming dates\" in schedule and paycheck editors does not reflect skipped dates.\n- Each deposit must go to a different account, and every paycheck repeats its defined amounts; edit a posted transaction for a one-off change.\n- Imported deposits more than about 7.5% from the expected amount do not link automatically.\n- A duplicate of the latest paycheck (for example, imported twice) can hide the next skipped date.\n- The mobile business calendar editor uses the desktop editor's layout.\n- Releases published on the same day may show the \"What's new\" message for any of them; the Notifications page lists all.\n- Synthetic staging only; no real financial data or production paperwork migration. No iPhone acceptance test is claimed."
+    },
+    {
       "id": "fork-release-26.10.1-alpha.16",
       "type": "release",
       "title": "Release 26.10.1-alpha.16 — Ken's Actual fork",

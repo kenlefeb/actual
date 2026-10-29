@@ -152,7 +152,7 @@ describe.each(cases)(
       );
     });
 
-    it('posts a missed occurrence on its computed date', async () => {
+    it('posts a missed occurrence on its computed date and moves on', async () => {
       // setNextDate reads the clock, so on Dec 1 it computes the December
       // occurrence. Set the clock first: sync timestamps must only move forward.
       MockDate.set(new Date(2016, 11, 1, 12));
@@ -172,6 +172,26 @@ describe.each(cases)(
           t.amount,
         ]),
       ).toEqual([[december, -10000]]);
+      expect((await getSchedule(id)).next_date).toBe(dates[0]);
+    });
+
+    it('moves on once a past occurrence is paid', async () => {
+      MockDate.set(new Date(2016, 11, 1, 12));
+      const { id } = await createRelative(unit);
+      await setNextDate({ id });
+      const { _account, next_date } = await getSchedule(id);
+      expect(next_date).toBe(december);
+      await db.insertTransaction({
+        account: _account,
+        amount: -10000,
+        date: december,
+        schedule: id,
+      });
+      MockDate.set(new Date(2017, 0, 1, 12));
+
+      await advanceSchedulesService(true);
+
+      expect((await getSchedule(id)).next_date).toBe(dates[0]);
     });
 
     it('forecasts the computed dates', async () => {
@@ -209,3 +229,62 @@ describe.each(cases)(
     });
   },
 );
+
+it('budgets every occurrence of a weekly source in a goal template', async () => {
+  // Fridays; one day after lands on the four Saturdays of February 2017
+  const weekly = {
+    ...paydayDate,
+    start: '2016-12-02',
+    frequency: 'weekly' as const,
+  };
+  const accountId = await db.insertAccount({
+    name: 'Checking',
+    offbudget: 0,
+    closed: 0,
+  });
+  const source = await createSchedule({
+    schedule: { name: 'Weekly' },
+    conditions: [{ op: 'isapprox', field: 'date', value: weekly }],
+  });
+  const id = await createSchedule({
+    schedule: { name: 'After weekly' },
+    conditions: [
+      { op: 'is', field: 'account', value: accountId },
+      { op: 'is', field: 'amount', value: -10000 },
+      {
+        op: 'isapprox',
+        field: 'date',
+        value: {
+          relativeTo: {
+            scheduleId: source,
+            offset: 1,
+            unit: 'days',
+            direction: 'after',
+          },
+        },
+      },
+    ],
+  });
+
+  const february = await runSchedule(
+    [
+      {
+        type: 'schedule',
+        name: 'After weekly',
+        scheduleId: id,
+        priority: 0,
+        directive: 'template',
+      },
+    ],
+    '2017-02-01',
+    0,
+    0,
+    0,
+    0,
+    [],
+    { id: 'cat', name: 'Deposits' } as CategoryEntity,
+    currencies[0],
+  );
+  expect(february.errors).toEqual([]);
+  expect(february.to_budget).toBe(40000);
+});

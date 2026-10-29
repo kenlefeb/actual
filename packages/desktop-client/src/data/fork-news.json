@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "id": "fork-release-26.10.1-alpha.14",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.14 — Ken's Actual fork",
+      "date": "2026-10-28",
+      "version": "26.10.1-alpha.14",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.14.md",
+      "body": "**Unofficial fork prerelease.** Based on Actual 26.10.0 (`2bebdbaae0b701120a8cad9d56aafd64fa04c577`); not an official Actual Budget release.\n\nPaychecks get their own experimental setting, and the paycheck editor shows year-to-date totals and lets you change how early deposits arrive.",
+      "details": "#### Features\n\n- The paycheck editor shows a year-to-date summary for this year and last: gross pay, each deduction and net pay, from posted transactions.\n\n#### Enhancements\n\n- Paychecks have their own \"Paychecks\" experimental setting. Turning it on also turns on business calendars. Budgets that already use business calendars or have a paycheck keep paychecks on.\n- Each deposit's business days early can be changed in the paycheck editor. The change applies to every paycheck that deposits to that account, and the editor says so.\n\n#### Bugfixes\n\n- No new fork bugfixes in this release; earlier fixes are retained.\n\n#### Maintenance\n\n- Tests cover the new setting, the days-early field and the year-to-date totals.\n\n#### Known limitations\n\n- Experimental; the paycheck editor is desktop only.\n- \"Upcoming dates\" in schedule and paycheck editors does not reflect skipped dates.\n- Each deposit must go to a different account, and every paycheck repeats its defined amounts; edit a posted transaction for a one-off change.\n- Imported deposits more than about 7.5% from the expected amount do not link automatically.\n- Releases published on the same day may show the \"What's new\" message for any of them; the Notifications page lists all.\n- Synthetic staging only; no real financial data or production paperwork migration. No iPhone acceptance test is claimed."
+    },
+    {
       "id": "fork-release-26.10.1-alpha.13",
       "type": "release",
       "title": "Release 26.10.1-alpha.13 — Ken's Actual fork",

@@ -3,7 +3,7 @@
 ## ADDED Requirements
 
 ### Requirement: Edits on two devices
-A paycheck's generated schedules SHALL be exactly the ones its definition lists. After every successful sync, before it posts any scheduled transaction, the app SHALL delete each generated schedule that no live definition lists, and SHALL restore each schedule a live definition lists that is missing or deleted. The same check SHALL run when the budget opens and when the paycheck is saved.
+While the paychecks feature is on, a paycheck's generated schedules SHALL be exactly the ones its definition lists. After every successful sync, before it posts any scheduled transaction, the app SHALL delete each generated schedule that no live definition lists, and SHALL restore each schedule a live definition lists that is missing or deleted. The same check SHALL run when the budget opens, when the paycheck is saved and when the feature is turned on.
 
 #### Scenario: Both devices add a deposit
 - **GIVEN** the "Acme" paycheck deposits to "Savings" and "Checking"
@@ -49,3 +49,21 @@ Deleting a schedule left behind by edits on two devices SHALL keep the transacti
 - **GIVEN** the user created a "Gym" schedule dated 1 business day after the "Acme" pay schedule
 - **WHEN** a sync brings in any edit of "Acme"
 - **THEN** "Gym" is kept
+
+### Requirement: No Delete for a paycheck's schedules
+While the paychecks feature is on, the app SHALL NOT offer Delete for a schedule that a paycheck lists, on desktop or phones. Its editor and its menu SHALL offer "Edit paycheck" instead, opening that paycheck. Removing the deposit there SHALL delete its schedule, as "Remove a deposit" says, and a later sync SHALL NOT bring it back.
+
+#### Scenario: Delete a deposit schedule from Schedules
+- **GIVEN** the user opens the "Acme → Checking" deposit schedule
+- **WHEN** they look for Delete
+- **THEN** it isn't offered, "Edit paycheck" is, and removing the "Checking" deposit there deletes the schedule for good, with no reappearance on the next sync
+
+#### Scenario: On a phone
+- **GIVEN** the user opens the "Acme → Checking" deposit schedule on a phone
+- **WHEN** the schedule page shows
+- **THEN** it offers "Edit paycheck", which opens "Acme", and no Delete
+
+#### Scenario: Deleted while paychecks were off
+- **GIVEN** with the paychecks feature off, the user deleted the "Acme → Checking" schedule like any other schedule
+- **WHEN** they turn the paychecks feature back on
+- **THEN** "Acme" is shown with its "Checking" deposit, and its deposit schedule is restored

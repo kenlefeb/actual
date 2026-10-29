@@ -2,7 +2,7 @@
 
 ## 1. Contract and failing tests
 
-- [ ] 1.1 Spec delta for `paychecks` "Edits on two devices" and "Clean-up after edits on two devices". Verify with `openspec validate reconcile-paycheck-schedules --strict`.
+- [ ] 1.1 Spec delta for `paychecks` "Edits on two devices", "Clean-up after edits on two devices" and "No Delete for a paycheck's schedules". Verify with `openspec validate reconcile-paycheck-schedules --strict`.
 - [ ] 1.2 Add `server/paychecks/concurrent-edits.test.ts` with two-device helpers, following the reproduction in design.md:
   - enable syncing mode with the mock sync server;
   - snapshot the database with `serialize()` and restore it with `openDatabase(buffer)`, then `loadMappings()` and `loadRules()`;
@@ -18,7 +18,16 @@
   - "Deleted on one device, edited on the other": no "Acme" schedule is active.
   - "A user's own schedule relative to the pay date": "Gym" is kept.
 
+  - "Deleted while paychecks were off": with the feature off, delete a deposit schedule; a sync doesn't restore it; turning the feature on restores it.
+
   Verify each fails on `development` for the reason in its name; "Gym" already passes.
+- [ ] 1.3 Add UI guard tests for "No Delete for a paycheck's schedules", one per place Delete is reachable today (design.md, the table under "No Delete for a paycheck's schedules"):
+  - desktop schedules table (`SchedulesTable` / `schedules/index.tsx`): with `paychecks` on, "Acme → Checking" isn't listed, so no row menu offers Delete for it;
+  - mobile schedules list (`MobileSchedulesPage`): it isn't listed, so there's no swipe Delete for it;
+  - desktop schedule editor (`ScheduleEditModal`): no Delete, and the paycheck note offers "Edit paycheck", which opens "Acme";
+  - mobile schedule edit page (`MobileScheduleEditPage`): no Delete, and "Edit paycheck" is offered. **This fails today**: the page has no paycheck note.
+
+  The first three pass today and guard against regressions. Verify the mobile edit page test fails.
 
 ## 2. Record which paycheck generated each schedule
 
@@ -39,17 +48,22 @@
   - a missing listed schedule is recreated and the definition updated;
   - two recreates of the same deposit converge after one more reconcile;
   - a second run changes nothing.
-- [ ] 3.2 Hook it into the schedules `sync` handler (`server/schedules/app.ts:987-1000`): on `type === 'success'`, when `tables` includes `paychecks`, `paycheck_schedules` or `schedules`, call `void runMutator(() => reconcilePaycheckSchedules())` **before** the `lastScheduleRun !== currentDay()` guard, and leave the guarded `advanceSchedulesService` call as it is. Also run it at budget load, after the backfill, and for the saved paycheck at the end of `paycheck-update`. Verify every 1.2 test passes, including "A later sync on the same day" and "Nothing posts before the clean-up".
+- [ ] 3.2 Gate the reconcile on the `paychecks` feature: it does nothing while the feature is off, and runs once when the feature is turned on. Verify "Deleted while paychecks were off" passes.
+- [ ] 3.3 Hook it into the schedules `sync` handler (`server/schedules/app.ts:987-1000`): on `type === 'success'`, when `tables` includes `paychecks`, `paycheck_schedules` or `schedules`, call `void runMutator(() => reconcilePaycheckSchedules())` **before** the `lastScheduleRun !== currentDay()` guard, and leave the guarded `advanceSchedulesService` call as it is. Also run it at budget load, after the backfill, and for the saved paycheck at the end of `paycheck-update`. Verify every 1.2 test passes, including "A later sync on the same day" and "Nothing posts before the clean-up".
 
-## 4. Docs and checks
+## 4. Edit paycheck instead of Delete
 
-- [ ] 4.1 Update ADR 2's "Concurrent edits aren't handled yet (sc-556)" to describe the mapping table, the two-way reconcile, and when it runs. In ADR 4's "remove fork data" steps, add:
+- [ ] 4.1 On the mobile schedule edit page, show the paycheck note with "Edit paycheck" for a schedule `usePaycheckMembership().scheduleIds` contains, opening that paycheck's mobile page, with no Delete. In the desktop editor, make sure `PaycheckScheduleNote` offers "Edit paycheck". If a list ever shows a listed schedule, its row menu or swipe offers "Edit paycheck" instead of Delete. Verify every 1.3 test passes, and a VRT for the mobile edit page with the note (see the `running-vrts` skill).
+
+## 5. Docs and checks
+
+- [ ] 5.1 Update ADR 2's "Concurrent edits aren't handled yet (sc-556)" to describe the mapping table, the two-way reconcile, and when it runs. In ADR 4's "remove fork data" steps, add:
   - `DROP TABLE paycheck_schedules` to step 3;
   - the new migration's id to step 6's `__migrations__` delete;
   - `paycheck_schedules` to step 7's list of `dataset` values whose `messages_crdt` and `messages_pending` rows are deleted.
 
   Verify that ADR 2 and all three ADR 4 steps name `paycheck_schedules` or its migration id.
-- [ ] 4.2 Run the loot-core tests, `yarn typecheck` and `yarn lint`; all pass. The existing `server/paychecks` tests are unchanged and pass.
+- [ ] 5.2 Run the loot-core and desktop-client tests, `yarn typecheck` and `yarn lint`; all pass. The existing `server/paychecks` tests are unchanged and pass.
 
 ## Workflow follow-up
 

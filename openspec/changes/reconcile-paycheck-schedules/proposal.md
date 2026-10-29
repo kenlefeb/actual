@@ -19,6 +19,7 @@ This was reproduced with real sync messages (design.md, "Reproduction"):
   - after every successful sync, not just the first of the day, queued before the schedules service posts anything;
   - when the budget loads;
   - on every paycheck save.
+- **No Delete for a paycheck's schedules.** While paychecks are on, a schedule a paycheck lists offers "Edit paycheck" instead of Delete, on desktop and phones, so a deleted deposit can't silently come back. Delete isn't reachable for these schedules today; the mobile schedule edit page gains the missing "Edit paycheck". The reconcile runs only while the feature is on.
 - **Posted transactions stay.** Transactions already posted from such a schedule are kept, as when a deposit is removed today.
 - **Backfill:** existing paychecks get their mapping rows from their definitions when the budget opens.
 - **Delete:** deleting a paycheck also removes its mapping rows.
@@ -36,13 +37,14 @@ None.
 
 ### Modified Capabilities
 
-- `paychecks`: adds two requirements. They're added rather than folded into "Editing and deleting paychecks", which sc-558's open change already modifies.
+- `paychecks`: adds three requirements. They're added rather than folded into "Editing and deleting paychecks", which sc-558's open change already modifies.
   - "Edits on two devices": every active schedule a paycheck generated is listed in its definition, and one left behind by edits on two devices is deleted after sync, before anything posts.
   - "Clean-up after edits on two devices": that clean-up keeps posted transactions and never deletes a user's own schedule.
+  - "No Delete for a paycheck's schedules": the app offers "Edit paycheck" instead.
 
 ## Impact
 
-- **Code:** `packages/loot-core` only.
+- **Code:** `packages/loot-core`, plus `packages/desktop-client` for "Edit paycheck" on the mobile schedule edit page and the guard tests.
   - A fork migration adding `paycheck_schedules`. It's additive, as ADR 4 allows.
   - The AQL schema entry for the new table.
   - `server/paychecks/app.ts`: record the mapping in `writePaycheckSchedules`, add a reconcile function, and drop mappings in `deletePaycheck`.

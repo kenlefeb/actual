@@ -78,8 +78,10 @@ spec is a story in #26 that carries the same `spec:` label.
 - **Check**: `yarn check:openspec-shortcut` runs in Fork CI. It fails when a
   change (active or archived) lacks `x-shortcut`, when a multi-story change's
   group heading lacks a listed story, and when a PR ticks a change's tasks
-  without naming one of its stories. `--require-story` additionally fails any
-  non-bot PR that names no story; Fork CI does not pass it yet.
+  without naming one of its stories. With `--require-story`, which Fork CI
+  passes, it also fails any PR whose title and branch name no story (bot PRs,
+  such as Dependabot's, are exempt), so every change is accounted for in
+  Shortcut.
 
 `openspec/config.yaml` carries the same rules, so the `/opsx:*` skills relay
 them; don't edit the generated skills, which `openspec update` overwrites.

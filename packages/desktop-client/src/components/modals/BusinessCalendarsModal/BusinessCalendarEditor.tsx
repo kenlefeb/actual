@@ -1,9 +1,12 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
+import { useResponsive } from '@actual-app/components/hooks/useResponsive';
 import { Input } from '@actual-app/components/input';
 import { Select } from '@actual-app/components/select';
+import { styles } from '@actual-app/components/styles';
 import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
@@ -25,6 +28,9 @@ type BusinessCalendarEditorProps = {
   calendar: BusinessCalendarEntity;
   onSave: (calendar: BusinessCalendarEntity) => void;
   onDelete: (id: BusinessCalendarEntity['id']) => void;
+  // Full-page editors (phones) place Save themselves, in a sticky footer, and
+  // show Delete in the body; the dialog keeps both in one row
+  renderPage?: (body: ReactNode, saveButton: ReactNode) => ReactNode;
 };
 
 const WEEKDAYS: Weekday[] = [0, 1, 2, 3, 4, 5, 6];
@@ -34,8 +40,14 @@ export function BusinessCalendarEditor({
   calendar,
   onSave,
   onDelete,
+  renderPage,
 }: BusinessCalendarEditorProps) {
   const { t } = useTranslation();
+  const { isNarrowWidth } = useResponsive();
+  // Touch-sized on phones; the desktop dialog keeps its compact controls
+  const touch = isNarrowWidth
+    ? { minHeight: styles.mobileMinHeight, minWidth: styles.mobileMinHeight }
+    : {};
   const locale = useLocale();
   const [draft, setDraft] = useState(calendar);
   const [weekdayError, setWeekdayError] = useState<string | null>(null);
@@ -153,7 +165,21 @@ export function BusinessCalendarEditor({
 
   const preview = getHolidays(draft, year);
 
-  return (
+  const deleteLabel = <Trans>Delete calendar</Trans>;
+  const saveButton = (
+    <Button
+      variant="primary"
+      isDisabled={draft.holidays.some(
+        h => h.kind === 'easter' && invalidOffsets.includes(h.id),
+      )}
+      onPress={() => onSave(draft)}
+      style={renderPage ? { ...touch, width: '100%' } : undefined}
+    >
+      <Trans>Save</Trans>
+    </Button>
+  );
+
+  const body = (
     <View style={{ gap: 15 }}>
       <View style={{ gap: 5 }}>
         <Text style={{ fontWeight: 600 }}>
@@ -163,6 +189,7 @@ export function BusinessCalendarEditor({
           aria-label={t('Calendar name')}
           value={draft.name}
           onChangeValue={name => setDraft({ ...draft, name })}
+          style={touch}
         />
       </View>
 
@@ -174,7 +201,7 @@ export function BusinessCalendarEditor({
           {WEEKDAYS.map(weekday => (
             <label
               key={weekday}
-              style={{ display: 'flex', alignItems: 'center' }}
+              style={{ display: 'flex', alignItems: 'center', ...touch }}
             >
               <Checkbox
                 checked={draft.nonWorkingDays.includes(weekday)}
@@ -204,19 +231,21 @@ export function BusinessCalendarEditor({
               aria-label={t('Holiday name')}
               value={rule.name}
               onChangeValue={name => updateHoliday(index, { ...rule, name })}
-              style={{ width: 200 }}
+              style={{ width: 200, ...touch }}
             />
             <Select
               aria-label={t('Holiday rule type')}
               options={kindOptions}
               value={rule.kind}
               onChange={kind => changeKind(index, kind)}
+              style={touch}
             />
             {rule.kind === 'nth-weekday' && (
               <Select
                 options={nthOptions}
                 value={rule.nth}
                 onChange={nth => updateHoliday(index, { ...rule, nth })}
+                style={touch}
               />
             )}
             {rule.kind === 'last-weekday' && (
@@ -229,6 +258,7 @@ export function BusinessCalendarEditor({
                 options={weekdayOptions}
                 value={rule.weekday}
                 onChange={weekday => updateHoliday(index, { ...rule, weekday })}
+                style={touch}
               />
             )}
             {rule.kind !== 'easter' && (
@@ -236,6 +266,7 @@ export function BusinessCalendarEditor({
                 options={monthOptions}
                 value={rule.month}
                 onChange={month => updateHoliday(index, { ...rule, month })}
+                style={touch}
               />
             )}
             {rule.kind === 'easter' && (
@@ -258,7 +289,7 @@ export function BusinessCalendarEditor({
                     setInvalidOffsets([...others, rule.id]);
                   }
                 }}
-                style={{ width: 70 }}
+                style={{ width: 70, ...touch }}
               />
             )}
             {rule.kind === 'easter' && invalidOffsets.includes(rule.id) && (
@@ -279,7 +310,7 @@ export function BusinessCalendarEditor({
                 onChangeValue={day =>
                   updateHoliday(index, { ...rule, day: Number(day) })
                 }
-                style={{ width: 60 }}
+                style={{ width: 60, ...touch }}
               />
             )}
             <Select
@@ -288,10 +319,12 @@ export function BusinessCalendarEditor({
               onChange={observance =>
                 updateHoliday(index, { ...rule, observance })
               }
+              style={touch}
             />
             <Button
               variant="bare"
               aria-label={t('Remove holiday')}
+              style={touch}
               onPress={() =>
                 setDraft({
                   ...draft,
@@ -303,7 +336,10 @@ export function BusinessCalendarEditor({
             </Button>
           </View>
         ))}
-        <Button style={{ alignSelf: 'flex-start' }} onPress={addHoliday}>
+        <Button
+          style={{ alignSelf: 'flex-start', ...touch }}
+          onPress={addHoliday}
+        >
           <Trans>Add holiday</Trans>
         </Button>
       </View>
@@ -324,6 +360,7 @@ export function BusinessCalendarEditor({
               onChangeValue={date =>
                 updateException(index, { ...exception, date })
               }
+              style={touch}
             />
             <Select
               options={[
@@ -334,6 +371,7 @@ export function BusinessCalendarEditor({
               onChange={isBusinessDay =>
                 updateException(index, { ...exception, isBusinessDay })
               }
+              style={touch}
             />
             <Input
               aria-label={t('Exception name')}
@@ -341,11 +379,12 @@ export function BusinessCalendarEditor({
               onChangeValue={name =>
                 updateException(index, { ...exception, name })
               }
-              style={{ width: 200 }}
+              style={{ width: 200, ...touch }}
             />
             <Button
               variant="bare"
               aria-label={t('Remove exception')}
+              style={touch}
               onPress={() =>
                 setDraft({
                   ...draft,
@@ -357,7 +396,10 @@ export function BusinessCalendarEditor({
             </Button>
           </View>
         ))}
-        <Button style={{ alignSelf: 'flex-start' }} onPress={addException}>
+        <Button
+          style={{ alignSelf: 'flex-start', ...touch }}
+          onPress={addException}
+        >
           <Trans>Add exception</Trans>
         </Button>
       </View>
@@ -370,6 +412,7 @@ export function BusinessCalendarEditor({
           <Button
             variant="bare"
             aria-label={t('Previous year')}
+            style={touch}
             onPress={() => setYear(year - 1)}
           >
             ‹
@@ -377,6 +420,7 @@ export function BusinessCalendarEditor({
           <Button
             variant="bare"
             aria-label={t('Next year')}
+            style={touch}
             onPress={() => setYear(year + 1)}
           >
             ›
@@ -402,21 +446,35 @@ export function BusinessCalendarEditor({
         )}
       </View>
 
+      {renderPage && (
+        // Destructive and set apart from Save, as on the paycheck page
+        <Button
+          onPress={() => onDelete(calendar.id)}
+          style={{
+            ...touch,
+            marginTop: 20,
+            color: theme.errorText,
+            borderColor: theme.errorText,
+          }}
+        >
+          {deleteLabel}
+        </Button>
+      )}
+    </View>
+  );
+
+  if (renderPage) {
+    return renderPage(body, saveButton);
+  }
+
+  return (
+    <View style={{ gap: 15 }}>
+      {body}
       <View
         style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10 }}
       >
-        <Button onPress={() => onDelete(calendar.id)}>
-          <Trans>Delete calendar</Trans>
-        </Button>
-        <Button
-          variant="primary"
-          isDisabled={draft.holidays.some(
-            h => h.kind === 'easter' && invalidOffsets.includes(h.id),
-          )}
-          onPress={() => onSave(draft)}
-        >
-          <Trans>Save</Trans>
-        </Button>
+        <Button onPress={() => onDelete(calendar.id)}>{deleteLabel}</Button>
+        {saveButton}
       </View>
     </View>
   );

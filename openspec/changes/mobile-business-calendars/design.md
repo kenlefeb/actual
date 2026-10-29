@@ -32,7 +32,7 @@ The mobile editor page wraps the existing `BusinessCalendarEditor` in a mobile `
 As on desktop, "New calendar" and "Copy … preset" create the calendar immediately through the existing create mutation; on mobile the app then opens the new calendar's editor.
 
 ### Save and delete
-Save and delete use the existing update and delete mutations and then return to the list, as the mobile paycheck page returns after saving. Delete has no extra confirmation, matching desktop.
+Save and delete use the existing update and delete mutations and then return to the list, as the mobile paycheck page returns after saving. On mobile, delete first asks for confirmation through the shared `confirm-delete` modal, as `MobileRuleEditPage` does, because phones have no undo shortcut. The confirmation is added by the mobile page around the shared editor's `onDelete`, so desktop behaviour is unchanged. While a create is pending, the create buttons are disabled so a double tap cannot create two calendars. An editor address for a calendar that does not exist (a stale link, or one deleted elsewhere) redirects to the list.
 
 ### Feature flag
 The Schedules control appears only when `businessCalendars` is on. The two pages also send a user to `/schedules` when the flag is off, so a stale link cannot reach them.
@@ -42,6 +42,7 @@ The Schedules control appears only when `businessCalendars` is on. The two pages
 - **Reused the desktop editor component** instead of building a phone-specific editor. Same features and validation by construction; the layout is the desktop one wrapped to phone width, not a bespoke mobile design.
 - **Entry point is a button on the mobile Schedules page**, under the search bar, matching where the desktop button lives. No new entry in the mobile navigation or settings.
 - **Save returns to the list**, as the mobile paycheck editor does. Desktop stays on the calendar.
+- **Delete asks for confirmation on mobile only** (`confirm-delete` modal). Desktop still deletes immediately, with undo available.
 - **Pages are gated by the flag too**, not only the entry point (paychecks gate only the entry point).
 - **No Playwright e2e.** The pages are covered by component tests; an e2e would need the flag on and calendar data, which no existing mobile e2e sets up, and e2e cannot run locally here.
 - **No upstream release note**, following the `business-calendars` precedent.

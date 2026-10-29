@@ -73,6 +73,7 @@ function CalendarList() {
         <Button
           variant="primary"
           style={rowStyle}
+          isDisabled={createCalendar.isPending}
           onPress={() =>
             create({
               name: t('New calendar'),
@@ -90,6 +91,7 @@ function CalendarList() {
             <Button
               key={preset.id}
               style={rowStyle}
+              isDisabled={createCalendar.isPending}
               onPress={() => create(calendar)}
             >
               <Trans>Copy {{ name: calendar.name }} preset</Trans>

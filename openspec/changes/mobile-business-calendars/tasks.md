@@ -10,8 +10,8 @@
 
 ## 3. Mobile pages
 
-- [x] 3.1 Add failing tests for `MobileBusinessCalendarsPage`: lists calendars, creates a new calendar and a preset copy and opens it
-- [x] 3.2 Add failing tests for `MobileBusinessCalendarPage`: changes a holiday rule to an Easter rule and saves, shows the weekday and offset validation errors, deletes; implement both pages with `BusinessCalendarEditor`
+- [x] 3.1 Add failing tests for `MobileBusinessCalendarsPage`: lists calendars, creates a new calendar and a preset copy and opens it, disables creating while a create is pending
+- [x] 3.2 Add failing tests for `MobileBusinessCalendarPage`: changes a holiday rule to an Easter rule and saves, shows the weekday and offset validation errors, deletes only after confirming, redirects an unknown id to the list; implement both pages with `BusinessCalendarEditor`
 - [x] 3.3 Add the routes (`WideNotSupported redirectTo="/schedules"`) and `NarrowAlternate` exports
 
 ## 4. Integration checks

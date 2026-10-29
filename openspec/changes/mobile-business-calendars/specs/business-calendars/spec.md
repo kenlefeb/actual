@@ -34,6 +34,14 @@ On narrow layouts, the calendar list page SHALL list the budget's calendars and 
 - **WHEN** a user marks all seven weekdays as non-working, or enters 150 days from Easter
 - **THEN** the editor explains the problem as on desktop, and an invalid Easter offset cannot be saved
 
+#### Scenario: Delete on a phone
+- **WHEN** a user taps "Delete calendar" on the editor page
+- **THEN** the app asks for confirmation, and deletes the calendar and returns to the list only if the user confirms
+
+#### Scenario: Unknown calendar
+- **WHEN** a calendar page address names a calendar that does not exist
+- **THEN** the user is sent to the calendar list page
+
 #### Scenario: Wide layout
 - **WHEN** a calendar page address is opened on a desktop layout
 - **THEN** the user is sent to the Schedules page, where the dialog is used

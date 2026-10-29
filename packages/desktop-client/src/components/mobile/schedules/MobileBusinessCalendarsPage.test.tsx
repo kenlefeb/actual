@@ -16,6 +16,7 @@ import { MobileBusinessCalendarsPage } from './MobileBusinessCalendarsPage';
 const state = vi.hoisted(() => ({
   isNarrowWidth: true,
   isEnabled: true,
+  isCreating: false,
   calendars: [] as BusinessCalendarEntity[],
   navigate: vi.fn(),
   dispatch: vi.fn(),
@@ -51,7 +52,10 @@ vi.mock('#hooks/useBusinessCalendars', () => ({
 }));
 
 vi.mock('#business-calendars', () => ({
-  useCreateBusinessCalendarMutation: () => ({ mutate: state.create }),
+  useCreateBusinessCalendarMutation: () => ({
+    mutate: state.create,
+    isPending: state.isCreating,
+  }),
   useUpdateBusinessCalendarMutation: () => ({ mutate: state.update }),
   useDeleteBusinessCalendarMutation: () => ({ mutate: state.remove }),
 }));
@@ -95,6 +99,7 @@ describe('mobile business calendars', () => {
     vi.useFakeTimers({ now: new Date(2026, 5, 1), toFake: ['Date'] });
     state.isNarrowWidth = true;
     state.isEnabled = true;
+    state.isCreating = false;
     state.calendars = [federal];
     for (const fn of [
       state.navigate,
@@ -233,14 +238,41 @@ describe('mobile business calendars', () => {
     expect(state.update).not.toHaveBeenCalled();
   });
 
-  it('deletes a calendar and returns', async () => {
+  it('deletes a calendar only after confirming, then returns', async () => {
     succeedWith(state.remove);
     renderAt('/business-calendars/federal');
     await userEvent.click(
       screen.getByRole('button', { name: 'Delete calendar' }),
     );
+    expect(state.remove).not.toHaveBeenCalled();
+    expect(state.navigate).not.toHaveBeenCalled();
+    const [action] = state.dispatch.mock.lastCall ?? [];
+    expect(action.payload.modal).toMatchObject({
+      name: 'confirm-delete',
+      options: {
+        message: 'Are you sure you want to delete this business calendar?',
+      },
+    });
+
+    action.payload.modal.options.onConfirm();
     expect(state.remove.mock.calls[0][0]).toBe('federal');
     expect(state.navigate).toHaveBeenCalledWith(-1);
+  });
+
+  it('returns to the list when the calendar does not exist', () => {
+    renderAt('/business-calendars/bogus');
+    expect(
+      screen.getByRole('button', { name: 'New calendar' }),
+    ).toBeInTheDocument();
+  });
+
+  it('cannot create two calendars from a double tap', async () => {
+    state.isCreating = true;
+    renderAt('/business-calendars');
+    expect(screen.getByRole('button', { name: 'New calendar' })).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Copy U.S. Federal Reserve preset' }),
+    ).toBeDisabled();
   });
 
   it('sends users to Schedules when the feature is off', () => {

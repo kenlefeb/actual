@@ -11,6 +11,8 @@ import { MobilePageHeader, Page } from '#components/Page';
 import { useBusinessCalendars } from '#hooks/useBusinessCalendars';
 import { useFeatureFlag } from '#hooks/useFeatureFlag';
 import { useNavigate } from '#hooks/useNavigate';
+import { pushModal } from '#modals/modalsSlice';
+import { useDispatch } from '#redux';
 
 export function MobileBusinessCalendarPage() {
   const isEnabled = useFeatureFlag('businessCalendars');
@@ -23,6 +25,7 @@ export function MobileBusinessCalendarPage() {
 function CalendarEditorPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const { id } = useParams<{ id: string }>();
   const { data: calendars = [], isPlaceholderData } = useBusinessCalendars();
   const updateCalendar = useUpdateBusinessCalendarMutation();
@@ -31,8 +34,12 @@ function CalendarEditorPage() {
   const close = () => void navigate(-1);
 
   // Wait for the calendar before seeding the editor's draft with it
-  if (isPlaceholderData || !calendar) {
+  if (isPlaceholderData) {
     return null;
+  }
+  // Unknown id: a stale link, or deleted elsewhere while open
+  if (!calendar) {
+    return <Navigate to="/business-calendars" replace />;
   }
 
   return (
@@ -49,8 +56,22 @@ function CalendarEditorPage() {
         key={JSON.stringify(calendar)}
         calendar={calendar}
         onSave={draft => updateCalendar.mutate(draft, { onSuccess: close })}
+        // Phones have no undo shortcut, so deleting asks first
         onDelete={calendarId =>
-          deleteCalendar.mutate(calendarId, { onSuccess: close })
+          dispatch(
+            pushModal({
+              modal: {
+                name: 'confirm-delete',
+                options: {
+                  message: t(
+                    'Are you sure you want to delete this business calendar?',
+                  ),
+                  onConfirm: () =>
+                    deleteCalendar.mutate(calendarId, { onSuccess: close }),
+                },
+              },
+            }),
+          )
         }
       />
     </Page>

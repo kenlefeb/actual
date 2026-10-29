@@ -38,6 +38,9 @@ function FeatureToggle({
 }: FeatureToggleProps) {
   const enabled = useFeatureFlag(flagName);
   const [_, setFlagPref] = useSyncedPref(`flags.${flagName}`);
+  const [__, setBusinessCalendarsPref] = useSyncedPref(
+    'flags.businessCalendars',
+  );
 
   return (
     <label style={{ display: 'flex' }}>
@@ -45,6 +48,10 @@ function FeatureToggle({
         checked={enabled}
         onChange={() => {
           setFlagPref(String(!enabled));
+          // Paychecks are built on business calendars
+          if (flagName === 'paychecks' && !enabled) {
+            setBusinessCalendarsPref('true');
+          }
         }}
         disabled={disableToggle}
       />
@@ -240,6 +247,9 @@ export function ExperimentalFeatures() {
             </FeatureToggle>
             <FeatureToggle flag="businessCalendars">
               <Trans>Business calendars</Trans>
+            </FeatureToggle>
+            <FeatureToggle flag="paychecks">
+              <Trans>Paychecks</Trans>
             </FeatureToggle>
             <FeatureToggle
               flag="enableBanking"

@@ -27,6 +27,7 @@ export function Schedules() {
   const dispatch = useDispatch();
   const [filter, setFilter] = useState('');
   const businessCalendarsEnabled = useFeatureFlag('businessCalendars');
+  const paychecksEnabled = useFeatureFlag('paychecks');
   const { isNarrowWidth } = useResponsive();
 
   const onEdit = useCallback(
@@ -158,7 +159,7 @@ export function Schedules() {
             )}
           </View>
           <View style={{ flexDirection: 'row', gap: '1em' }}>
-            {businessCalendarsEnabled && !isNarrowWidth && (
+            {paychecksEnabled && !isNarrowWidth && (
               <Button
                 onPress={() =>
                   dispatch(

@@ -6,6 +6,7 @@ import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
 import type { ScheduleEntity } from '@actual-app/core/types/models';
 
+import { useFeatureFlag } from '#hooks/useFeatureFlag';
 import { usePaychecks } from '#hooks/usePaychecks';
 import { pushModal } from '#modals/modalsSlice';
 import { useDispatch } from '#redux';
@@ -19,6 +20,7 @@ export function PaycheckScheduleNote({
   scheduleId,
 }: PaycheckScheduleNoteProps) {
   const dispatch = useDispatch();
+  const paychecksEnabled = useFeatureFlag('paychecks');
   const { data: paychecks = [] } = usePaychecks();
   const paycheck =
     scheduleId != null
@@ -29,7 +31,7 @@ export function PaycheckScheduleNote({
         )
       : undefined;
 
-  if (!paycheck) {
+  if (!paychecksEnabled || !paycheck) {
     return null;
   }
   return (

@@ -2,8 +2,8 @@
 
 ## 1. Paychecks flag
 
-- [ ] 1.1 Add the `paychecks` feature flag type, its Settings > Experimental toggle and the derived default (on when `businessCalendars` is on or any paycheck exists); verify with `useFeatureFlag` tests for unset/with-calendars/with-paycheck/explicitly-off
-- [ ] 1.2 Turning `paychecks` on also sets `businessCalendars`; gate "Add paycheck", the editor and `PaycheckScheduleNote` on `paychecks` instead of `businessCalendars`; verify with Experimental settings and schedules-page tests, plus the "Hidden when the feature is off" and "Turning on paychecks" scenarios
+- [x] 1.1 Add the `paychecks` feature flag type, its Settings > Experimental toggle and the derived default (on when `businessCalendars` is on or any paycheck exists); verify with `useFeatureFlag` tests for unset/with-calendars/with-paycheck/explicitly-off
+- [x] 1.2 Turning `paychecks` on also sets `businessCalendars`; gate "Add paycheck", the editor and `PaycheckScheduleNote` on `paychecks` instead of `businessCalendars`; verify with Experimental settings and schedules-page tests, plus the "Hidden when the feature is off" and "Turning on paychecks" scenarios
 
 ## 2. Paychecks section on Schedules (desktop and mobile)
 

@@ -48,7 +48,9 @@ None.
   - A fork migration adding `paycheck_schedules`. It's additive, as ADR 4 allows.
   - The AQL schema entry for the new table.
   - `server/paychecks/app.ts`: record the mapping in `writePaycheckSchedules`, add a reconcile function, and drop mappings in `deletePaycheck`.
-  - A hook on the server `sync` success event that runs before `advanceSchedulesService` (`server/schedules/app.ts:979`), plus one at budget load.
+  - A hook in the schedules `sync` handler (`server/schedules/app.ts:987-1000`), queued before `advanceSchedulesService`, plus one at budget load.
+  - The effective feature-flag rule (defaults, `FEATURE_FLAG_REQUIRES`, `isFlagOn`) moves from desktop-client's `useFeatureFlag.ts` into `loot-core/src/shared/feature-flags.ts`, so the server reads the same value as the UI.
+- **ADR 6** records the reconcile as its one server-side flag gate, and the shared module.
 - **Data:** one row per generated schedule. ADR 4's "remove fork data" export path also drops `paycheck_schedules`.
 - **ADR 2:** "Consequences" is updated to say when the reconcile runs.
 - **Related:** sc-558's "managed by paycheck" lookup keeps its meaning, "listed in a live definition". The new table is only for finding strays (design.md).

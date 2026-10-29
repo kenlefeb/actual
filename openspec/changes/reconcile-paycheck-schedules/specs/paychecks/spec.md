@@ -3,7 +3,7 @@
 ## ADDED Requirements
 
 ### Requirement: Edits on two devices
-While the paychecks feature is on, a paycheck's generated schedules SHALL be exactly the ones its definition lists. After every successful sync, before it posts any scheduled transaction, the app SHALL delete each generated schedule that no live definition lists, and SHALL restore each schedule a live definition lists that is missing or deleted. The same check SHALL run when the budget opens, when the paycheck is saved and when the feature is turned on.
+While the paychecks feature is on, a paycheck's generated schedules SHALL be exactly the ones its definition lists. After every successful sync, before it posts any scheduled transaction, the app SHALL delete each generated schedule that no live definition lists, and SHALL restore each schedule a live definition lists that is missing or deleted. The same check SHALL run when the budget opens, when the paycheck is saved and when the feature is turned on, on this device or another.
 
 #### Scenario: Both devices add a deposit
 - **GIVEN** the "Acme" paycheck deposits to "Savings" and "Checking"
@@ -65,5 +65,5 @@ While the paychecks feature is on, the app SHALL NOT offer Delete for a schedule
 
 #### Scenario: Deleted while paychecks were off
 - **GIVEN** with the paychecks feature off, the user deleted the "Acme → Checking" schedule like any other schedule
-- **WHEN** they turn the paychecks feature back on
+- **WHEN** they turn the paychecks feature back on, on this device or another
 - **THEN** "Acme" is shown with its "Checking" deposit, and its deposit schedule is restored

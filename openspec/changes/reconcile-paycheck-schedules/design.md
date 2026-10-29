@@ -85,12 +85,16 @@ Step 1 restores S on the next reconcile. That's the spec's "Saved again while th
    - **Why this ordering holds:** `runMutator` is sequential (`mutators.ts:98`), so a reconcile queued first finishes before the guarded `advanceSchedulesService` starts. That's what "Nothing posts before the clean-up" needs.
    - **Why not a separate paychecks listener:** `main.ts` combines `schedulesApp` (`:136`) before `paychecksApp` (`:152`). A paychecks `sync` listener would queue the reconcile after `advanceSchedulesService`.
    - **This edits an upstream handler**, by one call. The fork carries it, like its other schedules changes.
-   - It runs only while the `paychecks` feature is on (see "No Delete for a paycheck's schedules").
+   - It runs only while the **effective** `paychecks` flag is on ("Read the effective flag on the server", below).
    - It runs through `runMutator`, not `undoable`, so it isn't in the undo history.
    - Running once per finished full sync, rather than in a per-batch sync listener, means a page that holds the new rows but not yet the definition can't trigger it.
 2. **At budget load**, after the backfill below. This catches budgets that synced on a version without this change.
 3. **On every paycheck save**, for that paycheck, after `writePaycheckSchedules`. This replaces nothing: the existing previous-versus-new deletion stays.
-4. **When the `paychecks` feature is turned on**, once (Product decisions 5).
+4. **When the `paychecks` flag may have changed.** In the same schedules `sync` handler, on `type === 'applied'` or `'success'`, whenever `tables` includes `preferences` and the effective flag is now on, it queues `void runMutator(() => reconcilePaycheckSchedules())`. There's no "once" state, because the reconcile is idempotent.
+   - A toggle on this device goes through `preferences/save` → `applyMessages`, which emits `sync` with `type: 'applied'` and `preferences` in `tables` (`server/sync/index.ts:615-620`).
+   - A toggle on another device arrives as `success` with `preferences` in `tables`.
+   - Any other preference change re-runs a no-op reconcile, which is cheap.
+   - This is what restores a schedule deleted while paychecks were off, at the moment the user turns the feature on (Product decisions 5).
 
 Both devices may reconcile the same merge. Each tombstones, or restores, the same rows with the same values, so they converge whichever device writes last. The one exception is two devices recreating a missing schedule at once, which converges in one more round (above).
 
@@ -120,7 +124,24 @@ So with `paychecks` on, Delete isn't reachable for a paycheck's schedule today. 
 
 **Which lookup.** "A schedule a paycheck lists" uses the same rule as sc-558's server lookup (`getPaycheckManagingSchedule`): a live paycheck's definition lists the id as `paySchedule` or a `deposits[].schedule`. On the client, `usePaycheckMembership().scheduleIds` already indexes exactly that, and the lists and `PaycheckScheduleNote` use it. The UI reuses it rather than calling the server per row. Merge order: #87, sc-558, then this change, merging each previous one in.
 
-**With `paychecks` off**, these schedules show as ordinary schedules, and the lists offer Delete. A reconcile then would silently bring a deleted one back, which is the problem the PO raised. So the reconcile runs **only while the feature is on**, and once more when it's turned on (Product decisions 5).
+**With `paychecks` off**, these schedules show as ordinary schedules, and the lists offer Delete. A reconcile then would silently bring a deleted one back, which is the problem the PO raised. So the reconcile runs **only while the effective flag is on**, and again whenever a preference change leaves it on (Product decisions 5).
+
+### Read the effective flag on the server
+Whether `paychecks` counts as on is computed today only in desktop-client (`hooks/useFeatureFlag.ts:22-55`):
+- `DEFAULT_FEATURE_FLAG_STATE`, where `paychecks: true` makes an unset flag follow its requirement;
+- `FEATURE_FLAG_REQUIRES`;
+- `isFlagOn`.
+
+The server only has the raw `preferences` rows. A raw read would get two cases wrong:
+- a budget upgraded with `businessCalendars` on and `flags.paychecks` never set counts as on in the client ("Existing paychecks stay visible on upgrade"), but would read as off on the server, so the reconcile would never run;
+- a raw `'true'` with `businessCalendars` off counts as off in the client, but would read as on.
+
+**Decision:** move the defaults, `FEATURE_FLAG_REQUIRES` and `isFlagOn` (with its `isStoredOn` helper) into `loot-core/src/shared/feature-flags.ts`, as the one place the effective value is computed.
+- `useFeatureFlag` and `Experimental.tsx` import them from there; the hook stays a thin selector.
+- The server builds the same prefs shape from `SELECT id, value FROM preferences WHERE id LIKE 'flags.%'` and calls `isFlagOn(prefs, 'paychecks')`.
+- **Alternative: duplicate the rule on the server.** Rejected: the two copies would drift, and the unset-flag rule is exactly the kind of detail that drifts.
+
+**ADR 6.** Its first rule is "Gate only the UI … Server handlers, stored data, date math and the API are not gated". The reconcile is a deliberate exception: it's a repair that would otherwise undo a delete the user made while the feature was off. The implementation amends ADR 6 to record that exception and the shared module (task 5.1), as the Architect and the PO asked. It's a task rather than part of this planning PR, so the ADR describes code that exists.
 
 ## Product decisions
 
@@ -131,13 +152,14 @@ For the Product Owner to confirm. A recommendation is given for each.
 3. **Tell the user that the other device's deposit was dropped?** Recommendation: **not in this change**. Last write wins already drops edits silently, for every paycheck and calendar field (ADR 3). A notice for this one case would be inconsistent, and it belongs with a general conflict notice, if Ken wants one. File it as a follow-up if the PO agrees.
 4. **Strays left before this change?** They have no mapping row, so the reconcile can't tell them from a user's own schedule. Recommendation: **out of scope**. Optionally, a later story could add a one-off report, the heuristic in "Alternative: infer strays", that lists suspected strays for the user to delete. It wouldn't delete anything automatically.
 
-5. **A paycheck schedule deleted while paychecks were off.** When the feature is turned back on, should the reconcile restore it? Recommendation: **restore it**. The paycheck comes back whole, as the user expects when turning paychecks on, and the definition is the source of truth (ADR 2). It happens at a moment the user chose, not silently on a sync. The alternative is to drop that deposit from the definition, which would silently change the paycheck's split. The spec's "Deleted while paychecks were off" follows this recommendation, so if the PO decides otherwise that scenario changes.
+5. **A paycheck schedule deleted while paychecks were off.** When the feature is turned back on, should the reconcile restore it? **Confirmed by the PO (2026-10-29): restore it.** The paycheck comes back whole, as the user expects when turning paychecks on, and the definition is the source of truth (ADR 2). It happens at a moment the user chose, not silently on a sync. The alternative is to drop that deposit from the definition, which would silently change the paycheck's split. The spec's "Deleted while paychecks were off" follows this recommendation, so if the PO decides otherwise that scenario changes.
 
 **After the Architect's review (PR #91):** the reconcile also restores a schedule that a live definition lists but that is missing or deleted ("Reconcile in both directions"). That doesn't change decisions 1 to 4. It applies the existing rule that the definition is the source of truth (ADR 2) in the other direction too, and it already happens today when a save recreates a deleted schedule. Restoring in place keeps the schedule's id, so posted transactions stay linked, which supports decision 2.
 
 ## Risks / Trade-offs
 
 - **[A sync delivers a device's new mapping row before its definition write]:** the reconcile could delete a schedule the definition is about to list. → It runs only after a full sync finishes. One device's mutation is sent in one batch, so its rows and its definition arrive together. If a split ever happens, the next reconcile restores the schedule once the definition arrives. The task 1.2 tests cover the normal ordering.
+- **[Moving flag code out of an upstream file]:** `useFeatureFlag.ts` is an upstream file, and upstream adds flags to `DEFAULT_FEATURE_FLAG_STATE`. → The hook re-exports what it used to declare, so callers don't change, and an upstream merge that adds a flag adds it in the shared module instead. The merge conflict is one line, and it's obvious.
 - **[The UI and the reconcile disagree about "listed"]:** → Both read the same definitions. The client's `usePaycheckMembership` and sc-558's server lookup apply the same rule, and the guard scenarios test the UI against it.
 - **[Reconcile cost on every sync]:** → It runs only when the synced tables include paycheck or schedule data. It reads one small table joined to `paychecks`.
 - **[A restore races a newer delete on the other device]:** device A restores S because its definition lists S, while device B's newer definition has already dropped S. → Each reconcile reads the definition it holds. Once the newest definition reaches both devices, the next reconcile deletes or keeps S to match it. The cells converge by last write wins, and the next reconcile corrects the outcome.

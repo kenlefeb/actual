@@ -18,7 +18,7 @@
   - "Deleted on one device, edited on the other": no "Acme" schedule is active.
   - "A user's own schedule relative to the pay date": "Gym" is kept.
 
-  - "Deleted while paychecks were off": with the feature off, delete a deposit schedule; a sync doesn't restore it; turning the feature on restores it.
+  - "Deleted while paychecks were off": with the feature off, delete a deposit schedule, and check that a sync doesn't restore it. Then turn the feature on in two ways, each restoring it: a local toggle, which emits an `applied` event with `preferences` in `tables`, and a toggle that arrives by sync, a `success` event.
 
   Verify each fails on `development` for the reason in its name; "Gym" already passes.
 - [ ] 1.3 Add UI guard tests for "No Delete for a paycheck's schedules", one per place Delete is reachable today (design.md, the table under "No Delete for a paycheck's schedules"):
@@ -48,12 +48,30 @@
   - a missing listed schedule is recreated and the definition updated;
   - two recreates of the same deposit converge after one more reconcile;
   - a second run changes nothing.
-- [ ] 3.2 Gate the reconcile on the `paychecks` feature: it does nothing while the feature is off, and runs once when the feature is turned on. Verify "Deleted while paychecks were off" passes.
-- [ ] 3.3 Hook it into the schedules `sync` handler (`server/schedules/app.ts:987-1000`): on `type === 'success'`, when `tables` includes `paychecks`, `paycheck_schedules` or `schedules`, call `void runMutator(() => reconcilePaycheckSchedules())` **before** the `lastScheduleRun !== currentDay()` guard, and leave the guarded `advanceSchedulesService` call as it is. Also run it at budget load, after the backfill, and for the saved paycheck at the end of `paycheck-update`. Verify every 1.2 test passes, including "A later sync on the same day" and "Nothing posts before the clean-up".
+- [ ] 3.2 Add `loot-core/src/shared/feature-flags.ts`, holding the flag defaults, `FEATURE_FLAG_REQUIRES` and `isFlagOn` moved from `desktop-client/src/hooks/useFeatureFlag.ts:22-55`. Point `useFeatureFlag` and `Experimental.tsx` at it, and re-export from the hook so other callers don't change. Add a server helper that reads `SELECT id, value FROM preferences WHERE id LIKE 'flags.%'` and returns `isFlagOn(prefs, 'paychecks')`. Unit tests for the shared rule and the server helper:
+  - the upgrade case: `businessCalendars` on and `flags.paychecks` unset is **on**;
+  - `flags.paychecks` `'true'` with `businessCalendars` off is off;
+  - both on is on, and `flags.paychecks` `'false'` is off.
+
+  Verify the existing `useFeatureFlag` and `Experimental` tests still pass.
+- [ ] 3.3 Gate the reconcile on that effective flag: it does nothing while the flag is off. Verify "Deleted while paychecks were off" passes, for both the local and the synced toggle.
+- [ ] 3.4 Hook it into the schedules `sync` handler (`server/schedules/app.ts:987-1000`), **before** the `lastScheduleRun !== currentDay()` guard, leaving the guarded `advanceSchedulesService` call as it is. Call `void runMutator(() => reconcilePaycheckSchedules())`:
+  - on `type === 'success'`, when `tables` includes `paychecks`, `paycheck_schedules` or `schedules`;
+  - on `type === 'applied'` or `'success'`, when `tables` includes `preferences` and the effective flag is on.
+
+  Also run it at budget load, after the backfill, and for the saved paycheck at the end of `paycheck-update`. Verify every 1.2 test passes, including "A later sync on the same day", "Nothing posts before the clean-up" and both toggles in "Deleted while paychecks were off".
 
 ## 4. Edit paycheck instead of Delete
 
-- [ ] 4.1 On the mobile schedule edit page, show the paycheck note with "Edit paycheck" for a schedule `usePaycheckMembership().scheduleIds` contains, opening that paycheck's mobile page, with no Delete. In the desktop editor, make sure `PaycheckScheduleNote` offers "Edit paycheck". If a list ever shows a listed schedule, its row menu or swipe offers "Edit paycheck" instead of Delete. Verify every 1.3 test passes, and a VRT for the mobile edit page with the note (see the `running-vrts` skill).
+- [ ] 4.1 On the mobile schedule edit page, show the paycheck note for a schedule `usePaycheckMembership().scheduleIds` contains, following the UX Designer's conditions (PR #91, sc-556):
+  1. Reuse the desktop note's text word for word, with the "Edit paycheck" button. Add no phone-only text.
+  2. On a phone, the button opens the paycheck's own page, not the desktop dialog, the same way the Schedules page opens paychecks.
+  3. Put the note at the top of the page, above the schedule form, aligned with the form's side padding.
+  4. On phones, stack the grey text with "Edit paycheck" below it, left-aligned. Use a 40px normal (not primary) button; Save stays the only primary action. Desktop keeps its current row.
+  5. The page offers no Delete anywhere, and the guard test checks that.
+  6. Add a VRT of the stacked note at 375px, in light and dark (see the `running-vrts` skill).
+
+  In the desktop editor, make sure `PaycheckScheduleNote` offers "Edit paycheck". If a list ever shows a listed schedule, its row menu or swipe offers "Edit paycheck" instead of Delete. Verify every 1.3 test passes and the VRTs match.
 
 ## 5. Docs and checks
 
@@ -62,7 +80,11 @@
   - the new migration's id to step 6's `__migrations__` delete;
   - `paycheck_schedules` to step 7's list of `dataset` values whose `messages_crdt` and `messages_pending` rows are deleted.
 
-  Verify that ADR 2 and all three ADR 4 steps name `paycheck_schedules` or its migration id.
+  Amend ADR 6 (`docs/adr/0006-feature-flag-policy.md`):
+  - under "Gate only the UI", add the one server-side exception: the paycheck reconcile runs only while the effective `paychecks` flag is on, because it would otherwise undo a delete the user made while the feature was off;
+  - under "What the code does today", say that `loot-core/src/shared/feature-flags.ts` is the one place the effective flag is computed, used by `useFeatureFlag`, `Experimental.tsx` and the server.
+
+  Verify that ADR 2 and all three ADR 4 steps name `paycheck_schedules` or its migration id, and that ADR 6 names the exception and the shared module.
 - [ ] 5.2 Run the loot-core and desktop-client tests, `yarn typecheck` and `yarn lint`; all pass. The existing `server/paychecks` tests are unchanged and pass.
 
 ## Workflow follow-up

@@ -2,9 +2,24 @@
 
 Fork-only (never upstream; see `fork/README.md`). Tickets, specs and backlog
 items for this fork live as Shortcut **stories** in workspace `blacksmith-press`,
-team "Kenneth LeFebvre's Team", workflow "Standard" (Backlog → To Do → In
-Progress → In Review → Done). Use the Shortcut connector for every operation. If
-it isn't available, stop and say so; don't fall back to GitHub issues.
+team "Kenneth LeFebvre's Team", workflow "Spec-Driven Development". Use the
+Shortcut connector for every operation. If it isn't available, stop and say so;
+don't fall back to GitHub issues.
+
+Spec-Driven Development is the team's only workflow. The old "Standard"
+workflow (Backlog → To Do → …) is retired; don't use it or its states. The
+team's default workflow in Shortcut settings may still be Standard, so always
+pass a Spec-Driven state id.
+
+| State       | ID        | Meaning                                                                   |
+| ----------- | --------- | ------------------------------------------------------------------------- |
+| Backlog     | 500000219 | Not refined; don't start.                                                 |
+| Explore     | 500000225 | Explore only, with `/opsx:explore`; comment, but write no code.           |
+| Propose     | 500000226 | Write the OpenSpec change with `/opsx:propose`, then move to Ready to Do. |
+| Ready to Do | 500000220 | Ready; start without asking. Skip blocked or `ready-for-human` stories.   |
+| In Progress | 500000221 | Being built.                                                              |
+| In Review   | 500000222 | PR open.                                                                  |
+| Done        | 500000223 | PR merged into `development`.                                             |
 
 Story lifecycle (starting, branches, PR links, Done) follows the "Shortcut
 stories" section of `AGENTS.md`.
@@ -12,8 +27,8 @@ stories" section of `AGENTS.md`.
 ## Conventions
 
 - **Create a story**: `stories-create` with `team` "Kenneth LeFebvre's Team",
-  the matching `epic`, and the Backlog state. Type `bug` for defects, `chore`
-  for maintenance, `feature` otherwise. Search first (`stories-search`) so you
+  the matching `epic`, and the Spec-Driven Backlog state (500000219). Type
+  `bug` for defects, `chore` for maintenance, `feature` otherwise. Search first (`stories-search`) so you
   don't file a duplicate. Use the story template below, including its
   checklist.
 - **Epics**: product areas #469 Business calendars & schedule dates, #28
@@ -27,9 +42,11 @@ stories" section of `AGENTS.md`.
 - **Apply / remove labels**: `stories-update` with the story's full label list.
   Area labels in use: `actual-hosting`, `mobile`, `upstream`, and one
   `spec:<capability>` label per spec a story touches.
-- **Close**: move the story to Done when its PR merges into `development`. For
-  wontfix, apply `wontfix`, comment why, and archive it. For a duplicate, add
-  the "duplicates" relation, comment which story it duplicates, and archive it.
+- **Close**: move the story to Done when its PR merges into `development`. If
+  the PR closes without merging, move the story back to Ready to Do and
+  comment why. For wontfix, apply `wontfix`, comment why, and archive it. For a
+  duplicate, add the "duplicates" relation, comment which story it duplicates,
+  and archive it.
 
 ## Story template
 
@@ -120,7 +137,8 @@ spec is a story in #26 that carries the same `spec:` label.
   `https://github.com/kenlefeb/actual/tree/development/openspec/changes/<name>`,
   the spec paths in the description, and the `spec:` labels.
 - **Propose** (`/opsx:propose`) only for an existing story; put `sc-<id>` in
-  the proposal's Why and fill `x-shortcut`.
+  the proposal's Why and fill `x-shortcut`. A story in Propose then moves to
+  Ready to Do.
 - **Apply**: the story moves to In Progress; the PR names the story in its
   branch (`sc-<id>`) or title (`[sc-<id>]`).
 - **Unplanned work** outside the story's acceptance criteria gets its own story

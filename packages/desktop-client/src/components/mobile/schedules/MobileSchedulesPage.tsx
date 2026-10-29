@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
+import { Button } from '@actual-app/components/button';
 import { styles } from '@actual-app/components/styles';
 import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
@@ -20,6 +21,7 @@ import { useDateFormat } from '#hooks/useDateFormat';
 import { useFeatureFlag } from '#hooks/useFeatureFlag';
 import { useFormat } from '#hooks/useFormat';
 import { useNavigate } from '#hooks/useNavigate';
+import { useOpenBusinessCalendars } from '#hooks/useOpenBusinessCalendars';
 import { usePaycheckMembership } from '#hooks/usePaycheckMembership';
 import { usePayees } from '#hooks/usePayees';
 import { useSchedules } from '#hooks/useSchedules';
@@ -47,6 +49,8 @@ export function MobileSchedulesPage() {
     statuses,
   } = useSchedules({ query: schedulesQuery });
   const paychecksEnabled = useFeatureFlag('paychecks');
+  const businessCalendarsEnabled = useFeatureFlag('businessCalendars');
+  const openBusinessCalendars = useOpenBusinessCalendars();
   // A paycheck's schedules are reached from its row and editor instead
   const { scheduleIds: paycheckScheduleIds } = usePaycheckMembership();
   const listedSchedules = paychecksEnabled
@@ -163,6 +167,16 @@ export function MobileSchedulesPage() {
           }}
         />
       </View>
+      {businessCalendarsEnabled && (
+        <View style={{ padding: 10, paddingBottom: 0 }}>
+          <Button
+            style={{ minHeight: styles.mobileMinHeight }}
+            onPress={openBusinessCalendars}
+          >
+            <Trans>Business calendars</Trans>
+          </Button>
+        </View>
+      )}
       {paychecksEnabled && (
         <View style={{ padding: 10 }}>
           <PaychecksSection />

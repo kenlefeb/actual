@@ -2,6 +2,7 @@ import { MemoryRouter } from 'react-router';
 
 import type { PaycheckEntity } from '@actual-app/core/types/models';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TestProviders } from '#mocks';
@@ -10,13 +11,25 @@ import { MobileSchedulesPage } from './MobileSchedulesPage';
 
 const state = vi.hoisted(() => ({
   paychecks: false,
+  businessCalendars: false,
   listed: [] as string[],
+  navigate: vi.fn(),
 }));
 
 vi.mock('#hooks/useFeatureFlag', () => ({
   useFeatureFlag: (name: string) =>
-    name === 'paychecks' ? state.paychecks : false,
+    name === 'paychecks'
+      ? state.paychecks
+      : name === 'businessCalendars'
+        ? state.businessCalendars
+        : false,
 }));
+
+vi.mock('@actual-app/components/hooks/useResponsive', () => ({
+  useResponsive: () => ({ isNarrowWidth: true, isWideWidth: false }),
+}));
+
+vi.mock('#hooks/useNavigate', () => ({ useNavigate: () => state.navigate }));
 
 vi.mock('#hooks/useSchedules', () => ({
   useSchedules: () => ({
@@ -86,5 +99,28 @@ describe('MobileSchedulesPage paychecks', () => {
     renderPage();
     expect(screen.queryByText('Paychecks section')).not.toBeInTheDocument();
     expect(state.listed).toHaveLength(3);
+  });
+});
+
+describe('MobileSchedulesPage business calendars', () => {
+  beforeEach(() => {
+    state.businessCalendars = false;
+    state.navigate.mockReset();
+  });
+
+  it('opens the business calendars page when the feature is on', async () => {
+    state.businessCalendars = true;
+    renderPage();
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Business calendars' }),
+    );
+    expect(state.navigate).toHaveBeenCalledWith('/business-calendars');
+  });
+
+  it('hides business calendars when the feature is off', () => {
+    renderPage();
+    expect(
+      screen.queryByRole('button', { name: 'Business calendars' }),
+    ).not.toBeInTheDocument();
   });
 });

@@ -1,3 +1,5 @@
+import { MemoryRouter } from 'react-router';
+
 import type { PaycheckEntity } from '@actual-app/core/types/models';
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -62,7 +64,9 @@ vi.mock('./PaychecksSection', () => ({
 function renderPage() {
   render(
     <TestProviders>
-      <Schedules />
+      <MemoryRouter>
+        <Schedules />
+      </MemoryRouter>
     </TestProviders>,
   );
 }

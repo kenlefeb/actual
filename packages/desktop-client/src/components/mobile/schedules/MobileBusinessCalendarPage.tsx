@@ -1,0 +1,58 @@
+import { useTranslation } from 'react-i18next';
+import { Navigate, useParams } from 'react-router';
+
+import {
+  useDeleteBusinessCalendarMutation,
+  useUpdateBusinessCalendarMutation,
+} from '#business-calendars';
+import { MobileBackButton } from '#components/mobile/MobileBackButton';
+import { BusinessCalendarEditor } from '#components/modals/BusinessCalendarsModal/BusinessCalendarEditor';
+import { MobilePageHeader, Page } from '#components/Page';
+import { useBusinessCalendars } from '#hooks/useBusinessCalendars';
+import { useFeatureFlag } from '#hooks/useFeatureFlag';
+import { useNavigate } from '#hooks/useNavigate';
+
+export function MobileBusinessCalendarPage() {
+  const isEnabled = useFeatureFlag('businessCalendars');
+  if (!isEnabled) {
+    return <Navigate to="/schedules" replace />;
+  }
+  return <CalendarEditorPage />;
+}
+
+function CalendarEditorPage() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const { data: calendars = [], isPlaceholderData } = useBusinessCalendars();
+  const updateCalendar = useUpdateBusinessCalendarMutation();
+  const deleteCalendar = useDeleteBusinessCalendarMutation();
+  const calendar = calendars.find(c => c.id === id);
+  const close = () => void navigate(-1);
+
+  // Wait for the calendar before seeding the editor's draft with it
+  if (isPlaceholderData || !calendar) {
+    return null;
+  }
+
+  return (
+    <Page
+      header={
+        <MobilePageHeader
+          title={t('Edit business calendar')}
+          leftContent={<MobileBackButton onPress={close} />}
+        />
+      }
+    >
+      <BusinessCalendarEditor
+        // Remount on saved changes (undo, sync) so the draft never goes stale
+        key={JSON.stringify(calendar)}
+        calendar={calendar}
+        onSave={draft => updateCalendar.mutate(draft, { onSuccess: close })}
+        onDelete={calendarId =>
+          deleteCalendar.mutate(calendarId, { onSuccess: close })
+        }
+      />
+    </Page>
+  );
+}

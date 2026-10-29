@@ -26,7 +26,7 @@
 ## 4. Integration checks
 
 - [x] 4.1 Run the settings, flag, schedules, paychecks and mobile schedules tests in desktop-client, `yarn typecheck` and `yarn lint`; all pass
-- [ ] 4.2 In the app, check each case: with a paycheck and both flags on, the Business calendars toggle is disabled with the note; after the paycheck is deleted it can be turned off, and Paychecks turns off with it; turning Paychecks on turns both on
+- [x] 4.2 In the app, check each case: with a paycheck and both flags on, the Business calendars toggle is disabled with the note; after the paycheck is deleted it can be turned off, and Paychecks turns off with it; turning Paychecks on turns both on
 
 ## Workflow follow-up
 

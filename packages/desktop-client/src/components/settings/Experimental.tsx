@@ -59,6 +59,9 @@ function FeatureToggle({
       saveSyncedPrefs({ prefs: { [`flags.${name}`]: String(value) } }),
     );
   const reason = disableToggle ? disabledReason : null;
+  // A disabled checkbox can't take focus, so screen readers hear the reason
+  // only through its description
+  const reasonId = `${id}-reason`;
 
   return (
     <SettingsRow
@@ -70,6 +73,7 @@ function FeatureToggle({
           <FeatureDetails
             note={note}
             reason={reason}
+            reasonId={reasonId}
             error={disableToggle ? error : null}
           />
         )
@@ -93,6 +97,7 @@ function FeatureToggle({
               }
             }}
             disabled={disableToggle}
+            aria-describedby={reason ? reasonId : undefined}
             style={{ marginRight: 0 }}
           />
         </FeatureControl>
@@ -112,13 +117,19 @@ function flagsRequiring(name: FeatureFlag) {
 type FeatureDetailsProps = {
   note?: ReactNode;
   reason?: ReactNode;
+  reasonId?: string;
   error?: ReactNode;
 };
 
-function FeatureDetails({ note, reason, error }: FeatureDetailsProps) {
+function FeatureDetails({
+  note,
+  reason,
+  reasonId,
+  error,
+}: FeatureDetailsProps) {
   return (
     <>
-      {reason && <Text>{reason} </Text>}
+      {reason && <Text id={reasonId}>{reason} </Text>}
       {error && (
         <Text style={{ color: theme.errorText, fontWeight: 500 }}>
           {error}{' '}
@@ -218,7 +229,9 @@ export function ExperimentalFeatures() {
   );
   const isUsingServer = useSyncServerStatus() !== 'no-server';
   const businessCalendarsEnabled = useFeatureFlag('businessCalendars');
-  const { data: paychecks = [] } = usePaychecks();
+  const { data: paychecks = [], isPlaceholderData: isPaychecksLoading } =
+    usePaychecks();
+  const hasPaychecks = paychecks.length > 0;
 
   const showServerPrefs =
     localStorage.getItem('devEnableServerPrefs') === 'true';
@@ -309,13 +322,18 @@ export function ExperimentalFeatures() {
       </FeatureToggle>
       <FeatureToggle
         flag="businessCalendars"
-        // Paychecks are built on business calendars; turning them on is fine
-        disableToggle={businessCalendarsEnabled && paychecks.length > 0}
+        // Paychecks are built on business calendars; turning them on is fine.
+        // Locked until paychecks load, so it can't be turned off too early
+        disableToggle={
+          businessCalendarsEnabled && (isPaychecksLoading || hasPaychecks)
+        }
         disabledReason={
-          <Trans>
-            Paychecks use business calendars. Delete your paychecks to turn this
-            off.
-          </Trans>
+          hasPaychecks && (
+            <Trans>
+              Paychecks use business calendars. Delete your paychecks to turn
+              this off.
+            </Trans>
+          )
         }
       >
         <Trans>Business calendars</Trans>

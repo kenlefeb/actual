@@ -59,7 +59,7 @@ type PlannedPaycheck = { date: string; deposits: PlannedDeposit[] };
 export type PaycheckPlan = {
   netAmount: number;
   next: PlannedPaycheck | null;
-  // Occurrences before the next one that were skipped, not posted
+  // Occurrences before the next one that were skipped, not posted early
   skipped: string[];
   later: PlannedPaycheck[];
 };
@@ -67,12 +67,14 @@ export type PaycheckPlan = {
 /**
  * The next paycheck (the pay schedule's stored next date, so it includes
  * skips), any skipped before it and the three after it, each with the date
- * every deposit is expected for that pay date.
+ * every deposit is expected for that pay date. `postedDates` are the dates of
+ * the pay schedule's posted transactions.
  */
 export function planPaycheck(
   { definition }: PaycheckEntity,
   scheduleById: Map<ScheduleEntity['id'], ScheduleEntity>,
   today: string,
+  postedDates: string[],
 ): PaycheckPlan {
   const { netAmount, depositAmounts } = computePaycheck(definition);
   const pay = definition.paySchedule
@@ -101,8 +103,8 @@ export function planPaycheck(
   });
 
   // The pay schedule's own occurrences (moved off non-business days), as a
-  // zero-day relative date
-  const upcoming = getRelativeOccurrences(
+  // zero-day relative date, from a year back to find the last pay date
+  const occurrences = getRelativeOccurrences(
     {
       relativeTo: {
         scheduleId: pay.id,
@@ -111,17 +113,22 @@ export function planPaycheck(
         direction: 'after',
       },
     },
-    monthUtils.parseDate(today),
+    monthUtils.parseDate(monthUtils.addDays(today, -366)),
     monthUtils.parseDate(monthUtils.addDays(today, 366)),
   );
   const next = pay.next_date;
+  // Posted early: a pay transaction dated after the previous occurrence
+  const isPosted = (date: string, i: number) =>
+    postedDates.some(
+      posted => posted <= date && (i === 0 || posted > occurrences[i - 1]),
+    );
   return {
     netAmount,
     next: atPayDate(next),
-    // shortcut: pay schedules post on their date, so a later occurrence before
-    // next_date was skipped; one posted early by hand would show as skipped
-    skipped: upcoming.filter(date => date > today && date < next),
-    later: upcoming
+    skipped: occurrences.filter(
+      (date, i) => date > today && date < next && !isPosted(date, i),
+    ),
+    later: occurrences
       .filter(date => date > next)
       .slice(0, 3)
       .map(atPayDate),

@@ -288,3 +288,95 @@ it('budgets every occurrence of a weekly source in a goal template', async () =>
   expect(february.errors).toEqual([]);
   expect(february.to_budget).toBe(40000);
 });
+
+describe('a schedule two days after a one-time payday', () => {
+  // Payday is Tue Dec 20, 2016, once; the deposit lands Thu Dec 22
+  const occurrence = '2016-12-22';
+
+  async function createAfterOneTimePayday(postsTransaction: boolean) {
+    MockDate.set(new Date(2016, 11, 15, 12));
+    const accountId = await db.insertAccount({
+      name: 'Checking',
+      offbudget: 0,
+      closed: 0,
+    });
+    const payday = await createSchedule({
+      schedule: { name: 'Payday' },
+      conditions: [{ op: 'is', field: 'date', value: '2016-12-20' }],
+    });
+    const id = await createSchedule({
+      schedule: { name: 'Deposit', posts_transaction: postsTransaction },
+      conditions: [
+        { op: 'is', field: 'account', value: accountId },
+        { op: 'is', field: 'amount', value: -10000 },
+        {
+          op: 'isapprox',
+          field: 'date',
+          value: {
+            relativeTo: {
+              scheduleId: payday,
+              offset: 2,
+              unit: 'days',
+              direction: 'after',
+            },
+          },
+        },
+      ],
+    });
+    expect((await getSchedule(id)).next_date).toBe(occurrence);
+    MockDate.set(new Date(2017, 0, 1, 12));
+    return id;
+  }
+
+  it('is completed after its only occurrence posts', async () => {
+    const id = await createAfterOneTimePayday(true);
+
+    // As for a one-time schedule: one run posts, the next completes it
+    await advanceSchedulesService(true);
+    await advanceSchedulesService(true);
+
+    const { data: transactions } = await aqlQuery(
+      q('transactions').filter({ schedule: id }).select(['date']),
+    );
+    expect(transactions.map((t: { date: string }) => t.date)).toEqual([
+      occurrence,
+    ]);
+    expect((await getSchedule(id)).completed).toBe(true);
+  });
+
+  it('is completed once its only occurrence is paid', async () => {
+    const id = await createAfterOneTimePayday(false);
+    const { _account } = await getSchedule(id);
+    await db.insertTransaction({
+      account: _account,
+      amount: -10000,
+      date: occurrence,
+      schedule: id,
+    });
+
+    await advanceSchedulesService(true);
+
+    expect((await getSchedule(id)).completed).toBe(true);
+  });
+});
+
+it('never completes a schedule whose source still repeats', async () => {
+  MockDate.set(new Date(2016, 11, 1, 12));
+  const { id } = await createRelative('days');
+  await setNextDate({ id });
+  const { _account } = await getSchedule(id);
+  await db.insertTransaction({
+    account: _account,
+    amount: -10000,
+    date: december,
+    schedule: id,
+  });
+  MockDate.set(new Date(2017, 0, 1, 12));
+
+  await advanceSchedulesService(true);
+  await advanceSchedulesService(true);
+
+  const schedule = await getSchedule(id);
+  expect(schedule.completed).toBe(false);
+  expect(schedule.next_date).toBe('2017-01-08');
+});

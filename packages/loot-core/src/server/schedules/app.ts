@@ -761,9 +761,14 @@ async function hasTransactionForSchedule(
   return data.filter(Boolean).some(row => row.schedule === schedule.id);
 }
 
-// Relative dates repeat with their source, so they advance after posting too
+// Relative dates repeat with their source, so they advance after posting too.
+// One relative to a one-time source has a single occurrence, like a one-time
+// schedule.
 function isRecurringSchedule(schedule: ScheduleEntity): boolean {
-  return isRepeatingDate(schedule._date);
+  const date = schedule._date;
+  return isRelativeDate(date)
+    ? isRepeatingDate(getScheduleDate(date.relativeTo.scheduleId))
+    : isRepeatingDate(date);
 }
 
 async function advanceRecurringScheduleFromNextDate(
@@ -917,7 +922,11 @@ export async function advanceSchedulesService(syncSuccess) {
             // find the rule
           }
         } else {
-          if (schedule._date < currentDay()) {
+          // A relative date's single occurrence is its next date
+          const date = isRelativeDate(schedule._date)
+            ? schedule.next_date
+            : schedule._date;
+          if (date && date < currentDay()) {
             // Complete any single schedules
             await updateSchedule({
               schedule: { id: schedule.id, completed: true },

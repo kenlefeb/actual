@@ -656,14 +656,18 @@ Use the Shortcut connector when it's available; if it isn't, skip these steps
 and say so in your reply instead of guessing.
 
 - Picking work: what a story's state lets you do.
-  - Backlog: not refined yet. Don't start it or move it on yourself; ask Ken
-    to refine the backlog instead.
+  - Backlog: not defined well enough to start. It goes through Explore and
+    Propose before a developer can begin. Don't start it or move it on
+    yourself; ask Ken to refine the backlog instead.
   - Explore: explore it with `/opsx:explore` and comment what you find. Write
     no code.
   - Propose: write its OpenSpec change with `/opsx:propose`, then move the
     story to Ready to Do.
-  - Ready to Do: ready, so start it without asking. Skip stories that are
-    blocked or labelled `ready-for-human`.
+  - Ready to Do: ready, so start it without asking. Pick up only stories that
+    are not blocked and not labelled `ready-for-human`. A story that is only
+    waiting on a blocker stays in Ready to Do. It is marked blocked with
+    Shortcut's blocked flag or a `blocked` label, and linked to the blocking
+    story with a "blocks" relation.
 - Starting a story: assign yourself and move it to In Progress.
 - Checklist: every story follows the story template and checklist in
   `docs/agents/issue-tracker.md`. Complete each step's task when you finish it

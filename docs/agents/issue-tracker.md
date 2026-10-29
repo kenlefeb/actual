@@ -13,13 +13,18 @@ pass a Spec-Driven state id.
 
 | State       | ID        | Meaning                                                                   |
 | ----------- | --------- | ------------------------------------------------------------------------- |
-| Backlog     | 500000219 | Not refined; don't start.                                                 |
+| Backlog     | 500000219 | Not defined well enough to start; goes through Explore and Propose first. |
 | Explore     | 500000225 | Explore only, with `/opsx:explore`; comment, but write no code.           |
 | Propose     | 500000226 | Write the OpenSpec change with `/opsx:propose`, then move to Ready to Do. |
-| Ready to Do | 500000220 | Ready; start without asking. Skip blocked or `ready-for-human` stories.   |
+| Ready to Do | 500000220 | Ready; start without asking, unless blocked or `ready-for-human`.         |
 | In Progress | 500000221 | Being built.                                                              |
 | In Review   | 500000222 | PR open.                                                                  |
 | Done        | 500000223 | PR merged into `development`.                                             |
+
+Agents pick up only Ready to Do stories that are not blocked and not labelled
+`ready-for-human`. A story that is only waiting on a blocker stays in Ready to
+Do. Mark it blocked with Shortcut's blocked flag or a `blocked` label, and link
+it to the blocking story with a "blocks" relation (`stories-add-relation`).
 
 Story lifecycle (starting, branches, PR links, Done) follows the "Shortcut
 stories" section of `AGENTS.md`.

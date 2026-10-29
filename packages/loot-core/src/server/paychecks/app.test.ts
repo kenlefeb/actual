@@ -706,3 +706,87 @@ describe('editor additions', () => {
     ]);
   });
 });
+
+describe('clearing account', () => {
+  const status = async () => (await handlers['paychecks-clearing-status']())[0];
+
+  it('warns about a missing deposit once imports should have arrived', async () => {
+    const { pay, savings } = await createAcme();
+    expect(await status()).toMatchObject({
+      balance: 0,
+      payDate: null,
+      isWarning: false,
+    });
+
+    // November 13 pay posts; only the Savings deposit arrives
+    await schedulesApp.handlers['schedule/post-transaction']({ id: pay });
+    await reconcileTransactions('savings', [
+      { date: '2026-11-13', amount: 22500, imported_payee: 'ACME PAYROLL' },
+    ]);
+    expect(
+      (await transactions()).find(t => t.account === 'savings')?.schedule,
+    ).toBe(savings);
+
+    // Checking was expected Tuesday, November 10; Veterans Day makes its
+    // second business day after Friday, November 13
+    MockDate.set(new Date(2026, 10, 13));
+    expect((await status()).isWarning).toBe(false);
+    MockDate.set(new Date(2026, 10, 16));
+    expect(await status()).toEqual({
+      paycheck: expect.any(String),
+      clearingAccount: 'clearing',
+      balance: 202500,
+      payDate: '2026-11-13',
+      missingDeposits: [
+        { id: 'checking', account: 'checking', expectedDate: '2026-11-10' },
+      ],
+      isWarning: true,
+    });
+
+    // A late import links to the deposit and empties the account
+    await reconcileTransactions('checking', [
+      { date: '2026-11-12', amount: 202500, imported_payee: 'ACME PAYROLL' },
+    ]);
+    expect(await status()).toMatchObject({
+      balance: 0,
+      missingDeposits: [],
+      isWarning: false,
+    });
+  });
+
+  it('does not warn while imports may still arrive', async () => {
+    const { pay } = await createAcme();
+    // November 13 pay and both deposits
+    await schedulesApp.handlers['schedule/post-transaction']({ id: pay });
+    await reconcileTransactions('checking', [
+      { date: '2026-11-10', amount: 202500, imported_payee: 'ACME PAYROLL' },
+    ]);
+    await reconcileTransactions('savings', [
+      { date: '2026-11-13', amount: 22500, imported_payee: 'ACME PAYROLL' },
+    ]);
+    // November 30 pay posts; Checking is expected Wednesday, November 25
+    await db.insertTransaction({
+      account: 'clearing',
+      amount: 225000,
+      date: '2026-11-30',
+      schedule: pay,
+    });
+
+    // Thanksgiving: Checking's second business day after is November 30
+    MockDate.set(new Date(2026, 10, 26));
+    expect(await status()).toMatchObject({
+      balance: 225000,
+      payDate: '2026-11-30',
+      missingDeposits: [
+        { account: 'savings', expectedDate: '2026-11-30' },
+        { account: 'checking', expectedDate: '2026-11-25' },
+      ],
+      isWarning: false,
+    });
+    // Savings (expected November 30) has until Wednesday, December 2
+    MockDate.set(new Date(2026, 11, 2));
+    expect((await status()).isWarning).toBe(false);
+    MockDate.set(new Date(2026, 11, 3));
+    expect((await status()).isWarning).toBe(true);
+  });
+});

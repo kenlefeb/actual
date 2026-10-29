@@ -6,6 +6,7 @@ import { MemoryRouter } from 'react-router';
 
 import { generateAccount } from '@actual-app/core/mocks';
 import { initServer } from '@actual-app/core/platform/client/connection';
+import type { PaycheckEntity } from '@actual-app/core/types/models';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { SpreadsheetProvider } from '#hooks/useSpreadsheet';
@@ -43,6 +44,22 @@ describe('sidebar Account context menu', () => {
     initServer({
       query: async () => ({ data: [], dependencies: [] }),
       'get-cell': async () => ({ name: 'test-cell', value: 0 }),
+      'paychecks-get': async () => [
+        {
+          id: 'acme',
+          name: 'Acme',
+          definition: {
+            payee: null,
+            clearingAccount: 'clearing',
+            date: { start: '2026-11-01', frequency: 'monthly' },
+            weekendSolveMode: 'before',
+            grossAmount: 0,
+            incomeCategory: null,
+            deductions: [],
+            deposits: [],
+          },
+        } satisfies PaycheckEntity,
+      ],
     });
 
     store = configureTestAppStore({ queryClient: createTestQueryClient() });
@@ -117,5 +134,22 @@ describe('sidebar Account context menu', () => {
 
     expect(store.getState().contextMenu.isOpen).toBe(true);
     expect(contextMenuItemNames()).toEqual(['account-rename', 'account-close']);
+  });
+
+  it('marks a paycheck clearing account with a paycheck icon', async () => {
+    const account = { ...generateAccount('Acme Paycheck'), id: 'clearing' };
+
+    await renderRow(
+      <Account
+        name={account.name}
+        account={account}
+        to={`/accounts/${account.id}`}
+        query={bindings.accountBalance(account.id)}
+      />,
+    );
+
+    expect(
+      await screen.findByText('Clearing account for paycheck "Acme"'),
+    ).toBeInTheDocument();
   });
 });

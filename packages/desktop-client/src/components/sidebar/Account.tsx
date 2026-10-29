@@ -24,6 +24,7 @@ import { useReopenAccountMutation, useUpdateAccountMutation } from '#accounts';
 import { BalanceHistoryGraph } from '#components/accounts/BalanceHistoryGraph';
 import { Link } from '#components/common/Link';
 import { Notes } from '#components/Notes';
+import { ClearingAccountIcon } from '#components/schedules/ClearingAccount';
 import { DropHighlight, useDraggable, useDroppable } from '#components/sort';
 import type { OnDragChangeCallback, OnDropCallback } from '#components/sort';
 import { CellValue } from '#components/spreadsheet/CellValue';
@@ -254,7 +255,10 @@ export function Account<FieldName extends SheetFields<'account'>>({
                     />
                   </InitialFocus>
                 ) : (
-                  name
+                  <>
+                    {name}
+                    {account && <ClearingAccountIcon accountId={account.id} />}
+                  </>
                 )
               }
               right={

@@ -29,6 +29,8 @@ import { pushModal } from '#modals/modalsSlice';
 import { useSkipNextPaycheckMutation } from '#paychecks';
 import { useDispatch } from '#redux';
 
+import { ClearingWarning, useClearingStatus } from './ClearingAccount';
+
 // The editor is a modal on desktop and its own page on phones; no id adds one
 export function useOpenPaycheck() {
   const dispatch = useDispatch();
@@ -143,6 +145,7 @@ export function PaycheckRow({ paycheck, plan }: PaycheckRowProps) {
   const { data: accounts = [] } = useAccounts();
   const [isShowingMore, setIsShowingMore] = useState(false);
   const [isConfirmingSkip, setIsConfirmingSkip] = useState(false);
+  const clearing = useClearingStatus(paycheck.id);
 
   const formatDate = (date: string, pattern: string) =>
     monthUtils.format(date, pattern, locale);
@@ -200,6 +203,7 @@ export function PaycheckRow({ paycheck, plan }: PaycheckRowProps) {
           {t('Skipped: {{date}}', { date: formatDate(date, 'EEEE, MMMM d') })}
         </Text>
       ))}
+      {clearing?.isWarning && <ClearingWarning status={clearing} />}
       {isShowingMore && plan.later.map(renderPaycheck)}
       {next && (
         <View

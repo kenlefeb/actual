@@ -652,7 +652,14 @@ The fork's backlog lives in the Shortcut workspace `blacksmith-press`, team
 → In Review → Done). Use the Shortcut connector when it's available; if it
 isn't, skip these steps and say so in your reply instead of guessing.
 
+- Picking work: a story in To Do is ready, so start it without asking. Backlog
+  stories aren't refined yet: don't start them or move them to To Do yourself;
+  ask Ken to refine the backlog instead.
 - Starting a story: assign yourself and move it to In Progress.
+- Checklist: every story follows the story template and checklist in
+  `docs/agents/issue-tracker.md`. Complete each step's task when you finish it
+  and set yourself as its owner, so the record shows who did it. Never complete
+  "Code review" yourself; that is a person's step.
 - Branches: use the story's Shortcut branch name (it contains `sc-<id>`) when
   you choose the branch name. When the branch name is given to you, end the PR
   title with `[sc-<id>]` instead, after the `[AI]` prefix and summary. Leave the
@@ -670,3 +677,25 @@ isn't, skip these steps and say so in your reply instead of guessing.
   defects in fork changes; upstream's own problems are upstream's, except
   vulnerability findings in code that runs on the production server (the sync
   server and the web app it serves), which get a story too.
+
+OpenSpec owns what the app does; Shortcut owns work state. Link them by id and
+never copy one into the other (details in `docs/agents/issue-tracker.md`):
+
+- Every OpenSpec change names its epic and stories under `x-shortcut` in its
+  `.openspec.yaml`; a change with several stories ends each numbered `tasks.md`
+  group heading with `(sc-<id>)`. `openspec/config.yaml` repeats these rules to
+  the `/opsx:*` workflows.
+- A story links its change folder on GitHub and the specs it touches, and
+  carries a `spec:<capability>` label per spec. Requirement text stays in the
+  spec.
+- Work outside the current story's acceptance criteria gets its own story
+  first (related to the current one); do it in a separate PR or add its id to
+  this PR's title.
+- Archive a change when its last story merges; then move the stories' change
+  links to the archive path and file a Backlog story for every follow-up or
+  deferred item it lists.
+- `yarn check:openspec-shortcut` (run by Fork CI) fails when a change has no
+  stories, a group heading lacks one, a PR ticks a change's tasks without
+  naming one of its stories, or a PR names no story at all in its title
+  (`[sc-<id>]`) or branch (`sc-<id>`). File a story first, even for a release
+  or a small fix.

@@ -76,6 +76,7 @@ Before matching, a charge is flagged as:
 - Otherwise:
   - with two or more lines, it writes the children through the existing split-writing path (`batchUpdateTransactions` with child rows), so split invariants hold, and the parent changes only in its notes;
   - with one line, it updates the transaction's notes and category only (decision 6).
+- Lines take the parent's `cleared` and `reconciled` values (decision 11) and their category from decisions 8 and 10.
 
 ### 6. Allocation and rounding
 - Each line is its item's price × quantity. Tax, shipping and discount are spread across the lines in proportion to those prices, in integer cents.
@@ -100,6 +101,16 @@ Before matching, a charge is flagged as:
 - This gives per-item categorization from existing rules without side effects (spec: "Rules can categorize items").
 - Limit: conditions are evaluated against the line as given, so a category rule that depends on another rule's payee rename won't fire. That's acceptable for slice 1.
 - *Alternative:* call `runRules` and keep only `category`. Rejected, because it can insert a stray payee and runs schedules' rules.
+
+### 10. A line without a rule keeps the parent's former category (PO, #83)
+- Each line's category is the helper's result when a rule matches. Otherwise it's the category the parent had before applying, and uncategorized only if the parent was uncategorized. A one-line annotated charge follows the same rule.
+- Why: if the user already categorized the charge, itemizing must only add detail. It mustn't move that money back to uncategorized.
+- *Alternative:* leave lines uncategorized. Rejected by the PO.
+
+### 11. Reconciled transactions stay candidates (PO, #83)
+- Most past Amazon charges are reconciled, so excluding them would make importing older orders mostly useless.
+- The review marks those matches "Reconciled". Apply copies the parent's `cleared` and `reconciled` values onto every line, and never changes the parent's amount or date, so the account's reconciled balance stays the same.
+- The usual "edit a reconciled transaction?" warning isn't shown again, because the review is where the user confirms.
 
 ### 9. UI is desktop only, behind a new flag
 - The `FeatureFlag` is `amazonOrderItemization`, toggled on the Experimental settings page.
@@ -132,13 +143,6 @@ Before matching, a charge is flagged as:
 
 - There's no schema or data migration. The feature ships off behind its flag.
 - Rollback: turning the flag off removes the entry point only. Splits and notes already applied stay as ordinary transactions (spec: "Turned off after applying"). Undo, or deleting the lines by hand, removes a split.
-
-## Decisions pending the PO
-
-The Architect raised these on #83, and they've gone to the PO. Until the PO answers, the spec keeps today's wording: lines no rule categorizes stay uncategorized, and reconciled transactions are candidates.
-
-- Should a line that no rule categorizes default to the parent's category, since splitting clears the parent's category and changes what the budget shows as spent?
-- Should reconciled transactions be candidates at all, given that the app normally warns before editing them?
 
 ## Open Questions
 

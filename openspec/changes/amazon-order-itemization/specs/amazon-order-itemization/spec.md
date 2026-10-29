@@ -140,6 +140,11 @@ When a match leaves only one line, from one item or because the other lines woul
 - **WHEN** the user applies the match
 - **THEN** the transaction isn't split, and its notes name "Book ×1", the order link and the marker
 
+#### Scenario: Single-item charge takes a rule's category
+- **GIVEN** a single-item charge for a "Bulb pack ×2" in category "Shopping", and a rule "if notes contain 'Bulb' then category is Household"
+- **WHEN** the user applies the match
+- **THEN** the transaction isn't split and its category is "Household"
+
 ### Requirement: Parent keeps its bank fields
 Applying SHALL leave the transaction's account, date, amount, payee, imported id, cleared and reconciled state unchanged. It SHALL add a link to the Amazon order and an order marker to the parent's notes, keeping any existing note text.
 
@@ -147,6 +152,14 @@ Applying SHALL leave the transaction's account, date, amount, payee, imported id
 - **GIVEN** a matched transaction whose note is "birthday"
 - **WHEN** the user applies the match for order 111-0000001
 - **THEN** the note keeps "birthday" and adds the order link and the marker for 111-0000001, and the amount, date, payee and cleared state are unchanged
+
+### Requirement: Reconciled transactions can be itemized
+A reconciled transaction SHALL remain a candidate, and the review SHALL mark its match "Reconciled". Applying it SHALL give every line the parent's cleared and reconciled state, so the account's reconciled balance doesn't change.
+
+#### Scenario: Itemize a reconciled charge
+- **GIVEN** a reconciled −$32.40 transaction matched to a two-item charge
+- **WHEN** the review opens and the user applies the match
+- **THEN** the review marked the match "Reconciled", both lines are cleared and reconciled, and the account's reconciled balance is unchanged
 
 ### Requirement: Applying is undoable
 Applying one match or all selected matches SHALL be one undoable step that restores every changed transaction.
@@ -156,12 +169,22 @@ Applying one match or all selected matches SHALL be one undoable step that resto
 - **THEN** all five transactions are back to how they were before
 
 ### Requirement: Rules can categorize items
-Applying SHALL evaluate the budget's transaction rules against each new line and set only the category they would set, so a rule matching a line's note can categorize it. It SHALL NOT change any other field, create payees or other records, or use a schedule's own rule. Lines that no rule categorizes SHALL stay uncategorized.
+Applying SHALL evaluate the budget's transaction rules against each new line and set only the category they would set, so a rule matching a line's note can categorize it. It SHALL NOT change any other field, create payees or other records, or use a schedule's own rule. A line that no rule categorizes SHALL keep the parent's former category, and SHALL stay uncategorized only if the parent was uncategorized.
 
 #### Scenario: Rule sets the category from the note
 - **GIVEN** a rule "if notes contain 'Bulb' then category is Household"
 - **WHEN** the user applies a match with a "Bulb pack ×2" line
 - **THEN** that line's category is Household
+
+#### Scenario: No rule matches a categorized charge
+- **GIVEN** a −$32.40 transaction in category "Shopping", matched to a lamp and a bulb pack, and no rule that matches either line
+- **WHEN** the user applies the match
+- **THEN** both lines are in "Shopping"
+
+#### Scenario: A rule overrides the former category
+- **GIVEN** a transaction in "Shopping" with a "Bulb pack ×2" line, and a rule "if notes contain 'Bulb' then category is Household"
+- **WHEN** the user applies the match
+- **THEN** the bulb line is in "Household" and the other line is in "Shopping"
 
 #### Scenario: Rule that sets a new payee
 - **GIVEN** a rule "if notes contain 'Gift' then set payee to 'Gifts'", and no payee named "Gifts"

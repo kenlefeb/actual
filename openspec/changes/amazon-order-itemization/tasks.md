@@ -43,6 +43,8 @@
   - "A free item";
   - "Single-item charge";
   - "Rule that sets a new payee": no payee row is added;
+  - "No rule matches a categorized charge", "A rule overrides the former category" and "Single-item charge takes a rule's category";
+  - "Itemize a reconciled charge": the lines are cleared and reconciled, and the reconciled balance is unchanged;
   - "Bank sync updates the date": calls `reconcileTransactions` on the itemized transaction, and pins that a rule's category can land on the split parent (existing upstream behavior);
   - "Bank file imported again": calls `reconcileTransactions` with a file-style row (no `imported_id`) for an itemized multi-line charge and for an annotated single-item charge, and checks that each matches the original transaction.
 
@@ -53,7 +55,7 @@
 
   Verify they fail.
 - [ ] 4.2 Add the category-only rules helper next to `runRules` (design decision 8), with unit tests: it returns the category of the last matching `set category` rule, ignores schedule rules, and inserts no payee. Verify that the tests and the existing `transaction-rules` tests pass.
-- [ ] 4.3 Implement `amazon-orders-apply` (design decisions 5 to 7) as one undoable mutation, and register `amazon-orders-parse` and `amazon-orders-apply` in the app's handlers. Verify that 4.1 passes, along with the existing `server/accounts` and `server/transactions` tests.
+- [ ] 4.3 Implement `amazon-orders-apply` (design decisions 5 to 7, 10 and 11) as one undoable mutation, and register `amazon-orders-parse` and `amazon-orders-apply` in the app's handlers. Verify that 4.1 passes, along with the existing `server/accounts` and `server/transactions` tests.
 
 ## 5. Flag, entry point and review
 
@@ -63,6 +65,7 @@
   - "Import stays on the device", which spies on the network connection and checks that no request leaves the worker;
   - "Close the review";
   - choosing a candidate for an ambiguous charge;
+  - a reconciled match is marked "Reconciled";
   - a gift-card charge has no checkbox.
 
   Verify that the tests and `yarn typecheck` pass. Tell the Director before editing `accounts/Header.tsx`, because other stories touch that file.

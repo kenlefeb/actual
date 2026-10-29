@@ -52,7 +52,7 @@ export file --adapter--> Order { id, paymentMethods[], charges[] }
 
 ### 4. Matching runs one query, then a one-to-one assignment
 Matching:
-- One query finds on-budget, non-tombstoned, non-split transactions (neither parents nor children) that aren't transfers (`transfer_id IS NULL`), with an amount among the charges' negated amounts, dated from the earliest ship date −1 to the latest +5 days.
+- One query finds on-budget, non-tombstoned, non-split transactions (neither parents nor children) that aren't transfers (`transfer_id IS NULL`) and whose notes carry no `#amazon` marker for any order, with an amount among the charges' negated amounts, dated from the earliest ship date −1 to the latest +5 days.
 - Each charge's candidates are those with its exact amount, dated from its own ship date −1 to +5 days.
 
 Ranking:
@@ -72,7 +72,7 @@ Before matching, a charge is flagged as:
 
 ### 5. Applying is one undoable mutation that re-checks each match
 - `amazon-orders-apply` takes the matches the user confirmed (charge plus transaction id) and runs as one `mutator(undoable(...))` step.
-- For each match, it re-reads the transaction. It skips it, with a reason, if the transaction's amount changed, it's now split or a transfer, it's deleted, or it already carries the marker. The review shows those reasons.
+- For each match, it re-reads the transaction. It skips it, with a reason, if the transaction's amount changed, it's now split or a transfer, it's deleted, or its notes carry an `#amazon` marker for any order. The review shows those reasons.
 - Otherwise:
   - with two or more lines, it writes the children through the existing split-writing path (`batchUpdateTransactions` with child rows), so split invariants hold, and the parent changes only in its notes;
   - with one line, it updates the transaction's notes and category only (decision 6).
@@ -134,6 +134,8 @@ Before matching, a charge is flagged as:
 - **[Trade-off] Gift-card and points orders can't be itemized in slice 1.** They're listed, never hidden (spec: "Gift cards and points are not matched").
 - **[Risk] Another device's note edit drops the marker (ADR 3, last write wins on the `notes` cell).**
   → Applying twice is still impossible, because split parents are never candidates. The "already split" fallback shows the charge as "Already split" rather than "Not matched". An annotated one-line charge that loses its marker could be offered again; the review still shows it for the user to confirm.
+- **[Risk] An annotated one-line charge is matched again to a different order of the same amount.**
+  → Excluded: any transaction with an `#amazon` marker for any order is never a candidate and is skipped by apply's re-check (decisions 4 and 5). Split parents were already excluded, so this matters only for annotated charges.
 - **[Risk] Two devices apply the same charge before they sync.**
   → Each writes its own lines, so the parent ends up with both sets and its split no longer adds up. Actual shows its usual split-amount warning, and the user deletes one set. Manual splits made on two devices have the same risk upstream.
 - **[Risk] On bank re-sync, reconcile writes `existing.category || trans.category` onto the split parent.**

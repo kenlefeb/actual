@@ -45,12 +45,17 @@ The app SHALL group an order's items by shipment into charges. A charge's amount
 - **THEN** the review shows two charges for 111-0000001: $12.96 shipped November 2 and $32.40 shipped November 4
 
 ### Requirement: Match by amount and date
-A charge SHALL match an expense transaction of exactly its amount, dated from one day before to five days after its ship date. The transaction SHALL be in an on-budget account, not deleted, not a transfer, and not already split or a split line. Off-budget accounts SHALL NOT be searched.
+A charge SHALL match an expense transaction of exactly its amount, dated from one day before to five days after its ship date. The transaction SHALL be in an on-budget account, not deleted, not a transfer, not already split or a split line, and not already itemized for any order. Off-budget accounts SHALL NOT be searched.
 
 #### Scenario: Already split by hand
 - **GIVEN** a $32.40 charge shipped November 4, and the only −$32.40 transaction on November 5 was already split by the user
 - **WHEN** the export is imported
 - **THEN** the charge shows "Already split", it can't be applied, and the user's split is untouched
+
+#### Scenario: Annotated for another order
+- **GIVEN** the −$12.96 transaction was annotated for order A, and a later export has order B for $12.96, shipped a day after A
+- **WHEN** the export is imported
+- **THEN** that transaction is not a candidate for order B, and B is not matched to it
 
 #### Scenario: Transfer is never a candidate
 - **GIVEN** a $25.00 charge shipped November 3, and the only −$25.00 transaction on November 4 is a transfer from Checking to a card account

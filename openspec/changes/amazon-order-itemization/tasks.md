@@ -26,7 +26,8 @@
   - "Payee is a hint, not a filter";
   - "Two same-day orders of the same amount";
   - "Paid with a card that isn't in the budget";
-  - "Transfer is never a candidate".
+  - "Transfer is never a candidate";
+  - "Annotated for another order": a transaction annotated for order A is never a candidate for order B.
 
   Add two more tests: an off-budget account's transaction is never a candidate, and a split parent of the exact amount without a marker shows "Already split". Verify they fail.
 - [ ] 3.2 Implement the query and the one-to-one assignment (design decision 4). Verify that 3.1 passes.
@@ -49,7 +50,7 @@
   - "Bank file imported again": calls `reconcileTransactions` with a file-style row (no `imported_id`) for an itemized multi-line charge and for an annotated single-item charge, and checks that each matches the original transaction.
 
   Also cover:
-  - apply skips, with a reason, a transaction whose amount changed, that was split or that became a transfer after the review;
+  - apply skips, with a reason, a transaction whose amount changed, that was split, that became a transfer, or that was annotated for any order after the review;
   - a rule that would rename the payee leaves the parent's payee alone;
   - a schedule's own rule never sets a line's category.
 

@@ -372,17 +372,31 @@ export async function loadScheduleDateLookup() {
 // their stored next dates after the source changes or is deleted. Runs inside
 // the caller's undoable mutation, so undo restores both.
 async function refreshRelativeDependents(sourceId: string) {
+  // The lookup still holds the source's previous date until the refresh
+  const wasRepeating = isRepeatingDate(getScheduleDate(sourceId));
   await refreshScheduleDateLookup();
-  for (const { id } of await getRelativeDependents(sourceId)) {
+  // Dependents completed after a one-time source passed reopen once it
+  // starts repeating; ones completed by hand stay completed otherwise
+  const startsRepeating =
+    !wasRepeating && isRepeatingDate(getScheduleDate(sourceId));
+  for (const { id, completed } of await getRelativeDependents(sourceId, {
+    includeCompleted: startsRepeating,
+  })) {
+    if (completed) {
+      await db.updateWithSchema('schedules', { id, completed: false });
+    }
     await setNextDate({ id, clearIfNone: true });
   }
 }
 
-function getRelativeDependents(sourceId: string) {
-  return db.all<{ id: string }>(
-    `SELECT s.id FROM schedules s JOIN rules r ON r.id = s.rule
-     WHERE s.tombstone = 0 AND s.completed = 0 AND r.conditions LIKE ?`,
-    [`%"scheduleId":"${sourceId}"%`],
+function getRelativeDependents(
+  sourceId: string,
+  { includeCompleted = false } = {},
+) {
+  return db.all<{ id: string; completed: number }>(
+    `SELECT s.id, s.completed FROM schedules s JOIN rules r ON r.id = s.rule
+     WHERE s.tombstone = 0 AND (s.completed = 0 OR ?) AND r.conditions LIKE ?`,
+    [includeCompleted ? 1 : 0, `%"scheduleId":"${sourceId}"%`],
   );
 }
 
@@ -802,6 +816,9 @@ async function advanceRecurringScheduleFromNextDate(
 // TODO: make this sequential
 
 export async function advanceSchedulesService(syncSuccess) {
+  // A sync may have just changed a source schedule's date
+  await refreshScheduleDateLookup();
+
   // Move all paid schedules
   const { data: schedules } = await aqlQuery(
     q('schedules')

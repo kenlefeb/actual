@@ -325,11 +325,59 @@ describe('a schedule two days after a one-time payday', () => {
     });
     expect((await getSchedule(id)).next_date).toBe(occurrence);
     MockDate.set(new Date(2017, 0, 1, 12));
-    return id;
+    return { id, payday };
   }
 
+  async function completeAfterPayday() {
+    const ids = await createAfterOneTimePayday(false);
+    const { _account } = await getSchedule(ids.id);
+    await db.insertTransaction({
+      account: _account,
+      amount: -10000,
+      date: occurrence,
+      schedule: ids.id,
+    });
+    await advanceSchedulesService(true);
+    expect((await getSchedule(ids.id)).completed).toBe(true);
+    return ids;
+  }
+
+  const setPaydayDate = (payday: string, value: string | RecurConfig) =>
+    schedulesApp.handlers['schedule/update']({
+      schedule: { id: payday },
+      conditions: [
+        {
+          op: typeof value === 'string' ? 'is' : 'isapprox',
+          field: 'date',
+          value,
+        },
+      ],
+    });
+
+  it('reopens when its source starts repeating', async () => {
+    const { id, payday } = await completeAfterPayday();
+
+    // Payday now repeats on the 20th; two days after is Sun Jan 22
+    await setPaydayDate(payday, {
+      ...paydayDate,
+      start: '2016-12-20',
+    });
+
+    const schedule = await getSchedule(id);
+    expect(schedule.completed).toBe(false);
+    expect(schedule.next_date).toBe('2017-01-22');
+  });
+
+  it('stays completed when its one-time source moves to another one-time date', async () => {
+    const { id, payday } = await completeAfterPayday();
+
+    await setPaydayDate(payday, '2017-02-20');
+
+    expect((await getSchedule(id)).completed).toBe(true);
+  });
+
   it('is completed after its only occurrence posts', async () => {
-    const id = await createAfterOneTimePayday(true);
+    const { id } = await createAfterOneTimePayday(true);
 
     // As for a one-time schedule: one run posts, the next completes it
     await advanceSchedulesService(true);
@@ -345,7 +393,7 @@ describe('a schedule two days after a one-time payday', () => {
   });
 
   it('is completed once its only occurrence is paid', async () => {
-    const id = await createAfterOneTimePayday(false);
+    const { id } = await createAfterOneTimePayday(false);
     const { _account } = await getSchedule(id);
     await db.insertTransaction({
       account: _account,

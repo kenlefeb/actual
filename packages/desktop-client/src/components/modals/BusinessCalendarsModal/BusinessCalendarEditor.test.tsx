@@ -7,6 +7,14 @@ import { TestProviders } from '#mocks';
 
 import { BusinessCalendarEditor } from './BusinessCalendarEditor';
 
+const responsive = vi.hoisted(() => ({ isNarrowWidth: false }));
+vi.mock('@actual-app/components/hooks/useResponsive', () => ({
+  useResponsive: () => ({
+    isNarrowWidth: responsive.isNarrowWidth,
+    isWideWidth: !responsive.isNarrowWidth,
+  }),
+}));
+
 const federal = {
   id: 'federal',
   name: 'U.S. Federal Holidays',
@@ -151,5 +159,28 @@ describe('BusinessCalendarEditor', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(onSave.mock.calls[0][0].nonWorkingDays).toEqual([0, 1, 2, 3, 4, 6]);
+  });
+
+  it('keeps the compact dialog layout, with Delete beside Save', () => {
+    renderEditor();
+    const remove = screen.getByRole('button', { name: 'Delete calendar' });
+    const save = screen.getByRole('button', { name: 'Save' });
+
+    // One footer row, Delete first
+    expect(remove.parentElement).toBe(save.parentElement);
+    expect(
+      remove.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(save).not.toHaveStyle({ width: '100%' });
+
+    // Touch-sized minimums are for phones only
+    for (const control of [
+      ...screen.getAllByRole('button'),
+      ...screen.getAllByRole('textbox'),
+      ...screen.getAllByRole('checkbox').map(box => box.closest('label')),
+    ]) {
+      expect(control).not.toHaveStyle({ minHeight: '40px' });
+      expect(control).not.toHaveStyle({ minWidth: '40px' });
+    }
   });
 });

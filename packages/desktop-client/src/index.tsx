@@ -140,3 +140,6 @@ document.addEventListener('keydown', e => {
     }
   }
 });
+
+// THROWAWAY sc-626: a deliberate syntax error so the browser build must fail. Never merged.
+const brokenBuild = ;

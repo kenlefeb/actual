@@ -60,3 +60,48 @@ jobs:
           else
             node fork/scripts/check-openspec-shortcut.mjs
           fi
+
+  # Mobile e2e in the same Docker setup as actual-hosting's staging build
+  # (sc-625). The job always reports `mobile-e2e`, so it can be a required
+  # check; its scope step skips the run unless the PR touches packages or
+  # dependencies. Needs no secrets.
+  mobile-e2e:
+    if: github.repository == 'kenlefeb/actual'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          # A pull request checks out its merge commit; HEAD^1 is the base.
+          fetch-depth: 2
+      - name: Decide whether the mobile e2e tests apply
+        id: scope
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != pull_request ] ||
+            git diff --name-only HEAD^1 HEAD | grep -Eq '^(packages/|yarn\.lock$|package\.json$|\.yarn/|\.yarnrc\.yml$|sync-server\.Dockerfile$|\.github/workflows/fork-ci\.yml$)'; then
+            echo run=true >> "$GITHUB_OUTPUT"
+          else
+            echo 'No package or dependency changes; skipping mobile e2e.'
+            echo run=false >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build the dependency image
+        if: steps.scope.outputs.run == 'true'
+        run: docker build --target deps -f sync-server.Dockerfile -t actual-mobile-deps .
+      - name: Mobile e2e
+        if: steps.scope.outputs.run == 'true'
+        # Chromium crashes in Docker without a larger /dev/shm.
+        run: |
+          docker run --rm --shm-size=2g --mount "type=bind,src=$PWD,dst=/app" -v actual-mobile-modules:/app/node_modules -v actual-mobile-yarn-cache:/app/.yarn/cache actual-mobile-deps sh -eu -c '
+            git config --global --add safe.directory /app
+            yarn install --immutable
+            yarn workspace @actual-app/web playwright install --with-deps chromium
+            E2E_WORKERS=1 yarn workspace @actual-app/web playwright test mobile-receipts.mobile.test.ts version.mobile.test.ts paychecks.mobile.test.ts --workers=1 --retries=0 --reporter=line
+          '
+      - name: Upload the Playwright results
+        if: failure() && steps.scope.outputs.run == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mobile-e2e-results
+          path: packages/desktop-client/test-results/
+          retention-days: 7

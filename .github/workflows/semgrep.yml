@@ -24,4 +24,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
+      # semgrep ci passes without a token while scanning nothing
+      - name: Require token
+        run: test -n "$SEMGREP_APP_TOKEN" || { echo "::error::SEMGREP_APP_TOKEN is not set"; exit 1; }
       - run: semgrep ci

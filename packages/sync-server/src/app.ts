@@ -40,7 +40,8 @@ if (process.env.NODE_ENV !== 'development') {
       max: 500,
       legacyHeaders: false,
       standardHeaders: true,
-      // Tailnet devices can't rotate their addresses, so per-address keys are safe
+      // Fork-only: safe only because this server is tailnet-only, where devices
+      // can't rotate addresses. Revert if it's ever public (Funnel, public route).
       ipv6Subnet: false,
     }),
   );

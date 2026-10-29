@@ -23,11 +23,11 @@ test('Settings displays the customized client version', async ({ browser }) => {
       'Local file — not syncing',
     );
     await page.goto('/settings');
+    // Settings shows the version as the "Client version" row's value
     await expect(
-      page.getByText(`Client version: v${version}`, {
-        exact: true,
-      }),
+      page.getByText('Client version', { exact: true }),
     ).toBeVisible();
+    await expect(page.getByText(`v${version}`, { exact: true })).toBeVisible();
   } finally {
     await page.close();
   }

@@ -14,7 +14,8 @@ stories" section of `AGENTS.md`.
 - **Create a story**: `stories-create` with `team` "Kenneth LeFebvre's Team",
   the matching `epic`, and the Backlog state. Type `bug` for defects, `chore`
   for maintenance, `feature` otherwise. Search first (`stories-search`) so you
-  don't file a duplicate.
+  don't file a duplicate. Use the story template below, including its
+  checklist.
 - **Epics**: product areas #469 Business calendars & schedule dates, #28
   Paychecks and #470 Baseline fork behavior; work streams #27 Fork maintenance
   & hosting and #26 Upstream contributions. Ask before creating a new epic.
@@ -29,6 +30,59 @@ stories" section of `AGENTS.md`.
 - **Close**: move the story to Done when its PR merges into `development`. For
   wontfix, apply `wontfix`, comment why, and archive it. For a duplicate, add
   the "duplicates" relation, comment which story it duplicates, and archive it.
+
+## Story template
+
+Every story uses this shape, whoever files it. The description:
+
+```markdown
+## Why
+
+The problem or need, in a sentence or two.
+
+## What to build
+
+The scope, and what is out of scope when that helps.
+
+## Acceptance
+
+- Each scenario, or a link to the spec requirement it meets.
+
+## Specs
+
+- `openspec/specs/<capability>/spec.md`, or "none".
+```
+
+A `bug` story replaces "What to build" with "What's wrong" (steps, expected,
+actual) and names the spec and requirement it breaks.
+
+Right after creating the story, add the checklist as Shortcut tasks
+(`stories-add-task`), in this order:
+
+1. Spec: OpenSpec change proposed or updated
+2. Tests: failing tests written first
+3. Build: implementation done
+4. Checks: lint, typecheck and tests pass
+5. Self-review: the author read the whole diff
+6. Code review: a person reviewed the PR
+7. Release note or fork news, if user-facing
+8. Archive: OpenSpec change archived, if this is its last story
+
+**Who did each step.** Shortcut keeps a task's owners and completion time, not
+who ticked it. So whoever finishes a step completes the task and sets
+themselves as its only owner in the same `stories-update-task` call
+(`isCompleted: true`, `taskOwnerIds: [<your user id>]`; `users-get-current`
+gives the id). A step that doesn't apply is completed the same way with its
+description changed to start with `n/a:` and the reason, for example
+`Spec: n/a: no behavior change`.
+
+- Agents act through the Shortcut account the connector is signed in as, so a
+  task owned by that account was done by an agent.
+- "Code review" is a person's step: an agent never completes it. A reviewer
+  completes it after approving the PR, or Ken completes it when he has read
+  the diff. "Self-review" is the author's, agent or person.
+- Before moving a story to Done, every task is complete; an unfinished one
+  stays open with a comment saying why.
 
 ## OpenSpec changes and specs
 

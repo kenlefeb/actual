@@ -730,9 +730,9 @@ The rule of a schedule that a paycheck generated can't be updated: the app manag
 
 #### `deleteRule`
 
-<Method name="deleteRule" args={[{ name: 'id', type: 'id' }]} returns="Promise<null>" />
+<Method name="deleteRule" args={[{ name: 'id', type: 'id' }]} returns="Promise<boolean>" />
 
-Delete a rule. A rule that belongs to a schedule isn't deleted, and the call resolves to `false`.
+Delete a rule. Resolves to `true` once the rule is deleted. A rule that belongs to a schedule isn't deleted, and the call resolves to `false`.
 
 #### Examples
 

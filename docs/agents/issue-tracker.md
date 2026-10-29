@@ -99,7 +99,7 @@ Right after creating the story, add the checklist as Shortcut tasks
 3. Build: implementation done
 4. Checks: lint, typecheck and tests pass
 5. Self-review: the author read the whole diff
-6. Code review: a person reviewed the PR
+6. Code review: the required roles approved the PR
 7. Release note or fork news, if user-facing
 8. Archive: OpenSpec change archived, if this is its last story
 
@@ -116,9 +116,10 @@ description changed to start with `n/a:` and the reason, for example
 
 - Agents act through the Shortcut account the connector is signed in as, so a
   task owned by that account was done by an agent.
-- "Code review" is a person's step: an agent never completes it. A reviewer
-  completes it after approving the PR, or Ken completes it when he has read
-  the diff. "Self-review" is the author's, agent or person.
+- "Code review" is completed by a reviewer that isn't the author, once its
+  counted `Approved` comment is posted (`docs/agents/team.md`). The reviewer may
+  be an agent role (Ken, 2026-10-29) or Ken himself. "Self-review" is the
+  author's, agent or person.
 - Before moving a story to Done, every task is complete; an unfinished one
   stays open with a comment saying why.
 

@@ -366,6 +366,7 @@ export type Modal =
         onEditNotes: (id: NoteEntity['id']) => void;
         onClose?: () => void;
         onReconcile?: () => void;
+        onEditBusinessDays?: (accountId: AccountEntity['id']) => void;
       };
     }
   | {

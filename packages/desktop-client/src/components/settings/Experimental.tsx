@@ -12,10 +12,13 @@ import { Permissions } from '#auth/types';
 import { Link } from '#components/common/Link';
 import { Checkbox } from '#components/forms';
 import { useLoginMethod, useMultiuserEnabled } from '#components/ServerContext';
-import { useFeatureFlag } from '#hooks/useFeatureFlag';
+import { FEATURE_FLAG_REQUIRES, useFeatureFlag } from '#hooks/useFeatureFlag';
+import { usePaychecks } from '#hooks/usePaychecks';
 import { useServerPref } from '#hooks/useServerPref';
 import { useSyncedPref } from '#hooks/useSyncedPref';
 import { useSyncServerStatus } from '#hooks/useSyncServerStatus';
+import { saveSyncedPrefs } from '#prefs/prefsSlice';
+import { useDispatch } from '#redux';
 
 import { SettingsGroup } from './SettingsGroup';
 import { SettingsRow } from './SettingsRow';
@@ -24,6 +27,8 @@ type FeatureToggleProps = {
   flag: FeatureFlag;
   disableToggle?: boolean;
   error?: ReactNode;
+  // Why the toggle is disabled, in the row's neutral description style
+  disabledReason?: ReactNode;
   children: ReactNode;
   feedbackLink?: string;
   note?: ReactNode;
@@ -37,6 +42,7 @@ function FeatureToggle({
   disableToggle = false,
   feedbackLink,
   error,
+  disabledReason,
   children,
   note,
   isSubFeature = false,
@@ -44,11 +50,15 @@ function FeatureToggle({
   onDisable,
 }: FeatureToggleProps) {
   const enabled = useFeatureFlag(flagName);
-  const [_, setFlagPref] = useSyncedPref(`flags.${flagName}`);
-  const [__, setBusinessCalendarsPref] = useSyncedPref(
-    'flags.businessCalendars',
-  );
+  const dispatch = useDispatch();
   const id = `settings-flag-${flagName}`;
+  // One key per save; a half-applied cascade is safe because a flag counts
+  // as on only while the flags it requires are on
+  const setFlag = (name: FeatureFlag, value: boolean) =>
+    void dispatch(
+      saveSyncedPrefs({ prefs: { [`flags.${name}`]: String(value) } }),
+    );
+  const reason = disableToggle ? disabledReason : null;
 
   return (
     <SettingsRow
@@ -56,8 +66,12 @@ function FeatureToggle({
       title={children}
       isNested={isSubFeature}
       description={
-        (note || (disableToggle && error)) && (
-          <FeatureDetails note={note} error={disableToggle ? error : null} />
+        (note || reason || (disableToggle && error)) && (
+          <FeatureDetails
+            note={note}
+            reason={reason}
+            error={disableToggle ? error : null}
+          />
         )
       }
       control={
@@ -66,13 +80,16 @@ function FeatureToggle({
             id={id}
             checked={enabled}
             onChange={() => {
-              setFlagPref(String(!enabled));
-              // Paychecks are built on business calendars
-              if (flagName === 'paychecks' && !enabled) {
-                setBusinessCalendarsPref('true');
-              }
+              setFlag(flagName, !enabled);
               if (enabled) {
+                for (const dependent of flagsRequiring(flagName)) {
+                  setFlag(dependent, false);
+                }
                 onDisable?.();
+              } else {
+                for (const required of FEATURE_FLAG_REQUIRES[flagName] ?? []) {
+                  setFlag(required, true);
+                }
               }
             }}
             disabled={disableToggle}
@@ -86,14 +103,22 @@ function FeatureToggle({
   );
 }
 
+function flagsRequiring(name: FeatureFlag) {
+  return (
+    Object.entries(FEATURE_FLAG_REQUIRES) as Array<[FeatureFlag, FeatureFlag[]]>
+  ).flatMap(([flag, requires]) => (requires.includes(name) ? [flag] : []));
+}
+
 type FeatureDetailsProps = {
   note?: ReactNode;
+  reason?: ReactNode;
   error?: ReactNode;
 };
 
-function FeatureDetails({ note, error }: FeatureDetailsProps) {
+function FeatureDetails({ note, reason, error }: FeatureDetailsProps) {
   return (
     <>
+      {reason && <Text>{reason} </Text>}
       {error && (
         <Text style={{ color: theme.errorText, fontWeight: 500 }}>
           {error}{' '}
@@ -192,6 +217,8 @@ export function ExperimentalFeatures() {
     'flags.goalTemplatesUIEnabled',
   );
   const isUsingServer = useSyncServerStatus() !== 'no-server';
+  const businessCalendarsEnabled = useFeatureFlag('businessCalendars');
+  const { data: paychecks = [] } = usePaychecks();
 
   const showServerPrefs =
     localStorage.getItem('devEnableServerPrefs') === 'true';
@@ -280,7 +307,17 @@ export function ExperimentalFeatures() {
       >
         <Trans>Monte Carlo Analysis Report</Trans>
       </FeatureToggle>
-      <FeatureToggle flag="businessCalendars">
+      <FeatureToggle
+        flag="businessCalendars"
+        // Paychecks are built on business calendars; turning them on is fine
+        disableToggle={businessCalendarsEnabled && paychecks.length > 0}
+        disabledReason={
+          <Trans>
+            Paychecks use business calendars. Delete your paychecks to turn this
+            off.
+          </Trans>
+        }
+      >
         <Trans>Business calendars</Trans>
       </FeatureToggle>
       <FeatureToggle flag="paychecks">

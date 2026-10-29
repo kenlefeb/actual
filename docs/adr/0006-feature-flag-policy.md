@@ -18,33 +18,33 @@ calendars.
   a calendar or a relative date keep computing those dates
   (`schedule-business-days` and `schedule-relative-dates`, "Feature turned off
   later"). Paychecks keep their schedules.
-- **Dependent flags.** Turning `paychecks` on turns `businessCalendars` on.
-  An unset `paychecks` flag counts as on when the budget already has a paycheck
-  or `businessCalendars` is on (`paychecks`, "Paychecks feature"). Decided on
-  sc-557 and not built yet: while a paycheck exists, `businessCalendars` can't
-  be turned off. With no paycheck, turning `businessCalendars` off also turns
-  `paychecks` off. The dependency is declared once, in a map of which flag
-  requires which.
+- **Dependent flags.** A flag's dependencies are declared once, in
+  `FEATURE_FLAG_REQUIRES` (`paychecks` requires `businessCalendars`). A flag
+  counts as on only while the flags it requires are on. Turning it on turns
+  them on, and turning one of them off turns it off. An unset `paychecks` flag
+  counts as on exactly when `businessCalendars` is on (`paychecks`, "Paychecks
+  feature"). While a paycheck exists, the `businessCalendars` toggle can't be
+  turned off (`business-calendars`, "Experimental feature flag").
 
 ## What the code does today
 
-- [`useFeatureFlag.ts:28-45`](../../packages/desktop-client/src/hooks/useFeatureFlag.ts)
-  derives the unset `paychecks` flag with a paychecks query inside the
-  generic hook.
-- [`Experimental.tsx:47-73`](../../packages/desktop-client/src/components/settings/Experimental.tsx)
-  hard-codes "turning on `paychecks` sets `businessCalendars`" in the generic
-  toggle.
-- Nothing stops `businessCalendars` being turned off while `paychecks` is on.
-  In that state the paycheck editor still shows calendar and days-early fields
-  (`PaycheckFormFields.tsx:390`). sc-557 fixes all three points.
+- [`useFeatureFlag.ts`](../../packages/desktop-client/src/hooks/useFeatureFlag.ts)
+  declares `FEATURE_FLAG_REQUIRES` and applies it for every flag. `paychecks`
+  defaults to on, so an unset flag follows `businessCalendars`. The hook reads
+  all flags with one selector and runs no queries.
+- [`Experimental.tsx`](../../packages/desktop-client/src/components/settings/Experimental.tsx)
+  `FeatureToggle` writes a flag's requirements on and its dependents off,
+  one pref key at a time. It has no flag names. The Business calendars row in
+  the feature list passes the paycheck lock (`disableToggle` and
+  `disabledReason`).
 
 ## Consequences
 
 - API scripts and synced devices see fork data whatever the flags say on any
   one device.
-- A new fork flag declares any flag it depends on in the requires map (after
-  sc-557). It never adds feature-specific branches to `useFeatureFlag` or
-  `FeatureToggle`.
+- A new fork flag declares any flag it depends on in
+  `FEATURE_FLAG_REQUIRES`. It never adds feature-specific branches to
+  `useFeatureFlag` or `FeatureToggle`.
 - Each spec states its "hidden when the feature is off" scenario, plus what
   happens to existing data when the feature is turned off.
 

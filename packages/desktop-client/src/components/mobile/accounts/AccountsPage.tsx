@@ -31,6 +31,7 @@ import { makeAmountFullStyle } from '#components/budget/util';
 import { MOBILE_NAV_HEIGHT } from '#components/mobile/MobileNavTabs';
 import { PullToRefresh } from '#components/mobile/PullToRefresh';
 import { MobilePageHeader, Page } from '#components/Page';
+import { ClearingAccountIcon } from '#components/schedules/ClearingAccount';
 import { CellValue, CellValueText } from '#components/spreadsheet/CellValue';
 import { useAccounts } from '#hooks/useAccounts';
 import { useLocalPref } from '#hooks/useLocalPref';
@@ -191,17 +192,30 @@ function AccountListItem({
                 opacity: isConnected ? 1 : 0,
               }}
             />
-            <TextOneLine
+            {/* The name shrinks to an ellipsis; the icon right after it never shrinks */}
+            <View
               style={{
-                ...styles.text,
-                fontSize: 17,
-                fontWeight: 600,
-                color: isUpdated ? theme.mobileAccountText : theme.pillText,
+                flexDirection: 'row',
+                alignItems: 'center',
+                minWidth: 0,
+                // Keep a gap between the icon and the balance
+                marginRight: 8,
               }}
-              data-testid="account-name"
             >
-              {account.name}
-            </TextOneLine>
+              <TextOneLine
+                style={{
+                  ...styles.text,
+                  fontSize: 17,
+                  fontWeight: 600,
+                  color: isUpdated ? theme.mobileAccountText : theme.pillText,
+                  minWidth: 0,
+                }}
+                data-testid="account-name"
+              >
+                {account.name}
+              </TextOneLine>
+              <ClearingAccountIcon accountId={account.id} size={14} />
+            </View>
           </View>
           <CellValue binding={getBalanceQuery(account.id)} type="financial">
             {props => (

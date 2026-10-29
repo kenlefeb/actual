@@ -25,6 +25,7 @@ import { markAccountRead } from '#accounts/accountsSlice';
 import * as reconciliation from '#accounts/reconciliation';
 import { ReconcilingBanner } from '#components/mobile/accounts/ReconcilingBanner';
 import { TransactionListWithBalances } from '#components/mobile/transactions/TransactionListWithBalances';
+import { ClearingAccountNote } from '#components/schedules/ClearingAccount';
 import { useAccountPreviewTransactions } from '#hooks/useAccountPreviewTransactions';
 import { SchedulesProvider } from '#hooks/useCachedSchedules';
 import { useDateFormat } from '#hooks/useDateFormat';
@@ -315,6 +316,11 @@ function TransactionListWithPreviews({
           onCreateTransaction={onCreateReconciliationTransaction}
         />
       )}
+      <ClearingAccountNote
+        accountId={account.id}
+        style={{ padding: 10 }}
+        isWarningOnOwnLine
+      />
       <TransactionListWithBalances
         isLoading={
           isSearching || isReconciling

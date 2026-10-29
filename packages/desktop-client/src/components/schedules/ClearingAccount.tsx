@@ -2,6 +2,7 @@ import { Trans, useTranslation } from 'react-i18next';
 
 import { SvgMoneyBag } from '@actual-app/components/icons/v1';
 import { styles } from '@actual-app/components/styles';
+import type { CSSProperties } from '@actual-app/components/styles';
 import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
@@ -28,8 +29,10 @@ function useClearingPaycheck(accountId: AccountEntity['id']) {
 // Marks a paycheck's clearing account in the sidebars
 export function ClearingAccountIcon({
   accountId,
+  size = 11,
 }: {
   accountId: AccountEntity['id'];
+  size?: number;
 }) {
   const { t } = useTranslation();
   const paycheck = useClearingPaycheck(accountId);
@@ -43,8 +46,8 @@ export function ClearingAccountIcon({
     <span title={label} style={{ flexShrink: 0, marginLeft: 5 }}>
       <SvgMoneyBag
         aria-hidden
-        width={11}
-        height={11}
+        width={size}
+        height={size}
         style={{ verticalAlign: 'middle' }}
       />
       <Text style={styles.visuallyHidden}>{label}</Text>
@@ -102,8 +105,13 @@ export function ClearingWarning({
 // At the top of a clearing account's register
 export function ClearingAccountNote({
   accountId,
+  style,
+  isWarningOnOwnLine = false,
 }: {
   accountId: AccountEntity['id'];
+  style?: CSSProperties;
+  // Phones put the warning on its own line below the note
+  isWarningOnOwnLine?: boolean;
 }) {
   const paycheck = useClearingPaycheck(accountId);
   const status = useClearingStatus(paycheck?.id);
@@ -116,6 +124,7 @@ export function ClearingAccountNote({
         ...styles.pageContent,
         paddingBottom: 10,
         color: theme.pageTextSubdued,
+        ...style,
       }}
     >
       <aside>
@@ -124,8 +133,18 @@ export function ClearingAccountNote({
             Clearing account for paycheck "{{ name: paycheck.name }}". It should
             return to zero after each payday.
           </Trans>
-        </Text>{' '}
-        {status?.isWarning && <ClearingWarning status={status} />}
+        </Text>
+        {status?.isWarning &&
+          (isWarningOnOwnLine ? (
+            <View style={{ marginTop: 5 }}>
+              <ClearingWarning status={status} />
+            </View>
+          ) : (
+            <>
+              {' '}
+              <ClearingWarning status={status} />
+            </>
+          ))}
       </aside>
     </View>
   );

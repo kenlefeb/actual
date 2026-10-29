@@ -23,7 +23,7 @@ import { config } from './load-config';
 
 const debugSensitive = createDebug('actual-sensitive:server');
 
-const app = express();
+export const app = express();
 
 process.on('unhandledRejection', reason => {
   console.log('Unhandled rejection');

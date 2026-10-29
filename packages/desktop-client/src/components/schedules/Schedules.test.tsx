@@ -10,12 +10,17 @@ import { Schedules } from '.';
 
 const state = vi.hoisted(() => ({
   paychecks: false,
+  businessCalendars: false,
   listed: [] as string[],
 }));
 
 vi.mock('#hooks/useFeatureFlag', () => ({
   useFeatureFlag: (name: string) =>
-    name === 'paychecks' ? state.paychecks : false,
+    name === 'paychecks'
+      ? state.paychecks
+      : name === 'businessCalendars'
+        ? state.businessCalendars
+        : false,
 }));
 
 vi.mock('#hooks/useSchedules', () => ({
@@ -87,5 +92,26 @@ describe('Schedules page paychecks', () => {
     renderPage();
     expect(screen.queryByText('Paychecks section')).not.toBeInTheDocument();
     expect(state.listed).toHaveLength(4);
+  });
+});
+
+describe('Schedules page business calendars', () => {
+  beforeEach(() => {
+    state.businessCalendars = false;
+  });
+
+  it('shows the Business calendars button when the feature is on', () => {
+    state.businessCalendars = true;
+    renderPage();
+    expect(
+      screen.getByRole('button', { name: 'Business calendars' }),
+    ).toBeInTheDocument();
+  });
+
+  it('Feature disabled: hides the Business calendars button', () => {
+    renderPage();
+    expect(
+      screen.queryByRole('button', { name: 'Business calendars' }),
+    ).not.toBeInTheDocument();
   });
 });

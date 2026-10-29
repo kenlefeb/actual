@@ -275,13 +275,13 @@ describe('mobile business calendars', () => {
     ).toBeDisabled();
   });
 
-  it('sends users to Schedules when the feature is off', () => {
+  it('Feature disabled: sends users to Schedules from the list', () => {
     state.isEnabled = false;
     renderAt('/business-calendars');
     expect(screen.getByText('Schedules page')).toBeInTheDocument();
   });
 
-  it('sends users to Schedules from an editor when the feature is off', () => {
+  it('Feature disabled: sends users to Schedules from an editor', () => {
     state.isEnabled = false;
     renderAt('/business-calendars/federal');
     expect(screen.getByText('Schedules page')).toBeInTheDocument();

@@ -29,16 +29,21 @@ See proposal.md and specs/paychecks/spec.md.
 The mobile list and page render `ClearingAccountIcon` and `ClearingAccountNote` with the account id. They already handle the flag, the membership lookup and the warning, so "neither for an ordinary account or with the flag off" needs no new code.
 - Alternative: mobile-specific components. Rejected because the text and the warning logic would be duplicated.
 
-### Icon after the name in the accounts list row
-Put `ClearingAccountIcon` right after the name's `TextOneLine`, inside the same row, as the sidebar puts it after the name. The hidden label becomes part of the row's accessible name, which is what tests query.
+### Icon after the name in the accounts list row, sized for the row
+Put `ClearingAccountIcon` right after the name, as the sidebar does. The hidden label becomes part of the row's accessible name, which is what tests query.
+- **Size:** the icon is fixed at 11×11 for the 13px sidebar, which looks like a speck next to the 17px/600 mobile name. `ClearingAccountIcon` gets an optional `size` prop that defaults to 11, so the desktop is unchanged. The mobile row passes about 14. The icon is `currentColor`, so it follows the name's colour.
+- **Truncation:** today `TextOneLine` grows to fill the row, which would push the icon against the balance. Wrap the name and the icon in a row where the name can shrink (`minWidth: 0`) and the icon can't (`flexShrink: 0`). "Acme Paycheck Clearing" then truncates to "Acme Paycheck Cl…", with the bag right after it and the balance unmoved.
 
 ### Note at the top of the account's transactions, in `AccountTransactions.tsx`
 Render `ClearingAccountNote` above `TransactionListWithBalances`, after `ReconcilingBanner` when reconciling. It shows while searching and reconciling too, as the desktop note does.
 - Why this file and not `AccountPage.tsx`: the note belongs with the single account's transactions, and PR #68 (sc-492) is editing `AccountPage.tsx`.
 - Alternative: in the page header, next to the account name. Rejected because the header has no room for a sentence on a phone.
 
-### Mobile padding
-`ClearingAccountNote` uses `styles.pageContent` padding, which is sized for desktop. If it doesn't line up with the mobile balance row, give the component an optional `style` override, used only by the mobile caller. The desktop rendering stays as it is.
+### Mobile padding and layout of the note
+- **Padding:** `styles.pageContent` gives only 2px of side padding below 512px wide (`component-library/src/styles.ts`), so the note would sit 2px from the edge of a phone screen. `ClearingAccountNote` gets an optional `style` override. The mobile caller passes 10px side and vertical padding, matching the search bar and the reconcile banner. Desktop rendering is unchanged.
+- **Warning on its own line:** on desktop the warning is appended to the note's sentence. At 375px that would wrap into about four lines that change colour mid-paragraph, with the actionable part starting mid-line. So on phones the warning is its own line below the note, with the same components, text and timing. `ClearingAccountNote` gets an optional flag (for example `isWarningOnOwnLine`) that the mobile caller sets. The desktop default keeps the sentence as it is today.
+
+Layout decisions in this section and the previous one (icon size and truncation, the note's padding, the warning on its own line) are the UX Designer's, from the PR #72 review.
 
 ## Product decisions
 
@@ -48,10 +53,10 @@ For the Product Owner to confirm in review (recommendations given):
 2. **Icon on the mobile account page title:** recommendation: no. The note on the page already says it, and the title row is crowded.
 3. **Tests:** component tests only, no Playwright e2e, as for sc-492. The visual fit is checked by the manual step 3.2.
 4. **Release notes:** no upstream release note, since paychecks are fork-only. The fork release that ships this gets its release note and fork-news entry.
-5. **Phone form save layout:** out of scope here. Recommendation: its own story under epic #28 for the UX Designer's proposal, since it covers the paycheck editor and other phone forms, not this display-only change.
+5. **Phone form save layout:** out of scope here. Recommendation: its own story under epic #28, since it covers the paycheck editor and other phone forms, not this display-only change. The UX Designer has proposed the pattern on PR #72: a sticky full-width 40px Save on full-page phone editors, and compact right-aligned 40px Cancel and Save on short sheets.
 
 ## Risks / Trade-offs
 
-- [The list row has little width on a phone, and the icon takes about 16px from long names] → The name already truncates with `TextOneLine`, and the icon doesn't shrink.
-- [The note pushes the transaction list down by about one line] → This matches desktop, and it only happens for clearing accounts.
+- [The list row has little width on a phone, and the icon takes about 14px from long names] → The name shrinks and truncates with an ellipsis, and the icon doesn't shrink (see the icon decision).
+- [The note pushes the transaction list down by one line, or two with the warning] → It only happens for clearing accounts, and the explanation reads before the balance.
 - [No automated layout check] → jsdom does no layout, so the fit is checked by the manual narrow-viewport step.

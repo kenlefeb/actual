@@ -40,7 +40,7 @@ A deposit of a paycheck's most recent posted pay date is missing when it has no 
 #### Scenario: Acme Paycheck still holds 2,250.00 after payday on a phone
 - **GIVEN** the layout is narrow, the November 13, 2026 "Acme" pay posted, and neither the "Checking" deposit (expected Tuesday, November 10) nor the "Savings" deposit (expected Friday, November 13) arrived
 - **WHEN** the user opens "Acme Paycheck" on a phone on Wednesday, November 18
-- **THEN** the account page warns that 2,250.00 is still in "Acme Paycheck", waiting on the deposits to Checking and Savings, in the same words as the desktop register
+- **THEN** below the note, on its own line, the account page warns that 2,250.00 is still in "Acme Paycheck", waiting on the deposits to Checking and Savings, in the same words as the desktop register
 
 #### Scenario: No warning on a phone while imports may still arrive
 - **GIVEN** the layout is narrow, the November 30, 2026 "Acme" pay posted and the "Checking" deposit is expected Wednesday, November 25

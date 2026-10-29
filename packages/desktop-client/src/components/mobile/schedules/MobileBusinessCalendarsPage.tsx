@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { Navigate } from 'react-router';
 
@@ -42,6 +43,11 @@ function CalendarList() {
     justifyContent: 'flex-start',
     minHeight: styles.mobileMinHeight,
   } as const;
+  // Actions read as links, so they can't be mistaken for saved calendars
+  const actionStyle = {
+    ...rowStyle,
+    color: theme.pageTextLink,
+  } as const;
 
   return (
     <Page
@@ -52,53 +58,78 @@ function CalendarList() {
         />
       }
     >
-      <View style={{ gap: 10 }}>
-        {calendars.length === 0 && (
-          <Text style={{ color: theme.pageTextSubdued }}>
-            <Trans>
-              Create a calendar, or copy a preset, to define which days are
-              business days.
-            </Trans>
-          </Text>
-        )}
-        {calendars.map(calendar => (
-          <Button
-            key={calendar.id}
-            style={{ ...rowStyle, fontSize: 16 }}
-            onPress={() => open(calendar.id)}
-          >
-            {calendar.name}
-          </Button>
-        ))}
-        <Button
-          variant="primary"
-          style={rowStyle}
-          isDisabled={createCalendar.isPending}
-          onPress={() =>
-            create({
-              name: t('New calendar'),
-              nonWorkingDays: [0, 6],
-              holidays: [],
-              exceptions: [],
-            })
-          }
-        >
-          <Trans>New calendar</Trans>
-        </Button>
-        {businessCalendarPresets.map(preset => {
-          const calendar = calendarFromPreset(t, preset);
-          return (
+      <View style={{ gap: 20, paddingTop: 10, flexShrink: 0 }}>
+        <Section id="your-calendars" title={t('Your calendars')}>
+          {calendars.length === 0 && (
+            <Text style={{ color: theme.pageTextSubdued }}>
+              <Trans>
+                Create a calendar, or copy a preset, to define which days are
+                business days.
+              </Trans>
+            </Text>
+          )}
+          {calendars.map(calendar => (
             <Button
-              key={preset.id}
-              style={rowStyle}
-              isDisabled={createCalendar.isPending}
-              onPress={() => create(calendar)}
+              key={calendar.id}
+              style={{ ...rowStyle, fontSize: 16 }}
+              onPress={() => open(calendar.id)}
             >
-              <Trans>Copy {{ name: calendar.name }} preset</Trans>
+              {calendar.name}
             </Button>
-          );
-        })}
+          ))}
+        </Section>
+        <Section id="start-from-preset" title={t('Start from a preset')}>
+          {businessCalendarPresets.map(preset => {
+            const calendar = calendarFromPreset(t, preset);
+            return (
+              <Button
+                key={preset.id}
+                variant="bare"
+                style={actionStyle}
+                isDisabled={createCalendar.isPending}
+                onPress={() => create(calendar)}
+              >
+                <Trans>Copy {{ name: calendar.name }} preset</Trans>
+              </Button>
+            );
+          })}
+          <Button
+            variant="bare"
+            style={actionStyle}
+            isDisabled={createCalendar.isPending}
+            onPress={() =>
+              create({
+                name: t('New calendar'),
+                nonWorkingDays: [0, 6],
+                holidays: [],
+                exceptions: [],
+              })
+            }
+          >
+            <Trans>New calendar</Trans>
+          </Button>
+        </Section>
       </View>
     </Page>
+  );
+}
+
+type SectionProps = {
+  id: string;
+  title: string;
+  children: ReactNode;
+};
+
+function Section({ id, title, children }: SectionProps) {
+  return (
+    <section
+      aria-labelledby={id}
+      style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
+    >
+      <Text id={id} style={{ fontWeight: 600, color: theme.pageTextSubdued }}>
+        {title}
+      </Text>
+      {children}
+    </section>
   );
 }

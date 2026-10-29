@@ -1,6 +1,10 @@
 import { useTranslation } from 'react-i18next';
 import { Navigate, useParams } from 'react-router';
 
+import { styles } from '@actual-app/components/styles';
+import { theme } from '@actual-app/components/theme';
+import { View } from '@actual-app/components/view';
+
 import {
   useDeleteBusinessCalendarMutation,
   useUpdateBusinessCalendarMutation,
@@ -42,38 +46,63 @@ function CalendarEditorPage() {
     return <Navigate to="/business-calendars" replace />;
   }
 
+  const header = (
+    <MobilePageHeader
+      title={t('Edit business calendar')}
+      leftContent={<MobileBackButton onPress={close} />}
+    />
+  );
+
   return (
-    <Page
-      header={
-        <MobilePageHeader
-          title={t('Edit business calendar')}
-          leftContent={<MobileBackButton onPress={close} />}
-        />
-      }
-    >
-      <BusinessCalendarEditor
-        // Remount on saved changes (undo, sync) so the draft never goes stale
-        key={JSON.stringify(calendar)}
-        calendar={calendar}
-        onSave={draft => updateCalendar.mutate(draft, { onSuccess: close })}
-        // Phones have no undo shortcut, so deleting asks first
-        onDelete={calendarId =>
-          dispatch(
-            pushModal({
-              modal: {
-                name: 'confirm-delete',
-                options: {
-                  message: t(
-                    'Are you sure you want to delete this business calendar?',
-                  ),
-                  onConfirm: () =>
-                    deleteCalendar.mutate(calendarId, { onSuccess: close }),
-                },
+    <BusinessCalendarEditor
+      // Remount on saved changes (undo, sync) so the draft never goes stale
+      key={JSON.stringify(calendar)}
+      calendar={calendar}
+      // A sticky full-width Save, as on the paycheck page
+      renderPage={(body, saveButton) => (
+        <Page
+          header={header}
+          padding={0}
+          footer={
+            <View
+              style={{
+                paddingLeft: styles.mobileEditingPadding,
+                paddingRight: styles.mobileEditingPadding,
+                paddingTop: 10,
+                paddingBottom: 'calc(10px + env(safe-area-inset-bottom))',
+                backgroundColor: theme.tableHeaderBackground,
+                borderTopWidth: 1,
+                borderColor: theme.tableBorder,
+              }}
+            >
+              {saveButton}
+            </View>
+          }
+        >
+          {/* Keeps its height, so the page scrolls instead of squashing it */}
+          <View style={{ padding: styles.mobileEditingPadding, flexShrink: 0 }}>
+            {body}
+          </View>
+        </Page>
+      )}
+      onSave={draft => updateCalendar.mutate(draft, { onSuccess: close })}
+      // Phones have no undo shortcut, so deleting asks first
+      onDelete={calendarId =>
+        dispatch(
+          pushModal({
+            modal: {
+              name: 'confirm-delete',
+              options: {
+                message: t(
+                  'Are you sure you want to delete this business calendar?',
+                ),
+                onConfirm: () =>
+                  deleteCalendar.mutate(calendarId, { onSuccess: close }),
               },
-            }),
-          )
-        }
-      />
-    </Page>
+            },
+          }),
+        )
+      }
+    />
   );
 }

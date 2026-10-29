@@ -9,13 +9,11 @@ import { currentDay } from '@actual-app/core/shared/months';
 import { useBusinessCalendarLookup } from '#hooks/useBusinessCalendarLookup';
 import { usePaychecks } from '#hooks/usePaychecks';
 import { useScheduleDateLookup } from '#hooks/useScheduleDateLookup';
-import { pushModal } from '#modals/modalsSlice';
-import { useDispatch } from '#redux';
 
-import { PaycheckRow, planPaycheck } from './PaycheckRow';
+import { PaycheckRow, planPaycheck, useOpenPaycheck } from './PaycheckRow';
 
 export function PaychecksSection() {
-  const dispatch = useDispatch();
+  const openPaycheck = useOpenPaycheck();
   const { data: paychecks = [] } = usePaychecks();
   // Fill the lookups the deposit date math reads
   const { schedules } = useScheduleDateLookup();
@@ -32,9 +30,6 @@ export function PaychecksSection() {
     .sort((a, b) =>
       (a.plan.next?.date ?? '9999').localeCompare(b.plan.next?.date ?? '9999'),
     );
-
-  const onAdd = () =>
-    dispatch(pushModal({ modal: { name: 'paycheck-edit', options: {} } }));
 
   return (
     <section
@@ -56,7 +51,7 @@ export function PaychecksSection() {
         <Text id="paychecks-heading" style={{ fontSize: 16, fontWeight: 600 }}>
           <Trans>Paychecks</Trans>
         </Text>
-        <Button onPress={onAdd}>
+        <Button onPress={() => openPaycheck()}>
           <Trans>Add paycheck</Trans>
         </Button>
       </View>

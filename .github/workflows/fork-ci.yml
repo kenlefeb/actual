@@ -78,8 +78,13 @@ jobs:
       - name: Decide whether the mobile e2e tests apply
         id: scope
         run: |
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            # Captured first so a failing diff fails the job instead of skipping
+            # the tests; --no-renames keeps the old path of a moved file.
+            changed=$(git diff --no-renames --name-only HEAD^1 HEAD)
+          fi
           if [ "$GITHUB_EVENT_NAME" != pull_request ] ||
-            git diff --name-only HEAD^1 HEAD | grep -Eq '^(packages/|yarn\.lock$|package\.json$|\.yarn/|\.yarnrc\.yml$|sync-server\.Dockerfile$|\.github/workflows/fork-ci\.yml$)'; then
+            printf '%s\n' "$changed" | grep -Eq '^(packages/|yarn\.lock$|package\.json$|\.yarn/|\.yarnrc\.yml$|sync-server\.Dockerfile$|\.github/workflows/fork-ci\.yml$)'; then
             echo run=true >> "$GITHUB_OUTPUT"
           else
             echo 'No package or dependency changes; skipping mobile e2e.'

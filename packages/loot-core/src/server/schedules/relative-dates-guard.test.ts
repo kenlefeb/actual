@@ -16,6 +16,7 @@ import { setScheduleDates } from '#shared/schedule-date-lookup';
 import { computeSchedulePreviewTransactions } from '#shared/schedules';
 import type {
   CategoryEntity,
+  RecurConfig,
   RelativeDateConfig,
   ScheduleEntity,
 } from '#types/models';
@@ -24,6 +25,7 @@ import {
   advanceSchedulesService,
   createSchedule,
   app as schedulesApp,
+  setNextDate,
 } from './app';
 
 // No budget sheet is loaded here; last month's goal only matters for
@@ -73,7 +75,10 @@ function relativeTo(
 
 async function createRelative(
   unit: RelativeDateConfig['relativeTo']['unit'],
-  postsTransaction = false,
+  {
+    postsTransaction = false,
+    sourceDate = paydayDate,
+  }: { postsTransaction?: boolean; sourceDate?: RecurConfig } = {},
 ) {
   const accountId = await db.insertAccount({
     name: 'Checking',
@@ -82,7 +87,7 @@ async function createRelative(
   });
   const payday = await createSchedule({
     schedule: { name: 'Payday' },
-    conditions: [{ op: 'isapprox', field: 'date', value: paydayDate }],
+    conditions: [{ op: 'isapprox', field: 'date', value: sourceDate }],
   });
   const config = relativeTo(payday, unit);
   const id = await createSchedule({
@@ -148,19 +153,13 @@ describe.each(cases)(
     });
 
     it('posts a missed occurrence on its computed date', async () => {
-      const { id } = await createRelative(unit, true);
-      const row = await db.first<{ id: string }>(
-        'SELECT id FROM schedules_next_date WHERE schedule_id = ?',
-        [id],
-      );
-      const missed = Number(december.replaceAll('-', ''));
-      await db.update('schedules_next_date', {
-        id: row?.id,
-        local_next_date: missed,
-        local_next_date_ts: Date.now(),
-        base_next_date: missed,
-        base_next_date_ts: Date.now(),
-      });
+      // setNextDate reads the clock, so on Dec 1 it computes the December
+      // occurrence. Set the clock first: sync timestamps must only move forward.
+      MockDate.set(new Date(2016, 11, 1, 12));
+      const { id } = await createRelative(unit, { postsTransaction: true });
+      await setNextDate({ id });
+      expect((await getSchedule(id)).next_date).toBe(december);
+      MockDate.set(new Date(2017, 0, 1, 12));
 
       await advanceSchedulesService(true);
 
@@ -184,7 +183,14 @@ describe.each(cases)(
     });
 
     it('budgets the schedule goal template in the month of its date', async () => {
-      const { id } = await createRelative(unit);
+      // One payday on Wed Mar 1; two days or business days before is Mon Feb 27
+      const { id } = await createRelative(unit, {
+        sourceDate: {
+          ...paydayDate,
+          start: '2017-03-01',
+          endMode: 'after_n_occurrences',
+        },
+      });
       const category = { id: 'cat', name: 'Deposits' } as CategoryEntity;
       const template = {
         type: 'schedule',
@@ -193,20 +199,13 @@ describe.each(cases)(
         priority: 0,
         directive: 'template',
       } as const;
+      const budget = (month: string) =>
+        runSchedule([template], month, 0, 0, 0, 0, [], category, currencies[0]);
 
-      const february = await runSchedule(
-        [template],
-        '2017-02-01',
-        0,
-        0,
-        0,
-        0,
-        [],
-        category,
-        currencies[0],
-      );
+      const february = await budget('2017-02-01');
       expect(february.errors).toEqual([]);
       expect(february.to_budget).toBe(10000);
+      expect((await budget('2017-03-01')).to_budget).toBe(0);
     });
   },
 );

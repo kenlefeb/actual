@@ -371,18 +371,31 @@ export async function loadScheduleDateLookup() {
 // Relative schedules take their dates from a source schedule, so recompute
 // their stored next dates after the source changes or is deleted. Runs inside
 // the caller's undoable mutation, so undo restores both.
-async function refreshRelativeDependents(sourceId: string) {
+// Dependents completed after a one-time source passed reopen once the source
+// starts repeating; ones completed by hand stay completed otherwise.
+async function refreshRelativeDependents(
+  sourceId: string,
+  { startsRepeating = false } = {},
+) {
   await refreshScheduleDateLookup();
-  for (const { id } of await getRelativeDependents(sourceId)) {
+  for (const { id, completed } of await getRelativeDependents(sourceId, {
+    includeCompleted: startsRepeating,
+  })) {
+    if (completed) {
+      await db.updateWithSchema('schedules', { id, completed: false });
+    }
     await setNextDate({ id, clearIfNone: true });
   }
 }
 
-function getRelativeDependents(sourceId: string) {
-  return db.all<{ id: string }>(
-    `SELECT s.id FROM schedules s JOIN rules r ON r.id = s.rule
-     WHERE s.tombstone = 0 AND s.completed = 0 AND r.conditions LIKE ?`,
-    [`%"scheduleId":"${sourceId}"%`],
+function getRelativeDependents(
+  sourceId: string,
+  { includeCompleted = false } = {},
+) {
+  return db.all<{ id: string; completed: number }>(
+    `SELECT s.id, s.completed FROM schedules s JOIN rules r ON r.id = s.rule
+     WHERE s.tombstone = 0 AND (s.completed = 0 OR ?) AND r.conditions LIKE ?`,
+    [includeCompleted ? 1 : 0, `%"scheduleId":"${sourceId}"%`],
   );
 }
 
@@ -516,6 +529,7 @@ export async function updateSchedule({
   }
   let rule;
   let isDateChanged = false;
+  let startsRepeating = false;
 
   // This must be outside the `batchMessages` call because we change
   // and then read data
@@ -560,10 +574,15 @@ export async function updateSchedule({
       // or date changed. We check account because we don't update
       // schedules automatically for closed account, and the user
       // might switch accounts from a closed one
+      const oldDate = oldConditions.find(c => c.field === 'date');
+      const newDate = newConditions.find(c => c.field === 'date');
       isDateChanged = !areConditionValuesEqual(
-        stripType(oldConditions.find(c => c.field === 'date') || {}),
-        stripType(newConditions.find(c => c.field === 'date') || {}),
+        stripType(oldDate || {}),
+        stripType(newDate || {}),
       );
+      // From the rule itself: sync listeners may have refreshed the lookup
+      startsRepeating =
+        !isRepeatingDate(oldDate?.value) && isRepeatingDate(newDate?.value);
       if (
         resetNextDate ||
         !areScheduleConditionsEqual(
@@ -588,7 +607,7 @@ export async function updateSchedule({
   // Relative schedules depend only on their source's dates, so other edits
   // keep their next dates (and any skips)
   if (isDateChanged) {
-    await refreshRelativeDependents(schedule.id);
+    await refreshRelativeDependents(schedule.id, { startsRepeating });
   }
   const postsTransaction =
     scheduleFields.posts_transaction ??
@@ -761,9 +780,14 @@ async function hasTransactionForSchedule(
   return data.filter(Boolean).some(row => row.schedule === schedule.id);
 }
 
-// Relative dates repeat with their source, so they advance after posting too
+// Relative dates repeat with their source, so they advance after posting too.
+// One relative to a one-time source has a single occurrence, like a one-time
+// schedule.
 function isRecurringSchedule(schedule: ScheduleEntity): boolean {
-  return isRepeatingDate(schedule._date);
+  const date = schedule._date;
+  return isRelativeDate(date)
+    ? isRepeatingDate(getScheduleDate(date.relativeTo.scheduleId))
+    : isRepeatingDate(date);
 }
 
 async function advanceRecurringScheduleFromNextDate(
@@ -797,6 +821,9 @@ async function advanceRecurringScheduleFromNextDate(
 // TODO: make this sequential
 
 export async function advanceSchedulesService(syncSuccess) {
+  // A sync may have just changed a source schedule's date
+  await refreshScheduleDateLookup();
+
   // Move all paid schedules
   const { data: schedules } = await aqlQuery(
     q('schedules')
@@ -917,7 +944,11 @@ export async function advanceSchedulesService(syncSuccess) {
             // find the rule
           }
         } else {
-          if (schedule._date < currentDay()) {
+          // A relative date's single occurrence is its next date
+          const date = isRelativeDate(schedule._date)
+            ? schedule.next_date
+            : schedule._date;
+          if (date && date < currentDay()) {
             // Complete any single schedules
             await updateSchedule({
               schedule: { id: schedule.id, completed: true },

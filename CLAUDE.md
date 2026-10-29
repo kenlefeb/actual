@@ -7,7 +7,7 @@ Fork-only; never upstream (see `fork/README.md`).
 
 ### Issue tracker
 
-Shortcut stories in `blacksmith-press` (team "Kenneth LeFebvre's Team", Standard workflow). See `docs/agents/issue-tracker.md`.
+Shortcut stories in `blacksmith-press` (team "Kenneth LeFebvre's Team", Spec-Driven Development workflow). See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

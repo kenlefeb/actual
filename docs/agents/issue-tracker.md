@@ -2,9 +2,41 @@
 
 Fork-only (never upstream; see `fork/README.md`). Tickets, specs and backlog
 items for this fork live as Shortcut **stories** in workspace `blacksmith-press`,
-team "Kenneth LeFebvre's Team", workflow "Standard" (Backlog → To Do → In
-Progress → In Review → Done). Use the Shortcut connector for every operation. If
-it isn't available, stop and say so; don't fall back to GitHub issues.
+team "Kenneth LeFebvre's Team", workflow "Spec-Driven Development". Use the
+Shortcut connector for every operation. If it isn't available, stop and say so;
+don't fall back to GitHub issues.
+
+Spec-Driven Development is the team's only workflow. The old "Standard"
+workflow (Backlog → To Do → …) is retired; don't use it or its states. The
+team's default workflow in Shortcut settings may still be Standard, so always
+pass a Spec-Driven state id.
+
+| State       | ID        | Meaning                                                                                        |
+| ----------- | --------- | ---------------------------------------------------------------------------------------------- |
+| Backlog     | 500000219 | Not defined well enough to start; goes through Explore and Propose first.                      |
+| Explore     | 500000225 | Explore only, with `/opsx:explore`; comment, but write no code. The Product Owner moves it on. |
+| Propose     | 500000226 | Write the OpenSpec change with `/opsx:propose`, then move to Ready to Do.                      |
+| Ready to Do | 500000220 | Ready; start without asking, unless blocked or `ready-for-human`.                              |
+| In Progress | 500000221 | Being built.                                                                                   |
+| In Review   | 500000222 | PR open.                                                                                       |
+| Done        | 500000223 | PR merged into `development`.                                                                  |
+
+- **Refining**: only the Product Owner moves a story out of Backlog or
+  Explore. To get a story refined, ask the Product Owner through the Director.
+  After exploring, comment your findings; the Product Owner then moves the
+  story to Propose, Ready to Do or back to Backlog.
+- **No spec**: a story whose Specs section says "none" (hosting, CI or docs
+  chores) skips Explore and Propose. It goes straight to Ready to Do once it's
+  well defined.
+- **Picking work**: agents pick up only Ready to Do stories that are not
+  blocked (no open blocker and no `blocked` label) and not labelled
+  `ready-for-human`.
+- **Blocked**: a story that is only waiting on a blocker stays in Ready to Do.
+  - The blocker is a story: add a "blocks" relation from that story
+    (`stories-add-relation`). Shortcut then sets the story's blocked flag; it
+    can't be set by hand.
+  - The blocker isn't a story (such as Ken's approval or an upstream merge):
+    add the `blocked` label and a comment saying what the story waits on.
 
 Story lifecycle (starting, branches, PR links, Done) follows the "Shortcut
 stories" section of `AGENTS.md`.
@@ -12,14 +44,15 @@ stories" section of `AGENTS.md`.
 ## Conventions
 
 - **Create a story**: `stories-create` with `team` "Kenneth LeFebvre's Team",
-  the matching `epic`, and the Backlog state. Type `bug` for defects, `chore`
-  for maintenance, `feature` otherwise. Search first (`stories-search`) so you
-  don't file a duplicate. Use the story template below, including its
-  checklist.
+  the matching `epic`, and the Spec-Driven Backlog state (500000219). Type
+  `bug` for defects, `chore` for maintenance, `feature` otherwise. Search first
+  (`stories-search`) so you don't file a duplicate. Use the story template
+  below, including its checklist.
 - **Epics**: product areas #469 Business calendars & schedule dates, #28
-  Paychecks and #470 Baseline fork behavior; work streams #27 Fork maintenance
-  & hosting and #26 Upstream contributions. Ask before creating a new epic.
-  Which epic owns each spec is under "OpenSpec changes and specs" below.
+  Paychecks, #470 Baseline fork behavior and #543 Accounts & budgeting; work
+  streams #27 Fork maintenance & hosting and #26 Upstream contributions. Ask
+  before creating a new epic. Which epic owns each spec is under "OpenSpec
+  changes and specs" below.
 - **Read a story**: `stories-get-by-id`, including its comments and relations.
 - **List stories**: `stories-search` filtered by `epic`, `label`, `state` or
   `team`.
@@ -27,9 +60,11 @@ stories" section of `AGENTS.md`.
 - **Apply / remove labels**: `stories-update` with the story's full label list.
   Area labels in use: `actual-hosting`, `mobile`, `upstream`, and one
   `spec:<capability>` label per spec a story touches.
-- **Close**: move the story to Done when its PR merges into `development`. For
-  wontfix, apply `wontfix`, comment why, and archive it. For a duplicate, add
-  the "duplicates" relation, comment which story it duplicates, and archive it.
+- **Close**: move the story to Done when its PR merges into `development`. If
+  the PR closes without merging, move the story back to Ready to Do and
+  comment why. For wontfix, apply `wontfix`, comment why, and archive it. For a
+  duplicate, add the "duplicates" relation, comment which story it duplicates,
+  and archive it.
 
 ## Story template
 
@@ -68,6 +103,9 @@ Right after creating the story, add the checklist as Shortcut tasks
 7. Release note or fork news, if user-facing
 8. Archive: OpenSpec change archived, if this is its last story
 
+If a story has no checklist tasks when you start it, add these tasks then.
+Don't backfill other stories.
+
 **Who did each step.** Shortcut keeps a task's owners and completion time, not
 who ticked it. So whoever finishes a step completes the task and sets
 themselves as its only owner in the same `stories-update-task` call
@@ -96,6 +134,7 @@ requirement text into a story or status into OpenSpec.
 | #469 Business calendars & schedule dates | `business-calendars`, `schedule-business-days`, `schedule-relative-dates`                                                |
 | #28 Paychecks                            | `paychecks`, `account-business-days`, `paycheck-planning`                                                                |
 | #470 Baseline fork behavior              | `transaction-notes`, `split-transaction-editing`, `mobile-note-links`, `mobile-sync-status`, `api-transaction-mutations` |
+| #543 Accounts & budgeting                | none yet                                                                                                                 |
 | #27 Fork maintenance & hosting           | `fork-release-news`                                                                                                      |
 
 A new capability joins the epic of its product area: add it to this table, the
@@ -120,7 +159,8 @@ spec is a story in #26 that carries the same `spec:` label.
   `https://github.com/kenlefeb/actual/tree/development/openspec/changes/<name>`,
   the spec paths in the description, and the `spec:` labels.
 - **Propose** (`/opsx:propose`) only for an existing story; put `sc-<id>` in
-  the proposal's Why and fill `x-shortcut`.
+  the proposal's Why and fill `x-shortcut`. A story in Propose then moves to
+  Ready to Do.
 - **Apply**: the story moves to In Progress; the PR names the story in its
   branch (`sc-<id>`) or title (`[sc-<id>]`).
 - **Unplanned work** outside the story's acceptance criteria gets its own story
@@ -164,8 +204,10 @@ tickets.
 - **Blocking**: Shortcut's native story relation, added with
   `stories-add-relation` ("blocks"). A ticket is unblocked when every blocker is
   Done.
-- **Frontier query**: the epic's stories not Done, with no open blocker and no
-  owner. First in epic order wins.
+- **Frontier query**: the epic's stories in Spec-Driven Ready to Do
+  (500000220) that aren't blocked, have no owner and aren't labelled
+  `ready-for-human`. "Not blocked" means no open blocker and no `blocked`
+  label. First in epic order wins.
 - **Claim**: `stories-assign-current-user`, then move the story to In Progress.
   Do this before any other write.
 - **Resolve**: comment the answer, move the story to Done, then add a context

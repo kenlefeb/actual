@@ -648,14 +648,37 @@ generated `news.json`.
 ## Shortcut stories (fork-only)
 
 The fork's backlog lives in the Shortcut workspace `blacksmith-press`, team
-"Kenneth LeFebvre's Team", workflow "Standard" (Backlog → To Do → In Progress
-→ In Review → Done). Use the Shortcut connector when it's available; if it
-isn't, skip these steps and say so in your reply instead of guessing.
+"Kenneth LeFebvre's Team", workflow "Spec-Driven Development" (Backlog →
+Explore → Propose → Ready to Do → In Progress → In Review → Done). It is the
+team's only workflow; the old "Standard" workflow is retired. Shortcut's team
+setting may still default to Standard, so always set the Spec-Driven state.
+Use the Shortcut connector when it's available; if it isn't, skip these steps
+and say so in your reply instead of guessing.
 
-- Picking work: a story in To Do is ready, so start it without asking. Backlog
-  stories aren't refined yet: don't start them or move them to To Do yourself;
-  ask Ken to refine the backlog instead.
-- Starting a story: assign yourself and move it to In Progress.
+- Picking work: what a story's state lets you do.
+  - Backlog: not defined well enough to start. It goes through Explore and
+    Propose before a developer can begin. Don't start it or move it on
+    yourself; ask the Product Owner, through the Director, to refine it.
+  - Explore: explore it with `/opsx:explore` and comment what you find. Write
+    no code. The Product Owner then moves it to Propose, Ready to Do or back
+    to Backlog; don't move it yourself.
+  - Propose: write its OpenSpec change with `/opsx:propose`, then move the
+    story to Ready to Do.
+  - Ready to Do: ready, so start it without asking. Pick up only stories that
+    are not blocked (no open blocker and no `blocked` label) and not labelled
+    `ready-for-human`.
+  - No spec: a story whose Specs section says "none" (hosting, CI or docs
+    chores) skips Explore and Propose. It goes straight to Ready to Do once
+    it's well defined.
+- Blocked stories: a story that is only waiting on a blocker stays in Ready to
+  Do.
+  - The blocker is a story: add a "blocks" relation from that story. Shortcut
+    then sets the story's blocked flag; it can't be set by hand.
+  - The blocker isn't a story (such as Ken's approval or an upstream merge):
+    add the `blocked` label and a comment saying what the story waits on.
+- Starting a story: assign yourself and move it to In Progress. If the story
+  has no checklist tasks, add the template's tasks now. Don't backfill other
+  stories.
 - Checklist: every story follows the story template and checklist in
   `docs/agents/issue-tracker.md`. Complete each step's task when you finish it
   and set yourself as its owner, so the record shows who did it. Never complete
@@ -667,9 +690,9 @@ isn't, skip these steps and say so in your reply instead of guessing.
 - Opening a PR: add the PR URL to the story's external links and move the story
   to In Review.
 - PR merged into `development`: move the story to Done. Closed without merging:
-  move it back to To Do and comment why.
-- Work you find but don't do: add a Backlog story to the matching epic instead
-  of a GitHub issue. Check for an existing story first.
+  move it back to Ready to Do and comment why.
+- Work you find but don't do: add a Spec-Driven Backlog story to the matching
+  epic instead of a GitHub issue. Check for an existing story first.
 - Defects you find and don't fix in the same change get a `bug` story: test
   failures, vulnerability scan findings (`yarn npm audit`, Dependabot, code
   scanning) and new compiler or lint warnings included. Group findings with one

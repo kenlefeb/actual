@@ -19,7 +19,29 @@ function isNonWorkingWeekday(calendar: BusinessCalendarEntity, date: string) {
   return days.includes(weekdayOf(date));
 }
 
+/** Western (Gregorian) Easter Sunday: anonymous Gregorian algorithm (Meeus/Jones/Butcher). */
+export function getWesternEaster(year: number): string {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const h =
+    (19 * a +
+      b -
+      Math.floor(b / 4) -
+      Math.floor((b - Math.floor((b + 8) / 25) + 1) / 3) +
+      15) %
+    30;
+  const l = (32 + 2 * (b % 4) + 2 * Math.floor(c / 4) - h - (c % 4)) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return monthUtils.dayFromDate(new Date(year, month - 1, day));
+}
+
 function ruleDate(rule: HolidayRule, year: number): string | null {
+  if (rule.kind === 'easter') {
+    return monthUtils.addDays(getWesternEaster(year), rule.offset);
+  }
   const first = new Date(year, rule.month - 1, 1);
   let day: number;
   switch (rule.kind) {

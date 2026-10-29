@@ -40,6 +40,8 @@ export function BusinessCalendarEditor({
   const [draft, setDraft] = useState(calendar);
   const [weekdayError, setWeekdayError] = useState<string | null>(null);
   const [year, setYear] = useState(() => new Date().getFullYear());
+  // Ids of Easter rules whose offset field holds text that was not saved
+  const [invalidOffsets, setInvalidOffsets] = useState<string[]>([]);
 
   const weekdayName = (weekday: Weekday) =>
     d.format(new Date(2024, 0, 7 + weekday), 'EEEE', { locale });
@@ -52,6 +54,7 @@ export function BusinessCalendarEditor({
     ['fixed', t('Fixed date')],
     ['nth-weekday', t('Nth weekday')],
     ['last-weekday', t('Last weekday')],
+    ['easter', t('Days from Easter')],
   ];
   const nthOptions: Array<readonly [1 | 2 | 3 | 4, string]> = [
     [1, t('First')],
@@ -86,15 +89,24 @@ export function BusinessCalendarEditor({
   }
 
   function changeKind(index: number, kind: HolidayRule['kind']) {
-    const { id, name, month, observance } = draft.holidays[index];
-    const base = { id, name, month, observance };
+    const rule = draft.holidays[index];
+    const { id, name, observance } = rule;
+    setInvalidOffsets(invalidOffsets.filter(i => i !== id));
+    const base = {
+      id,
+      name,
+      observance,
+      month: rule.kind === 'easter' ? 1 : rule.month,
+    };
     updateHoliday(
       index,
-      kind === 'fixed'
-        ? { ...base, kind, day: 1 }
-        : kind === 'nth-weekday'
-          ? { ...base, kind, weekday: 1, nth: 1 }
-          : { ...base, kind, weekday: 1 },
+      kind === 'easter'
+        ? { id, name, observance, kind, offset: 0 }
+        : kind === 'fixed'
+          ? { ...base, kind, day: 1 }
+          : kind === 'nth-weekday'
+            ? { ...base, kind, weekday: 1, nth: 1 }
+            : { ...base, kind, weekday: 1 },
     );
   }
 
@@ -195,6 +207,7 @@ export function BusinessCalendarEditor({
               style={{ width: 200 }}
             />
             <Select
+              aria-label={t('Holiday rule type')}
               options={kindOptions}
               value={rule.kind}
               onChange={kind => changeKind(index, kind)}
@@ -211,18 +224,51 @@ export function BusinessCalendarEditor({
                 <Trans>Last</Trans>
               </Text>
             )}
-            {rule.kind !== 'fixed' && (
+            {(rule.kind === 'nth-weekday' || rule.kind === 'last-weekday') && (
               <Select
                 options={weekdayOptions}
                 value={rule.weekday}
                 onChange={weekday => updateHoliday(index, { ...rule, weekday })}
               />
             )}
-            <Select
-              options={monthOptions}
-              value={rule.month}
-              onChange={month => updateHoliday(index, { ...rule, month })}
-            />
+            {rule.kind !== 'easter' && (
+              <Select
+                options={monthOptions}
+                value={rule.month}
+                onChange={month => updateHoliday(index, { ...rule, month })}
+              />
+            )}
+            {rule.kind === 'easter' && (
+              <Input
+                aria-label={t('Days from Easter Sunday')}
+                type="number"
+                min={-100}
+                max={100}
+                // Uncontrolled so a lone "-" can be typed before the digits
+                defaultValue={String(rule.offset)}
+                onChangeValue={offset => {
+                  const others = invalidOffsets.filter(i => i !== rule.id);
+                  if (
+                    /^-?\d+$/.test(offset) &&
+                    Math.abs(Number(offset)) <= 100
+                  ) {
+                    setInvalidOffsets(others);
+                    updateHoliday(index, { ...rule, offset: Number(offset) });
+                  } else {
+                    setInvalidOffsets([...others, rule.id]);
+                  }
+                }}
+                style={{ width: 70 }}
+              />
+            )}
+            {rule.kind === 'easter' && invalidOffsets.includes(rule.id) && (
+              <Text
+                role="alert"
+                style={{ color: theme.errorText, width: '100%' }}
+              >
+                <Trans>Enter a whole number of days from -100 to 100.</Trans>
+              </Text>
+            )}
             {rule.kind === 'fixed' && (
               <Input
                 aria-label={t('Day of month')}
@@ -362,7 +408,13 @@ export function BusinessCalendarEditor({
         <Button onPress={() => onDelete(calendar.id)}>
           <Trans>Delete calendar</Trans>
         </Button>
-        <Button variant="primary" onPress={() => onSave(draft)}>
+        <Button
+          variant="primary"
+          isDisabled={draft.holidays.some(
+            h => h.kind === 'easter' && invalidOffsets.includes(h.id),
+          )}
+          onPress={() => onSave(draft)}
+        >
           <Trans>Save</Trans>
         </Button>
       </View>

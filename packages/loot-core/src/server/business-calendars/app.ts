@@ -169,11 +169,21 @@ function validateHoliday(rule: HolidayRule) {
   if (typeof rule.name !== 'string' || !rule.name.trim()) {
     throw new Error('Each holiday needs a name');
   }
-  if (!Number.isInteger(rule.month) || rule.month < 1 || rule.month > 12) {
-    throw new Error(`Invalid month for holiday "${rule.name}"`);
-  }
   if (!OBSERVANCES.has(rule.observance)) {
     throw new Error(`Invalid observance for holiday "${rule.name}"`);
+  }
+  if (rule.kind === 'easter') {
+    // Within 100 days the observed date stays inside the adjacent years getHolidays scans
+    if (!Number.isInteger(rule.offset) || Math.abs(rule.offset) > 100) {
+      throw new Error(`Invalid offset for holiday "${rule.name}"`);
+    }
+    return;
+  }
+  if (!['fixed', 'nth-weekday', 'last-weekday'].includes(rule.kind)) {
+    throw new Error('Unknown holiday kind');
+  }
+  if (!Number.isInteger(rule.month) || rule.month < 1 || rule.month > 12) {
+    throw new Error(`Invalid month for holiday "${rule.name}"`);
   }
   switch (rule.kind) {
     case 'fixed': {

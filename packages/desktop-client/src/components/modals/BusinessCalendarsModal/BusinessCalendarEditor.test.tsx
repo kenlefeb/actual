@@ -52,6 +52,91 @@ describe('BusinessCalendarEditor', () => {
     ).toHaveTextContent('Independence Day');
   });
 
+  it('edits a holiday as days from Easter', async () => {
+    const onSave = renderEditor();
+    const [name] = screen.getAllByRole('textbox', { name: 'Holiday name' });
+    await userEvent.clear(name);
+    await userEvent.type(name, 'Good Friday');
+    await userEvent.click(
+      screen.getAllByRole('button', { name: 'Holiday rule type' })[0],
+    );
+    await userEvent.click(screen.getByText('Days from Easter'));
+
+    const offset = screen.getByRole('spinbutton', {
+      name: 'Days from Easter Sunday',
+    });
+    await userEvent.clear(offset);
+    await userEvent.type(offset, '-2');
+
+    const preview = screen.getByRole('list', { name: 'Year preview' });
+    expect(
+      within(preview).getByText(/Friday, April 3rd, 2026/),
+    ).toHaveTextContent('Good Friday');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(onSave.mock.calls[0][0].holidays[0]).toEqual({
+      id: 'new-years-day',
+      name: 'Good Friday',
+      kind: 'easter',
+      offset: -2,
+      observance: 'nearest-weekday',
+    });
+  });
+
+  async function switchFirstRule(kind: string) {
+    await userEvent.click(
+      screen.getAllByRole('button', { name: 'Holiday rule type' })[0],
+    );
+    await userEvent.click(within(screen.getByRole('menu')).getByText(kind));
+  }
+
+  it('explains an out-of-range Easter offset and blocks saving it', async () => {
+    const onSave = renderEditor();
+    await switchFirstRule('Days from Easter');
+    const offset = screen.getByRole('spinbutton', {
+      name: 'Days from Easter Sunday',
+    });
+    await userEvent.clear(offset);
+    await userEvent.type(offset, '150');
+    await userEvent.tab();
+
+    expect(offset).toHaveValue(150);
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Enter a whole number of days from -100 to 100.',
+    );
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+    await userEvent.clear(offset);
+    await userEvent.type(offset, '50');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(offset).toHaveValue(50);
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onSave.mock.calls[0][0].holidays[0]).toMatchObject({
+      kind: 'easter',
+      offset: 50,
+    });
+  });
+
+  it('switches an Easter rule back to a month-based rule', async () => {
+    const onSave = renderEditor();
+    await switchFirstRule('Days from Easter');
+    await switchFirstRule('Fixed date');
+
+    expect(
+      screen.queryByRole('spinbutton', { name: 'Days from Easter Sunday' }),
+    ).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(onSave.mock.calls[0][0].holidays[0]).toEqual({
+      id: 'new-years-day',
+      name: "New Year's Day",
+      kind: 'fixed',
+      month: 1,
+      day: 1,
+      observance: 'nearest-weekday',
+    });
+  });
+
   it('rejects making every weekday non-working', async () => {
     const onSave = renderEditor();
     for (const day of ['Monday', 'Tuesday', 'Wednesday', 'Thursday']) {

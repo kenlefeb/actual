@@ -314,6 +314,32 @@ export function FinancesApp() {
                         </ErrorBoundary>
                       }
                     />
+                    <Route
+                      path="/business-calendars"
+                      element={
+                        <ErrorBoundary
+                          FallbackComponent={FeatureErrorFallback}
+                          resetKeys={[location.pathname]}
+                        >
+                          <WideNotSupported redirectTo="/schedules">
+                            <NarrowAlternate name="BusinessCalendars" />
+                          </WideNotSupported>
+                        </ErrorBoundary>
+                      }
+                    />
+                    <Route
+                      path="/business-calendars/:id"
+                      element={
+                        <ErrorBoundary
+                          FallbackComponent={FeatureErrorFallback}
+                          resetKeys={[location.pathname]}
+                        >
+                          <WideNotSupported redirectTo="/schedules">
+                            <NarrowAlternate name="BusinessCalendarEdit" />
+                          </WideNotSupported>
+                        </ErrorBoundary>
+                      }
+                    />
 
                     <Route
                       path="/payees"

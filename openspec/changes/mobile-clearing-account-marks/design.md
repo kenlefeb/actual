@@ -32,7 +32,7 @@ The mobile list and page render `ClearingAccountIcon` and `ClearingAccountNote` 
 ### Icon after the name in the accounts list row, sized for the row
 Put `ClearingAccountIcon` right after the name, as the sidebar does. The hidden label becomes part of the row's accessible name, which is what tests query.
 - **Size:** the icon is fixed at 11×11 for the 13px sidebar, which looks like a speck next to the 17px/600 mobile name. `ClearingAccountIcon` gets an optional `size` prop that defaults to 11, so the desktop is unchanged. The mobile row passes about 14. The icon is `currentColor`, so it follows the name's colour.
-- **Truncation:** today `TextOneLine` grows to fill the row, which would push the icon against the balance. Wrap the name and the icon in a row where the name can shrink (`minWidth: 0`) and the icon can't (`flexShrink: 0`). "Acme Paycheck Clearing" then truncates to "Acme Paycheck Cl…", with the bag right after it and the balance unmoved.
+- **Truncation:** today `TextOneLine` grows to fill the row, which would push the icon against the balance. Wrap the name and the icon in a row where the name can shrink (`minWidth: 0`) and the icon can't (`flexShrink: 0`). The icon is a sibling of the `TextOneLine` with `data-testid="account-name"`, not inside it, because the e2e page model reads the name through that test id (`e2e/page-models/mobile-accounts-page.ts:28`). "Acme Paycheck Clearing" then truncates to "Acme Paycheck Cl…", with the bag right after it and the balance unmoved.
 
 ### Note at the top of the account's transactions, in `AccountTransactions.tsx`
 Render `ClearingAccountNote` above `TransactionListWithBalances`, after `ReconcilingBanner` when reconciling. It shows while searching and reconciling too, as the desktop note does.
@@ -49,11 +49,11 @@ Layout decisions in this section and the previous one (icon size and truncation,
 
 For the Product Owner to confirm in review (recommendations given):
 
-1. **Spec wording "becomes a warning":** both platforms show the note followed by the warning. The requirement says the note "SHALL become a warning". This change keeps that sentence and copies the desktop behavior. Recommendation: keep the behavior, and let the Solution Architect reword the requirement to "is followed by a warning" in a separate change.
+1. **Spec wording "becomes a warning":** decided in the PR #72 review (the Product Owner and the Solution Architect). This change rewords the requirement to "the note SHALL be followed by a warning". Its scenarios cover the desktop layout (the warning in the same line) and the phone layout (the warning on its own line).
 2. **Icon on the mobile account page title:** recommendation: no. The note on the page already says it, and the title row is crowded.
 3. **Tests:** component tests only, no Playwright e2e, as for sc-492. The visual fit is checked by the manual step 3.2.
 4. **Release notes:** no upstream release note, since paychecks are fork-only. The fork release that ships this gets its release note and fork-news entry.
-5. **Phone form save layout:** out of scope here. Recommendation: its own story under epic #28, since it covers the paycheck editor and other phone forms, not this display-only change. The UX Designer has proposed the pattern on PR #72: a sticky full-width 40px Save on full-page phone editors, and compact right-aligned 40px Cancel and Save on short sheets.
+5. **Phone form save layout:** out of scope here. The Product Owner filed it as sc-808 under epic #28, since it covers the paycheck editor and other phone forms, not this display-only change. The UX Designer has proposed the pattern on PR #72: a sticky full-width 40px Save on full-page phone editors, and compact right-aligned 40px Cancel and Save on short sheets.
 
 ## Risks / Trade-offs
 

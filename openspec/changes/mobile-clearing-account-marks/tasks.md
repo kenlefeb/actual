@@ -14,7 +14,7 @@
   - add an optional `style` override to `ClearingAccountNote`, and an option that puts the warning on its own line below the note (the desktop defaults are unchanged);
   - render `ClearingAccountNote` above `TransactionListWithBalances` in `components/mobile/accounts/AccountTransactions.tsx` (after `ReconcilingBanner`), with 10px side and vertical padding and the warning on its own line.
 
-  Verify the new tests and the existing `ClearingAccount` and `PaycheckRow` tests pass, including a check that the desktop note still shows the warning in the same sentence
+  Verify the new tests and the existing `ClearingAccount` and `PaycheckRow` tests pass, including a check that the desktop note still shows the warning in the same line
 - [ ] 3.2 On a narrow viewport (375px wide) with `paychecks` on, check that:
   - the icon (about 14px) sits right after "Acme Paycheck" in the accounts list and doesn't move the balance;
   - with the clearing account renamed "Acme Paycheck Clearing", the name truncates to "Acme Paycheck Cl…", the icon stays right after it, and the balance is unmoved;
@@ -28,4 +28,4 @@
 ## Workflow follow-up
 
 - Archive the change when sc-677 merges.
-- File the phone form save layout story (design.md, Product decisions 5) if the Product Owner agrees.
+- The phone form save layout is sc-808 (design.md, Product decisions 5).

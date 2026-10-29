@@ -55,4 +55,5 @@ schedule goal template budgets only its next occurrence.
 - Specs: `schedule-relative-dates` ("Behaves like any schedule"),
   `schedule-business-days`.
 - Change: `openspec/changes/archive/2026-10-27-schedule-relative-dates/design.md`.
-- Story: sc-561 (PR #67, open at the time of writing).
+- Stories: sc-561 (PR #67, open at the time of writing), sc-751 (posting),
+  sc-752 (goal templates).

@@ -77,4 +77,5 @@ shows the same balances and the same schedule next dates.
 
 - Changes: `openspec/changes/archive/2026-10-27-business-calendars/design.md`
   and `2026-10-27-paychecks/design.md` ("Migration Plan").
-- Story: sc-562 (this decision). The export implementation isn't filed yet.
+- Story: sc-562 (this decision). The export implementation isn't planned
+  until someone needs to leave the fork.

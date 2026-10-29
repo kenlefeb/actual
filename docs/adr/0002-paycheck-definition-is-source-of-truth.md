@@ -42,6 +42,8 @@ paycheck itself, or the receiving account's business calendar and **days early**
   definition, or the next reconcile deletes it. sc-556 decides when that
   reconcile runs.
 - There's no public paychecks API (Ken, 2026-10-29).
+- Paychecks stay fork-only for now (Ken, 2026-10-29). There's no upstream
+  story. Revisit once the schedule upstream PRs, through sc-496, have merged.
 
 ## Links
 

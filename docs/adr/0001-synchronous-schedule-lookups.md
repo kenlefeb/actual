@@ -48,7 +48,7 @@ descriptions).
 - Any new backend entry point that does date math must call both `load*`
   functions first.
 - `shared/relative-dates.ts` imports `#server/rules`, so this shared code
-  depends on the server. That's tolerated for now.
+  depends on the server. sc-560 removes that import.
 
 ## Links
 
@@ -56,4 +56,4 @@ descriptions).
   are computed"), `schedule-relative-dates`.
 - Changes: `openspec/changes/archive/2026-10-27-schedule-business-days/design.md`,
   `2026-10-27-schedule-relative-dates/design.md`.
-- Stories: sc-555 (PR #64), sc-739.
+- Stories: sc-555 (PR #64), sc-560, sc-739.

@@ -359,6 +359,21 @@ describe('PaychecksSection', () => {
     ).toHaveTextContent('Tuesday, December 15, 2026');
   });
 
+  it.each(['2026-11-13', '2026-11-20'])(
+    'still shows two paychecks posted early as paid on %s',
+    today => {
+      state.today = today;
+      withPayNextDate('2026-12-15');
+      state.payTransactions = [
+        { schedule: 'acme-pay', date: '2026-11-12' },
+        { schedule: 'acme-pay', date: '2026-11-12' },
+      ];
+      renderSection();
+      const section = screen.getByRole('region', { name: 'Paychecks' });
+      expect(section).not.toHaveTextContent('Skipped');
+    },
+  );
+
   it('shows a skipped paycheck after more than a year of paychecks', () => {
     withPayNextDate('2026-11-30');
     state.payTransactions = [

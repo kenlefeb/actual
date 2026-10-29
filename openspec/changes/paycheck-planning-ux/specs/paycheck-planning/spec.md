@@ -36,7 +36,7 @@ Each row SHALL offer "Skip next paycheck". It SHALL ask for confirmation naming 
 - **THEN** the app asks "Skip the paycheck on November 13, 2026?" and nothing is skipped until the user confirms
 
 ### Requirement: Skipped paychecks are shown
-When a paycheck's next occurrence has been skipped, its row SHALL show "Skipped: <date>" and show the following occurrence as the next paycheck. Undo SHALL restore the skipped occurrence. An occurrence whose pay transaction was posted before its pay date is paid, not skipped. Each pay transaction posted after the last pay date on or before today pays one later occurrence: the earliest unpaid occurrence on or after its date.
+When a paycheck's next occurrence has been skipped, its row SHALL show "Skipped: <date>" and show the following occurrence as the next paycheck. Undo SHALL restore the skipped occurrence. An occurrence whose pay transaction was posted before its pay date is paid, not skipped.
 
 #### Scenario: Unpaid leave is visible
 - **GIVEN** the user skipped the November 13, 2026 "Acme" paycheck
@@ -48,10 +48,13 @@ When a paycheck's next occurrence has been skipped, its row SHALL show "Skipped:
 - **WHEN** the user opens the Schedules page that day
 - **THEN** the "Acme" row shows Monday, November 30 as the next paycheck and does not show "Skipped"
 
+### Requirement: Early pay transactions each pay one occurrence
+Each pay transaction dated after the second-to-last pay date on or before today SHALL pay one later occurrence: the earliest unpaid one on or after its date. Known limit: a paycheck posted late for the earlier of those two pay dates counts toward the next occurrence.
+
 #### Scenario: Two paychecks posted before the first pay date
 - **GIVEN** on Thursday, November 12, 2026 the user posted the "Acme" paychecks due Friday, November 13 and Monday, November 30, 2026
-- **WHEN** the user opens the Schedules page that day
-- **THEN** the "Acme" row shows Tuesday, December 15 as the next paycheck and does not show "Skipped"
+- **WHEN** the user opens the Schedules page on November 12, 13 or 20
+- **THEN** the "Acme" row does not show "Skipped"
 
 #### Scenario: Skipped paycheck between two posted ones
 - **GIVEN** on Thursday, November 12, 2026 the user posted the "Acme" paycheck due Friday, November 13 and one dated Monday, December 14 for the December 15 pay date, and skipped the November 30 paycheck

@@ -36,7 +36,7 @@ Each row SHALL offer "Skip next paycheck". It SHALL ask for confirmation naming 
 - **THEN** the app asks "Skip the paycheck on November 13, 2026?" and nothing is skipped until the user confirms
 
 ### Requirement: Skipped paychecks are shown
-When a paycheck's next occurrence has been skipped, its row SHALL show "Skipped: <date>" and show the following occurrence as the next paycheck. Undo SHALL restore the skipped occurrence. An occurrence whose pay transaction was posted before its pay date is paid, not skipped.
+When a paycheck's next occurrence has been skipped, its row SHALL show "Skipped: <date>" and show the following occurrence as the next paycheck. Undo SHALL restore the skipped occurrence. An occurrence whose pay transaction was posted before its pay date is paid, not skipped. Each posted pay transaction pays one occurrence: the earliest unpaid occurrence on or after its date.
 
 #### Scenario: Unpaid leave is visible
 - **GIVEN** the user skipped the November 13, 2026 "Acme" paycheck
@@ -47,6 +47,16 @@ When a paycheck's next occurrence has been skipped, its row SHALL show "Skipped:
 - **GIVEN** on Thursday, November 12, 2026 the user posted the "Acme" paycheck due Friday, November 13, 2026
 - **WHEN** the user opens the Schedules page that day
 - **THEN** the "Acme" row shows Monday, November 30 as the next paycheck and does not show "Skipped"
+
+#### Scenario: Two paychecks posted before the first pay date
+- **GIVEN** on Thursday, November 12, 2026 the user posted the "Acme" paychecks due Friday, November 13 and Monday, November 30, 2026
+- **WHEN** the user opens the Schedules page that day
+- **THEN** the "Acme" row shows Tuesday, December 15 as the next paycheck and does not show "Skipped"
+
+#### Scenario: Skipped paycheck between two posted ones
+- **GIVEN** on Thursday, November 12, 2026 the user posted the "Acme" paycheck due Friday, November 13 and one dated Monday, December 14 for the December 15 pay date, and skipped the November 30 paycheck
+- **WHEN** the user opens the Schedules page that day
+- **THEN** the "Acme" row shows "Skipped: Monday, November 30" and no other skipped paycheck
 
 ### Requirement: Clearing account warning on the row
 When a paycheck's clearing account warning is active (see `paychecks` "Clearing account"), its row SHALL show the warning's amount and the deposit still missing.

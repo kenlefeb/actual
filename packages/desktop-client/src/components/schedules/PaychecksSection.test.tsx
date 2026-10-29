@@ -331,6 +331,35 @@ describe('PaychecksSection', () => {
     ).toHaveTextContent('Monday, November 30, 2026');
   });
 
+  it('shows two paychecks posted before the first pay date as paid', () => {
+    state.today = '2026-11-12';
+    withPayNextDate('2026-12-15');
+    state.payTransactions = [
+      { schedule: 'acme-pay', date: '2026-11-12' },
+      { schedule: 'acme-pay', date: '2026-11-12' },
+    ];
+    renderSection();
+    const section = screen.getByRole('region', { name: 'Paychecks' });
+    expect(section).not.toHaveTextContent('Skipped');
+    expect(
+      screen.getByRole('button', { name: 'Edit paycheck Acme' }),
+    ).toHaveTextContent('Tuesday, December 15, 2026');
+  });
+
+  it('keeps a skipped paycheck between two posted ones skipped', () => {
+    state.today = '2026-11-12';
+    withPayNextDate('2026-12-31');
+    state.payTransactions = [
+      { schedule: 'acme-pay', date: '2026-11-12' },
+      { schedule: 'acme-pay', date: '2026-12-14' },
+    ];
+    renderSection();
+    const section = screen.getByRole('region', { name: 'Paychecks' });
+    expect(section).toHaveTextContent('Skipped: Monday, November 30');
+    expect(section).not.toHaveTextContent('Skipped: Tuesday, December 15');
+    expect(section).not.toHaveTextContent('Skipped: Friday, November 13');
+  });
+
   it('shows the skipped paycheck again once undo restores it', () => {
     withPayNextDate('2026-11-30');
     const { rerender } = render(

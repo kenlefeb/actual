@@ -27,7 +27,7 @@ test('Settings displays the customized client version', async ({ browser }) => {
     await expect(
       page.getByText('Client version', { exact: true }),
     ).toBeVisible();
-    await expect(page.getByText(`v${version}`, { exact: true })).toBeVisible();
+    await expect(page.getByText(`v${version}-deliberately-wrong`, { exact: true })).toBeVisible();
   } finally {
     await page.close();
   }

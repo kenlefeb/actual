@@ -122,8 +122,18 @@ export function planPaycheck(
   // Each pay transaction posted after the second-to-last pay date up to today
   // pays one later occurrence: the earliest unpaid one on or after its date,
   // so several paychecks posted early each count once (even after the first
-  // pay date passes) and older history can't shift them
-  const anchor = occurrences.filter(o => o <= today).at(-2) ?? '';
+  // pay date passes) and older history can't shift them. Until two pay dates
+  // have passed, only transactions within one pay period of the first count,
+  // so history linked to a new or re-dated schedule can't hide its skips
+  const [first, second] = occurrences;
+  const anchor =
+    occurrences.filter(o => o <= today).at(-2) ??
+    (first && second
+      ? monthUtils.addDays(
+          first,
+          -monthUtils.differenceInCalendarDays(second, first),
+        )
+      : '');
   const upcoming = occurrences.filter(o => o > anchor);
   const paid = new Set<string>();
   for (const posted of postedDates.filter(d => d > anchor).sort()) {

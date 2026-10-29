@@ -6,19 +6,24 @@ export type HolidayObservance = 'none' | 'sunday-to-monday' | 'nearest-weekday';
 type HolidayRuleBase = {
   id: string;
   name: string;
-  // 1 = January ... 12 = December
-  month: number;
   observance: HolidayObservance;
 };
 
+type MonthRuleBase = HolidayRuleBase & {
+  // 1 = January ... 12 = December
+  month: number;
+};
+
 export type HolidayRule =
-  | (HolidayRuleBase & { kind: 'fixed'; day: number })
-  | (HolidayRuleBase & {
+  | (MonthRuleBase & { kind: 'fixed'; day: number })
+  | (MonthRuleBase & {
       kind: 'nth-weekday';
       weekday: Weekday;
       nth: 1 | 2 | 3 | 4;
     })
-  | (HolidayRuleBase & { kind: 'last-weekday'; weekday: Weekday });
+  | (MonthRuleBase & { kind: 'last-weekday'; weekday: Weekday })
+  // Days from Western (Gregorian) Easter Sunday, -100 to 100: Good Friday is -2
+  | (HolidayRuleBase & { kind: 'easter'; offset: number });
 
 export type BusinessCalendarException = {
   // YYYY-MM-DD

@@ -3,6 +3,7 @@ import type { BusinessCalendarEntity, HolidayRule } from '#types/models';
 import {
   getHolidays,
   getNearestBusinessDay,
+  getWesternEaster,
   isBusinessDay,
 } from './business-calendars';
 
@@ -80,6 +81,62 @@ describe('business calendars', () => {
     expect(getHolidays(cal, 2026)).toEqual([
       { date: '2026-05-25', name: 'Memorial Day' },
     ]);
+  });
+
+  test.each([
+    [2024, '2024-03-31'],
+    [2025, '2025-04-20'],
+    [2026, '2026-04-05'],
+    [2038, '2038-04-25'],
+    [1818, '1818-03-22'],
+    [2285, '2285-03-22'],
+  ])('Western Easter Sunday in %i is %s', (year, date) => {
+    expect(getWesternEaster(year)).toBe(date);
+  });
+
+  test('easter rules count days from Easter Sunday', () => {
+    const cal = calendar({
+      holidays: [
+        {
+          id: 'good-friday',
+          name: 'Good Friday',
+          kind: 'easter',
+          offset: -2,
+          observance: 'none',
+        },
+        {
+          id: 'easter-monday',
+          name: 'Easter Monday',
+          kind: 'easter',
+          offset: 1,
+          observance: 'none',
+        },
+      ],
+    });
+    expect(getHolidays(cal, 2026)).toEqual([
+      { date: '2026-04-03', name: 'Good Friday' },
+      { date: '2026-04-06', name: 'Easter Monday' },
+    ]);
+    expect(isBusinessDay(cal, '2027-03-26')).toBe(false);
+  });
+
+  test('easter rules follow observance like other rules', () => {
+    const easter = (observance: HolidayRule['observance']) =>
+      calendar({
+        holidays: [
+          {
+            id: 'easter',
+            name: 'Easter',
+            kind: 'easter',
+            offset: 0,
+            observance,
+          },
+        ],
+      });
+    expect(getHolidays(easter('nearest-weekday'), 2026)).toEqual([
+      { date: '2026-04-06', name: 'Easter' },
+    ]);
+    expect(getHolidays(easter('none'), 2026)).toEqual([]);
   });
 
   test('nearest-weekday observance moves Saturday to Friday', () => {

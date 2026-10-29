@@ -159,11 +159,33 @@ describe('business calendars app', () => {
 
     it('rejects unknown holiday kinds and unnamed holidays', async () => {
       await expect(
-        create({ holidays: [{ ...july4, kind: 'easter' }] }),
+        create({ holidays: [{ ...july4, kind: 'pentecost' }] }),
       ).rejects.toThrow(/Unknown holiday kind/);
       await expect(
         create({ holidays: [{ ...july4, name: '' }] }),
       ).rejects.toThrow(/needs a name/);
+    });
+
+    it('accepts easter rules with whole-day offsets up to 100 days', async () => {
+      const goodFriday = {
+        id: 'good-friday',
+        name: 'Good Friday',
+        kind: 'easter',
+        offset: -2,
+        observance: 'none',
+      };
+      const id = await create({ holidays: [goodFriday] });
+      const [calendar] = await app.handlers['business-calendars-get']();
+      expect(calendar).toMatchObject({ id, holidays: [goodFriday] });
+
+      for (const offset of [101, -101, 1.5, '1', undefined]) {
+        await expect(
+          create({ holidays: [{ ...goodFriday, offset }] }),
+        ).rejects.toThrow(/Invalid offset/);
+      }
+      await expect(
+        create({ holidays: [{ ...goodFriday, offset: 100 }] }),
+      ).resolves.toEqual(expect.any(String));
     });
 
     it('rejects invalid and duplicate exception dates', async () => {

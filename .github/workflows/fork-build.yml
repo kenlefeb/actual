@@ -20,9 +20,15 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  # One list for both jobs, the same as fork-ci.yml's mobile-e2e: a pull request
+  # skips a build only when every changed file is known safe.
+  SAFE_PATHS: '^(docs/|openspec/|fork/|upcoming-release-notes/)|\.md$'
+
 jobs:
   # Both jobs always report, so they can be required checks; a scope step
-  # skips the work on a pull request that can't affect it. Pushes always build.
+  # skips the work only on a pull request that changes nothing but safe files.
+  # Pushes always build.
   browser-build:
     if: github.repository == 'kenlefeb/actual'
     runs-on: ubuntu-latest
@@ -37,15 +43,17 @@ jobs:
         id: scope
         run: |
           if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
-            # Captured first so a failing diff fails the job instead of
-            # skipping the build; --no-renames keeps a moved file's old path.
-            changed=$(git diff --no-renames --name-only HEAD^1 HEAD)
+            # Captured first so a failing diff fails the job instead of skipping
+            # the build; --no-renames keeps the old path of a moved file, and
+            # quotePath=false keeps unusual file names unquoted.
+            changed=$(git -c core.quotePath=false diff --no-renames --name-only HEAD^1 HEAD)
           fi
+          # Skip only when every changed file is known safe; anything else runs.
           if [ "$GITHUB_EVENT_NAME" != pull_request ] ||
-            printf '%s\n' "$changed" | grep -Eq '^(packages/|bin/|\.yarn/|yarn\.lock$|package\.json$|\.yarnrc\.yml$|\.nvmrc$|lage\.config\.js$|tsconfig\.json$|\.github/actions/setup/|\.github/workflows/fork-build\.yml$)'; then
+            printf '%s\n' "$changed" | grep -Ev "$SAFE_PATHS" | grep -q .; then
             echo run=true >> "$GITHUB_OUTPUT"
           else
-            echo 'No app or build changes; skipping the browser build.'
+            echo 'Only docs, OpenSpec, fork notes or Markdown changed; skipping the browser build.'
             echo run=false >> "$GITHUB_OUTPUT"
           fi
       - name: Set up environment
@@ -70,14 +78,15 @@ jobs:
         id: scope
         run: |
           if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
-            changed=$(git diff --no-renames --name-only HEAD^1 HEAD)
+            changed=$(git -c core.quotePath=false diff --no-renames --name-only HEAD^1 HEAD)
           fi
-          # Dependencies, the files the image's deps stage copies, and the Docker files
+          # Same rule: the image copies all of packages/ and runs yarn build:server,
+          # which no other job builds, so any non-safe change runs it.
           if [ "$GITHUB_EVENT_NAME" != pull_request ] ||
-            printf '%s\n' "$changed" | grep -Eq '^(yarn\.lock|package\.json|packages/[^/]+/package\.json|\.yarnrc\.yml|\.yarn/.*|bin/package-browser|sync-server\.Dockerfile|Dockerfile|\.dockerignore|\.github/workflows/fork-build\.yml)$'; then
+            printf '%s\n' "$changed" | grep -Ev "$SAFE_PATHS" | grep -q .; then
             echo run=true >> "$GITHUB_OUTPUT"
           else
-            echo 'No dependency or Docker changes; skipping the Docker build.'
+            echo 'Only docs, OpenSpec, fork notes or Markdown changed; skipping the Docker build.'
             echo run=false >> "$GITHUB_OUTPUT"
           fi
       # The same image the actual-hosting staging build makes

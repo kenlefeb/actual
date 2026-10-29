@@ -62,7 +62,7 @@ A clearing account SHALL show a paycheck icon beside its name in the sidebar on 
 - **THEN** no paycheck icon, note or warning is shown for it
 
 ### Requirement: Clearing account warning
-A deposit of a paycheck's most recent posted pay date is missing when it has no linked transaction. Once every missing deposit (or, when none is missing, every deposit) is past its expected date by more than 2 business days (of that deposit account's calendar) and the clearing account's balance is not zero, the clearing account note SHALL be followed by a warning stating the balance and naming each missing deposit. On desktop layouts the warning follows the note in the same line. On narrow (mobile) layouts it is on its own line below the note. The text and timing are the same on both.
+A deposit of a paycheck's most recent posted pay date is missing when it has no linked transaction. Once every missing deposit (or, when none is missing, every deposit) is past its expected date by more than 2 business days (of that deposit account's calendar) and the clearing account's balance is not zero, the clearing account note SHALL be followed by a warning stating the balance and naming each missing deposit.
 
 #### Scenario: Missing deposit
 - **GIVEN** the November 13, 2026 "Acme" pay posted, the "Savings" deposit arrived and the "Checking" deposit (expected Tuesday, November 10) did not
@@ -83,6 +83,17 @@ A deposit of a paycheck's most recent posted pay date is missing when it has no 
 - **GIVEN** the layout is narrow, the November 30, 2026 "Acme" pay posted and the "Checking" deposit is expected Wednesday, November 25
 - **WHEN** the user opens "Acme Paycheck" on a phone on Thursday, November 26
 - **THEN** the account page shows the note, not a warning
+
+### Requirement: Clearing account warning placement
+On desktop layouts the clearing account warning SHALL follow the note in the same line. On narrow (mobile) layouts it SHALL be on its own line below the note. Its text and timing are the same on both.
+
+#### Scenario: Warning in the note's line on desktop
+- **WHEN** the clearing account warning shows in the register on a desktop layout
+- **THEN** it follows the note in the same line
+
+#### Scenario: Warning on its own line on a phone
+- **WHEN** the clearing account warning shows on the account page on a narrow layout
+- **THEN** it is on its own line below the note, in the same words as on desktop
 
 ### Requirement: Rounding
 Percent deposits SHALL be rounded to the cent, and the single remainder deposit SHALL receive net pay minus all other deposits, so rounding never leaves money in the clearing account.

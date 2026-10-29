@@ -13,7 +13,7 @@ With the `paychecks` experimental feature on, the schedules page SHALL offer "Ad
 - **THEN** the schedules page does not offer "Add paycheck"
 
 ### Requirement: Paychecks feature
-Turning on `paychecks` SHALL also turn on `businessCalendars`. The `paychecks` feature SHALL count as on only while `businessCalendars` is on, so turning `businessCalendars` off also turns `paychecks` off. While the budget has a paycheck, `businessCalendars` SHALL not be turned off (see `business-calendars` "Experimental feature flag"). An unset `paychecks` flag SHALL start on for a budget that has `businessCalendars` on. Turning either feature off SHALL hide paycheck entry points but keep paychecks and their schedules.
+Turning on `paychecks` SHALL also turn on `businessCalendars`. `paychecks` SHALL count as on only while `businessCalendars` is on, and an unset `paychecks` flag SHALL start on exactly when `businessCalendars` is on. Turning either feature off SHALL hide paycheck entry points but keep paychecks and their schedules. The lock while a paycheck exists is in `business-calendars` "Experimental feature flag".
 
 #### Scenario: Turning on paychecks turns on business calendars
 - **WHEN** the user turns on `paychecks` while `businessCalendars` is off

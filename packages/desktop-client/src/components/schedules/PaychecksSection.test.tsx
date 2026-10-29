@@ -151,9 +151,14 @@ function fillScheduleDates() {
   );
 }
 
-function withPayNextDate(next_date: string) {
+function withPayNextDate(next_date: string, start = payDate.start) {
   state.schedules = [
-    { id: 'acme-pay', next_date, completed: false, _date: payDate },
+    {
+      id: 'acme-pay',
+      next_date,
+      completed: false,
+      _date: { ...payDate, start },
+    },
     deposit('acme-checking', 2),
     deposit('acme-savings', 0),
   ];
@@ -394,6 +399,30 @@ describe('PaychecksSection', () => {
     renderSection();
     const section = screen.getByRole('region', { name: 'Paychecks' });
     expect(section).toHaveTextContent('Skipped: Friday, November 13');
+  });
+
+  it('ignores paychecks from before a new pay schedule starts', () => {
+    state.today = '2026-11-10';
+    withPayNextDate('2026-12-15', '2026-11-13');
+    state.payTransactions = ['2025-11', '2025-12'].flatMap(onTimePay);
+    renderSection();
+    const section = screen.getByRole('region', { name: 'Paychecks' });
+    expect(section).toHaveTextContent('Skipped: Friday, November 13');
+    expect(section).toHaveTextContent('Skipped: Monday, November 30');
+  });
+
+  // Known limit: a duplicate can't be told apart from a paycheck posted early
+  it('counts a duplicate of the latest paycheck toward the next one', () => {
+    state.today = '2026-11-20';
+    withPayNextDate('2026-12-15');
+    state.payTransactions = [
+      ...paidMonths2026.flatMap(onTimePay),
+      { schedule: 'acme-pay', date: '2026-11-10' },
+      { schedule: 'acme-pay', date: '2026-11-10' },
+    ];
+    renderSection();
+    const section = screen.getByRole('region', { name: 'Paychecks' });
+    expect(section).not.toHaveTextContent('Skipped');
   });
 
   it('keeps a skipped paycheck between two posted ones skipped', () => {

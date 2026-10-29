@@ -656,6 +656,10 @@ isn't, skip these steps and say so in your reply instead of guessing.
   stories aren't refined yet: don't start them or move them to To Do yourself;
   ask Ken to refine the backlog instead.
 - Starting a story: assign yourself and move it to In Progress.
+- Checklist: every story follows the story template and checklist in
+  `docs/agents/issue-tracker.md`. Complete each step's task when you finish it
+  and set yourself as its owner, so the record shows who did it. Never complete
+  "Code review" yourself; that is a person's step.
 - Branches: use the story's Shortcut branch name (it contains `sc-<id>`) when
   you choose the branch name. When the branch name is given to you, end the PR
   title with `[sc-<id>]` instead, after the `[AI]` prefix and summary. Leave the

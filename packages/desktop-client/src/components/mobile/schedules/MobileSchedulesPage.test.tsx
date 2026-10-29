@@ -117,7 +117,7 @@ describe('MobileSchedulesPage business calendars', () => {
     expect(state.navigate).toHaveBeenCalledWith('/business-calendars');
   });
 
-  it('hides business calendars when the feature is off', () => {
+  it('Feature disabled: hides business calendars', () => {
     renderPage();
     expect(
       screen.queryByRole('button', { name: 'Business calendars' }),

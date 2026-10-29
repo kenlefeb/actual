@@ -7,6 +7,7 @@ import { MobileSheetSection } from '#components/mobile/MobileSheetSection';
 import { validateAccountName } from '#components/util/accountValidation';
 import { useAccount } from '#hooks/useAccount';
 import { useAccounts } from '#hooks/useAccounts';
+import { useFeatureFlag } from '#hooks/useFeatureFlag';
 import { useNotes } from '#hooks/useNotes';
 import { useSyncedPref } from '#hooks/useSyncedPref';
 import type { Modal as ModalType } from '#modals/modalsSlice';
@@ -24,8 +25,10 @@ export function AccountMenuModal({
   onEditNotes,
   onClose,
   onReconcile,
+  onEditBusinessDays,
 }: AccountMenuModalProps) {
   const { t } = useTranslation();
+  const businessCalendarsEnabled = useFeatureFlag('businessCalendars');
   const account = useAccount(accountId);
   const { data: accounts = [] } = useAccounts();
   const notes = useNotes(`account-${accountId}`);
@@ -71,6 +74,12 @@ export function AccountMenuModal({
               <MobileSheetRow
                 label={t('Reconcile')}
                 onPress={() => onReconcile()}
+              />
+            )}
+            {businessCalendarsEnabled && onEditBusinessDays && (
+              <MobileSheetRow
+                label={t('Business days')}
+                onPress={() => onEditBusinessDays(account.id)}
               />
             )}
             <MobileSheetRow

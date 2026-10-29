@@ -745,7 +745,7 @@ type AccountMenuProps = {
   ) => void;
 };
 
-function AccountMenu({
+export function AccountMenu({
   account,
   canSync,
   showNetWorthChart,

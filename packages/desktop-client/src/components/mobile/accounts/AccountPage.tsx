@@ -170,6 +170,17 @@ function AccountHeader({ account }: { readonly account: AccountEntity }) {
     );
   }, [account.id, dispatch, setSearchParams]);
 
+  const onEditBusinessDays = useCallback(
+    (accountId: AccountEntity['id']) => {
+      dispatch(
+        pushModal({
+          modal: { name: 'account-business-days', options: { accountId } },
+        }),
+      );
+    },
+    [dispatch],
+  );
+
   const onClick = useCallback(() => {
     dispatch(
       pushModal({
@@ -182,6 +193,7 @@ function AccountHeader({ account }: { readonly account: AccountEntity }) {
             onCloseAccount,
             onReopenAccount,
             onReconcile,
+            onEditBusinessDays,
           },
         },
       }),
@@ -190,6 +202,7 @@ function AccountHeader({ account }: { readonly account: AccountEntity }) {
     account.id,
     dispatch,
     onCloseAccount,
+    onEditBusinessDays,
     onEditNotes,
     onReconcile,
     onReopenAccount,

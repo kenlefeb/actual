@@ -66,7 +66,9 @@ later than its latest `Changes requested`, and no commits were pushed after the
 approval except merges of `development`.
 
 An approval also completes the story's "Code review" task. The reviewer ticks
-it, as the owner of that task.
+it, as the owner of that task, and comments on the story with the approval
+comment's URL. Every agent uses one Shortcut user, so that link is what shows
+the review wasn't the author's.
 
 ## Merging
 

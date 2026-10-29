@@ -114,13 +114,17 @@ async function createAcme(fields: Partial<PaycheckDefinition> = {}) {
   };
 }
 
+// Tests that need an earlier today set it in a beforeAll, since the CRDT
+// clock can't move back once the setup below has written at this date
+let today = new Date(2026, 10, 1);
+
 beforeEach(async () => {
   await global.emptyDatabase()();
   await loadMappings();
   await loadRules();
   // Fills the schedule view's condition paths, as at budget load
   schedulesApp.startServices();
-  MockDate.set(new Date(2026, 10, 1));
+  MockDate.set(today);
   setBusinessCalendars([federal, reserve]);
 
   await addAccount('clearing');
@@ -213,6 +217,32 @@ describe('account business days', () => {
         depositDaysEarly: days,
       }),
     ).rejects.toThrow('whole number from 0 to 10');
+  });
+
+  describe('in October 2026', () => {
+    beforeAll(() => {
+      today = new Date(2026, 9, 1);
+    });
+    afterAll(() => {
+      today = new Date(2026, 10, 1);
+    });
+
+    it('Same-day deposits on a bank holiday: a 0-day deposit moves before Columbus Day', async () => {
+      // The employer works Columbus Day, so pay stays on Monday, October 12
+      await handlers['account-set-business-days']({
+        id: 'clearing',
+        businessCalendarId: null,
+        depositDaysEarly: 0,
+      });
+      const { pay, savings } = await createAcme({
+        date: { start: '2026-10-12', frequency: 'monthly', interval: 1 },
+      });
+
+      expect(await upcoming(pay)).toEqual(['2026-10-12', '2026-11-12']);
+      // "Savings" uses the Federal Reserve calendar, 0 business days early
+      expect(await upcoming(savings)).toEqual(['2026-10-09', '2026-11-12']);
+      expect((await scheduleRow(savings)).next_date).toBe('2026-10-09');
+    });
   });
 
   it('moves deposit dates when the account changes, and undo restores them', async () => {
@@ -368,6 +398,45 @@ describe('paychecks', () => {
     expect(
       (await transactions()).find(t => t.account === 'checking'),
     ).toMatchObject({ schedule: null });
+  });
+
+  it('Change how often pay arrives: monthly to weekly moves the pay and deposit schedules', async () => {
+    const { id, pay, checking, savings } = await createAcme();
+    const paycheck = await getPaycheck(id);
+    if (!paycheck) throw new Error('Missing paycheck');
+    // Stored next dates compare write times, so let the clock move on
+    MockDate.set(new Date(2026, 10, 1, 12));
+    await handlers['paycheck-update']({
+      id,
+      name: 'Acme',
+      definition: {
+        ...paycheck.definition,
+        // Every Friday from November 6
+        date: { start: '2026-11-06', frequency: 'weekly', interval: 1 },
+      },
+    });
+
+    const updated = await getPaycheck(id);
+    expect(updated?.definition.date).toMatchObject({ frequency: 'weekly' });
+    expect(await upcoming(pay, 3)).toEqual([
+      '2026-11-06',
+      '2026-11-13',
+      '2026-11-20',
+    ]);
+    // Two Federal Reserve business days early; Wed Nov 11 is Veterans Day
+    expect(await upcoming(checking, 3)).toEqual([
+      '2026-11-04',
+      '2026-11-10',
+      '2026-11-18',
+    ]);
+    expect(await upcoming(savings, 3)).toEqual([
+      '2026-11-06',
+      '2026-11-13',
+      '2026-11-20',
+    ]);
+    expect((await scheduleRow(pay)).next_date).toBe('2026-11-06');
+    expect((await scheduleRow(checking)).next_date).toBe('2026-11-04');
+    expect((await scheduleRow(savings)).next_date).toBe('2026-11-06');
   });
 
   it('updates future amounts without changing posted transactions', async () => {

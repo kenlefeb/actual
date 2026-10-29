@@ -31,7 +31,7 @@ The `account-menu` modal options gain an optional `onEditBusinessDays: (accountI
 The row opens `AccountBusinessDaysModal`, not a new mobile page. The dialog has two fields and a Save button, so it fits a phone once its width is fixed. This keeps one implementation of the days validation, the "Missing calendar" note and the save call. Saving closes the dialog and leaves the account menu sheet open underneath, as "Edit notes" does.
 
 ### Open the dialog as a sheet on narrow layouts
-`AccountBusinessDaysModal` passes `presentation="sheet"` to `Modal`. `Modal` uses the sheet only when `isNarrowWidth` is true (`common/Modal.tsx`), so a phone gets a bottom sheet like the account menu it came from, and desktop keeps the centred dialog. This is the same switch `MobileSheet` uses, and it is one prop.
+At narrow width `AccountBusinessDaysModal` renders its fields inside `MobileSheet`, so a phone gets a bottom sheet like the account menu it came from: the same centred 18px title that wraps to two lines, and no close button. Desktop keeps the centred dialog with its `ModalHeader` and close button. (The first version passed `presentation="sheet"` to `Modal`, but kept the desktop header, which cut the account name off and had a 30px close button; the UX Designer's PR #68 review asked for the sheet title.)
 
 - Alternative: a full mobile page like the paycheck editor (sc-60). Rejected for now: it would duplicate the validation for two fields.
 

@@ -47,6 +47,7 @@ describe('AccountBusinessDaysModal', () => {
     state.account.business_calendar_id = 'reserve';
     state.mutate.mockClear();
     responsive.isNarrowWidth = false;
+    state.account.name = 'Checking';
   });
 
   // shortcut: jsdom does no layout, so the phone-width fit is checked by hand (task 3.2).
@@ -78,6 +79,25 @@ describe('AccountBusinessDaysModal', () => {
       { id: 'checking', businessCalendarId: 'reserve', depositDaysEarly: 1 },
       expect.anything(),
     );
+  });
+
+  it('shows the whole account name as a sheet title with no close button at narrow width', () => {
+    responsive.isNarrowWidth = true;
+    state.account.name = 'Capital One Checking';
+    renderModal();
+    expect(
+      screen.getByRole('heading', {
+        name: 'Business days: Capital One Checking',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /close/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps the desktop close button at wide width', () => {
+    renderModal();
+    expect(screen.getByRole('button', { name: /close/i })).toBeInTheDocument();
   });
 
   it('gives every control a touch-sized height at narrow width', () => {

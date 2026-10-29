@@ -111,15 +111,12 @@ export function usePaycheckForm(paycheck?: PaycheckEntity) {
   const clearing = accountById.get(definition.clearingAccount);
   // Shown as moved, the way the pay schedule saves it
   const clearingCalendarId = clearing?.business_calendar_id ?? undefined;
-  const payDates = useMemo(
-    () => ({
-      ...definition.date,
-      skipWeekend: true,
-      weekendSolveMode: definition.weekendSolveMode,
-      businessCalendarId: clearingCalendarId,
-    }),
-    [definition.date, definition.weekendSolveMode, clearingCalendarId],
-  );
+  const payDates = {
+    ...definition.date,
+    skipWeekend: true,
+    weekendSolveMode: definition.weekendSolveMode,
+    businessCalendarId: clearingCalendarId,
+  };
   const employerName = definition.payee
     ? payeesById[definition.payee]?.name
     : undefined;

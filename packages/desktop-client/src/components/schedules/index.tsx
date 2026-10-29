@@ -11,7 +11,6 @@ import type { ScheduleEntity } from '@actual-app/core/types/models';
 
 import { Search } from '#components/common/Search';
 import { FeatureErrorFallback } from '#components/FeatureErrorFallback';
-import { Page } from '#components/Page';
 import { useFeatureFlag } from '#hooks/useFeatureFlag';
 import { useOpenBusinessCalendars } from '#hooks/useOpenBusinessCalendars';
 import { usePaycheckMembership } from '#hooks/usePaycheckMembership';
@@ -100,7 +99,7 @@ export function Schedules() {
 
   return (
     <ErrorBoundary FallbackComponent={FeatureErrorFallback}>
-      <Page header={t('Schedules')}>
+      <>
         {paychecksEnabled && <PaychecksSection />}
         <View
           style={{
@@ -168,7 +167,7 @@ export function Schedules() {
             </Button>
           </View>
         </View>
-      </Page>
+      </>
     </ErrorBoundary>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { send } from '@actual-app/core/platform/client/connection';
+import { setBusinessCalendars } from '@actual-app/core/shared/business-calendar-lookup';
 import * as monthUtils from '@actual-app/core/shared/months';
 import { computeSchedulePreviewTransactions } from '@actual-app/core/shared/schedules';
 import { ungroupTransactions } from '@actual-app/core/shared/transactions';
@@ -12,7 +13,10 @@ import type {
 
 import { useBusinessCalendarLookup } from './useBusinessCalendarLookup';
 import { useCachedSchedules } from './useCachedSchedules';
-import { useScheduleDateLookup } from './useScheduleDateLookup';
+import {
+  applyScheduleDateLookup,
+  useScheduleDateLookup,
+} from './useScheduleDateLookup';
 import { useSyncedPref } from './useSyncedPref';
 import { calculateRunningBalancesBottomUp } from './useTransactions';
 
@@ -82,14 +86,17 @@ export function usePreviewTransactions({
       return [];
     }
 
+    // Date math reads calendars and relative dates through shared lookups, so
+    // bring them up to date with what this render sees first
+    setBusinessCalendars(businessCalendars);
+    applyScheduleDateLookup(scheduleDates);
+
     return computeSchedulePreviewTransactions(
       schedules,
       statuses,
       upcomingLength,
       filter,
     );
-    // businessCalendars: date math reads them through the shared lookup
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [
     filter,
     isSchedulesLoading,

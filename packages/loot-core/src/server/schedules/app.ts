@@ -22,7 +22,7 @@ import {
 } from '#server/transactions/transaction-rules';
 import { undoable } from '#server/undo';
 import { RSchedule } from '#server/util/rschedule';
-import { currentDay, dayFromDate } from '#shared/months';
+import { currentDay, dayFromDate, parseDate, subDays } from '#shared/months';
 import { q } from '#shared/query';
 import {
   getRelativeOccurrences,
@@ -219,6 +219,20 @@ async function fixRuleForSchedule(id) {
   return getRules().find(rule => rule.id === newId);
 }
 
+// `getNextDate` only looks at occurrences from `today` on, before moving them
+// off the weekend, so it misses an earlier occurrence moved `after` the
+// weekend onto `today` or later. `getNextDateAfter` sees that one, and it is
+// only used when it comes first, so every other case keeps its next date.
+function getNextDateFrom(dateCond, today: Date) {
+  const nextDate = getNextDate(dateCond, today);
+  const movedOntoToday = getNextDateAfter(dateCond, subDays(today, 1));
+
+  return movedOntoToday != null &&
+    (nextDate == null || movedOntoToday < nextDate)
+    ? movedOntoToday
+    : nextDate;
+}
+
 export async function setNextDate({
   id,
   conditions,
@@ -252,7 +266,7 @@ export async function setNextDate({
   if (dateCond) {
     const newNextDate = advance
       ? getNextDateAfter(dateCond, nextDate)
-      : getNextDate(dateCond, new Date());
+      : getNextDateFrom(dateCond, new Date());
 
     if (
       (newNextDate != null || (clearIfNone && nextDate != null)) &&
@@ -396,6 +410,23 @@ async function assertValidRelativeDate(dateCond, scheduleId: string) {
   }
 }
 
+// The auto-posting service is throttled to one run per day through the
+// `lastScheduleRun` pref (see the `sync` event listener at the bottom of this
+// file). A schedule that posts transactions can be created or edited after
+// that run has already happened and still be due today, in which case it
+// would not be posted until the next day. Clearing the marker lets the
+// service run again for the current day; it only posts occurrences that do
+// not have a transaction yet, so an extra run is harmless.
+async function allowAutoPostingToRunAgainToday(postsTransaction: boolean) {
+  if (!postsTransaction) {
+    return;
+  }
+
+  if (prefs.getPrefs()?.lastScheduleRun) {
+    await prefs.savePrefs({ lastScheduleRun: undefined });
+  }
+}
+
 export async function createSchedule({
   schedule = null,
   conditions = [],
@@ -416,7 +447,7 @@ export async function createSchedule({
   await refreshScheduleDateLookup();
   await assertValidRelativeDate(dateCond, scheduleId);
 
-  const nextDate = getNextDate(dateCond);
+  const nextDate = getNextDateFrom(dateCond, parseDate(currentDay()));
   const nextDateRepr = nextDate ? toDateRepr(nextDate) : null;
   const scheduleFields = schedule && {
     ...schedule,
@@ -452,6 +483,8 @@ export async function createSchedule({
     id: scheduleId,
     rule: ruleId,
   });
+
+  await allowAutoPostingToRunAgainToday(scheduleFields?.posts_transaction);
 
   return scheduleId;
 }
@@ -556,6 +589,11 @@ export async function updateSchedule({
   if (isDateChanged) {
     await refreshRelativeDependents(schedule.id);
   }
+  const postsTransaction =
+    scheduleFields.posts_transaction ??
+    (await getSchedule(scheduleFields.id))?.posts_transaction;
+
+  await allowAutoPostingToRunAgainToday(postsTransaction);
 
   return scheduleFields.id;
 }

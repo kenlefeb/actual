@@ -25,11 +25,17 @@ export function useScheduleDateLookup() {
   // A stable empty list while loading, so callers don't recompute every render
   const schedules = data ?? NO_SCHEDULES;
   // Synchronous on purpose: callers compute dates in the same render
-  useMemo(() => {
-    setScheduleDates(schedules.map(s => [s.id, s._date] as const));
-    setScheduleNames(
-      schedules.flatMap(s => (s.name ? [[s.id, s.name] as const] : [])),
-    );
-  }, [schedules]);
+  useMemo(() => applyScheduleDateLookup(schedules), [schedules]);
   return { schedules, isLoading };
+}
+
+/**
+ * Fills the shared lookup from `schedules`. Callers that memoize date math
+ * call it inside the memo too, so the math depends on the schedules it reads.
+ */
+export function applyScheduleDateLookup(schedules: readonly ScheduleEntity[]) {
+  setScheduleDates(schedules.map(s => [s.id, s._date] as const));
+  setScheduleNames(
+    schedules.flatMap(s => (s.name ? [[s.id, s.name] as const] : [])),
+  );
 }

@@ -33,7 +33,9 @@ export type DbAccount = {
     | 'attention-required'
     | 'rate-limit-exceeded'
     | 'timed-out'
+    | 'server-down'
     | 'account-missing'
+    | 'not-configured'
     | null;
   account_group_id?: DbAccountGroup['id'] | null;
   business_calendar_id?: string | null;

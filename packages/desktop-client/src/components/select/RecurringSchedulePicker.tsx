@@ -15,6 +15,7 @@ import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
 import { sendCatch } from '@actual-app/core/platform/client/connection';
+import { setBusinessCalendars } from '@actual-app/core/shared/business-calendar-lookup';
 import * as monthUtils from '@actual-app/core/shared/months';
 import type { RecurConfig, RecurPattern } from '@actual-app/core/types/models';
 import type {
@@ -399,13 +400,12 @@ function RecurringScheduleTooltip({
 
   // Reset only when the dates change: a caller that rebuilds an equal value on
   // every render must not wipe the user's edit in progress
-  const currentConfigKey = JSON.stringify(currentConfig);
+  const currentConfigKey = JSON.stringify(currentConfig ?? {});
   useEffect(() => {
     dispatch({
       type: 'replace-config',
-      config: parseConfig(currentConfig),
+      config: parseConfig(JSON.parse(currentConfigKey)),
     });
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [currentConfigKey]);
 
   const { config } = state;
@@ -688,12 +688,12 @@ export function RecurringSchedulePicker({
     setIsOpen(false);
   }
 
-  const recurringDescription = useMemo(
-    () => getRecurringDescription(value, dateFormat, locale),
-    // businessCalendars: the description names the chosen calendar
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-    [locale, value, dateFormat, businessCalendars],
-  );
+  const recurringDescription = useMemo(() => {
+    // The description names the chosen calendar, read through the shared
+    // lookup, so bring it up to date with what this render sees first
+    setBusinessCalendars(businessCalendars);
+    return getRecurringDescription(value, dateFormat, locale);
+  }, [locale, value, dateFormat, businessCalendars]);
 
   const tooltip = (
     <RecurringScheduleTooltip

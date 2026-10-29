@@ -170,6 +170,19 @@ function renderSection() {
   );
 }
 
+// Each month's two paychecks, posted a few days before their pay dates
+function onTimePay(month: string) {
+  return [`${month}-10`, `${month}-25`].map(date => ({
+    schedule: 'acme-pay',
+    date,
+  }));
+}
+
+const paidMonths2026 = Array.from(
+  { length: 10 },
+  (_, i) => `2026-${String(i + 1).padStart(2, '0')}`,
+);
+
 describe('PaychecksSection', () => {
   beforeEach(() => {
     setBusinessCalendars([
@@ -329,6 +342,72 @@ describe('PaychecksSection', () => {
     expect(
       screen.getByRole('button', { name: 'Edit paycheck Acme' }),
     ).toHaveTextContent('Monday, November 30, 2026');
+  });
+
+  it('shows two paychecks posted before the first pay date as paid', () => {
+    state.today = '2026-11-12';
+    withPayNextDate('2026-12-15');
+    state.payTransactions = [
+      { schedule: 'acme-pay', date: '2026-11-12' },
+      { schedule: 'acme-pay', date: '2026-11-12' },
+    ];
+    renderSection();
+    const section = screen.getByRole('region', { name: 'Paychecks' });
+    expect(section).not.toHaveTextContent('Skipped');
+    expect(
+      screen.getByRole('button', { name: 'Edit paycheck Acme' }),
+    ).toHaveTextContent('Tuesday, December 15, 2026');
+  });
+
+  it.each(['2026-11-13', '2026-11-20'])(
+    'still shows two paychecks posted early as paid on %s',
+    today => {
+      state.today = today;
+      withPayNextDate('2026-12-15');
+      state.payTransactions = [
+        { schedule: 'acme-pay', date: '2026-11-12' },
+        { schedule: 'acme-pay', date: '2026-11-12' },
+      ];
+      renderSection();
+      const section = screen.getByRole('region', { name: 'Paychecks' });
+      expect(section).not.toHaveTextContent('Skipped');
+    },
+  );
+
+  it('shows a skipped paycheck after more than a year of paychecks', () => {
+    withPayNextDate('2026-11-30');
+    state.payTransactions = [
+      ...['2025-11', '2025-12'].flatMap(onTimePay),
+      ...paidMonths2026.flatMap(onTimePay),
+    ];
+    renderSection();
+    const section = screen.getByRole('region', { name: 'Paychecks' });
+    expect(section).toHaveTextContent('Skipped: Friday, November 13');
+  });
+
+  it('shows a skipped paycheck despite an extra past pay transaction', () => {
+    withPayNextDate('2026-11-30');
+    state.payTransactions = [
+      ...paidMonths2026.flatMap(onTimePay),
+      { schedule: 'acme-pay', date: '2026-06-10' },
+    ];
+    renderSection();
+    const section = screen.getByRole('region', { name: 'Paychecks' });
+    expect(section).toHaveTextContent('Skipped: Friday, November 13');
+  });
+
+  it('keeps a skipped paycheck between two posted ones skipped', () => {
+    state.today = '2026-11-12';
+    withPayNextDate('2026-12-31');
+    state.payTransactions = [
+      { schedule: 'acme-pay', date: '2026-11-12' },
+      { schedule: 'acme-pay', date: '2026-12-14' },
+    ];
+    renderSection();
+    const section = screen.getByRole('region', { name: 'Paychecks' });
+    expect(section).toHaveTextContent('Skipped: Monday, November 30');
+    expect(section).not.toHaveTextContent('Skipped: Tuesday, December 15');
+    expect(section).not.toHaveTextContent('Skipped: Friday, November 13');
   });
 
   it('shows the skipped paycheck again once undo restores it', () => {

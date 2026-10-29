@@ -2,8 +2,8 @@
 
 ## 1. Contract and failing tests
 
-- [ ] 1.1 Spec delta for `paychecks` "Edits on two devices", "Clean-up after edits on two devices" and "No Delete for a paycheck's schedules". Verify with `openspec validate reconcile-paycheck-schedules --strict`.
-- [ ] 1.2 Add `server/paychecks/concurrent-edits.test.ts` with two-device helpers, following the reproduction in design.md:
+- [x] 1.1 Spec delta for `paychecks` "Edits on two devices", "Clean-up after edits on two devices" and "No Delete for a paycheck's schedules". Verify with `openspec validate reconcile-paycheck-schedules --strict`.
+- [x] 1.2 Add `server/paychecks/concurrent-edits.test.ts` with two-device helpers, following the reproduction in design.md:
   - enable syncing mode with the mock sync server;
   - snapshot the database with `serialize()` and restore it with `openDatabase(buffer)`, then `loadMappings()` and `loadRules()`;
   - capture a device's `messages_crdt` rows since a timestamp, and apply them with `applyMessages` and `deserializeValue`.

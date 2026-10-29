@@ -130,6 +130,25 @@ describe('clearing accounts', () => {
     );
   });
 
+  it('keeps the warning in the same line as the note on desktop', async () => {
+    state.clearing = [missingChecking];
+    render(
+      <TestProviders>
+        <ClearingAccountNote accountId="clearing" />
+      </TestProviders>,
+    );
+    const warning =
+      '2,025.00 is still in "Acme Paycheck", waiting on the deposit to Checking.';
+    await waitFor(() =>
+      expect(screen.getByRole('complementary')).toHaveTextContent(warning),
+    );
+    const shown = screen
+      .getAllByText((_, element) => element?.textContent === warning)
+      .at(-1);
+    // Inline in the same block as the note, with no block of its own
+    expect(shown?.closest('div')).toHaveTextContent(note);
+  });
+
   it('names every missing deposit', async () => {
     state.clearing = [
       {

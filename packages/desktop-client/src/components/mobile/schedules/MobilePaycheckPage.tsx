@@ -83,7 +83,7 @@ function MobilePaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
             borderColor: theme.tableBorder,
           }}
         >
-          <View style={{ fontSize: 16, fontWeight: 600 }}>
+          <View style={styles.mediumText}>
             <PaycheckNetPay form={form} />
           </View>
           <Button
@@ -131,6 +131,7 @@ function MobilePaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
         <CollapsibleSection
           title={t('Deductions')}
           summary={t('{{count}} deductions · {{total}}', {
+            defaultValue_one: '{{count}} deduction · {{total}}',
             count: definition.deductions.length,
             total: format(deductionTotal, 'financial'),
           })}
@@ -186,6 +187,8 @@ function CollapsibleSection({
         backgroundColor: theme.tableBackground,
         border: `1px solid ${theme.tableBorder}`,
         borderRadius: 6,
+        // Keep its full height; the page scrolls instead of squeezing sections
+        flexShrink: 0,
       }}
     >
       <Button

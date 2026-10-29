@@ -52,6 +52,17 @@ describe('MobileSyncStatus', () => {
     ).toBeEnabled();
   });
 
+  it('gives the Sync button a 40px touch target', () => {
+    render(
+      <TestProviders>
+        <MobileSyncStatus />
+      </TestProviders>,
+    );
+    expect(
+      screen.getByRole('button', { name: 'Sync with server' }),
+    ).toHaveStyle({ minHeight: '40px', minWidth: '40px' });
+  });
+
   it('keeps offline and failed-sync outcomes visible and retry available', async () => {
     render(
       <TestProviders>

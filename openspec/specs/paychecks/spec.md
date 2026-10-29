@@ -50,24 +50,60 @@ A paycheck's clearing account SHALL be an on-budget account: either a new one th
 - **THEN** an on-budget account "Acme Paycheck" exists with a starting balance of zero
 
 ### Requirement: Clearing account note
-A clearing account SHALL show a paycheck icon beside its name in the sidebar, and its register SHALL show a note naming its paycheck and saying it should return to zero after each payday.
+A clearing account SHALL show a paycheck icon beside its name in the sidebar on desktop layouts and in the accounts list on narrow (mobile) layouts. Its register on desktop, and its account page above the transaction list on narrow layouts, SHALL show a note naming its paycheck and saying it should return to zero after each payday. The icon and note SHALL appear only while the `paychecks` experimental feature is on, and only for an account that is a paycheck's clearing account.
 
 #### Scenario: Marked as a clearing account
 - **WHEN** the user views the sidebar and opens "Acme Paycheck"
 - **THEN** "Acme Paycheck" has a paycheck icon, and its register notes that it is the clearing account for "Acme" and should return to zero after each payday
 
+#### Scenario: Acme Paycheck is marked on a phone
+- **GIVEN** the `paychecks` experimental feature is on and the layout is narrow
+- **WHEN** the user opens Accounts and taps "Acme Paycheck"
+- **THEN** the "Acme Paycheck" row in the accounts list has a paycheck icon labelled as the clearing account for paycheck "Acme", and the account page notes above its transactions that it is the clearing account for "Acme" and should return to zero after each payday, in the same words as the desktop register
+
+#### Scenario: Checking is not marked on a phone
+- **GIVEN** the layout is narrow and "Checking" receives an "Acme" deposit but is not a clearing account
+- **WHEN** the user opens Accounts and taps "Checking"
+- **THEN** neither the "Checking" row nor its account page shows the paycheck icon, note or warning
+
+#### Scenario: Not marked with paychecks turned off
+- **GIVEN** the `paychecks` experimental feature is off
+- **WHEN** the user opens "Acme Paycheck", on desktop or on a phone
+- **THEN** no paycheck icon, note or warning is shown for it
+
 ### Requirement: Clearing account warning
-A deposit of a paycheck's most recent posted pay date is missing when it has no linked transaction. Once every missing deposit (or, when none is missing, every deposit) is past its expected date by more than 2 business days (of that deposit account's calendar) and the clearing account's balance is not zero, the clearing account note SHALL become a warning stating the balance and naming each missing deposit.
+A deposit of a paycheck's most recent posted pay date is missing when it has no linked transaction. Once every missing deposit (or, when none is missing, every deposit) is past its expected date by more than 2 business days (of that deposit account's calendar) and the clearing account's balance is not zero, the clearing account note SHALL be followed by a warning stating the balance and naming each missing deposit.
 
 #### Scenario: Missing deposit
 - **GIVEN** the November 13, 2026 "Acme" pay posted, the "Savings" deposit arrived and the "Checking" deposit (expected Tuesday, November 10) did not
 - **WHEN** the user opens "Acme Paycheck" on Monday, November 16
-- **THEN** the register warns that 2,025.00 remains and the "Checking" deposit has not arrived
+- **THEN** the register shows the note followed, in the same line, by a warning that 2,025.00 remains and the "Checking" deposit has not arrived
 
 #### Scenario: No warning while imports may still arrive
 - **GIVEN** the November 30, 2026 "Acme" pay posted and the "Checking" deposit is expected Wednesday, November 25
 - **WHEN** the user opens "Acme Paycheck" on Thursday, November 26
 - **THEN** the register shows the note, not a warning
+
+#### Scenario: Acme Paycheck still holds 2,250.00 after payday on a phone
+- **GIVEN** the layout is narrow, the November 13, 2026 "Acme" pay posted, and neither the "Checking" deposit (expected Tuesday, November 10) nor the "Savings" deposit (expected Friday, November 13) arrived
+- **WHEN** the user opens "Acme Paycheck" on a phone on Wednesday, November 18
+- **THEN** below the note, on its own line, the account page warns that 2,250.00 is still in "Acme Paycheck", waiting on the deposits to Checking and Savings, in the same words as the desktop register
+
+#### Scenario: No warning on a phone while imports may still arrive
+- **GIVEN** the layout is narrow, the November 30, 2026 "Acme" pay posted and the "Checking" deposit is expected Wednesday, November 25
+- **WHEN** the user opens "Acme Paycheck" on a phone on Thursday, November 26
+- **THEN** the account page shows the note, not a warning
+
+### Requirement: Clearing account warning placement
+On desktop layouts the clearing account warning SHALL follow the note in the same line. On narrow (mobile) layouts it SHALL be on its own line below the note. Its text and timing are the same on both.
+
+#### Scenario: Warning in the note's line on desktop
+- **WHEN** the clearing account warning shows in the register on a desktop layout
+- **THEN** it follows the note in the same line
+
+#### Scenario: Warning on its own line on a phone
+- **WHEN** the clearing account warning shows on the account page on a narrow layout
+- **THEN** it is on its own line below the note, in the same words as on desktop
 
 ### Requirement: Rounding
 Percent deposits SHALL be rounded to the cent, and the single remainder deposit SHALL receive net pay minus all other deposits, so rounding never leaves money in the clearing account.
@@ -154,7 +190,7 @@ Each direct deposit SHALL have a "Post automatically" option, off by default. Wh
 - **THEN** the editor notes that a bank-synced deposit merges only when its amount is exactly the same
 
 ### Requirement: Editing and deleting paychecks
-Opening a paycheck's schedule SHALL offer to edit the paycheck. Saving changes SHALL update its schedules in one undoable step and SHALL NOT change transactions already posted or linked. Deleting a paycheck SHALL delete its schedules and keep its clearing account and existing transactions. Undo SHALL restore the previous paycheck and schedules.
+Opening a paycheck's schedule SHALL offer to edit the paycheck. Saving changes SHALL update its schedules in one undoable step and SHALL NOT change transactions already posted or linked. Deleting a paycheck SHALL delete its schedules and keep its clearing account and existing transactions. Undo SHALL restore the previous paycheck and schedules. The API SHALL refuse to update or delete a paycheck's pay or deposit schedule, or to update its rule, with an error naming the paycheck and no change.
 
 #### Scenario: Raise
 - **WHEN** the user changes "Acme" gross pay to 3,200.00
@@ -171,6 +207,32 @@ Opening a paycheck's schedule SHALL offer to edit the paycheck. Saving changes S
 #### Scenario: Delete a paycheck
 - **WHEN** the user deletes "Acme"
 - **THEN** its schedules are gone, "Acme Paycheck" and its transactions remain, and undo restores the paycheck and its schedules
+
+#### Scenario: A script edits Acme's Checking deposit schedule
+- **WHEN** an API script calls `updateSchedule` on the "Acme → Checking" deposit schedule to change its amount
+- **THEN** the call fails with "This schedule is managed by paycheck "Acme". Edit the paycheck in the app." and the schedule's amount, date and name are unchanged
+
+#### Scenario: A script deletes Acme's pay schedule
+- **WHEN** an API script calls `deleteSchedule` on the "Acme" pay schedule
+- **THEN** the call fails with the same error, and the pay schedule and its rule still exist
+
+#### Scenario: A script edits the rule behind Acme's pay schedule
+- **WHEN** an API script calls `updateRule` on the rule of the "Acme" pay schedule
+- **THEN** the call fails with the same error, and the rule is unchanged
+
+#### Scenario: A script deletes the rule behind Acme's pay schedule
+- **WHEN** an API script calls `deleteRule` on the rule of the "Acme" pay schedule
+- **THEN** the call resolves to `false` without deleting anything, as it already does for the rule of any schedule, and the rule and the pay schedule still exist
+
+#### Scenario: A script edits and deletes the Rent schedule
+- **GIVEN** a "Rent" schedule that no paycheck lists
+- **WHEN** an API script updates its amount and then deletes it
+- **THEN** both calls succeed
+
+#### Scenario: The app still manages Acme's schedules
+- **GIVEN** the API refused an edit of "Acme"'s schedules
+- **WHEN** the user raises "Acme" in the app, skips its next paycheck, and then deletes it
+- **THEN** each action updates, advances and finally deletes the pay and deposit schedules as before
 
 ### Requirement: Skip next paycheck
 A paycheck SHALL offer "Skip next paycheck", which skips the next occurrence of its pay schedule and of each deposit schedule together in one undoable step.

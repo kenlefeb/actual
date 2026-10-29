@@ -1,6 +1,7 @@
 import { Trans } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
+import { styles } from '@actual-app/components/styles';
 import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
@@ -18,6 +19,7 @@ import {
   useScheduleDateLookup,
   withScheduleLookups,
 } from '#hooks/useScheduleDateLookup';
+import { useTouchTargetStyle } from '#hooks/useTouchTargetStyle';
 
 import { PaycheckRow, planPaycheck, useOpenPaycheck } from './PaycheckRow';
 
@@ -26,6 +28,7 @@ const NO_PAYCHECKS: PaycheckEntity[] = [];
 
 export function PaychecksSection() {
   const openPaycheck = useOpenPaycheck();
+  const touchTarget = useTouchTargetStyle();
   const { data: paychecks = NO_PAYCHECKS } = usePaychecks();
   // The lookups the deposit date math reads
   const { schedules } = useScheduleDateLookup();
@@ -85,10 +88,10 @@ export function PaychecksSection() {
           justifyContent: 'space-between',
         }}
       >
-        <Text id="paychecks-heading" style={{ fontSize: 16, fontWeight: 600 }}>
+        <Text id="paychecks-heading" style={styles.mediumText}>
           <Trans>Paychecks</Trans>
         </Text>
-        <Button onPress={() => openPaycheck()}>
+        <Button style={touchTarget} onPress={() => openPaycheck()}>
           <Trans>Add paycheck</Trans>
         </Button>
       </View>

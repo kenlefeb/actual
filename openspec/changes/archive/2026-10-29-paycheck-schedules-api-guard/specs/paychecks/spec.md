@@ -3,7 +3,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Editing and deleting paychecks
-Opening a paycheck's schedule SHALL offer to edit the paycheck. Saving changes SHALL update its schedules in one undoable step and SHALL NOT change transactions already posted or linked. Deleting a paycheck SHALL delete its schedules and keep its clearing account and existing transactions. Undo SHALL restore the previous paycheck and schedules. Through the API, updating or deleting a schedule that a paycheck lists as its pay schedule or a deposit schedule, or updating that schedule's rule, SHALL fail with an error naming the paycheck and SHALL change nothing. Updating and deleting other schedules through the API SHALL work as before. The app's own paycheck save, delete and skip SHALL keep updating these schedules.
+Opening a paycheck's schedule SHALL offer to edit the paycheck. Saving changes SHALL update its schedules in one undoable step and SHALL NOT change transactions already posted or linked. Deleting a paycheck SHALL delete its schedules and keep its clearing account and existing transactions. Undo SHALL restore the previous paycheck and schedules. The API SHALL refuse to update or delete a paycheck's pay or deposit schedule, or to update its rule, with an error naming the paycheck and no change.
 
 #### Scenario: Raise
 - **WHEN** the user changes "Acme" gross pay to 3,200.00

@@ -158,6 +158,8 @@ describe('ManageRules', () => {
       }),
     );
 
+    // The row re-renders once it has subscribed to the store, which can land
+    // after the update, so wait for it instead of reading the DOM at once
     expect(
       await screen.findByText('2 business days before Acme payday'),
     ).toBeInTheDocument();

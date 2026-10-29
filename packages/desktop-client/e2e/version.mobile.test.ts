@@ -22,8 +22,8 @@ test('Settings displays the customized client version', async ({ browser }) => {
     await expect(page.getByRole('status')).toHaveText(
       'Local file — not syncing',
     );
-    await page.goto('/settings');
-    // Settings shows the version as the "Client version" row's value
+    // On phones /settings is a menu; the version is under General
+    await page.goto('/settings/general');
     await expect(
       page.getByText('Client version', { exact: true }),
     ).toBeVisible();

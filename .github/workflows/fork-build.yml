@@ -1,0 +1,95 @@
+# Fork-only: build the app before merge, so a broken browser build or Docker
+# image shows up here, not at the actual-hosting staging build (sc-626).
+# Separate from fork-ci.yml: each job gets its own runner, so build:browser's
+# leftover packages/*/@types and dist never reach a typecheck. Never upstream
+# (fork/README.md).
+name: Fork build
+
+on:
+  pull_request:
+    branches:
+      - development
+  push:
+    branches:
+      - development
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  # One list for both jobs, the same as fork-ci.yml's mobile-e2e: a pull request
+  # skips a build only when every changed file is known safe.
+  SAFE_PATHS: '^(docs/|openspec/|fork/|upcoming-release-notes/)|\.md$'
+
+jobs:
+  # Both jobs always report, so they can be required checks; a scope step
+  # skips the work only on a pull request that changes nothing but safe files.
+  # Pushes always build.
+  browser-build:
+    if: github.repository == 'kenlefeb/actual'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          # A pull request checks out its merge commit; HEAD^1 is the base.
+          fetch-depth: 2
+      - name: Decide whether the browser build applies
+        id: scope
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            # Captured first so a failing diff fails the job instead of skipping
+            # the build; --no-renames keeps the old path of a moved file, and
+            # quotePath=false keeps unusual file names unquoted.
+            changed=$(git -c core.quotePath=false diff --no-renames --name-only HEAD^1 HEAD)
+          fi
+          # Skip only when every changed file is known safe; anything else runs.
+          if [ "$GITHUB_EVENT_NAME" != pull_request ] ||
+            printf '%s\n' "$changed" | grep -Ev "$SAFE_PATHS" | grep -q .; then
+            echo run=true >> "$GITHUB_OUTPUT"
+          else
+            echo 'Only docs, OpenSpec, fork notes or Markdown changed; skipping the browser build.'
+            echo run=false >> "$GITHUB_OUTPUT"
+          fi
+      - name: Set up environment
+        if: steps.scope.outputs.run == 'true'
+        uses: ./.github/actions/setup
+        with:
+          download-translations: 'false'
+      - name: Build the browser app
+        if: steps.scope.outputs.run == 'true'
+        run: yarn build:browser --skip-translations
+
+  docker-build:
+    if: github.repository == 'kenlefeb/actual'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Decide whether the Docker build applies
+        id: scope
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            changed=$(git -c core.quotePath=false diff --no-renames --name-only HEAD^1 HEAD)
+          fi
+          # Same rule: the image copies all of packages/ and runs yarn build:server,
+          # which no other job builds, so any non-safe change runs it.
+          if [ "$GITHUB_EVENT_NAME" != pull_request ] ||
+            printf '%s\n' "$changed" | grep -Ev "$SAFE_PATHS" | grep -q .; then
+            echo run=true >> "$GITHUB_OUTPUT"
+          else
+            echo 'Only docs, OpenSpec, fork notes or Markdown changed; skipping the Docker build.'
+            echo run=false >> "$GITHUB_OUTPUT"
+          fi
+      # The same image the actual-hosting staging build makes
+      - name: Build the sync-server image
+        if: steps.scope.outputs.run == 'true'
+        run: docker build -f sync-server.Dockerfile -t actual-fork-build:ci .

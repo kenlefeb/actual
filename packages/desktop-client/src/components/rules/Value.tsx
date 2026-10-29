@@ -7,6 +7,10 @@ import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { getMonthYearFormat } from '@actual-app/core/shared/months';
 import { isRelativeDate } from '@actual-app/core/shared/relative-dates';
+import type {
+  RecurConfig,
+  RelativeDateConfig,
+} from '@actual-app/core/types/models';
 import { format as formatDate, parseISO } from 'date-fns';
 
 import { Link } from '#components/common/Link';
@@ -18,6 +22,10 @@ import { useDateFormat } from '#hooks/useDateFormat';
 import { useFormat } from '#hooks/useFormat';
 import { useLocale } from '#hooks/useLocale';
 import { usePayees } from '#hooks/usePayees';
+import {
+  useScheduleDateLookup,
+  withScheduleLookups,
+} from '#hooks/useScheduleDateLookup';
 import { getRecurringDescription } from '#util/schedule';
 
 type ValueProps<T> = {
@@ -56,9 +64,6 @@ export function Value<T>({
     ...style,
   };
   const ValueText = field === 'amount' ? FinancialText : Text;
-  const locale = useLocale();
-  // Re-render recurrence descriptions when business calendars load or change
-  useBusinessCalendarLookup();
 
   function getData() {
     if (dataProp) {
@@ -106,7 +111,7 @@ export function Value<T>({
         case 'date':
           if (value) {
             if (value.frequency || isRelativeDate(value)) {
-              return getRecurringDescription(value, dateFormat, locale);
+              return <RecurringDateText config={value} />;
             }
             return formatDate(parseISO(value), dateFormat);
           }
@@ -215,4 +220,20 @@ export function Value<T>({
   } else {
     return <ValueText style={valueStyle}>{formatValue(value)}</ValueText>;
   }
+}
+
+// Its own component so only date values read every schedule, for the names
+// relative dates refer to
+function RecurringDateText({
+  config,
+}: {
+  config: RecurConfig | RelativeDateConfig;
+}) {
+  const dateFormat = useDateFormat() || 'MM/dd/yyyy';
+  const locale = useLocale();
+  const calendars = useBusinessCalendarLookup();
+  const { schedules } = useScheduleDateLookup();
+  return withScheduleLookups({ calendars, schedules }, () =>
+    getRecurringDescription(config, dateFormat, locale),
+  );
 }

@@ -1,16 +1,16 @@
-import { useMemo } from 'react';
-
-import { setBusinessCalendars } from '@actual-app/core/shared/business-calendar-lookup';
+import type { BusinessCalendarEntity } from '@actual-app/core/types/models';
 
 import { useBusinessCalendars } from './useBusinessCalendars';
 
+// A stable empty list while loading, so callers don't recompute every render
+const NO_CALENDARS: BusinessCalendarEntity[] = [];
+
 /**
- * Fills the shared lookup used by schedule date math and descriptions, and
- * returns the calendars so callers re-run that math when calendars change.
+ * The business calendars, for the shared lookup used by schedule date math
+ * and descriptions. Callers pass them to `withScheduleLookups` around the math
+ * that reads the lookup; filling it here would be a memo with an unused
+ * result, which the React Compiler drops (sc-811).
  */
 export function useBusinessCalendarLookup() {
-  const { data: calendars = [] } = useBusinessCalendars();
-  // Synchronous on purpose: callers compute dates in the same render
-  useMemo(() => setBusinessCalendars(calendars), [calendars]);
-  return calendars;
+  return useBusinessCalendars().data ?? NO_CALENDARS;
 }

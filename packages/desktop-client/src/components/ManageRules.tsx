@@ -22,7 +22,6 @@ import type {
 import { useAccounts } from '#hooks/useAccounts';
 import { useCategories } from '#hooks/useCategories';
 import { usePayees } from '#hooks/usePayees';
-import { useScheduleDateLookup } from '#hooks/useScheduleDateLookup';
 import { useSchedules } from '#hooks/useSchedules';
 import { SelectedProvider, useSelected } from '#hooks/useSelected';
 import { pushModal } from '#modals/modalsSlice';
@@ -122,8 +121,6 @@ export function ManageRules({
 }: ManageRulesProps) {
   const { t } = useTranslation();
 
-  // Names of schedules that relative dates refer to, for rule descriptions
-  useScheduleDateLookup();
   const [allRules, setAllRules] = useState<RuleEntity[]>([]);
   const [page, setPage] = useState(0);
   const [filter, setFilter] = useState('');

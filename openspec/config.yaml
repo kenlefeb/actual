@@ -30,3 +30,24 @@ schema: spec-driven
 #     archive:
 #       guidance:
 #         - Summarize the archive outcome before finishing
+
+# Fork-only: link every change to its Shortcut stories (see the "Shortcut
+# stories" section of AGENTS.md and docs/agents/issue-tracker.md). The check
+# `yarn check:openspec-shortcut` enforces the parts a machine can see.
+rules:
+  proposal:
+    - Every change belongs to a Shortcut story in workspace `blacksmith-press`. Name it as `sc-<id>` in the Why section. If there is no story yet, stop and ask; do not invent an id.
+    - Add the story ids to the change's `.openspec.yaml` under `x-shortcut` (`epic:` the story's epic id, `stories:` a list of story ids). Keep the `x-` prefix; OpenSpec ignores unprefixed unknown keys with a warning.
+    - Copy no requirement text into Shortcut. The story links the change folder on GitHub and the specs it touches, and carries a `spec:<capability>` label for each.
+  tasks:
+    - When the change has more than one story, end each numbered group heading with the story that ships it, for example `## 2. Paychecks section (sc-57)`, and give each group its own PR.
+operations:
+  apply:
+    guidance:
+      - Before the first task, assign yourself the story for the group you are implementing and move it to In Progress in Shortcut. Use a branch name containing `sc-<id>`, or end the PR title with `[sc-<id>]`.
+      - Work outside the story's acceptance criteria needs its own Backlog story first (related to this one); file it, then do it in a separate PR or add its id to this PR's title.
+  archive:
+    guidance:
+      - Archive only when every story in `x-shortcut` is Done or this PR completes the last one.
+      - After archiving, point each story's change link at `openspec/changes/archive/<date>-<name>/`, and when the change adds a capability, add its spec to the epic description and create its `spec:<capability>` label.
+      - File a Backlog story in the change's epic for each follow-up, deferred item or open "Decisions for Ken" entry in the proposal and design, or mark it "not planned" in the design.

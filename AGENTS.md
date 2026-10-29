@@ -670,3 +670,23 @@ isn't, skip these steps and say so in your reply instead of guessing.
   defects in fork changes; upstream's own problems are upstream's, except
   vulnerability findings in code that runs on the production server (the sync
   server and the web app it serves), which get a story too.
+
+OpenSpec owns what the app does; Shortcut owns work state. Link them by id and
+never copy one into the other (details in `docs/agents/issue-tracker.md`):
+
+- Every OpenSpec change names its epic and stories under `x-shortcut` in its
+  `.openspec.yaml`; a change with several stories ends each numbered `tasks.md`
+  group heading with `(sc-<id>)`. `openspec/config.yaml` repeats these rules to
+  the `/opsx:*` workflows.
+- A story links its change folder on GitHub and the specs it touches, and
+  carries a `spec:<capability>` label per spec. Requirement text stays in the
+  spec.
+- Work outside the current story's acceptance criteria gets its own story
+  first (related to the current one); do it in a separate PR or add its id to
+  this PR's title.
+- Archive a change when its last story merges; then move the stories' change
+  links to the archive path and file a Backlog story for every follow-up or
+  deferred item it lists.
+- `yarn check:openspec-shortcut` (run by Fork CI) fails when a change has no
+  stories, a group heading lacks one, or a PR ticks a change's tasks without
+  naming one of its stories.

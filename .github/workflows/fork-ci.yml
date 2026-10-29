@@ -35,3 +35,28 @@ jobs:
         run: yarn lint
       - name: Test
         run: yarn test
+
+  # Links between OpenSpec changes and Shortcut stories
+  # (docs/agents/issue-tracker.md). Needs only Node, so it skips the setup.
+  openspec-shortcut:
+    if: github.repository == 'kenlefeb/actual'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          # A pull request checks out its merge commit; HEAD^1 is the base.
+          fetch-depth: 2
+      - name: Test the check
+        run: node --test fork/scripts/*.test.mjs
+      - name: Check OpenSpec and Shortcut links
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_HEAD_REF: ${{ github.head_ref }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            node fork/scripts/check-openspec-shortcut.mjs --base HEAD^1
+          else
+            node fork/scripts/check-openspec-shortcut.mjs
+          fi

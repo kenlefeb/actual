@@ -1,2 +1,5 @@
 schema: spec-driven
 created: 2026-10-27
+x-shortcut:
+  epic: 469
+  stories: [486]

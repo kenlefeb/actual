@@ -28,6 +28,14 @@ const state = vi.hoisted(() => ({
   clearing: [] as PaycheckClearingStatus[],
   skip: vi.fn(),
   pushModal: vi.fn(),
+  isNarrowWidth: false,
+}));
+
+vi.mock('@actual-app/components/hooks/useResponsive', () => ({
+  useResponsive: () => ({
+    isNarrowWidth: state.isNarrowWidth,
+    isWideWidth: !state.isNarrowWidth,
+  }),
 }));
 
 // Tests otherwise pin today to 2017-01-01
@@ -229,6 +237,7 @@ describe('PaychecksSection', () => {
     state.today = '2026-11-02';
     state.skip.mockReset();
     state.pushModal.mockReset();
+    state.isNarrowWidth = false;
   });
 
   afterEach(() => {
@@ -307,12 +316,28 @@ describe('PaychecksSection', () => {
       screen.getByRole('button', { name: 'Skip next paycheck' }),
     );
     expect(
-      screen.getByText('Skip the paycheck on November 13, 2026?'),
+      screen.getByText('Skip the paycheck on 11/13/2026?'),
     ).toBeInTheDocument();
     expect(state.skip).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole('button', { name: 'Skip it' }));
     expect(state.skip).toHaveBeenCalledWith({ id: 'acme' }, expect.anything());
+  });
+
+  it('gives every row control a 40px touch target on a phone', async () => {
+    const user = userEvent.setup();
+    state.isNarrowWidth = true;
+    renderSection();
+    const touchTarget = { minHeight: '40px', minWidth: '40px' };
+    for (const name of ['Add paycheck', 'Show more', 'Skip next paycheck']) {
+      expect(screen.getByRole('button', { name })).toHaveStyle(touchTarget);
+    }
+    await user.click(
+      screen.getByRole('button', { name: 'Skip next paycheck' }),
+    );
+    for (const name of ['Keep it', 'Skip it']) {
+      expect(screen.getByRole('button', { name })).toHaveStyle(touchTarget);
+    }
   });
 
   it('keeps the paycheck when the skip is not confirmed', async () => {

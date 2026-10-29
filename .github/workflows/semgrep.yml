@@ -1,0 +1,30 @@
+# Fork-only (never upstream, see fork/README.md). From Semgrep's setup for org
+# blacksmith_press: diff-aware on pull requests, full scan on every push to
+# development (schedules only run on the default branch, master, which tracks
+# upstream).
+name: Semgrep
+on:
+  workflow_dispatch: {}
+  pull_request: {}
+  push:
+    branches:
+      - development
+jobs:
+  semgrep:
+    name: semgrep/ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+    container:
+      image: semgrep/semgrep:1.182.1@sha256:451b3d875c00dac7ed5db5293e584a07de11449a409c10b3c2d2652f429630b6
+    if: github.repository == 'kenlefeb/actual' && (github.actor != 'dependabot[bot]')
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      # semgrep ci passes without a token while scanning nothing
+      - name: Require token
+        run: test -n "$SEMGREP_APP_TOKEN" || { echo "::error::SEMGREP_APP_TOKEN is not set"; exit 1; }
+      - run: semgrep ci

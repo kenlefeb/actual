@@ -27,8 +27,8 @@
 
 ## 5. Mobile paycheck editor
 
-- [ ] 5.1 Extract the editor's form state, validation and computed amounts from `PaycheckEditor` into a shared hook, keeping the desktop modal's behavior; verify with the existing `PaycheckEditModal` tests passing unchanged
-- [ ] 5.2 Build the mobile paycheck page (create, edit, delete, skip) as one scrolling page with collapsible section summaries and net pay pinned at the bottom, opened from the mobile Paychecks section; verify with mobile component tests for "Set up a paycheck on a phone" and "Net pay stays visible", and a mobile e2e smoke test
+- [x] 5.1 Extract the editor's form state, validation and computed amounts from `PaycheckEditor` into a shared hook, keeping the desktop modal's behavior; verify with the existing `PaycheckEditModal` tests passing unchanged
+- [x] 5.2 Build the mobile paycheck page (create, edit, delete, skip) as one scrolling page with collapsible section summaries and net pay pinned at the bottom, opened from the mobile Paychecks section; verify with mobile component tests for "Set up a paycheck on a phone" and "Net pay stays visible", and a mobile e2e smoke test
 
 ## 6. Release
 

@@ -8,7 +8,7 @@ Paychecks answer the planning question Ken asks most — what lands in which acc
 
 - A **Paychecks section** at the top of the Schedules page (desktop and mobile): one row per paycheck showing the next paycheck's date, net pay and each deposit (account, amount, date); "Show more" reveals the next three; a skipped paycheck shows as "Skipped: <date>"; the row offers "Skip next paycheck" with a confirmation and opens the editor when tapped; an empty state invites setting one up.
 - A paycheck's generated schedules are **hidden from the regular schedules list** and reached through its row.
-- The **clearing account is marked**: a paycheck icon in the sidebar and a one-line register note saying it should return to zero after each payday. Once every deposit's expected date has passed plus 2 business days and the account isn't back to zero, the note becomes a **warning** naming the amount and the missing deposit, also shown on the paycheck's row.
+- The **clearing account is marked**: a paycheck icon in the sidebar and a one-line register note saying it should return to zero after each payday. Once every missing deposit's expected date has passed plus 2 business days and the account isn't back to zero, the note becomes a **warning** naming the amount and the missing deposit, also shown on the paycheck's row.
 - The editor lets the user **change a deposit account's "business days early"** in place, noting it applies to every paycheck depositing there.
 - The editor shows a **year-to-date summary** (gross pay, each deduction, net pay) for the current and previous year, from posted transactions.
 - **Mobile gets the full editor** (create, edit, delete, skip) as one scrolling page with collapsible sections and net pay pinned at the bottom, after the list ships.

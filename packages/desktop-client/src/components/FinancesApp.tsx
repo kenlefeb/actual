@@ -301,6 +301,19 @@ export function FinancesApp() {
                         </ErrorBoundary>
                       }
                     />
+                    <Route
+                      path="/paychecks/:id"
+                      element={
+                        <ErrorBoundary
+                          FallbackComponent={FeatureErrorFallback}
+                          resetKeys={[location.pathname]}
+                        >
+                          <WideNotSupported redirectTo="/schedules">
+                            <NarrowAlternate name="PaycheckEdit" />
+                          </WideNotSupported>
+                        </ErrorBoundary>
+                      }
+                    />
 
                     <Route
                       path="/payees"

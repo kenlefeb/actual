@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
+import { useResponsive } from '@actual-app/components/hooks/useResponsive';
 import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
@@ -22,12 +23,31 @@ import { FinancialText } from '#components/FinancialText';
 import { useAccounts } from '#hooks/useAccounts';
 import { useFormat } from '#hooks/useFormat';
 import { useLocale } from '#hooks/useLocale';
+import { useNavigate } from '#hooks/useNavigate';
 import { useUndo } from '#hooks/useUndo';
 import { pushModal } from '#modals/modalsSlice';
 import { useSkipNextPaycheckMutation } from '#paychecks';
 import { useDispatch } from '#redux';
 
 import { ClearingWarning, useClearingStatus } from './ClearingAccount';
+
+// The editor is a modal on desktop and its own page on phones; no id adds one
+export function useOpenPaycheck() {
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const { isNarrowWidth } = useResponsive();
+  return (paycheckId?: PaycheckEntity['id']) => {
+    if (isNarrowWidth) {
+      void navigate(`/paychecks/${paycheckId ?? 'new'}`);
+    } else {
+      dispatch(
+        pushModal({
+          modal: { name: 'paycheck-edit', options: { paycheckId } },
+        }),
+      );
+    }
+  };
+}
 
 type PlannedDeposit = {
   id: string;
@@ -117,7 +137,7 @@ type PaycheckRowProps = {
 
 export function PaycheckRow({ paycheck, plan }: PaycheckRowProps) {
   const { t } = useTranslation();
-  const dispatch = useDispatch();
+  const openPaycheck = useOpenPaycheck();
   const format = useFormat();
   const locale = useLocale();
   const { showUndoNotification } = useUndo();
@@ -165,16 +185,7 @@ export function PaycheckRow({ paycheck, plan }: PaycheckRowProps) {
         variant="bare"
         aria-label={t('Edit paycheck {{name}}', { name: paycheck.name })}
         style={{ justifyContent: 'flex-start', textAlign: 'left' }}
-        onPress={() =>
-          dispatch(
-            pushModal({
-              modal: {
-                name: 'paycheck-edit',
-                options: { paycheckId: paycheck.id },
-              },
-            }),
-          )
-        }
+        onPress={() => openPaycheck(paycheck.id)}
       >
         <View style={{ gap: 4 }}>
           <Text style={{ fontWeight: 600 }}>{paycheck.name}</Text>

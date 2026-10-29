@@ -19,7 +19,7 @@ With the `paychecks` experimental feature on, the schedules page SHALL offer "Ad
 - **THEN** `paychecks` is on and "Acme" appears in the Paychecks section
 
 ### Requirement: Clearing account
-A paycheck's clearing account SHALL be an on-budget account: either a new one the editor creates, named after the employer by default, or an existing on-budget account. A clearing account SHALL show a paycheck icon beside its name in the sidebar, and its register SHALL show a note naming its paycheck and saying it should return to zero after each payday. Once every deposit of a paycheck's most recent posted pay date is past its expected date by more than 2 business days (of that deposit account's calendar) and the clearing account's balance is not zero, the note SHALL become a warning stating the balance and naming each deposit not yet linked or entered.
+A paycheck's clearing account SHALL be an on-budget account: either a new one the editor creates, named after the employer by default, or an existing on-budget account. A clearing account SHALL show a paycheck icon beside its name in the sidebar, and its register SHALL show a note naming its paycheck and saying it should return to zero after each payday. A deposit of a paycheck's most recent posted pay date is missing when it has no linked transaction. Once every missing deposit (or, when none is missing, every deposit) is past its expected date by more than 2 business days (of that deposit account's calendar) and the clearing account's balance is not zero, the note SHALL become a warning stating the balance and naming each missing deposit.
 
 #### Scenario: Create the clearing account
 - **WHEN** the user chooses a new clearing account for employer "Acme" and saves

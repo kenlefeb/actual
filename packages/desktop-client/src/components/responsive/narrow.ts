@@ -8,6 +8,7 @@ export { MobileRuleEditPage as RuleEdit } from '#components/mobile/rules/MobileR
 
 export { MobileSchedulesPage as Schedules } from '#components/mobile/schedules/MobileSchedulesPage';
 export { MobileScheduleEditPage as ScheduleEdit } from '#components/mobile/schedules/MobileScheduleEditPage';
+export { MobilePaycheckPage as PaycheckEdit } from '#components/mobile/schedules/MobilePaycheckPage';
 
 export { CategoryPage as Category } from '#components/mobile/budget/CategoryPage';
 export { MobilePayeesPage as Payees } from '#components/mobile/payees/MobilePayeesPage';

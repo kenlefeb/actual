@@ -2,6 +2,7 @@ export { Budget } from '#components/budget';
 
 export { Schedules } from '#components/schedules';
 export { Schedules as ScheduleEdit } from '#components/schedules';
+export { Schedules as PaycheckEdit } from '#components/schedules';
 
 export { GoCardlessLink } from '#components/gocardless/GoCardlessLink';
 

@@ -1,3 +1,5 @@
+import { MemoryRouter } from 'react-router';
+
 import { setBusinessCalendars } from '@actual-app/core/shared/business-calendar-lookup';
 import { setScheduleDates } from '@actual-app/core/shared/schedule-date-lookup';
 import type {
@@ -154,7 +156,9 @@ function withPayNextDate(next_date: string) {
 function renderSection() {
   render(
     <TestProviders>
-      <PaychecksSection />
+      <MemoryRouter>
+        <PaychecksSection />
+      </MemoryRouter>
     </TestProviders>,
   );
 }
@@ -307,14 +311,18 @@ describe('PaychecksSection', () => {
     withPayNextDate('2026-11-30');
     const { rerender } = render(
       <TestProviders>
-        <PaychecksSection />
+        <MemoryRouter>
+          <PaychecksSection />
+        </MemoryRouter>
       </TestProviders>,
     );
     // Undo puts the pay schedule's next date back
     withPayNextDate('2026-11-13');
     rerender(
       <TestProviders>
-        <PaychecksSection />
+        <MemoryRouter>
+          <PaychecksSection />
+        </MemoryRouter>
       </TestProviders>,
     );
     const section = screen.getByRole('region', { name: 'Paychecks' });

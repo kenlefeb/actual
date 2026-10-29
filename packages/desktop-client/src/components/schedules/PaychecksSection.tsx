@@ -37,10 +37,14 @@ export function PaychecksSection() {
     dispatch(pushModal({ modal: { name: 'paycheck-edit', options: {} } }));
 
   return (
-    <View
-      role="region"
+    <section
       aria-labelledby="paychecks-heading"
-      style={{ gap: 10, marginBottom: 15 }}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+        marginBottom: 15,
+      }}
     >
       <View
         style={{
@@ -67,6 +71,6 @@ export function PaychecksSection() {
           <PaycheckRow key={paycheck.id} paycheck={paycheck} plan={plan} />
         ))
       )}
-    </View>
+    </section>
   );
 }

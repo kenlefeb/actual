@@ -663,7 +663,8 @@ isn't, skip these steps and say so in your reply instead of guessing.
   move it back to To Do and comment why.
 - Work you find but don't do: add a Backlog story to the matching epic instead
   of a GitHub issue. Check for an existing story first.
-- Defects you find, fixed now or not, get a `bug` story: test failures,
-  vulnerability scan findings (`yarn npm audit`, Dependabot, code scanning) and
-  new compiler or lint warnings included. Group findings with one cause into one
-  story.
+- Defects you find and don't fix in the same change get a `bug` story: test
+  failures, vulnerability scan findings (`yarn npm audit`, Dependabot, code
+  scanning) and new compiler or lint warnings included. Group findings with one
+  cause into one story. A defect you fix right away needs no story. File only
+  defects in fork changes; upstream's own problems are upstream's.

@@ -14,10 +14,13 @@ import type { ScheduleEntity } from '@actual-app/core/types/models';
 
 import { Search } from '#components/common/Search';
 import { MobilePageHeader, Page } from '#components/Page';
+import { PaychecksSection } from '#components/schedules/PaychecksSection';
 import { useAccounts } from '#hooks/useAccounts';
 import { useDateFormat } from '#hooks/useDateFormat';
+import { useFeatureFlag } from '#hooks/useFeatureFlag';
 import { useFormat } from '#hooks/useFormat';
 import { useNavigate } from '#hooks/useNavigate';
+import { usePaycheckMembership } from '#hooks/usePaycheckMembership';
 import { usePayees } from '#hooks/usePayees';
 import { useSchedules } from '#hooks/useSchedules';
 import { useUndo } from '#hooks/useUndo';
@@ -43,6 +46,12 @@ export function MobileSchedulesPage() {
     schedules,
     statuses,
   } = useSchedules({ query: schedulesQuery });
+  const paychecksEnabled = useFeatureFlag('paychecks');
+  // A paycheck's schedules are reached from its row and editor instead
+  const { scheduleIds: paycheckScheduleIds } = usePaycheckMembership();
+  const listedSchedules = paychecksEnabled
+    ? schedules.filter(s => !paycheckScheduleIds.has(s.id))
+    : schedules;
 
   const { data: payees = [] } = usePayees();
   const { data: accounts = [] } = useAccounts();
@@ -54,7 +63,7 @@ export function MobileSchedulesPage() {
       : false;
 
   const baseSchedules = filter
-    ? schedules.filter(schedule => {
+    ? listedSchedules.filter(schedule => {
         const payee = payees.find(p => schedule._payee === p.id);
         const account = accounts.find(a => schedule._account === a.id);
         const amount = getScheduledAmount(schedule._amount);
@@ -79,7 +88,7 @@ export function MobileSchedulesPage() {
           filterIncludes(dateStr)
         );
       })
-    : schedules;
+    : listedSchedules;
   const hasCompletedSchedules = baseSchedules.some(
     schedule => schedule.completed,
   );
@@ -154,6 +163,11 @@ export function MobileSchedulesPage() {
           }}
         />
       </View>
+      {paychecksEnabled && (
+        <View style={{ padding: 10 }}>
+          <PaychecksSection />
+        </View>
+      )}
       <SchedulesList
         schedules={filteredSchedules}
         isLoading={isSchedulesLoading}

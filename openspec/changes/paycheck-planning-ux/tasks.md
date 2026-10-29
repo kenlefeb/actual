@@ -7,12 +7,12 @@
 
 ## 2. Paychecks section on Schedules (desktop and mobile)
 
-- [ ] 2.1 Add a paycheck-membership hook (paycheck schedule ids, clearing account → paycheck) from `usePaychecks()`; verify with a hook test
-- [ ] 2.2 Build the Paychecks section: rows ordered by next pay date with net pay and per-deposit account · amount · date, selecting a row opens the editor, empty state with "Add paycheck"; render it on the desktop Schedules page and the mobile schedules page; verify with component tests for the "Next paycheck at a glance", "Open the editor", "Empty state" and feature-off scenarios
-- [ ] 2.3 Hide paycheck pay and deposit schedules from the desktop and mobile schedules lists using the membership hook; verify with the "Paycheck schedules are listed once" scenario test
-- [ ] 2.4 Add "Show more" (next three occurrences with deposit dates); verify with the "Show more" scenario test
-- [ ] 2.5 Add "Skip next paycheck" on the row with a confirmation naming the date, reusing the paycheck skip mutation; verify with the "Confirm before skipping" scenario test
-- [ ] 2.6 Show "Skipped: <date>" when the pay schedule's next occurrence was skipped; verify with the "Unpaid leave is visible" scenario test and undo restoring it
+- [x] 2.1 Add a paycheck-membership hook (paycheck schedule ids, clearing account → paycheck) from `usePaychecks()`; verify with a hook test
+- [x] 2.2 Build the Paychecks section: rows ordered by next pay date with net pay and per-deposit account · amount · date, selecting a row opens the editor, empty state with "Add paycheck"; render it on the desktop Schedules page and the mobile schedules page; verify with component tests for the "Next paycheck at a glance", "Open the editor", "Empty state" and feature-off scenarios
+- [x] 2.3 Hide paycheck pay and deposit schedules from the desktop and mobile schedules lists using the membership hook; verify with the "Paycheck schedules are listed once" scenario test
+- [x] 2.4 Add "Show more" (next three occurrences with deposit dates); verify with the "Show more" scenario test
+- [x] 2.5 Add "Skip next paycheck" on the row with a confirmation naming the date, reusing the paycheck skip mutation; verify with the "Confirm before skipping" scenario test
+- [x] 2.6 Show "Skipped: <date>" when the pay schedule's next occurrence was skipped; verify with the "Unpaid leave is visible" scenario test and undo restoring it
 
 ## 3. Clearing account marking and warning
 

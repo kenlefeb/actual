@@ -144,7 +144,8 @@ function applyOffset(day: string, config: RelativeDateConfig): string {
   return current;
 }
 
-function toRelativeDay(sourceDay: string, config: RelativeDateConfig) {
+// The relative day for one source occurrence (already moved by the source)
+export function toRelativeDay(sourceDay: string, config: RelativeDateConfig) {
   const day = applyOffset(sourceDay, config);
   return config.skipWeekend
     ? monthUtils.dayFromDate(

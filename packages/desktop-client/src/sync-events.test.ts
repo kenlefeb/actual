@@ -4,6 +4,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { budgetBoundsQueries } from './budget';
+import { scheduleDateLookupQueries } from './hooks/useScheduleDateLookup';
 import type { AppStore } from './redux/store';
 import { dashboardQueries, reportQueries } from './reports';
 import { listenForSyncEvent } from './sync-events';
@@ -123,6 +124,28 @@ describe('listenForSyncEvent', () => {
     });
     expect(invalidateQueries).not.toHaveBeenCalledWith({
       queryKey: reportQueries.lists(),
+    });
+  });
+
+  it.each([
+    'schedules',
+    'schedules_next_date',
+    'schedules_json_paths',
+    'rules',
+    'payee_mapping',
+  ])('refreshes the shared schedules query after %s changes', table => {
+    const { invalidateQueries } = setup();
+    publishSyncEvent(appliedEvent([table]));
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: scheduleDateLookupQueries.all(),
+    });
+  });
+
+  it('leaves the shared schedules query alone for unrelated tables', () => {
+    const { invalidateQueries } = setup();
+    publishSyncEvent(appliedEvent(['categories']));
+    expect(invalidateQueries).not.toHaveBeenCalledWith({
+      queryKey: scheduleDateLookupQueries.all(),
     });
   });
 });

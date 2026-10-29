@@ -53,8 +53,8 @@ vi.mock('./useBusinessCalendars', () => ({
 }));
 
 // The lookup reads every schedule, including sources filtered out elsewhere
-vi.mock('./useQuery', () => ({
-  useQuery: () => ({ data: [payday, deposit], isLoading: false }),
+vi.mock('#queries/aqlQuery', () => ({
+  aqlQuery: async () => ({ data: [payday, deposit], dependencies: [] }),
 }));
 
 vi.mock('./useCachedSchedules', () => ({

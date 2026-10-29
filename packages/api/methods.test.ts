@@ -954,6 +954,48 @@ describe('API CRUD operations', () => {
     expect(transactions).toHaveLength(1);
   });
 
+  test('Transactions: a delete has finished when deleteTransaction resolves', async () => {
+    const accountId = await api.createAccount({ name: 'test-account' }, 10000);
+    await api.addTransactions(accountId, [
+      { date: '2023-11-03', amount: -200 },
+      { date: '2023-11-04', amount: -500 },
+    ]);
+    const added = await api.getTransactions(
+      accountId,
+      '2023-11-01',
+      '2023-11-30',
+    );
+    const kept = added.find(t => t.amount === -200)?.id;
+    const deleted = added.find(t => t.amount === -500)?.id;
+    if (!kept || !deleted) {
+      throw new Error('transactions not found');
+    }
+
+    await api.deleteTransaction(deleted);
+
+    // Read immediately: the delete has already landed
+    const transactions = await api.getTransactions(
+      accountId,
+      '2023-11-01',
+      '2023-11-30',
+    );
+    expect(transactions.map(t => t.id)).not.toContain(deleted);
+    expect(transactions.map(t => t.id)).toContain(kept);
+    expect(await api.getAccountBalance(accountId)).toBe(9800);
+
+    // And it survives closing and reopening the budget
+    await api.shutdown();
+    await api.init({ dataDir: path.join(__dirname, '/mocks/budgets/') });
+    await api.loadBudget(budgetName);
+    const reloaded = await api.getTransactions(
+      accountId,
+      '2023-11-01',
+      '2023-11-30',
+    );
+    expect(reloaded.map(t => t.id)).not.toContain(deleted);
+    expect(await api.getAccountBalance(accountId)).toBe(9800);
+  });
+
   test('Transactions: updating a split child keeps its other fields', async () => {
     const accountId = await api.createAccount({ name: 'test-account' }, 0);
     const groupId = await api.createCategoryGroup({ name: 'tests' });

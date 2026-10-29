@@ -366,4 +366,69 @@ describe('API handlers', () => {
       expect(handlers['rule-update']).toHaveBeenCalledWith(internalRule);
     });
   });
+
+  describe('api/transaction-delete', () => {
+    const originalBatchUpdate = handlers['transactions-batch-update'];
+
+    beforeEach(global.emptyDatabase());
+
+    beforeEach(async () => {
+      await prefs.loadPrefs();
+      await db.insertAccount({ id: 'delete-account', name: 'Checking' });
+      await db.insertTransaction({
+        id: 'delete-transaction',
+        account: 'delete-account',
+        date: '2026-10-25',
+        amount: -500,
+      });
+    });
+
+    // These tests replace the batch-update handler; put it back for later tests
+    afterEach(() => {
+      handlers['transactions-batch-update'] = originalBatchUpdate;
+    });
+
+    test('resolves with the deleted transactions after the batch update finishes', async () => {
+      const transaction = await db.getTransaction('delete-transaction');
+      if (!transaction) {
+        throw new Error('transaction not found');
+      }
+      const result = {
+        added: [],
+        updated: [],
+        deleted: [transaction],
+        errors: [],
+      };
+      let finish: () => void = () => undefined;
+      handlers['transactions-batch-update'] = vi.fn(
+        () =>
+          new Promise<typeof result>(resolve => {
+            finish = () => resolve(result);
+          }),
+      );
+
+      let settled = false;
+      const pending = handlers['api/transaction-delete']({
+        id: 'delete-transaction',
+      }).finally(() => (settled = true));
+
+      // Still waiting on the batch update
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(settled).toBe(false);
+
+      finish();
+      await expect(pending).resolves.toEqual([transaction]);
+      expect(handlers['transactions-batch-update']).toHaveBeenCalledOnce();
+    });
+
+    test('rejects when the batch update fails', async () => {
+      handlers['transactions-batch-update'] = vi
+        .fn()
+        .mockRejectedValue(new Error('Batch write failed'));
+
+      await expect(
+        handlers['api/transaction-delete']({ id: 'delete-transaction' }),
+      ).rejects.toThrow('Batch write failed');
+    });
+  });
 });

@@ -12,7 +12,10 @@ import { loadMappings } from '#server/db/mappings';
 import { getNormalizedSchedules } from '#server/forecast/forecast-schedules';
 import { runMutator } from '#server/mutators';
 import * as prefs from '#server/prefs';
-import { app as schedulesApp } from '#server/schedules/app';
+import {
+  app as schedulesApp,
+  waitOnSchedulesService,
+} from '#server/schedules/app';
 import { applyMessages, setSyncingMode } from '#server/sync';
 import { deserializeValue } from '#server/sync/serialization';
 import * as mockSyncServer from '#server/tests/mockSyncServer';
@@ -354,6 +357,24 @@ describe('Edits on two devices', () => {
       () => saveAcme([savings, checking, travel]),
     );
     await syncFinished();
+
+    expect(await strays()).toEqual([]);
+  });
+
+  it('closing the budget waits for a clean-up a sync started', async () => {
+    await createAcme();
+    await editOnTwoDevices(
+      () => saveAcme([savings, checking, emergency()]),
+      () => saveAcme([savings, checking, travel]),
+    );
+    expect(await strays()).toHaveLength(1);
+    schedulesApp.events.emit('sync', {
+      type: 'success',
+      tables: ['paychecks'],
+      syncDisabled: false,
+    });
+    // What closeBudget waits on before closing the database
+    await waitOnSchedulesService();
 
     expect(await strays()).toEqual([]);
   });

@@ -2,7 +2,7 @@
 import * as d from 'date-fns';
 import { v4 as uuidv4 } from 'uuid';
 
-import { captureBreadcrumb } from '#platform/exceptions';
+import { captureBreadcrumb, captureException } from '#platform/exceptions';
 import * as connection from '#platform/server/connection';
 import { logger } from '#platform/server/log';
 import { addTransactions } from '#server/accounts/sync';
@@ -11,7 +11,6 @@ import { aqlQuery } from '#server/aql';
 import * as db from '#server/db';
 import { toDateRepr } from '#server/models';
 import { mutator, runMutator } from '#server/mutators';
-import { reconcilePaycheckSchedules } from '#server/paychecks/app';
 import * as prefs from '#server/prefs';
 import { Rule } from '#server/rules';
 import { addSyncListener, batchMessages } from '#server/sync';
@@ -52,6 +51,7 @@ import type {
   RuleConditionEntity,
   ScheduleEntity,
 } from '#types/models';
+import type { ServerEvents } from '#types/server-events';
 
 import { findSchedules } from './find-schedules';
 
@@ -1008,21 +1008,44 @@ app.method('schedule/get-upcoming-dates', getUpcomingDates);
 
 app.service(trackJSONPaths);
 
-const PAYCHECK_TABLES = ['paychecks', 'paycheck_schedules', 'schedules'];
+// The run the last sync started, so closing a budget can wait for it instead
+// of closing the database under it
+let serviceRun: Promise<void> = Promise.resolve();
+
+export async function waitOnSchedulesService() {
+  // A sync that lands while we wait can start another run; wait for that too
+  let run: Promise<void>;
+  do {
+    run = serviceRun;
+    await run;
+  } while (run !== serviceRun);
+}
+
+// Queues work that closing a budget must wait for. runMutator is sequential,
+// so the newest run finishes last and is the only one to track.
+export function runTrackedMutator(name: string, func: () => Promise<unknown>) {
+  // Handling the failure here reports it; closing the budget only waits
+  serviceRun = runMutator(func).then(
+    () => undefined,
+    error => {
+      logger.error(`${name} failed:`, error);
+      captureException(error);
+    },
+  );
+}
+
+// Steps other modules run on every sync, before the once-a-day guard. The
+// paychecks reconcile registers here, so this module doesn't import paychecks.
+const syncSteps: Array<(event: ServerEvents['sync-event']) => void> = [];
+
+export function onEverySync(step: (event: ServerEvents['sync-event']) => void) {
+  syncSteps.push(step);
+}
 
 app.events.on('sync', event => {
   const { type } = event;
-  // Before the once-a-day guard: edits from another device can arrive on any
-  // sync, and must be cleaned up before schedules post (ADR 2). The reconcile
-  // does nothing while paychecks are off.
-  if (
-    (type === 'success' || type === 'applied') &&
-    db.getDatabase() &&
-    (event.tables.includes('preferences') ||
-      (type === 'success' &&
-        event.tables.some(table => PAYCHECK_TABLES.includes(table))))
-  ) {
-    void runMutator(() => reconcilePaycheckSchedules());
+  for (const step of syncSteps) {
+    step(event);
   }
 
   const completeEvent =
@@ -1036,7 +1059,9 @@ app.events.on('sync', event => {
 
     const { lastScheduleRun } = prefs.getPrefs();
     if (lastScheduleRun !== currentDay()) {
-      void runMutator(() => advanceSchedulesService(type === 'success'));
+      runTrackedMutator('Schedules service', () =>
+        advanceSchedulesService(type === 'success'),
+      );
 
       // Only mark the day as done when sync succeeded, so that
       // schedule auto-posting is retried on subsequent successful syncs

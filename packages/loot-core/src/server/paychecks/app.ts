@@ -2,12 +2,14 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { createApp } from '#server/app';
 import * as db from '#server/db';
-import { mutator, runMutator } from '#server/mutators';
+import { mutator } from '#server/mutators';
 import {
   createSchedule,
   deleteSchedule,
   getRuleForSchedule,
+  onEverySync,
   refreshScheduleDateLookup,
+  runTrackedMutator,
   skipNextDate,
   updateSchedule,
 } from '#server/schedules/app';
@@ -47,11 +49,30 @@ app.method('paycheck-delete', mutator(undoable(deletePaycheck)));
 // At budget load: record schedules of paychecks saved before the record
 // existed, then clean up edits that synced while the budget was closed
 app.service(() => {
-  void runMutator(async () => {
+  runTrackedMutator('Paycheck schedule backfill', async () => {
     await backfillPaycheckSchedules();
     await reconcilePaycheckSchedules();
   });
   return () => undefined;
+});
+
+const PAYCHECK_TABLES = ['paychecks', 'paycheck_schedules', 'schedules'];
+
+// Before the schedules service's once-a-day guard: edits from another device
+// can arrive on any sync, and must be cleaned up before schedules post (ADR 2).
+// The reconcile does nothing while paychecks are off.
+onEverySync(event => {
+  if (
+    (event.type === 'success' || event.type === 'applied') &&
+    db.getDatabase() &&
+    (event.tables.includes('preferences') ||
+      (event.type === 'success' &&
+        event.tables.some(table => PAYCHECK_TABLES.includes(table))))
+  ) {
+    runTrackedMutator('Paycheck schedule reconcile', () =>
+      reconcilePaycheckSchedules(),
+    );
+  }
 });
 app.method('paycheck-skip-next', mutator(undoable(skipNextPaycheck)));
 app.method('paycheck-year-to-date', getYearToDate);

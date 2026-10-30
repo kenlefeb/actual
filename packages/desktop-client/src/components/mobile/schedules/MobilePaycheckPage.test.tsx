@@ -435,8 +435,14 @@ describe('MobilePaycheckPage', () => {
         <PaycheckEditModal paycheckId="acme" />
       </TestProviders>,
     );
-    expect(screen.queryByText('Deduction 1 name')).toBeNull();
-    expect(screen.queryByText('Deposit 1 account')).toBeNull();
+    // Texts that only exist as stacked labels
+    expect(screen.queryByText('Goes to')).toBeNull();
+    expect(screen.queryByText('Amount type')).toBeNull();
+    // No stacked label element of any kind
+    const stackedLabels = [
+      ...document.querySelectorAll('[aria-hidden="true"]'),
+    ].filter(element => element.textContent?.trim());
+    expect(stackedLabels).toEqual([]);
     expect(screen.getByLabelText('Deduction 1 category')).toHaveAttribute(
       'placeholder',
       'nothing',

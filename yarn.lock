@@ -118,6 +118,7 @@ __metadata:
     "@actual-app/crdt": "workspace:*"
     "@actual-app/vite-plugin-peggy": "workspace:*"
     "@jlongster/sql.js": "npm:^1.6.7"
+    "@noble/hashes": "npm:^1.8.0"
     "@rschedule/core": "npm:^1.5.0"
     "@rschedule/standard-date-adapter": "npm:^1.5.0"
     "@types/better-sqlite3": "npm:^9.6.0"
@@ -130,7 +131,6 @@ __metadata:
     browserify-zlib: "npm:^0.2.0"
     buffer: "npm:^6.0.3"
     cross-env: "npm:^10.1.0"
-    crypto-browserify: "npm:^3.12.1"
     csv-parse: "npm:^7.0.3"
     csv-stringify: "npm:^6.9.0"
     date-fns: "npm:^4.4.0"
@@ -5190,7 +5190,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@noble/hashes@npm:^1.1.5":
+"@noble/hashes@npm:^1.1.5, @noble/hashes@npm:^1.8.0":
   version: 1.8.0
   resolution: "@noble/hashes@npm:1.8.0"
   checksum: 10/474b7f56bc6fb2d5b3a42132561e221b0ea4f91e590f4655312ca13667840896b34195e2b53b7f097ec080a1fdd3b58d902c2a8d0fbdf51d2e238b53808a177e

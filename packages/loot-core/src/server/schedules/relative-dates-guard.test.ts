@@ -488,7 +488,9 @@ it('Deleted source is visible: a goal template budgets nothing once the source i
   expect((await getSchedule(id)).next_date).toBeNull();
   const february = await budgetFebruary();
   expect(february.to_budget).toBe(0);
-  expect(february.errors).toEqual(['Schedule Deposit is in the Past.']);
+  expect(february.errors).toEqual([
+    "Schedule Deposit's source schedule was deleted.",
+  ]);
 
   // Undo restores the source, and the template budgets again
   await undo();

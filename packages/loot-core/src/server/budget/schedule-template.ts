@@ -146,7 +146,10 @@ async function createScheduleList(
       current_month,
     );
     const displayName = scheduleName ?? template.name ?? '';
-    if (num_months < 0) {
+    if (isRelativeDate(dateConditions.value) && !recurDate) {
+      // The source is gone, so the schedule has no dates (not "in the past")
+      errors.push(`Schedule ${displayName}'s source schedule was deleted.`);
+    } else if (num_months < 0) {
       //non-repeating schedules could be negative
       errors.push(`Schedule ${displayName} is in the Past.`);
     } else {

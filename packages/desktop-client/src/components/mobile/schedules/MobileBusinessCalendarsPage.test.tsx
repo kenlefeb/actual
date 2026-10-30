@@ -247,10 +247,12 @@ describe('mobile business calendars', () => {
     );
     expect(state.remove).not.toHaveBeenCalled();
     expect(state.navigate).not.toHaveBeenCalled();
+    // Phones get the mobile delete sheet, with the same message
     const [action] = state.dispatch.mock.lastCall ?? [];
     expect(action.payload.modal).toMatchObject({
-      name: 'confirm-delete',
+      name: 'mobile-confirm-delete',
       options: {
+        title: 'Delete calendar',
         message: 'Are you sure you want to delete this business calendar?',
       },
     });

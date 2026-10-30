@@ -13,10 +13,9 @@ import { MobileBackButton } from '#components/mobile/MobileBackButton';
 import { BusinessCalendarEditor } from '#components/modals/BusinessCalendarsModal/BusinessCalendarEditor';
 import { MobilePageHeader, Page } from '#components/Page';
 import { useBusinessCalendars } from '#hooks/useBusinessCalendars';
+import { useConfirmDelete } from '#hooks/useConfirmDelete';
 import { useFeatureFlag } from '#hooks/useFeatureFlag';
 import { useNavigate } from '#hooks/useNavigate';
-import { pushModal } from '#modals/modalsSlice';
-import { useDispatch } from '#redux';
 
 export function MobileBusinessCalendarPage() {
   const isEnabled = useFeatureFlag('businessCalendars');
@@ -29,7 +28,7 @@ export function MobileBusinessCalendarPage() {
 function CalendarEditorPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const dispatch = useDispatch();
+  const confirmDelete = useConfirmDelete();
   const { id } = useParams<{ id: string }>();
   const { data: calendars = [], isPlaceholderData } = useBusinessCalendars();
   const updateCalendar = useUpdateBusinessCalendarMutation();
@@ -88,20 +87,12 @@ function CalendarEditorPage() {
       onSave={draft => updateCalendar.mutate(draft, { onSuccess: close })}
       // Phones have no undo shortcut, so deleting asks first
       onDelete={calendarId =>
-        dispatch(
-          pushModal({
-            modal: {
-              name: 'confirm-delete',
-              options: {
-                message: t(
-                  'Are you sure you want to delete this business calendar?',
-                ),
-                onConfirm: () =>
-                  deleteCalendar.mutate(calendarId, { onSuccess: close }),
-              },
-            },
-          }),
-        )
+        confirmDelete({
+          title: t('Delete calendar'),
+          message: t('Are you sure you want to delete this business calendar?'),
+          onConfirm: () =>
+            deleteCalendar.mutate(calendarId, { onSuccess: close }),
+        })
       }
     />
   );

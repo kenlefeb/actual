@@ -5,7 +5,7 @@ Unofficial Actual Budget fork for synthetic evaluation and development. The MIT 
 ## Branches and migration
 
 - `master` is the upstream mirror: it tracks the upstream snapshot cloned when this fork was created (`21c2b3f703142f858af4c653a31e675ca5ff85d7` at migration). It carries no fork work and is not the default branch.
-- `development` is the fork's default branch (sc-697, [ADR 0008](../docs/adr/0008-development-becomes-default-branch.md)), so pull requests, Dependabot, code scanning and scheduled workflows target it. Upstream-only workflows are guarded with `github.repository == 'actualbudget/actual'` so they never run here.
+- `development` is the fork's default branch (sc-697, [ADR 0008](../docs/adr/0008-development-becomes-default-branch.md)), so pull requests, Dependabot, code scanning and scheduled workflows target it. Every upstream release, publish and scheduled job is guarded by repository name (`github.repository == 'actualbudget/actual'`), so none of them runs here.
 - `development` preserves our six original commits, based on upstream `2bebdbaae0b701120a8cad9d56aafd64fa04c577` (26.10.0), through `4039c27b7d15732b0986624aa51e3afd7e068725` (26.10.1-alpha.2).
 - The active local checkout is now `actual`, replacing `actual-development`. The old checkout remains available as a recovery reference.
 

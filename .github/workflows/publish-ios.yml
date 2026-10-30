@@ -44,6 +44,7 @@ permissions:
 
 jobs:
   publish-ios:
+    if: github.repository == 'actualbudget/actual'
     runs-on: depot-macos-latest
     environment: release
     # Includes up to 45 minutes waiting for Apple to process the build.

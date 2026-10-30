@@ -90,6 +90,7 @@ jobs:
             packages/cli/@actual-app/cli.tgz
 
   publish:
+    if: github.repository == 'actualbudget/actual'
     # must use GitHub hosted runners as NPM will not allow publishing from
     # self-hosted
     runs-on: ubuntu-latest

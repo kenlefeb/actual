@@ -28,18 +28,20 @@ and is only ever fast-forwarded from upstream.
 
 1. **Upstream workflows that fire on the default branch.** Audit of
    `.github/workflows`:
-   - `docker-nightly.yml`: `on: push: branches: [master]`, no owner guard. It
-     keeps firing on mirror syncs only, and does not move with the default
-     branch. Add `if: github.repository_owner == 'actualbudget'` (or disable
-     it) so a stray run on the fork cannot push to `ghcr.io`.
-   - Scheduled with no owner guard: `count-points.yml`,
-     `publish-nightly-electron.yml`, `stale.yml`, `publish-npm-packages.yml`,
-     `codeql.yml`. Scheduled runs move to `development` the moment it is the
-     default. Guard or disable each upstream-only one (`stale`,
-     `count-points`, `publish-nightly-electron`, `publish-npm-packages`).
-     Keep `codeql.yml` (change `branches: [master]` to include `development`).
-   - Already guarded: `cut-release-branch.yml`,
-     `i18n-string-extract-master.yml`, `nightly-theme-catalog-scan.yml`.
+   - Rule as implemented: every upstream release, publish and scheduled job
+     carries `if: github.repository == 'actualbudget/actual'` (ANDed with any
+     existing condition), so none can run on the fork whatever the default
+     branch is. Guarded: `docker-nightly`, `docker-release`, `count-points`,
+     `stale`, `publish-nightly-electron`, `publish-npm-packages`,
+     `publish-crdt`, `publish-ios`, `publish-mac-app-store`,
+     `publish-flathub`, `publish-microsoft-store`, `netlify-release`,
+     `electron-master`, and the `generate-release-notes` job in
+     `release-notes`. `cut-release-branch`, `i18n-string-extract-master`,
+     `nightly-theme-catalog-scan` and `discord-release-notifications` were
+     already guarded.
+   - Deliberately unguarded: pull-request CI (`build`, `check`, `e2e-test`
+     and similar), `codeql.yml` (its weekly scan is wanted; `development` is
+     added to its push branches) and the `fork-*` and `semgrep` workflows.
    - `cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}` in
      `build.yml`, `check.yml`, `codeql.yml`, `dependency-review.yml`: after the
      switch, in-progress runs on `development` are cancelled by the next push.

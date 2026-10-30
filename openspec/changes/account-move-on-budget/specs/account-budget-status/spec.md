@@ -22,8 +22,9 @@ The app SHALL let the user move an open off-budget account on budget, from the a
 
 ### Requirement: Warn before moving
 Before it moves an account, the app SHALL show the start date and what the move changes, with:
-- the number of transactions before the start date, which become uncategorized, and how many categories that clears;
-- the number of transactions from the start date on without a category, and how many keep theirs;
+- the number of transactions before the start date, which become uncategorized;
+- the number of transactions from the start date on without a category;
+- the category counts;
 - the transfers;
 - the starting balance the budget gains.
 
@@ -32,14 +33,23 @@ The app SHALL move the account only after one confirmation. Cancelling SHALL cha
 #### Scenario: Counts match the account
 - **GIVEN** an off-budget account with 30 transactions before 2026-10-01 totalling 2,000.00 and 5 from that date on totalling 150.00
 - **AND** 2 of those are transfers from "Checking" (on budget) categorized "Savings" on the "Checking" side, and 1 is a transfer to "Mortgage" (off budget)
-- **AND** a rule set a category on 4 of this account's own transactions before 2026-10-01 and on 1 from that date on
+- **AND** a rule set a category on 4 of this account's own non-transfer transactions before 2026-10-01 and on 1 from that date on
+- **AND** this account's side of the transfer from "Checking" on 2026-10-12 has a hidden category
 - **WHEN** the user chooses "Move on budget…" with a start date of 2026-10-01
-- **THEN** the warning shows 30 transactions before the start date that become uncategorized, "4 categories before 2026-10-01 will be cleared", 4 transactions from the start date with no category, "1 transaction from 2026-10-01 keeps its category", 3 transfers listed by date, other account and amount, with "Savings" kept on the 2 from "Checking", and a starting balance of 2,000.00
+- **THEN** the warning shows 30 transactions before the start date that become uncategorized, "5 categories will be cleared" (the 4 before the start date and the transfer side on 2026-10-12), 4 transactions from the start date with no category, "1 transaction from 2026-10-01 keeps its category" (the transfer side isn't counted there), 3 transfers listed by date, other account and amount, with "Savings" kept on the 2 from "Checking", and a starting balance of 2,000.00
 
 #### Scenario: Cancelling changes nothing
 - **GIVEN** the warning is open
 - **WHEN** the user cancels
 - **THEN** the account is still off budget, and no transaction or budget amount has changed
+
+### Requirement: Category counts in the warning
+The warning SHALL show how many categories the move clears, counting this account's transactions before the start date and this account's sides of transfers of any date, and how many non-transfer transactions from the start date on keep their category. This account's sides of transfers SHALL NOT count as kept.
+
+#### Scenario: Transfer sides count as cleared, not kept
+- **GIVEN** an off-budget account with 1 non-transfer transaction on 2026-10-05 categorized "Groceries", and this account's side of a transfer from "Checking" on 2026-10-12 with a hidden category "Investments"
+- **WHEN** the user chooses "Move on budget…" with a start date of 2026-10-01
+- **THEN** the warning says "1 category will be cleared" and "1 transaction from 2026-10-01 keeps its category"
 
 ### Requirement: Transfers in the warning
 The warning SHALL list the account's transfers: their number, then each one's date, other account and amount, the newest 20 followed by "and N more", with the category that each transfer to an on-budget account keeps.

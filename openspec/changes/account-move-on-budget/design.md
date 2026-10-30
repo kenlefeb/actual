@@ -74,7 +74,7 @@ The move also clears every category on this account's transactions before the st
 - `before`: the number of the account's transactions before the start date, all of which become uncategorized, and `categoriesCleared`, how many of them have a category the move clears.
 - `from`: the number of transactions from the start date on (so, with the default date, from the 1st of the month to today) that have no category, and `categoriesKept`, how many non-transfer transactions keep theirs.
 - `categoriesCleared` also counts this account's sides of transfers with a category, whatever their date.
-- The warning shows these as counts, including "N categories before \<start date\> will be cleared" and "N transactions from \<start date\> keep their category", with no list.
+- The warning shows these as counts, including "N categories will be cleared" (before the start date, plus this account's sides of transfers of any date) and "N transactions from \<start date\> keep their category" (non-transfer transactions only), with no list.
 - `transfers`: the account's transfers, newest first, each with its date, other account, amount and, for an on-budget other account, the category it keeps (Ken's decision 2). Transfers to off-budget accounts become uncategorized on-budget transfers, because Actual expects the on-budget side of such a transfer to carry a category. The warning shows the count, then the first 20, then "and N more" (Resolved question 2).
 - `startingBalance`: B.
 

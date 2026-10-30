@@ -5,7 +5,7 @@
 - [ ] 1.1 Spec for `account-budget-status`. Verify with `openspec validate account-move-on-budget --strict`.
 - [ ] 1.2 Add loot-core tests in `server/accounts/move-on-budget.test.ts`, named after the spec scenarios, that fail on `development`:
   - "The account keeps everything": id, transaction ids, balance, `account_id`/`bank` link and schedules are unchanged, and `offbudget` is 0.
-  - "The default start date", "Counts match the account" and "Many transfers": the preview's counts, including the categories cleared before the start date and kept from it, the transfers list (first 20 and the remainder) with kept categories, and the starting balance.
+  - "The default start date", "Counts match the account", "Transfer sides count as cleared, not kept" and "Many transfers": the preview's counts, including the categories cleared before the start date and kept from it, the transfers list (first 20 and the remainder) with kept categories, and the starting balance.
   - "The counts follow the start date".
   - "Envelope budget: balance unchanged, To Budget rises, earlier months unchanged" (required, with a categorized transfer and a hidden category in the history), "Tracking budget: income rises, earlier months unchanged", "Envelope budget: the budget gains the balance from the start date", "Earlier months change only by uncategorized amounts" and "A negative balance": the account balance, and budget sheet values for the start month and the month before, under the budget type each names. These tests fix the split's exact amounts (design.md, Decision 1).
   - "Hidden category before the start date", "Hidden category after the start date", "Hidden category on this side of a later transfer" and "Undo restores cleared categories".

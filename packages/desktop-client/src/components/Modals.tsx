@@ -67,6 +67,7 @@ import { ImportYNAB4Modal } from './modals/manager/ImportYNAB4Modal';
 import { ImportYNAB5Modal } from './modals/manager/ImportYNAB5Modal';
 import { ManageRulesModal } from './modals/ManageRulesModal';
 import { MergeUnusedPayeesModal } from './modals/MergeUnusedPayeesModal';
+import { MoveOnBudgetModal } from './modals/MoveOnBudgetModal';
 import { NewCategoryGroupModal } from './modals/NewCategoryGroupModal';
 import { NewCategoryModal } from './modals/NewCategoryModal';
 import { NotesModal } from './modals/NotesModal';
@@ -282,6 +283,9 @@ export function Modals() {
 
         case 'business-calendars':
           return <BusinessCalendarsModal key={key} />;
+
+        case 'account-move-on-budget':
+          return <MoveOnBudgetModal key={key} {...modal.options} />;
 
         case 'account-business-days':
           return <AccountBusinessDaysModal key={key} {...modal.options} />;

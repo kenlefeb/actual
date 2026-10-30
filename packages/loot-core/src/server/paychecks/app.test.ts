@@ -1,5 +1,3 @@
-import MockDate from 'mockdate';
-
 import { reconcileTransactions } from '#server/accounts/sync';
 import { aqlQuery } from '#server/aql';
 import * as db from '#server/db';
@@ -13,7 +11,7 @@ import { q } from '#shared/query';
 import { setScheduleDates } from '#shared/schedule-date-lookup';
 import type { PaycheckDefinition } from '#types/models';
 
-import { app } from './app';
+import { app, getPaycheckManagingSchedule } from './app';
 
 const handlers = app.handlers;
 
@@ -124,7 +122,11 @@ beforeEach(async () => {
   await loadRules();
   // Fills the schedule view's condition paths, as at budget load
   schedulesApp.startServices();
-  MockDate.set(today);
+  // Only Date is faked. mockdate's Date formats the current time as a string on
+  // every construction, which made these date-heavy tests slow enough to time
+  // out under load (sc-810).
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(today);
   setBusinessCalendars([federal, reserve]);
 
   await addAccount('clearing');
@@ -178,7 +180,7 @@ afterEach(async () => {
   await schedulesApp.stopServices();
   setBusinessCalendars([]);
   setScheduleDates([]);
-  MockDate.reset();
+  vi.useRealTimers();
 });
 
 describe('account business days', () => {
@@ -250,7 +252,7 @@ describe('account business days', () => {
     expect(await upcoming(checking)).toEqual(['2026-11-10', '2026-11-25']);
 
     // Stored next dates compare write times, so let the clock move on
-    MockDate.set(new Date(2026, 10, 1, 12));
+    vi.setSystemTime(new Date(2026, 10, 1, 12));
     await handlers['account-set-business-days']({
       id: 'checking',
       businessCalendarId: 'reserve',
@@ -260,10 +262,9 @@ describe('account business days', () => {
     expect(await upcoming(checking)).toEqual(['2026-11-12', '2026-11-27']);
     expect((await scheduleRow(checking)).next_date).toBe('2026-11-12');
 
+    // undo() resolves after the restored rows and rule cache are applied
     await undo();
-    await vi.waitFor(async () =>
-      expect(await upcoming(checking)).toEqual(['2026-11-10', '2026-11-25']),
-    );
+    expect(await upcoming(checking)).toEqual(['2026-11-10', '2026-11-25']);
   });
 });
 
@@ -405,7 +406,7 @@ describe('paychecks', () => {
     const paycheck = await getPaycheck(id);
     if (!paycheck) throw new Error('Missing paycheck');
     // Stored next dates compare write times, so let the clock move on
-    MockDate.set(new Date(2026, 10, 1, 12));
+    vi.setSystemTime(new Date(2026, 10, 1, 12));
     await handlers['paycheck-update']({
       id,
       name: 'Acme',
@@ -685,7 +686,7 @@ describe('editor additions', () => {
     ]);
     expect(await upcoming(sideChecking)).toEqual(['2026-11-10', '2026-11-25']);
 
-    MockDate.set(new Date(2026, 10, 1, 12));
+    vi.setSystemTime(new Date(2026, 10, 1, 12));
     await handlers['account-set-business-days']({
       id: 'checking',
       businessCalendarId: 'reserve',
@@ -798,9 +799,9 @@ describe('clearing account', () => {
 
     // Checking was expected Tuesday, November 10; Veterans Day makes its
     // second business day after Friday, November 13
-    MockDate.set(new Date(2026, 10, 13));
+    vi.setSystemTime(new Date(2026, 10, 13));
     expect((await status()).isWarning).toBe(false);
-    MockDate.set(new Date(2026, 10, 16));
+    vi.setSystemTime(new Date(2026, 10, 16));
     expect(await status()).toEqual({
       paycheck: expect.any(String),
       clearingAccount: 'clearing',
@@ -842,7 +843,7 @@ describe('clearing account', () => {
     });
 
     // Thanksgiving: Checking's second business day after is November 30
-    MockDate.set(new Date(2026, 10, 26));
+    vi.setSystemTime(new Date(2026, 10, 26));
     expect(await status()).toMatchObject({
       balance: 225000,
       payDate: '2026-11-30',
@@ -853,9 +854,34 @@ describe('clearing account', () => {
       isWarning: false,
     });
     // Savings (expected November 30) has until Wednesday, December 2
-    MockDate.set(new Date(2026, 11, 2));
+    vi.setSystemTime(new Date(2026, 11, 2));
     expect((await status()).isWarning).toBe(false);
-    MockDate.set(new Date(2026, 11, 3));
+    vi.setSystemTime(new Date(2026, 11, 3));
     expect((await status()).isWarning).toBe(true);
+  });
+});
+
+describe('getPaycheckManagingSchedule', () => {
+  it('finds the paycheck for its pay and deposit schedules', async () => {
+    const { id, pay, checking, savings } = await createAcme();
+    for (const schedule of [pay, checking, savings]) {
+      expect(await getPaycheckManagingSchedule(schedule)).toEqual({
+        id,
+        name: 'Acme',
+      });
+    }
+  });
+
+  it('ignores an id that only appears elsewhere in the definition', async () => {
+    await createAcme();
+    // "checking" is a deposit account id in the definition, not a schedule
+    expect(await getPaycheckManagingSchedule('checking')).toBeNull();
+    expect(await getPaycheckManagingSchedule('unrelated')).toBeNull();
+  });
+
+  it("ignores a deleted paycheck's schedules", async () => {
+    const { id, pay } = await createAcme();
+    await handlers['paycheck-delete']({ id });
+    expect(await getPaycheckManagingSchedule(pay)).toBeNull();
   });
 });

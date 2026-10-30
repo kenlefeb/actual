@@ -13,9 +13,11 @@ on:
 permissions:
   contents: read
 
+# A PR cancels its own superseded runs. Every push to development gets its own
+# group and is never cancelled, so each merged commit has a full result (sc-946).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check:

@@ -93,6 +93,9 @@ team: a PR merges itself once it is both approved and green.
   checks are never removed in order to merge.
 - A failing check or unresolved `Changes requested` blocks the merge. Nobody
   merges past it.
+- A red Fork CI push run on `development` stops the line. The Director pauses
+  merges into `development` until a fix or a revert lands and its push run is
+  green.
 
 ## Repository settings
 

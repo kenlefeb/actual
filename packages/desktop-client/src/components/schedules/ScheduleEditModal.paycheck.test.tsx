@@ -1,3 +1,5 @@
+import { MemoryRouter } from 'react-router';
+
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -48,7 +50,9 @@ describe('ScheduleEditModal for a paycheck schedule', () => {
   it('Delete a deposit schedule from Schedules: offers Edit paycheck and no Delete', () => {
     render(
       <TestProviders>
-        <ScheduleEditModal id="acme-checking" />
+        <MemoryRouter>
+          <ScheduleEditModal id="acme-checking" />
+        </MemoryRouter>
       </TestProviders>,
     );
     expect(screen.getByRole('note')).toHaveTextContent('Acme');

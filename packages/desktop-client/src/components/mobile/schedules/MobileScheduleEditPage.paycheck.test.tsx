@@ -19,6 +19,10 @@ vi.mock('#hooks/useFeatureFlag', () => ({
     name === 'paychecks' ? state.paychecks : false,
 }));
 
+vi.mock('@actual-app/components/hooks/useResponsive', () => ({
+  useResponsive: () => ({ isNarrowWidth: true, isWideWidth: false }),
+}));
+
 vi.mock('#hooks/useNavigate', () => ({ useNavigate: () => state.navigate }));
 
 vi.mock('#hooks/usePaychecks', () => ({

@@ -14,6 +14,9 @@ calendars.
 
 - **Gate only the UI.** Flags hide the entry points: menus, rows, buttons and
   editors. Server handlers, stored data, date math and the API are not gated.
+  One exception: the paycheck schedule reconcile ([ADR 2](0002-paycheck-definition-is-source-of-truth.md))
+  runs only while the effective `paychecks` flag is on. Otherwise it would
+  restore schedules the user deleted while the feature was off (sc-556).
 - **Turning a flag off hides the UI, not the data.** Schedules that already use
   a calendar or a relative date keep computing those dates
   (`schedule-business-days` and `schedule-relative-dates`, "Feature turned off
@@ -28,8 +31,13 @@ calendars.
 
 ## What the code does today
 
+- [`feature-flags.ts`](../../packages/loot-core/src/shared/feature-flags.ts)
+  is the one place a flag's effective value is computed: the defaults,
+  `FEATURE_FLAG_REQUIRES` and `isFlagOn`. `useFeatureFlag`, `Experimental.tsx`
+  and the server (`isPaychecksOn` in `server/paychecks/app.ts`) all use it.
 - [`useFeatureFlag.ts`](../../packages/desktop-client/src/hooks/useFeatureFlag.ts)
-  declares `FEATURE_FLAG_REQUIRES` and applies it for every flag. `paychecks`
+  applies the shared rule for every flag and re-exports
+  `FEATURE_FLAG_REQUIRES`. `paychecks`
   defaults to on, so an unset flag follows `businessCalendars`. The hook reads
   all flags with one selector and runs no queries.
 - [`Experimental.tsx`](../../packages/desktop-client/src/components/settings/Experimental.tsx)

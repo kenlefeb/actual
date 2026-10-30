@@ -33,14 +33,23 @@ paycheck itself, or the receiving account's business calendar and **days early**
 - Editing a generated schedule directly lasts only until the next paycheck
   save. The schedule editor says so. API scripts can still edit or delete
   generated schedules; sc-558 will make the API refuse that.
-- **Concurrent edits aren't handled yet (sc-556).** Each device creates the
+- **Concurrent edits are reconciled (sc-556).** Each device creates the
   schedules for its own edit, and the definition syncs as one value with last
-  write wins ([ADR 3](0003-json-columns-last-write-wins.md)). Two devices that
-  each add a deposit before syncing leave one device's deposit schedule active
-  but unlisted in the definition, and forecasts count it twice. The intended
-  rule: an active schedule a paycheck generated must be listed in its
-  definition, or the next reconcile deletes it. sc-556 decides when that
-  reconcile runs.
+  write wins ([ADR 3](0003-json-columns-last-write-wins.md)), so two devices
+  that each add a deposit can leave one deposit schedule active but unlisted.
+  The fork table `paycheck_schedules` (schedule id → paycheck, migration
+  1793300000000) records which paycheck generated each schedule; saving writes
+  it, deleting a paycheck tombstones its rows, and budget load backfills rows
+  for paychecks saved before the table existed. The reconcile works in both
+  directions: it first deletes every recorded schedule its paycheck no longer
+  lists, then restores each listed schedule that is deleted (in place) or
+  missing (regenerated from the definition). Schedules no paycheck generated
+  are never touched, and posted transactions stay. It runs on every
+  successful sync that touches `paychecks`, `paycheck_schedules`,
+  `schedules` or `preferences` (and on a local `preferences` change), before
+  the once-a-day posting guard; at budget load after the backfill; and at the
+  end of each paycheck save. It runs only while the effective `paychecks`
+  flag is on ([ADR 6](0006-feature-flag-policy.md)).
 - There's no public paychecks API (Ken, 2026-10-29).
 - Paychecks stay fork-only for now (Ken, 2026-10-29). There's no upstream
   story. Revisit once the schedule upstream PRs, through sc-496, have merged.

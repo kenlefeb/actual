@@ -75,7 +75,7 @@
 
 ## 5. Docs and checks
 
-- [ ] 5.1 Update ADR 2's "Concurrent edits aren't handled yet (sc-556)" to describe the mapping table, the two-way reconcile, and when it runs. In ADR 4's "remove fork data" steps, add:
+- [x] 5.1 Update ADR 2's "Concurrent edits aren't handled yet (sc-556)" to describe the mapping table, the two-way reconcile, and when it runs. In ADR 4's "remove fork data" steps, add:
   - `DROP TABLE paycheck_schedules` to step 3;
   - the new migration's id to step 6's `__migrations__` delete;
   - `paycheck_schedules` to step 7's list of `dataset` values whose `messages_crdt` and `messages_pending` rows are deleted.

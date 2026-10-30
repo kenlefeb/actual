@@ -99,6 +99,15 @@ describe('relative dates', () => {
     ]);
   });
 
+  it('skips only weekends when its calendar has been deleted', () => {
+    // Paycheck deposits count business days in the account's calendar; a
+    // deleted calendar counts like no calendar at all
+    const deleted = { ...deposit, businessCalendarId: 'deleted' };
+    expect(between(deleted, '2026-11-01', '2026-11-30')).toEqual([
+      '2026-11-11',
+    ]);
+  });
+
   it('treats a zero offset as the nearest business day', () => {
     const sameDay: RelativeDateConfig = {
       ...deposit,

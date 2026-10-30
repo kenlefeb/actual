@@ -253,7 +253,9 @@ describe('mobile business calendars', () => {
       name: 'mobile-confirm-delete',
       options: {
         title: 'Delete calendar',
-        message: 'Are you sure you want to delete this business calendar?',
+        // Names the calendar and states only what deleting it changes
+        message:
+          'Delete "U.S. Federal Holidays"? Accounts and schedules that use it, including paycheck deposits, will skip only weekends.',
       },
     });
 

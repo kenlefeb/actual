@@ -1,7 +1,6 @@
 import { MemoryRouter } from 'react-router';
 
 import { setBusinessCalendars } from '@actual-app/core/shared/business-calendar-lookup';
-import type { Query } from '@actual-app/core/shared/query';
 import {
   setScheduleDates,
   setScheduleNames,
@@ -13,11 +12,12 @@ import type {
   RecurConfig,
   ScheduleEntity,
 } from '@actual-app/core/types/models';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { resetTestProviders, TestProviders } from '#mocks';
+import { scheduleDateLookupQueries } from '#hooks/useScheduleDateLookup';
+import { createTestQueryClient, TestProviders } from '#mocks';
 
 import { PaychecksSection } from './PaychecksSection';
 
@@ -38,13 +38,14 @@ vi.mock('#hooks/useBusinessCalendars', () => ({
   useBusinessCalendars: () => state.calendars,
 }));
 
-// Every schedule for the date lookup; no posted pay transactions
-const noTransactions = { data: [], isLoading: false };
+// Every schedule, for the shared schedules query of the date lookup
+vi.mock('#queries/aqlQuery', () => ({
+  aqlQuery: async () => ({ data: state.allSchedules.data, dependencies: [] }),
+}));
+
+// No posted pay transactions
 vi.mock('#hooks/useQuery', () => ({
-  useQuery: (makeQuery: () => Query) =>
-    makeQuery().state.table === 'schedules'
-      ? state.allSchedules
-      : noTransactions,
+  useQuery: () => ({ data: [], isLoading: false }),
 }));
 
 vi.mock('#hooks/usePaychecks', () => ({
@@ -149,22 +150,31 @@ function schedules(payDate: RecurConfig): Partial<ScheduleEntity>[] {
 }
 
 function renderSection() {
+  const queryClient = createTestQueryClient();
   const view = () => (
-    <TestProviders>
+    <TestProviders queryClient={queryClient}>
       <MemoryRouter>
         <PaychecksSection />
       </MemoryRouter>
     </TestProviders>
   );
   const { rerender } = render(view());
-  return () => rerender(view());
+  return {
+    rerender: () => rerender(view()),
+    // As sync-events does when a schedules table syncs
+    syncSchedules: () =>
+      act(() =>
+        queryClient.invalidateQueries({
+          queryKey: scheduleDateLookupQueries.all(),
+        }),
+      ),
+  };
 }
 
 const row = () => screen.getByRole('button', { name: 'Edit paycheck Acme' });
 
 describe('PaychecksSection after a change syncs in', () => {
   beforeEach(() => {
-    resetTestProviders();
     state.calendars = { data: [fed] };
     state.allSchedules = { data: schedules(twiceMonthly), isLoading: false };
   });
@@ -175,11 +185,13 @@ describe('PaychecksSection after a change syncs in', () => {
     setScheduleNames([]);
   });
 
-  it('moves a deposit date when its calendar changes', () => {
-    const rerender = renderSection();
-    // Wednesday, November 11 is Veterans Day
-    expect(row()).toHaveTextContent(
-      'Checking · 3,000.00 · Tuesday, November 10',
+  it('moves a deposit date when its calendar changes', async () => {
+    const { rerender } = renderSection();
+    // Wednesday, November 11 is Veterans Day; wait for the schedules query
+    await waitFor(() =>
+      expect(row()).toHaveTextContent(
+        'Checking · 3,000.00 · Tuesday, November 10',
+      ),
     );
 
     state.calendars = { data: [{ ...fed, holidays: [] }] };
@@ -191,8 +203,10 @@ describe('PaychecksSection after a change syncs in', () => {
   });
 
   it('moves later paychecks when the pay schedule changes', async () => {
-    const rerender = renderSection();
-    await userEvent.click(screen.getByRole('button', { name: 'Show more' }));
+    const { syncSchedules } = renderSection();
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Show more' }),
+    );
     expect(screen.getByText('Monday, November 30, 2026')).toBeInTheDocument();
 
     // Pay moves to every Friday; the next pay date stays November 13
@@ -207,9 +221,11 @@ describe('PaychecksSection after a change syncs in', () => {
       }),
       isLoading: false,
     };
-    rerender();
+    await syncSchedules();
 
-    expect(screen.getByText('Friday, November 20, 2026')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Friday, November 20, 2026'),
+    ).toBeInTheDocument();
     expect(
       screen.queryByText('Monday, November 30, 2026'),
     ).not.toBeInTheDocument();

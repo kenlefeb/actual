@@ -12,7 +12,6 @@ import { View } from '@actual-app/components/view';
 import { send } from '@actual-app/core/platform/client/connection';
 import * as undo from '@actual-app/core/platform/client/undo';
 import { getNormalisedString } from '@actual-app/core/shared/normalisation';
-import { q } from '@actual-app/core/shared/query';
 import type {
   NewRuleEntity,
   RuleEntity,
@@ -22,7 +21,7 @@ import type {
 import { useAccounts } from '#hooks/useAccounts';
 import { useCategories } from '#hooks/useCategories';
 import { usePayees } from '#hooks/usePayees';
-import { useSchedules } from '#hooks/useSchedules';
+import { useScheduleDateLookup } from '#hooks/useScheduleDateLookup';
 import { SelectedProvider, useSelected } from '#hooks/useSelected';
 import { pushModal } from '#modals/modalsSlice';
 import { useDispatch } from '#redux';
@@ -126,9 +125,8 @@ export function ManageRules({
   const [filter, setFilter] = useState('');
   const dispatch = useDispatch();
 
-  const { schedules = [] } = useSchedules({
-    query: useMemo(() => q('schedules').select('*'), []),
-  });
+  // The shared query of every schedule, also used by each rule's values
+  const { schedules } = useScheduleDateLookup();
   const { data: { list: categories } = { list: [] } } = useCategories();
   const { data: payees } = usePayees();
   const { data: accounts = [] } = useAccounts();

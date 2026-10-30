@@ -49,7 +49,7 @@ export function PaycheckScheduleNote({
         // In the phone page's column it would shrink and let the form cover it
         flexShrink: 0,
         // AA contrast on the phone page and in the desktop dialog (sc-1116)
-        color: theme.clearingNoteText,
+        color: theme.paycheckNoteText,
       }}
     >
       <Text>

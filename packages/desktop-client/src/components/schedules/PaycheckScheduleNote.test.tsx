@@ -57,7 +57,7 @@ describe('PaycheckScheduleNote', () => {
   it('uses the AA-contrast note colour (sc-1116)', () => {
     renderNote('pay');
     expect(screen.getByRole('note')).toHaveStyle({
-      color: theme.clearingNoteText,
+      color: theme.paycheckNoteText,
     });
   });
 

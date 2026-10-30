@@ -18,16 +18,15 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { useAccounts } from '#hooks/useAccounts';
 import { useBusinessCalendars } from '#hooks/useBusinessCalendars';
+import { useConfirmDelete } from '#hooks/useConfirmDelete';
 import { usePayeesById } from '#hooks/usePayees';
 import { useSchedules } from '#hooks/useSchedules';
-import { pushModal } from '#modals/modalsSlice';
 import {
   useDeletePaycheckMutation,
   useSavePaycheckMutation,
   useSetAccountBusinessDaysMutation,
   useSkipNextPaycheckMutation,
 } from '#paychecks';
-import { useDispatch } from '#redux';
 
 export type PaycheckForm = ReturnType<typeof usePaycheckForm>;
 
@@ -57,7 +56,7 @@ function newDefinition(): PaycheckDefinition {
 // by the desktop modal and the mobile page
 export function usePaycheckForm(paycheck?: PaycheckEntity) {
   const { t } = useTranslation();
-  const dispatch = useDispatch();
+  const askToDelete = useConfirmDelete();
   const savePaycheck = useSavePaycheckMutation();
   const deletePaycheck = useDeletePaycheckMutation();
   const skipNextPaycheck = useSkipNextPaycheckMutation();
@@ -206,21 +205,15 @@ export function usePaycheckForm(paycheck?: PaycheckEntity) {
 
   const confirmDelete = (close: () => void) => {
     if (!paycheck) return;
-    dispatch(
-      pushModal({
-        modal: {
-          name: 'confirm-delete',
-          options: {
-            message: t(
-              'Delete the paycheck "{{name}}" and its schedules? Its clearing account and transactions are kept.',
-              { name: paycheck.name },
-            ),
-            onConfirm: () =>
-              deletePaycheck.mutate({ id: paycheck.id }, { onSuccess: close }),
-          },
-        },
-      }),
-    );
+    askToDelete({
+      title: t('Delete paycheck'),
+      message: t(
+        'Delete the paycheck "{{name}}" and its schedules? Its clearing account and transactions are kept.',
+        { name: paycheck.name },
+      ),
+      onConfirm: () =>
+        deletePaycheck.mutate({ id: paycheck.id }, { onSuccess: close }),
+    });
   };
 
   const skipNext = (close: () => void) => {

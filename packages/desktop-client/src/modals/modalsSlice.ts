@@ -616,6 +616,14 @@ export type Modal =
       };
     }
   | {
+      name: 'mobile-confirm-delete';
+      options: {
+        title: string;
+        message: string;
+        onConfirm: () => void;
+      };
+    }
+  | {
       name: 'copy-widget-to-dashboard';
       options: {
         onSelect: (dashboardId: string) => void;

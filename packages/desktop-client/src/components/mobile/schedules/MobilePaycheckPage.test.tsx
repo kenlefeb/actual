@@ -8,7 +8,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PaycheckEditModal } from '#components/modals/PaycheckEditModal/PaycheckEditModal';
 import { useOpenPaycheck } from '#components/schedules/PaycheckRow';
-import { TestProviders } from '#mocks';
+import { resetTestProviders, TestProviders } from '#mocks';
+import type * as ModalsSlice from '#modals/modalsSlice';
 
 import { MobilePaycheckPage } from './MobilePaycheckPage';
 
@@ -18,7 +19,20 @@ const state = vi.hoisted(() => ({
   mutate: vi.fn(),
   navigate: vi.fn(),
   isNarrowWidth: true,
+  pushModal: vi.fn(),
 }));
+
+// Records each pushed modal while still opening it
+vi.mock('#modals/modalsSlice', async importOriginal => {
+  const actual = await importOriginal<typeof ModalsSlice>();
+  return {
+    ...actual,
+    pushModal: (payload: Parameters<typeof actual.pushModal>[0]) => {
+      state.pushModal(payload);
+      return actual.pushModal(payload);
+    },
+  };
+});
 
 vi.mock('@actual-app/components/hooks/useResponsive', () => ({
   useResponsive: () => ({
@@ -373,6 +387,32 @@ describe('MobilePaycheckPage', () => {
     expect(screen.getByLabelText('Deduction 2 name').parentElement).toHaveStyle(
       { flexDirection: 'row' },
     );
+  });
+
+  it('asks with the mobile delete sheet on a phone and the dialog on desktop', async () => {
+    const user = userEvent.setup();
+    state.paychecks = [acme];
+    state.pushModal.mockReset();
+    const page = renderPage('acme');
+    await user.click(screen.getByRole('button', { name: 'Delete paycheck' }));
+    expect(state.pushModal.mock.lastCall?.[0].modal).toMatchObject({
+      name: 'mobile-confirm-delete',
+      options: { title: 'Delete paycheck' },
+    });
+
+    // A fresh store, without the phone sheet still open on top
+    page.unmount();
+    resetTestProviders();
+    state.isNarrowWidth = false;
+    render(
+      <TestProviders>
+        <PaycheckEditModal paycheckId="acme" />
+      </TestProviders>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Delete paycheck' }));
+    expect(state.pushModal.mock.lastCall?.[0].modal).toMatchObject({
+      name: 'confirm-delete',
+    });
   });
 
   it('sets Delete paycheck apart as a destructive action', () => {

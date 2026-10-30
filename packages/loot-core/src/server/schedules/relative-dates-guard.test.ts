@@ -10,6 +10,7 @@ import {
   getNormalizedSchedules,
 } from '#server/forecast/forecast-schedules';
 import { loadRules } from '#server/transactions/transaction-rules';
+import { undo } from '#server/undo';
 import { currencies } from '#shared/currencies';
 import { q } from '#shared/query';
 import { setScheduleDates } from '#shared/schedule-date-lookup';
@@ -450,4 +451,49 @@ it('reads source dates afresh before advancing schedules', async () => {
   await advanceSchedulesService(true);
 
   expect((await getSchedule(id)).completed).toBe(false);
+});
+
+it('Deleted source is visible: a goal template budgets nothing once the source is gone', async () => {
+  const { id } = await createRelative('days');
+  const { data: sources } = await aqlQuery(
+    q('schedules').filter({ name: 'Payday' }).select('id'),
+  );
+  const budgetFebruary = () =>
+    runSchedule(
+      [
+        {
+          type: 'schedule',
+          name: 'Deposit',
+          scheduleId: id,
+          priority: 0,
+          directive: 'template',
+        },
+      ],
+      '2017-02-01',
+      0,
+      0,
+      0,
+      0,
+      [],
+      { id: 'cat', name: 'Deposits' } as CategoryEntity,
+      currencies[0],
+    );
+  // Wed Feb 8 is two days before payday on Fri Feb 10
+  expect((await budgetFebruary()).to_budget).toBe(10000);
+
+  await schedulesApp.handlers['schedule/delete']({ id: sources[0].id });
+
+  // No next date, so no occurrence to budget; the template reports an error
+  // instead of throwing
+  expect((await getSchedule(id)).next_date).toBeNull();
+  const february = await budgetFebruary();
+  expect(february.to_budget).toBe(0);
+  expect(february.errors).toEqual(['Schedule Deposit is in the Past.']);
+
+  // Undo restores the source, and the template budgets again
+  await undo();
+  await vi.waitFor(async () =>
+    expect((await getSchedule(id)).next_date).toBe('2017-01-08'),
+  );
+  expect((await budgetFebruary()).to_budget).toBe(10000);
 });

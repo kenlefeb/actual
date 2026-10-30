@@ -1,7 +1,7 @@
 import { useId, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
+import { Navigate, useParams } from 'react-router';
 
 import { Button } from '@actual-app/components/button';
 import { styles } from '@actual-app/components/styles';
@@ -37,8 +37,13 @@ export function MobilePaycheckPage() {
   const paycheck = isNew ? undefined : paychecks.find(p => p.id === id);
 
   // Wait for an existing paycheck before seeding the form with it
-  if (!isNew && (isPlaceholderData || !paycheck)) {
+  if (!isNew && isPlaceholderData) {
     return null;
+  }
+  // Just deleted (the editor unmounts before its own close can run), deleted
+  // elsewhere while open, or a stale link
+  if (!isNew && !paycheck) {
+    return <Navigate to="/schedules" replace />;
   }
   return <MobilePaycheckEditor paycheck={paycheck} />;
 }

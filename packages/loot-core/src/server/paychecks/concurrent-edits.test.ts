@@ -330,6 +330,20 @@ describe('Edits on two devices', () => {
     expect(await depositTotal()).toBe(NET_PAY);
   });
 
+  it('Saving the paycheck again cleans up before any sync', async () => {
+    await createAcme();
+    await editOnTwoDevices(
+      () => saveAcme([savings, checking, emergency()]),
+      () => saveAcme([savings, checking, travel]),
+    );
+    expect(await strays()).toHaveLength(1);
+    // Device A saves again without a sync: the original repro's last step
+    await saveAcme((await acme())!.definition.deposits);
+
+    expect(await strays()).toEqual([]);
+    expect(await depositTotal()).toBe(NET_PAY);
+  });
+
   it('Forecasts count each deposit once', async () => {
     await createAcme();
     await editOnTwoDevices(

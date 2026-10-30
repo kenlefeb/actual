@@ -1,6 +1,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
+import { waitOnSchedulesService } from '@actual-app/core/server/schedules/app';
 import type { RuleEntity } from '@actual-app/core/types/models';
 import { vi } from 'vitest';
 
@@ -67,6 +68,36 @@ async function createTestBudget(templateName: string, name: string) {
 }
 
 describe('API setup and teardown', () => {
+  // A sync starts the schedules service in the background; closing the
+  // budget must wait for it instead of closing the database under it
+  test('closes the budget while the schedules service is running', async () => {
+    const rejections: unknown[] = [];
+    const onRejection = (reason: unknown) => rejections.push(reason);
+    process.on('unhandledRejection', onRejection);
+    // A failed run is reported through logger.error, which writes here
+    const consoleError = vi.spyOn(console, 'error');
+    let errors: unknown[][] = [];
+    try {
+      await api.loadBudget(budgetName);
+      // As api.shutdown does: the sync starts the service, then the budget closes
+      await api.internal!.send('sync');
+      await api.internal!.send('close-budget');
+      // Let the run finish, so a failure from a too-early close is logged
+      await waitOnSchedulesService();
+    } finally {
+      process.off('unhandledRejection', onRejection);
+      // Read before restoring, which clears the recorded calls
+      errors = [...consoleError.mock.calls];
+      consoleError.mockRestore();
+    }
+    expect(rejections).toEqual([]);
+    expect(
+      errors.filter(([message]) =>
+        String(message).includes('Schedules service failed'),
+      ),
+    ).toEqual([]);
+  });
+
   // apis: loadBudget, getBudgetMonths
   test('successfully loads budget', async () => {
     await expect(api.loadBudget(budgetName)).resolves.toBeUndefined();

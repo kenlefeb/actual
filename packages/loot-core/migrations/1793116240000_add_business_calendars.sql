@@ -1,6 +1,6 @@
 BEGIN TRANSACTION;
 
-CREATE TABLE business_calendars
+CREATE TABLE IF NOT EXISTS business_calendars
   (id TEXT PRIMARY KEY,
    name TEXT,
    non_working_days TEXT DEFAULT '[0,6]',

@@ -85,7 +85,7 @@
   - under "What the code does today", say that `loot-core/src/shared/feature-flags.ts` is the one place the effective flag is computed, used by `useFeatureFlag`, `Experimental.tsx` and the server.
 
   Verify that ADR 2 and all three ADR 4 steps name `paycheck_schedules` or its migration id, and that ADR 6 names the exception and the shared module.
-- [ ] 5.2 Run the loot-core and desktop-client tests, `yarn typecheck` and `yarn lint`; all pass. The existing `server/paychecks` tests are unchanged and pass.
+- [x] 5.2 Run the loot-core and desktop-client tests, `yarn typecheck` and `yarn lint`; all pass. The existing `server/paychecks` tests are unchanged and pass.
 
 ## Workflow follow-up
 

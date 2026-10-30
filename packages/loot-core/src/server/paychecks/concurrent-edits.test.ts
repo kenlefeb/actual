@@ -582,7 +582,7 @@ describe('Which paycheck generated each schedule', () => {
     await createAcme();
     const expected = await liveMappings();
     // A paycheck from before the change has no records
-    await db.runQuery('DELETE FROM paycheck_schedules');
+    db.runQuery('DELETE FROM paycheck_schedules');
     await backfillPaycheckSchedules();
     expect(await liveMappings()).toEqual(expected);
 

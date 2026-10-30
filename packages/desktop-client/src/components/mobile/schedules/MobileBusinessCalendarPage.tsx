@@ -89,7 +89,11 @@ function CalendarEditorPage() {
       onDelete={calendarId =>
         confirmDelete({
           title: t('Delete calendar'),
-          message: t('Are you sure you want to delete this business calendar?'),
+          // Names the saved calendar and states only what deleting it changes
+          message: t(
+            'Delete "{{name}}"? Accounts and schedules that use it, including paycheck deposits, will skip only weekends.',
+            { name: calendar.name },
+          ),
           onConfirm: () =>
             deleteCalendar.mutate(calendarId, { onSuccess: close }),
         })

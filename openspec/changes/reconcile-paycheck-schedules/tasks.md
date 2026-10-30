@@ -48,7 +48,7 @@
   - a missing listed schedule is recreated and the definition updated;
   - two recreates of the same deposit converge after one more reconcile;
   - a second run changes nothing.
-- [ ] 3.2 Add `loot-core/src/shared/feature-flags.ts`, holding the flag defaults, `FEATURE_FLAG_REQUIRES` and `isFlagOn` moved from `desktop-client/src/hooks/useFeatureFlag.ts:22-55`. Point `useFeatureFlag` and `Experimental.tsx` at it, and re-export from the hook so other callers don't change. Add a server helper that reads `SELECT id, value FROM preferences WHERE id LIKE 'flags.%'` and returns `isFlagOn(prefs, 'paychecks')`. Unit tests for the shared rule and the server helper:
+- [x] 3.2 Add `loot-core/src/shared/feature-flags.ts`, holding the flag defaults, `FEATURE_FLAG_REQUIRES` and `isFlagOn` moved from `desktop-client/src/hooks/useFeatureFlag.ts:22-55`. Point `useFeatureFlag` and `Experimental.tsx` at it, and re-export from the hook so other callers don't change. Add a server helper that reads `SELECT id, value FROM preferences WHERE id LIKE 'flags.%'` and returns `isFlagOn(prefs, 'paychecks')`. Unit tests for the shared rule and the server helper:
   - the upgrade case: `businessCalendars` on and `flags.paychecks` unset is **on**;
   - `flags.paychecks` `'true'` with `businessCalendars` off is off;
   - both on is on, and `flags.paychecks` `'false'` is off.

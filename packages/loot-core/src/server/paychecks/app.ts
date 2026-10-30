@@ -13,6 +13,7 @@ import {
 } from '#server/schedules/app';
 import { updateRule } from '#server/transactions/transaction-rules';
 import { undoable } from '#server/undo';
+import { isFlagOn } from '#shared/feature-flags';
 import * as monthUtils from '#shared/months';
 import { computePaycheck, MAX_DEPOSIT_DAYS_EARLY } from '#shared/paychecks';
 import { isRelativeDate, toRelativeDay } from '#shared/relative-dates';
@@ -260,6 +261,17 @@ async function recordGenerated(
  * Records the schedules each live paycheck lists, for paychecks saved before
  * the record existed. Idempotent: it writes only what's missing.
  */
+// The effective paychecks flag, by the same rule the UI uses (ADR 6)
+export async function isPaychecksOn() {
+  const rows = await db.all<{ id: string; value: string }>(
+    "SELECT id, value FROM preferences WHERE id LIKE 'flags.%'",
+  );
+  return isFlagOn(
+    Object.fromEntries(rows.map(row => [row.id, row.value])),
+    'paychecks',
+  );
+}
+
 export async function backfillPaycheckSchedules() {
   for (const paycheck of await getPaychecks()) {
     const listed = [

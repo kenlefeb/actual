@@ -28,6 +28,7 @@ import type { PaycheckDefinition, PaycheckEntity } from '#types/models';
 import {
   app,
   backfillPaycheckSchedules,
+  isPaychecksOn,
   reconcilePaycheckSchedules,
 } from './app';
 
@@ -712,5 +713,23 @@ describe('reconcilePaycheckSchedules', () => {
     const since = await latestTimestamp();
     await reconcilePaycheckSchedules();
     expect(await messagesSince(since)).toEqual([]);
+  });
+});
+
+describe('isPaychecksOn', () => {
+  const setPref = (id: string, value: string) =>
+    db.update('preferences', { id, value });
+
+  it('reads the effective flag from the stored preferences', async () => {
+    // beforeEach stores flags.businessCalendars = 'true', and flags.paychecks
+    // is unset: an upgraded budget, which counts as on
+    expect(await isPaychecksOn()).toBe(true);
+
+    await setPref('flags.paychecks', 'false');
+    expect(await isPaychecksOn()).toBe(false);
+
+    await setPref('flags.paychecks', 'true');
+    await setPref('flags.businessCalendars', 'false');
+    expect(await isPaychecksOn()).toBe(false);
   });
 });

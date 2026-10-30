@@ -2,7 +2,7 @@
 import * as d from 'date-fns';
 import { v4 as uuidv4 } from 'uuid';
 
-import { captureBreadcrumb } from '#platform/exceptions';
+import { captureBreadcrumb, captureException } from '#platform/exceptions';
 import * as connection from '#platform/server/connection';
 import { logger } from '#platform/server/log';
 import { addTransactions } from '#server/accounts/sync';
@@ -1011,8 +1011,13 @@ app.service(trackJSONPaths);
 // of closing the database under it
 let serviceRun: Promise<void> = Promise.resolve();
 
-export function waitOnSchedulesService() {
-  return serviceRun;
+export async function waitOnSchedulesService() {
+  // A sync that lands while we wait can start another run; wait for that too
+  let run: Promise<void>;
+  do {
+    run = serviceRun;
+    await run;
+  } while (run !== serviceRun);
 }
 
 app.events.on('sync', ({ type }) => {
@@ -1027,13 +1032,13 @@ app.events.on('sync', ({ type }) => {
 
     const { lastScheduleRun } = prefs.getPrefs();
     if (lastScheduleRun !== currentDay()) {
-      const run = runMutator(() => advanceSchedulesService(type === 'success'));
-      // Failures still surface from `run`; waiters only need it settled
-      serviceRun = run.then(
-        () => {},
-        () => {},
-      );
-      void run;
+      // Handling the failure here reports it; closing the budget only waits
+      serviceRun = runMutator(() =>
+        advanceSchedulesService(type === 'success'),
+      ).catch(error => {
+        logger.error('Schedules service failed:', error);
+        captureException(error);
+      });
 
       // Only mark the day as done when sync succeeded, so that
       // schedule auto-posting is retried on subsequent successful syncs

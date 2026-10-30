@@ -351,6 +351,8 @@ async function deleteBudget({
     // the budget file if it hasn't been opened yet.  This needs a better
     // way, but works for now.
     try {
+      // A sync may have just started the schedules service on this budget
+      await waitOnSchedulesService();
       await db.openDatabase(id);
       db.closeDatabase();
       const budgetDir = fs.getBudgetDir(id);

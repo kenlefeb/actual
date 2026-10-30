@@ -83,8 +83,12 @@ describe('AccountPage', () => {
       name: 'Acme Paycheck Clearing Account',
     });
     expect(heading).toHaveStyle({ minWidth: '0px' });
-    // Clipping the heading itself would cut wider titles, like the month picker
-    expect(heading).not.toHaveStyle({ overflow: 'hidden' });
+    // Clipping the heading itself, on either axis, would cut wider titles,
+    // like the month picker
+    const style = getComputedStyle(heading);
+    for (const overflow of [style.overflow, style.overflowX, style.overflowY]) {
+      expect(['', 'visible']).toContain(overflow);
+    }
     // The button may shrink below its text, so the text can be cut
     expect(title).toHaveStyle({ minWidth: '0px', flexShrink: '1' });
     expect(title.querySelector('span') ?? title).toHaveStyle({

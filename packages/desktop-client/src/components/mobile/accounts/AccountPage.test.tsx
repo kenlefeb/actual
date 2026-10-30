@@ -58,4 +58,43 @@ describe('AccountPage', () => {
       },
     });
   });
+
+  it('ends a long account name with an ellipsis in the header', () => {
+    state.account = {
+      id: 'checking',
+      name: 'Acme Paycheck Clearing Account',
+      closed: false,
+    };
+    render(
+      <TestProviders>
+        <MemoryRouter initialEntries={['/accounts/checking']}>
+          <Routes>
+            <Route path="/accounts/:id" element={<AccountPage />} />
+          </Routes>
+        </MemoryRouter>
+      </TestProviders>,
+    );
+
+    // The full name stays the accessible name; CSS only shortens what shows
+    const heading = screen.getByRole('heading', {
+      name: 'Acme Paycheck Clearing Account',
+    });
+    const title = screen.getByRole('button', {
+      name: 'Acme Paycheck Clearing Account',
+    });
+    expect(heading).toHaveStyle({ minWidth: '0px' });
+    // Clipping the heading itself, on either axis, would cut wider titles,
+    // like the month picker
+    const style = getComputedStyle(heading);
+    for (const overflow of [style.overflow, style.overflowX, style.overflowY]) {
+      expect(['', 'visible']).toContain(overflow);
+    }
+    // The button may shrink below its text, so the text can be cut
+    expect(title).toHaveStyle({ minWidth: '0px', flexShrink: '1' });
+    expect(title.querySelector('span') ?? title).toHaveStyle({
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap',
+    });
+  });
 });

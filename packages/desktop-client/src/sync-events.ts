@@ -12,6 +12,10 @@ import {
   uploadBudget,
 } from './budgetfiles/budgetfilesSlice';
 import { businessCalendarQueries } from './business-calendars';
+import {
+  SCHEDULE_TABLES,
+  scheduleDateLookupQueries,
+} from './hooks/useScheduleDateLookup';
 import { pushModal } from './modals/modalsSlice';
 import { addNotification } from './notifications/notificationsSlice';
 import type { Notification } from './notifications/notificationsSlice';
@@ -175,6 +179,12 @@ export function listenForSyncEvent(store: AppStore, queryClient: QueryClient) {
       ) {
         void queryClient.invalidateQueries({
           queryKey: paycheckQueries.clearingStatus().queryKey,
+        });
+      }
+
+      if (SCHEDULE_TABLES.some(table => tables.includes(table))) {
+        void queryClient.invalidateQueries({
+          queryKey: scheduleDateLookupQueries.all(),
         });
       }
 

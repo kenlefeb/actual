@@ -1,6 +1,6 @@
 {
   "name": "@actual-app/core",
-  "version": "26.10.1-alpha.17",
+  "version": "26.10.1-alpha.18",
   "description": "",
   "license": "ISC",
   "repository": {
@@ -197,6 +197,7 @@
   },
   "dependencies": {
     "@jlongster/sql.js": "^1.6.7",
+    "@noble/hashes": "^1.8.0",
     "@rschedule/core": "^1.5.0",
     "@rschedule/standard-date-adapter": "^1.5.0",
     "absurd-sql": "0.0.54",
@@ -224,7 +225,6 @@
     "browserify-zlib": "^0.2.0",
     "buffer": "^6.0.3",
     "cross-env": "^10.1.0",
-    "crypto-browserify": "^3.12.1",
     "fake-indexeddb": "^6.2.5",
     "fast-check": "^4.10.2",
     "jest-diff": "^30.5.2",

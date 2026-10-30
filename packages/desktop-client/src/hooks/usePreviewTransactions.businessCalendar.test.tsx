@@ -17,8 +17,11 @@ const calendars = vi.hoisted(() => ({
   data: [] as BusinessCalendarEntity[],
 }));
 
+// The mocks return the same objects on every render, as the real hooks do
+// until their data changes. New objects each render made the hook's effect
+// re-run forever, which would also hide a real render loop (sc-631).
 vi.mock('./useBusinessCalendars', () => ({
-  useBusinessCalendars: () => ({ data: calendars.data }),
+  useBusinessCalendars: () => calendars,
 }));
 
 vi.mock('@actual-app/core/platform/client/connection', async importActual => ({
@@ -57,23 +60,47 @@ const schedule: ScheduleEntity = {
   ],
 };
 
-vi.mock('./useCachedSchedules', () => ({
-  useCachedSchedules: () => ({
-    isLoading: false,
-    error: undefined,
-    schedules: [schedule],
-    statuses: new Map([['paycheck', 'upcoming']]),
-  }),
-}));
+vi.mock('./useCachedSchedules', () => {
+  // Built on first use: `schedule` isn't initialised yet when the factory runs
+  let cached: object | undefined;
+  return {
+    useCachedSchedules: () =>
+      (cached ??= {
+        isLoading: false,
+        error: undefined,
+        schedules: [schedule],
+        statuses: new Map([['paycheck', 'upcoming']]),
+      }),
+  };
+});
 
 function wrapper({ children }: { children: ReactNode }) {
   return <TestProviders>{children}</TestProviders>;
 }
 
 async function previewDates() {
-  const { result } = renderHook(() => usePreviewTransactions(), { wrapper });
-  await waitFor(() => expect(result.current.isLoading).toBe(false));
-  return result.current.previewTransactions.map(t => t.date).sort();
+  // React reports render loops ("Maximum update depth exceeded") through
+  // console.error, so any error fails the test instead of scrolling past
+  const consoleError = vi.spyOn(console, 'error');
+  try {
+    let renders = 0;
+    const { result } = renderHook(
+      () => {
+        renders++;
+        return usePreviewTransactions();
+      },
+      { wrapper },
+    );
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    // A render loop keeps re-rendering after loading ends; a settled hook doesn't
+    const settled = renders;
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(renders).toBe(settled);
+    expect(consoleError.mock.calls).toEqual([]);
+    return result.current.previewTransactions.map(t => t.date).sort();
+  } finally {
+    consoleError.mockRestore();
+  }
 }
 
 describe('usePreviewTransactions with business calendars', () => {

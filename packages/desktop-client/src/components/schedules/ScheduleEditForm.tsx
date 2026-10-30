@@ -298,6 +298,7 @@ export function ScheduleEditForm({
               <RecurringSchedulePicker
                 // @ts-expect-error fix me
                 value={fields.date}
+                scheduleId={schedule.id}
                 onChange={value =>
                   dispatch({ type: 'set-field', field: 'date', value })
                 }

@@ -460,10 +460,18 @@ export function CustomCell({
 }: CustomCellProps) {
   const [value, setValue] = useState(defaultValue);
   const [prevDefaultValue, setPrevDefaultValue] = useState(defaultValue);
+  // onSave already submitted this value; a later blur or key must not repeat it
+  const savedValue = useRef<unknown>(undefined);
 
   if (prevDefaultValue !== defaultValue) {
     setValue(defaultValue);
     setPrevDefaultValue(defaultValue);
+  }
+
+  function submit() {
+    if (value !== savedValue.current) {
+      onUpdate?.(value);
+    }
   }
 
   function onBlur_(e: FocusEvent) {
@@ -471,14 +479,14 @@ export function CustomCell({
     // the app unfocuses, and it's unintuitive to save the value since
     // the input will be focused again when the app regains focus
     if (document.hasFocus()) {
-      onUpdate?.(value);
+      submit();
       fireBlur(onBlur, e);
     }
   }
 
   function onKeyDown(e: KeyboardEvent) {
     if (shouldSaveFromKey(e)) {
-      onUpdate?.(value);
+      submit();
     }
   }
 
@@ -488,8 +496,12 @@ export function CustomCell({
         children?.({
           onBlur: onBlur_,
           onKeyDown,
-          onUpdate: val => setValue(val),
+          onUpdate: val => {
+            savedValue.current = undefined;
+            setValue(val);
+          },
           onSave: val => {
+            savedValue.current = val;
             setValue(val);
             onUpdate?.(val);
           },

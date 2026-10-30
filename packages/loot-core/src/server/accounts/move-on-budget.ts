@@ -148,7 +148,12 @@ export async function moveOnBudget({
     balance !== 0 ? await getStartingBalancePayee() : null;
 
   await batchMessages(async () => {
-    await db.update('accounts', { id, offbudget: 0 });
+    // The offset line is set below, once it has an id
+    await db.update('accounts', {
+      id,
+      offbudget: 0,
+      budget_start_date: toDateRepr(startDate),
+    });
     for (const row of toClear) {
       await db.updateTransaction({ id: row.id, category: null });
     }
@@ -174,7 +179,7 @@ export async function moveOnBudget({
         is_child: true,
         parent_id: parent,
       });
-      await db.insertTransaction({
+      const offset = await db.insertTransaction({
         account: id,
         date: startDate,
         amount: -balance,
@@ -185,6 +190,7 @@ export async function moveOnBudget({
         is_child: true,
         parent_id: parent,
       });
+      await db.update('accounts', { id, budget_start_offset: offset });
     }
   });
 }

@@ -50,6 +50,7 @@ import { View } from '@actual-app/components/view';
 import { send } from '@actual-app/core/platform/client/connection';
 import { memoizeOne } from '@actual-app/core/shared/memoize';
 import * as monthUtils from '@actual-app/core/shared/months';
+import { isMovedHistory } from '@actual-app/core/shared/moved-history';
 import { q } from '@actual-app/core/shared/query';
 import {
   DEFAULT_UPCOMING_SCHEDULE_DAYS,
@@ -1367,6 +1368,7 @@ const Transaction = memo(function Transaction({
       : transferAccountsByTransaction[id];
   const isBudgetTransfer = transferAcct && transferAcct.offbudget === 0;
   const isOffBudget = account && account.offbudget === 1;
+  const movedHistory = isMovedHistory(transaction, account || undefined);
 
   const valueStyle = added
     ? { fontWeight: 600, color: theme.tableTextItemAdded }
@@ -1925,7 +1927,9 @@ const Transaction = memo(function Transaction({
               value
                 ? (getCategoriesById(categoryGroups)[value]?.name ?? '')
                 : transaction.id
-                  ? t('Categorize')
+                  ? movedHistory
+                    ? t('Moved history')
+                    : t('Categorize')
                   : ''
             }
             exposed={focusedField === 'category'}
@@ -1936,13 +1940,24 @@ const Transaction = memo(function Transaction({
                     // uncategorized transaction
                     fontStyle: 'italic',
                     fontWeight: 300,
-                    color: theme.formInputTextHighlight,
+                    color: movedHistory
+                      ? theme.tableText
+                      : theme.formInputTextHighlight,
                   }
                 : valueStyle
             }
             onUpdate={async value => {
               if (value === 'split') {
                 onSplit(transaction.id);
+              } else if (value && movedHistory) {
+                dispatch(
+                  pushModal({
+                    modal: {
+                      name: 'confirm-categorize-moved-history',
+                      options: { onConfirm: () => onUpdate('category', value) },
+                    },
+                  }),
+                );
               } else {
                 onUpdate('category', value);
               }

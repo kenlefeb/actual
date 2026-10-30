@@ -617,6 +617,12 @@ export type Modal =
       };
     }
   | {
+      name: 'confirm-categorize-moved-history';
+      options: {
+        onConfirm: () => void;
+      };
+    }
+  | {
       name: 'mobile-confirm-delete';
       options: {
         title: string;

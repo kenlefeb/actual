@@ -14,6 +14,10 @@ export type AccountEntity = {
   business_calendar_id?: string | null;
   // Business days early that direct deposits arrive, 0 to 10
   deposit_days_early?: number | null;
+  // Set when an off-budget account is moved on budget (history before the
+  // start date, and the offset line, aren't uncategorized)
+  budget_start_date?: string | null;
+  budget_start_offset?: string | null;
 
   // Sync fields
   account_id: string | null;

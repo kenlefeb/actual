@@ -81,6 +81,8 @@ export const schema = {
     account_group_id: f('id', { ref: 'account_groups' }),
     business_calendar_id: f('string'),
     deposit_days_early: f('integer'),
+    budget_start_date: f('date'),
+    budget_start_offset: f('string'),
   },
   account_groups: {
     id: f('id'),

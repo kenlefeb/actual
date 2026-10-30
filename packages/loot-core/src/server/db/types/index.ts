@@ -40,6 +40,8 @@ export type DbAccount = {
   account_group_id?: DbAccountGroup['id'] | null;
   business_calendar_id?: string | null;
   deposit_days_early?: number | null;
+  budget_start_date?: number | null;
+  budget_start_offset?: string | null;
 };
 
 export type DbAccountGroup = {

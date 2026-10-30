@@ -15,10 +15,15 @@ const palette = Object.fromEntries(
   ].map(([, name, hex]) => [name, hex]),
 );
 
-function color(themeCss: string, token: string) {
+function color(themeCss: string, token: string): string {
   const value = themeCss.match(
     new RegExp(`--color-${token}:\\s*([^;]+);`),
   )?.[1];
+  // A fork token can alias a shared one
+  const alias = value?.match(/var\(--color-([\w-]+)\)/)?.[1];
+  if (alias) {
+    return color(themeCss, alias);
+  }
   const name = value?.match(/var\(--palette-([\w-]+)\)/)?.[1];
   const hex = name ? palette[name] : value?.trim();
   if (!hex?.startsWith('#')) {
@@ -68,4 +73,40 @@ describe('paycheck note and warning contrast', () => {
       }
     },
   );
+});
+
+// The backgrounds secondary and warning text sit on across the app, as
+// measured on sc-1096
+const backgrounds = [
+  'pageBackground',
+  'mobilePageBackground',
+  'tableBackground',
+  'cardBackground',
+  'modalBackground',
+  'menuBackground',
+];
+
+describe('subdued and warning text contrast (sc-1212)', () => {
+  it.each(['light', 'dark', 'midnight'])(
+    'pageTextSubdued meets WCAG AA on every background in the %s theme',
+    themeName => {
+      const css = read(`${themeName}.css`);
+      for (const background of backgrounds) {
+        expect(
+          contrast(color(css, 'pageTextSubdued'), color(css, background)),
+          `pageTextSubdued on ${background}`,
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    },
+  );
+
+  it('warningText meets WCAG AA on every background in the light theme', () => {
+    const css = read('light.css');
+    for (const background of backgrounds) {
+      expect(
+        contrast(color(css, 'warningText'), color(css, background)),
+        `warningText on ${background}`,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
 });

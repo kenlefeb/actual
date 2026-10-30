@@ -8,7 +8,8 @@
   --color-pageBackgroundLineBottom: var(--palette-gray150);
   --color-pageText: var(--palette-gray100);
   --color-pageTextLight: var(--palette-gray200);
-  --color-pageTextSubdued: var(--palette-gray400);
+  /* fork: AA contrast, see sc-1096; drop when upstream adopts */
+  --color-pageTextSubdued: var(--palette-navy300);
   --color-pageTextDark: var(--palette-gray100);
   --color-pageTextPositive: var(--palette-purple200);
   --color-pageTextLink: var(--palette-purple300);
@@ -206,8 +207,8 @@
   --color-warningTextDark: var(--palette-orange100);
   --color-warningBorder: var(--palette-orange500);
   /* Fork: clearing account note and paycheck warnings, WCAG AA */
-  --color-paycheckNoteText: var(--palette-navy300);
-  --color-paycheckWarningText: var(--palette-orange200);
+  --color-paycheckNoteText: var(--color-pageTextSubdued);
+  --color-paycheckWarningText: var(--color-warningText);
   --color-errorBackground: var(--palette-red800);
   --color-errorText: var(--palette-red200);
   --color-errorTextDark: var(--palette-red150);

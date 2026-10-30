@@ -105,7 +105,7 @@ The starting balance SHALL be one split transaction on the start date that nets 
 - **THEN** the register shows one split transaction on 2026-10-01 with payee "Starting Balance" and a total of 0.00, with a 2,000.00 line in "Starting Balances" and a −2,000.00 uncategorized line noted "Offsets transactions before 2026-10-01 (moved on budget)"
 
 ### Requirement: Categories before and from the start date
-Moving an account on budget SHALL clear the category of each of this account's transactions dated before the start date, and SHALL keep the categories of its transactions from the start date on. It SHALL NOT change any category on another account's transactions, including the other side of a transfer.
+Moving an account on budget SHALL clear the category of each of this account's transactions dated before the start date, and of this account's side of every transfer whatever its date. It SHALL keep the categories of its other transactions from the start date on. It SHALL NOT change any category on another account's transactions, including the other side of a transfer.
 
 #### Scenario: Hidden category before the start date
 - **GIVEN** an off-budget transaction of −80.00 on 2026-09-15 with category "Groceries", set by a rule
@@ -116,6 +116,11 @@ Moving an account on budget SHALL clear the category of each of this account's t
 - **GIVEN** an off-budget transaction of −60.00 on 2026-10-10 with category "Groceries"
 - **WHEN** the user moves the account on budget with a start date of 2026-10-01
 - **THEN** that transaction keeps "Groceries", and October 2026's "Groceries" spending includes the 60.00
+
+#### Scenario: Hidden category on this side of a later transfer
+- **GIVEN** a transfer of 500.00 on 2026-10-12 from "Checking" (on budget, categorized "Savings" on its side) to the off-budget account, whose side has a hidden category "Investments"
+- **WHEN** the user moves the account on budget with a start date of 2026-10-01
+- **THEN** this account's side is uncategorized, the "Checking" side keeps "Savings", October 2026's "Investments" is unchanged, and the 500.00 counts once in the budget
 
 #### Scenario: A categorized transfer
 - **GIVEN** a transfer of 500.00 from "Checking" (on budget) to the off-budget account, categorized "Savings" on the "Checking" side

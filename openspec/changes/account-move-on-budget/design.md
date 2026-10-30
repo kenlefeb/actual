@@ -72,7 +72,8 @@ The move also clears every category on this account's transactions before the st
 
 `account-move-on-budget-preview({ id, startDate })` returns:
 - `before`: the number of the account's transactions before the start date, all of which become uncategorized, and `categoriesCleared`, how many of them have a category the move clears.
-- `from`: the number of transactions from the start date on (so, with the default date, from the 1st of the month to today) that have no category, and `categoriesKept`, how many keep theirs.
+- `from`: the number of transactions from the start date on (so, with the default date, from the 1st of the month to today) that have no category, and `categoriesKept`, how many non-transfer transactions keep theirs.
+- `categoriesCleared` also counts this account's sides of transfers with a category, whatever their date.
 - The warning shows these as counts, including "N categories before \<start date\> will be cleared" and "N transactions from \<start date\> keep their category", with no list.
 - `transfers`: the account's transfers, newest first, each with its date, other account, amount and, for an on-budget other account, the category it keeps (Ken's decision 2). Transfers to off-budget accounts become uncategorized on-budget transfers, because Actual expects the on-budget side of such a transfer to carry a category. The warning shows the count, then the first 20, then "and N more" (Resolved question 2).
 - `startingBalance`: B.
@@ -83,7 +84,7 @@ Split children count once each; parents with children don't count. Deleted (tomb
 
 `account-move-on-budget({ id, startDate })` runs as `mutator(undoable(...))`, like the other account handlers.
 - It refuses when the account is closed, already on budget, or doesn't exist.
-- In one batch, it sets `offbudget = 0`, clears the categories before the start date (Decision 6), and inserts the split transaction (Decision 1).
+- In one batch, it sets `offbudget = 0`, clears the categories before the start date and on this account's sides of transfers (Decision 6), and inserts the split transaction (Decision 1).
 - **Undo** restores `offbudget = 1`, restores the cleared categories, and removes the transaction.
 - **Sync:** both writes are ordinary CRDT messages. Other devices get the flag and the transaction, and `handleAccountChange` updates their budget.
 
@@ -107,7 +108,8 @@ Split children count once each; parents with children don't count. Deleted (tomb
 ### 6. Categories before and from the start date (PO, option b)
 
 - **Before the start date:** the move clears any category on this account's transactions, in the same undoable step. Those months look exactly as they did while the account was off budget, and the offset line cancels them exactly.
-- **From the start date on:** existing categories stay. That's current activity the user wants budgeted, and a category a rule or import already set is usually right. Transactions without one stay uncategorized.
+- **From the start date on:** existing categories on non-transfer transactions stay. That's current activity the user wants budgeted, and a category a rule or import already set is usually right. Transactions without one stay uncategorized.
+- **This account's side of a transfer, whatever its date:** its category is cleared. After the move both sides of a transfer to an on-budget account are on budget, so a hidden category on this side would count the money a second time, for example −500.00 "Savings" on the other side and +500.00 "Investments" on this one for money that never left the budget (found by the Architect on #106).
 - **Other accounts:** the category on the other side of a transfer is never touched (Ken's decision 2).
 - Undo restores the cleared categories.
 

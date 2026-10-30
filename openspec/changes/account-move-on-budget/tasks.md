@@ -8,7 +8,7 @@
   - "The default start date", "Counts match the account" and "Many transfers": the preview's counts, including the categories cleared before the start date and kept from it, the transfers list (first 20 and the remainder) with kept categories, and the starting balance.
   - "The counts follow the start date".
   - "Envelope budget: balance unchanged, To Budget rises, earlier months unchanged" (required, with a categorized transfer and a hidden category in the history), "Tracking budget: income rises, earlier months unchanged", "Envelope budget: the budget gains the balance from the start date", "Earlier months change only by uncategorized amounts" and "A negative balance": the account balance, and budget sheet values for the start month and the month before, under the budget type each names. These tests fix the split's exact amounts (design.md, Decision 1).
-  - "Hidden category before the start date", "Hidden category after the start date" and "Undo restores cleared categories".
+  - "Hidden category before the start date", "Hidden category after the start date", "Hidden category on this side of a later transfer" and "Undo restores cleared categories".
   - "Nothing before the start date".
   - "The adjustment in the register": one split on the start date, total 0, with the Starting Balances line and the noted offset line.
   - "A categorized transfer".
@@ -19,7 +19,7 @@
 ## 2. Server
 
 - [ ] 2.1 `account-move-on-budget-preview({ id, startDate })` (design.md, Decision 3).
-- [ ] 2.2 `account-move-on-budget({ id, startDate })` as `mutator(undoable(...))`: refuse invalid accounts, set `offbudget = 0`, clear the categories before the start date (Decision 6) and insert the zero-net split starting balance (Decision 1), in one batch.
+- [ ] 2.2 `account-move-on-budget({ id, startDate })` as `mutator(undoable(...))`: refuse invalid accounts, set `offbudget = 0`, clear the categories before the start date and on this account's sides of transfers (Decision 6) and insert the zero-net split starting balance (Decision 1), in one batch.
 - [ ] 2.3 Types in the accounts handlers. Make tasks 1.2 and 1.3 pass.
 
 ## 3. UI

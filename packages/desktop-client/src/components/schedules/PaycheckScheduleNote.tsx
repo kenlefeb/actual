@@ -46,6 +46,8 @@ export function PaycheckScheduleNote({
         alignItems: isNarrowWidth ? 'flex-start' : 'center',
         gap: 10,
         padding: 10,
+        // In the phone page's column it would shrink and let the form cover it
+        flexShrink: 0,
         color: theme.pageTextSubdued,
       }}
     >

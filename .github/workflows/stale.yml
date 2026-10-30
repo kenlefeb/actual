@@ -7,6 +7,7 @@ permissions: {}
 
 jobs:
   stale:
+    if: github.repository == 'actualbudget/actual'
     permissions:
       pull-requests: write
     runs-on: depot-ubuntu-latest
@@ -20,6 +21,7 @@ jobs:
           days-before-issue-stale: -1
           include-only-assigned: true
   stale-wip:
+    if: github.repository == 'actualbudget/actual'
     permissions:
       pull-requests: write
     runs-on: depot-ubuntu-latest
@@ -34,6 +36,7 @@ jobs:
           days-before-issue-stale: -1
 
   stale-needs-info:
+    if: github.repository == 'actualbudget/actual'
     permissions:
       issues: write
     runs-on: depot-ubuntu-latest

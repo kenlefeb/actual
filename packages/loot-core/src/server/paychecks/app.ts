@@ -1,6 +1,8 @@
+import { v4 as uuidv4 } from 'uuid';
+
 import { createApp } from '#server/app';
 import * as db from '#server/db';
-import { mutator } from '#server/mutators';
+import { mutator, runMutator } from '#server/mutators';
 import {
   createSchedule,
   deleteSchedule,
@@ -41,6 +43,11 @@ app.method('paychecks-get', getPaychecks);
 app.method('paycheck-create', mutator(undoable(createPaycheck)));
 app.method('paycheck-update', mutator(undoable(updatePaycheck)));
 app.method('paycheck-delete', mutator(undoable(deletePaycheck)));
+// At budget load: record schedules of paychecks saved before the record existed
+app.service(() => {
+  void runMutator(() => backfillPaycheckSchedules());
+  return () => undefined;
+});
 app.method('paycheck-skip-next', mutator(undoable(skipNextPaycheck)));
 app.method('paycheck-year-to-date', getYearToDate);
 app.method('paychecks-clearing-status', getClearingStatus);
@@ -225,11 +232,60 @@ async function writeSchedule(
   return scheduleId;
 }
 
+// Records which paycheck generated each schedule. Each device writes its own
+// rows, so the record survives an edit on another device that loses this
+// paycheck's definition (ADR 2, reconcile-paycheck-schedules).
+async function recordGenerated(
+  paycheckId: PaycheckEntity['id'],
+  scheduleIds: string[],
+) {
+  for (const id of scheduleIds) {
+    const row = await db.first<db.DbPaycheckSchedule>(
+      'SELECT * FROM paycheck_schedules WHERE id = ?',
+      [id],
+    );
+    if (!row) {
+      await db.insert('paycheck_schedules', { id, paycheck: paycheckId });
+    } else if (row.tombstone || row.paycheck !== paycheckId) {
+      await db.update('paycheck_schedules', {
+        id,
+        paycheck: paycheckId,
+        tombstone: 0,
+      });
+    }
+  }
+}
+
+/**
+ * Records the schedules each live paycheck lists, for paychecks saved before
+ * the record existed. Idempotent: it writes only what's missing.
+ */
+export async function backfillPaycheckSchedules() {
+  for (const paycheck of await getPaychecks()) {
+    const listed = [
+      paycheck.definition.paySchedule,
+      ...paycheck.definition.deposits.map(d => d.schedule),
+    ].filter((id): id is string => !!id);
+    await recordGenerated(paycheck.id, listed);
+  }
+}
+
+async function forgetGenerated(scheduleId: string) {
+  const row = await db.first<db.DbPaycheckSchedule>(
+    'SELECT * FROM paycheck_schedules WHERE id = ? AND tombstone = 0',
+    [scheduleId],
+  );
+  if (row) {
+    await db.delete_('paycheck_schedules', scheduleId);
+  }
+}
+
 /**
  * Regenerates a paycheck's schedules from its definition and the current
  * account settings, returning the definition with the schedule ids.
  */
 async function writePaycheckSchedules(
+  paycheckId: PaycheckEntity['id'],
   name: string,
   definition: PaycheckDefinition,
   previous?: PaycheckDefinition,
@@ -352,9 +408,11 @@ async function writePaycheckSchedules(
   for (const deposit of previous?.deposits ?? []) {
     if (deposit.schedule && !kept.has(deposit.schedule)) {
       await deleteSchedule({ id: deposit.schedule });
+      await forgetGenerated(deposit.schedule);
     }
   }
 
+  await recordGenerated(paycheckId, [paySchedule, ...kept]);
   return { ...definition, paySchedule, deposits };
 }
 
@@ -380,8 +438,11 @@ async function createPaycheck({
     });
     await db.insertPayee({ name: '', transfer_acct: fields.clearingAccount });
   }
-  const written = await writePaycheckSchedules(name, fields);
+  // The id comes first, so the schedules can record which paycheck made them
+  const id = uuidv4();
+  const written = await writePaycheckSchedules(id, name, fields);
   return db.insertWithUUID('paychecks', {
+    id,
     name,
     definition: JSON.stringify(written),
   });
@@ -399,6 +460,7 @@ async function updatePaycheck({
   const previous = await getPaycheck(id);
   await validate(name, definition, previous.definition);
   const written = await writePaycheckSchedules(
+    id,
     name,
     definition,
     previous.definition,
@@ -422,6 +484,13 @@ async function deletePaycheck({ id }: { id: PaycheckEntity['id'] }) {
   }
   if (definition.paySchedule) {
     await deleteSchedule({ id: definition.paySchedule });
+  }
+  const mapped = await db.all<{ id: string }>(
+    'SELECT id FROM paycheck_schedules WHERE paycheck = ? AND tombstone = 0',
+    [id],
+  );
+  for (const row of mapped) {
+    await db.delete_('paycheck_schedules', row.id);
   }
   await db.delete_('paychecks', id);
 }
@@ -631,6 +700,7 @@ async function setAccountBusinessDays({
   );
   for (const paycheck of rows.flatMap(row => toPaycheck(row) ?? [])) {
     const written = await writePaycheckSchedules(
+      paycheck.id,
       paycheck.name,
       paycheck.definition,
       paycheck.definition,

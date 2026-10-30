@@ -17,6 +17,7 @@ import { applyMessages, setSyncingMode } from '#server/sync';
 import { deserializeValue } from '#server/sync/serialization';
 import * as mockSyncServer from '#server/tests/mockSyncServer';
 import { loadRules } from '#server/transactions/transaction-rules';
+import { undo } from '#server/undo';
 import { setBusinessCalendars } from '#shared/business-calendar-lookup';
 import { businessCalendarPresets } from '#shared/business-calendar-presets';
 import { currentDay } from '#shared/months';
@@ -24,7 +25,7 @@ import { q } from '#shared/query';
 import { setScheduleDates } from '#shared/schedule-date-lookup';
 import type { PaycheckDefinition, PaycheckEntity } from '#types/models';
 
-import { app } from './app';
+import { app, backfillPaycheckSchedules } from './app';
 
 const handlers = app.handlers;
 const NET_PAY = 300000;
@@ -543,5 +544,61 @@ describe('Deleted while paychecks were off', () => {
     ] as never);
     await syncFinished('success', ['preferences']);
     expect(await scheduleById(id)).toMatchObject({ tombstone: false });
+  });
+});
+
+describe('Which paycheck generated each schedule', () => {
+  const liveMappings = () =>
+    db.all<{ id: string; paycheck: string }>(
+      'SELECT id, paycheck FROM paycheck_schedules WHERE tombstone = 0 ORDER BY id',
+    );
+
+  it('records every schedule a paycheck creates', async () => {
+    await createAcme();
+    const paycheck = (await acme())!;
+    const listed = [...(await listedIds())].sort();
+    expect(await liveMappings()).toEqual(
+      listed.map(id => ({ id, paycheck: paycheck.id })),
+    );
+  });
+
+  it('drops the record of a removed deposit and of a deleted paycheck', async () => {
+    await createAcme([savings, checking, travel]);
+    await saveAcme([savings, checking]);
+    expect((await liveMappings()).map(m => m.id).sort()).toEqual(
+      [...(await listedIds())].sort(),
+    );
+
+    await handlers['paycheck-delete']({ id: (await acme())!.id });
+    expect(await liveMappings()).toEqual([]);
+  });
+
+  it('backfills records for a paycheck saved before this change', async () => {
+    await createAcme();
+    const expected = await liveMappings();
+    // A paycheck from before the change has no records
+    await db.runQuery('DELETE FROM paycheck_schedules');
+    await backfillPaycheckSchedules();
+    expect(await liveMappings()).toEqual(expected);
+
+    const writes = () =>
+      db.first<{ n: number }>(
+        "SELECT count(*) AS n FROM messages_crdt WHERE dataset = 'paycheck_schedules'",
+      );
+    const before = await writes();
+    await backfillPaycheckSchedules();
+    expect(await writes()).toEqual(before);
+  });
+
+  it('undo restores the records with the paycheck', async () => {
+    await createAcme();
+    const before = await liveMappings();
+    expect(before).toHaveLength(3);
+    await handlers['paycheck-delete']({ id: (await acme())!.id });
+    await undo();
+    expect(await liveMappings()).toEqual(before);
+
+    await undo();
+    expect(await liveMappings()).toEqual([]);
   });
 });

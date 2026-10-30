@@ -31,9 +31,9 @@
 
 ## 2. Record which paycheck generated each schedule
 
-- [ ] 2.1 Add the fork migration `packages/loot-core/migrations/<timestamp>_add_paycheck_schedules.sql`, creating `paycheck_schedules (id TEXT PRIMARY KEY, paycheck TEXT, tombstone INTEGER DEFAULT 0)` with an id later than `1793200000000`. Add the table to the AQL schema (`server/aql/schema/index.ts`). Verify the migration tests and `yarn typecheck` pass.
-- [ ] 2.2 In `writePaycheckSchedules`, insert a mapping row for each schedule it creates, and in `deletePaycheck`, tombstone the paycheck's rows. Unit tests: after create, every listed schedule has a row for the paycheck; after delete, none is live. Undo of a create or delete restores the rows too.
-- [ ] 2.3 Add the backfill at budget load: for each live paycheck, insert the missing rows for its listed schedules. Unit test: a paycheck created without rows gets them, and running it twice changes nothing.
+- [x] 2.1 Add the fork migration `packages/loot-core/migrations/<timestamp>_add_paycheck_schedules.sql`, creating `paycheck_schedules (id TEXT PRIMARY KEY, paycheck TEXT, tombstone INTEGER DEFAULT 0)` with an id later than `1793200000000`. Add the table to the AQL schema (`server/aql/schema/index.ts`). Verify the migration tests and `yarn typecheck` pass.
+- [x] 2.2 In `writePaycheckSchedules`, insert a mapping row for each schedule it creates, and in `deletePaycheck`, tombstone the paycheck's rows. Unit tests: after create, every listed schedule has a row for the paycheck; after delete, none is live. Undo of a create or delete restores the rows too.
+- [x] 2.3 Add the backfill at budget load: for each live paycheck, insert the missing rows for its listed schedules. Unit test: a paycheck created without rows gets them, and running it twice changes nothing.
 
 ## 3. Reconcile
 

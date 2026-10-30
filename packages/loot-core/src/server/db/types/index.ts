@@ -67,6 +67,13 @@ export type DbPaycheck = {
   tombstone: 1 | 0;
 };
 
+// Which paycheck generated a schedule; `id` is the schedule's id
+export type DbPaycheckSchedule = {
+  id: string;
+  paycheck: string;
+  tombstone: 1 | 0;
+};
+
 export type DbBank = {
   id: string;
   bank_id: string;

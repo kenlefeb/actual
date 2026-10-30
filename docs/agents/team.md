@@ -43,10 +43,27 @@ the Director tells him they're ready. Each checklist must meet this standard:
   copied, and how to recognise it.
 - Each step has a "Why you, not an agent" line naming the specific reason, such
   as root on the production host, a credential under Ken's account or a
-  physical device. A step without such a reason goes back to an agent.
+  physical device.
+
+The reviewer judges each of those reasons and says which one it accepts. Ken's
+only gate is changing production (see above), so "needs approval" is not a
+reason. A step with no reason, or only that one, goes back to an agent.
 
 The reviewer posts its findings as a story comment that starts with
 "Checklist Reviewer:", followed by numbered findings or "Approved".
+
+The same rules as "How to approve" apply:
+
+- The reviewer is a different session from the checklist's author. If the
+  author is itself the Checklist Reviewer, a second agent in that role reviews.
+- A review counts only when the Director sent the reviewer the checklist and
+  the reviewer's report gives the comment's URL.
+- The comment is never edited. A new finding or verdict goes in a new comment.
+
+After a finding, the author fixes the checklist and it is reviewed again. The
+Director tells Ken nothing until there is an "Approved" comment later than the
+latest finding. This covers instructions given to Ken in chat as well as in
+stories.
 
 ## Who reviews what
 

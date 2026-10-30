@@ -179,4 +179,23 @@ describe('RecurringSchedulePicker business calendars', () => {
       expect.objectContaining({ businessCalendarId: 'federal' }),
     );
   });
+
+  it('previews a saved schedule from its stored next date', async () => {
+    render(
+      <TestProviders>
+        <RecurringSchedulePicker
+          value={baseConfig}
+          scheduleId="rent"
+          onChange={vi.fn()}
+        />
+      </TestProviders>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Every month/ }));
+
+    expect(sendCatch).toHaveBeenLastCalledWith('schedule/get-upcoming-dates', {
+      config: expect.any(Object),
+      count: 4,
+      scheduleId: 'rent',
+    });
+  });
 });

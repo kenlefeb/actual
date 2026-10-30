@@ -1,3 +1,4 @@
+import { sendCatch } from '@actual-app/core/platform/client/connection';
 import type { PaycheckEntity } from '@actual-app/core/types/models';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -115,6 +116,25 @@ describe('PaycheckEditModal pay dates', () => {
           }),
         }),
       ),
+    );
+  });
+
+  it('Skip next paycheck: the pay dates preview starts from the next pay date', async () => {
+    state.paychecks = [
+      { ...acme, definition: { ...acme.definition, paySchedule: 'acme-pay' } },
+    ];
+    render(
+      <TestProviders>
+        <PaycheckEditModal paycheckId="acme" />
+      </TestProviders>,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /Every month/ }));
+
+    // The pay schedule's stored next date (after skips) is where it starts
+    expect(sendCatch).toHaveBeenLastCalledWith(
+      'schedule/get-upcoming-dates',
+      expect.objectContaining({ scheduleId: 'acme-pay' }),
     );
   });
 });

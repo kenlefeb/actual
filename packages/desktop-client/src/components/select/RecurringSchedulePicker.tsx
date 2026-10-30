@@ -374,11 +374,13 @@ function MonthlyPatterns({
 function RecurringScheduleTooltip({
   config: currentConfig,
   hideSkipWeekend,
+  scheduleId,
   onClose,
   onSave,
 }: {
   config: RecurConfig;
   hideSkipWeekend?: boolean;
+  scheduleId?: string;
   onClose: () => void;
   onSave: (config: RecurConfig) => void;
 }) {
@@ -442,11 +444,12 @@ function RecurringScheduleTooltip({
       const { data, error } = await sendCatch('schedule/get-upcoming-dates', {
         config: unparseConfig(config),
         count: 4,
+        scheduleId,
       });
       setPreviewDates(error ? t('Invalid rule') : data);
     }
     void run();
-  }, [config, t]);
+  }, [config, scheduleId, t]);
 
   if (previewDates == null) {
     return null;
@@ -666,6 +669,8 @@ type RecurringSchedulePickerProps = {
   buttonStyle?: CSSProperties;
   // For callers that decide the move off non-business days themselves
   hideSkipWeekend?: boolean;
+  // A saved schedule's dates preview from its next date, so skips show
+  scheduleId?: string;
   onChange: (config: RecurConfig) => void;
 };
 
@@ -673,6 +678,7 @@ export function RecurringSchedulePicker({
   value,
   buttonStyle,
   hideSkipWeekend,
+  scheduleId,
   onChange,
 }: RecurringSchedulePickerProps) {
   const { t } = useTranslation();
@@ -701,6 +707,7 @@ export function RecurringSchedulePicker({
     <RecurringScheduleTooltip
       config={value}
       hideSkipWeekend={hideSkipWeekend}
+      scheduleId={scheduleId}
       onClose={() => setIsOpen(false)}
       onSave={onSave}
     />

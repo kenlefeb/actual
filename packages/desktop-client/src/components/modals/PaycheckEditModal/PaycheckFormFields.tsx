@@ -108,6 +108,7 @@ export function PaycheckScheduleFields({ form }: FormProps) {
         <RecurringSchedulePicker
           value={form.payDates}
           hideSkipWeekend
+          scheduleId={form.paycheck?.definition.paySchedule ?? undefined}
           onChange={date => update({ date })}
         />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
@@ -128,7 +129,6 @@ export function PaycheckScheduleFields({ form }: FormProps) {
             </label>
           </Trans>
         </View>
-        {/* Upcoming dates above follow the pattern; this one includes skips */}
         {nextPayDate && (
           <Text style={{ fontWeight: 600 }}>
             {t('Next paycheck: {{date}}', {

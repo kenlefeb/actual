@@ -639,9 +639,43 @@ function discoverSchedules() {
   return findSchedules();
 }
 
-async function getUpcomingDates({ config, count }) {
+// The stored next date of a saved schedule, which already accounts for skips.
+// Skips only move it forward, so an earlier one is overdue, not skipped, and
+// "upcoming" starts today as before.
+async function getStoredNextDate(
+  scheduleId: string | undefined,
+): Promise<string | null> {
+  if (!scheduleId) {
+    return null;
+  }
+  const { data: nextDate } = await aqlQuery(
+    q('schedules').filter({ id: scheduleId }).calculate('next_date'),
+  );
+  const today = dayFromDate(d.startOfDay(new Date()));
+  return nextDate && nextDate >= today ? nextDate : null;
+}
+
+async function getUpcomingDates({
+  config,
+  count,
+  scheduleId,
+}: {
+  config;
+  count: number;
+  scheduleId?: string;
+}) {
+  const nextDate = await getStoredNextDate(scheduleId);
+
   if (isRelativeDate(config)) {
     const today = d.startOfDay(new Date());
+    if (nextDate) {
+      const start = parseDate(nextDate);
+      const dates = getRelativeOccurrences(config, start, d.addYears(start, 3));
+      // Only while the dates still produce it: an edit starts over from today
+      if (dates[0] === nextDate) {
+        return dates.slice(0, count);
+      }
+    }
     return getRelativeOccurrences(config, today, d.addYears(today, 3)).slice(
       0,
       count,
@@ -652,20 +686,41 @@ async function getUpcomingDates({ config, count }) {
 
   try {
     const schedule = new RSchedule({ rrules: rules });
+    const move = date =>
+      dayFromDate(
+        config.skipWeekend
+          ? getDateWithSkippedWeekend(
+              date,
+              config.weekendSolveMode,
+              config.businessCalendarId,
+            )
+          : date,
+      );
+
+    if (nextDate) {
+      // Start a little early, so a date moved forward onto the stored next
+      // date is still listed, then drop the ones before it
+      const start = parseDate(nextDate);
+      const from = d.subDays(start, 14);
+      const before = schedule
+        .occurrences({ start: from, end: d.subDays(start, 1) })
+        .toArray().length;
+      const dates = schedule
+        .occurrences({ start: from, take: count + before })
+        .toArray()
+        .map(({ date }) => move(date))
+        .filter(date => date >= nextDate)
+        .slice(0, count);
+      // Only while the dates still produce it: an edit starts over from today
+      if (dates[0] === nextDate) {
+        return dates;
+      }
+    }
 
     return schedule
       .occurrences({ start: d.startOfDay(new Date()), take: count })
       .toArray()
-      .map(date =>
-        config.skipWeekend
-          ? getDateWithSkippedWeekend(
-              date.date,
-              config.weekendSolveMode,
-              config.businessCalendarId,
-            )
-          : date.date,
-      )
-      .map(date => dayFromDate(date));
+      .map(({ date }) => move(date));
   } catch (err) {
     captureBreadcrumb(config);
     throw err;

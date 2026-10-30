@@ -4,7 +4,7 @@ import type { RefObject } from 'react';
 import { useRefEventListener } from './useRefEventListener';
 
 export function useCursorPosition(
-  ref: RefObject<HTMLInputElement | null>,
+  ref: RefObject<HTMLInputElement | HTMLTextAreaElement | null>,
 ): [number | null, (n: number | null) => void] {
   const doc = useRef(document);
   const [cursorPosition, setCursorPosition] = useState<number | null>(null);

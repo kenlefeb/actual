@@ -34,7 +34,7 @@ function focusElement(
     el.focus();
   }
 
-  if (el instanceof HTMLInputElement) {
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
     el.setSelectionRange(0, 10000);
   }
 }
@@ -85,7 +85,7 @@ export function useProperFocus(
     const view = ref.current;
 
     if (view && shouldFocus && (prev === null || prev === false)) {
-      const selector = 'input,button,div[tabindex]';
+      const selector = 'input,textarea,button,div[tabindex]';
       const focusEl = view.matches(selector)
         ? view
         : view.querySelector<HTMLElement>(selector);

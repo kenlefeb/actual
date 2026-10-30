@@ -250,6 +250,55 @@ describe('Transactions', () => {
     expect(data.length).toBe(5);
   });
 
+  // The mobile editor saves an edit by passing the edited row, with the
+  // latest children re-attached to a parent, to updateTransaction
+  describe('Split edits are isolated', () => {
+    const split = () =>
+      makeSplitTransaction({ id: 'p', amount: 3000, notes: 'Parent note' }, [
+        { id: 'c1', amount: 2000, notes: 'Groceries' },
+        { id: 'c2', amount: 1000, notes: 'Software' },
+      ]);
+
+    test("Edit one split's note", () => {
+      const transactions = split();
+      const c2 = transactions.find(t => t.id === 'c2');
+      const { data, diff } = updateTransaction(transactions, {
+        ...c2,
+        notes: 'Software\nSPLIT CHECK',
+      });
+
+      // Only the edited split's note is written
+      expect(
+        diff.updated
+          .filter(u => 'notes' in u)
+          .map(({ id, notes }) => ({ id, notes })),
+      ).toEqual([{ id: 'c2', notes: 'Software\nSPLIT CHECK' }]);
+      expect(data.find(t => t.id === 'p').notes).toBe('Parent note');
+      expect(data.find(t => t.id === 'c1').notes).toBe('Groceries');
+      expect(data.find(t => t.id === 'c2').notes).toBe('Software\nSPLIT CHECK');
+    });
+
+    test('Edit the parent note', () => {
+      const transactions = split();
+      const parent = transactions.find(t => t.id === 'p');
+      const children = transactions.filter(t => t.parent_id === 'p');
+      const { data, diff } = updateTransaction(transactions, {
+        ...parent,
+        notes: 'Receipt\nMOBILE CHECK',
+        subtransactions: children,
+      });
+
+      // Only the parent's note is written
+      expect(
+        diff.updated
+          .filter(u => 'notes' in u)
+          .map(({ id, notes }) => ({ id, notes })),
+      ).toEqual([{ id: 'p', notes: 'Receipt\nMOBILE CHECK' }]);
+      expect(data.find(t => t.id === 'c1').notes).toBe('Groceries');
+      expect(data.find(t => t.id === 'c2').notes).toBe('Software');
+    });
+  });
+
   test('partially updating a split parent preserves amount and does not set error', () => {
     const transactions = [
       makeTransaction({ amount: 2001 }),

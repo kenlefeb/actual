@@ -26,6 +26,7 @@ export function AccountMenuModal({
   onClose,
   onReconcile,
   onEditBusinessDays,
+  onMoveOnBudget,
 }: AccountMenuModalProps) {
   const { t } = useTranslation();
   const businessCalendarsEnabled = useFeatureFlag('businessCalendars');
@@ -102,6 +103,12 @@ export function AccountMenuModal({
                 setHideReconciled(hideReconciled === 'true' ? 'false' : 'true');
               }}
             />
+            {!!account.offbudget && !account.closed && onMoveOnBudget && (
+              <MobileSheetRow
+                label={t('Move on budget…')}
+                onPress={() => onMoveOnBudget(account.id)}
+              />
+            )}
             {account.closed ? (
               <MobileSheetRow
                 label={t('Reopen account')}

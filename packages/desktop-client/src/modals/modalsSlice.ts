@@ -367,6 +367,7 @@ export type Modal =
         onClose?: () => void;
         onReconcile?: () => void;
         onEditBusinessDays?: (accountId: AccountEntity['id']) => void;
+        onMoveOnBudget?: (accountId: AccountEntity['id']) => void;
       };
     }
   | {
@@ -672,6 +673,12 @@ export type Modal =
     }
   | {
       name: 'business-calendars';
+    }
+  | {
+      name: 'account-move-on-budget';
+      options: {
+        accountId: AccountEntity['id'];
+      };
     }
   | {
       name: 'account-business-days';

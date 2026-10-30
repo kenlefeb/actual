@@ -7,7 +7,7 @@ import { TestProviders } from '#mocks';
 import { AccountMenuModal } from './AccountMenuModal';
 
 const state = vi.hoisted(() => ({
-  account: { id: 'checking', name: 'Checking', closed: false },
+  account: { id: 'checking', name: 'Checking', closed: false, offbudget: 0 },
   businessCalendars: true,
 }));
 
@@ -27,7 +27,7 @@ vi.mock('#hooks/useFeatureFlag', () => ({
     name === 'businessCalendars' ? state.businessCalendars : false,
 }));
 
-function renderMenu(onEditBusinessDays = vi.fn()) {
+function renderMenu(onEditBusinessDays = vi.fn(), onMoveOnBudget = vi.fn()) {
   render(
     <TestProviders>
       <AccountMenuModal
@@ -38,6 +38,7 @@ function renderMenu(onEditBusinessDays = vi.fn()) {
         onEditNotes={vi.fn()}
         onReconcile={vi.fn()}
         onEditBusinessDays={onEditBusinessDays}
+        onMoveOnBudget={onMoveOnBudget}
       />
     </TestProviders>,
   );
@@ -51,6 +52,12 @@ function rowLabels() {
 describe('AccountMenuModal', () => {
   beforeEach(() => {
     state.businessCalendars = true;
+    state.account = {
+      id: 'checking',
+      name: 'Checking',
+      closed: false,
+      offbudget: 0,
+    };
   });
 
   it('offers Business days after Reconcile and opens it for the account', async () => {
@@ -70,6 +77,23 @@ describe('AccountMenuModal', () => {
     renderMenu();
     expect(
       screen.queryByRole('button', { name: 'Business days' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('Menu option on phones: offers "Move on budget…" for an open off-budget account', async () => {
+    state.account = { ...state.account, offbudget: 1 };
+    const onMoveOnBudget = vi.fn();
+    renderMenu(vi.fn(), onMoveOnBudget);
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Move on budget…' }),
+    );
+    expect(onMoveOnBudget).toHaveBeenCalledWith('checking');
+  });
+
+  it('Not offered for on-budget or closed accounts', () => {
+    renderMenu();
+    expect(
+      screen.queryByRole('button', { name: 'Move on budget…' }),
     ).not.toBeInTheDocument();
   });
 });

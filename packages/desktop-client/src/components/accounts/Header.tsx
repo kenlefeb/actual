@@ -741,7 +741,8 @@ type AccountMenuProps = {
       | 'toggle-net-worth-chart'
       | 'manage-columns'
       | 'account-group'
-      | 'business-days',
+      | 'business-days'
+      | 'move-on-budget',
   ) => void;
 };
 
@@ -819,6 +820,9 @@ export function AccountMenu({
               : []
           : []),
 
+        ...(account.offbudget && !account.closed
+          ? [{ name: 'move-on-budget', text: t('Move on budget…') } as const]
+          : []),
         ...(account.closed
           ? [{ name: 'reopen', text: t('Reopen account') } as const]
           : [{ name: 'close', text: t('Close account') } as const]),

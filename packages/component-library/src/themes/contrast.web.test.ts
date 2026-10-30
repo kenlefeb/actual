@@ -52,6 +52,8 @@ describe('paycheck note and warning contrast', () => {
         ['paycheckNoteText', 'mobilePageBackground'],
         // Field labels in the phone paycheck editor's section cards
         ['paycheckNoteText', 'tableBackground'],
+        // The paycheck note in the desktop schedule dialog (sc-1116)
+        ['paycheckNoteText', 'modalBackground'],
         ['paycheckWarningText', 'pageBackground'],
         ['paycheckWarningText', 'mobilePageBackground'],
         // The Paychecks card on the Schedules page ("Skipped: …" and the

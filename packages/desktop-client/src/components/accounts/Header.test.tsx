@@ -40,11 +40,11 @@ const checking = {
   bank_sync_status: null,
 } satisfies AccountEntity;
 
-function renderMenu() {
+function renderMenu(account: AccountEntity = checking) {
   render(
     <TestProviders>
       <AccountMenu
-        account={checking}
+        account={account}
         canSync={false}
         showNetWorthChart={false}
         showReconciled={false}
@@ -71,5 +71,20 @@ describe('account menu', () => {
     state.businessCalendars = true;
     renderMenu();
     expect(screen.getByText('Business days')).toBeInTheDocument();
+  });
+
+  it('Menu option on desktop: offers "Move on budget…" for an open off-budget account', () => {
+    renderMenu({ ...checking, offbudget: 1 });
+    expect(screen.getByText('Move on budget…')).toBeInTheDocument();
+  });
+
+  it('Not offered for on-budget or closed accounts', () => {
+    renderMenu();
+    expect(screen.queryByText('Move on budget…')).not.toBeInTheDocument();
+  });
+
+  it('Not offered for a closed off-budget account', () => {
+    renderMenu({ ...checking, offbudget: 1, closed: 1 });
+    expect(screen.queryByText('Move on budget…')).not.toBeInTheDocument();
   });
 });

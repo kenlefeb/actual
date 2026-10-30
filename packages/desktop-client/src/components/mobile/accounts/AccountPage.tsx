@@ -181,6 +181,17 @@ function AccountHeader({ account }: { readonly account: AccountEntity }) {
     [dispatch],
   );
 
+  const onMoveOnBudget = useCallback(
+    (accountId: AccountEntity['id']) => {
+      dispatch(
+        pushModal({
+          modal: { name: 'account-move-on-budget', options: { accountId } },
+        }),
+      );
+    },
+    [dispatch],
+  );
+
   const onClick = useCallback(() => {
     dispatch(
       pushModal({
@@ -194,6 +205,7 @@ function AccountHeader({ account }: { readonly account: AccountEntity }) {
             onReopenAccount,
             onReconcile,
             onEditBusinessDays,
+            onMoveOnBudget,
           },
         },
       }),
@@ -203,6 +215,7 @@ function AccountHeader({ account }: { readonly account: AccountEntity }) {
     dispatch,
     onCloseAccount,
     onEditBusinessDays,
+    onMoveOnBudget,
     onEditNotes,
     onReconcile,
     onReopenAccount,

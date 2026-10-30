@@ -833,7 +833,8 @@ class AccountInternal extends PureComponent<
       | 'toggle-net-worth-chart'
       | 'manage-columns'
       | 'account-group'
-      | 'business-days',
+      | 'business-days'
+      | 'move-on-budget',
   ) => {
     const accountId = this.props.accountId!;
     const account = this.props.accounts.find(
@@ -876,6 +877,13 @@ class AccountInternal extends PureComponent<
         this.props.dispatch(
           pushModal({
             modal: { name: 'account-business-days', options: { accountId } },
+          }),
+        );
+        break;
+      case 'move-on-budget':
+        this.props.dispatch(
+          pushModal({
+            modal: { name: 'account-move-on-budget', options: { accountId } },
           }),
         );
         break;

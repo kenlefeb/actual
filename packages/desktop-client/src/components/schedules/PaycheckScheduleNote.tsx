@@ -48,7 +48,8 @@ export function PaycheckScheduleNote({
         padding: 10,
         // In the phone page's column it would shrink and let the form cover it
         flexShrink: 0,
-        color: theme.pageTextSubdued,
+        // AA contrast on the phone page and in the desktop dialog (sc-1116)
+        color: theme.paycheckNoteText,
       }}
     >
       <Text>

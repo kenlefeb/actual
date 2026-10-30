@@ -1,5 +1,6 @@
 import { MemoryRouter } from 'react-router';
 
+import { theme } from '@actual-app/components/theme';
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -51,6 +52,13 @@ describe('PaycheckScheduleNote', () => {
     expect(
       screen.getByRole('button', { name: 'Edit paycheck' }),
     ).toBeInTheDocument();
+  });
+
+  it('uses the AA-contrast note colour (sc-1116)', () => {
+    renderNote('pay');
+    expect(screen.getByRole('note')).toHaveStyle({
+      color: theme.paycheckNoteText,
+    });
   });
 
   it('shows nothing for other schedules', () => {

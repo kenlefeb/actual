@@ -92,7 +92,7 @@ For a transaction in a moved account dated before its start date, and for the of
 - **Writes outside the editors:** applying a rule from the Rules page ("Apply actions" to matching transactions), rules running on import or bank sync, and the API can still categorize moved history without a prompt. The prompt covers the editors and bulk categorize, where it happens by hand. **Follow-up:** a Backlog story for the Rules page's apply path.
 - **Two devices moving the same account while offline:** each passes the `offbudget` check and writes its own split. The account's cells settle to one offset id, so the other device's offset line shows as uncategorized, and there are two Starting Balances. sc-467 already has this gap; this change only makes it visible.
 - **Transactions added later before the start date:** for example, from bank sync or another device after the move. They count as moved history: they aren't in B and aren't prompted, so their amount isn't budgeted anywhere. This is the same gap `account-move-on-budget` accepted for unsynced transactions. This change only stops prompting for them.
-- **Accounts moved before this change:** they have no stored date, so they keep today's behavior. Nothing backfills them (see "Resolved questions").
+- **Accounts moved before this change:** none exist, because moving on budget isn't in any release yet, so there's nothing to backfill (see "Resolved questions").
 
 ## Resolved questions
 

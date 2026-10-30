@@ -78,6 +78,7 @@ import {
   FieldLabel,
   InputField,
   TapField,
+  TextareaField,
   ToggleField,
 } from '#components/mobile/MobileForms';
 import { getPrettyPayee } from '#components/mobile/utils';
@@ -105,6 +106,7 @@ import {
 } from '#hooks/useSingleActiveEditForm';
 import { useSyncedPref } from '#hooks/useSyncedPref';
 import { pushModal } from '#modals/modalsSlice';
+import { NotesTagFormatter } from '#notes/NotesTagFormatter';
 import { addNotification } from '#notifications/notificationsSlice';
 import { useSavePayeeLocationMutation } from '#payees';
 import { locationService } from '#payees/location';
@@ -455,7 +457,7 @@ const ChildTransactionEdit = forwardRef<
     const { t } = useTranslation();
     const { editingField, onRequestActiveEdit, onClearActiveEdit } =
       useSingleActiveEditForm()!;
-    const noteRef = useRef<HTMLInputElement | null>(null);
+    const noteRef = useRef<HTMLTextAreaElement | null>(null);
 
     const prettyPayee = getPrettyPayee({
       t,
@@ -554,7 +556,8 @@ const ChildTransactionEdit = forwardRef<
 
         <View>
           <FieldLabel title={t('Notes')} />
-          <InputField
+          <TextareaField
+            aria-label={t('Notes')}
             ref={noteRef}
             iconStart={<SvgNotesPaper width={17} height={17} />}
             iconEnd={<NoteInsertHashButton inputRef={noteRef} />}
@@ -570,6 +573,18 @@ const ChildTransactionEdit = forwardRef<
             onUpdate={value => onUpdate(transaction, 'notes', value)}
           />
           <NoteTagAutocomplete inputRef={noteRef} />
+          {transaction.notes && (
+            <View
+              aria-label={t('Note preview')}
+              style={{
+                padding: `8px ${styles.mobileEditingPadding}px`,
+                whiteSpace: 'pre-wrap',
+                overflowWrap: 'anywhere',
+              }}
+            >
+              <NotesTagFormatter notes={transaction.notes} />
+            </View>
+          )}
         </View>
 
         <View style={{ alignItems: 'center' }}>
@@ -666,7 +681,7 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
     );
     const { data: { grouped: categoryGroups } = { grouped: [] } } =
       useCategories();
-    const noteRef = useRef<HTMLInputElement | null>(null);
+    const noteRef = useRef<HTMLTextAreaElement | null>(null);
 
     useEffect(() => {
       if (window.history.length === 1) {
@@ -1528,7 +1543,8 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
 
           <View>
             <FieldLabel title={t('Notes')} />
-            <InputField
+            <TextareaField
+              aria-label={t('Notes')}
               ref={noteRef}
               iconStart={<SvgNotesPaper width={17} height={17} />}
               iconEnd={<NoteInsertHashButton inputRef={noteRef} />}
@@ -1547,6 +1563,18 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
               }
             />
             <NoteTagAutocomplete inputRef={noteRef} />
+            {transaction.notes && (
+              <View
+                aria-label={t('Note preview')}
+                style={{
+                  padding: `8px ${styles.mobileEditingPadding}px`,
+                  whiteSpace: 'pre-wrap',
+                  overflowWrap: 'anywhere',
+                }}
+              >
+                <NotesTagFormatter notes={transaction.notes} />
+              </View>
+            )}
           </View>
 
           {!isAdding && (

@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { InputField } from './MobileForms';
+import { InputField, TextareaField } from './MobileForms';
 
 describe('InputField', () => {
   const showPicker = vi.fn();
@@ -72,4 +72,23 @@ describe('InputField', () => {
     expect(showPicker).toHaveBeenCalledTimes(1);
     expect(onClick).toHaveBeenCalledTimes(1);
   });
+});
+
+// A transaction note must survive browser value sanitization on blur.
+it('preserves newline-separated document references when a note loses focus', async () => {
+  const note =
+    'Receipt\nPAPERWORK:synthetic-id\nhttps://example.com/receipt.pdf';
+  const onUpdate = vi.fn();
+  render(
+    <TextareaField
+      aria-label="Transaction note"
+      defaultValue={note}
+      onUpdate={onUpdate}
+    />,
+  );
+  const field = screen.getByRole('textbox', { name: 'Transaction note' });
+  expect(field).toHaveValue(note);
+  await userEvent.click(field);
+  await userEvent.tab();
+  expect(onUpdate.mock.calls[0][0]).toBe(note);
 });

@@ -77,7 +77,8 @@ test.describe('Mobile Transactions', () => {
 - text: Cleared
 - checkbox [checked]
 - text: Notes
-- textbox [disabled]: just a note`);
+- textbox "Notes" [disabled]: just a note
+- text: just a note`);
   });
 
   test('removes the payee from a new transaction', async () => {

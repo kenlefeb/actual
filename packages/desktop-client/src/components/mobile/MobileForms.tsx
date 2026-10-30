@@ -3,6 +3,7 @@ import type {
   ComponentPropsWithoutRef,
   ComponentPropsWithRef,
   CSSProperties,
+  FocusEvent,
   ReactNode,
 } from 'react';
 
@@ -189,6 +190,57 @@ export function InputField({
 }
 
 InputField.displayName = 'InputField';
+
+type TextareaFieldProps = ComponentPropsWithRef<'textarea'> & {
+  iconStart?: ReactNode;
+  iconEnd?: ReactNode;
+  onUpdate?: (value: string, event: FocusEvent<HTMLTextAreaElement>) => void;
+};
+
+export function TextareaField({
+  iconStart,
+  iconEnd,
+  onUpdate,
+  onBlur,
+  style,
+  ...props
+}: TextareaFieldProps) {
+  return (
+    <View
+      className={iconFieldWrapperClassName}
+      style={{
+        height: 'auto',
+        alignItems: 'flex-start',
+        paddingTop: 8,
+        paddingBottom: 8,
+      }}
+    >
+      {iconStart && <View style={iconStyle}>{iconStart}</View>}
+      <textarea
+        rows={3}
+        className={css({
+          ...styles.smallText,
+          flex: 1,
+          minWidth: 0,
+          border: 0,
+          outline: 'none',
+          backgroundColor: 'transparent',
+          color: theme.tableText,
+          resize: 'vertical',
+          whiteSpace: 'pre-wrap',
+          ...style,
+        })}
+        autoCapitalize="none"
+        {...props}
+        onBlur={event => {
+          onUpdate?.(event.currentTarget.value, event);
+          onBlur?.(event);
+        }}
+      />
+      {iconEnd && <View style={iconStyle}>{iconEnd}</View>}
+    </View>
+  );
+}
 
 type TapFieldProps = ComponentPropsWithRef<typeof Button> & {
   icon?: ReactNode;

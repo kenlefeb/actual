@@ -8,7 +8,7 @@ import { useCursorPosition } from '#hooks/useCursorPosition';
 import { useInputRefValue } from '#hooks/useInputRefValue';
 
 type NoteInsertHashButtonProps = {
-  inputRef: RefObject<HTMLInputElement | null>;
+  inputRef: RefObject<HTMLInputElement | HTMLTextAreaElement | null>;
 };
 
 export function NoteInsertHashButton({ inputRef }: NoteInsertHashButtonProps) {

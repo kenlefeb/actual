@@ -651,3 +651,8 @@ export function applyFindReplace(
     return text;
   }
 }
+
+// sc-946 proof only: calls the old name
+export function sc946ProofUsesOldName(text: string) {
+  return appendDecimals(text, false);
+}

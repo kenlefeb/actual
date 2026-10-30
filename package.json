@@ -51,6 +51,7 @@
     "generate:news-feed": "yarn workspace @actual-app/ci-actions tsx bin/generate-news-feed.ts",
     "generate:fork-news": "node ./fork/scripts/generate-release-news.mjs",
     "check:openspec-shortcut": "node ./fork/scripts/check-openspec-shortcut.mjs",
+    "check:spec-scenarios": "node ./fork/scripts/check-spec-scenarios.mjs",
     "test": "lage test --continue",
     "test:debug": "lage test --no-cache --continue",
     "e2e": "yarn workspace @actual-app/web run e2e",

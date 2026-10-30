@@ -8,7 +8,7 @@
   --color-pageBackgroundLineBottom: var(--palette-blue150);
   --color-pageText: #272630;
   --color-pageTextLight: var(--palette-navy500);
-  --color-pageTextSubdued: var(--palette-navy300);
+  --color-pageTextSubdued: var(--palette-navy600);
   --color-pageTextDark: var(--palette-navy800);
   --color-pageTextPositive: var(--palette-purple600);
   --color-pageTextLink: var(--palette-blue600);
@@ -197,7 +197,7 @@
   --color-noticeTextMenu: var(--palette-green200);
   --color-noticeBorder: var(--palette-green500);
   --color-warningBackground: var(--palette-orange200);
-  --color-warningText: var(--palette-orange700);
+  --color-warningText: var(--palette-orange800);
   --color-warningTextLight: var(--palette-orange500);
   --color-warningTextDark: var(--palette-orange900);
   --color-warningBorder: var(--palette-orange500);

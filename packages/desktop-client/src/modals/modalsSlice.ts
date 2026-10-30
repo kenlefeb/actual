@@ -802,6 +802,13 @@ const modalsSlice = createSlice({
       ) {
         return state;
       }
+      // special case: a cell save and the blur from this dialog opening both ask
+      if (
+        modal.name === 'confirm-categorize-moved-history' &&
+        state.modalStack.some(m => m.name === modal.name)
+      ) {
+        return state;
+      }
       state.modalStack = [...state.modalStack, modal];
     },
     replaceModal(state, action: PayloadAction<ReplaceModalPayload>) {

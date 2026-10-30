@@ -31,8 +31,14 @@ paycheck itself, or the receiving account's business calendar and **days early**
 ## Consequences
 
 - Editing a generated schedule directly lasts only until the next paycheck
-  save. The schedule editor says so. API scripts can still edit or delete
-  generated schedules; sc-558 will make the API refuse that.
+  save. The schedule editor says so.
+- **The API refuses to change generated schedules (sc-558).**
+  `updateSchedule`, `deleteSchedule`, and `updateRule` on such a schedule's
+  rule, fail with "This schedule is managed by paycheck "<name>". Edit the
+  paycheck in the app." `deleteRule` already resolves to `false` for the rule
+  of any schedule. The check is `getPaycheckManagingSchedule`
+  (`paychecks/app.ts`). `internal.send` and the internal `schedule/*` handlers
+  aren't the public API and aren't guarded.
 - **Concurrent edits are reconciled (sc-556).** Each device creates the
   schedules for its own edit, and the definition syncs as one value with last
   write wins ([ADR 3](0003-json-columns-last-write-wins.md)), so two devices

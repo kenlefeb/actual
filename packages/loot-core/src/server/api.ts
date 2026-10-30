@@ -54,6 +54,7 @@ import type { RemoteFile } from './cloud-storage';
 import * as db from './db';
 import { APIError, withErrorCode } from './errors';
 import { runMutator } from './mutators';
+import { getPaycheckManagingSchedule } from './paychecks/app';
 import * as prefs from './prefs';
 import { getScheduleDates } from './schedules/occurrences';
 import * as sheet from './sheet';
@@ -988,6 +989,13 @@ handlers['api/rule-create'] = withMutation(async function ({ rule }) {
 
 handlers['api/rule-update'] = withMutation(async function ({ rule }) {
   checkFileOpen();
+  const schedule = await db.first<Pick<db.DbSchedule, 'id'>>(
+    'SELECT id FROM schedules WHERE rule = ? AND tombstone = 0',
+    [rule.id],
+  );
+  if (schedule) {
+    await refuseIfManagedByPaycheck(schedule.id);
+  }
   const updatedRule = await handlers['rule-update'](
     ruleModel.fromExternal(rule),
   );
@@ -1003,6 +1011,17 @@ handlers['api/rule-delete'] = withMutation(async function (id) {
   checkFileOpen();
   return handlers['rule-delete'](id);
 });
+
+// A paycheck regenerates its schedules on every save, so scripts must edit
+// the paycheck instead (ADR 2)
+async function refuseIfManagedByPaycheck(scheduleId: string) {
+  const paycheck = await getPaycheckManagingSchedule(scheduleId);
+  if (paycheck) {
+    throw APIError(
+      `This schedule is managed by paycheck "${paycheck.name}". Edit the paycheck in the app.`,
+    );
+  }
+}
 
 handlers['api/schedules-get'] = async function () {
   checkFileOpen();
@@ -1057,6 +1076,7 @@ handlers['api/schedule-update'] = withMutation(async function ({
   resetNextDate,
 }) {
   checkFileOpen();
+  await refuseIfManagedByPaycheck(id);
   const { data } = await aqlQuery(q('schedules').filter({ id }).select('*'));
   if (!data || data.length === 0) {
     throw APIError(`Schedule ${id} not found`);
@@ -1195,6 +1215,7 @@ handlers['api/schedule-update'] = withMutation(async function ({
 
 handlers['api/schedule-delete'] = withMutation(async function (id: string) {
   checkFileOpen();
+  await refuseIfManagedByPaycheck(id);
   return handlers['schedule/delete']({ id });
 });
 

@@ -206,7 +206,7 @@
   --color-warningTextDark: var(--palette-orange100);
   --color-warningBorder: var(--palette-orange500);
   /* Fork: clearing account note and paycheck warnings, WCAG AA */
-  --color-clearingNoteText: var(--palette-navy300);
+  --color-paycheckNoteText: var(--palette-navy300);
   --color-paycheckWarningText: var(--palette-orange200);
   --color-errorBackground: var(--palette-red800);
   --color-errorText: var(--palette-red200);

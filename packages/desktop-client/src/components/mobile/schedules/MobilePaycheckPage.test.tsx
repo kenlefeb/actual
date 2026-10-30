@@ -68,15 +68,18 @@ vi.mock('#components/util/GenericInput', () => ({
   GenericInput: ({
     value,
     onChange,
+    placeholder,
     'aria-label': label,
   }: {
     value: string;
     onChange: (value: string) => void;
+    placeholder?: string;
     'aria-label'?: string;
   }) => (
     <input
       aria-label={label}
       value={value}
+      placeholder={placeholder ?? 'nothing'}
       onChange={e => onChange(e.target.value)}
     />
   ),
@@ -333,6 +336,117 @@ describe('MobilePaycheckPage', () => {
     );
     expect(deduction(2)).not.toHaveStyle(divider);
     expect(deposit(2)).not.toHaveStyle(divider);
+  });
+
+  it('labels every stacked field on a phone with a short name inside its accessible name', async () => {
+    const user = userEvent.setup();
+    state.paychecks = [
+      {
+        ...acme,
+        definition: {
+          ...acme.definition,
+          deductions: [
+            ...acme.definition.deductions,
+            {
+              id: 'hsa',
+              name: 'HSA',
+              amount: 5000,
+              category: null,
+              transferAccount: 'savings',
+            },
+          ],
+          deposits: [
+            { id: 'savings', account: 'savings', kind: 'fixed', value: 10000 },
+            { id: 'checking', account: 'checking', kind: 'percent', value: 5 },
+          ],
+        },
+      },
+    ];
+    renderPage('acme');
+    await user.click(screen.getByRole('button', { name: /^Deductions/ }));
+    await user.click(screen.getByRole('button', { name: /^Direct deposits/ }));
+    // [visible label, the field's unchanged accessible name]
+    const fields = [
+      ['Name', 'Deduction 1 name'],
+      ['Amount', 'Deduction 1 amount'],
+      ['Goes to', 'Deduction 1 goes to'],
+      ['Category', 'Deduction 1 category'],
+      ['Transfer account', 'Deduction 2 transfer account'],
+      ['Account', 'Deposit 1 account'],
+      ['Amount type', 'Deposit 1 amount type'],
+      ['Fixed amount', 'Deposit 1 fixed amount'],
+      ['Percent', 'Deposit 2 percent'],
+    ];
+    for (const [visible, name] of fields) {
+      // Label in name: the words a user sees are part of what's read
+      expect(name.toLowerCase()).toContain(visible.toLowerCase());
+      const field =
+        screen.queryByRole('button', { name }) ?? screen.getByLabelText(name);
+      // The field's label is the nearest element with that text before it
+      const label = screen
+        .getAllByText(visible)
+        .filter(
+          element =>
+            element.compareDocumentPosition(field) &
+            Node.DOCUMENT_POSITION_FOLLOWING,
+        )
+        .at(-1);
+      expect(label).toHaveStyle({ color: theme.paycheckNoteText });
+      // Screen readers already read the field's own name
+      expect(label).toHaveAttribute('aria-hidden', 'true');
+    }
+    expect(screen.queryByText('Transfer to')).toBeNull();
+  });
+
+  it('shows a clear empty state for an empty account or category on a phone', async () => {
+    const user = userEvent.setup();
+    state.paychecks = [
+      {
+        ...acme,
+        definition: {
+          ...acme.definition,
+          deductions: [
+            { id: 'tax', name: 'Federal tax', amount: 45000, category: null },
+          ],
+          deposits: [
+            { id: 'checking', account: '', kind: 'remainder', value: 0 },
+          ],
+        },
+      },
+    ];
+    renderPage('acme');
+    await user.click(screen.getByRole('button', { name: /^Deductions/ }));
+    await user.click(screen.getByRole('button', { name: /^Direct deposits/ }));
+    expect(screen.getByLabelText('Deduction 1 category')).toHaveAttribute(
+      'placeholder',
+      'No category',
+    );
+    expect(screen.getByLabelText('Deposit 1 account')).toHaveAttribute(
+      'placeholder',
+      'Choose an account',
+    );
+  });
+
+  it('keeps desktop rows without the stacked labels', async () => {
+    state.isNarrowWidth = false;
+    state.paychecks = [acme];
+    render(
+      <TestProviders>
+        <PaycheckEditModal paycheckId="acme" />
+      </TestProviders>,
+    );
+    // Texts that only exist as stacked labels
+    expect(screen.queryByText('Goes to')).toBeNull();
+    expect(screen.queryByText('Amount type')).toBeNull();
+    // No stacked label element of any kind
+    const stackedLabels = [
+      ...document.querySelectorAll('[aria-hidden="true"]'),
+    ].filter(element => element.textContent?.trim());
+    expect(stackedLabels).toEqual([]);
+    expect(screen.getByLabelText('Deduction 1 category')).toHaveAttribute(
+      'placeholder',
+      'nothing',
+    );
   });
 
   it('makes "Post automatically" one 40px tappable row on a phone', async () => {

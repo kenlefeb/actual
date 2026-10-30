@@ -51,15 +51,16 @@ On a copy of the budget's `db.sqlite`, in one transaction:
    The schedules a paycheck generated stay as ordinary schedules, already
    converted by step 1.
 4. **Fork account columns.** `ALTER TABLE accounts DROP COLUMN
-   business_calendar_id` and `DROP COLUMN deposit_days_early`.
+   business_calendar_id`, `DROP COLUMN deposit_days_early`,
+   `DROP COLUMN budget_start_date` and `DROP COLUMN budget_start_offset`.
 5. **Fork flags.** `DELETE FROM preferences WHERE id IN
    ('flags.businessCalendars', 'flags.paychecks')`.
 6. **Migration records.** `DELETE FROM __migrations__ WHERE id IN
-   (1793116240000, 1793200000000, 1793300000000)`.
+   (1793116240000, 1793200000000, 1793300000000, 1793400000000)`.
 7. **Sync history.** Delete `messages_crdt` and `messages_pending` rows whose
    `dataset` is `paychecks`, `paycheck_schedules` or `business_calendars`, or
    whose `column` is one of
-   the two dropped account columns.
+   the dropped account columns.
 
 Then import the result into upstream as a **new** budget file, with a new sync
 id, rather than syncing it into the old group. Messages on the server would

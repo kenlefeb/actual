@@ -28,6 +28,11 @@ import type {
 import { aqlQuery } from '#queries/aqlQuery';
 import { useDispatch } from '#redux';
 
+import {
+  afterSheetCloses,
+  useConfirmMovedHistory,
+} from './useConfirmMovedHistory';
+
 type BatchReconciledReason = Extract<
   ConfirmTransactionEditReason,
   `batch${string}Reconciled`
@@ -78,6 +83,7 @@ type BatchUnlinkScheduleProps = {
 export function useTransactionBatchActions() {
   const dispatch = useDispatch();
   const { t } = useTranslation();
+  const movedHistory = useConfirmMovedHistory();
 
   const onBatchEdit = async ({ name, ids, onSuccess }: BatchEditProps) => {
     const { data } = await aqlQuery(
@@ -237,6 +243,7 @@ export function useTransactionBatchActions() {
         transactions.every(
           t => monthUtils.monthFromDate(t.date) === transactionMonth,
         );
+      const sheet = afterSheetCloses();
       dispatch(
         pushModal({
           modal: {
@@ -244,7 +251,22 @@ export function useTransactionBatchActions() {
             options: {
               month: transactionsHaveSameMonth ? transactionMonth : undefined,
               showNoneOption: true,
-              onSelect: categoryId => onChange(name, categoryId),
+              onSelect: categoryId => {
+                if (
+                  categoryId &&
+                  movedHistory.includesMovedHistory(
+                    transactions.filter(trans => ids.includes(trans.id)),
+                  )
+                ) {
+                  // One confirmation for the batch: Cancel changes none
+                  sheet.run(() =>
+                    movedHistory.confirm(() => void onChange(name, categoryId)),
+                  );
+                } else {
+                  void onChange(name, categoryId);
+                }
+              },
+              onClose: sheet.onClose,
             },
           },
         }),

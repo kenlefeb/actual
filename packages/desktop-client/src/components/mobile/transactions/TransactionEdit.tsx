@@ -94,6 +94,10 @@ import {
 } from '#components/transactions/table/utils';
 import { useAccounts } from '#hooks/useAccounts';
 import { useCategories } from '#hooks/useCategories';
+import {
+  afterSheetCloses,
+  useConfirmMovedHistory,
+} from '#hooks/useConfirmMovedHistory';
 import { useDateFormat } from '#hooks/useDateFormat';
 import { useLocalPref } from '#hooks/useLocalPref';
 import { useLocationPermission } from '#hooks/useLocationPermission';
@@ -668,6 +672,7 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
     const { t } = useTranslation();
     const navigate = useNavigate();
     const dispatch = useDispatch();
+    const movedHistory = useConfirmMovedHistory();
     const [showHiddenCategories] = useLocalPref('budget.showHiddenCategories');
     const [upcomingLength = DEFAULT_UPCOMING_SCHEDULE_DAYS] = useSyncedPref(
       'upcomingScheduledTransactionLength',
@@ -990,7 +995,8 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
           }
 
           switch (name) {
-            case 'category':
+            case 'category': {
+              const sheet = afterSheetCloses();
               dispatch(
                 pushModal({
                   modal: {
@@ -1003,20 +1009,33 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
                         unserializedTransaction.date,
                       ),
                       onSelect: categoryId => {
-                        void onUpdateInner(
-                          transactionToEdit,
-                          name,
-                          categoryId as TransactionEntity['category'],
-                        );
+                        const update = () =>
+                          void onUpdateInner(
+                            transactionToEdit,
+                            name,
+                            categoryId as TransactionEntity['category'],
+                          );
+                        if (
+                          categoryId &&
+                          movedHistory.includesMovedHistory([
+                            unserializedTransaction,
+                          ])
+                        ) {
+                          sheet.run(() => movedHistory.confirm(update));
+                        } else {
+                          update();
+                        }
                       },
                       onClose: () => {
                         onClearActiveEdit();
+                        sheet.onClose();
                       },
                     },
                   },
                 }),
               );
               break;
+            }
             case 'account':
               dispatch(
                 pushModal({
@@ -1089,6 +1108,7 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
       [
         categoryGroups,
         dispatch,
+        movedHistory,
         onUpdateInner,
         onClearActiveEdit,
         onRequestActiveEdit,

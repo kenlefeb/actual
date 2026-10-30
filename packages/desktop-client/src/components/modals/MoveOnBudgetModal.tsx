@@ -146,10 +146,10 @@ export function MoveOnBudgetModal({ accountId }: MoveOnBudgetModalProps) {
             {preview.before > 0 && (
               <Text>
                 {t(
-                  '{{count}} transactions before {{date}} are covered by the starting balance. Leave them uncategorized.',
+                  "{{count}} transactions before {{date}} are covered by the starting balance. They show as moved history and aren't counted as uncategorized.",
                   {
                     defaultValue_one:
-                      '{{count}} transaction before {{date}} is covered by the starting balance. Leave it uncategorized.',
+                      "{{count}} transaction before {{date}} is covered by the starting balance. It shows as moved history and isn't counted as uncategorized.",
                     count: preview.before,
                     date: shownDate,
                   },

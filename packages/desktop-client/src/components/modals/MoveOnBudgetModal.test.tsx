@@ -96,7 +96,7 @@ describe('MoveOnBudgetModal', () => {
       'Your budget gains 2,000.00 on 01/01/2017, in Starting Balances.',
     );
     const lines = [
-      '30 transactions before 01/01/2017 are covered by the starting balance. Leave them uncategorized.',
+      "30 transactions before 01/01/2017 are covered by the starting balance. They show as moved history and aren't counted as uncategorized.",
       '4 transactions from 01/01/2017 need a category.',
       '1 keeps its category.',
       '5 categories will be cleared.',
@@ -129,7 +129,7 @@ describe('MoveOnBudgetModal', () => {
     renderModal();
     expect(
       await screen.findByText(
-        '1 transaction before 01/01/2017 is covered by the starting balance. Leave it uncategorized.',
+        "1 transaction before 01/01/2017 is covered by the starting balance. It shows as moved history and isn't counted as uncategorized.",
       ),
     ).toBeInTheDocument();
     expect(

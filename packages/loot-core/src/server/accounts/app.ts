@@ -13,6 +13,7 @@ import {
   TransactionError,
 } from '#server/errors';
 import { app as mainApp } from '#server/main-app';
+import { fromDateRepr } from '#server/models';
 import { mutator } from '#server/mutators';
 import { del, get, post } from '#server/post';
 import { getPrefs } from '#server/prefs';
@@ -140,6 +141,10 @@ async function getAccounts(): Promise<AccountEntity[]> {
         account_group_id: dbAccount.account_group_id ?? null,
         business_calendar_id: dbAccount.business_calendar_id ?? null,
         deposit_days_early: dbAccount.deposit_days_early ?? 0,
+        budget_start_date: dbAccount.budget_start_date
+          ? fromDateRepr(dbAccount.budget_start_date)
+          : null,
+        budget_start_offset: dbAccount.budget_start_offset ?? null,
       }) satisfies AccountEntity,
   );
 }

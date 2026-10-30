@@ -27,6 +27,7 @@ import { CategoryGroupAutocompleteModal } from './modals/CategoryGroupAutocomple
 import { CategoryGroupMenuModal } from './modals/CategoryGroupMenuModal';
 import { CategoryMenuModal } from './modals/CategoryMenuModal';
 import { CloseAccountModal } from './modals/CloseAccountModal';
+import { ConfirmCategorizeMovedHistoryModal } from './modals/ConfirmCategorizeMovedHistoryModal';
 import { ConfirmCategoryDeleteModal } from './modals/ConfirmCategoryDeleteModal';
 import { ConfirmDeleteModal } from './modals/ConfirmDeleteModal';
 import { ConfirmPayeesMergeModal } from './modals/ConfirmPayeesMergeModal';
@@ -172,6 +173,11 @@ export function Modals() {
 
         case 'confirm-delete':
           return <ConfirmDeleteModal key={key} {...modal.options} />;
+
+        case 'confirm-categorize-moved-history':
+          return (
+            <ConfirmCategorizeMovedHistoryModal key={key} {...modal.options} />
+          );
 
         case 'mobile-confirm-delete':
           return <MobileConfirmDeleteModal key={key} {...modal.options} />;

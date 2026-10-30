@@ -638,6 +638,83 @@ describe('Transactions', () => {
     });
   });
 
+  describe('Moved history', () => {
+    // Every generated transaction is before this start date
+    const movedAccount = {
+      ...accounts[0],
+      budget_start_date: '2999-01-01',
+      budget_start_offset: null,
+    };
+
+    async function pickGeneral(container: HTMLElement) {
+      const input = await editField(container, 'category', 0);
+      await userEvent.clear(input);
+      await userEvent.type(input, 'General');
+      await userEvent.click(screen.getByTestId('General-category-item'));
+    }
+
+    test('shows "Moved history" instead of "Categorize"', () => {
+      const transactions = generateTransactions(5, []);
+      transactions[0].category = undefined;
+      const { container } = renderTransactions({
+        transactions,
+        accounts: [movedAccount],
+      });
+      expect(queryField(container, 'category', 'div', 0).textContent).toBe(
+        'Moved history',
+      );
+    });
+
+    test('a never-moved account still says "Categorize"', () => {
+      const transactions = generateTransactions(5, []);
+      transactions[0].category = undefined;
+      const { container } = renderTransactions({ transactions });
+      expect(queryField(container, 'category', 'div', 0).textContent).toBe(
+        'Categorize',
+      );
+    });
+
+    test('categorizing asks first, and Categorize anyway changes it', async () => {
+      const pushModalSpy = vi.spyOn(modalsSlice, 'pushModal');
+      const transactions = generateTransactions(5, []);
+      transactions[0].category = undefined;
+      const { container, getTransactions } = renderTransactions({
+        transactions,
+        accounts: [movedAccount],
+      });
+
+      await pickGeneral(container);
+
+      await waitFor(() => expect(pushModalSpy).toHaveBeenCalled());
+      expect(getTransactions()[0].category).toBeFalsy();
+      const modal = pushModalSpy.mock.calls[0][0].modal as Extract<
+        modalsSlice.Modal,
+        { name: 'confirm-categorize-moved-history' }
+      >;
+      expect(modal.name).toBe('confirm-categorize-moved-history');
+      // Cancel never calls onConfirm; confirming does
+      await act(async () => modal.options.onConfirm());
+      expect(getTransactions()[0].category).not.toBe(null);
+      pushModalSpy.mockRestore();
+    });
+
+    test('later transactions do not ask', async () => {
+      const pushModalSpy = vi.spyOn(modalsSlice, 'pushModal');
+      const transactions = generateTransactions(5, []);
+      transactions[0].category = undefined;
+      const { container, getTransactions } = renderTransactions({
+        transactions,
+        accounts: [{ ...movedAccount, budget_start_date: '1996-01-01' }],
+      });
+
+      await pickGeneral(container);
+
+      await waitFor(() => expect(getTransactions()[0].category).not.toBe(null));
+      expect(pushModalSpy).not.toHaveBeenCalled();
+      pushModalSpy.mockRestore();
+    });
+  });
+
   describe('Group column', () => {
     test('group column is hidden by default', () => {
       const { container } = renderTransactions();

@@ -17,6 +17,7 @@ import { Text } from '@actual-app/components/text';
 import { TextOneLine } from '@actual-app/components/text-one-line';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
+import { isMovedHistory } from '@actual-app/core/shared/moved-history';
 import { isRepeatingDate } from '@actual-app/core/shared/schedules';
 import { isPreviewId } from '@actual-app/core/shared/transactions';
 import { integerToCurrency } from '@actual-app/core/shared/util';
@@ -289,7 +290,10 @@ export function TransactionListItem({
                       textAlign: 'left',
                     }}
                   >
-                    {prettyCategory || t('Uncategorized')}
+                    {prettyCategory ||
+                      (isMovedHistory(transaction, account)
+                        ? t('Moved history')
+                        : t('Uncategorized'))}
                   </TextOneLine>
                 </View>
               )}

@@ -414,6 +414,67 @@ describe('One adjustment transaction', () => {
   });
 });
 
+async function budgetStart(id = 'vanguard') {
+  const row = await db.first<{
+    budget_start_date: number | null;
+    budget_start_offset: string | null;
+  }>(
+    'SELECT budget_start_date, budget_start_offset FROM accounts WHERE id = ?',
+    [id],
+  );
+  return { date: row?.budget_start_date, offset: row?.budget_start_offset };
+}
+
+describe('The move remembers its start date', () => {
+  it('Recorded with the account', async () => {
+    await setUp();
+    await addTransaction('t1', '2016-11-05', 2_000_00);
+
+    await move();
+
+    const { date, offset } = await budgetStart();
+    expect(date).toBe(20161201);
+    // The client reads the date as YYYY-MM-DD
+    const account = (await app.handlers['accounts-get']()).find(
+      a => a.id === 'vanguard',
+    );
+    expect(account?.budget_start_date).toBe('2016-12-01');
+    expect(account?.budget_start_offset).toBe(offset);
+    const line = await db.first<{ amount: number; category: string | null }>(
+      'SELECT amount, category FROM v_transactions_internal_alive WHERE id = ?',
+      [offset ?? null],
+    );
+    expect(line).toEqual({ amount: -2_000_00, category: null });
+  });
+
+  it('Records the date but no offset when nothing is before it', async () => {
+    await setUp();
+    await addTransaction('t1', '2016-12-05', 100_00);
+    await move();
+    expect(await budgetStart()).toEqual({ date: 20161201, offset: null });
+  });
+
+  it('Undo clears them', async () => {
+    await setUp();
+    await addTransaction('t1', '2016-11-05', 2_000_00);
+    await move();
+    await undo();
+    expect(await budgetStart()).toEqual({ date: null, offset: null });
+  });
+
+  it('A database that already has the columns migrates', async () => {
+    const { default: runMigration } =
+      await import('#migrations/1793400000000_add_account_budget_start');
+    const database = db.getDatabase()!;
+    await runMigration({
+      runQuery: (q: string, p: [], all: true) =>
+        sqlite.runQuery(database, q, p, all),
+      execQuery: (q: string) => sqlite.execQuery(database, q),
+    });
+    expect(await budgetStart()).toEqual({ date: undefined, offset: undefined });
+  });
+});
+
 describe('Categories before and from the start date', () => {
   it('Hidden category before the start date', async () => {
     await setUp();
@@ -557,6 +618,9 @@ describe('Undo and sync', () => {
       expect(await offbudget()).toBe(0);
       expect(await categoryOf('h1')).toBe(null);
       expect(monthTotals('2016-12')).toEqual(expected);
+      const { date, offset } = await budgetStart();
+      expect(date).toBe(20161201);
+      expect(offset).not.toBeNull();
     });
   });
 });

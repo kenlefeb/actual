@@ -5,6 +5,7 @@ import {
   getShortYearFormat,
   getShortYearRegex,
 } from '@actual-app/core/shared/months';
+import { notMovedHistoryFilter } from '@actual-app/core/shared/moved-history';
 import { q } from '@actual-app/core/shared/query';
 import type { Query } from '@actual-app/core/shared/query';
 import {
@@ -53,6 +54,8 @@ export function accountFilter(
             'payee.transfer_acct': null,
           },
         ],
+        // Schedules reuse this filter with other fields and have no `date`
+        ...(field === 'account' ? notMovedHistoryFilter(field) : {}),
       };
     } else {
       return { [field]: accountId };
@@ -132,5 +135,6 @@ export function uncategorizedTransactions() {
         'payee.transfer_acct': null,
       },
     ],
+    ...notMovedHistoryFilter('account'),
   });
 }

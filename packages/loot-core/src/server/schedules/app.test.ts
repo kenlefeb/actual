@@ -1700,4 +1700,21 @@ describe('upcoming dates after a skip', () => {
       ['2026-10-07', '2026-11-07', '2026-12-07'],
     );
   });
+
+  it('preview an overdue next date from today', async () => {
+    const monthly = {
+      start: '2026-09-15',
+      frequency: 'monthly' as const,
+      patterns: [],
+    };
+    const id = await createSchedule({
+      conditions: [{ op: 'isapprox', field: 'date', value: monthly }],
+    });
+    // Sep 15 is missed, not skipped, so "upcoming" starts today
+    expect(await upcoming({ config: monthly, scheduleId: id })).toEqual([
+      '2026-10-15',
+      '2026-11-15',
+      '2026-12-15',
+    ]);
+  });
 });

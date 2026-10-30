@@ -639,7 +639,9 @@ function discoverSchedules() {
   return findSchedules();
 }
 
-// The stored next date of a saved schedule, which already accounts for skips
+// The stored next date of a saved schedule, which already accounts for skips.
+// Skips only move it forward, so an earlier one is overdue, not skipped, and
+// "upcoming" starts today as before.
 async function getStoredNextDate(
   scheduleId: string | undefined,
 ): Promise<string | null> {
@@ -649,7 +651,8 @@ async function getStoredNextDate(
   const { data: nextDate } = await aqlQuery(
     q('schedules').filter({ id: scheduleId }).calculate('next_date'),
   );
-  return nextDate ?? null;
+  const today = dayFromDate(d.startOfDay(new Date()));
+  return nextDate && nextDate >= today ? nextDate : null;
 }
 
 async function getUpcomingDates({

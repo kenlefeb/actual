@@ -242,4 +242,45 @@ describe('business calendars', () => {
       'No business day within 366 days',
     );
   });
+
+  test('holidays are computed once per calendar object and year', () => {
+    let reads = 0;
+    const base = calendar({ holidays: [july4('none')] });
+    const counted = {
+      ...base,
+      get holidays() {
+        reads++;
+        return base.holidays;
+      },
+    } as BusinessCalendarEntity;
+
+    isBusinessDay(counted, '2026-07-06');
+    const afterFirst = reads;
+    expect(afterFirst).toBeGreaterThan(0);
+    isBusinessDay(counted, '2026-07-07');
+    isBusinessDay(counted, '2026-07-08');
+    expect(reads).toBe(afterFirst);
+
+    isBusinessDay(counted, '2027-07-06');
+    expect(reads).toBeGreaterThan(afterFirst);
+  });
+
+  test('a modified copy of a calendar gets fresh results', () => {
+    const cal = calendar({ holidays: [july4('none')] });
+    expect(isBusinessDay(cal, '2026-07-06')).toBe(true);
+    expect(isBusinessDay(cal, '2026-07-04')).toBe(false);
+
+    const withHoliday = {
+      ...cal,
+      holidays: [...cal.holidays, { ...july4('none'), id: 'x', day: 6 }],
+    };
+    expect(isBusinessDay(withHoliday, '2026-07-06')).toBe(false);
+    expect(isBusinessDay(cal, '2026-07-06')).toBe(true);
+
+    const withException = {
+      ...withHoliday,
+      exceptions: [{ date: '2026-07-06', isBusinessDay: true, name: 'Open' }],
+    };
+    expect(isBusinessDay(withException, '2026-07-06')).toBe(true);
+  });
 });

@@ -51,11 +51,11 @@ vi.mock('@actual-app/core/platform/client/connection', async importActual => ({
   send: vi.fn(async (name: string) =>
     name === 'account-move-on-budget-preview'
       ? {
+          startingBalance: 2_000_00,
           ...state.counts,
           transfers: Array.from({ length: state.transfers }, (_, i) =>
             transfer(i),
           ),
-          startingBalance: 2_000_00,
         }
       : undefined,
   ),
@@ -209,6 +209,31 @@ describe('MoveOnBudgetModal', () => {
       screen.getByRole('button', { name: 'Move on budget' }),
     ]) {
       expect(control).toHaveStyle({ minHeight: '40px' });
+    }
+  });
+
+  it('describes a negative starting balance as a reduction', async () => {
+    state.counts = { ...COUNTS, startingBalance: -20_00 };
+    renderModal();
+    expect(
+      await screen.findByText(/^Your budget is reduced by/),
+    ).toHaveTextContent(
+      'Your budget is reduced by 20.00 on 01/01/2017, in Starting Balances.',
+    );
+    expect(screen.queryByText(/^Your budget gains/)).toBe(null);
+  });
+
+  it("keeps the phone scroll area's children at their height, so it scrolls", async () => {
+    state.isNarrowWidth = true;
+    state.transfers = 25;
+    renderModal();
+    await screen.findByText('25 transfers:');
+    const area = screen.getByTestId('move-on-budget-scroll');
+    // jsdom doesn't compute vh, so check the scrolling itself
+    expect(area).toHaveStyle({ overflowY: 'auto' });
+    expect(area.children.length).toBeGreaterThan(1);
+    for (const child of Array.from(area.children)) {
+      expect(child).toHaveStyle({ flexShrink: '0' });
     }
   });
 });

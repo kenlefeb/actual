@@ -87,13 +87,15 @@ export function MoveOnBudgetModal({ accountId }: MoveOnBudgetModalProps) {
     <View style={{ gap: 12, width: '100%', maxWidth: 480, minHeight: 0 }}>
       {/* Scrolls on a phone, so the buttons stay in view below */}
       <View
+        data-testid="move-on-budget-scroll"
         style={{
           gap: 12,
           minHeight: 0,
           ...(isNarrowWidth && { maxHeight: '55vh', overflowY: 'auto' }),
         }}
       >
-        <View style={{ gap: 5 }}>
+        {/* Children keep their height, so the area scrolls instead of squashing them */}
+        <View style={{ gap: 5, flexShrink: 0 }}>
           <label htmlFor="move-on-budget-start">
             <Trans>Budget it from</Trans>
           </label>
@@ -107,19 +109,36 @@ export function MoveOnBudgetModal({ accountId }: MoveOnBudgetModalProps) {
         </View>
 
         {preview && (
-          <View style={{ gap: 8 }} aria-live="polite">
+          <View style={{ gap: 8, flexShrink: 0 }} aria-live="polite">
             <Text style={{ fontSize: 15 }}>
-              <Trans>
-                Your budget gains{' '}
-                <FinancialText style={{ fontWeight: 700 }}>
-                  {
+              {preview.startingBalance < 0 ? (
+                <Trans>
+                  Your budget is reduced by{' '}
+                  <FinancialText style={{ fontWeight: 700 }}>
                     {
-                      amount: format(preview.startingBalance, 'financial'),
-                    } as TransObjectLiteral
-                  }
-                </FinancialText>{' '}
-                on {{ date: shownDate }}, in Starting Balances.
-              </Trans>
+                      {
+                        amount: format(
+                          Math.abs(preview.startingBalance),
+                          'financial',
+                        ),
+                      } as TransObjectLiteral
+                    }
+                  </FinancialText>{' '}
+                  on {{ date: shownDate }}, in Starting Balances.
+                </Trans>
+              ) : (
+                <Trans>
+                  Your budget gains{' '}
+                  <FinancialText style={{ fontWeight: 700 }}>
+                    {
+                      {
+                        amount: format(preview.startingBalance, 'financial'),
+                      } as TransObjectLiteral
+                    }
+                  </FinancialText>{' '}
+                  on {{ date: shownDate }}, in Starting Balances.
+                </Trans>
+              )}
             </Text>
 
             {preview.before > 0 && (

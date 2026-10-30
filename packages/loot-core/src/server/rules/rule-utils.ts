@@ -3,8 +3,7 @@ import * as dateFns from 'date-fns';
 
 import { logger } from '#platform/server/log';
 import { RuleError } from '#server/errors';
-import { RSchedule } from '#server/util/rschedule';
-import { recurConfigToRSchedule } from '#shared/schedules';
+import { parseRecurSchedule } from '#shared/schedules';
 import type { RuleConditionEntity } from '#types/models';
 
 import type { Rule } from './rule';
@@ -219,19 +218,7 @@ export function iterateIds(
 
 export function parseRecurDate(desc) {
   try {
-    const rules = recurConfigToRSchedule(desc);
-
-    return {
-      type: 'recur',
-      schedule: new RSchedule({
-        rrules: rules,
-        data: {
-          skipWeekend: desc.skipWeekend,
-          weekendSolve: desc.weekendSolveMode,
-          businessCalendarId: desc.businessCalendarId,
-        },
-      }),
-    };
+    return { type: 'recur', schedule: parseRecurSchedule(desc) };
   } catch (e) {
     throw new RuleError('parse-recur-date', e.message);
   }

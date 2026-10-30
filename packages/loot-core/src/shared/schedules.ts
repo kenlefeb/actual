@@ -10,6 +10,7 @@ import { getNearestBusinessDay } from './business-calendars';
 import * as monthUtils from './months';
 import { q } from './query';
 import { getNextRelativeDate } from './relative-dates';
+import { RSchedule } from './rschedule';
 
 export const DEFAULT_UPCOMING_SCHEDULE_DAYS = '7';
 
@@ -200,6 +201,17 @@ type ScheduleRuleOptions = IRuleOptions & {
   interval?: number;
   byHourOfDay?: number[];
 };
+
+export function parseRecurSchedule(desc) {
+  return new RSchedule({
+    rrules: recurConfigToRSchedule(desc),
+    data: {
+      skipWeekend: desc.skipWeekend,
+      weekendSolve: desc.weekendSolveMode,
+      businessCalendarId: desc.businessCalendarId,
+    },
+  });
+}
 
 export function recurConfigToRSchedule(config) {
   const base: ScheduleRuleOptions = {

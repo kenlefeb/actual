@@ -1,6 +1,5 @@
 import * as d from 'date-fns';
 
-import { Condition } from '#server/rules';
 import type {
   BusinessCalendarEntity,
   RecurConfig,
@@ -12,7 +11,7 @@ import { getBusinessCalendar } from './business-calendar-lookup';
 import { getNearestBusinessDay, isBusinessDay } from './business-calendars';
 import * as monthUtils from './months';
 import { getScheduleDate } from './schedule-date-lookup';
-import { getDateWithSkippedWeekend } from './schedules';
+import { getDateWithSkippedWeekend, parseRecurSchedule } from './schedules';
 
 const WEEKENDS_ONLY: BusinessCalendarEntity = {
   id: 'weekends',
@@ -51,39 +50,16 @@ type OccurrenceQuery = {
   reverse?: boolean;
 };
 
-type ParsedRecur = {
-  type: 'recur';
-  schedule: {
-    occurrences: (args: OccurrenceQuery) => {
-      toArray: () => Array<{ date: Date }>;
-    };
-    data: {
-      skipWeekend?: boolean;
-      weekendSolve?: 'before' | 'after';
-      businessCalendarId?: string;
-    };
-  };
-};
-
 // Lookup entries keep their identity until the next refresh, so rule checks
 // over many transactions parse each source once
 const parsedSources = new WeakMap<
   RecurConfig,
-  ParsedRecur['schedule'] | null
+  ReturnType<typeof parseRecurSchedule>
 >();
 
 function parseSource(source: RecurConfig) {
   if (!parsedSources.has(source)) {
-    const value: { type: string } = new Condition(
-      'isapprox',
-      'date',
-      source,
-      null,
-    ).getValue();
-    parsedSources.set(
-      source,
-      value.type === 'recur' ? (value as ParsedRecur).schedule : null,
-    );
+    parsedSources.set(source, parseRecurSchedule(source));
   }
   return parsedSources.get(source) ?? null;
 }

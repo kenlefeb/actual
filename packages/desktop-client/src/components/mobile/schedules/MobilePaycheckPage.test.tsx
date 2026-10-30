@@ -122,16 +122,21 @@ const acme = {
   },
 } satisfies PaycheckEntity;
 
-function renderPage(id: string) {
-  return render(
+function page(id: string) {
+  return (
     <TestProviders>
       <MemoryRouter initialEntries={[`/paychecks/${id}`]}>
         <Routes>
           <Route path="/paychecks/:id" element={<MobilePaycheckPage />} />
+          <Route path="/schedules" element={<div>Schedules page</div>} />
         </Routes>
       </MemoryRouter>
-    </TestProviders>,
+    </TestProviders>
   );
+}
+
+function renderPage(id: string) {
+  return render(page(id));
 }
 
 // The same steps on either layout
@@ -527,6 +532,29 @@ describe('MobilePaycheckPage', () => {
     expect(state.pushModal.mock.lastCall?.[0].modal).toMatchObject({
       name: 'confirm-delete',
     });
+  });
+
+  it('returns to Schedules once the open paycheck is deleted', async () => {
+    const user = userEvent.setup();
+    state.paychecks = [acme];
+    // Deleting removes the paycheck from the list before any per-call
+    // onSuccess could run, as the real query invalidation does
+    state.mutate.mockImplementation(() => {
+      state.paychecks = [];
+    });
+    const { rerender } = renderPage('acme');
+    state.pushModal.mockReset();
+    await user.click(screen.getByRole('button', { name: 'Delete paycheck' }));
+    // Confirm in the delete sheet
+    state.pushModal.mock.lastCall?.[0].modal.options.onConfirm();
+    rerender(page('acme'));
+
+    expect(await screen.findByText('Schedules page')).toBeInTheDocument();
+  });
+
+  it('returns to Schedules for a paycheck that no longer exists', async () => {
+    renderPage('gone');
+    expect(await screen.findByText('Schedules page')).toBeInTheDocument();
   });
 
   it('sets Delete paycheck apart as a destructive action', () => {

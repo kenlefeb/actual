@@ -123,7 +123,7 @@ export function ClearingAccountNote({
       style={{
         ...styles.pageContent,
         paddingBottom: 10,
-        color: theme.clearingNoteText,
+        color: theme.paycheckNoteText,
         ...style,
       }}
     >

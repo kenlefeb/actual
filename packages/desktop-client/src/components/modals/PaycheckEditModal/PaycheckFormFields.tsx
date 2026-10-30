@@ -204,13 +204,14 @@ function useRowLayout() {
   } as const;
 }
 
-// On a phone each stacked field gets a visible label in the same words as its
-// accessible name. Hidden from screen readers, which already read that name.
-function StackedLabel({ children }: { children: string }) {
+// On a phone each stacked field gets a short visible label. Its words are part
+// of the field's numbered accessible name (WCAG label in name); it's hidden
+// from screen readers, which already read that name.
+function StackedLabel({ children }: { children: ReactNode }) {
   return (
     <Text
       aria-hidden
-      style={{ color: theme.clearingNoteText, marginBottom: -4 }}
+      style={{ color: theme.paycheckNoteText, marginBottom: -4 }}
     >
       {children}
     </Text>
@@ -234,7 +235,11 @@ export function PaycheckDeductionFields({ form }: FormProps) {
         const categoryLabel = t('Deduction {{number}} category', { number });
         return (
           <View key={deduction.id} style={{ ...row, ...divider(index) }}>
-            {isStacked && <StackedLabel>{nameLabel}</StackedLabel>}
+            {isStacked && (
+              <StackedLabel>
+                <Trans>Name</Trans>
+              </StackedLabel>
+            )}
             <Input
               aria-label={nameLabel}
               placeholder={t('Name')}
@@ -242,7 +247,11 @@ export function PaycheckDeductionFields({ form }: FormProps) {
               onChangeValue={name => updateDeduction(deduction.id, { name })}
               style={{ flex: 1, ...touch, ...fullWidth }}
             />
-            {isStacked && <StackedLabel>{amountLabel}</StackedLabel>}
+            {isStacked && (
+              <StackedLabel>
+                <Trans>Amount</Trans>
+              </StackedLabel>
+            )}
             <AmountInput
               aria-label={amountLabel}
               value={deduction.amount}
@@ -251,7 +260,11 @@ export function PaycheckDeductionFields({ form }: FormProps) {
               style={{ width: 110, ...fullWidth }}
               inputStyle={touch}
             />
-            {isStacked && <StackedLabel>{kindLabel}</StackedLabel>}
+            {isStacked && (
+              <StackedLabel>
+                <Trans>Goes to</Trans>
+              </StackedLabel>
+            )}
             <Select
               style={{ ...touch, ...fullWidth }}
               aria-label={kindLabel}
@@ -272,7 +285,9 @@ export function PaycheckDeductionFields({ form }: FormProps) {
               {deduction.transferAccount != null && (
                 <>
                   {isStacked ? (
-                    <StackedLabel>{transferLabel}</StackedLabel>
+                    <StackedLabel>
+                      <Trans>Transfer account</Trans>
+                    </StackedLabel>
                   ) : (
                     <Text style={{ color: theme.pageTextSubdued }}>
                       <Trans>Transfer to</Trans>
@@ -292,7 +307,9 @@ export function PaycheckDeductionFields({ form }: FormProps) {
                 </>
               )}
               {isStacked ? (
-                <StackedLabel>{categoryLabel}</StackedLabel>
+                <StackedLabel>
+                  <Trans>Category</Trans>
+                </StackedLabel>
               ) : (
                 <Text style={{ color: theme.pageTextSubdued }}>
                   <Trans>Category</Trans>
@@ -365,7 +382,11 @@ export function PaycheckDepositFields({ form }: FormProps) {
           <View key={deposit.id} style={{ gap: 5, ...divider(index) }}>
             <View style={row}>
               <View style={{ flex: 1, gap: 8, ...fullWidth }}>
-                {isStacked && <StackedLabel>{accountLabel}</StackedLabel>}
+                {isStacked && (
+                  <StackedLabel>
+                    <Trans>Account</Trans>
+                  </StackedLabel>
+                )}
                 <GenericInput
                   style={{ '& input': touch }}
                   aria-label={accountLabel}
@@ -376,7 +397,11 @@ export function PaycheckDepositFields({ form }: FormProps) {
                   onChange={account => updateDeposit(deposit.id, { account })}
                 />
               </View>
-              {isStacked && <StackedLabel>{kindLabel}</StackedLabel>}
+              {isStacked && (
+                <StackedLabel>
+                  <Trans>Amount type</Trans>
+                </StackedLabel>
+              )}
               <Select
                 style={{ ...touch, ...fullWidth }}
                 aria-label={kindLabel}
@@ -389,7 +414,9 @@ export function PaycheckDepositFields({ form }: FormProps) {
                 onChange={kind => updateDeposit(deposit.id, { kind, value: 0 })}
               />
               {isStacked && deposit.kind === 'fixed' && (
-                <StackedLabel>{fixedLabel}</StackedLabel>
+                <StackedLabel>
+                  <Trans>Fixed amount</Trans>
+                </StackedLabel>
               )}
               {deposit.kind === 'fixed' && (
                 <AmountInput
@@ -402,7 +429,9 @@ export function PaycheckDepositFields({ form }: FormProps) {
                 />
               )}
               {isStacked && deposit.kind === 'percent' && (
-                <StackedLabel>{percentLabel}</StackedLabel>
+                <StackedLabel>
+                  <Trans>Percent</Trans>
+                </StackedLabel>
               )}
               {deposit.kind === 'percent' && (
                 <Input

@@ -19,7 +19,10 @@ import type { ImportableBudgetType } from '#server/importers';
 import { app as mainApp } from '#server/main-app';
 import { mutator } from '#server/mutators';
 import * as prefs from '#server/prefs';
-import { loadScheduleDateLookup } from '#server/schedules/app';
+import {
+  loadScheduleDateLookup,
+  waitOnSchedulesService,
+} from '#server/schedules/app';
 import { getServer } from '#server/server-config';
 import * as sheet from '#server/sheet';
 import {
@@ -309,6 +312,8 @@ async function closeBudget() {
 
   clearFullSyncTimeout();
   await mainApp.stopServices();
+  // A sync may have just started the schedules service
+  await waitOnSchedulesService();
 
   db.closeDatabase();
 

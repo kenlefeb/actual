@@ -1007,6 +1007,14 @@ app.method('schedule/get-upcoming-dates', getUpcomingDates);
 
 app.service(trackJSONPaths);
 
+// The run the last sync started, so closing a budget can wait for it instead
+// of closing the database under it
+let serviceRun: Promise<void> = Promise.resolve();
+
+export function waitOnSchedulesService() {
+  return serviceRun;
+}
+
 app.events.on('sync', ({ type }) => {
   const completeEvent =
     type === 'success' || type === 'error' || type === 'unauthorized';
@@ -1019,7 +1027,13 @@ app.events.on('sync', ({ type }) => {
 
     const { lastScheduleRun } = prefs.getPrefs();
     if (lastScheduleRun !== currentDay()) {
-      void runMutator(() => advanceSchedulesService(type === 'success'));
+      const run = runMutator(() => advanceSchedulesService(type === 'success'));
+      // Failures still surface from `run`; waiters only need it settled
+      serviceRun = run.then(
+        () => {},
+        () => {},
+      );
+      void run;
 
       // Only mark the day as done when sync succeeded, so that
       // schedule auto-posting is retried on subsequent successful syncs

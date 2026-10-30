@@ -67,6 +67,24 @@ async function createTestBudget(templateName: string, name: string) {
 }
 
 describe('API setup and teardown', () => {
+  // A sync starts the schedules service in the background; closing the
+  // budget must wait for it instead of closing the database under it
+  test('closes the budget while the schedules service is running', async () => {
+    const rejections: unknown[] = [];
+    const onRejection = (reason: unknown) => rejections.push(reason);
+    process.on('unhandledRejection', onRejection);
+    try {
+      await api.loadBudget(budgetName);
+      // As api.shutdown does: the sync starts the service, then the budget closes
+      await api.internal!.send('sync');
+      await api.internal!.send('close-budget');
+      await new Promise(resolve => setTimeout(resolve, 200));
+    } finally {
+      process.off('unhandledRejection', onRejection);
+    }
+    expect(rejections).toEqual([]);
+  });
+
   // apis: loadBudget, getBudgetMonths
   test('successfully loads budget', async () => {
     await expect(api.loadBudget(budgetName)).resolves.toBeUndefined();

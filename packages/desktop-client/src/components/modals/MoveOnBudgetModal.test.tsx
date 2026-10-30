@@ -7,7 +7,18 @@ import { TestProviders } from '#mocks';
 
 import { MoveOnBudgetModal } from './MoveOnBudgetModal';
 
-const state = vi.hoisted(() => ({ isNarrowWidth: false, transfers: 3 }));
+const COUNTS = {
+  before: 30,
+  fromUncategorized: 4,
+  categoriesCleared: 5,
+  categoriesKept: 1,
+};
+
+const state = vi.hoisted(() => ({
+  isNarrowWidth: false,
+  transfers: 3,
+  counts: {} as Record<string, number>,
+}));
 
 vi.mock('@actual-app/components/hooks/useResponsive', () => ({
   useResponsive: () => ({
@@ -40,10 +51,7 @@ vi.mock('@actual-app/core/platform/client/connection', async importActual => ({
   send: vi.fn(async (name: string) =>
     name === 'account-move-on-budget-preview'
       ? {
-          before: 30,
-          fromUncategorized: 4,
-          categoriesCleared: 5,
-          categoriesKept: 1,
+          ...state.counts,
           transfers: Array.from({ length: state.transfers }, (_, i) =>
             transfer(i),
           ),
@@ -65,6 +73,7 @@ describe('MoveOnBudgetModal', () => {
   beforeEach(() => {
     state.isNarrowWidth = false;
     state.transfers = 3;
+    state.counts = { ...COUNTS };
     vi.mocked(send).mockClear();
   });
 
@@ -80,26 +89,72 @@ describe('MoveOnBudgetModal', () => {
     );
   });
 
-  it('Counts match the account', async () => {
+  it('Counts match the account, after the starting balance', async () => {
     renderModal();
-    expect(
-      await screen.findByText(
-        '30 transactions before 01/01/2017 become uncategorized.',
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText('5 categories will be cleared.'),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        '4 transactions from 01/01/2017 have no category, and 1 keep their category.',
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByText('2,000.00')).toBeInTheDocument();
+    const lead = await screen.findByText(/^Your budget gains/);
+    expect(lead).toHaveTextContent(
+      'Your budget gains 2,000.00 on 01/01/2017, in Starting Balances.',
+    );
+    const lines = [
+      '30 transactions before 01/01/2017 are covered by the starting balance. Leave them uncategorized.',
+      '4 transactions from 01/01/2017 need a category.',
+      '1 keeps its category.',
+      '5 categories will be cleared.',
+      "The account balance and earlier months don't change.",
+    ].map(text => screen.getByText(text));
+    // In this order, after the lead
+    const ordered = [lead, ...lines];
+    for (const [earlier, later] of ordered
+      .slice(1)
+      .map((line, i) => [ordered[i], line])) {
+      expect(
+        earlier.compareDocumentPosition(later) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    }
     const list = screen.getByRole('list', { name: 'Transfers' });
     expect(within(list).getAllByRole('listitem')[0]).toHaveTextContent(
       '09/12/2026 · Checking · 500.00 · keeps Savings',
     );
+  });
+
+  it('uses singular wording for counts of one', async () => {
+    state.transfers = 21;
+    state.counts = {
+      before: 1,
+      fromUncategorized: 1,
+      categoriesCleared: 1,
+      categoriesKept: 1,
+    };
+    renderModal();
+    expect(
+      await screen.findByText(
+        '1 transaction before 01/01/2017 is covered by the starting balance. Leave it uncategorized.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('1 transaction from 01/01/2017 needs a category.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('1 keeps its category.')).toBeInTheDocument();
+    expect(screen.getByText('1 category will be cleared.')).toBeInTheDocument();
+    expect(screen.getByText('and 1 more')).toBeInTheDocument();
+  });
+
+  it('hides zero counts but always shows the starting balance', async () => {
+    state.transfers = 0;
+    state.counts = {
+      before: 0,
+      fromUncategorized: 0,
+      categoriesCleared: 0,
+      categoriesKept: 0,
+    };
+    renderModal();
+    expect(await screen.findByText(/^Your budget gains/)).toBeInTheDocument();
+    expect(screen.queryByText(/covered by the starting balance/)).toBe(null);
+    expect(screen.queryByText(/need.? a category/)).toBe(null);
+    expect(screen.queryByText(/its category|their category/)).toBe(null);
+    expect(screen.queryByText(/will be cleared/)).toBe(null);
+    expect(screen.queryByRole('list', { name: 'Transfers' })).toBe(null);
   });
 
   it('Many transfers: lists the newest 20, then "and N more"', async () => {

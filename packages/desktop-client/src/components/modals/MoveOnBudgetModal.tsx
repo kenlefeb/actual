@@ -13,6 +13,7 @@ import { send } from '@actual-app/core/platform/client/connection';
 import type { MoveOnBudgetPreview } from '@actual-app/core/server/accounts/move-on-budget';
 import * as monthUtils from '@actual-app/core/shared/months';
 import type { AccountEntity } from '@actual-app/core/types/models';
+import type { TransObjectLiteral } from '@actual-app/core/types/util';
 
 import {
   Modal,
@@ -83,96 +84,146 @@ export function MoveOnBudgetModal({ accountId }: MoveOnBudgetModalProps) {
   }
 
   const renderBody = (close: () => void) => (
-    <View style={{ gap: 12, width: '100%', maxWidth: 480 }}>
-      <View style={{ gap: 5 }}>
-        <label htmlFor="move-on-budget-start">
-          <Trans>Budget it from</Trans>
-        </label>
-        <Input
-          id="move-on-budget-start"
-          type="date"
-          value={startDate}
-          onChangeValue={setStartDate}
-          style={{ width: 170, ...touchStyle }}
-        />
-      </View>
+    <View style={{ gap: 12, width: '100%', maxWidth: 480, minHeight: 0 }}>
+      {/* Scrolls on a phone, so the buttons stay in view below */}
+      <View
+        style={{
+          gap: 12,
+          minHeight: 0,
+          ...(isNarrowWidth && { maxHeight: '55vh', overflowY: 'auto' }),
+        }}
+      >
+        <View style={{ gap: 5 }}>
+          <label htmlFor="move-on-budget-start">
+            <Trans>Budget it from</Trans>
+          </label>
+          <Input
+            id="move-on-budget-start"
+            type="date"
+            value={startDate}
+            onChangeValue={setStartDate}
+            style={{ width: 170, ...touchStyle }}
+          />
+        </View>
 
-      {preview && (
-        <View style={{ gap: 8 }} aria-live="polite">
-          <Text>
-            {t('The budget gains a starting balance on {{date}}:', {
-              date: shownDate,
-            })}{' '}
-            <FinancialText>
-              {format(preview.startingBalance, 'financial')}
-            </FinancialText>
-          </Text>
-          <Text>{t("The account balance doesn't change.")}</Text>
-          <Text>
-            {t('{{count}} transactions before {{date}} become uncategorized.', {
-              count: preview.before,
-              date: shownDate,
-            })}
-          </Text>
-          <Text>
-            {t('{{count}} categories will be cleared.', {
-              count: preview.categoriesCleared,
-            })}
-          </Text>
-          <Text>
-            {t(
-              '{{count}} transactions from {{date}} have no category, and {{kept}} keep their category.',
-              {
-                count: preview.fromUncategorized,
-                kept: preview.categoriesKept,
-                date: shownDate,
-              },
-            )}
-          </Text>
-          {preview.transfers.length > 0 && (
-            <View style={{ gap: 4 }}>
+        {preview && (
+          <View style={{ gap: 8 }} aria-live="polite">
+            <Text style={{ fontSize: 15 }}>
+              <Trans>
+                Your budget gains{' '}
+                <FinancialText style={{ fontWeight: 700 }}>
+                  {
+                    {
+                      amount: format(preview.startingBalance, 'financial'),
+                    } as TransObjectLiteral
+                  }
+                </FinancialText>{' '}
+                on {{ date: shownDate }}, in Starting Balances.
+              </Trans>
+            </Text>
+
+            {preview.before > 0 && (
               <Text>
-                {t('{{count}} transfers:', {
-                  count: preview.transfers.length,
+                {t(
+                  '{{count}} transactions before {{date}} are covered by the starting balance. Leave them uncategorized.',
+                  {
+                    defaultValue_one:
+                      '{{count}} transaction before {{date}} is covered by the starting balance. Leave it uncategorized.',
+                    count: preview.before,
+                    date: shownDate,
+                  },
+                )}
+              </Text>
+            )}
+            {preview.fromUncategorized > 0 && (
+              <Text>
+                {t('{{count}} transactions from {{date}} need a category.', {
+                  defaultValue_one:
+                    '{{count}} transaction from {{date}} needs a category.',
+                  count: preview.fromUncategorized,
+                  date: shownDate,
                 })}
               </Text>
-              <ul
-                aria-label={t('Transfers')}
-                style={{ margin: 0, paddingLeft: 18 }}
-              >
-                {preview.transfers.slice(0, LISTED_TRANSFERS).map(transfer => (
-                  <li key={transfer.id}>
-                    {date(transfer.date)} · {transfer.otherAccountName ?? ''} ·{' '}
-                    <FinancialText>
-                      {format(transfer.amount, 'financial')}
-                    </FinancialText>
-                    {transfer.keptCategory &&
-                      ` · ${t('keeps {{category}}', {
-                        category:
-                          categories?.list[transfer.keptCategory]?.name ?? '',
-                      })}`}
-                  </li>
-                ))}
-              </ul>
-              {preview.transfers.length > LISTED_TRANSFERS && (
+            )}
+            {preview.categoriesKept > 0 && (
+              <Text>
+                {t('{{count}} keep their category.', {
+                  defaultValue_one: '{{count}} keeps its category.',
+                  count: preview.categoriesKept,
+                })}
+              </Text>
+            )}
+            {preview.categoriesCleared > 0 && (
+              <Text>
+                {t('{{count}} categories will be cleared.', {
+                  defaultValue_one: '{{count}} category will be cleared.',
+                  count: preview.categoriesCleared,
+                })}
+              </Text>
+            )}
+
+            {preview.transfers.length > 0 && (
+              <View style={{ gap: 4 }}>
                 <Text>
-                  {t('and {{count}} more', {
-                    count: preview.transfers.length - LISTED_TRANSFERS,
+                  {t('{{count}} transfers:', {
+                    defaultValue_one: '{{count}} transfer:',
+                    count: preview.transfers.length,
                   })}
                 </Text>
-              )}
-              <Text style={{ color: theme.pageTextSubdued }}>
-                <Trans>
-                  A kept category is cleared if you edit that transfer later.
-                </Trans>
-              </Text>
-            </View>
-          )}
-        </View>
-      )}
+                <ul
+                  aria-label={t('Transfers')}
+                  style={{ margin: 0, paddingLeft: 18 }}
+                >
+                  {preview.transfers
+                    .slice(0, LISTED_TRANSFERS)
+                    .map(transfer => (
+                      <li key={transfer.id}>
+                        {date(transfer.date)} ·{' '}
+                        {transfer.otherAccountName ?? ''} ·{' '}
+                        <FinancialText>
+                          {format(transfer.amount, 'financial')}
+                        </FinancialText>
+                        {transfer.keptCategory &&
+                          ` · ${t('keeps {{category}}', {
+                            category:
+                              categories?.list[transfer.keptCategory]?.name ??
+                              '',
+                          })}`}
+                      </li>
+                    ))}
+                </ul>
+                {preview.transfers.length > LISTED_TRANSFERS && (
+                  <Text>
+                    {t('and {{count}} more', {
+                      defaultValue_one: 'and {{count}} more',
+                      count: preview.transfers.length - LISTED_TRANSFERS,
+                    })}
+                  </Text>
+                )}
+                <Text style={{ color: theme.pageTextSubdued }}>
+                  <Trans>
+                    A kept category is cleared if you edit that transfer later.
+                  </Trans>
+                </Text>
+              </View>
+            )}
+
+            <Text style={{ color: theme.pageTextSubdued }}>
+              <Trans>
+                The account balance and earlier months don't change.
+              </Trans>
+            </Text>
+          </View>
+        )}
+      </View>
 
       <View
-        style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10 }}
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'flex-end',
+          gap: 10,
+          flexShrink: 0,
+        }}
       >
         <Button style={touchStyle} onPress={() => close()}>
           <Trans>Cancel</Trans>

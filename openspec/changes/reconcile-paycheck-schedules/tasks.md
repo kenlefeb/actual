@@ -37,7 +37,7 @@
 
 ## 3. Reconcile
 
-- [ ] 3.1 Add `reconcilePaycheckSchedules()` to `server/paychecks/app.ts`, working in both directions (design.md, "Reconcile in both directions"):
+- [x] 3.1 Add `reconcilePaycheckSchedules()` to `server/paychecks/app.ts`, working in both directions (design.md, "Reconcile in both directions"):
   - **Restore:** for each live paycheck, a listed schedule that is tombstoned is restored in place (clear the tombstone on the schedule, its rule and its mapping row, then rerun `writePaycheckSchedules`). A listed schedule that is missing is recreated by `writePaycheckSchedules`.
   - **Delete:** then each mapped, active schedule that is unlisted in its live paycheck, or whose paycheck is deleted or missing, gets `deleteSchedule` and its mapping row tombstoned.
   - It never touches an unmapped schedule.

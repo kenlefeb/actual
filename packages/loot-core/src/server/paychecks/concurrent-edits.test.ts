@@ -25,7 +25,11 @@ import { q } from '#shared/query';
 import { setScheduleDates } from '#shared/schedule-date-lookup';
 import type { PaycheckDefinition, PaycheckEntity } from '#types/models';
 
-import { app, backfillPaycheckSchedules } from './app';
+import {
+  app,
+  backfillPaycheckSchedules,
+  reconcilePaycheckSchedules,
+} from './app';
 
 const handlers = app.handlers;
 const NET_PAY = 300000;
@@ -600,5 +604,113 @@ describe('Which paycheck generated each schedule', () => {
 
     await undo();
     expect(await liveMappings()).toEqual([]);
+  });
+});
+
+describe('reconcilePaycheckSchedules', () => {
+  const depositSchedule = async (depositId: string) =>
+    (await acme())!.definition.deposits.find(d => d.id === depositId)!
+      .schedule!;
+
+  // Points a deposit at a schedule id that doesn't exist, as when the row
+  // never arrived from another device
+  async function listMissingSchedule(depositId: string) {
+    const paycheck = (await acme())!;
+    await db.update('paychecks', {
+      id: paycheck.id,
+      definition: JSON.stringify({
+        ...paycheck.definition,
+        deposits: paycheck.definition.deposits.map(d =>
+          d.id === depositId ? { ...d, schedule: 'never-arrived' } : d,
+        ),
+      }),
+    });
+  }
+
+  it('deletes only mapped strays and keeps their posted transactions', async () => {
+    await createAcme();
+    await editOnTwoDevices(
+      () => saveAcme([savings, checking, emergency()]),
+      () => saveAcme([savings, checking, travel]),
+    );
+    const stray = (await strays())[0];
+    await db.insertTransaction({
+      id: 'posted-emergency',
+      account: 'emergency',
+      date: '2026-11-13',
+      amount: 20000,
+      schedule: stray.id,
+    });
+
+    await reconcilePaycheckSchedules();
+
+    expect(await strays()).toEqual([]);
+    expect(await scheduleById(stray.id)).toMatchObject({ tombstone: true });
+    expect(await db.getTransaction('posted-emergency')).toMatchObject({
+      schedule: stray.id,
+      tombstone: false,
+    });
+  });
+
+  it('restores a deleted schedule a paycheck lists, keeping its id and links', async () => {
+    await createAcme();
+    const id = await depositSchedule('checking');
+    await db.insertTransaction({
+      id: 'posted-checking',
+      account: 'checking',
+      date: '2026-11-13',
+      amount: 250000,
+      schedule: id,
+    });
+    await schedulesApp.handlers['schedule/delete']({ id });
+
+    await reconcilePaycheckSchedules();
+
+    expect(await scheduleById(id)).toMatchObject({ tombstone: false });
+    expect(await depositSchedule('checking')).toBe(id);
+    expect(await db.getTransaction('posted-checking')).toMatchObject({
+      schedule: id,
+    });
+    expect(await depositTotal()).toBe(NET_PAY);
+  });
+
+  it('recreates a missing schedule a paycheck lists and updates the paycheck', async () => {
+    await createAcme();
+    await listMissingSchedule('savings');
+
+    await reconcilePaycheckSchedules();
+
+    const id = await depositSchedule('savings');
+    expect(id).not.toBe('never-arrived');
+    expect(await scheduleById(id)).toMatchObject({ tombstone: false });
+    expect(await strays()).toEqual([]);
+    expect(await depositTotal()).toBe(NET_PAY);
+  });
+
+  it('converges in one more round when two devices recreate the same schedule', async () => {
+    await createAcme();
+    await listMissingSchedule('savings');
+    await editOnTwoDevices(
+      () => reconcilePaycheckSchedules(),
+      () => reconcilePaycheckSchedules(),
+    );
+    // Each device made its own Savings schedule; one lost in the definition
+    expect(await strays()).toHaveLength(1);
+
+    await reconcilePaycheckSchedules();
+    expect(await strays()).toEqual([]);
+    expect(await depositTotal()).toBe(NET_PAY);
+  });
+
+  it('changes nothing the second time', async () => {
+    await createAcme();
+    await editOnTwoDevices(
+      () => saveAcme([savings, checking, emergency()]),
+      () => saveAcme([savings, checking, travel]),
+    );
+    await reconcilePaycheckSchedules();
+    const since = await latestTimestamp();
+    await reconcilePaycheckSchedules();
+    expect(await messagesSince(since)).toEqual([]);
   });
 });

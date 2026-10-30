@@ -270,6 +270,89 @@ export async function backfillPaycheckSchedules() {
   }
 }
 
+function listedSchedules(definition: PaycheckDefinition) {
+  return (
+    [definition.paySchedule, ...definition.deposits.map(d => d.schedule)]
+      // Never null after a save; older or corrupt rows may lack them
+      .filter((id): id is string => !!id)
+  );
+}
+
+/**
+ * Makes each paycheck's schedules match its live definition (ADR 2), after
+ * edits on two devices merged by last write wins (ADR 3):
+ * 1. A schedule a paycheck generated but no live definition lists, or whose
+ *    paycheck is deleted, is deleted. Posted transactions stay.
+ * 2. A schedule a live definition lists but that is deleted is restored in
+ *    place, keeping its id and links; one that is missing is recreated.
+ *    Deleting first frees the name a recreated schedule needs.
+ * Schedules no paycheck generated are never touched. Idempotent.
+ */
+export async function reconcilePaycheckSchedules() {
+  const listedBy = new Map(
+    (await getPaychecks()).flatMap(paycheck =>
+      listedSchedules(paycheck.definition).map(id => [id, paycheck.id]),
+    ),
+  );
+  const mapped = await db.all<{
+    id: string;
+    paycheck: string;
+    active: number | null;
+  }>(
+    `SELECT m.id, m.paycheck, s.id IS NOT NULL AND s.tombstone = 0 AS active
+       FROM paycheck_schedules m LEFT JOIN schedules s ON s.id = m.id
+      WHERE m.tombstone = 0`,
+  );
+  for (const { id, paycheck, active } of mapped) {
+    if (listedBy.get(id) === paycheck) {
+      continue;
+    }
+    if (active) {
+      await deleteSchedule({ id });
+    }
+    await forgetGenerated(id);
+  }
+
+  for (const paycheck of await getPaychecks()) {
+    let regenerate = paycheck.definition.deposits.some(d => !d.schedule);
+    for (const id of listedSchedules(paycheck.definition)) {
+      const row = await db.first<{ tombstone: number; rule: string }>(
+        'SELECT tombstone, rule FROM schedules WHERE id = ?',
+        [id],
+      );
+      if (!row) {
+        regenerate = true;
+      } else if (row.tombstone) {
+        await db.update('rules', { id: row.rule, tombstone: 0 });
+        await db.update('schedules', { id, tombstone: 0 });
+        regenerate = true;
+      }
+    }
+    if (regenerate) {
+      const written = await writePaycheckSchedules(
+        paycheck.id,
+        paycheck.name,
+        paycheck.definition,
+        paycheck.definition,
+      );
+      if (JSON.stringify(written) !== JSON.stringify(paycheck.definition)) {
+        await db.update('paychecks', {
+          id: paycheck.id,
+          definition: JSON.stringify(written),
+        });
+      }
+    }
+  }
+}
+
+async function isLiveSchedule(id: string) {
+  return (
+    (await db.first('SELECT id FROM schedules WHERE id = ? AND tombstone = 0', [
+      id,
+    ])) != null
+  );
+}
+
 async function forgetGenerated(scheduleId: string) {
   const row = await db.first<db.DbPaycheckSchedule>(
     'SELECT * FROM paycheck_schedules WHERE id = ? AND tombstone = 0',
@@ -407,7 +490,11 @@ async function writePaycheckSchedules(
   const kept = new Set(deposits.map(d => d.schedule));
   for (const deposit of previous?.deposits ?? []) {
     if (deposit.schedule && !kept.has(deposit.schedule)) {
-      await deleteSchedule({ id: deposit.schedule });
+      // A schedule that never arrived, or was deleted elsewhere and has just
+      // been recreated, has nothing left to delete
+      if (await isLiveSchedule(deposit.schedule)) {
+        await deleteSchedule({ id: deposit.schedule });
+      }
       await forgetGenerated(deposit.schedule);
     }
   }

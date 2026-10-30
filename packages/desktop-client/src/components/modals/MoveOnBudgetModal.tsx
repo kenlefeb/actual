@@ -111,7 +111,9 @@ export function MoveOnBudgetModal({ accountId }: MoveOnBudgetModalProps) {
         {preview && (
           <View style={{ gap: 8, flexShrink: 0 }} aria-live="polite">
             <Text style={{ fontSize: 15 }}>
-              {preview.startingBalance < 0 ? (
+              {preview.startingBalance === 0 ? (
+                <Trans>Your budget doesn't change.</Trans>
+              ) : preview.startingBalance < 0 ? (
                 <Trans>
                   Your budget is reduced by{' '}
                   <FinancialText style={{ fontWeight: 700 }}>
@@ -219,7 +221,7 @@ export function MoveOnBudgetModal({ accountId }: MoveOnBudgetModalProps) {
                     })}
                   </Text>
                 )}
-                <Text style={{ color: theme.pageTextSubdued }}>
+                <Text style={{ color: theme.paycheckNoteText }}>
                   <Trans>
                     A kept category is cleared if you edit that transfer later.
                   </Trans>
@@ -227,7 +229,7 @@ export function MoveOnBudgetModal({ accountId }: MoveOnBudgetModalProps) {
               </View>
             )}
 
-            <Text style={{ color: theme.pageTextSubdued }}>
+            <Text style={{ color: theme.paycheckNoteText }}>
               <Trans>
                 The account balance and earlier months don't change.
               </Trans>

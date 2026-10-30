@@ -2,6 +2,7 @@
 import * as db from '#server/db';
 import { fromDateRepr, toDateRepr } from '#server/models';
 import { batchMessages } from '#server/sync';
+import { isValidYearMonthDay } from '#shared/months';
 import type { AccountEntity } from '#types/models';
 
 import { getStartingBalancePayee } from './payees';
@@ -93,6 +94,16 @@ function plan(rows: Row[], startDate: string) {
   return { preview, toClear };
 }
 
+// A real calendar date in YYYY-MM-DD form, so date comparisons and the
+// starting balance's date are never NaN or rolled over (2026-02-30)
+function assertValidStartDate(startDate: string) {
+  if (!(typeof startDate === 'string' && isValidYearMonthDay(startDate))) {
+    throw new Error(
+      `Invalid start date "${startDate}": use a real date as YYYY-MM-DD`,
+    );
+  }
+}
+
 async function getMovableAccount(id: AccountEntity['id']) {
   const account = await db.first<db.DbAccount>(
     'SELECT * FROM accounts WHERE id = ? AND tombstone = 0',
@@ -117,6 +128,7 @@ export async function previewMoveOnBudget({
   id: AccountEntity['id'];
   startDate: string;
 }): Promise<MoveOnBudgetPreview> {
+  assertValidStartDate(startDate);
   await getMovableAccount(id);
   return plan(await getRows(id), startDate).preview;
 }
@@ -128,6 +140,7 @@ export async function moveOnBudget({
   id: AccountEntity['id'];
   startDate: string;
 }): Promise<void> {
+  assertValidStartDate(startDate);
   await getMovableAccount(id);
   const { preview, toClear } = plan(await getRows(id), startDate);
   const balance = preview.startingBalance;

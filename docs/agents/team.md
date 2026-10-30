@@ -19,9 +19,51 @@ production (Ken, 2026-10-29). Everything else is decided by the roles.
 | **Release & Operations Engineer** | CI, repository settings, staging deploys and release mechanics, backups and restore tooling, and the `kenlefeb/actual-hosting` repo.                                  | Touch production: promotion and production access are Ken's.           |
 | **UX Designer**                   | `PRODUCT.md` and `DESIGN.md`. Designs with the impeccable skill and reviews layout, mobile behavior and copy.                                                         | Implement features.                                                    |
 | **Security Analyst**              | Threat review, dependency and scan findings (`yarn npm audit`, Dependabot, Semgrep), secrets, auth, the sync server, hosting and CI.                                  | Accept risk for Ken; it reports the risk to the Director.              |
+| **Checklist Reviewer**            | Reviewing every set of instructions meant for Ken (ready-for-human stories, VPS and admin sessions, release and promotion steps) before he's told they're ready.      | Write the checklist it reviews.                                        |
 
 Several Developers may work at once, each in their own worktree on their own
 story. Two agents never write the same files at the same time.
+
+## Instructions for Ken
+
+Instructions for Ken must be very explicit (Ken, 2026-10-30). A step like
+"install the age public recipient file at the path in the hosting README" is
+not usable: it doesn't say what the file is, where it is or what the path is.
+
+The Checklist Reviewer reads every set of instructions meant for Ken before
+the Director tells him they're ready. Each checklist must meet this standard:
+
+- Someone unfamiliar with the project can do it.
+- Every term is explained the first time it appears.
+- Every command can be copied and pasted as written, with full paths.
+- Each step says where its inputs come from: a file, a 1Password item or a URL.
+- Documentation is quoted or deep-linked, never "see the README".
+- Each step ends with a check and the output Ken should expect.
+- Where a secret is involved, the step names what must never be pasted or
+  copied, and how to recognise it.
+- Each step has a "Why you, not an agent" line naming the specific reason, such
+  as root on the production host, a credential under Ken's account or a
+  physical device.
+
+The reviewer judges each of those reasons and says which one it accepts. Ken's
+only gate is changing production (see above), so "needs approval" is not a
+reason. A step with no reason, or only that one, goes back to an agent.
+
+The reviewer posts its findings as a story comment that starts with
+"Checklist Reviewer:", followed by numbered findings or "Approved".
+
+The same rules as "How to approve" apply:
+
+- The reviewer is a different session from the checklist's author. If the
+  author is itself the Checklist Reviewer, a second agent in that role reviews.
+- A review counts only when the Director sent the reviewer the checklist and
+  the reviewer's report gives the comment's URL.
+- The comment is never edited. A new finding or verdict goes in a new comment.
+
+After a finding, the author fixes the checklist and it is reviewed again. The
+Director tells Ken nothing until there is an "Approved" comment later than the
+latest finding. This covers instructions given to Ken in chat as well as in
+stories.
 
 ## Who reviews what
 

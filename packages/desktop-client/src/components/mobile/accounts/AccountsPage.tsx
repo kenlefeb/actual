@@ -561,7 +561,7 @@ export function AccountsPage() {
 
   const syncAndDownload = useSyncAndDownloadMutation();
   const onSync = useCallback(async () => {
-    syncAndDownload.mutate({});
+    await syncAndDownload.mutateAsync({});
   }, [syncAndDownload]);
 
   // Drill-downs (e.g. report activity) land on /accounts with filter

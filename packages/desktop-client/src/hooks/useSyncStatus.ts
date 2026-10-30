@@ -4,7 +4,13 @@ import { listen } from '@actual-app/core/platform/client/connection';
 
 import { useMetadataPref } from '#hooks/useMetadataPref';
 
-export type SyncState = null | 'offline' | 'local' | 'disabled' | 'error';
+export type SyncState =
+  | null
+  | 'synced'
+  | 'offline'
+  | 'local'
+  | 'disabled'
+  | 'error';
 
 type UseSyncStatusOpts = {
   syncingEndDelayMs?: number;
@@ -49,7 +55,7 @@ export function useSyncStatus({
           setSyncState('error');
         }
       } else if (event.type === 'success') {
-        setSyncState(event.syncDisabled ? 'disabled' : null);
+        setSyncState(event.syncDisabled ? 'disabled' : 'synced');
       }
     });
 

@@ -157,9 +157,9 @@ function TransactionListWithPreviews({
   });
 
   const syncAndDownload = useSyncAndDownloadMutation();
-  const onRefresh = useCallback(() => {
+  const onRefresh = useCallback(async () => {
     if (account.id) {
-      syncAndDownload.mutate({ id: account.id });
+      await syncAndDownload.mutateAsync({ id: account.id });
     }
   }, [account.id, syncAndDownload]);
 

@@ -84,7 +84,7 @@ type TransactionListWithBalancesProps = {
   isLoadingMore: boolean;
   onLoadMore: () => void;
   onOpenTransaction: (transaction: TransactionEntity) => void;
-  onRefresh?: () => void;
+  onRefresh?: () => Promise<unknown>;
   showMakeTransfer?: boolean;
   isReconciling?: boolean;
   onToggleTransactionCleared?: (transaction: TransactionEntity) => void;

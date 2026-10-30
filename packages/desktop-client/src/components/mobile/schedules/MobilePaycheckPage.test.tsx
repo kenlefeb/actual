@@ -295,6 +295,46 @@ describe('MobilePaycheckPage', () => {
     ).toHaveStyle({ flexDirection: 'column' });
   });
 
+  it('separates stacked deductions and deposits with a divider on a phone only', async () => {
+    const user = userEvent.setup();
+    state.paychecks = [
+      {
+        ...acme,
+        definition: {
+          ...acme.definition,
+          deductions: [
+            ...acme.definition.deductions,
+            { id: 'dental', name: 'Dental', amount: 1500, category: 'taxes' },
+          ],
+        },
+      },
+    ];
+    renderPage('acme');
+    await user.click(screen.getByRole('button', { name: /^Deductions/ }));
+    await user.click(screen.getByRole('button', { name: /^Direct deposits/ }));
+    const deduction = (n: number) =>
+      screen.getByLabelText(`Deduction ${n} name`).parentElement;
+    const deposit = (n: number) =>
+      screen.getByLabelText(`Deposit ${n} account`).parentElement?.parentElement
+        ?.parentElement;
+    const divider = { borderTopWidth: '1px', borderTopStyle: 'solid' };
+    expect(deduction(1)).not.toHaveStyle(divider);
+    expect(deduction(2)).toHaveStyle({ ...divider, paddingTop: '12px' });
+    expect(deposit(1)).not.toHaveStyle(divider);
+    expect(deposit(2)).toHaveStyle({ ...divider, paddingTop: '12px' });
+
+    // Desktop rows keep their look
+    document.body.innerHTML = '';
+    state.isNarrowWidth = false;
+    render(
+      <TestProviders>
+        <PaycheckEditModal paycheckId="acme" />
+      </TestProviders>,
+    );
+    expect(deduction(2)).not.toHaveStyle(divider);
+    expect(deposit(2)).not.toHaveStyle(divider);
+  });
+
   it('makes "Post automatically" one 40px tappable row on a phone', async () => {
     const user = userEvent.setup();
     state.paychecks = [acme];

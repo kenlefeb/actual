@@ -189,17 +189,29 @@ function useRowLayout() {
           alignItems: 'center',
         },
     fullWidth: isStacked ? { width: '100%', flex: 'none' } : {},
+    // Stacked items after the first start with a divider, so one item's
+    // Remove doesn't run into the next item's fields
+    divider: (index: number) =>
+      isStacked && index > 0
+        ? {
+            borderTopWidth: 1,
+            borderTopStyle: 'solid',
+            borderTopColor: theme.tableBorder,
+            paddingTop: 12,
+            marginTop: 4,
+          }
+        : {},
   } as const;
 }
 
 export function PaycheckDeductionFields({ form }: FormProps) {
   const { t } = useTranslation();
-  const { touch, isStacked, row, fullWidth } = useRowLayout();
+  const { touch, isStacked, row, fullWidth, divider } = useRowLayout();
   const { updateDeduction } = form;
   return (
     <>
       {form.definition.deductions.map((deduction, index) => (
-        <View key={deduction.id} style={row}>
+        <View key={deduction.id} style={{ ...row, ...divider(index) }}>
           <Input
             aria-label={t('Deduction {{number}} name', {
               number: index + 1,
@@ -307,13 +319,13 @@ export function PaycheckNetPay({ form }: FormProps) {
 
 export function PaycheckDepositFields({ form }: FormProps) {
   const { t } = useTranslation();
-  const { touch, isStacked, row, fullWidth } = useRowLayout();
+  const { touch, isStacked, row, fullWidth, divider } = useRowLayout();
   const format = useFormat();
   const { accountById, updateDeposit } = form;
   return (
     <>
       {form.definition.deposits.map((deposit, index) => (
-        <View key={deposit.id} style={{ gap: 5 }}>
+        <View key={deposit.id} style={{ gap: 5, ...divider(index) }}>
           <View style={row}>
             <View style={{ flex: 1, ...fullWidth }}>
               <GenericInput

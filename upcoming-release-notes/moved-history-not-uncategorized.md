@@ -3,4 +3,4 @@ category: Enhancements
 authors: [kenlefeb]
 ---
 
-Keep an account's history from before it moved on budget out of the uncategorized count, and ask before categorizing it
+Transactions from before an account moved on budget now show as moved history instead of uncategorized, and ask before you categorize them.

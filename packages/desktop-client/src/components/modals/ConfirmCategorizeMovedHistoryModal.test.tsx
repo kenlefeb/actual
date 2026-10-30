@@ -18,7 +18,7 @@ describe('ConfirmCategorizeMovedHistoryModal', () => {
   it('explains the double count', () => {
     renderModal(vi.fn());
     expect(screen.getByText('Categorize moved history?')).toBeInTheDocument();
-    expect(screen.getByText(/counts the money twice/)).toBeInTheDocument();
+    expect(screen.getByText(/would count the money twice/)).toBeInTheDocument();
   });
 
   it('Cancel changes nothing', async () => {

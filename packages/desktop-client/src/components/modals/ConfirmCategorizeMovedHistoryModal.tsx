@@ -36,9 +36,8 @@ export function ConfirmCategorizeMovedHistoryModal({
           <View style={{ lineHeight: 1.5 }}>
             <Paragraph>
               <Trans>
-                This is already in the account's starting balance. Categorizing
-                it counts the money twice, and the starting balance stops
-                reconciling.
+                This is already included in the account's starting balance.
+                Categorizing it would count the money twice.
               </Trans>
             </Paragraph>
             <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>

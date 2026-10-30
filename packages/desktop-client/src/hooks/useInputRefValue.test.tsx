@@ -20,12 +20,12 @@ it('inserts a tag into a multiline note through React without dropping line brea
           defaultValue={note}
           onChange={e => changed(e.currentTarget.value)}
         />
-        <button onClick={() => setValue(note + '\n#Ken')}>Insert tag</button>
+        <button onClick={() => setValue(note + '\n#Alex')}>Insert tag</button>
       </>
     );
   }
   render(<Editor />);
   await userEvent.click(screen.getByRole('button', { name: 'Insert tag' }));
-  expect(screen.getByRole('textbox')).toHaveValue(note + '\n#Ken');
-  expect(changed).toHaveBeenLastCalledWith(note + '\n#Ken');
+  expect(screen.getByRole('textbox')).toHaveValue(note + '\n#Alex');
+  expect(changed).toHaveBeenLastCalledWith(note + '\n#Alex');
 });

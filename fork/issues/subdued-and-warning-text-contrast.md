@@ -4,6 +4,7 @@
 - Type: Bug report
 - Checked against upstream `master` at `1d9ec2d1d` (theme CSS). The ratios below are computed from `packages/component-library/src/themes/palette.css` and the `light`, `dark` and `midnight` theme files at that commit.
 - Screenshots to attach: `images/subdued-text-light-before.jpg` and `images/subdued-text-light-after.jpg`. Both are the Schedules list on a 375px phone in the light theme with the demo budget. The "after" image only sets the two proposed colours.
+- Suggested-fix branch: `upstream/subdued-text-contrast` on kenlefeb/actual (from upstream `master` at `1d9ec2d1d`). It changes only the four token values plus a release note. Upstream's VRT snapshots need regenerating for it. The draft PR description is on sc-1096.
 - Fork tracking: Shortcut sc-1096. Found while fixing the fork's own note in sc-951.
 
 ## What happened?

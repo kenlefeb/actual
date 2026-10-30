@@ -233,13 +233,18 @@ function AccountHeader({ account }: { readonly account: AccountEntity }) {
           }}
         />
       )}
-      <Button variant="bare" onPress={onClick}>
+      {/* Shrinks to the header's title space so a long name ends in "…" */}
+      <Button
+        variant="bare"
+        onPress={onClick}
+        style={{ minWidth: 0, flexShrink: 1 }}
+      >
         <Text
           size="extra-large"
           style={{
             fontWeight: 500,
             ...styles.underlinedText,
-            ...(styles.lineClamp(2) as CSSProperties),
+            ...styles.ellipsisText,
           }}
         >
           {account.closed

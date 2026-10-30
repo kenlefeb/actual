@@ -1,6 +1,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
+import { waitOnSchedulesService } from '@actual-app/core/server/schedules/app';
 import type { RuleEntity } from '@actual-app/core/types/models';
 import { vi } from 'vitest';
 
@@ -67,6 +68,36 @@ async function createTestBudget(templateName: string, name: string) {
 }
 
 describe('API setup and teardown', () => {
+  // A sync starts the schedules service in the background; closing the
+  // budget must wait for it instead of closing the database under it
+  test('closes the budget while the schedules service is running', async () => {
+    const rejections: unknown[] = [];
+    const onRejection = (reason: unknown) => rejections.push(reason);
+    process.on('unhandledRejection', onRejection);
+    // A failed run is reported through logger.error, which writes here
+    const consoleError = vi.spyOn(console, 'error');
+    let errors: unknown[][] = [];
+    try {
+      await api.loadBudget(budgetName);
+      // As api.shutdown does: the sync starts the service, then the budget closes
+      await api.internal!.send('sync');
+      await api.internal!.send('close-budget');
+      // Let the run finish, so a failure from a too-early close is logged
+      await waitOnSchedulesService();
+    } finally {
+      process.off('unhandledRejection', onRejection);
+      // Read before restoring, which clears the recorded calls
+      errors = [...consoleError.mock.calls];
+      consoleError.mockRestore();
+    }
+    expect(rejections).toEqual([]);
+    expect(
+      errors.filter(([message]) =>
+        String(message).includes('Schedules service failed'),
+      ),
+    ).toEqual([]);
+  });
+
   // apis: loadBudget, getBudgetMonths
   test('successfully loads budget', async () => {
     await expect(api.loadBudget(budgetName)).resolves.toBeUndefined();
@@ -1563,5 +1594,151 @@ describe('API preferences: setPreference', () => {
     expect(preferences[`csv-mappings-${budgetName}`]).toBe(
       'col1:name,col2:amount',
     );
+  });
+});
+
+describe('API paycheck schedules', () => {
+  const MANAGED =
+    'This schedule is managed by paycheck "Acme". Edit the paycheck in the app.';
+
+  async function paychecks() {
+    return (await api.internal!.send('paychecks-get')) as Array<{
+      id: string;
+      definition: {
+        paySchedule?: string | null;
+        deposits: Array<{ account: string; schedule?: string | null }>;
+      };
+    }>;
+  }
+
+  // The "Acme" paycheck, made by the app, with Checking and Savings deposits
+  async function createAcme() {
+    await api.loadBudget(budgetName);
+    const checking = await api.createAccount({ name: 'Checking' }, 0);
+    const savings = await api.createAccount({ name: 'Savings' }, 0);
+    const income = (await api.getCategories()).find(
+      c => 'is_income' in c && c.is_income && 'group_id' in c,
+    );
+    const id = (await api.internal!.send('paycheck-create', {
+      name: 'Acme',
+      newClearingAccountName: 'Acme Paycheck',
+      definition: {
+        payee: null,
+        clearingAccount: '',
+        date: { start: '2026-11-01', frequency: 'monthly' },
+        weekendSolveMode: 'before',
+        grossAmount: 300000,
+        incomeCategory: income?.id ?? null,
+        deductions: [],
+        deposits: [
+          { id: 'savings', account: savings, kind: 'percent', value: 10 },
+          { id: 'checking', account: checking, kind: 'remainder', value: 0 },
+        ],
+      },
+    } as never)) as string;
+    const { definition } = (await paychecks()).find(p => p.id === id)!;
+    const deposit = (account: string) =>
+      definition.deposits.find(d => d.account === account)!.schedule!;
+    return {
+      id,
+      pay: definition.paySchedule!,
+      checking: deposit(checking),
+      savings: deposit(savings),
+    };
+  }
+
+  const schedule = async (id: string) =>
+    (await api.getSchedules()).find(s => s.id === id);
+
+  test("A script edits Acme's Checking deposit schedule", async () => {
+    const { checking } = await createAcme();
+    const before = await schedule(checking);
+
+    await expect(
+      api.updateSchedule(checking, { amount: 12345, name: 'Renamed' }),
+    ).rejects.toThrow(MANAGED);
+
+    expect(await schedule(checking)).toEqual(before);
+  });
+
+  test("A script deletes Acme's pay schedule", async () => {
+    const { pay } = await createAcme();
+    const { rule } = (await schedule(pay))!;
+
+    await expect(api.deleteSchedule(pay)).rejects.toThrow(MANAGED);
+
+    expect(await schedule(pay)).toBeDefined();
+    expect((await api.getRules()).some(r => r.id === rule)).toBe(true);
+  });
+
+  test("A script edits the rule behind Acme's pay schedule", async () => {
+    const { pay } = await createAcme();
+    const { rule: ruleId } = (await schedule(pay))!;
+    const rule = (await api.getRules()).find(r => r.id === ruleId)!;
+
+    await expect(
+      api.updateRule({
+        ...rule,
+        conditions: rule.conditions.map(c =>
+          c.field === 'amount' ? { ...c, value: 1 } : c,
+        ),
+      } as RuleEntity),
+    ).rejects.toThrow(MANAGED);
+
+    expect((await api.getRules()).find(r => r.id === ruleId)).toEqual(rule);
+  });
+
+  test("A script deletes the rule behind Acme's pay schedule", async () => {
+    const { pay } = await createAcme();
+    const rule = (await schedule(pay))!.rule!;
+
+    // Existing behaviour for any schedule's rule: nothing is deleted
+    await expect(api.deleteRule(rule)).resolves.toBe(false);
+
+    expect((await api.getRules()).some(r => r.id === rule)).toBe(true);
+    expect(await schedule(pay)).toBeDefined();
+  });
+
+  test('A script edits and deletes the Rent schedule', async () => {
+    await createAcme();
+    const rent = await api.createSchedule({
+      name: 'Rent',
+      posts_transaction: false,
+      amount: -150000,
+      amountOp: 'is',
+      date: '2026-12-01',
+    });
+
+    await api.updateSchedule(rent, { amount: -160000 });
+    expect((await schedule(rent))?.amount).toBe(-160000);
+    await api.deleteSchedule(rent);
+    expect(await schedule(rent)).toBeUndefined();
+  });
+
+  test("The app still manages Acme's schedules", async () => {
+    const { id, pay, checking, savings } = await createAcme();
+    await expect(api.updateSchedule(checking, { amount: 1 })).rejects.toThrow(
+      MANAGED,
+    );
+    const { definition } = (await paychecks()).find(p => p.id === id)!;
+
+    // A raise updates the deposit amounts
+    await api.internal!.send('paycheck-update', {
+      id,
+      name: 'Acme',
+      definition: { ...definition, grossAmount: 320000 },
+    } as never);
+    expect((await schedule(savings))?.amount).toBe(32000);
+
+    // Skipping advances the pay schedule
+    const nextPay = (await schedule(pay))?.next_date;
+    await api.internal!.send('paycheck-skip-next', { id } as never);
+    expect((await schedule(pay))?.next_date).not.toBe(nextPay);
+
+    // Deleting removes every schedule
+    await api.internal!.send('paycheck-delete', { id } as never);
+    for (const s of [pay, checking, savings]) {
+      expect(await schedule(s)).toBeUndefined();
+    }
   });
 });

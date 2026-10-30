@@ -17,6 +17,7 @@ vi.mock('#shared/errors', () => ({
 
 describe('API handlers', () => {
   const handlers = installAPI({} as unknown as ServerHandlers);
+  const originalBatchUpdate = handlers['transactions-batch-update'];
 
   describe('api/get-server-version', () => {
     beforeEach(() => {
@@ -310,6 +311,11 @@ describe('API handlers', () => {
   describe('transaction mutation completion', () => {
     beforeEach(global.emptyDatabase());
 
+    // These tests replace the batch-update handler; put it back for later tests
+    afterEach(() => {
+      handlers['transactions-batch-update'] = originalBatchUpdate;
+    });
+
     beforeEach(async () => {
       await prefs.loadPrefs();
       await db.insertAccount({ id: 'mutation-account', name: 'Checking' });
@@ -375,6 +381,11 @@ describe('API handlers', () => {
         await expect(pending).rejects.toThrow('Batch write failed');
       },
     );
+  });
+
+  // Runs after the describe above, in file order
+  test('leaves the batch-update handler as it was for later tests', () => {
+    expect(handlers['transactions-batch-update']).toBe(originalBatchUpdate);
   });
 
   describe('api/rule-create', () => {

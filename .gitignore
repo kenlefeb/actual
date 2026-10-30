@@ -119,3 +119,7 @@ actual.config.js
 
 # Mac App Store provisioning profiles, downloaded per machine
 packages/desktop-electron/mas/*.provisionprofile
+
+# Mutation reports and Stryker sandboxes (fork-only, sc-632)
+packages/loot-core/reports/
+.stryker-tmp/

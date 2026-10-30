@@ -1,0 +1,68 @@
+# Fork-only (sc-632): a mutation-testing report for the shared date and money
+# modules, plus the list of spec scenarios no test names. Report only: it
+# never fails a pull request and is not a required check. Never upstream
+# (fork/README.md).
+name: Fork mutation report
+
+on:
+  schedule:
+    # Nightly, 07:30 UTC. GitHub runs schedules only from the default branch.
+    - cron: '30 7 * * *'
+  workflow_dispatch:
+  # Only a change to the report itself runs it on a pull request
+  pull_request:
+    branches:
+      - development
+    paths:
+      - .github/workflows/fork-mutation-report.yml
+      - packages/loot-core/stryker.config.mjs
+      - packages/loot-core/vitest.mutation.config.ts
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  report:
+    if: github.repository == 'kenlefeb/actual'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Set up environment
+        uses: ./.github/actions/setup
+        with:
+          download-translations: 'false'
+      - name: Run mutation testing
+        # Report only: surviving mutants never fail the job
+        run: |
+          yarn workspace @actual-app/core run mutation-report --concurrency 4 | tee mutation.log
+          {
+            echo '## Mutation score by module'
+            echo '```'
+            grep -E '^(-+\||File +\||All files|[ ]+[^ |]+\.ts +\|)' mutation.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: List spec scenarios with no test
+        run: |
+          node fork/scripts/check-spec-scenarios.mjs | tee scenarios.txt
+          {
+            echo '## Spec scenarios with no test'
+            echo '```'
+            cat scenarios.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload the report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mutation-report
+          path: |
+            packages/loot-core/reports/mutation/
+            scenarios.txt
+          retention-days: 30

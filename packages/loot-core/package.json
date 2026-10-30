@@ -188,6 +188,7 @@
     "build:node": "cross-env NODE_ENV=production vite build --config ./vite.desktop.config.mts",
     "watch:node": "cross-env NODE_ENV=development vite build --config ./vite.desktop.config.mts --watch",
     "test": "npm-run-all -cp 'test:*'",
+    "mutation-report": "stryker run",
     "test:node": "ENV=node vitest --run",
     "test:web": "ENV=web vitest --run -c vitest.web.config.ts",
     "typecheck": "tsgo -b && tsc-strict --noEmit --incremental false --composite false",
@@ -217,6 +218,8 @@
   "devDependencies": {
     "@actual-app/crdt": "workspace:*",
     "@actual-app/vite-plugin-peggy": "workspace:*",
+    "@stryker-mutator/core": "10.1.1",
+    "@stryker-mutator/vitest-runner": "10.1.1",
     "@types/better-sqlite3": "^9.6.0",
     "@types/jlongster__sql.js": "npm:@types/sql.js@latest",
     "@types/node": "^22.20.5",

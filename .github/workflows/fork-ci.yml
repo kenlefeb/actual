@@ -9,6 +9,7 @@ on:
   push:
     branches:
       - development
+      - sc-946-proof # scratch proof branch only; never on development
 
 permissions:
   contents: read

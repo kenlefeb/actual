@@ -29,7 +29,11 @@
 
 ### 1. Store the start date and the offset line on the account
 
-**Two nullable columns on `accounts`:** `budget_start_date` (date) and `budget_start_offset` (the offset line's transaction id). The move writes both in its existing batch, so:
+**Two nullable columns on `accounts`:** `budget_start_date` and `budget_start_offset` (the offset line's transaction id).
+- `budget_start_date` is stored like `transactions.date`: an AQL `f('date')` field, written through `toDateRepr`. So `date >= $account.budget_start_date` compares integers with integers. A string column would compare as text, and the filter would be silently wrong.
+- **The migration is a JS migration**, like `1788468782000_add_messages_pending.js`, with an id after `1793300000000`. It reads `PRAGMA table_info(accounts)` and adds each column only when it's missing. SQLite has no `ADD COLUMN IF NOT EXISTS`, and this rides upstream with sc-467 later. If upstream renumbers the migration, as happened with sc-494, budgets that already have the columns would otherwise fail with `duplicate column name` and not open.
+
+The move writes both columns in its existing batch, so:
 - undo restores them to null with everything else;
 - other devices get them as ordinary CRDT messages on the account row.
 
@@ -54,11 +58,16 @@ The `uncategorized` filters in `queries/index.ts` add, for the transaction's acc
     { date: { $gte: '$account.budget_start_date' } },
   ],
 },
-{ id: { $ne: '$account.budget_start_offset' } }   // null-safe in the compiled SQL
+{
+  $or: [
+    { 'account.budget_start_offset': null },
+    { id: { $ne: '$account.budget_start_offset' } },
+  ],
+}
 ```
 
 - That one change covers the title-bar count, the desktop "Uncategorized" list and the phone list, because all three read these filters.
-- The offset comparison must be null-safe: an account that was never moved has `budget_start_offset = null`, and `id != NULL` is unknown in SQL. The compiled SQL needs `IFNULL` or `IS NOT`; the implementation's tests cover a never-moved account.
+- **Both clauses check for null first.** AQL compiles `$ne` with a field reference to `(id != x OR id IS NULL)` (`server/aql/compiler.ts`). For a never-moved account the offset is NULL, so `id != NULL` would drop every row (found by the Architect on #115). Checking for null first keeps those accounts' uncategorized transactions, and "A never-moved account keeps its count" is a required scenario.
 - The filters are client-side, but they read synced account fields, so other devices agree.
 
 ### 3. "Moved history" instead of "Categorize"
@@ -74,16 +83,19 @@ For a transaction in a moved account dated before its start date, and for the of
   - **title:** "Categorize moved history?"
   - **body:** this transaction is already in the account's starting balance on \<start date\>, so categorizing it counts the money twice and the starting balance stops reconciling.
 - **Cancel** leaves it uncategorized. **Categorize anyway** sets the category.
-- The PO asked for at least a warning on the offset line. This design applies the same confirmation to the history before the start date, because categorizing either one double-counts in the same way. See "Open questions".
-- Bulk edits, rules and imports don't prompt. Server-side writes stay as they are (see Risks).
+- The PO asked for at least a warning on the offset line. This design applies the same confirmation to the history before the start date, because categorizing either one double-counts in the same way. See "Resolved questions".
+- **Bulk categorize** (the PO on #115): setting a category on several selected transactions at once, when any of them is moved history, shows one confirmation for the whole batch. Cancel changes none of them, and Categorize anyway changes all of them. This covers the usual way to clear an uncategorized list.
+- Rules and imports don't prompt. Server-side writes stay as they are (see Risks).
 
 ## Risks / Trade-offs
 
-- **Writes outside the editors:** rules, the API and bulk "Set category" can still categorize moved history without a prompt. Guarding every server path is out of scope; the prompt covers the editors, where it happens by hand.
+- **Writes outside the editors:** applying a rule from the Rules page ("Apply actions" to matching transactions), rules running on import or bank sync, and the API can still categorize moved history without a prompt. The prompt covers the editors and bulk categorize, where it happens by hand. **Follow-up:** a Backlog story for the Rules page's apply path.
+- **Two devices moving the same account while offline:** each passes the `offbudget` check and writes its own split. The account's cells settle to one offset id, so the other device's offset line shows as uncategorized, and there are two Starting Balances. sc-467 already has this gap; this change only makes it visible.
 - **Transactions added later before the start date:** for example, from bank sync or another device after the move. They count as moved history: they aren't in B and aren't prompted, so their amount isn't budgeted anywhere. This is the same gap `account-move-on-budget` accepted for unsynced transactions. This change only stops prompting for them.
-- **Accounts moved before this change:** they have no stored date, so they keep today's behavior. Nothing backfills them (see "Open questions").
+- **Accounts moved before this change:** they have no stored date, so they keep today's behavior. Nothing backfills them (see "Resolved questions").
 
-## Open questions
+## Resolved questions
 
-1. **Ask before categorizing history before the start date, not only the offset line?** The PO asked for at least a warning on the offset line. The design applies the same confirmation to history before the start date, because it double-counts the same way. Is that right?
-2. **Backfill accounts moved before this change?** Their start date could be inferred from the move's split (payee "Starting Balance", the offset note, the date). Decision 1 explains why that inference isn't reliable. The proposal is no backfill: the feature hasn't been released in a prerelease yet, so few or no budgets have moved accounts.
+Answered by the PO, with the Architect agreeing, on #115:
+1. **The confirmation covers history before the start date as well as the offset line.** Both double-count the same way, and one rule for all moved history is easier to understand. Bulk categorize gets one confirmation for the batch.
+2. **No backfill.** Moving on budget isn't in any release (it missed alpha.18), so no budget has a move without the new columns. Don't add a backfill later.

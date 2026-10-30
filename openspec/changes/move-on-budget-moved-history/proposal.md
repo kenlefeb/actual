@@ -18,11 +18,11 @@ PO decision (2026-10-29): exclude them. The app remembers each moved account's s
   - its offset line.
 
   These show "Moved history" instead. Uncategorized transactions from the start date on still count and are still prompted.
-- **Categorizing moved history or the offset line asks first.** Choosing a category for either shows a confirmation that explains the double count. Cancel leaves it uncategorized.
+- **Categorizing moved history or the offset line asks first.** Choosing a category for either shows a confirmation that explains the double count. Cancel leaves it uncategorized. A bulk categorize that includes any moved history shows one confirmation for the batch, and Cancel changes none of them.
 
 Non-goals:
 - Changing what the move itself writes. Its amounts and categories stay as in `account-move-on-budget`.
-- Accounts moved before this change: they have no stored start date, so their history still counts, and nothing backfills it. See "Open questions".
+- A backfill for accounts moved before this change. Moving on budget isn't in any release yet, so there are none (design.md, "Resolved questions").
 
 ## Capabilities
 

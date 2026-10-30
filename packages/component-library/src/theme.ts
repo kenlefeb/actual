@@ -165,6 +165,8 @@ export const theme = {
   warningText: 'var(--color-warningText)',
   warningTextLight: 'var(--color-warningTextLight)',
   warningTextDark: 'var(--color-warningTextDark)',
+  clearingNoteText: 'var(--color-clearingNoteText)',
+  clearingWarningText: 'var(--color-clearingWarningText)',
   warningBorder: 'var(--color-warningBorder)',
   errorBackground: 'var(--color-errorBackground)',
   errorText: 'var(--color-errorText)',

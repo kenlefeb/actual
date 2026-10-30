@@ -201,6 +201,9 @@
   --color-warningTextLight: var(--palette-orange500);
   --color-warningTextDark: var(--palette-orange900);
   --color-warningBorder: var(--palette-orange500);
+  /* Fork: clearing account note and warning, AA on page backgrounds */
+  --color-clearingNoteText: var(--palette-navy600);
+  --color-clearingWarningText: var(--palette-orange800);
   --color-errorBackground: var(--palette-red100);
   --color-errorText: var(--palette-red500);
   --color-errorTextDark: var(--palette-red700);

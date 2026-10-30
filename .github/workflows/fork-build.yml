@@ -16,9 +16,10 @@ on:
 permissions:
   contents: read
 
+# Same as fork-ci.yml: every push to development gets a full build (sc-946).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # One list for both jobs, the same as fork-ci.yml's mobile-e2e: a pull request

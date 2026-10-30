@@ -29,7 +29,7 @@ it('reports a failed service run and still lets the budget close', async () => {
   vi.spyOn(db, 'all').mockRejectedValueOnce(failure);
   const logError = vi.spyOn(logger, 'error');
 
-  app.events.emit('sync', { type: 'success' });
+  app.events.emit('sync', { type: 'success', tables: [] });
   await waitOnSchedulesService();
 
   expect(captureException).toHaveBeenCalledWith(failure);
@@ -43,10 +43,10 @@ it('waits for a run that starts while it is already waiting', async () => {
     throw new Error('posting failed');
   });
 
-  app.events.emit('sync', { type: 'success' });
+  app.events.emit('sync', { type: 'success', tables: [] });
   const waiting = waitOnSchedulesService();
   // A second sync lands before the first run finishes
-  app.events.emit('sync', { type: 'success' });
+  app.events.emit('sync', { type: 'success', tables: [] });
   await waiting;
 
   expect(captureException).toHaveBeenCalledTimes(2);

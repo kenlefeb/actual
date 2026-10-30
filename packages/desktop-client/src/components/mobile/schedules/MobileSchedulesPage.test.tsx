@@ -95,6 +95,14 @@ describe('MobileSchedulesPage paychecks', () => {
     expect(state.listed).toEqual(['Rent']);
   });
 
+  // paychecks spec, "No Delete for a paycheck's schedules": the list's swipe
+  // action is the only Delete on phones, and it never gets a paycheck's schedule
+  it('Delete a deposit schedule from Schedules: no list row, so no swipe Delete', () => {
+    state.paychecks = true;
+    renderPage();
+    expect(state.listed).not.toContain('Acme → Checking');
+  });
+
   it('hides the Paychecks section when the feature is off', () => {
     renderPage();
     expect(screen.queryByText('Paychecks section')).not.toBeInTheDocument();

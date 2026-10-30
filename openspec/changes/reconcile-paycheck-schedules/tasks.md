@@ -21,7 +21,7 @@
   - "Deleted while paychecks were off": with the feature off, delete a deposit schedule, and check that a sync doesn't restore it. Then turn the feature on in two ways, each restoring it: a local toggle, which emits an `applied` event with `preferences` in `tables`, and a toggle that arrives by sync, a `success` event.
 
   Verify each fails on `development` for the reason in its name; "Gym" already passes.
-- [ ] 1.3 Add UI guard tests for "No Delete for a paycheck's schedules", one per place Delete is reachable today (design.md, the table under "No Delete for a paycheck's schedules"):
+- [x] 1.3 Add UI guard tests for "No Delete for a paycheck's schedules", one per place Delete is reachable today (design.md, the table under "No Delete for a paycheck's schedules"):
   - desktop schedules table (`SchedulesTable` / `schedules/index.tsx`): with `paychecks` on, "Acme → Checking" isn't listed, so no row menu offers Delete for it;
   - mobile schedules list (`MobileSchedulesPage`): it isn't listed, so there's no swipe Delete for it;
   - desktop schedule editor (`ScheduleEditModal`): no Delete, and the paycheck note offers "Edit paycheck", which opens "Acme";

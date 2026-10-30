@@ -1,3 +1,5 @@
+import { MemoryRouter } from 'react-router';
+
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -30,7 +32,9 @@ vi.mock('#hooks/useFeatureFlag', () => ({
 function renderNote(scheduleId: string) {
   render(
     <TestProviders>
-      <PaycheckScheduleNote scheduleId={scheduleId} />
+      <MemoryRouter>
+        <PaycheckScheduleNote scheduleId={scheduleId} />
+      </MemoryRouter>
     </TestProviders>,
   );
 }

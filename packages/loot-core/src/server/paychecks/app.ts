@@ -1,3 +1,5 @@
+import { v4 as uuidv4 } from 'uuid';
+
 import { createApp } from '#server/app';
 import * as db from '#server/db';
 import { mutator } from '#server/mutators';
@@ -5,12 +7,15 @@ import {
   createSchedule,
   deleteSchedule,
   getRuleForSchedule,
+  onEverySync,
   refreshScheduleDateLookup,
+  runTrackedMutator,
   skipNextDate,
   updateSchedule,
 } from '#server/schedules/app';
 import { updateRule } from '#server/transactions/transaction-rules';
 import { undoable } from '#server/undo';
+import { isFlagOn } from '#shared/feature-flags';
 import * as monthUtils from '#shared/months';
 import { computePaycheck, MAX_DEPOSIT_DAYS_EARLY } from '#shared/paychecks';
 import { isRelativeDate, toRelativeDay } from '#shared/relative-dates';
@@ -41,6 +46,34 @@ app.method('paychecks-get', getPaychecks);
 app.method('paycheck-create', mutator(undoable(createPaycheck)));
 app.method('paycheck-update', mutator(undoable(updatePaycheck)));
 app.method('paycheck-delete', mutator(undoable(deletePaycheck)));
+// At budget load: record schedules of paychecks saved before the record
+// existed, then clean up edits that synced while the budget was closed
+app.service(() => {
+  runTrackedMutator('Paycheck schedule backfill', async () => {
+    await backfillPaycheckSchedules();
+    await reconcilePaycheckSchedules();
+  });
+  return () => undefined;
+});
+
+const PAYCHECK_TABLES = ['paychecks', 'paycheck_schedules', 'schedules'];
+
+// Before the schedules service's once-a-day guard: edits from another device
+// can arrive on any sync, and must be cleaned up before schedules post (ADR 2).
+// The reconcile does nothing while paychecks are off.
+onEverySync(event => {
+  if (
+    (event.type === 'success' || event.type === 'applied') &&
+    db.getDatabase() &&
+    (event.tables.includes('preferences') ||
+      (event.type === 'success' &&
+        event.tables.some(table => PAYCHECK_TABLES.includes(table))))
+  ) {
+    runTrackedMutator('Paycheck schedule reconcile', () =>
+      reconcilePaycheckSchedules(),
+    );
+  }
+});
 app.method('paycheck-skip-next', mutator(undoable(skipNextPaycheck)));
 app.method('paycheck-year-to-date', getYearToDate);
 app.method('paychecks-clearing-status', getClearingStatus);
@@ -247,11 +280,157 @@ async function writeSchedule(
   return scheduleId;
 }
 
+// Records which paycheck generated each schedule. Each device writes its own
+// rows, so the record survives an edit on another device that loses this
+// paycheck's definition (ADR 2, reconcile-paycheck-schedules).
+async function recordGenerated(
+  paycheckId: PaycheckEntity['id'],
+  scheduleIds: string[],
+) {
+  for (const id of scheduleIds) {
+    const row = await db.first<db.DbPaycheckSchedule>(
+      'SELECT * FROM paycheck_schedules WHERE id = ?',
+      [id],
+    );
+    if (!row) {
+      await db.insert('paycheck_schedules', { id, paycheck: paycheckId });
+    } else if (row.tombstone || row.paycheck !== paycheckId) {
+      await db.update('paycheck_schedules', {
+        id,
+        paycheck: paycheckId,
+        tombstone: 0,
+      });
+    }
+  }
+}
+
+/**
+ * Records the schedules each live paycheck lists, for paychecks saved before
+ * the record existed. Idempotent: it writes only what's missing.
+ */
+// The effective paychecks flag, by the same rule the UI uses (ADR 6)
+export async function isPaychecksOn() {
+  const rows = await db.all<{ id: string; value: string }>(
+    "SELECT id, value FROM preferences WHERE id LIKE 'flags.%'",
+  );
+  return isFlagOn(
+    Object.fromEntries(rows.map(row => [row.id, row.value])),
+    'paychecks',
+  );
+}
+
+export async function backfillPaycheckSchedules() {
+  for (const paycheck of await getPaychecks()) {
+    const listed = [
+      paycheck.definition.paySchedule,
+      ...paycheck.definition.deposits.map(d => d.schedule),
+    ].filter((id): id is string => !!id);
+    await recordGenerated(paycheck.id, listed);
+  }
+}
+
+function listedSchedules(definition: PaycheckDefinition) {
+  return (
+    [definition.paySchedule, ...definition.deposits.map(d => d.schedule)]
+      // Never null after a save; older or corrupt rows may lack them
+      .filter((id): id is string => !!id)
+  );
+}
+
+/**
+ * Makes each paycheck's schedules match its live definition (ADR 2), after
+ * edits on two devices merged by last write wins (ADR 3):
+ * 1. A schedule a paycheck generated but no live definition lists, or whose
+ *    paycheck is deleted, is deleted. Posted transactions stay.
+ * 2. A schedule a live definition lists but that is deleted is restored in
+ *    place, keeping its id and links; one that is missing is recreated.
+ *    Deleting first frees the name a recreated schedule needs.
+ * Schedules no paycheck generated are never touched. Idempotent.
+ */
+export async function reconcilePaycheckSchedules() {
+  if (!(await isPaychecksOn())) {
+    return;
+  }
+  const listedBy = new Map(
+    (await getPaychecks()).flatMap(paycheck =>
+      listedSchedules(paycheck.definition).map(id => [id, paycheck.id]),
+    ),
+  );
+  const mapped = await db.all<{
+    id: string;
+    paycheck: string;
+    active: number | null;
+  }>(
+    `SELECT m.id, m.paycheck, s.id IS NOT NULL AND s.tombstone = 0 AS active
+       FROM paycheck_schedules m LEFT JOIN schedules s ON s.id = m.id
+      WHERE m.tombstone = 0`,
+  );
+  for (const { id, paycheck, active } of mapped) {
+    if (listedBy.get(id) === paycheck) {
+      continue;
+    }
+    if (active) {
+      await deleteSchedule({ id });
+    }
+    await forgetGenerated(id);
+  }
+
+  for (const paycheck of await getPaychecks()) {
+    let regenerate = paycheck.definition.deposits.some(d => !d.schedule);
+    for (const id of listedSchedules(paycheck.definition)) {
+      const row = await db.first<{ tombstone: number; rule: string }>(
+        'SELECT tombstone, rule FROM schedules WHERE id = ?',
+        [id],
+      );
+      if (!row) {
+        regenerate = true;
+      } else if (row.tombstone) {
+        await db.update('rules', { id: row.rule, tombstone: 0 });
+        await db.update('schedules', { id, tombstone: 0 });
+        regenerate = true;
+      }
+    }
+    if (regenerate) {
+      const written = await writePaycheckSchedules(
+        paycheck.id,
+        paycheck.name,
+        paycheck.definition,
+        paycheck.definition,
+      );
+      if (JSON.stringify(written) !== JSON.stringify(paycheck.definition)) {
+        await db.update('paychecks', {
+          id: paycheck.id,
+          definition: JSON.stringify(written),
+        });
+      }
+    }
+  }
+}
+
+async function isLiveSchedule(id: string) {
+  return (
+    (await db.first('SELECT id FROM schedules WHERE id = ? AND tombstone = 0', [
+      id,
+    ])) != null
+  );
+}
+
+async function forgetGenerated(scheduleId: string) {
+  const row = await db.first<db.DbPaycheckSchedule>(
+    'SELECT * FROM paycheck_schedules WHERE id = ? AND tombstone = 0',
+    [scheduleId],
+  );
+  if (row) {
+    await db.delete_('paycheck_schedules', scheduleId);
+  }
+}
+
 /**
  * Regenerates a paycheck's schedules from its definition and the current
  * account settings, returning the definition with the schedule ids.
  */
 async function writePaycheckSchedules(
+  paycheckId: PaycheckEntity['id'],
   name: string,
   definition: PaycheckDefinition,
   previous?: PaycheckDefinition,
@@ -373,10 +552,16 @@ async function writePaycheckSchedules(
   const kept = new Set(deposits.map(d => d.schedule));
   for (const deposit of previous?.deposits ?? []) {
     if (deposit.schedule && !kept.has(deposit.schedule)) {
-      await deleteSchedule({ id: deposit.schedule });
+      // A schedule that never arrived, or was deleted elsewhere and has just
+      // been recreated, has nothing left to delete
+      if (await isLiveSchedule(deposit.schedule)) {
+        await deleteSchedule({ id: deposit.schedule });
+      }
+      await forgetGenerated(deposit.schedule);
     }
   }
 
+  await recordGenerated(paycheckId, [paySchedule, ...kept]);
   return { ...definition, paySchedule, deposits };
 }
 
@@ -402,8 +587,11 @@ async function createPaycheck({
     });
     await db.insertPayee({ name: '', transfer_acct: fields.clearingAccount });
   }
-  const written = await writePaycheckSchedules(name, fields);
+  // The id comes first, so the schedules can record which paycheck made them
+  const id = uuidv4();
+  const written = await writePaycheckSchedules(id, name, fields);
   return db.insertWithUUID('paychecks', {
+    id,
     name,
     definition: JSON.stringify(written),
   });
@@ -421,6 +609,7 @@ async function updatePaycheck({
   const previous = await getPaycheck(id);
   await validate(name, definition, previous.definition);
   const written = await writePaycheckSchedules(
+    id,
     name,
     definition,
     previous.definition,
@@ -430,6 +619,8 @@ async function updatePaycheck({
     name,
     definition: JSON.stringify(written),
   });
+  // Saving may race an edit synced from another device
+  await reconcilePaycheckSchedules();
 }
 
 // Deletes the paycheck and its schedules; the clearing account and posted
@@ -444,6 +635,13 @@ async function deletePaycheck({ id }: { id: PaycheckEntity['id'] }) {
   }
   if (definition.paySchedule) {
     await deleteSchedule({ id: definition.paySchedule });
+  }
+  const mapped = await db.all<{ id: string }>(
+    'SELECT id FROM paycheck_schedules WHERE paycheck = ? AND tombstone = 0',
+    [id],
+  );
+  for (const row of mapped) {
+    await db.delete_('paycheck_schedules', row.id);
   }
   await db.delete_('paychecks', id);
 }
@@ -653,6 +851,7 @@ async function setAccountBusinessDays({
   );
   for (const paycheck of rows.flatMap(row => toPaycheck(row) ?? [])) {
     const written = await writePaycheckSchedules(
+      paycheck.id,
       paycheck.name,
       paycheck.definition,
       paycheck.definition,

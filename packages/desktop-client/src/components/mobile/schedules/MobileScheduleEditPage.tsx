@@ -18,6 +18,7 @@ import type {
 
 import { MobileBackButton } from '#components/mobile/MobileBackButton';
 import { MobilePageHeader, Page } from '#components/Page';
+import { PaycheckScheduleNote } from '#components/schedules/PaycheckScheduleNote';
 import { updateScheduleConditions } from '#components/schedules/schedule-edit-utils';
 import { ScheduleEditForm } from '#components/schedules/ScheduleEditForm';
 import { useNavigate } from '#hooks/useNavigate';
@@ -258,6 +259,7 @@ export function MobileScheduleEditPage() {
       }
       padding={0}
     >
+      <PaycheckScheduleNote scheduleId={schedule?.id} />
       <ScheduleEditForm
         fields={state.fields}
         dispatch={dispatch}

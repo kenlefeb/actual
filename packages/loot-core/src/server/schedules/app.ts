@@ -51,6 +51,7 @@ import type {
   RuleConditionEntity,
   ScheduleEntity,
 } from '#types/models';
+import type { ServerEvents } from '#types/server-events';
 
 import { findSchedules } from './find-schedules';
 
@@ -1075,7 +1076,33 @@ export async function waitOnSchedulesService() {
   } while (run !== serviceRun);
 }
 
-app.events.on('sync', ({ type }) => {
+// Queues work that closing a budget must wait for. runMutator is sequential,
+// so the newest run finishes last and is the only one to track.
+export function runTrackedMutator(name: string, func: () => Promise<unknown>) {
+  // Handling the failure here reports it; closing the budget only waits
+  serviceRun = runMutator(func).then(
+    () => undefined,
+    error => {
+      logger.error(`${name} failed:`, error);
+      captureException(error);
+    },
+  );
+}
+
+// Steps other modules run on every sync, before the once-a-day guard. The
+// paychecks reconcile registers here, so this module doesn't import paychecks.
+const syncSteps: Array<(event: ServerEvents['sync-event']) => void> = [];
+
+export function onEverySync(step: (event: ServerEvents['sync-event']) => void) {
+  syncSteps.push(step);
+}
+
+app.events.on('sync', event => {
+  const { type } = event;
+  for (const step of syncSteps) {
+    step(event);
+  }
+
   const completeEvent =
     type === 'success' || type === 'error' || type === 'unauthorized';
 
@@ -1087,13 +1114,9 @@ app.events.on('sync', ({ type }) => {
 
     const { lastScheduleRun } = prefs.getPrefs();
     if (lastScheduleRun !== currentDay()) {
-      // Handling the failure here reports it; closing the budget only waits
-      serviceRun = runMutator(() =>
+      runTrackedMutator('Schedules service', () =>
         advanceSchedulesService(type === 'success'),
-      ).catch(error => {
-        logger.error('Schedules service failed:', error);
-        captureException(error);
-      });
+      );
 
       // Only mark the day as done when sync succeeded, so that
       // schedule auto-posting is retried on subsequent successful syncs

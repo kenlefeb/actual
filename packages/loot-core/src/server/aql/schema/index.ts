@@ -102,6 +102,12 @@ export const schema = {
     definition: f('json'),
     tombstone: f('boolean'),
   },
+  paycheck_schedules: {
+    // The schedule's id
+    id: f('id'),
+    paycheck: f('id', { ref: 'paychecks' }),
+    tombstone: f('boolean'),
+  },
   categories: {
     id: f('id'),
     name: f('string'),

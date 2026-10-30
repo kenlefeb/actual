@@ -41,6 +41,7 @@ import type {
 } from '#types/models';
 
 import * as link from './link';
+import { moveOnBudget, previewMoveOnBudget } from './move-on-budget';
 import { getStartingBalancePayee } from './payees';
 import * as bankSync from './sync';
 
@@ -63,6 +64,8 @@ export type AccountHandlers = {
   'akahu-accounts-link': typeof linkAkahuAccount;
   'enablebanking-accounts-link': typeof linkEnableBankingAccount;
   'account-create': typeof createAccount;
+  'account-move-on-budget-preview': typeof previewMoveOnBudget;
+  'account-move-on-budget': typeof moveOnBudget;
   'account-close': typeof closeAccount;
   'account-reopen': typeof reopenAccount;
   'account-move': typeof moveAccount;
@@ -1804,6 +1807,8 @@ app.method('pluggyai-accounts-link', linkPluggyAiAccount);
 app.method('akahu-accounts-link', linkAkahuAccount);
 app.method('enablebanking-accounts-link', linkEnableBankingAccount);
 app.method('account-create', mutator(undoable(createAccount)));
+app.method('account-move-on-budget-preview', previewMoveOnBudget);
+app.method('account-move-on-budget', mutator(undoable(moveOnBudget)));
 app.method('account-close', mutator(closeAccount));
 app.method('account-reopen', mutator(undoable(reopenAccount)));
 app.method('account-move', mutator(undoable(moveAccount)));

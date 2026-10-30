@@ -54,8 +54,8 @@
   - both on is on, and `flags.paychecks` `'false'` is off.
 
   Verify the existing `useFeatureFlag` and `Experimental` tests still pass.
-- [ ] 3.3 Gate the reconcile on that effective flag: it does nothing while the flag is off. Verify "Deleted while paychecks were off" passes, for both the local and the synced toggle.
-- [ ] 3.4 Hook it into the schedules `sync` handler (`server/schedules/app.ts:987-1000`), **before** the `lastScheduleRun !== currentDay()` guard, leaving the guarded `advanceSchedulesService` call as it is. Call `void runMutator(() => reconcilePaycheckSchedules())`:
+- [x] 3.3 Gate the reconcile on that effective flag: it does nothing while the flag is off. Verify "Deleted while paychecks were off" passes, for both the local and the synced toggle.
+- [x] 3.4 Hook it into the schedules `sync` handler (`server/schedules/app.ts:987-1000`), **before** the `lastScheduleRun !== currentDay()` guard, leaving the guarded `advanceSchedulesService` call as it is. Call `void runMutator(() => reconcilePaycheckSchedules())`:
   - on `type === 'success'`, when `tables` includes `paychecks`, `paycheck_schedules` or `schedules`;
   - on `type === 'applied'` or `'success'`, when `tables` includes `preferences` and the effective flag is on.
 

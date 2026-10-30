@@ -11,6 +11,7 @@ import { aqlQuery } from '#server/aql';
 import * as db from '#server/db';
 import { toDateRepr } from '#server/models';
 import { mutator, runMutator } from '#server/mutators';
+import { reconcilePaycheckSchedules } from '#server/paychecks/app';
 import * as prefs from '#server/prefs';
 import { Rule } from '#server/rules';
 import { addSyncListener, batchMessages } from '#server/sync';
@@ -976,7 +977,23 @@ app.method('schedule/get-upcoming-dates', getUpcomingDates);
 
 app.service(trackJSONPaths);
 
-app.events.on('sync', ({ type }) => {
+const PAYCHECK_TABLES = ['paychecks', 'paycheck_schedules', 'schedules'];
+
+app.events.on('sync', event => {
+  const { type } = event;
+  // Before the once-a-day guard: edits from another device can arrive on any
+  // sync, and must be cleaned up before schedules post (ADR 2). The reconcile
+  // does nothing while paychecks are off.
+  if (
+    (type === 'success' || type === 'applied') &&
+    db.getDatabase() &&
+    (event.tables.includes('preferences') ||
+      (type === 'success' &&
+        event.tables.some(table => PAYCHECK_TABLES.includes(table))))
+  ) {
+    void runMutator(() => reconcilePaycheckSchedules());
+  }
+
   const completeEvent =
     type === 'success' || type === 'error' || type === 'unauthorized';
 

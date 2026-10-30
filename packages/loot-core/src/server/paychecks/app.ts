@@ -44,9 +44,13 @@ app.method('paychecks-get', getPaychecks);
 app.method('paycheck-create', mutator(undoable(createPaycheck)));
 app.method('paycheck-update', mutator(undoable(updatePaycheck)));
 app.method('paycheck-delete', mutator(undoable(deletePaycheck)));
-// At budget load: record schedules of paychecks saved before the record existed
+// At budget load: record schedules of paychecks saved before the record
+// existed, then clean up edits that synced while the budget was closed
 app.service(() => {
-  void runMutator(() => backfillPaycheckSchedules());
+  void runMutator(async () => {
+    await backfillPaycheckSchedules();
+    await reconcilePaycheckSchedules();
+  });
   return () => undefined;
 });
 app.method('paycheck-skip-next', mutator(undoable(skipNextPaycheck)));
@@ -301,6 +305,9 @@ function listedSchedules(definition: PaycheckDefinition) {
  * Schedules no paycheck generated are never touched. Idempotent.
  */
 export async function reconcilePaycheckSchedules() {
+  if (!(await isPaychecksOn())) {
+    return;
+  }
   const listedBy = new Map(
     (await getPaychecks()).flatMap(paycheck =>
       listedSchedules(paycheck.definition).map(id => [id, paycheck.id]),
@@ -569,6 +576,8 @@ async function updatePaycheck({
     name,
     definition: JSON.stringify(written),
   });
+  // Saving may race an edit synced from another device
+  await reconcilePaycheckSchedules();
 }
 
 // Deletes the paycheck and its schedules; the clearing account and posted

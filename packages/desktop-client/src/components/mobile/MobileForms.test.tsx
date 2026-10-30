@@ -76,8 +76,7 @@ describe('InputField', () => {
 
 // A transaction note must survive browser value sanitization on blur.
 it('preserves newline-separated document references when a note loses focus', async () => {
-  const note =
-    'Receipt\nPAPERWORK:synthetic-id\nhttps://example.com/receipt.pdf';
+  const note = 'Receipt\nRef 12345\nhttps://example.com/receipt.pdf';
   const onUpdate = vi.fn();
   render(
     <TextareaField

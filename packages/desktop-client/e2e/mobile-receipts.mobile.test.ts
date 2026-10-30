@@ -27,7 +27,7 @@ test('mobile note retains document boundaries and opens a receipt without enteri
     await expect(page.getByTestId('transactions-balance')).toHaveText('901.00');
     await item.click();
     const note =
-      'MOBILE RECEIPT CHECK\nPAPERWORK:synthetic-id\nhttps://example.com/receipt.pdf';
+      'MOBILE RECEIPT CHECK\nRef 12345\nhttps://example.com/receipt.pdf';
     const notes = page
       .getByRole('textbox', { name: 'Notes', exact: true })
       .last();

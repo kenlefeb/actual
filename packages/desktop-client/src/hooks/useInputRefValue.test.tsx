@@ -7,7 +7,7 @@ import { expect, it, vi } from 'vitest';
 import { useInputRefValue } from './useInputRefValue';
 
 it('inserts a tag into a multiline note through React without dropping line breaks', async () => {
-  const note = 'Receipt\nPAPERWORK:synthetic-id';
+  const note = 'Receipt\nRef 12345';
   const changed = vi.fn();
   function Editor() {
     const ref = useRef<HTMLTextAreaElement>(null);

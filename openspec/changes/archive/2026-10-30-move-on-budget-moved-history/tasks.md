@@ -22,8 +22,11 @@
 - [x] 3.2 "Moved history" in the desktop category cell and the phone transaction row (Decision 3).
 - [x] 3.3 The confirmation modal and its use from the desktop category cell, the phone transaction edit page and bulk categorize on the selection (Decision 4).
 - [x] 3.4 File a Backlog story for categorizing through the Rules page's apply path (design.md, Risks).
+  - Filed as sc-1214; the rules-page path is not implemented in this change.
 
 ## 4. Checks
 
-- [ ] 4.1 `yarn typecheck`, `yarn lint` and the loot-core and desktop-client tests.
-- [ ] 4.2 By hand, desktop and 375px, on a demo budget: the uncategorized count before and after a move, undo, "Moved history", and the confirmation.
+- [x] 4.1 `yarn typecheck`, `yarn lint` and the loot-core and desktop-client tests.
+  - Done in PR #122 (CI green).
+- [x] 4.2 By hand, desktop and 375px, on a demo budget: the uncategorized count before and after a move, undo, "Moved history", and the confirmation.
+  - Done by the Tester on PR #122 (approval comments).

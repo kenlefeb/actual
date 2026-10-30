@@ -980,7 +980,11 @@ describe('API CRUD operations', () => {
             category: groceries,
             notes: 'Groceries #Alex #Sam',
           },
-          { amount: -5900, category: software, notes: 'Software #Alex #Jordan' },
+          {
+            amount: -5900,
+            category: software,
+            notes: 'Software #Alex #Jordan',
+          },
         ],
       },
       {

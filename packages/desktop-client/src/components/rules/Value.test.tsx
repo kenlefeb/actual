@@ -8,10 +8,11 @@ import type {
   RelativeDateConfig,
   ScheduleEntity,
 } from '@actual-app/core/types/models';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { TestProviders } from '#mocks';
+import { scheduleDateLookupQueries } from '#hooks/useScheduleDateLookup';
+import { createTestQueryClient, TestProviders } from '#mocks';
 
 import { Value } from './Value';
 
@@ -26,8 +27,8 @@ vi.mock('#hooks/useBusinessCalendars', () => ({
 }));
 
 // Every schedule, for the schedule-name lookup
-vi.mock('#hooks/useQuery', () => ({
-  useQuery: () => state.allSchedules,
+vi.mock('#queries/aqlQuery', () => ({
+  aqlQuery: async () => ({ data: state.allSchedules.data, dependencies: [] }),
 }));
 
 const bank: BusinessCalendarEntity = {
@@ -55,13 +56,23 @@ const twoDaysBefore: RelativeDateConfig = {
 };
 
 function renderValue(value: unknown) {
+  const queryClient = createTestQueryClient();
   const view = () => (
-    <TestProviders>
+    <TestProviders queryClient={queryClient}>
       <Value value={value} field="date" />
     </TestProviders>
   );
   const { rerender } = render(view());
-  return () => rerender(view());
+  return {
+    rerender: () => rerender(view()),
+    // As sync-events does when a schedules table syncs
+    syncSchedules: () =>
+      act(() =>
+        queryClient.invalidateQueries({
+          queryKey: scheduleDateLookupQueries.all(),
+        }),
+      ),
+  };
 }
 
 describe('Value', () => {
@@ -76,28 +87,28 @@ describe('Value', () => {
     setScheduleNames([]);
   });
 
-  it('describes a relative date instead of parsing it as a date', () => {
+  it('describes a relative date instead of parsing it as a date', async () => {
     renderValue({ ...twoDaysBefore, businessCalendarId: undefined });
     expect(
-      screen.getByText('2 business days before Payday'),
+      await screen.findByText('2 business days before Payday'),
     ).toBeInTheDocument();
   });
 
-  it('names a source schedule renamed after it syncs', () => {
-    const rerender = renderValue(twoDaysBefore);
+  it('names a source schedule renamed after it syncs', async () => {
+    const { syncSchedules } = renderValue(twoDaysBefore);
     expect(
-      screen.getByText('2 business days before Payday (Bank)'),
+      await screen.findByText('2 business days before Payday (Bank)'),
     ).toBeInTheDocument();
 
     state.allSchedules = { data: [payday('Acme payday')], isLoading: false };
-    rerender();
+    await syncSchedules();
 
     expect(
-      screen.getByText('2 business days before Acme payday (Bank)'),
+      await screen.findByText('2 business days before Acme payday (Bank)'),
     ).toBeInTheDocument();
   });
 
-  it('names a calendar renamed after it syncs', () => {
+  it('names a calendar renamed after it syncs', async () => {
     const recurring = {
       start: '2026-11-06',
       frequency: 'weekly',
@@ -105,8 +116,10 @@ describe('Value', () => {
       weekendSolveMode: 'before',
       businessCalendarId: 'bank',
     };
-    const rerender = renderValue(recurring);
-    expect(screen.getByText(/non-business days in Bank\)/)).toBeInTheDocument();
+    const { rerender } = renderValue(recurring);
+    expect(
+      await screen.findByText(/non-business days in Bank\)/),
+    ).toBeInTheDocument();
 
     state.calendars = { data: [{ ...bank, name: 'Credit union' }] };
     rerender();

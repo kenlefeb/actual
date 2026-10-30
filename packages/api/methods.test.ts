@@ -1009,9 +1009,13 @@ describe('API CRUD operations', () => {
           {
             amount: -4000,
             category: groceries,
-            notes: 'Groceries #Ken #Ethan',
+            notes: 'Groceries #Alex #Sam',
           },
-          { amount: -5900, category: software, notes: 'Software #Ken #Wendee' },
+          {
+            amount: -5900,
+            category: software,
+            notes: 'Software #Alex #Jordan',
+          },
         ],
       },
       {
@@ -1040,7 +1044,7 @@ describe('API CRUD operations', () => {
     assert(child);
 
     await api.updateTransaction(child.id, {
-      notes: 'Verified edit #Ken #Ethan',
+      notes: 'Verified edit #Alex #Sam',
     });
     const after = await api.getTransactions(
       accountId,
@@ -1052,7 +1056,7 @@ describe('API CRUD operations', () => {
     ).toEqual(
       parent.subtransactions?.map(transaction =>
         transaction.id === child.id
-          ? { ...transaction, notes: 'Verified edit #Ken #Ethan' }
+          ? { ...transaction, notes: 'Verified edit #Alex #Sam' }
           : transaction,
       ),
     );

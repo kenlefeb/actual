@@ -1594,3 +1594,127 @@ describe('relative schedules', () => {
     expect(getScheduleDate(payday)).toEqual(paydayDate);
   });
 });
+
+describe('upcoming dates after a skip', () => {
+  const weekly = {
+    start: '2026-10-03',
+    frequency: 'weekly' as const,
+    patterns: [],
+  };
+  const upcoming = (args: { config: unknown; scheduleId?: string }) =>
+    schedulesApp.handlers['schedule/get-upcoming-dates']({ ...args, count: 3 });
+
+  beforeEach(() => {
+    MockDate.set(new Date(2026, 9, 1, 12));
+  });
+
+  afterEach(() => {
+    MockDate.reset();
+  });
+
+  it('start from the stored next date once a date is skipped', async () => {
+    const id = await createSchedule({
+      conditions: [{ op: 'isapprox', field: 'date', value: weekly }],
+    });
+    await skipNextDate({ id });
+
+    expect(await upcoming({ config: weekly, scheduleId: id })).toEqual([
+      '2026-10-10',
+      '2026-10-17',
+      '2026-10-24',
+    ]);
+  });
+
+  it('keep a date moved after the weekend onto the stored next date', async () => {
+    const moved = {
+      ...weekly,
+      skipWeekend: true,
+      weekendSolveMode: 'after' as const,
+    };
+    const id = await createSchedule({
+      conditions: [{ op: 'isapprox', field: 'date', value: moved }],
+    });
+    // Saturdays move to Mondays: Oct 5 is skipped, so Oct 10 (shown Oct 12) is next
+    await skipNextDate({ id });
+
+    expect(await upcoming({ config: moved, scheduleId: id })).toEqual([
+      '2026-10-12',
+      '2026-10-19',
+      '2026-10-26',
+    ]);
+  });
+
+  it('preview new and edited dates from today, as before', async () => {
+    const id = await createSchedule({
+      conditions: [{ op: 'isapprox', field: 'date', value: weekly }],
+    });
+    await skipNextDate({ id });
+
+    const fromToday = ['2026-10-03', '2026-10-10', '2026-10-17'];
+    // A new schedule has no stored next date
+    expect(await upcoming({ config: weekly })).toEqual(fromToday);
+    // An edited date no longer matches the stored next date
+    expect(
+      await upcoming({
+        config: { ...weekly, start: '2026-10-02' },
+        scheduleId: id,
+      }),
+    ).toEqual(['2026-10-02', '2026-10-09', '2026-10-16']);
+  });
+
+  it('start a relative schedule from its stored next date until its offset changes', async () => {
+    const payday = await createSchedule({
+      conditions: [
+        {
+          op: 'isapprox',
+          field: 'date',
+          value: { start: '2026-10-10', frequency: 'monthly', patterns: [] },
+        },
+      ],
+    });
+    const twoDaysBefore = {
+      relativeTo: {
+        scheduleId: payday,
+        offset: 2,
+        unit: 'days' as const,
+        direction: 'before' as const,
+      },
+    };
+    const id = await createSchedule({
+      conditions: [{ op: 'isapprox', field: 'date', value: twoDaysBefore }],
+    });
+    // Oct 8 is skipped, so Nov 8 is next
+    await skipNextDate({ id });
+
+    expect(await upcoming({ config: twoDaysBefore, scheduleId: id })).toEqual([
+      '2026-11-08',
+      '2026-12-08',
+      '2027-01-08',
+    ]);
+    // Three days before no longer lands on Nov 8, so it starts from today
+    const threeDaysBefore = {
+      ...twoDaysBefore,
+      relativeTo: { ...twoDaysBefore.relativeTo, offset: 3 },
+    };
+    expect(await upcoming({ config: threeDaysBefore, scheduleId: id })).toEqual(
+      ['2026-10-07', '2026-11-07', '2026-12-07'],
+    );
+  });
+
+  it('preview an overdue next date from today', async () => {
+    const monthly = {
+      start: '2026-09-15',
+      frequency: 'monthly' as const,
+      patterns: [],
+    };
+    const id = await createSchedule({
+      conditions: [{ op: 'isapprox', field: 'date', value: monthly }],
+    });
+    // Sep 15 is missed, not skipped, so "upcoming" starts today
+    expect(await upcoming({ config: monthly, scheduleId: id })).toEqual([
+      '2026-10-15',
+      '2026-11-15',
+      '2026-12-15',
+    ]);
+  });
+});

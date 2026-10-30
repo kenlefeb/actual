@@ -6,12 +6,13 @@ import type {
   BusinessCalendarEntity,
   ScheduleEntity,
 } from '@actual-app/core/types/models';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { TestProviders } from '#mocks';
+import { createTestQueryClient, TestProviders } from '#mocks';
 
 import { usePreviewTransactions } from './usePreviewTransactions';
+import { scheduleDateLookupQueries } from './useScheduleDateLookup';
 
 // What the queries serve; each update is a new object, as after a sync
 const state = vi.hoisted(() => ({
@@ -24,9 +25,9 @@ vi.mock('./useBusinessCalendars', () => ({
   useBusinessCalendars: () => state.calendars,
 }));
 
-// Every schedule, for the relative-date lookup
-vi.mock('./useQuery', () => ({
-  useQuery: () => state.allSchedules,
+// Every schedule, for the shared schedules query of the relative-date lookup
+vi.mock('#queries/aqlQuery', () => ({
+  aqlQuery: async () => ({ data: state.allSchedules.data, dependencies: [] }),
 }));
 
 // The account's schedules, which leave out sources in other accounts
@@ -75,14 +76,21 @@ const bank: BusinessCalendarEntity = {
   exceptions: [],
 };
 
-function wrapper({ children }: { children: ReactNode }) {
-  return <TestProviders>{children}</TestProviders>;
-}
-
 function renderPreview() {
+  const queryClient = createTestQueryClient();
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <TestProviders queryClient={queryClient}>{children}</TestProviders>
+  );
   const hook = renderHook(() => usePreviewTransactions(), { wrapper });
   const dates = () => hook.result.current.previewTransactions.map(t => t.date);
-  return { ...hook, dates };
+  // As sync-events does when a schedules table syncs
+  const syncSchedules = () =>
+    act(() =>
+      queryClient.invalidateQueries({
+        queryKey: scheduleDateLookupQueries.all(),
+      }),
+    );
+  return { ...hook, dates, syncSchedules };
 }
 
 describe('usePreviewTransactions after a change syncs in', () => {
@@ -153,7 +161,7 @@ describe('usePreviewTransactions after a change syncs in', () => {
       isLoading: false,
     };
     showSchedule(deposit);
-    const { dates, rerender } = renderPreview();
+    const { dates, syncSchedules } = renderPreview();
     await waitFor(() => expect(dates()).toContain('2017-01-13'));
 
     // Payday moves to Thursdays; only the all-schedules query changes
@@ -161,7 +169,7 @@ describe('usePreviewTransactions after a change syncs in', () => {
       data: [payday('2017-01-05'), deposit],
       isLoading: false,
     };
-    rerender();
+    await syncSchedules();
 
     await waitFor(() => expect(dates()).toContain('2017-01-12'));
     expect(dates()).not.toContain('2017-01-13');

@@ -8,10 +8,31 @@ import type {
   BusinessCalendarEntity,
   ScheduleEntity,
 } from '@actual-app/core/types/models';
+import { queryOptions, useQuery } from '@tanstack/react-query';
 
-import { useQuery } from './useQuery';
+import { aqlQuery } from '#queries/aqlQuery';
 
 const NO_SCHEDULES: ScheduleEntity[] = [];
+
+// Tables the schedules view reads; a change to any of them refetches it
+export const SCHEDULE_TABLES = [
+  'schedules',
+  'schedules_next_date',
+  'schedules_json_paths',
+  'rules',
+  'payee_mapping',
+];
+
+/** One shared query of every schedule, refetched by sync events. */
+export const scheduleDateLookupQueries = {
+  all: () => ['schedule-date-lookup'],
+  list: () =>
+    queryOptions<ScheduleEntity[]>({
+      queryKey: [...scheduleDateLookupQueries.all(), 'list'],
+      queryFn: async () => (await aqlQuery(q('schedules').select('*'))).data,
+      staleTime: Infinity,
+    }),
+};
 
 /**
  * Every schedule (with its loading state), for the shared lookup of each
@@ -21,12 +42,11 @@ const NO_SCHEDULES: ScheduleEntity[] = [];
  * account's schedule list.
  */
 export function useScheduleDateLookup() {
-  const { data, isLoading } = useQuery<ScheduleEntity>(
-    () => q('schedules').select('*'),
-    [],
-  );
+  // Every caller shares this one query (sc-915)
+  const { data, isPending } = useQuery(scheduleDateLookupQueries.list());
   // A stable empty list while loading, so callers don't recompute every render
   const schedules = data ?? NO_SCHEDULES;
+  const isLoading = isPending;
   // Filling the lookup here would be a memo with an unused result, which the
   // React Compiler drops (sc-811)
   return { schedules, isLoading };

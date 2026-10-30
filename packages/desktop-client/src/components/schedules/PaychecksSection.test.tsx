@@ -1,5 +1,6 @@
 import { MemoryRouter } from 'react-router';
 
+import { theme } from '@actual-app/components/theme';
 import { setBusinessCalendars } from '@actual-app/core/shared/business-calendar-lookup';
 import { setScheduleDates } from '@actual-app/core/shared/schedule-date-lookup';
 import type {
@@ -360,6 +361,10 @@ describe('PaychecksSection', () => {
     renderSection();
     const section = screen.getByRole('region', { name: 'Paychecks' });
     expect(section).toHaveTextContent('Skipped: Friday, November 13');
+    // The same AA-contrast amber as the clearing warning
+    expect(screen.getByText('Skipped: Friday, November 13')).toHaveStyle({
+      color: theme.paycheckWarningText,
+    });
     expect(
       screen.getByRole('button', { name: 'Edit paycheck Acme' }),
     ).toHaveTextContent('Monday, November 30, 2026');

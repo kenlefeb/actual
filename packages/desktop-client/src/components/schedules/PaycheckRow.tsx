@@ -228,7 +228,7 @@ export function PaycheckRow({ paycheck, plan }: PaycheckRowProps) {
         </View>
       </Button>
       {plan.skipped.map(date => (
-        <Text key={date} style={{ color: theme.warningText }}>
+        <Text key={date} style={{ color: theme.paycheckWarningText }}>
           {t('Skipped: {{date}}', { date: formatDate(date, 'EEEE, MMMM d') })}
         </Text>
       ))}

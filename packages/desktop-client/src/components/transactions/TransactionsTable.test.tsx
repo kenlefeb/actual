@@ -698,6 +698,78 @@ describe('Transactions', () => {
       pushModalSpy.mockRestore();
     });
 
+    function blurCategory(container: HTMLElement) {
+      const input = container.querySelector<HTMLInputElement>(
+        '[data-testid="category"] input',
+      );
+      expect(input).not.toBeNull();
+      fireEvent.blur(input!);
+    }
+
+    async function pickAndGetModal(
+      container: HTMLElement,
+      pushModalSpy: ReturnType<typeof vi.spyOn>,
+    ) {
+      await pickGeneral(container);
+      await waitFor(() => expect(pushModalSpy).toHaveBeenCalled());
+      return pushModalSpy.mock.calls[0][0].modal as Extract<
+        modalsSlice.Modal,
+        { name: 'confirm-categorize-moved-history' }
+      >;
+    }
+
+    test('a pick followed by the blur from the dialog asks once', async () => {
+      const pushModalSpy = vi.spyOn(modalsSlice, 'pushModal');
+      const transactions = generateTransactions(5, []);
+      transactions[0].category = undefined;
+      const { container } = renderTransactions({
+        transactions,
+        accounts: [movedAccount],
+      });
+
+      await pickAndGetModal(container, pushModalSpy);
+      blurCategory(container);
+
+      expect(pushModalSpy).toHaveBeenCalledTimes(1);
+      pushModalSpy.mockRestore();
+    });
+
+    test('a blur after Categorize anyway does not ask again', async () => {
+      const pushModalSpy = vi.spyOn(modalsSlice, 'pushModal');
+      const transactions = generateTransactions(5, []);
+      transactions[0].category = undefined;
+      const { container, getTransactions } = renderTransactions({
+        transactions,
+        accounts: [movedAccount],
+      });
+
+      const modal = await pickAndGetModal(container, pushModalSpy);
+      await act(async () => modal.options.onConfirm());
+      blurCategory(container);
+
+      expect(pushModalSpy).toHaveBeenCalledTimes(1);
+      expect(getTransactions()[0].category).not.toBe(null);
+      pushModalSpy.mockRestore();
+    });
+
+    test('a blur after Cancel does not ask again and stays uncategorized', async () => {
+      const pushModalSpy = vi.spyOn(modalsSlice, 'pushModal');
+      const transactions = generateTransactions(5, []);
+      transactions[0].category = undefined;
+      const { container, getTransactions } = renderTransactions({
+        transactions,
+        accounts: [movedAccount],
+      });
+
+      await pickAndGetModal(container, pushModalSpy);
+      // Cancel never calls onConfirm
+      blurCategory(container);
+
+      expect(pushModalSpy).toHaveBeenCalledTimes(1);
+      expect(getTransactions()[0].category).toBeFalsy();
+      pushModalSpy.mockRestore();
+    });
+
     test('later transactions do not ask', async () => {
       const pushModalSpy = vi.spyOn(modalsSlice, 'pushModal');
       const transactions = generateTransactions(5, []);

@@ -236,4 +236,13 @@ describe('MoveOnBudgetModal', () => {
       expect(child).toHaveStyle({ flexShrink: '0' });
     }
   });
+
+  it("says the budget doesn't change when the starting balance is zero", async () => {
+    state.counts = { ...COUNTS, startingBalance: 0 };
+    renderModal();
+    expect(
+      await screen.findByText("Your budget doesn't change."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/^Your budget gains/)).toBe(null);
+  });
 });

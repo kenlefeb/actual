@@ -183,6 +183,34 @@ describe('Move an off-budget account on budget', () => {
   });
 });
 
+describe('Invalid start dates', () => {
+  it.each(['2026-13-01', '2026-02-30', '10/01/2026', ''])(
+    'rejects %j in both handlers and writes nothing',
+    async startDate => {
+      await setUp();
+      await addTransaction('h1', '2016-11-15', -80_00, 'groceries');
+      const count = async () =>
+        (
+          await db.first<{ n: number }>(
+            'SELECT COUNT(*) AS n FROM transactions',
+          )
+        )?.n;
+      const before = await count();
+
+      await expect(preview('vanguard', startDate)).rejects.toThrow(
+        'Invalid start date',
+      );
+      await expect(move('vanguard', startDate)).rejects.toThrow(
+        'Invalid start date',
+      );
+
+      expect(await offbudget()).toBe(1);
+      expect(await categoryOf('h1')).toBe('groceries');
+      expect(await count()).toBe(before);
+    },
+  );
+});
+
 describe('Warn before moving', () => {
   it('Counts match the account', async () => {
     await setUp();

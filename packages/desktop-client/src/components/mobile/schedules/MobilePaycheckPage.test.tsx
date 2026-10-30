@@ -257,7 +257,7 @@ describe('MobilePaycheckPage', () => {
     }
   });
 
-  it('keeps the amount fields from shrinking on a phone', async () => {
+  it('stacks each deduction and deposit field full width on a phone', async () => {
     const user = userEvent.setup();
     state.paychecks = [
       {
@@ -274,15 +274,86 @@ describe('MobilePaycheckPage', () => {
     renderPage('acme');
     await user.click(screen.getByRole('button', { name: /^Deductions/ }));
     await user.click(screen.getByRole('button', { name: /^Direct deposits/ }));
-    // jsdom does no layout, so this checks the style that keeps 110px:
-    // AmountInput's own `flex: 1` would otherwise override the width
-    for (const label of ['Deduction 1 amount', 'Deposit 1 fixed amount']) {
-      expect(screen.getByLabelText(label).parentElement).toHaveStyle({
-        width: '110px',
-        flexGrow: '0',
-        flexShrink: '0',
-      });
+    // jsdom does no layout, so this checks the styles that stack the fields
+    const fullWidth = { width: '100%', flexGrow: '0', flexShrink: '0' };
+    const name = screen.getByLabelText('Deduction 1 name');
+    expect(name.parentElement).toHaveStyle({ flexDirection: 'column' });
+    for (const field of [
+      name,
+      screen.getByLabelText('Deduction 1 amount').parentElement,
+      screen.getByRole('button', { name: 'Deduction 1 goes to' }),
+      screen.getByLabelText('Deduction 1 category').parentElement,
+      screen.getByLabelText('Deposit 1 account').parentElement,
+      screen.getByRole('button', { name: 'Deposit 1 amount type' }),
+      screen.getByLabelText('Deposit 1 fixed amount').parentElement,
+    ]) {
+      expect(field).toHaveStyle(fullWidth);
     }
+    expect(
+      screen.getByRole('button', { name: 'Deposit 1 amount type' })
+        .parentElement,
+    ).toHaveStyle({ flexDirection: 'column' });
+  });
+
+  it('separates stacked deductions and deposits with a divider on a phone only', async () => {
+    const user = userEvent.setup();
+    state.paychecks = [
+      {
+        ...acme,
+        definition: {
+          ...acme.definition,
+          deductions: [
+            ...acme.definition.deductions,
+            { id: 'dental', name: 'Dental', amount: 1500, category: 'taxes' },
+          ],
+        },
+      },
+    ];
+    renderPage('acme');
+    await user.click(screen.getByRole('button', { name: /^Deductions/ }));
+    await user.click(screen.getByRole('button', { name: /^Direct deposits/ }));
+    const deduction = (n: number) =>
+      screen.getByLabelText(`Deduction ${n} name`).parentElement;
+    const deposit = (n: number) =>
+      screen.getByLabelText(`Deposit ${n} account`).parentElement?.parentElement
+        ?.parentElement;
+    const divider = { borderTopWidth: '1px', borderTopStyle: 'solid' };
+    expect(deduction(1)).not.toHaveStyle(divider);
+    expect(deduction(2)).toHaveStyle({ ...divider, paddingTop: '12px' });
+    expect(deposit(1)).not.toHaveStyle(divider);
+    expect(deposit(2)).toHaveStyle({ ...divider, paddingTop: '12px' });
+
+    // Desktop rows keep their look
+    document.body.innerHTML = '';
+    state.isNarrowWidth = false;
+    render(
+      <TestProviders>
+        <PaycheckEditModal paycheckId="acme" />
+      </TestProviders>,
+    );
+    expect(deduction(2)).not.toHaveStyle(divider);
+    expect(deposit(2)).not.toHaveStyle(divider);
+  });
+
+  it('makes "Post automatically" one 40px tappable row on a phone', async () => {
+    const user = userEvent.setup();
+    state.paychecks = [acme];
+    renderPage('acme');
+    await user.click(screen.getByRole('button', { name: /^Direct deposits/ }));
+    const [label] = screen.getAllByText('Post automatically');
+    const row = label.closest('label')?.parentElement;
+    expect(row).toHaveStyle({ minHeight: '40px' });
+    // The label fills the row, so a tap anywhere on it toggles the checkbox
+    expect(label.closest('label')).toHaveStyle({
+      flexGrow: '1',
+      alignSelf: 'stretch',
+    });
+    const [checkbox] = screen.getAllByRole('checkbox', {
+      name: 'Post automatically',
+    });
+    expect(checkbox).not.toBeChecked();
+    await user.click(label);
+    expect(checkbox).toBeChecked();
   });
 
   it('lets the amount fields stretch on desktop as before', async () => {
@@ -298,6 +369,10 @@ describe('MobilePaycheckPage', () => {
     const amount = screen.getByLabelText('Deduction 2 amount').parentElement;
     expect(amount).toHaveStyle({ width: '110px' });
     expect(amount).not.toHaveStyle({ flexGrow: '0' });
+    // Desktop rows stay on one wrapping line
+    expect(screen.getByLabelText('Deduction 2 name').parentElement).toHaveStyle(
+      { flexDirection: 'row' },
+    );
   });
 
   it('sets Delete paycheck apart as a destructive action', () => {

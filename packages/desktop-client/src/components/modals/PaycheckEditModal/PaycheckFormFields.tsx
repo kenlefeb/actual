@@ -172,22 +172,46 @@ export function PaycheckGrossFields({ form }: FormProps) {
   );
 }
 
+// On a phone a row's fields stack full width; on wider layouts they share a
+// wrapping line
+function useRowLayout() {
+  const touch = useTouchTargetStyle();
+  const isStacked = !!touch.minWidth;
+  return {
+    touch,
+    isStacked,
+    row: isStacked
+      ? { flexDirection: 'column', alignItems: 'stretch', gap: 8 }
+      : {
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          gap: 5,
+          alignItems: 'center',
+        },
+    fullWidth: isStacked ? { width: '100%', flex: 'none' } : {},
+    // Stacked items after the first start with a divider, so one item's
+    // Remove doesn't run into the next item's fields
+    divider: (index: number) =>
+      isStacked && index > 0
+        ? {
+            borderTopWidth: 1,
+            borderTopStyle: 'solid',
+            borderTopColor: theme.tableBorder,
+            paddingTop: 12,
+            marginTop: 4,
+          }
+        : {},
+  } as const;
+}
+
 export function PaycheckDeductionFields({ form }: FormProps) {
   const { t } = useTranslation();
-  const touch = useTouchTargetStyle();
+  const { touch, isStacked, row, fullWidth, divider } = useRowLayout();
   const { updateDeduction } = form;
   return (
     <>
       {form.definition.deductions.map((deduction, index) => (
-        <View
-          key={deduction.id}
-          style={{
-            flexDirection: 'row',
-            flexWrap: 'wrap',
-            gap: 5,
-            alignItems: 'center',
-          }}
-        >
+        <View key={deduction.id} style={{ ...row, ...divider(index) }}>
           <Input
             aria-label={t('Deduction {{number}} name', {
               number: index + 1,
@@ -195,7 +219,7 @@ export function PaycheckDeductionFields({ form }: FormProps) {
             placeholder={t('Name')}
             value={deduction.name}
             onChangeValue={name => updateDeduction(deduction.id, { name })}
-            style={{ flex: 1, ...touch }}
+            style={{ flex: 1, ...touch, ...fullWidth }}
           />
           <AmountInput
             aria-label={t('Deduction {{number}} amount', {
@@ -204,15 +228,11 @@ export function PaycheckDeductionFields({ form }: FormProps) {
             value={deduction.amount}
             sign="+"
             onUpdate={amount => updateDeduction(deduction.id, { amount })}
-            style={{
-              width: 110,
-              // On a phone it keeps 110px; on desktop it stretches as before
-              ...(touch.minWidth && { flex: 'none' }),
-            }}
+            style={{ width: 110, ...fullWidth }}
             inputStyle={touch}
           />
           <Select
-            style={touch}
+            style={{ ...touch, ...fullWidth }}
             aria-label={t('Deduction {{number}} goes to', {
               number: index + 1,
             })}
@@ -227,14 +247,7 @@ export function PaycheckDeductionFields({ form }: FormProps) {
               })
             }
           />
-          <View
-            style={{
-              flex: 1,
-              gap: 5,
-              // On a phone the category drops to its own line instead of squeezing
-              ...(touch.minWidth && { minWidth: 120 }),
-            }}
-          >
+          <View style={{ flex: 1, gap: 5, ...fullWidth }}>
             {deduction.transferAccount != null && (
               <>
                 <Text style={{ color: theme.pageTextSubdued }}>
@@ -274,7 +287,7 @@ export function PaycheckDeductionFields({ form }: FormProps) {
           </View>
           <Button
             variant="bare"
-            style={touch}
+            style={{ ...touch, ...(isStacked && { alignSelf: 'flex-start' }) }}
             aria-label={t('Remove deduction {{number}}', {
               number: index + 1,
             })}
@@ -306,22 +319,15 @@ export function PaycheckNetPay({ form }: FormProps) {
 
 export function PaycheckDepositFields({ form }: FormProps) {
   const { t } = useTranslation();
-  const touch = useTouchTargetStyle();
+  const { touch, isStacked, row, fullWidth, divider } = useRowLayout();
   const format = useFormat();
   const { accountById, updateDeposit } = form;
   return (
     <>
       {form.definition.deposits.map((deposit, index) => (
-        <View key={deposit.id} style={{ gap: 5 }}>
-          <View
-            style={{
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              gap: 5,
-              alignItems: 'center',
-            }}
-          >
-            <View style={{ flex: 1 }}>
+        <View key={deposit.id} style={{ gap: 5, ...divider(index) }}>
+          <View style={row}>
+            <View style={{ flex: 1, ...fullWidth }}>
               <GenericInput
                 style={{ '& input': touch }}
                 aria-label={t('Deposit {{number}} account', {
@@ -334,7 +340,7 @@ export function PaycheckDepositFields({ form }: FormProps) {
               />
             </View>
             <Select
-              style={touch}
+              style={{ ...touch, ...fullWidth }}
               aria-label={t('Deposit {{number}} amount type', {
                 number: index + 1,
               })}
@@ -354,11 +360,7 @@ export function PaycheckDepositFields({ form }: FormProps) {
                 value={deposit.value}
                 sign="+"
                 onUpdate={value => updateDeposit(deposit.id, { value })}
-                style={{
-                  width: 110,
-                  // On a phone it keeps 110px; on desktop it stretches as before
-                  ...(touch.minWidth && { flex: 'none' }),
-                }}
+                style={{ width: 110, ...fullWidth }}
                 inputStyle={touch}
               />
             )}
@@ -377,20 +379,23 @@ export function PaycheckDepositFields({ form }: FormProps) {
                     value: Math.max(0, Number(value) || 0),
                   })
                 }
-                style={{ width: 70, ...touch }}
+                style={{ width: 70, ...touch, ...fullWidth }}
               />
             )}
             <FinancialText
               aria-label={t('Deposit {{number}} amount', {
                 number: index + 1,
               })}
-              style={{ width: 100, textAlign: 'right' }}
+              style={{ width: 100, textAlign: 'right', ...fullWidth }}
             >
               {format(form.depositAmounts.get(deposit.id) ?? 0, 'financial')}
             </FinancialText>
             <Button
               variant="bare"
-              style={touch}
+              style={{
+                ...touch,
+                ...(isStacked && { alignSelf: 'flex-start' }),
+              }}
               aria-label={t('Remove deposit {{number}}', {
                 number: index + 1,
               })}
@@ -405,6 +410,11 @@ export function PaycheckDepositFields({ form }: FormProps) {
               flexWrap: 'wrap',
               gap: 5,
               alignItems: 'center',
+              // On a phone the whole row is the tap target
+              ...(isStacked && {
+                minHeight: touch.minHeight,
+                flexWrap: 'nowrap',
+              }),
             }}
           >
             <Checkbox
@@ -416,7 +426,19 @@ export function PaycheckDepositFields({ form }: FormProps) {
                 })
               }
             />
-            <label htmlFor={`deposit-post-${deposit.id}`}>
+            <label
+              htmlFor={`deposit-post-${deposit.id}`}
+              style={
+                isStacked
+                  ? {
+                      flexGrow: 1,
+                      alignSelf: 'stretch',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }
+                  : undefined
+              }
+            >
               <Trans>Post automatically</Trans>
             </label>
           </View>

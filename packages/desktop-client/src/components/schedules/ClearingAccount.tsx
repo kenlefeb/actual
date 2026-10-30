@@ -80,7 +80,7 @@ export function ClearingWarning({
   const account = accountName(status.clearingAccount);
 
   return (
-    <Text style={{ color: theme.clearingWarningText }}>
+    <Text style={{ color: theme.paycheckWarningText }}>
       {missing.length === 0 ? (
         <Trans>
           {{ amount }} is still in "{{ account }}

@@ -40,20 +40,27 @@ function contrast(a: string, b: string) {
   return (light + 0.05) / (dark + 0.05);
 }
 
-describe('clearing account note contrast', () => {
+describe('paycheck note and warning contrast', () => {
   // The desktop register sits on pageBackground, the phone account page on
   // mobilePageBackground
   it.each(['light', 'dark', 'midnight'])(
     'meets WCAG AA in the %s theme',
     themeName => {
       const css = read(`${themeName}.css`);
-      for (const text of ['clearingNoteText', 'clearingWarningText']) {
-        for (const background of ['pageBackground', 'mobilePageBackground']) {
-          expect(
-            contrast(color(css, text), color(css, background)),
-            `${text} on ${background}`,
-          ).toBeGreaterThanOrEqual(4.5);
-        }
+      const pairs = [
+        ['clearingNoteText', 'pageBackground'],
+        ['clearingNoteText', 'mobilePageBackground'],
+        ['paycheckWarningText', 'pageBackground'],
+        ['paycheckWarningText', 'mobilePageBackground'],
+        // The Paychecks card on the Schedules page ("Skipped: …" and the
+        // clearing warning)
+        ['paycheckWarningText', 'tableBackground'],
+      ];
+      for (const [text, background] of pairs) {
+        expect(
+          contrast(color(css, text), color(css, background)),
+          `${text} on ${background}`,
+        ).toBeGreaterThanOrEqual(4.5);
       }
     },
   );

@@ -14,7 +14,7 @@ import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
 import {
   amountToCurrency,
-  appendDecimals,
+  appendDecimalPlaces,
   currencyToAmount,
   reapplyThousandSeparators,
 } from '@actual-app/core/shared/util';
@@ -118,7 +118,7 @@ const AmountInput = memo(function AmountInput({
 
   const onChangeText = (text: string) => {
     text = reapplyThousandSeparators(text);
-    text = appendDecimals(text, String(hideFraction) === 'true');
+    text = appendDecimalPlaces(text, String(hideFraction) === 'true');
     setEditing(true);
     setText(text);
     props.onChangeValue?.(text);

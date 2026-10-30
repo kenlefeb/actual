@@ -243,7 +243,7 @@ export function reapplyThousandSeparators(amountText: string) {
     : integerPart;
 }
 
-export function appendDecimals(
+export function appendDecimalPlaces(
   amountText: string,
   hideDecimals = false,
 ): string {

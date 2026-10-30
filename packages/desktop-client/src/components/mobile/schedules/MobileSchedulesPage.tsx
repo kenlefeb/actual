@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
+import { Button } from '@actual-app/components/button';
 import { styles } from '@actual-app/components/styles';
 import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
@@ -16,8 +17,10 @@ import { Search } from '#components/common/Search';
 import { MobilePageHeader, Page } from '#components/Page';
 import { useAccounts } from '#hooks/useAccounts';
 import { useDateFormat } from '#hooks/useDateFormat';
+import { useFeatureFlag } from '#hooks/useFeatureFlag';
 import { useFormat } from '#hooks/useFormat';
 import { useNavigate } from '#hooks/useNavigate';
+import { useOpenBusinessCalendars } from '#hooks/useOpenBusinessCalendars';
 import { usePayees } from '#hooks/usePayees';
 import { useSchedules } from '#hooks/useSchedules';
 import { useUndo } from '#hooks/useUndo';
@@ -43,6 +46,8 @@ export function MobileSchedulesPage() {
     schedules,
     statuses,
   } = useSchedules({ query: schedulesQuery });
+  const businessCalendarsEnabled = useFeatureFlag('businessCalendars');
+  const openBusinessCalendars = useOpenBusinessCalendars();
 
   const { data: payees = [] } = usePayees();
   const { data: accounts = [] } = useAccounts();
@@ -154,6 +159,16 @@ export function MobileSchedulesPage() {
           }}
         />
       </View>
+      {businessCalendarsEnabled && (
+        <View style={{ padding: 10, paddingBottom: 0 }}>
+          <Button
+            style={{ minHeight: styles.mobileMinHeight }}
+            onPress={openBusinessCalendars}
+          >
+            <Trans>Business calendars</Trans>
+          </Button>
+        </View>
+      )}
       <SchedulesList
         schedules={filteredSchedules}
         isLoading={isSchedulesLoading}

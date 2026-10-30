@@ -11,6 +11,8 @@ import type { ScheduleEntity } from '@actual-app/core/types/models';
 
 import { Search } from '#components/common/Search';
 import { FeatureErrorFallback } from '#components/FeatureErrorFallback';
+import { useFeatureFlag } from '#hooks/useFeatureFlag';
+import { useOpenBusinessCalendars } from '#hooks/useOpenBusinessCalendars';
 import { useSchedules } from '#hooks/useSchedules';
 import { pushModal } from '#modals/modalsSlice';
 import { useDispatch } from '#redux';
@@ -23,6 +25,8 @@ export function Schedules() {
 
   const dispatch = useDispatch();
   const [filter, setFilter] = useState('');
+  const businessCalendarsEnabled = useFeatureFlag('businessCalendars');
+  const openBusinessCalendars = useOpenBusinessCalendars();
 
   const onEdit = useCallback(
     (id: ScheduleEntity['id']) => {
@@ -142,6 +146,11 @@ export function Schedules() {
             <Button onPress={onChangeUpcomingLength}>
               <Trans>Change upcoming length</Trans>
             </Button>
+            {businessCalendarsEnabled && (
+              <Button onPress={openBusinessCalendars}>
+                <Trans>Business calendars</Trans>
+              </Button>
+            )}
           </View>
           <Button variant="primary" onPress={onAdd}>
             <Trans>Add new schedule</Trans>

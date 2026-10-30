@@ -669,6 +669,9 @@ export type Modal =
       name: 'schedules-upcoming-length';
     }
   | {
+      name: 'business-calendars';
+    }
+  | {
       name: 'payee-category-learning';
     }
   | {

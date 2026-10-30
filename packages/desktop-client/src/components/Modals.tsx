@@ -20,6 +20,7 @@ import { AkahuInitialiseModal } from './modals/AkahuInitialiseModal';
 import { AllAccountsMenuModal } from './modals/AllAccountsMenuModal';
 import { BudgetAutomationsModal } from './modals/BudgetAutomationsModal';
 import { BudgetPageMenuModal } from './modals/BudgetPageMenuModal';
+import { BusinessCalendarsModal } from './modals/BusinessCalendarsModal';
 import { CategoryAutocompleteModal } from './modals/CategoryAutocompleteModal';
 import { CategoryGroupAutocompleteModal } from './modals/CategoryGroupAutocompleteModal';
 import { CategoryGroupMenuModal } from './modals/CategoryGroupMenuModal';
@@ -273,6 +274,9 @@ export function Modals() {
 
         case 'schedules-discover':
           return <DiscoverSchedules key={key} />;
+
+        case 'business-calendars':
+          return <BusinessCalendarsModal key={key} />;
 
         case 'schedules-upcoming-length':
           return <UpcomingLength key={key} />;

@@ -86,6 +86,14 @@ export const schema = {
     sort_order: f('float'),
     tombstone: f('boolean'),
   },
+  business_calendars: {
+    id: f('id'),
+    name: f('string'),
+    non_working_days: f('json'),
+    holidays: f('json'),
+    exceptions: f('json'),
+    tombstone: f('boolean'),
+  },
   categories: {
     id: f('id'),
     name: f('string'),

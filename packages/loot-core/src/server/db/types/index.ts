@@ -47,6 +47,16 @@ export type DbAccountGroup = {
   tombstone: 1 | 0;
 };
 
+export type DbBusinessCalendar = {
+  id: string;
+  name: string;
+  // JSON-encoded arrays
+  non_working_days: string;
+  holidays: string;
+  exceptions: string;
+  tombstone: 1 | 0;
+};
+
 export type DbBank = {
   id: string;
   bank_id: string;

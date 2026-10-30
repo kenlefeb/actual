@@ -48,11 +48,11 @@ test('mobile note retains document boundaries and opens a receipt without enteri
     await expect(notes).toHaveValue(note);
     await expect(
       page.getByRole('textbox', { name: 'Notes', exact: true }).nth(0),
-    ).toHaveValue('Groceries #Ken #Ethan');
+    ).toHaveValue('Groceries #Alex #Sam');
     await expect(
       page.getByRole('textbox', { name: 'Notes', exact: true }).nth(1),
-    ).toHaveValue('Software #Ken #Wendee');
-    const softwareNote = 'Software #Ken #Wendee\nSPLIT PHONE CHECK';
+    ).toHaveValue('Software #Alex #Jordan');
+    const softwareNote = 'Software #Alex #Jordan\nSPLIT PHONE CHECK';
     await page
       .getByRole('textbox', { name: 'Notes', exact: true })
       .nth(1)
@@ -65,7 +65,7 @@ test('mobile note retains document boundaries and opens a receipt without enteri
     await expect(notes).toHaveValue(note);
     await expect(
       page.getByRole('textbox', { name: 'Notes', exact: true }).nth(0),
-    ).toHaveValue('Groceries #Ken #Ethan');
+    ).toHaveValue('Groceries #Alex #Sam');
     await expect(
       page.getByRole('textbox', { name: 'Notes', exact: true }).nth(1),
     ).toHaveValue(softwareNote);

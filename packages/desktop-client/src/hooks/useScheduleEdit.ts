@@ -328,11 +328,13 @@ export function useScheduleEdit({
       const { data } = await sendCatch('schedule/get-upcoming-dates', {
         config: date,
         count: 3,
+        // A saved schedule previews from its next date, so skips show
+        scheduleId: state.schedule?.id,
       });
       dispatch({ type: 'set-upcoming-dates', dates: data });
     }
     void run();
-  }, [state.fields.date]);
+  }, [state.fields.date, state.schedule?.id]);
 
   // Load linked transactions
   useEffect(() => {

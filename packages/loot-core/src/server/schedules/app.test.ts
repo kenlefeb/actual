@@ -1594,3 +1594,71 @@ describe('relative schedules', () => {
     expect(getScheduleDate(payday)).toEqual(paydayDate);
   });
 });
+
+describe('upcoming dates after a skip', () => {
+  const weekly = {
+    start: '2026-10-03',
+    frequency: 'weekly' as const,
+    patterns: [],
+  };
+  const upcoming = (args: { config: unknown; scheduleId?: string }) =>
+    schedulesApp.handlers['schedule/get-upcoming-dates']({ ...args, count: 3 });
+
+  beforeEach(() => {
+    MockDate.set(new Date(2026, 9, 1, 12));
+  });
+
+  afterEach(() => {
+    MockDate.reset();
+  });
+
+  it('start from the stored next date once a date is skipped', async () => {
+    const id = await createSchedule({
+      conditions: [{ op: 'isapprox', field: 'date', value: weekly }],
+    });
+    await skipNextDate({ id });
+
+    expect(await upcoming({ config: weekly, scheduleId: id })).toEqual([
+      '2026-10-10',
+      '2026-10-17',
+      '2026-10-24',
+    ]);
+  });
+
+  it('keep a date moved after the weekend onto the stored next date', async () => {
+    const moved = {
+      ...weekly,
+      skipWeekend: true,
+      weekendSolveMode: 'after' as const,
+    };
+    const id = await createSchedule({
+      conditions: [{ op: 'isapprox', field: 'date', value: moved }],
+    });
+    // Saturdays move to Mondays: Oct 5 is skipped, so Oct 10 (shown Oct 12) is next
+    await skipNextDate({ id });
+
+    expect(await upcoming({ config: moved, scheduleId: id })).toEqual([
+      '2026-10-12',
+      '2026-10-19',
+      '2026-10-26',
+    ]);
+  });
+
+  it('preview new and edited dates from today, as before', async () => {
+    const id = await createSchedule({
+      conditions: [{ op: 'isapprox', field: 'date', value: weekly }],
+    });
+    await skipNextDate({ id });
+
+    const fromToday = ['2026-10-03', '2026-10-10', '2026-10-17'];
+    // A new schedule has no stored next date
+    expect(await upcoming({ config: weekly })).toEqual(fromToday);
+    // An edited date no longer matches the stored next date
+    expect(
+      await upcoming({
+        config: { ...weekly, start: '2026-10-02' },
+        scheduleId: id,
+      }),
+    ).toEqual(['2026-10-02', '2026-10-09', '2026-10-16']);
+  });
+});

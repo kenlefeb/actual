@@ -1661,4 +1661,43 @@ describe('upcoming dates after a skip', () => {
       }),
     ).toEqual(['2026-10-02', '2026-10-09', '2026-10-16']);
   });
+
+  it('start a relative schedule from its stored next date until its offset changes', async () => {
+    const payday = await createSchedule({
+      conditions: [
+        {
+          op: 'isapprox',
+          field: 'date',
+          value: { start: '2026-10-10', frequency: 'monthly', patterns: [] },
+        },
+      ],
+    });
+    const twoDaysBefore = {
+      relativeTo: {
+        scheduleId: payday,
+        offset: 2,
+        unit: 'days' as const,
+        direction: 'before' as const,
+      },
+    };
+    const id = await createSchedule({
+      conditions: [{ op: 'isapprox', field: 'date', value: twoDaysBefore }],
+    });
+    // Oct 8 is skipped, so Nov 8 is next
+    await skipNextDate({ id });
+
+    expect(await upcoming({ config: twoDaysBefore, scheduleId: id })).toEqual([
+      '2026-11-08',
+      '2026-12-08',
+      '2027-01-08',
+    ]);
+    // Three days before no longer lands on Nov 8, so it starts from today
+    const threeDaysBefore = {
+      ...twoDaysBefore,
+      relativeTo: { ...twoDaysBefore.relativeTo, offset: 3 },
+    };
+    expect(await upcoming({ config: threeDaysBefore, scheduleId: id })).toEqual(
+      ['2026-10-07', '2026-11-07', '2026-12-07'],
+    );
+  });
 });

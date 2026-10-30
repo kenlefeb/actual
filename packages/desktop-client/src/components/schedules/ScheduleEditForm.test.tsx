@@ -1,6 +1,8 @@
 import type { ComponentProps } from 'react';
 
+import { sendCatch } from '@actual-app/core/platform/client/connection';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TestProviders } from '#mocks';
@@ -14,7 +16,8 @@ vi.mock('#hooks/useFeatureFlag', () => ({
     name === 'businessCalendars' ? flags.businessCalendars : false,
 }));
 
-vi.mock('#hooks/useScheduleDateLookup', () => ({
+vi.mock('#hooks/useScheduleDateLookup', async importActual => ({
+  ...(await importActual<object>()),
   useScheduleDateLookup: () => ({ schedules: [], isLoading: false }),
 }));
 
@@ -22,9 +25,18 @@ vi.mock('#hooks/useBusinessCalendarLookup', () => ({
   useBusinessCalendarLookup: () => [],
 }));
 
+vi.mock('@actual-app/core/platform/client/connection', async importActual => ({
+  ...(await importActual<object>()),
+  sendCatch: vi.fn(async () => ({ data: ['2026-11-10'] })),
+}));
+
 type Props = ComponentProps<typeof ScheduleEditForm>;
 
-function renderForm(date: Props['fields']['date'], repeats = false) {
+function renderForm(
+  date: Props['fields']['date'],
+  repeats = false,
+  schedule: Props['schedule'] = {},
+) {
   const props: Props = {
     fields: {
       payee: null,
@@ -39,7 +51,7 @@ function renderForm(date: Props['fields']['date'], repeats = false) {
     dispatch: vi.fn(),
     upcomingDates: null,
     repeats,
-    schedule: {},
+    schedule,
     adding: true,
     isCustom: false,
     onEditRule: vi.fn(),
@@ -98,5 +110,19 @@ describe('ScheduleEditForm date type', () => {
       'Relative to another schedule',
     );
     expect(screen.getByRole('spinbutton', { name: 'Offset' })).toHaveValue(2);
+  });
+
+  it("previews a saved schedule's repeating dates from its next date", async () => {
+    renderForm(
+      { start: '2026-10-10', frequency: 'monthly', interval: 1, patterns: [] },
+      true,
+      { id: 'rent' },
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Every month/ }));
+
+    expect(sendCatch).toHaveBeenLastCalledWith(
+      'schedule/get-upcoming-dates',
+      expect.objectContaining({ scheduleId: 'rent' }),
+    );
   });
 });

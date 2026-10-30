@@ -5,10 +5,11 @@
 - [ ] 1.1 Spec for `account-budget-status`. Verify with `openspec validate account-move-on-budget --strict`.
 - [ ] 1.2 Add loot-core tests in `server/accounts/move-on-budget.test.ts`, named after the spec scenarios, that fail on `development`:
   - "The account keeps everything": id, transaction ids, balance, `account_id`/`bank` link and schedules are unchanged, and `offbudget` is 0.
-  - "Counts match the account": the preview's uncategorized counts and totals, the on-budget transfers with their categories, the off-budget transfer count and the starting balance.
+  - "The default start date", "Counts match the account" and "Many transfers": the preview's uncategorized counts, the transfers list (first 20 and the remainder) with kept categories, and the starting balance.
   - "The counts follow the start date".
-  - "The budget gains the balance from the start date", "Earlier months change only by uncategorized amounts" and "A negative balance": budget sheet values for the start month and the month before.
+  - "Balance unchanged, To Budget rises, earlier months unchanged" (required, with a categorized transfer in the history), "The budget gains the balance from the start date", "Earlier months change only by uncategorized amounts" and "A negative balance": the account balance, and budget sheet values for the start month and the month before. These tests fix the split's exact amounts (design.md, Decision 1).
   - "Nothing before the start date".
+  - "The adjustment in the register": one split on the start date, total 0, with the Starting Balances line and the noted offset line.
   - "A categorized transfer".
   - "Undo": the move, then `undo()`.
   - Refusals: a closed account, an on-budget account and an unknown id.
@@ -22,7 +23,7 @@
 
 ## 3. UI
 
-- [ ] 3.1 The `account-move-on-budget` modal (design.md, Decision 5): start date, counts, the on-budget transfers list, the starting balance, Cancel and Move on budget. Phones get a sheet with 40px controls.
+- [ ] 3.1 The `account-move-on-budget` modal (design.md, Decision 5): the start date (default the 1st of the current month), the counts, the transfers list (first 20, then "and N more"), the starting balance, Cancel and Move on budget. Phones get a sheet with 40px controls.
 - [ ] 3.2 Desktop: "Move on budget…" in the account header menu for open off-budget accounts.
 - [ ] 3.3 Phones: the same row in `AccountMenuModal`.
 - [ ] 3.4 Component tests: the option shows only for open off-budget accounts, the modal shows the preview's numbers, Cancel calls nothing, and Confirm calls the handler with the chosen date.

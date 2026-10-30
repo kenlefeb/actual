@@ -4,7 +4,7 @@
 
 Actual can't change an account's budget status after the account is created (Shortcut sc-467). The account update handler (`account-update` in `server/accounts/app.ts`) can't change `offbudget`. Neither account menu offers it, and the docs say so (`packages/docs/docs/budgeting/credit-cards/index.md`). Today's workaround is to make a new on-budget account, move every transaction with **Edit → Account**, then close the old account. That loses the bank-sync link and the schedules.
 
-Ken settled the product questions on 2026-10-29 (recorded on sc-467):
+Ken settled the product questions on 2026-10-29 (recorded on sc-467), and the PO settled the follow-ups the same day (design.md, "Resolved questions"):
 1. Past transactions stay uncategorized. The user picks a start date, and the move adds one starting balance on that date.
 2. Transfers to on-budget accounts keep their categories, and the warning lists them.
 3. Only off-budget → on-budget for now.
@@ -14,17 +14,16 @@ Ken settled the product questions on 2026-10-29 (recorded on sc-467):
 ## What Changes
 
 - **A new account menu option**, "Move on budget…", on desktop and phones. It appears only for an open off-budget account.
-- **A confirmation step.** It shows the start date (defaulting to the first day of the current month) and what will change, with counts:
-  - the transactions that will be on budget but uncategorized, before and from the start date;
-  - transfers to on-budget accounts, which keep their categories (listed);
-  - transfers to off-budget accounts, which become uncategorized on-budget transfers;
+- **A confirmation step.** It shows the start date (defaulting to the first day of the current month, and editable) and what will change:
+  - the number of transactions that will be on budget but uncategorized, before the start date and from it on (including the 1st of the month to today);
+  - the transfers, with their count, then each one's date, other account and amount, the first 20 followed by "and N more". Transfers to on-budget accounts keep their categories. Transfers to off-budget accounts become uncategorized on-budget transfers;
   - the starting balance the budget gains on the start date.
 
-  Cancelling changes nothing.
+  One confirmation moves the account; Cancel changes nothing.
 - **The move.** It marks the account on budget and adds the starting balance on the start date, in one undoable step that syncs to other devices.
   - The account keeps its id, transactions, balance, bank-sync link and schedules.
   - The starting balance brings the account's balance as of the start date into the budget, through the "Starting Balances" income category. Its amount is the sum of the account's transactions before the start date.
-  - **The starting balance doesn't change the account's balance.** It is one split transaction: a "Starting Balance" line in the income category, and an equal and opposite uncategorized line, the "Balance before \<start date\>". The net is zero (design.md, Decision 1).
+  - **The starting balance never changes the account's balance.** It is one split transaction that nets to zero on the account: a "Starting Balance" line in the income category, and an offset line with no category and the note "Offsets transactions before \<date\> (moved on budget)" (design.md, Decision 1).
 - **Two server handlers:**
   - `account-move-on-budget-preview` returns the counts for the confirmation.
   - `account-move-on-budget` does the move.

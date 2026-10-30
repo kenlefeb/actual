@@ -36,7 +36,7 @@ Ken's decision 1 adds "one starting balance transaction" on the start date. A pl
 |---|---|---|---|
 | Parent | 0 | — | Payee "Starting Balance" |
 | 1 | +B | "Starting Balances" (income), from `getStartingBalancePayee` | "Starting balance" |
-| 2 | −B | none (uncategorized) | "Balance before \<start date\>" |
+| 2 | −B | none (uncategorized) | "Offsets transactions before \<start date\> (moved on budget)" |
 
 - B is the sum of the account's transactions dated before the start date, including transfers.
 - **Effect:**
@@ -51,20 +51,24 @@ Ken's decision 1 adds "one starting balance transaction" on the start date. A pl
   - *Categorize line 2 instead of leaving it uncategorized.* Rejected: no category fits, and decision 1 keeps the past uncategorized.
   - *Two separate transactions instead of a split.* Viable. The split keeps it one row in the register, and undoing removes both lines together.
 
-**This needs the PO's confirmation** (see "Open questions").
+**Confirmed by the PO** (Resolved question 1). The invariants are what matter, and the tests fix the exact amounts:
+- the account balance never changes;
+- the start month's "To Budget" rises by the account's balance on the start date;
+- earlier months' totals don't change.
+
+The account's own side of a transfer never has a category while it's off budget, so the offset is −B. Transfers that keep their categories sit on the other account's side and are already in the budget. The tests (tasks 1.2) confirm this with categorized transfers in the history.
 
 ### 2. Start date
 
-- The default is the first day of the current month, in the budget's month boundaries.
+- The default is the first day of the current month, and the user can change it (Resolved question 3).
 - Any date is allowed, including before the account's first transaction (then B is 0) or in the future (then B includes every transaction up to that date).
 - The transaction is dated on the start date and marked cleared. It isn't marked reconciled.
 
 ### 3. The warning's counts come from one preview handler
 
 `account-move-on-budget-preview({ id, startDate })` returns:
-- `uncategorizedBefore` and `uncategorizedFrom`: counts and totals of the account's non-transfer transactions before the start date and from it on. All of them become uncategorized on-budget transactions.
-- `transfersOnBudget`: transfers whose other account is on budget, with each one's category from the other side. They keep their categories (Ken's decision 2) and are listed in the warning.
-- `transfersOffBudget`: the count of transfers whose other account is off budget. They become uncategorized on-budget transfers. Actual expects the on-budget side of such a transfer to carry a category, so they're counted as uncategorized too.
+- `uncategorizedBefore` and `uncategorizedFrom`: counts and totals of the account's non-transfer transactions before the start date and from it on (so, with the default date, from the 1st of the month to today). All of them become uncategorized on-budget transactions.
+- `transfers`: the account's transfers, newest first, each with its date, other account, amount and, for an on-budget other account, the category it keeps (Ken's decision 2). Transfers to off-budget accounts become uncategorized on-budget transfers, because Actual expects the on-budget side of such a transfer to carry a category. The warning shows the count, then the first 20, then "and N more" (Resolved question 2).
 - `startingBalance`: B.
 
 Split children count once each; parents with children don't count. Deleted (tombstoned) transactions don't count.
@@ -84,8 +88,9 @@ Split children count once each; parents with children don't count. Deleted (tomb
   - Phones: the account menu sheet (`AccountMenuModal`) gains the same row.
   - Both open one new modal, `account-move-on-budget`.
 - **What the modal shows:**
-  - a start date field;
-  - the counts from the preview, refreshed when the date changes, with a list of the on-budget transfers and their categories;
+  - a start date field, defaulting to the 1st of the current month;
+  - the counts from the preview, refreshed when the date changes;
+  - the transfers: the count, then date, other account and amount (with the kept category for on-budget ones), the first 20, then "and N more";
   - the starting balance;
   - **Cancel** and **Move on budget**.
 
@@ -98,8 +103,9 @@ Split children count once each; parents with children don't count. Deleted (tomb
 - **Upstream files:** `Header.tsx`, `AccountMenuModal.tsx` and `accounts/app.ts`. The additions are small and isolated, which keeps the upstream PR simple later.
 - **Bank sync after the move:** imported transactions arrive uncategorized, or categorized by rules, like any on-budget account. Nothing in bank sync reads `offbudget` when importing, apart from what rules do.
 
-## Open questions
+## Resolved questions
 
-1. **Zero-net split vs a plain starting balance (Decision 1).** Ken's decision says "adds one starting balance transaction". A plain one would change the account balance, which the acceptance forbids. The proposal uses a zero-net split instead. **Does this match what Ken meant?**
-2. **Transfers to off-budget accounts** become uncategorized on-budget transfers (Decision 3). Should the warning list them, like the on-budget transfers, or only count them?
-3. **Default start date:** the first day of the current month, or today?
+Answered by the PO on 2026-10-29:
+1. **The zero-net split is right.** Moving onto the budget must never change the account balance. On the start date the budget gains exactly the money the account held then, as Starting Balances income, and past months don't shift. The offset line's note is plain: "Offsets transactions before \<date\> (moved on budget)".
+2. **The warning lists the transfers.** It shows the count, then each transfer's date, other account and amount: the first 20, then "and N more". There's one confirmation, and Cancel changes nothing.
+3. **The default start date is the first of the current month**, and it's editable. The uncategorized count includes the transactions from the 1st to today.

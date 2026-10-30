@@ -22,23 +22,35 @@ The app SHALL let the user move an open off-budget account on budget, from the a
 
 ### Requirement: Warn before moving
 Before it moves an account, the app SHALL show the start date and what the move changes, with:
-- the number and total of transactions that become uncategorized, before the start date and from it on;
-- the transfers to on-budget accounts, each with the category it keeps;
-- the number of transfers to off-budget accounts, which become uncategorized;
+- the number of transactions that become uncategorized, before the start date and from it on;
+- the number of transfers, then each one's date, other account and amount, the first 20 followed by "and N more", with the category each transfer to an on-budget account keeps;
 - the starting balance the budget gains.
 
-The app SHALL move the account only after the user confirms. Cancelling SHALL change nothing.
+The app SHALL move the account only after one confirmation. Cancelling SHALL change nothing.
 
 #### Scenario: Counts match the account
 - **GIVEN** an off-budget account with 30 transactions before 2026-10-01 totalling 2,000.00 and 5 from that date on totalling 150.00
 - **AND** 2 of those are transfers from "Checking" (on budget) categorized "Savings", and 1 is a transfer to "Mortgage" (off budget)
 - **WHEN** the user chooses "Move on budget…" with a start date of 2026-10-01
-- **THEN** the warning shows the transactions that become uncategorized, before and from the start date, the 2 transfers with their category "Savings", 1 transfer to an off-budget account, and a starting balance of 2,000.00
+- **THEN** the warning shows 30 transactions that become uncategorized before the start date and 5 from it, 3 transfers listed by date, other account and amount, with "Savings" kept on the 2 from "Checking", and a starting balance of 2,000.00
+
+#### Scenario: Many transfers
+- **GIVEN** an off-budget account with 25 transfers
+- **WHEN** the user chooses "Move on budget…"
+- **THEN** the warning says 25 transfers, lists the 20 newest, and ends with "and 5 more"
 
 #### Scenario: Cancelling changes nothing
 - **GIVEN** the warning is open
 - **WHEN** the user cancels
 - **THEN** the account is still off budget, and no transaction or budget amount has changed
+
+### Requirement: Start date
+The start date SHALL default to the first day of the current month, and the user SHALL be able to change it before confirming.
+
+#### Scenario: The default start date
+- **GIVEN** today is 2026-10-29
+- **WHEN** the user chooses "Move on budget…"
+- **THEN** the start date is 2026-10-01, and the transactions from 2026-10-01 to today are counted as becoming uncategorized from the start date
 
 #### Scenario: The counts follow the start date
 - **GIVEN** the warning is open with a start date of 2026-10-01
@@ -46,7 +58,12 @@ The app SHALL move the account only after the user confirms. Cancelling SHALL ch
 - **THEN** the counts and the starting balance are recalculated for 2026-07-01
 
 ### Requirement: Starting balance on the start date
-Moving an account on budget SHALL add the account's balance as of the start date to the budget, as income in the "Starting Balances" category in the start date's month. It SHALL NOT change the account's balance. When that balance is zero, the move SHALL add nothing.
+Moving an account on budget SHALL add the account's balance as of the start date to the budget, as income in the "Starting Balances" category in the start date's month. It SHALL NOT change the account's balance, and it SHALL NOT change any earlier month's totals. When that balance is zero, the move SHALL add nothing.
+
+#### Scenario: Balance unchanged, To Budget rises, earlier months unchanged
+- **GIVEN** an off-budget account whose balance on 2026-10-01 is 2,000.00 and whose history includes a categorized transfer from "Checking"
+- **WHEN** the user moves it on budget with a start date of 2026-10-01
+- **THEN** the account balance is unchanged, October 2026's "To Budget" rises by 2,000.00, and September 2026 and earlier months' totals are unchanged
 
 #### Scenario: The budget gains the balance from the start date
 - **GIVEN** an off-budget account whose transactions before 2026-10-01 total 2,000.00
@@ -67,6 +84,14 @@ Moving an account on budget SHALL add the account's balance as of the start date
 - **GIVEN** an off-budget account with no transactions before the start date
 - **WHEN** the user moves it on budget
 - **THEN** no starting balance transaction is added
+
+### Requirement: One adjustment transaction
+The starting balance SHALL be one split transaction on the start date that nets to zero on the account: a "Starting Balance" line in the "Starting Balances" category, and an offset line with no category and the note "Offsets transactions before <start date> (moved on budget)".
+
+#### Scenario: The adjustment in the register
+- **GIVEN** an off-budget account whose transactions before 2026-10-01 total 2,000.00
+- **WHEN** the user moves it on budget with a start date of 2026-10-01
+- **THEN** the register shows one split transaction on 2026-10-01 with payee "Starting Balance" and a total of 0.00, with a 2,000.00 line in "Starting Balances" and a −2,000.00 uncategorized line noted "Offsets transactions before 2026-10-01 (moved on budget)"
 
 ### Requirement: Transfers keep their categories
 Moving an account on budget SHALL NOT change the category of any existing transaction, including transfers to on-budget accounts.

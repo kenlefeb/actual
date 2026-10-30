@@ -52,7 +52,7 @@ A moved account's transactions dated before its start date, and its offset line,
 - **THEN** both devices show the same uncategorized count, without the moved history
 
 ### Requirement: Categorizing moved history asks first
-Choosing a category for a moved account's transaction dated before its start date, or for its offset line, SHALL first show a confirmation that explains the double count. Cancel SHALL leave the transaction uncategorized. When the user sets a category on several selected transactions at once and any of them is moved history, the app SHALL show one confirmation for the batch, and Cancel SHALL change none of them.
+Choosing a category for a moved account's transaction dated before its start date, or for its offset line, SHALL first show a confirmation that explains the double count. Cancel SHALL leave the transaction uncategorized. When the user sets a category on several selected transactions at once and any of them is moved history, the app SHALL show one confirmation for the batch, and Cancel SHALL change none of them. The same holds when a rule's actions set a category and the user applies the rule from the Rules page to selected transactions.
 
 #### Scenario: Cancel
 - **GIVEN** the moved account's offset line
@@ -69,6 +69,13 @@ Choosing a category for a moved account's transaction dated before its start dat
 - **WHEN** they set "Groceries" on both and cancel the confirmation
 - **THEN** neither changes
 - **AND WHEN** they set "Groceries" on both and confirm
+- **THEN** both have the category "Groceries"
+
+#### Scenario: Applying a rule to moved history asks once
+- **GIVEN** a rule that sets "Groceries", and its matching transactions include the moved account's transaction on 2026-09-15 and its transaction on 2026-10-05
+- **WHEN** the user selects both and chooses "Apply actions" and cancels the confirmation
+- **THEN** neither changes
+- **AND WHEN** they choose "Apply actions" and confirm
 - **THEN** both have the category "Groceries"
 
 #### Scenario: Later transactions don't ask

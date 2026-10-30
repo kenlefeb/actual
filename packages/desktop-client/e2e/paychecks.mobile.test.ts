@@ -47,4 +47,63 @@ test.describe('Mobile paycheck editor', () => {
     await expect(details).toHaveAttribute('aria-expanded', 'false');
     await expect(details).toContainText('Acme');
   });
+
+  // Saves a paycheck and opens its pay schedule's edit page at phone width
+  async function openPaySchedule() {
+    await page.setViewportSize({ width: 375, height: 600 });
+    await navigation.goToSchedulesPage();
+    await page.getByRole('button', { name: 'Add paycheck' }).click();
+    await page.getByLabel('Name', { exact: true }).fill('Acme');
+    const gross = page.getByLabel('Gross pay');
+    await gross.fill('3000');
+    await gross.press('Enter');
+    await page.getByLabel('New clearing account name').fill('Acme Paycheck');
+    const depositAccount = page.getByLabel('Deposit 1 account');
+    // pressSequentially + option click: fill()+Enter breaks the autocomplete
+    await depositAccount.pressSequentially('Bank of America');
+    await page
+      .getByRole('option')
+      .filter({ hasText: 'Bank of America' })
+      .first()
+      .click();
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(
+      page.getByRole('button', { name: 'Add paycheck' }),
+    ).toBeVisible();
+
+    // The Schedules list hides a paycheck's schedules, so open one by its id
+    const paySchedule = await page.evaluate(() => {
+      const [query] = window.__TANSTACK_QUERY_CLIENT__
+        .getQueryCache()
+        .findAll({ queryKey: ['paychecks', 'lists'] });
+      const [paycheck] = query.state.data as Array<{
+        definition: { paySchedule: string };
+      }>;
+      return paycheck.definition.paySchedule;
+    });
+    await page.evaluate(
+      id => window.__navigate(`/schedules/${id}`),
+      paySchedule,
+    );
+    return page.getByRole('note');
+  }
+
+  test('notes a paycheck schedule on its edit page', async () => {
+    const note = await openPaySchedule();
+    await expect(note).toContainText('Part of paycheck "Acme"');
+    await expect(page.getByRole('button', { name: /delete/i })).toHaveCount(0);
+
+    await note.getByRole('button', { name: 'Edit paycheck' }).click();
+    await expect(
+      page.getByRole('heading', { name: 'Edit paycheck' }),
+    ).toBeVisible();
+  });
+
+  // No baselines yet, and no CI generates them: sc-1115
+  // (https://app.shortcut.com/blacksmith-press/story/1115). Unskip once it lands.
+  test.fixme('shows the stacked paycheck note at 375px', async () => {
+    const note = await openPaySchedule();
+    await expect(note).toContainText('Part of paycheck "Acme"');
+    await expect(note).toMatchThemeScreenshots();
+  });
 });

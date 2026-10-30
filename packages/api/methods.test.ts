@@ -92,8 +92,11 @@ describe('API setup and teardown', () => {
     }
     expect(rejections).toEqual([]);
     expect(
+      // Paycheck runs started at load or by the sync are waited on too
       errors.filter(([message]) =>
-        String(message).includes('Schedules service failed'),
+        /(Schedules service|Paycheck schedule \w+) failed/.test(
+          String(message),
+        ),
       ),
     ).toEqual([]);
   });

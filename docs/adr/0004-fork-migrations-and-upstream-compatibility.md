@@ -46,7 +46,8 @@ On a copy of the budget's `db.sqlite`, in one transaction:
 2. **Calendar ids on repeating dates.** In each `date` condition value with
    `businessCalendarId`, remove that key. Keep `skipWeekend` and
    `weekendSolveMode`, so these schedules fall back to skipping weekends.
-3. **Fork tables.** `DROP TABLE paychecks` and `DROP TABLE business_calendars`.
+3. **Fork tables.** `DROP TABLE paychecks`, `DROP TABLE paycheck_schedules`
+   and `DROP TABLE business_calendars`.
    The schedules a paycheck generated stay as ordinary schedules, already
    converted by step 1.
 4. **Fork account columns.** `ALTER TABLE accounts DROP COLUMN
@@ -54,9 +55,10 @@ On a copy of the budget's `db.sqlite`, in one transaction:
 5. **Fork flags.** `DELETE FROM preferences WHERE id IN
    ('flags.businessCalendars', 'flags.paychecks')`.
 6. **Migration records.** `DELETE FROM __migrations__ WHERE id IN
-   (1793116240000, 1793200000000)`.
+   (1793116240000, 1793200000000, 1793300000000)`.
 7. **Sync history.** Delete `messages_crdt` and `messages_pending` rows whose
-   `dataset` is `paychecks` or `business_calendars`, or whose `column` is one of
+   `dataset` is `paychecks`, `paycheck_schedules` or `business_calendars`, or
+   whose `column` is one of
    the two dropped account columns.
 
 Then import the result into upstream as a **new** budget file, with a new sync

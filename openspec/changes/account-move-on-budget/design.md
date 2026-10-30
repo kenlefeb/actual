@@ -12,6 +12,8 @@
   - So for an off-budget account X:
     - a transfer to an on-budget account has a category on the other side;
     - a transfer to another off-budget account has none on either side.
+  - `clearCategory` (`server/transactions/transfer.ts:24-45`) enforces this only for on↔on and off↔off transfers. For an on↔off transfer it leaves both sides as they are.
+- **Hidden categories** (found by the Architect on #106). An off-budget transaction can carry a category the user never sees: the table shows "Off budget" instead (`TransactionsTable.tsx:1886-1898`), but rules, file imports and the API can set one, and so can an on↔off transfer's off-budget side. Budget cells ignore it only because they sum `offbudget = 0`. After the move, `handleAccountChange` recomputes every category the account's transactions use, so a hidden category would start counting in its past months.
 
 ## Goals / Non-Goals
 
@@ -24,7 +26,7 @@
 **Non-Goals:**
 - On budget → off budget.
 - Categorizing past transactions for the user.
-- Changing the categories on existing transfers.
+- Changing the categories on another account's side of a transfer.
 
 ## Decisions
 
@@ -56,7 +58,9 @@ Ken's decision 1 adds "one starting balance transaction" on the start date. A pl
 - the start month's "To Budget" rises by the account's balance on the start date;
 - earlier months' totals don't change.
 
-The account's own side of a transfer never has a category while it's off budget, so the offset is −B. Transfers that keep their categories sit on the other account's side and are already in the budget. The tests (tasks 1.2) confirm this with categorized transfers in the history.
+The move also clears every category on this account's transactions before the start date (Decision 6). With those cleared, the transactions before the start date are all uncategorized and total B, so the −B offset cancels them exactly, and the earlier months' category totals don't change. Categories on the other account's side of a transfer sit outside this account, were already in the budget, and stay. The tests (task 1.2) confirm this with a categorized transfer and a hidden category in the history, under both budget types.
+
+**Budget types.** In envelope budgeting, B also shows as "To Budget" in the start month. Tracking budgeting has no "To Budget": B shows as "Starting Balances" income in the start month.
 
 ### 2. Start date
 
@@ -67,7 +71,9 @@ The account's own side of a transfer never has a category while it's off budget,
 ### 3. The warning's counts come from one preview handler
 
 `account-move-on-budget-preview({ id, startDate })` returns:
-- `uncategorizedBefore` and `uncategorizedFrom`: counts and totals of the account's non-transfer transactions before the start date and from it on (so, with the default date, from the 1st of the month to today). All of them become uncategorized on-budget transactions.
+- `before`: the number of the account's transactions before the start date, all of which become uncategorized, and `categoriesCleared`, how many of them have a category the move clears.
+- `from`: the number of transactions from the start date on (so, with the default date, from the 1st of the month to today) that have no category, and `categoriesKept`, how many keep theirs.
+- The warning shows these as counts, including "N categories before \<start date\> will be cleared" and "N transactions from \<start date\> keep their category", with no list.
 - `transfers`: the account's transfers, newest first, each with its date, other account, amount and, for an on-budget other account, the category it keeps (Ken's decision 2). Transfers to off-budget accounts become uncategorized on-budget transfers, because Actual expects the on-budget side of such a transfer to carry a category. The warning shows the count, then the first 20, then "and N more" (Resolved question 2).
 - `startingBalance`: B.
 
@@ -77,8 +83,8 @@ Split children count once each; parents with children don't count. Deleted (tomb
 
 `account-move-on-budget({ id, startDate })` runs as `mutator(undoable(...))`, like the other account handlers.
 - It refuses when the account is closed, already on budget, or doesn't exist.
-- In one batch, it sets `offbudget = 0` and inserts the split transaction (Decision 1).
-- **Undo** restores `offbudget = 1` and removes the transaction.
+- In one batch, it sets `offbudget = 0`, clears the categories before the start date (Decision 6), and inserts the split transaction (Decision 1).
+- **Undo** restores `offbudget = 1`, restores the cleared categories, and removes the transaction.
 - **Sync:** both writes are ordinary CRDT messages. Other devices get the flag and the transaction, and `handleAccountChange` updates their budget.
 
 ### 5. UI
@@ -90,14 +96,25 @@ Split children count once each; parents with children don't count. Deleted (tomb
 - **What the modal shows:**
   - a start date field, defaulting to the 1st of the current month;
   - the counts from the preview, refreshed when the date changes;
-  - the transfers: the count, then date, other account and amount (with the kept category for on-budget ones), the first 20, then "and N more";
+  - the category counts: categories cleared before the start date and kept from it on;
+  - the transfers: the count, then date, other account and amount (with the kept category for on-budget ones), the first 20, then "and N more", and a note that a kept category is cleared if that transfer is edited later;
   - the starting balance;
   - **Cancel** and **Move on budget**.
 
   It follows the existing confirmation style: on phones, a sheet with 40px controls. Moving needs this confirmation.
 - **Where the account shows after the move:** it appears under "On budget" in the sidebar and in the phone account list. No reload is needed; the accounts query refreshes.
 
+### 6. Categories before and from the start date (PO, option b)
+
+- **Before the start date:** the move clears any category on this account's transactions, in the same undoable step. Those months look exactly as they did while the account was off budget, and the offset line cancels them exactly.
+- **From the start date on:** existing categories stay. That's current activity the user wants budgeted, and a category a rule or import already set is usually right. Transactions without one stay uncategorized.
+- **Other accounts:** the category on the other side of a transfer is never touched (Ken's decision 2).
+- Undo restores the cleared categories.
+
 ## Risks / Trade-offs
+
+- **A later edit of a kept-category transfer clears it.** After the move, a transfer between this account and an on-budget account is on↔on. Any later edit of that transfer runs `clearCategory`, which clears the other side's kept category and changes that past month. That's existing upstream behavior, but the move creates the case. The warning's transfers list says that kept categories are cleared if the transfer is edited later.
+- **A transaction not synced yet.** A transaction dated before the start date, added on another device before the move syncs, isn't in B. The account balance still holds, because the offset nets to zero, but that amount stays uncategorized and isn't in "Starting Balances". That's acceptable.
 
 - **Uncategorized total:** users with a long history will see a large uncategorized total before the start date. The warning says so, with the count and total, and from the start date the total is zero.
 - **Upstream files:** `Header.tsx`, `AccountMenuModal.tsx` and `accounts/app.ts`. The additions are small and isolated, which keeps the upstream PR simple later.

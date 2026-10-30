@@ -204,99 +204,130 @@ function useRowLayout() {
   } as const;
 }
 
+// On a phone each stacked field gets a visible label in the same words as its
+// accessible name. Hidden from screen readers, which already read that name.
+function StackedLabel({ children }: { children: string }) {
+  return (
+    <Text
+      aria-hidden
+      style={{ color: theme.clearingNoteText, marginBottom: -4 }}
+    >
+      {children}
+    </Text>
+  );
+}
+
 export function PaycheckDeductionFields({ form }: FormProps) {
   const { t } = useTranslation();
   const { touch, isStacked, row, fullWidth, divider } = useRowLayout();
   const { updateDeduction } = form;
   return (
     <>
-      {form.definition.deductions.map((deduction, index) => (
-        <View key={deduction.id} style={{ ...row, ...divider(index) }}>
-          <Input
-            aria-label={t('Deduction {{number}} name', {
-              number: index + 1,
-            })}
-            placeholder={t('Name')}
-            value={deduction.name}
-            onChangeValue={name => updateDeduction(deduction.id, { name })}
-            style={{ flex: 1, ...touch, ...fullWidth }}
-          />
-          <AmountInput
-            aria-label={t('Deduction {{number}} amount', {
-              number: index + 1,
-            })}
-            value={deduction.amount}
-            sign="+"
-            onUpdate={amount => updateDeduction(deduction.id, { amount })}
-            style={{ width: 110, ...fullWidth }}
-            inputStyle={touch}
-          />
-          <Select
-            style={{ ...touch, ...fullWidth }}
-            aria-label={t('Deduction {{number}} goes to', {
-              number: index + 1,
-            })}
-            options={[
-              ['category', t('Category')],
-              ['transfer', t('Transfer')],
-            ]}
-            value={deduction.transferAccount != null ? 'transfer' : 'category'}
-            onChange={kind =>
-              updateDeduction(deduction.id, {
-                transferAccount: kind === 'transfer' ? '' : null,
-              })
-            }
-          />
-          <View style={{ flex: 1, gap: 5, ...fullWidth }}>
-            {deduction.transferAccount != null && (
-              <>
-                <Text style={{ color: theme.pageTextSubdued }}>
-                  <Trans>Transfer to</Trans>
-                </Text>
-                <GenericInput
-                  style={{ '& input': touch }}
-                  aria-label={t('Deduction {{number}} transfer account', {
-                    number: index + 1,
-                  })}
-                  type="id"
-                  field="account"
-                  value={deduction.transferAccount}
-                  onChange={transferAccount =>
-                    updateDeduction(deduction.id, { transferAccount })
-                  }
-                />
-              </>
-            )}
-            <Text style={{ color: theme.pageTextSubdued }}>
-              <Trans>Category</Trans>
-            </Text>
-            <GenericInput
-              style={{ '& input': touch }}
-              aria-label={t('Deduction {{number}} category', {
-                number: index + 1,
-              })}
-              type="id"
-              field="category"
-              value={deduction.category ?? ''}
-              onChange={(category: string) =>
+      {form.definition.deductions.map((deduction, index) => {
+        const number = index + 1;
+        const nameLabel = t('Deduction {{number}} name', { number });
+        const amountLabel = t('Deduction {{number}} amount', { number });
+        const kindLabel = t('Deduction {{number}} goes to', { number });
+        const transferLabel = t('Deduction {{number}} transfer account', {
+          number,
+        });
+        const categoryLabel = t('Deduction {{number}} category', { number });
+        return (
+          <View key={deduction.id} style={{ ...row, ...divider(index) }}>
+            {isStacked && <StackedLabel>{nameLabel}</StackedLabel>}
+            <Input
+              aria-label={nameLabel}
+              placeholder={t('Name')}
+              value={deduction.name}
+              onChangeValue={name => updateDeduction(deduction.id, { name })}
+              style={{ flex: 1, ...touch, ...fullWidth }}
+            />
+            {isStacked && <StackedLabel>{amountLabel}</StackedLabel>}
+            <AmountInput
+              aria-label={amountLabel}
+              value={deduction.amount}
+              sign="+"
+              onUpdate={amount => updateDeduction(deduction.id, { amount })}
+              style={{ width: 110, ...fullWidth }}
+              inputStyle={touch}
+            />
+            {isStacked && <StackedLabel>{kindLabel}</StackedLabel>}
+            <Select
+              style={{ ...touch, ...fullWidth }}
+              aria-label={kindLabel}
+              options={[
+                ['category', t('Category')],
+                ['transfer', t('Transfer')],
+              ]}
+              value={
+                deduction.transferAccount != null ? 'transfer' : 'category'
+              }
+              onChange={kind =>
                 updateDeduction(deduction.id, {
-                  category: category || null,
+                  transferAccount: kind === 'transfer' ? '' : null,
                 })
               }
             />
+            <View style={{ flex: 1, gap: 5, ...fullWidth }}>
+              {deduction.transferAccount != null && (
+                <>
+                  {isStacked ? (
+                    <StackedLabel>{transferLabel}</StackedLabel>
+                  ) : (
+                    <Text style={{ color: theme.pageTextSubdued }}>
+                      <Trans>Transfer to</Trans>
+                    </Text>
+                  )}
+                  <GenericInput
+                    style={{ '& input': touch }}
+                    aria-label={transferLabel}
+                    placeholder={isStacked ? t('Choose an account') : undefined}
+                    type="id"
+                    field="account"
+                    value={deduction.transferAccount}
+                    onChange={transferAccount =>
+                      updateDeduction(deduction.id, { transferAccount })
+                    }
+                  />
+                </>
+              )}
+              {isStacked ? (
+                <StackedLabel>{categoryLabel}</StackedLabel>
+              ) : (
+                <Text style={{ color: theme.pageTextSubdued }}>
+                  <Trans>Category</Trans>
+                </Text>
+              )}
+              <GenericInput
+                style={{ '& input': touch }}
+                aria-label={categoryLabel}
+                placeholder={isStacked ? t('No category') : undefined}
+                type="id"
+                field="category"
+                value={deduction.category ?? ''}
+                onChange={(category: string) =>
+                  updateDeduction(deduction.id, {
+                    category: category || null,
+                  })
+                }
+              />
+            </View>
+            <Button
+              variant="bare"
+              style={{
+                ...touch,
+                ...(isStacked && { alignSelf: 'flex-start' }),
+              }}
+              aria-label={t('Remove deduction {{number}}', {
+                number: index + 1,
+              })}
+              onPress={() => form.removeDeduction(deduction.id)}
+            >
+              <Trans>Remove</Trans>
+            </Button>
           </View>
-          <Button
-            variant="bare"
-            style={{ ...touch, ...(isStacked && { alignSelf: 'flex-start' }) }}
-            aria-label={t('Remove deduction {{number}}', {
-              number: index + 1,
-            })}
-            onPress={() => form.removeDeduction(deduction.id)}
-          >
-            <Trans>Remove</Trans>
-          </Button>
-        </View>
-      ))}
+        );
+      })}
       <Button
         style={{ alignSelf: 'flex-start', ...touch }}
         onPress={form.addDeduction}
@@ -324,176 +355,184 @@ export function PaycheckDepositFields({ form }: FormProps) {
   const { accountById, updateDeposit } = form;
   return (
     <>
-      {form.definition.deposits.map((deposit, index) => (
-        <View key={deposit.id} style={{ gap: 5, ...divider(index) }}>
-          <View style={row}>
-            <View style={{ flex: 1, ...fullWidth }}>
-              <GenericInput
-                style={{ '& input': touch }}
-                aria-label={t('Deposit {{number}} account', {
+      {form.definition.deposits.map((deposit, index) => {
+        const number = index + 1;
+        const accountLabel = t('Deposit {{number}} account', { number });
+        const kindLabel = t('Deposit {{number}} amount type', { number });
+        const fixedLabel = t('Deposit {{number}} fixed amount', { number });
+        const percentLabel = t('Deposit {{number}} percent', { number });
+        return (
+          <View key={deposit.id} style={{ gap: 5, ...divider(index) }}>
+            <View style={row}>
+              <View style={{ flex: 1, gap: 8, ...fullWidth }}>
+                {isStacked && <StackedLabel>{accountLabel}</StackedLabel>}
+                <GenericInput
+                  style={{ '& input': touch }}
+                  aria-label={accountLabel}
+                  placeholder={isStacked ? t('Choose an account') : undefined}
+                  type="id"
+                  field="account"
+                  value={deposit.account}
+                  onChange={account => updateDeposit(deposit.id, { account })}
+                />
+              </View>
+              {isStacked && <StackedLabel>{kindLabel}</StackedLabel>}
+              <Select
+                style={{ ...touch, ...fullWidth }}
+                aria-label={kindLabel}
+                options={[
+                  ['fixed', t('Fixed amount')],
+                  ['percent', t('Percent of net pay')],
+                  ['remainder', t('Remainder')],
+                ]}
+                value={deposit.kind}
+                onChange={kind => updateDeposit(deposit.id, { kind, value: 0 })}
+              />
+              {isStacked && deposit.kind === 'fixed' && (
+                <StackedLabel>{fixedLabel}</StackedLabel>
+              )}
+              {deposit.kind === 'fixed' && (
+                <AmountInput
+                  aria-label={fixedLabel}
+                  value={deposit.value}
+                  sign="+"
+                  onUpdate={value => updateDeposit(deposit.id, { value })}
+                  style={{ width: 110, ...fullWidth }}
+                  inputStyle={touch}
+                />
+              )}
+              {isStacked && deposit.kind === 'percent' && (
+                <StackedLabel>{percentLabel}</StackedLabel>
+              )}
+              {deposit.kind === 'percent' && (
+                <Input
+                  aria-label={percentLabel}
+                  type="number"
+                  min={0}
+                  max={100}
+                  // Uncontrolled so a half-typed "12." keeps its decimal point
+                  defaultValue={String(deposit.value)}
+                  onChangeValue={value =>
+                    updateDeposit(deposit.id, {
+                      value: Math.max(0, Number(value) || 0),
+                    })
+                  }
+                  style={{ width: 70, ...touch, ...fullWidth }}
+                />
+              )}
+              <FinancialText
+                aria-label={t('Deposit {{number}} amount', {
                   number: index + 1,
                 })}
-                type="id"
-                field="account"
-                value={deposit.account}
-                onChange={account => updateDeposit(deposit.id, { account })}
-              />
+                style={{ width: 100, textAlign: 'right', ...fullWidth }}
+              >
+                {format(form.depositAmounts.get(deposit.id) ?? 0, 'financial')}
+              </FinancialText>
+              <Button
+                variant="bare"
+                style={{
+                  ...touch,
+                  ...(isStacked && { alignSelf: 'flex-start' }),
+                }}
+                aria-label={t('Remove deposit {{number}}', {
+                  number: index + 1,
+                })}
+                onPress={() => form.removeDeposit(deposit.id)}
+              >
+                <Trans>Remove</Trans>
+              </Button>
             </View>
-            <Select
-              style={{ ...touch, ...fullWidth }}
-              aria-label={t('Deposit {{number}} amount type', {
-                number: index + 1,
-              })}
-              options={[
-                ['fixed', t('Fixed amount')],
-                ['percent', t('Percent of net pay')],
-                ['remainder', t('Remainder')],
-              ]}
-              value={deposit.kind}
-              onChange={kind => updateDeposit(deposit.id, { kind, value: 0 })}
-            />
-            {deposit.kind === 'fixed' && (
-              <AmountInput
-                aria-label={t('Deposit {{number}} fixed amount', {
-                  number: index + 1,
-                })}
-                value={deposit.value}
-                sign="+"
-                onUpdate={value => updateDeposit(deposit.id, { value })}
-                style={{ width: 110, ...fullWidth }}
-                inputStyle={touch}
-              />
-            )}
-            {deposit.kind === 'percent' && (
-              <Input
-                aria-label={t('Deposit {{number}} percent', {
-                  number: index + 1,
-                })}
-                type="number"
-                min={0}
-                max={100}
-                // Uncontrolled so a half-typed "12." keeps its decimal point
-                defaultValue={String(deposit.value)}
-                onChangeValue={value =>
-                  updateDeposit(deposit.id, {
-                    value: Math.max(0, Number(value) || 0),
-                  })
-                }
-                style={{ width: 70, ...touch, ...fullWidth }}
-              />
-            )}
-            <FinancialText
-              aria-label={t('Deposit {{number}} amount', {
-                number: index + 1,
-              })}
-              style={{ width: 100, textAlign: 'right', ...fullWidth }}
-            >
-              {format(form.depositAmounts.get(deposit.id) ?? 0, 'financial')}
-            </FinancialText>
-            <Button
-              variant="bare"
-              style={{
-                ...touch,
-                ...(isStacked && { alignSelf: 'flex-start' }),
-              }}
-              aria-label={t('Remove deposit {{number}}', {
-                number: index + 1,
-              })}
-              onPress={() => form.removeDeposit(deposit.id)}
-            >
-              <Trans>Remove</Trans>
-            </Button>
-          </View>
-          <View
-            style={{
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              gap: 5,
-              alignItems: 'center',
-              // On a phone the whole row is the tap target
-              ...(isStacked && {
-                minHeight: touch.minHeight,
-                flexWrap: 'nowrap',
-              }),
-            }}
-          >
-            <Checkbox
-              id={`deposit-post-${deposit.id}`}
-              checked={!!deposit.postAutomatically}
-              onChange={e =>
-                updateDeposit(deposit.id, {
-                  postAutomatically: e.target.checked,
-                })
-              }
-            />
-            <label
-              htmlFor={`deposit-post-${deposit.id}`}
-              style={
-                isStacked
-                  ? {
-                      flexGrow: 1,
-                      alignSelf: 'stretch',
-                      display: 'flex',
-                      alignItems: 'center',
-                    }
-                  : undefined
-              }
-            >
-              <Trans>Post automatically</Trans>
-            </label>
-          </View>
-          {accountById.has(deposit.account) && (
             <View
               style={{
                 flexDirection: 'row',
                 flexWrap: 'wrap',
                 gap: 5,
                 alignItems: 'center',
+                // On a phone the whole row is the tap target
+                ...(isStacked && {
+                  minHeight: touch.minHeight,
+                  flexWrap: 'nowrap',
+                }),
               }}
             >
-              <label htmlFor={`deposit-days-${deposit.id}`}>
-                <Trans>Business days early</Trans>
-              </label>
-              <Input
-                id={`deposit-days-${deposit.id}`}
-                type="number"
-                min={0}
-                max={MAX_DEPOSIT_DAYS_EARLY}
-                step={1}
-                value={
-                  form.daysEarlyInput[deposit.account] ??
-                  String(form.savedDaysEarly(deposit.account))
+              <Checkbox
+                id={`deposit-post-${deposit.id}`}
+                checked={!!deposit.postAutomatically}
+                onChange={e =>
+                  updateDeposit(deposit.id, {
+                    postAutomatically: e.target.checked,
+                  })
                 }
-                onChangeValue={value =>
-                  form.setDaysEarlyInput(deposit.account, value)
-                }
-                style={{ width: 60, ...touch }}
               />
-              <Text style={{ color: theme.pageTextSubdued }}>
-                {t('Calendar: {{calendar}}', {
-                  calendar: form.calendarName(deposit.account),
+              <label
+                htmlFor={`deposit-post-${deposit.id}`}
+                style={
+                  isStacked
+                    ? {
+                        flexGrow: 1,
+                        alignSelf: 'stretch',
+                        display: 'flex',
+                        alignItems: 'center',
+                      }
+                    : undefined
+                }
+              >
+                <Trans>Post automatically</Trans>
+              </label>
+            </View>
+            {accountById.has(deposit.account) && (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  flexWrap: 'wrap',
+                  gap: 5,
+                  alignItems: 'center',
+                }}
+              >
+                <label htmlFor={`deposit-days-${deposit.id}`}>
+                  <Trans>Business days early</Trans>
+                </label>
+                <Input
+                  id={`deposit-days-${deposit.id}`}
+                  type="number"
+                  min={0}
+                  max={MAX_DEPOSIT_DAYS_EARLY}
+                  step={1}
+                  value={
+                    form.daysEarlyInput[deposit.account] ??
+                    String(form.savedDaysEarly(deposit.account))
+                  }
+                  onChangeValue={value =>
+                    form.setDaysEarlyInput(deposit.account, value)
+                  }
+                  style={{ width: 60, ...touch }}
+                />
+                <Text style={{ color: theme.pageTextSubdued }}>
+                  {t('Calendar: {{calendar}}', {
+                    calendar: form.calendarName(deposit.account),
+                  })}
+                </Text>
+              </View>
+            )}
+            {form.changedDaysEarly.some(d => d.account === deposit.account) && (
+              <Text role="note" style={{ color: theme.pageTextSubdued }}>
+                {t('Applies to every paycheck depositing to {{account}}.', {
+                  account: accountById.get(deposit.account)?.name,
                 })}
               </Text>
-            </View>
-          )}
-          {form.changedDaysEarly.some(d => d.account === deposit.account) && (
-            <Text role="note" style={{ color: theme.pageTextSubdued }}>
-              {t('Applies to every paycheck depositing to {{account}}.', {
-                account: accountById.get(deposit.account)?.name,
-              })}
-            </Text>
-          )}
-          {deposit.postAutomatically && (
-            <Text role="note" style={{ color: theme.pageTextSubdued }}>
-              <Trans>
-                A bank-synced deposit merges with the posted one only when its
-                amount is exactly the same. Leave this off for deposits that
-                vary.
-              </Trans>
-            </Text>
-          )}
-        </View>
-      ))}
+            )}
+            {deposit.postAutomatically && (
+              <Text role="note" style={{ color: theme.pageTextSubdued }}>
+                <Trans>
+                  A bank-synced deposit merges with the posted one only when its
+                  amount is exactly the same. Leave this off for deposits that
+                  vary.
+                </Trans>
+              </Text>
+            )}
+          </View>
+        );
+      })}
       <Button
         style={{ alignSelf: 'flex-start', ...touch }}
         onPress={form.addDeposit}

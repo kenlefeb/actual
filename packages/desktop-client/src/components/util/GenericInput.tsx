@@ -31,6 +31,8 @@ import { AmountInput } from './AmountInput';
 import { PercentInput } from './PercentInput';
 
 type GenericInputProps = {
+  // The empty state of an autocomplete (`type: 'id'`); defaults to "nothing"
+  placeholder?: string;
   ref?: Ref<HTMLInputElement>;
   style?: CSSProperties;
   inputStyle?: CSSProperties;
@@ -124,6 +126,7 @@ export const GenericInput = ({
   style,
   inputStyle,
   'aria-label': ariaLabel,
+  placeholder,
   ...props
 }: GenericInputProps) => {
   const dispatch = useDispatch();
@@ -161,7 +164,9 @@ export const GenericInput = ({
               inputProps={{
                 ref,
                 'aria-label': ariaLabel,
-                ...(showPlaceholder ? { placeholder: t('nothing') } : null),
+                ...(showPlaceholder
+                  ? { placeholder: placeholder ?? t('nothing') }
+                  : null),
                 onClick: () => {
                   if (!isNarrowWidth) {
                     return;
@@ -207,7 +212,9 @@ export const GenericInput = ({
                   inputProps={{
                     ref,
                     'aria-label': ariaLabel,
-                    ...(showPlaceholder ? { placeholder: t('nothing') } : null),
+                    ...(showPlaceholder
+                      ? { placeholder: placeholder ?? t('nothing') }
+                      : null),
                     onClick: () => {
                       if (!isNarrowWidth) {
                         return;
@@ -250,7 +257,9 @@ export const GenericInput = ({
               inputProps={{
                 ref,
                 'aria-label': ariaLabel,
-                ...(showPlaceholder ? { placeholder: t('nothing') } : null),
+                ...(showPlaceholder
+                  ? { placeholder: placeholder ?? t('nothing') }
+                  : null),
                 onClick: () => {
                   if (!isNarrowWidth) {
                     return;
@@ -291,7 +300,9 @@ export const GenericInput = ({
               showHiddenCategories
               inputProps={{
                 ref,
-                ...(showPlaceholder ? { placeholder: t('nothing') } : null),
+                ...(showPlaceholder
+                  ? { placeholder: placeholder ?? t('nothing') }
+                  : null),
                 onClick: () => {
                   if (!isNarrowWidth) {
                     return;

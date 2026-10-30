@@ -50,6 +50,8 @@ describe('paycheck note and warning contrast', () => {
       const pairs = [
         ['clearingNoteText', 'pageBackground'],
         ['clearingNoteText', 'mobilePageBackground'],
+        // Field labels in the phone paycheck editor's section cards
+        ['clearingNoteText', 'tableBackground'],
         ['paycheckWarningText', 'pageBackground'],
         ['paycheckWarningText', 'mobilePageBackground'],
         // The Paychecks card on the Schedules page ("Skipped: …" and the

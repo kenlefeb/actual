@@ -68,15 +68,18 @@ vi.mock('#components/util/GenericInput', () => ({
   GenericInput: ({
     value,
     onChange,
+    placeholder,
     'aria-label': label,
   }: {
     value: string;
     onChange: (value: string) => void;
+    placeholder?: string;
     'aria-label'?: string;
   }) => (
     <input
       aria-label={label}
       value={value}
+      placeholder={placeholder ?? 'nothing'}
       onChange={e => onChange(e.target.value)}
     />
   ),
@@ -333,6 +336,93 @@ describe('MobilePaycheckPage', () => {
     );
     expect(deduction(2)).not.toHaveStyle(divider);
     expect(deposit(2)).not.toHaveStyle(divider);
+  });
+
+  it('labels every stacked field on a phone with its accessible name', async () => {
+    const user = userEvent.setup();
+    state.paychecks = [
+      {
+        ...acme,
+        definition: {
+          ...acme.definition,
+          deposits: [
+            { id: 'savings', account: 'savings', kind: 'fixed', value: 10000 },
+            { id: 'checking', account: 'checking', kind: 'percent', value: 5 },
+          ],
+        },
+      },
+    ];
+    renderPage('acme');
+    await user.click(screen.getByRole('button', { name: /^Deductions/ }));
+    await user.click(screen.getByRole('button', { name: /^Direct deposits/ }));
+    for (const label of [
+      'Deduction 1 name',
+      'Deduction 1 amount',
+      'Deduction 1 goes to',
+      'Deduction 1 category',
+      'Deposit 1 account',
+      'Deposit 1 amount type',
+      'Deposit 1 fixed amount',
+      'Deposit 2 percent',
+    ]) {
+      // The same words as the field's accessible name, readable in every theme
+      const visible = screen.getByText(label);
+      expect(visible).toHaveStyle({ color: theme.clearingNoteText });
+      const field =
+        screen.queryByRole('button', { name: label }) ??
+        screen.getByLabelText(label);
+      expect(
+        visible.compareDocumentPosition(field) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    }
+    // The old "Category" heading no longer repeats the select's "Category"
+    expect(screen.getAllByText('Category')).toHaveLength(1);
+  });
+
+  it('shows a clear empty state for an empty account or category on a phone', async () => {
+    const user = userEvent.setup();
+    state.paychecks = [
+      {
+        ...acme,
+        definition: {
+          ...acme.definition,
+          deductions: [
+            { id: 'tax', name: 'Federal tax', amount: 45000, category: null },
+          ],
+          deposits: [
+            { id: 'checking', account: '', kind: 'remainder', value: 0 },
+          ],
+        },
+      },
+    ];
+    renderPage('acme');
+    await user.click(screen.getByRole('button', { name: /^Deductions/ }));
+    await user.click(screen.getByRole('button', { name: /^Direct deposits/ }));
+    expect(screen.getByLabelText('Deduction 1 category')).toHaveAttribute(
+      'placeholder',
+      'No category',
+    );
+    expect(screen.getByLabelText('Deposit 1 account')).toHaveAttribute(
+      'placeholder',
+      'Choose an account',
+    );
+  });
+
+  it('keeps desktop rows without the stacked labels', async () => {
+    state.isNarrowWidth = false;
+    state.paychecks = [acme];
+    render(
+      <TestProviders>
+        <PaycheckEditModal paycheckId="acme" />
+      </TestProviders>,
+    );
+    expect(screen.queryByText('Deduction 1 name')).toBeNull();
+    expect(screen.queryByText('Deposit 1 account')).toBeNull();
+    expect(screen.getByLabelText('Deduction 1 category')).toHaveAttribute(
+      'placeholder',
+      'nothing',
+    );
   });
 
   it('makes "Post automatically" one 40px tappable row on a phone', async () => {

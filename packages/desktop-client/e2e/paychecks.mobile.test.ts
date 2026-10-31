@@ -107,12 +107,20 @@ test.describe('Mobile paycheck editor', () => {
       page.getByRole('heading', { name: 'Edit paycheck' }),
     ).toBeVisible();
 
-    // The test budget has no posted pay, so seed 12 deductions of year-to-date
-    await page.evaluate(() => {
+    // Let the real (empty) year-to-date fetch finish first, or it could land
+    // after the seed below and replace it
+    await expect(
+      page.getByText('No paychecks posted this year or last year.'),
+    ).toBeVisible();
+
+    // The test budget has no posted pay, so seed 12 deductions of year-to-date,
+    // and keep the seed from being refetched
+    await page.evaluate(async () => {
       const client = window.__TANSTACK_QUERY_CLIENT__;
-      const [query] = client.getQueryCache().findAll({
-        queryKey: ['paychecks', 'year-to-date'],
-      });
+      const queryKey = ['paychecks', 'year-to-date'];
+      client.setQueryDefaults(queryKey, { staleTime: Infinity });
+      await client.cancelQueries({ queryKey });
+      const [query] = client.getQueryCache().findAll({ queryKey });
       client.setQueryData(
         query.queryKey,
         [2025, 2026].map(year => ({

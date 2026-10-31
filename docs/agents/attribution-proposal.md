@@ -115,7 +115,9 @@ What this gets us:
 - **Real PR reviews.** The Tester App can approve a PR opened by the Developer
   App, because they are different actors. Branch protection can then require
   approvals, and the "review counts only when…" rules in `team.md` mostly
-  become GitHub settings.
+  become GitHub settings. Not all of them: an approval count can't express the
+  per-role review matrix, and CODEOWNERS can't name Apps, so the matrix stays a
+  `team.md` rule.
 - **Least privilege per role.** For example, the Product Owner App can comment
   but can't push, and only the Ops App can edit workflows.
 - **Revocation.** Suspending one App cuts off one role without touching Ken's

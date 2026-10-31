@@ -620,6 +620,7 @@ export type Modal =
       name: 'confirm-categorize-moved-history';
       options: {
         onConfirm: () => void;
+        isBatch?: boolean;
       };
     }
   | {

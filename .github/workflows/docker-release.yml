@@ -29,6 +29,7 @@ permissions:
 
 jobs:
   build:
+    if: github.repository == 'actualbudget/actual'
     name: Build Docker image
     runs-on: depot-ubuntu-latest-4
     environment: release

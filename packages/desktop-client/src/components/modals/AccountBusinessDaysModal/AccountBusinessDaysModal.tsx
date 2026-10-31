@@ -5,7 +5,6 @@ import { Button } from '@actual-app/components/button';
 import { useResponsive } from '@actual-app/components/hooks/useResponsive';
 import { Input } from '@actual-app/components/input';
 import { Select } from '@actual-app/components/select';
-import { styles } from '@actual-app/components/styles';
 import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { spacing } from '@actual-app/components/tokens';
@@ -22,6 +21,7 @@ import {
 import { MobileSheet } from '#components/mobile/MobileSheet';
 import { useAccount } from '#hooks/useAccount';
 import { useBusinessCalendars } from '#hooks/useBusinessCalendars';
+import { useTouchTargetStyle } from '#hooks/useTouchTargetStyle';
 import { useSetAccountBusinessDaysMutation } from '#paychecks';
 
 type AccountBusinessDaysModalProps = {
@@ -33,8 +33,7 @@ export function AccountBusinessDaysModal({
 }: AccountBusinessDaysModalProps) {
   const { t } = useTranslation();
   const { isNarrowWidth } = useResponsive();
-  // At narrow width every control is at least a touch target tall.
-  const touchStyle = isNarrowWidth ? { minHeight: styles.mobileMinHeight } : {};
+  const touchStyle = useTouchTargetStyle();
   const account = useAccount(accountId);
   const { data: calendars = [] } = useBusinessCalendars();
   const setBusinessDays = useSetAccountBusinessDaysMutation();

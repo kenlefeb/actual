@@ -194,7 +194,7 @@ export function MobileRuleEditPage() {
       <RuleEditor
         rule={defaultRule}
         onSave={handleSave}
-        onCancel={handleCancel}
+        stickySave
         onDelete={isEditing && !isLinkedToSchedule ? handleDelete : undefined}
         style={{
           paddingTop: 10,

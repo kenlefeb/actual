@@ -2,14 +2,14 @@ name: CodeQL
 
 on:
   push:
-    branches: [master]
+    branches: [master, development]
   pull_request:
   schedule:
     - cron: '23 11 * * 6'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' && github.ref != 'refs/heads/development' }}
 
 jobs:
   analyze:

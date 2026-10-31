@@ -81,6 +81,7 @@ import {
   TextareaField,
   ToggleField,
 } from '#components/mobile/MobileForms';
+import { StickyFormFooter } from '#components/mobile/StickyFormFooter';
 import { getPrettyPayee } from '#components/mobile/utils';
 import { MobilePageHeader, Page } from '#components/Page';
 import {
@@ -109,6 +110,7 @@ import {
   useSingleActiveEditForm,
 } from '#hooks/useSingleActiveEditForm';
 import { useSyncedPref } from '#hooks/useSyncedPref';
+import { useTouchTargetStyle } from '#hooks/useTouchTargetStyle';
 import { pushModal } from '#modals/modalsSlice';
 import { NotesTagFormatter } from '#notes/NotesTagFormatter';
 import { addNotification } from '#notifications/notificationsSlice';
@@ -271,6 +273,7 @@ function Footer({
   onEditField,
   isFuture,
 }: FooterProps) {
+  const touchTarget = useTouchTargetStyle();
   const [transaction, ...childTransactions] = transactions;
   const emptySplitTransaction = childTransactions.find(t => t.amount === 0);
   const onClickRemainingSplit = () => {
@@ -286,23 +289,11 @@ function Footer({
   };
 
   return (
-    <View
-      data-testid="transaction-form-footer"
-      style={{
-        paddingLeft: styles.mobileEditingPadding,
-        paddingRight: styles.mobileEditingPadding,
-        paddingTop: 10,
-        paddingBottom: 'calc(10px + env(safe-area-inset-bottom))',
-        backgroundColor: theme.tableHeaderBackground,
-        borderTopWidth: 1,
-        borderColor: theme.tableBorder,
-        gap: 8,
-      }}
-    >
+    <StickyFormFooter data-testid="transaction-form-footer" gap={8}>
       {isFuture && (
         <Button
           variant="normal"
-          style={{ height: styles.mobileMinHeight }}
+          style={touchTarget}
           isDisabled={!!editingField}
           onPress={onSchedule}
         >
@@ -320,7 +311,7 @@ function Footer({
       {transaction.error?.type === 'SplitTransactionError' ? (
         <Button
           variant="primary"
-          style={{ height: styles.mobileMinHeight }}
+          style={touchTarget}
           isDisabled={!!editingField}
           onPress={onClickRemainingSplit}
         >
@@ -360,7 +351,7 @@ function Footer({
       ) : !transaction.account ? (
         <Button
           variant="primary"
-          style={{ height: styles.mobileMinHeight }}
+          style={touchTarget}
           isDisabled={!!editingField}
           onPress={() => onEditField(transaction.id, 'account')}
         >
@@ -377,7 +368,7 @@ function Footer({
       ) : isAdding ? (
         <Button
           variant="primary"
-          style={{ height: styles.mobileMinHeight }}
+          style={touchTarget}
           isDisabled={!!editingField}
           onPress={onAdd}
         >
@@ -394,7 +385,7 @@ function Footer({
       ) : (
         <Button
           variant="primary"
-          style={{ height: styles.mobileMinHeight }}
+          style={touchTarget}
           isDisabled={!!editingField}
           onPress={onSave}
         >
@@ -409,7 +400,7 @@ function Footer({
           </Text>
         </Button>
       )}
-    </View>
+    </StickyFormFooter>
   );
 }
 
@@ -2223,10 +2214,11 @@ function FillRemainingButton({
   readonly remaining: number;
   readonly onPress: () => void;
 }) {
+  const touchTarget = useTouchTargetStyle();
   return (
     <Button
       variant="primary"
-      style={{ height: styles.mobileMinHeight }}
+      style={touchTarget}
       onPress={onPress}
       isDisabled={remaining === 0}
     >

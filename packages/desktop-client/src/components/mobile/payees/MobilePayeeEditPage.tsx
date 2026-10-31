@@ -3,7 +3,6 @@ import { Trans, useTranslation } from 'react-i18next';
 import { useLocation, useParams } from 'react-router';
 
 import { Button } from '@actual-app/components/button';
-import { styles } from '@actual-app/components/styles';
 import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
@@ -12,15 +11,18 @@ import type { PayeeEntity } from '@actual-app/core/types/models';
 
 import { MobileBackButton } from '#components/mobile/MobileBackButton';
 import { InputField } from '#components/mobile/MobileForms';
+import { StickyFormFooter } from '#components/mobile/StickyFormFooter';
 import { MobilePageHeader, Page } from '#components/Page';
 import { useNavigate } from '#hooks/useNavigate';
 import { usePayees } from '#hooks/usePayees';
+import { useTouchTargetStyle } from '#hooks/useTouchTargetStyle';
 import { useUndo } from '#hooks/useUndo';
 import { addNotification } from '#notifications/notificationsSlice';
 import { useDispatch } from '#redux';
 
 export function MobilePayeeEditPage() {
   const { t } = useTranslation();
+  const touchTarget = useTouchTargetStyle();
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
@@ -128,26 +130,16 @@ export function MobilePayeeEditPage() {
         />
       }
       footer={
-        <View
-          style={{
-            paddingLeft: styles.mobileEditingPadding,
-            paddingRight: styles.mobileEditingPadding,
-            paddingTop: 10,
-            paddingBottom: 'calc(10px + env(safe-area-inset-bottom))',
-            backgroundColor: theme.tableHeaderBackground,
-            borderTopWidth: 1,
-            borderColor: theme.tableBorder,
-          }}
-        >
+        <StickyFormFooter>
           <Button
             variant="primary"
             onPress={handleSave}
             isDisabled={!editedPayeeName.trim()}
-            style={{ height: styles.mobileMinHeight }}
+            style={touchTarget}
           >
             <Trans>Save</Trans>
           </Button>
-        </View>
+        </StickyFormFooter>
       }
     >
       <View style={{ paddingTop: 20 }}>

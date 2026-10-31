@@ -2,7 +2,6 @@ import { useTranslation } from 'react-i18next';
 import { Navigate, useParams } from 'react-router';
 
 import { styles } from '@actual-app/components/styles';
-import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
 
 import {
@@ -10,6 +9,7 @@ import {
   useUpdateBusinessCalendarMutation,
 } from '#business-calendars';
 import { MobileBackButton } from '#components/mobile/MobileBackButton';
+import { StickyFormFooter } from '#components/mobile/StickyFormFooter';
 import { BusinessCalendarEditor } from '#components/modals/BusinessCalendarsModal/BusinessCalendarEditor';
 import { MobilePageHeader, Page } from '#components/Page';
 import { useBusinessCalendars } from '#hooks/useBusinessCalendars';
@@ -62,21 +62,7 @@ function CalendarEditorPage() {
         <Page
           header={header}
           padding={0}
-          footer={
-            <View
-              style={{
-                paddingLeft: styles.mobileEditingPadding,
-                paddingRight: styles.mobileEditingPadding,
-                paddingTop: 10,
-                paddingBottom: 'calc(10px + env(safe-area-inset-bottom))',
-                backgroundColor: theme.tableHeaderBackground,
-                borderTopWidth: 1,
-                borderColor: theme.tableBorder,
-              }}
-            >
-              {saveButton}
-            </View>
-          }
+          footer={<StickyFormFooter>{saveButton}</StickyFormFooter>}
         >
           {/* Keeps its height, so the page scrolls instead of squashing it */}
           <View style={{ padding: styles.mobileEditingPadding, flexShrink: 0 }}>

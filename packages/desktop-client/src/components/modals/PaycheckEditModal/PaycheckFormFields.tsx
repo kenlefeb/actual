@@ -575,7 +575,7 @@ export function PaycheckDepositFields({ form }: FormProps) {
 export function PaycheckFormErrors({ form }: FormProps) {
   if (!form.isEdited || form.formErrors.length === 0) return null;
   return (
-    <View role="alert" style={{ gap: 3 }}>
+    <View role="alert" style={{ gap: 3, flexShrink: 0 }}>
       {form.formErrors.map(error => (
         <Text key={error} style={{ color: theme.errorText }}>
           {error}

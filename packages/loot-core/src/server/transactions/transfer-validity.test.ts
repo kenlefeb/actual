@@ -1,5 +1,5 @@
-import * as db from '#server/db';
 // @ts-strict-ignore
+import * as db from '#server/db';
 import * as transfer from '#shared/transfer';
 
 beforeEach(global.emptyDatabase());

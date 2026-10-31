@@ -21,6 +21,7 @@ concurrency:
 
 jobs:
   build-and-deploy:
+    if: github.repository == 'actualbudget/actual'
     runs-on: depot-ubuntu-latest
     environment: release
     steps:

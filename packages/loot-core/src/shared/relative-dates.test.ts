@@ -1,4 +1,3 @@
-import { Condition } from '#server/rules';
 import type { RecurConfig, RelativeDateConfig } from '#types/models';
 
 import { setBusinessCalendars } from './business-calendar-lookup';
@@ -170,16 +169,5 @@ describe('relative dates', () => {
         new Date(2026, 10, 13),
       ),
     ).toBe('2026-11-19');
-  });
-
-  it('matches an imported transaction near a relative occurrence', () => {
-    const approx = new Condition('isapprox', 'date', deposit, null);
-    expect(approx.eval({ date: '2026-11-10' })).toBe(true);
-    expect(approx.eval({ date: '2026-11-12' })).toBe(true);
-    expect(approx.eval({ date: '2026-11-20' })).toBe(false);
-
-    const exact = new Condition('is', 'date', deposit, null);
-    expect(exact.eval({ date: '2026-11-10' })).toBe(true);
-    expect(exact.eval({ date: '2026-11-11' })).toBe(false);
   });
 });

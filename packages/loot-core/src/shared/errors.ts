@@ -182,3 +182,12 @@ export class LazyLoadFailedError extends Error {
     this.cause = cause;
   }
 }
+
+export class RuleError extends Error {
+  type: string;
+
+  constructor(name: string, message: string) {
+    super('RuleError: ' + message);
+    this.type = name;
+  }
+}

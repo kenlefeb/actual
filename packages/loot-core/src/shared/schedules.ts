@@ -2,11 +2,11 @@
 import type { IRuleOptions } from '@rschedule/core';
 import * as d from 'date-fns';
 
-import { Condition } from '#server/rules';
 import type { RuleConditionEntity, ScheduleEntity } from '#types/models';
 
 import { getBusinessCalendar } from './business-calendar-lookup';
 import { getNearestBusinessDay } from './business-calendars';
+import { parseDateCondition } from './date-condition';
 import * as monthUtils from './months';
 import { q } from './query';
 import { getNextRelativeDate } from './relative-dates';
@@ -302,8 +302,7 @@ export function getNextDate(
 ): string | null {
   start = d.startOfDay(start);
 
-  const cond = new Condition(dateCond.op, 'date', dateCond.value, null);
-  const value = cond.getValue();
+  const value = parseDateCondition(dateCond.op, dateCond.value);
 
   if (value.type === 'date') {
     return value.date;
@@ -450,12 +449,13 @@ export function isRepeatingDate(
   );
 }
 
-export function scheduleIsRecurring(dateCond: Condition | null) {
+export function scheduleIsRecurring(
+  dateCond: Pick<RuleConditionEntity, 'op' | 'value'> | null,
+) {
   if (!dateCond) {
     return false;
   }
-  const cond = new Condition(dateCond.op, 'date', dateCond.value, null);
-  const value = cond.getValue();
+  const value = parseDateCondition(dateCond.op, dateCond.value);
 
   return value.type === 'recur' || value.type === 'relative';
 }

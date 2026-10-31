@@ -135,6 +135,27 @@ export function getHolidays(
   return holidays.sort((a, b) => a.date.localeCompare(b.date));
 }
 
+// Keyed by calendar object: edits create a new entity, so no invalidation is
+// needed. Never mutate a calendar in place or this cache goes stale.
+const holidayDatesCache = new WeakMap<
+  BusinessCalendarEntity,
+  Map<number, Set<string>>
+>();
+
+function holidayDatesFor(calendar: BusinessCalendarEntity, year: number) {
+  let byYear = holidayDatesCache.get(calendar);
+  if (!byYear) {
+    byYear = new Map();
+    holidayDatesCache.set(calendar, byYear);
+  }
+  let dates = byYear.get(year);
+  if (!dates) {
+    dates = new Set(getHolidays(calendar, year).map(h => h.date));
+    byYear.set(year, dates);
+  }
+  return dates;
+}
+
 export function isBusinessDay(calendar: BusinessCalendarEntity, date: string) {
   const exception = calendar.exceptions.find(e => e.date === date);
   if (exception) {
@@ -144,7 +165,7 @@ export function isBusinessDay(calendar: BusinessCalendarEntity, date: string) {
     return false;
   }
   const year = Number(date.slice(0, 4));
-  return !getHolidays(calendar, year).some(holiday => holiday.date === date);
+  return !holidayDatesFor(calendar, year).has(date);
 }
 
 export function getNearestBusinessDay(

@@ -68,7 +68,7 @@ jobs:
         uses: ./.github/actions/release-notes/check
 
   generate-release-notes:
-    if: github.event_name == 'push'
+    if: github.repository == 'actualbudget/actual' && (github.event_name == 'push')
     runs-on: depot-ubuntu-latest
     environment: release
     permissions:

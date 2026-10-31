@@ -18,6 +18,7 @@ permissions:
 
 jobs:
   count-points:
+    if: github.repository == 'actualbudget/actual'
     runs-on: depot-ubuntu-latest
     steps:
       - name: Checkout repository

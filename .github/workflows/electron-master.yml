@@ -18,6 +18,7 @@ concurrency:
 
 jobs:
   create-release:
+    if: github.repository == 'actualbudget/actual'
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -49,6 +50,7 @@ jobs:
           fi
 
   build:
+    if: github.repository == 'actualbudget/actual'
     needs: create-release
     # this is so the assets can be added to the release
     permissions:

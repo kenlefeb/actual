@@ -23,6 +23,7 @@ permissions:
 
 jobs:
   publish-microsoft-store:
+    if: github.repository == 'actualbudget/actual'
     runs-on: depot-windows-2022
     environment: release
     steps:

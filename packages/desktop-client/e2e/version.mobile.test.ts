@@ -27,7 +27,8 @@ test('Settings displays the customized client version', async ({ browser }) => {
     await expect(
       page.getByText('Client version', { exact: true }),
     ).toBeVisible();
-    await expect(page.getByText(`v${version}`, { exact: true })).toBeVisible();
+    // Not exact: a CI build appends `+<commit>` to the version.
+    await expect(page.getByText(`v${version}`)).toBeVisible();
   } finally {
     await page.close();
   }

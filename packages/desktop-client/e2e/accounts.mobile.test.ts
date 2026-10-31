@@ -48,6 +48,8 @@ test.describe('Mobile Accounts', () => {
     await expect(accountPage.transactionList).toBeVisible();
     expect(await accountPage.getBalance()).toBeGreaterThan(0);
     await expect(accountPage.noTransactionsMessage).not.toBeVisible();
+    // The list shows a spinner until rows load; screenshot only the loaded state.
+    await expect(accountPage.transactions.first()).toBeVisible();
     await expect(page).toMatchThemeScreenshots();
 
     await accountPage.searchByText('nothing should be found');

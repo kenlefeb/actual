@@ -51,7 +51,7 @@ export class SettingsPage {
           await this.backButton.click({ timeout: 2000 });
         }
         await sectionLink.waitFor({ state: 'visible', timeout: 2000 });
-      }).toPass();
+      }).toPass({ timeout: 10_000 });
     }
 
     await sectionLink.click();

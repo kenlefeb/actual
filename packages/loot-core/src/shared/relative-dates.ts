@@ -58,10 +58,12 @@ const parsedSources = new WeakMap<
 >();
 
 function parseSource(source: RecurConfig) {
-  if (!parsedSources.has(source)) {
-    parsedSources.set(source, parseRecurSchedule(source));
+  let schedule = parsedSources.get(source);
+  if (!schedule) {
+    schedule = parseRecurSchedule(source);
+    parsedSources.set(source, schedule);
   }
-  return parsedSources.get(source) ?? null;
+  return schedule;
 }
 
 function sourceOccurrences(
@@ -75,9 +77,6 @@ function sourceOccurrences(
     return query.reverse || inRange ? [source] : [];
   }
   const schedule = parseSource(source);
-  if (!schedule) {
-    return [];
-  }
   return schedule
     .occurrences(query)
     .toArray()

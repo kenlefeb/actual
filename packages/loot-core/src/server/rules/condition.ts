@@ -2,6 +2,7 @@
 import * as dateFns from 'date-fns';
 
 import { logger } from '#platform/server/log';
+import { parseDateConditionValue } from '#shared/date-condition';
 import {
   addDays,
   isAfter,
@@ -20,52 +21,14 @@ import {
 } from '#shared/rules';
 import { extractTagsForFilter } from '#shared/tags';
 
-import {
-  assert,
-  parseBetweenAmount,
-  parseDateString,
-  parseRecurDate,
-} from './rule-utils';
+import { assert, parseBetweenAmount } from './rule-utils';
 
 export const CONDITION_TYPES = {
   date: {
     ops: ['is', 'isapprox', 'gt', 'gte', 'lt', 'lte'],
     nullable: false,
     parse(op, value, fieldName) {
-      const parsed =
-        typeof value === 'string'
-          ? parseDateString(value)
-          : value.relativeTo != null
-            ? { type: 'relative', config: value }
-            : value.frequency != null
-              ? parseRecurDate(value)
-              : null;
-      assert(
-        parsed,
-        'date-format',
-        `Invalid date format (field: ${fieldName})`,
-      );
-
-      // Approximate only works with exact, recurring & relative dates
-      if (op === 'isapprox') {
-        assert(
-          parsed.type === 'date' ||
-            parsed.type === 'recur' ||
-            parsed.type === 'relative',
-          'date-format',
-          `Invalid date value for "isapprox" (field: ${fieldName})`,
-        );
-      }
-      // These only work with exact dates
-      else if (op === 'gt' || op === 'gte' || op === 'lt' || op === 'lte') {
-        assert(
-          parsed.type === 'date',
-          'date-format',
-          `Invalid date value for "${op}" (field: ${fieldName})`,
-        );
-      }
-
-      return parsed;
+      return parseDateConditionValue(op, value, fieldName);
     },
   },
   id: {

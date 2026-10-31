@@ -100,14 +100,8 @@ export class ValidationError extends Error {}
 
 export class TransactionError extends Error {}
 
-export class RuleError extends Error {
-  type: string;
-
-  constructor(name: string, message: string) {
-    super('RuleError: ' + message);
-    this.type = name;
-  }
-}
+// Lives in shared so shared code can raise it; re-exported to keep one class
+export { RuleError } from '#shared/errors';
 
 export function APIError(
   msg: string,

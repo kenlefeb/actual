@@ -11,7 +11,7 @@ const sharedDir = fileURLToPath(new URL('.', import.meta.url));
 // `#platform/server/...` is a different alias and stays allowed.
 const serverImport =
   /\b(?:from|import|require)\s*\(?\s*['"](?:#server|(?:\.\.\/)+server)(?:\/[^'"]*)?['"]/;
-const thisFile = 'no-server-imports.test.ts';
+const thisFile = fileURLToPath(import.meta.url);
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
@@ -27,8 +27,7 @@ describe('shared', () => {
   it('does not import from #server', () => {
     const offenders = sourceFiles(sharedDir).filter(
       file =>
-        !file.endsWith(thisFile) &&
-        serverImport.test(readFileSync(file, 'utf8')),
+        file !== thisFile && serverImport.test(readFileSync(file, 'utf8')),
     );
 
     expect(offenders).toEqual([]);

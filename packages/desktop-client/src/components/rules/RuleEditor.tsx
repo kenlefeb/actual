@@ -1323,7 +1323,12 @@ export function RuleEditor({
   const showSplitButton = actionSplits.length > 0;
 
   return (
-    <View style={style}>
+    <View
+      style={
+        // Grow with the content so the sticky footer has the whole page to pin to
+        stickySave ? { ...style, flexShrink: 0, minHeight: '100%' } : style
+      }
+    >
       <View
         style={{
           flexDirection: 'row',
@@ -1604,7 +1609,16 @@ export function RuleEditor({
       </SelectedProvider>
 
       {stickySave && (
-        <View style={{ position: 'sticky', bottom: 0, marginTop: 'auto' }}>
+        <View
+          style={{
+            position: 'sticky',
+            bottom: 0,
+            marginTop: 'auto',
+            flexShrink: 0,
+            // Above the transactions section (zIndex 1), which scrolls under it
+            zIndex: 2,
+          }}
+        >
           <StickyFormFooter>
             <Button variant="primary" onPress={onSave} style={touchTarget}>
               <Trans>Save</Trans>

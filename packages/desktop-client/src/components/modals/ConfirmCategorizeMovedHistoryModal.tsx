@@ -18,6 +18,7 @@ type ConfirmCategorizeMovedHistoryModalProps = Extract<
 
 export function ConfirmCategorizeMovedHistoryModal({
   onConfirm,
+  isBatch,
 }: ConfirmCategorizeMovedHistoryModalProps) {
   const { t } = useTranslation();
   const { isNarrowWidth } = useResponsive();
@@ -35,10 +36,18 @@ export function ConfirmCategorizeMovedHistoryModal({
           />
           <View style={{ lineHeight: 1.5 }}>
             <Paragraph>
-              <Trans>
-                This is already included in the account's starting balance.
-                Categorizing it would count the money twice.
-              </Trans>
+              {isBatch ? (
+                <Trans>
+                  Some of these transactions are already included in an
+                  account's starting balance. Categorizing them would count the
+                  money twice.
+                </Trans>
+              ) : (
+                <Trans>
+                  This is already included in the account's starting balance.
+                  Categorizing it would count the money twice.
+                </Trans>
+              )}
             </Paragraph>
             <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
               <InitialFocus>

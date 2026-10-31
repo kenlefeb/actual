@@ -22,12 +22,12 @@ export function useConfirmMovedHistory() {
           accounts?.find(account => account.id === transaction.account),
         ),
       ),
-    confirm: (onConfirm: () => void) =>
+    confirm: (onConfirm: () => void, options?: { isBatch?: boolean }) =>
       dispatch(
         pushModal({
           modal: {
             name: 'confirm-categorize-moved-history',
-            options: { onConfirm },
+            options: { onConfirm, ...options },
           },
         }),
       ),

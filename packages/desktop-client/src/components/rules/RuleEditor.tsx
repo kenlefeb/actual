@@ -50,12 +50,12 @@ import { SimpleTransactionsTable } from '#components/transactions/SimpleTransact
 import { BetweenAmountInput } from '#components/util/AmountInput';
 import { DisplayId } from '#components/util/DisplayId';
 import { GenericInput } from '#components/util/GenericInput';
+import { useApplyRuleActions } from '#hooks/useApplyRuleActions';
 import { useDateFormat } from '#hooks/useDateFormat';
 import { useFeatureFlag } from '#hooks/useFeatureFlag';
 import { useFormat } from '#hooks/useFormat';
 import { useSchedules } from '#hooks/useSchedules';
 import { SelectedProvider, useSelected } from '#hooks/useSelected';
-import { addNotification } from '#notifications/notificationsSlice';
 import { aqlQuery } from '#queries/aqlQuery';
 import { useDispatch } from '#redux';
 import { disableUndo, enableUndo } from '#undo';
@@ -1060,6 +1060,7 @@ export function RuleEditor({
   const [conditionsOp, setConditionsOp] = useState(defaultRule.conditionsOp);
   const [transactions, setTransactions] = useState([]);
   const dispatch = useDispatch();
+  const applyRuleActions = useApplyRuleActions();
   const scrollableEl = useRef(undefined);
 
   const isSchedule = getActions(actionSplits).some(
@@ -1257,26 +1258,11 @@ export function RuleEditor({
   }
 
   function onApply() {
-    const selectedTransactions = transactions.filter(({ id }) =>
-      selectedInst.items.has(id),
+    applyRuleActions(
+      transactions.filter(({ id }) => selectedInst.items.has(id)),
+      getUnparsedActions(actionSplits),
+      () => setActionSplits([...actionSplits]),
     );
-    void send('rule-apply-actions', {
-      transactions: selectedTransactions,
-      actions: getUnparsedActions(actionSplits),
-    }).then(content => {
-      // This makes it refetch the transactions
-      content.errors.forEach(error => {
-        dispatch(
-          addNotification({
-            notification: {
-              type: 'error',
-              message: error,
-            },
-          }),
-        );
-      });
-      setActionSplits([...actionSplits]);
-    });
   }
 
   async function onSave() {

@@ -1,7 +1,6 @@
-// @ts-strict-ignore
 import * as db from '#server/db';
-
-import * as transfer from './transfer';
+// @ts-strict-ignore
+import * as transfer from '#shared/transfer';
 
 beforeEach(global.emptyDatabase());
 

@@ -1323,7 +1323,12 @@ export function RuleEditor({
   const showSplitButton = actionSplits.length > 0;
 
   return (
-    <View style={style}>
+    <View
+      style={
+        // Grow with the content so the sticky footer has the whole page to pin to
+        stickySave ? { ...style, flexShrink: 0, minHeight: '100%' } : style
+      }
+    >
       <View
         style={{
           flexDirection: 'row',
@@ -1365,9 +1370,15 @@ export function RuleEditor({
         style={{
           borderBottom: '1px solid ' + theme.tableBorder,
           padding: '0 20px 20px 20px',
-          overflow: 'auto',
-          maxHeight: 'calc(100% - 300px)',
-          minHeight: 100,
+          // The phone page scrolls as a whole, so the conditions and actions
+          // aren't boxed into a short inner scroller above the footer.
+          ...(stickySave
+            ? { flexShrink: 0 }
+            : {
+                overflow: 'auto',
+                maxHeight: 'calc(100% - 300px)',
+                minHeight: 100,
+              }),
           position: 'relative',
           zIndex: 2,
         }}
@@ -1522,7 +1533,7 @@ export function RuleEditor({
         <View
           style={{
             padding: '20px',
-            flex: 1,
+            flex: stickySave ? '0 0 auto' : 1,
             position: 'relative',
             zIndex: 1,
           }}
@@ -1598,7 +1609,16 @@ export function RuleEditor({
       </SelectedProvider>
 
       {stickySave && (
-        <View style={{ position: 'sticky', bottom: 0, marginTop: 'auto' }}>
+        <View
+          style={{
+            position: 'sticky',
+            bottom: 0,
+            marginTop: 'auto',
+            flexShrink: 0,
+            // Above the transactions section (zIndex 1), which scrolls under it
+            zIndex: 2,
+          }}
+        >
           <StickyFormFooter>
             <Button variant="primary" onPress={onSave} style={touchTarget}>
               <Trans>Save</Trans>

@@ -3,10 +3,8 @@ import type { ReactNode } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
-import { useResponsive } from '@actual-app/components/hooks/useResponsive';
 import { Input } from '@actual-app/components/input';
 import { Select } from '@actual-app/components/select';
-import { styles } from '@actual-app/components/styles';
 import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
@@ -23,6 +21,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { Checkbox } from '#components/forms';
 import { useLocale } from '#hooks/useLocale';
+import { useTouchTargetStyle } from '#hooks/useTouchTargetStyle';
 
 type BusinessCalendarEditorProps = {
   calendar: BusinessCalendarEntity;
@@ -43,11 +42,8 @@ export function BusinessCalendarEditor({
   renderPage,
 }: BusinessCalendarEditorProps) {
   const { t } = useTranslation();
-  const { isNarrowWidth } = useResponsive();
   // Touch-sized on phones; the desktop dialog keeps its compact controls
-  const touch = isNarrowWidth
-    ? { minHeight: styles.mobileMinHeight, minWidth: styles.mobileMinHeight }
-    : {};
+  const touch = useTouchTargetStyle();
   const locale = useLocale();
   const [draft, setDraft] = useState(calendar);
   const [weekdayError, setWeekdayError] = useState<string | null>(null);

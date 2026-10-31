@@ -12,6 +12,7 @@ import { format as monthUtilFormat } from '@actual-app/core/shared/months';
 import type { PaycheckEntity } from '@actual-app/core/types/models';
 
 import { MobileBackButton } from '#components/mobile/MobileBackButton';
+import { StickyFormFooter } from '#components/mobile/StickyFormFooter';
 import {
   PaycheckActions,
   PaycheckDeductionFields,
@@ -29,6 +30,7 @@ import { useFormat } from '#hooks/useFormat';
 import { useNavigate } from '#hooks/useNavigate';
 import { usePaycheckForm } from '#hooks/usePaycheckForm';
 import { usePaychecks } from '#hooks/usePaychecks';
+import { useTouchTargetStyle } from '#hooks/useTouchTargetStyle';
 
 export function MobilePaycheckPage() {
   const { id } = useParams<{ id?: string }>();
@@ -50,6 +52,7 @@ export function MobilePaycheckPage() {
 
 function MobilePaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
   const { t } = useTranslation();
+  const touchTarget = useTouchTargetStyle();
   const navigate = useNavigate();
   const format = useFormat();
   const dateFormat = useDateFormat() || 'MM/dd/yyyy';
@@ -76,30 +79,16 @@ function MobilePaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
         />
       }
       footer={
-        <View
-          style={{
-            gap: 10,
-            paddingLeft: styles.mobileEditingPadding,
-            paddingRight: styles.mobileEditingPadding,
-            paddingTop: 10,
-            paddingBottom: 'calc(10px + env(safe-area-inset-bottom))',
-            backgroundColor: theme.tableHeaderBackground,
-            borderTopWidth: 1,
-            borderColor: theme.tableBorder,
-          }}
-        >
-          <View style={styles.mediumText}>
-            <PaycheckNetPay form={form} />
-          </View>
+        <StickyFormFooter summary={<PaycheckNetPay form={form} />}>
           <Button
             variant="primary"
             isDisabled={form.formErrors.length > 0}
             onPress={() => form.save(close)}
-            style={{ height: styles.mobileMinHeight }}
+            style={touchTarget}
           >
             <Trans>Save</Trans>
           </Button>
-        </View>
+        </StickyFormFooter>
       }
       padding={0}
     >

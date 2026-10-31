@@ -475,6 +475,9 @@ budgetTypes.forEach(budgetType => {
       await expect(budgetedButton).toHaveText(
         amountToCurrency(amountToTemplate),
       );
+      // The success and undo toasts overlap and fade out on a timer; let them
+      // go (auto-dismiss is 6.5s) so the screenshot is stable.
+      await expect(page.getByRole('alert')).toHaveCount(0, { timeout: 15000 });
       await expect(page).toMatchThemeScreenshots();
     });
 

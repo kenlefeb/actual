@@ -1,3 +1,4 @@
+import { expect } from '@playwright/test';
 import type { Locator, Page } from '@playwright/test';
 
 type SettingsSection =
@@ -43,8 +44,14 @@ export class SettingsPage {
     // Narrow layouts only show the settings nav on the settings landing page
     const viewport = this.page.viewportSize();
     const isNarrow = viewport != null && viewport.width < 512;
-    if (isNarrow && !(await sectionLink.isVisible())) {
-      await this.backButton.click();
+    // Retry as a unit: the Back button can detach while the nav re-renders.
+    if (isNarrow) {
+      await expect(async () => {
+        if (!(await sectionLink.isVisible())) {
+          await this.backButton.click({ timeout: 2000 });
+        }
+        await sectionLink.waitFor({ state: 'visible', timeout: 2000 });
+      }).toPass({ timeout: 10_000 });
     }
 
     await sectionLink.click();

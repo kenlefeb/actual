@@ -114,3 +114,60 @@ jobs:
           name: mobile-e2e-results
           path: packages/desktop-client/test-results/
           retention-days: 7
+
+  # Visual regression for the phone UI (sc-977). Snapshots are Linux-only and
+  # must match the pinned Playwright image (keep in sync with e2e-test.yml and
+  # bin/run-vrt); the Debian-based mobile-e2e image renders fonts differently,
+  # so this is a separate job. `yarn vrt` sets VRT=true, which turns on
+  # toMatchThemeScreenshots. Same docs-only skip as mobile-e2e.
+  mobile-vrt:
+    if: github.repository == 'kenlefeb/actual'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.1-jammy
+    env:
+      E2E_USE_BUILD: '1'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Trust the repository directory
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Decide whether the mobile VRT applies
+        id: scope
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            changed=$(git -c core.quotePath=false diff --no-renames --name-only HEAD^1 HEAD)
+          fi
+          if [ "$GITHUB_EVENT_NAME" != pull_request ] ||
+            printf '%s\n' "$changed" | grep -Ev '^(docs/|openspec/|fork/|upcoming-release-notes/)|\.md$' | grep -q .; then
+            echo run=true >> "$GITHUB_OUTPUT"
+          else
+            echo 'Only docs, OpenSpec, fork notes or Markdown changed; skipping mobile VRT.'
+            echo run=false >> "$GITHUB_OUTPUT"
+          fi
+      - name: Set up environment
+        if: steps.scope.outputs.run == 'true'
+        uses: ./.github/actions/setup
+        with:
+          download-translations: 'false'
+      - name: Build browser bundle
+        if: steps.scope.outputs.run == 'true'
+        # REACT_APP_NETLIFY keeps the "Create test file" button in the bundle;
+        # --skip-translations renders source English (same as e2e-test.yml).
+        env:
+          REACT_APP_NETLIFY: 'true'
+        run: yarn build:browser --skip-translations
+      - name: Mobile VRT
+        if: steps.scope.outputs.run == 'true'
+        # One retry (the config default) absorbs a screenshot taken mid-spinner.
+        run: yarn vrt mobile
+      - name: Upload the Playwright results
+        if: failure() && steps.scope.outputs.run == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mobile-vrt-results
+          path: packages/desktop-client/test-results/
+          retention-days: 7

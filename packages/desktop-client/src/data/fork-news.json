@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "id": "fork-release-26.10.1-alpha.20",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.20 — Ken's Actual fork",
+      "date": "2026-10-31",
+      "version": "26.10.1-alpha.20",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.20.md",
+      "body": "**Unofficial fork prerelease.** Based on upstream Actual `master` at `21c2b3f703142f858af4c653a31e675ca5ff85d7` (October 26, 2026), which comes after Actual 26.10.0 and is not itself an upstream release; not an official Actual Budget release.\n\nThis release fixes the year-to-date rows on the phone paycheck page, keeps Save in view on the phone edit pages, asks only once before moved history is categorized, and explains goal template errors for schedules whose source was deleted.",
+      "details": "#### Features\n\n- None in this release.\n\n#### Enhancements\n\n- On a phone, the paycheck, business calendar, schedule, transaction, payee, bank sync and rule edit pages keep Save in view at the bottom of the screen. On the bank sync and rule pages, Unlink and Delete move to the end of the form.\n- Applying a rule from the Rules page asks once before it would categorize transactions from before an account moved on budget.\n- A goal template error for a schedule dated relative to another schedule now says that source schedule was deleted, instead of wrongly saying the schedule is in the past.\n\n#### Bugfixes\n\n- On the phone paycheck page, the year-to-date rows no longer overlap the Skip and Delete buttons.\n- On the phone rule edit page, the last action row is no longer cut off behind the Save button.\n- Categorizing a moved-history transaction in the transaction table opens one confirmation instead of two.\n\n#### Maintenance\n\n- The sync server's query-string library is pinned to a version that clears three security advisories.\n- Business-day checks for schedules reuse each calendar's holidays per year instead of rebuilding them every time.\n- Shared schedule date code no longer pulls server rule code into the client.\n- Phone screenshot tests run in fork CI with fresh baselines, and several end-to-end tests no longer depend on the date or on timing.\n- Agent workflow documentation updates.\n\n#### Known limitations\n\n- Experimental.\n- Upstream changes made after 26.10.0 have not yet been through an upstream release.\n- Each deposit must go to a different account, and every paycheck repeats its defined amounts; edit a posted transaction for a one-off change.\n- Imported deposits more than about 7.5% from the expected amount do not link automatically.\n- A duplicate of the latest paycheck (for example, imported twice) can hide the next skipped date.\n- Goal templates already applied under alpha.17 keep their amounts until templates are applied again.\n- Releases published on the same day may show the \"What's new\" message for any of them; the Notifications page lists all.\n- No iPhone acceptance test is claimed."
+    },
+    {
       "id": "fork-release-26.10.1-alpha.19",
       "type": "release",
       "title": "Release 26.10.1-alpha.19 — Ken's Actual fork",

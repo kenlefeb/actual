@@ -157,8 +157,11 @@ jobs:
         if: steps.scope.outputs.run == 'true'
         # REACT_APP_NETLIFY keeps the "Create test file" button in the bundle;
         # --skip-translations renders source English (same as e2e-test.yml).
+        # GITHUB_SHA is blanked so the bundle shows the plain version, which
+        # version.mobile.test.ts matches exactly (vite appends the commit).
         env:
           REACT_APP_NETLIFY: 'true'
+          GITHUB_SHA: ''
         run: yarn build:browser --skip-translations
       - name: Mobile VRT
         if: steps.scope.outputs.run == 'true'

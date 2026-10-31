@@ -99,4 +99,50 @@ test.describe('Mobile paycheck editor', () => {
       page.getByRole('heading', { name: 'Edit paycheck' }),
     ).toBeVisible();
   });
+
+  test('keeps long year-to-date rows above the paycheck buttons', async () => {
+    const note = await openPaySchedule();
+    await note.getByRole('button', { name: 'Edit paycheck' }).click();
+    await expect(
+      page.getByRole('heading', { name: 'Edit paycheck' }),
+    ).toBeVisible();
+
+    // Let the real (empty) year-to-date fetch finish first, or it could land
+    // after the seed below and replace it
+    await expect(
+      page.getByText('No paychecks posted this year or last year.'),
+    ).toBeVisible();
+
+    // The test budget has no posted pay, so seed 12 deductions of year-to-date,
+    // and keep the seed from being refetched
+    await page.evaluate(async () => {
+      const client = window.__TANSTACK_QUERY_CLIENT__;
+      const queryKey = ['paychecks', 'year-to-date'];
+      client.setQueryDefaults(queryKey, { staleTime: Infinity });
+      await client.cancelQueries({ queryKey });
+      const [query] = client.getQueryCache().findAll({ queryKey });
+      client.setQueryData(
+        query.queryKey,
+        [2025, 2026].map(year => ({
+          year,
+          gross: 300000,
+          deductions: Array.from({ length: 12 }, (_, n) => ({
+            name: `Deduction ${n + 1}`,
+            amount: 1000,
+          })),
+          net: 200000,
+        })),
+      );
+    });
+
+    const table = page.getByRole('table', { name: 'Year to date' });
+    const skip = page.getByRole('button', { name: 'Skip next paycheck' });
+    await expect(table.getByRole('row')).toHaveCount(15);
+    await skip.scrollIntoViewIfNeeded();
+
+    const tableBox = await table.boundingBox();
+    const skipBox = await skip.boundingBox();
+    expect(tableBox!.y + tableBox!.height).toBeLessThanOrEqual(skipBox!.y);
+    await expect(page).toMatchThemeScreenshots();
+  });
 });

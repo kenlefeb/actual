@@ -153,7 +153,7 @@ function MobilePaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
         <PaycheckFormErrors form={form} />
 
         {paycheck && (
-          <View style={{ gap: 10, alignItems: 'stretch' }}>
+          <View style={{ gap: 10, alignItems: 'stretch', flexShrink: 0 }}>
             <PaycheckActions form={form} close={close} />
           </View>
         )}

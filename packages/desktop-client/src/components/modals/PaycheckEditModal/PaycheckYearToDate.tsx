@@ -28,7 +28,7 @@ export function PaycheckYearToDate({ paycheckId }: PaycheckYearToDateProps) {
   const isEmpty = years.every(year => year.gross === 0 && year.net === 0);
 
   return (
-    <View style={{ gap: 8 }}>
+    <View style={{ gap: 8, flexShrink: 0 }}>
       <Text style={{ fontWeight: 600 }}>
         <Trans>Year to date</Trans>
       </Text>

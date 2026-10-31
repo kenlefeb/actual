@@ -3,7 +3,6 @@ import { Trans, useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import { Button } from '@actual-app/components/button';
-import { SpaceBetween } from '@actual-app/components/space-between';
 import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { spacing } from '@actual-app/components/tokens';
@@ -14,14 +13,17 @@ import { BankSyncCheckboxOptions } from '#components/banksync/BankSyncCheckboxOp
 import { FieldMapping } from '#components/banksync/FieldMapping';
 import { useBankSyncAccountSettings } from '#components/banksync/useBankSyncAccountSettings';
 import { MobileBackButton } from '#components/mobile/MobileBackButton';
+import { StickyFormFooter } from '#components/mobile/StickyFormFooter';
 import { MobilePageHeader, Page } from '#components/Page';
 import { useAccount } from '#hooks/useAccount';
 import { useNavigate } from '#hooks/useNavigate';
+import { useTouchTargetStyle } from '#hooks/useTouchTargetStyle';
 import { pushModal } from '#modals/modalsSlice';
 import { useDispatch } from '#redux';
 
 export function MobileBankSyncAccountEditPage() {
   const { t } = useTranslation();
+  const touchTarget = useTouchTargetStyle();
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { accountId } = useParams<{ accountId: string }>();
@@ -119,6 +121,13 @@ export function MobileBankSyncAccountEditPage() {
         />
       }
       padding={0}
+      footer={
+        <StickyFormFooter>
+          <Button variant="primary" onPress={handleSave} style={touchTarget}>
+            <Trans>Save</Trans>
+          </Button>
+        </StickyFormFooter>
+      }
     >
       <View style={{ flex: 1, backgroundColor: theme.mobilePageBackground }}>
         <View
@@ -158,38 +167,14 @@ export function MobileBankSyncAccountEditPage() {
               setUpdateDates={setUpdateDates}
               helpMode="mobile"
             />
+
+            <Button
+              style={{ ...touchTarget, color: theme.errorText, marginTop: 30 }}
+              onPress={handleUnlink}
+            >
+              <Trans>Unlink account</Trans>
+            </Button>
           </View>
-        </View>
-
-        <View
-          style={{
-            padding: 16,
-            paddingTop: 12,
-            borderTop: `1px solid ${theme.tableBorder}`,
-            backgroundColor: theme.mobilePageBackground,
-            display: 'flex',
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
-        >
-          <Button
-            style={{
-              color: theme.errorText,
-            }}
-            onPress={handleUnlink}
-          >
-            <Trans>Unlink account</Trans>
-          </Button>
-
-          <SpaceBetween gap={10}>
-            <Button onPress={handleCancel}>
-              <Trans>Cancel</Trans>
-            </Button>
-            <Button variant="primary" onPress={handleSave}>
-              <Trans>Save</Trans>
-            </Button>
-          </SpaceBetween>
         </View>
       </View>
     </Page>

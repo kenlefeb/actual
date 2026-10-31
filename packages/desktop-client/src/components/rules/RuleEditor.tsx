@@ -45,6 +45,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import { TagMultiAutocomplete } from '#components/autocomplete/TagMultiAutocomplete';
 import { FinancialText } from '#components/FinancialText';
+import { StickyFormFooter } from '#components/mobile/StickyFormFooter';
 import { StatusBadge } from '#components/schedules/StatusBadge';
 import { SimpleTransactionsTable } from '#components/transactions/SimpleTransactionsTable';
 import { BetweenAmountInput } from '#components/util/AmountInput';
@@ -56,6 +57,7 @@ import { useFeatureFlag } from '#hooks/useFeatureFlag';
 import { useFormat } from '#hooks/useFormat';
 import { useSchedules } from '#hooks/useSchedules';
 import { SelectedProvider, useSelected } from '#hooks/useSelected';
+import { useTouchTargetStyle } from '#hooks/useTouchTargetStyle';
 import { aqlQuery } from '#queries/aqlQuery';
 import { useDispatch } from '#redux';
 import { disableUndo, enableUndo } from '#undo';
@@ -1024,6 +1026,9 @@ type RuleEditorProps = {
   onCancel?: () => void;
   onDelete?: () => void;
   style?: CSSProperties;
+  // Phone page layout: Save in a sticky footer, Delete as a row in the body,
+  // no Cancel (the page's back arrow cancels).
+  stickySave?: boolean;
 };
 
 export function RuleEditor({
@@ -1032,8 +1037,10 @@ export function RuleEditor({
   onDelete,
   onCancel,
   style,
+  stickySave,
 }: RuleEditorProps) {
   const { t } = useTranslation();
+  const touchTarget = useTouchTargetStyle();
   const [conditions, setConditions] = useState(
     defaultRule.conditions.map(parse).map(c => ({ ...c, inputKey: uuidv4() })),
   );
@@ -1551,29 +1558,54 @@ export function RuleEditor({
             }}
           />
 
-          <SpaceBetween
-            style={{
-              marginTop: 20,
-              justifyContent: onDelete ? 'space-between' : 'flex-end',
-            }}
-          >
-            {onDelete && (
-              <Button onPress={onDelete}>
+          {stickySave ? (
+            onDelete && (
+              <Button
+                style={{
+                  ...touchTarget,
+                  color: theme.errorText,
+                  marginTop: 30,
+                }}
+                onPress={onDelete}
+              >
                 <Trans>Delete</Trans>
               </Button>
-            )}
+            )
+          ) : (
+            <SpaceBetween
+              style={{
+                marginTop: 20,
+                justifyContent: onDelete ? 'space-between' : 'flex-end',
+              }}
+            >
+              {onDelete && (
+                <Button onPress={onDelete}>
+                  <Trans>Delete</Trans>
+                </Button>
+              )}
 
-            <SpaceBetween>
-              <Button onPress={onCancel}>
-                <Trans>Cancel</Trans>
-              </Button>
-              <Button variant="primary" onPress={onSave}>
-                <Trans>Save</Trans>
-              </Button>
+              <SpaceBetween>
+                <Button onPress={onCancel}>
+                  <Trans>Cancel</Trans>
+                </Button>
+                <Button variant="primary" onPress={onSave}>
+                  <Trans>Save</Trans>
+                </Button>
+              </SpaceBetween>
             </SpaceBetween>
-          </SpaceBetween>
+          )}
         </View>
       </SelectedProvider>
+
+      {stickySave && (
+        <View style={{ position: 'sticky', bottom: 0, marginTop: 'auto' }}>
+          <StickyFormFooter>
+            <Button variant="primary" onPress={onSave} style={touchTarget}>
+              <Trans>Save</Trans>
+            </Button>
+          </StickyFormFooter>
+        </View>
+      )}
     </View>
   );
 }

@@ -22,12 +22,18 @@ describe('StickyFormFooter', () => {
       </StickyFormFooter>,
     );
 
-    // jsdom drops env() values from computed styles, so check the class rule
+    // jsdom drops env() values from computed styles, so read the footer's own
+    // class rules from the emitted CSS
+    const footer = screen.getByTestId('footer');
     const css = Array.from(document.querySelectorAll('style'))
       .map(el => el.textContent)
       .join('');
-    expect(screen.getByTestId('footer')).toBeTruthy();
-    expect(css).toContain('env(safe-area-inset-bottom)');
+    const ownRules = Array.from(footer.classList).flatMap(
+      name => css.match(new RegExp(`\\.${name}\\s*\\{[^}]*\\}`, 'g')) ?? [],
+    );
+    expect(ownRules.join('')).toContain(
+      'padding-bottom:calc(10px + env(safe-area-inset-bottom))',
+    );
   });
 
   it('passes a disabled Save button through', () => {

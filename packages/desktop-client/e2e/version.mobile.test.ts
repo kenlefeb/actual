@@ -27,8 +27,12 @@ test('Settings displays the customized client version', async ({ browser }) => {
     await expect(
       page.getByText('Client version', { exact: true }),
     ).toBeVisible();
-    // Not exact: a CI build appends `+<commit>` to the version.
-    await expect(page.getByText(`v${version}`)).toBeVisible();
+    // Anchored so alpha.10 can't satisfy alpha.1; a CI build appends `+<commit>`.
+    await expect(
+      page.getByText(
+        new RegExp(`^v${version.replace(/\./g, '\\.')}(\\+[0-9a-f]+)?$`),
+      ),
+    ).toBeVisible();
   } finally {
     await page.close();
   }

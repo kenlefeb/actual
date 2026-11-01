@@ -196,6 +196,7 @@ __metadata:
     zod: "npm:4.6.7"
   bin:
     actual-mcp: ./dist/mcp.js
+    actual-mcp-http: ./dist/mcp-http.js
   languageName: unknown
   linkType: soft
 

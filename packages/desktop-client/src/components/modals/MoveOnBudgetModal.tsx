@@ -49,10 +49,14 @@ export function MoveOnBudgetModal({ accountId }: MoveOnBudgetModalProps) {
   );
   const [preview, setPreview] = useState<MoveOnBudgetPreview | null>(null);
   const [isMoving, setIsMoving] = useState(false);
-  const isDateValid = /^\d{4}-\d{2}-\d{2}$/.test(startDate);
+  const isDateValid = monthUtils.isValidYearMonthDay(startDate);
+  // Only a date the user cleared or typed badly gets the hint. A default date
+  // still loading (sc-1530) must not, so keep that as its own state.
+  const showDateHint = !isDateValid;
 
   useEffect(() => {
     if (!isDateValid) {
+      setPreview(null);
       return;
     }
     let isCurrent = true;
@@ -108,7 +112,13 @@ export function MoveOnBudgetModal({ accountId }: MoveOnBudgetModalProps) {
           />
         </View>
 
-        {preview && (
+        {showDateHint && (
+          <Text style={{ flexShrink: 0 }} aria-live="polite">
+            <Trans>Choose a start date</Trans>
+          </Text>
+        )}
+
+        {preview && isDateValid && (
           <View style={{ gap: 8, flexShrink: 0 }} aria-live="polite">
             <Text style={{ fontSize: 15 }}>
               {preview.startingBalance === 0 ? (

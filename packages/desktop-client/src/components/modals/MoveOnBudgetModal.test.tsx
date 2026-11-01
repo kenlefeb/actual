@@ -237,6 +237,46 @@ describe('MoveOnBudgetModal', () => {
     }
   });
 
+  it('Clearing the start date', async () => {
+    renderModal();
+    await screen.findByText(/^Your budget gains/);
+    await userEvent.clear(screen.getByLabelText('Budget it from'));
+    expect(screen.getByText('Choose a start date')).toBeInTheDocument();
+    expect(screen.queryByText(/Your budget/)).toBe(null);
+    expect(screen.queryByText(/transactions? from/)).toBe(null);
+    expect(screen.queryByRole('list', { name: 'Transfers' })).toBe(null);
+    expect(
+      screen.getByRole('button', { name: 'Move on budget' }),
+    ).toBeDisabled();
+  });
+
+  it('Clearing the start date on a phone', async () => {
+    state.isNarrowWidth = true;
+    renderModal();
+    await screen.findByText(/^Your budget gains/);
+    await userEvent.clear(screen.getByLabelText('Budget it from'));
+    expect(screen.getByText('Choose a start date')).toBeInTheDocument();
+    expect(screen.queryByText(/Your budget/)).toBe(null);
+    expect(
+      screen.getByRole('button', { name: 'Move on budget' }),
+    ).toBeDisabled();
+  });
+
+  it('Choosing a date brings the preview back', async () => {
+    renderModal();
+    await screen.findByText(/^Your budget gains/);
+    const date = screen.getByLabelText('Budget it from');
+    await userEvent.clear(date);
+    await userEvent.type(date, '2026-07-01');
+    expect(await screen.findByText(/^Your budget gains/)).toHaveTextContent(
+      'on 07/01/2026',
+    );
+    expect(screen.queryByText('Choose a start date')).toBe(null);
+    expect(
+      screen.getByRole('button', { name: 'Move on budget' }),
+    ).toBeEnabled();
+  });
+
   it("says the budget doesn't change when the starting balance is zero", async () => {
     state.counts = { ...COUNTS, startingBalance: 0 };
     renderModal();

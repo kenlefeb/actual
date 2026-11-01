@@ -2,6 +2,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 
 import { ensurePrivateDir, loadConfig } from './config';
 import { closeBudget, openBudget } from './connection';
+import { registerShutdown } from './shutdown';
 import { redirectConsoleToStderr } from './stdio';
 import { createServer } from './tools';
 
@@ -13,11 +14,8 @@ async function main() {
   await openBudget(config);
 
   const server = createServer(config.secrets);
+  server.server.onclose = registerShutdown(closeBudget);
   await server.connect(new StdioServerTransport());
-
-  const stop = () => void closeBudget().finally(() => process.exit(0));
-  process.on('SIGINT', stop);
-  process.on('SIGTERM', stop);
 }
 
 main().catch(error => {

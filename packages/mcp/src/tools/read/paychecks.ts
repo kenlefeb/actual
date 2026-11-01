@@ -7,6 +7,48 @@ import { withText } from '#sanitize';
 import { moneyAs, pageShape } from './shared';
 import type { RegisterTool } from './shared';
 
+// Everything in a paycheck's definition is synced data, so an id is only
+// returned as an id when it looks like one; anything else is cleaned and
+// moved under `text`.
+const PLAIN_ID = /^[A-Za-z0-9_-]{1,64}$/;
+const KINDS = new Set(['fixed', 'percent', 'remainder']);
+
+// A number from the definition, or null: a string there is untrusted text.
+const finite = (n: unknown): number | null =>
+  typeof n === 'number' && Number.isFinite(n) ? n : null;
+
+function splitIds(ids: Record<string, unknown>) {
+  const plain: Record<string, unknown> = {};
+  const text: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(ids)) {
+    // Only null, empty or a plain identifier stays an id. Anything else,
+    // including a number, object or array, is data.
+    const isPlain =
+      value == null ||
+      value === '' ||
+      (typeof value === 'string' && PLAIN_ID.test(value));
+    if (isPlain) {
+      plain[key] = value;
+    } else {
+      plain[key] = null;
+      text[key] = value;
+    }
+  }
+  return { plain, text };
+}
+
+/** A record with its id fields; a `text` group only when one is not plain. */
+function withIds(
+  record: Record<string, unknown>,
+  ids: Record<string, unknown>,
+  text: Record<string, unknown> = {},
+) {
+  const split = splitIds(ids);
+  const base = { ...record, ...split.plain };
+  const all = { ...text, ...split.text };
+  return Object.keys(all).length > 0 ? withText(base, all) : base;
+}
+
 export function registerPaycheckTools(tool: RegisterTool) {
   tool(
     'list_paychecks',
@@ -16,20 +58,27 @@ export function registerPaycheckTools(tool: RegisterTool) {
       const paychecks = await api.getPaychecks();
       return pageList(
         paychecks.map(({ id, name, definition: d }) =>
-          withText(
+          withIds(
             {
               id,
+              ...(finite(d.grossAmount) === null
+                ? { gross_amount: null, gross_amount_decimal: null }
+                : moneyAs('gross_amount', d.grossAmount)),
+              deposits: d.deposits.map(x =>
+                withIds(
+                  {
+                    kind: KINDS.has(x.kind) ? x.kind : 'unknown',
+                    value: finite(x.value),
+                  },
+                  { id: x.id, account_id: x.account },
+                ),
+              ),
+            },
+            {
               clearing_account_id: d.clearingAccount,
               payee_id: d.payee,
               income_category_id: d.incomeCategory,
               pay_schedule_id: d.paySchedule ?? null,
-              ...moneyAs('gross_amount', d.grossAmount),
-              deposits: d.deposits.map(x => ({
-                id: x.id,
-                account_id: x.account,
-                kind: x.kind,
-                value: x.value,
-              })),
             },
             { name, deductions: d.deductions.map(x => x.name) },
           ),
@@ -66,18 +115,23 @@ export function registerPaycheckTools(tool: RegisterTool) {
     async p => {
       const statuses = await api.getPaychecksClearingStatus();
       return pageList(
-        statuses.map(s => ({
-          paycheck_id: s.paycheck,
-          clearing_account_id: s.clearingAccount,
-          ...moneyAs('balance', s.balance),
-          pay_date: s.payDate,
-          missing_deposits: s.missingDeposits.map(d => ({
-            id: d.id,
-            account_id: d.account,
-            expected_date: d.expectedDate,
-          })),
-          is_warning: s.isWarning,
-        })),
+        statuses.map(s =>
+          withIds(
+            {
+              paycheck_id: s.paycheck,
+              ...moneyAs('balance', s.balance),
+              pay_date: s.payDate,
+              missing_deposits: s.missingDeposits.map(d =>
+                withIds(
+                  { expected_date: d.expectedDate },
+                  { id: d.id, account_id: d.account },
+                ),
+              ),
+              is_warning: s.isWarning,
+            },
+            { clearing_account_id: s.clearingAccount },
+          ),
+        ),
         p,
       );
     },

@@ -53,10 +53,10 @@
 
 ## 8. Read-tool hardening (sc-1664)
 
-- [ ] 8.1 Spec requirements "Paycheck definition text is data", "The move preview pages its transfers" and "Next-date search is bounded". Verify with `openspec validate fork-mcp-server --strict`.
-- [ ] 8.2 Add failing tests named after the scenarios: "An injected deposit kind", "A hostile deposit id", "A hostile account id", "Clearing status ids are checked too", "A normal deposit is unchanged", "More transfers than one page", "The digest covers every page", "A transfer on a later page changes", "A rule that never matches" (with a time bound) and "A malformed rule is still an error".
-- [ ] 8.3 Map `kind` onto the three values or `unknown` and sanitize every id field read from the definition (clearing account, payee, income category, pay schedule, and each deposit's id, account and schedule) in `list_paychecks` and `get_paychecks_clearing_status`; page `transfers` with a whole-preview `confirm`; catch the recurrence library's "Failed to find a matching occurrence" error and return the "No matching date" result, with a test that pins the message prefix.
-- [ ] 8.4 Move `@actual-app/core` to `devDependencies` in `packages/mcp/package.json`, and make the `mcp-build` job fail if `dist/mcp.js` imports it.
+- [x] 8.1 Spec requirements "Paycheck definition text is data", "The move preview pages its transfers" and "Next-date search is bounded". Verify with `openspec validate fork-mcp-server --strict`.
+- [x] 8.2 Add failing tests named after the scenarios: "An injected deposit kind", "A hostile deposit id", "A hostile account id", "Clearing status ids are checked too", "A normal deposit is unchanged", "More transfers than one page", "The digest covers every page", "A transfer on a later page changes", "A rule that never matches" (with a time bound) and "A malformed rule is still an error".
+- [x] 8.3 Map `kind` onto the three values or `unknown` and sanitize every id field read from the definition (clearing account, payee, income category, pay schedule, and each deposit's id, account and schedule) in `list_paychecks` and `get_paychecks_clearing_status`; page `transfers` with a whole-preview `confirm`; catch the recurrence library's "Failed to find a matching occurrence" error and return the "No matching date" result, with a test that pins the message prefix.
+- [x] 8.4 Move `@actual-app/core` to `devDependencies` in `packages/mcp/package.json`, and make the `mcp-build` job fail if `dist/mcp.js` imports it.
 - [ ] 8.5 Update `coverage.json` and the README for any changed tool output. Security Analyst approves the PR.
 
 ## 9. Write-tool hardening (sc-1684)

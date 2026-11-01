@@ -84,9 +84,9 @@
 
 ## 12. Checking the data directory before creating it (sc-1913)
 
-- [ ] 12.1 Spec requirement "The data directory is checked before it is created". Verify with `openspec validate fork-mcp-server --strict`.
-- [ ] 12.2 Add failing tests named after the scenarios, using a temporary home: "A refused directory is not created" (nothing exists afterwards, including missing parents), "A symlinked parent is checked" and "An allowed directory is created private".
-- [ ] 12.3 In `ensurePrivateDir`, resolve the nearest existing ancestor's real path, check it with the remaining path before any `mkdir`, create with mode 0700 only after the check, and re-check after creating, removing only what this call created on a failure (design Decision 16). Security Analyst approves the PR.
+- [x] 12.1 Spec requirement "The data directory is checked before it is created". Verify with `openspec validate fork-mcp-server --strict`.
+- [x] 12.2 Add failing tests named after the scenarios, using a temporary home: "A refused directory is not created" (nothing exists afterwards, including missing parents), "A symlinked parent is checked" and "An allowed directory is created private".
+- [x] 12.3 In `ensurePrivateDir`, resolve the nearest existing ancestor's real path, check it with the remaining path before any `mkdir`, create with mode 0700 only after the check, and re-check after creating, removing only what this call created on a failure (design Decision 16). Security Analyst approves the PR.
 
 ## 13. The `--writes` entry has its own data directory (sc-1948)
 

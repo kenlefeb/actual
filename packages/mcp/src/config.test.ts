@@ -1,6 +1,15 @@
-import { chmodSync, mkdirSync, mkdtempSync, statSync, symlinkSync } from 'fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  realpathSync,
+  statSync,
+  symlinkSync,
+} from 'fs';
 import { homedir, tmpdir } from 'os';
-import { join } from 'path';
+import { dirname, join } from 'path';
 
 import { ensurePrivateDir, loadConfig } from './config';
 
@@ -149,5 +158,74 @@ describe('data directory', () => {
     const link = join(root, 'innocent');
     symlinkSync(real, link);
     expect(() => ensurePrivateDir(link)).toThrow(/synced location/);
+  });
+});
+
+describe('data directory is checked before it is created', () => {
+  /** Runs `fn` with HOME pointing at a fresh temporary home. */
+  function withHome(fn: (home: string) => void) {
+    const home = realpathSync(mkdtempSync(join(tmpdir(), 'actual-mcp-home-')));
+    const saved = process.env.HOME;
+    process.env.HOME = home;
+    try {
+      fn(home);
+    } finally {
+      process.env.HOME = saved;
+    }
+  }
+
+  it('A refused directory is not created', () => {
+    withHome(home => {
+      const dir = join(home, 'Documents', 'actual-mcp', 'staging');
+      expect(() => ensurePrivateDir(dir)).toThrow(/synced location/);
+      expect(existsSync(join(home, 'Documents'))).toBe(false);
+    });
+  });
+
+  it('A symlinked parent is checked', () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'actual-mcp-')));
+    const real = join(root, 'Dropbox', 'real');
+    mkdirSync(real, { recursive: true, mode: 0o700 });
+    const link = join(root, 'innocent');
+    symlinkSync(real, link);
+    expect(() => ensurePrivateDir(join(link, 'a', 'b'))).toThrow(
+      /synced location/,
+    );
+    expect(readdirSync(real)).toEqual([]);
+  });
+
+  it('An allowed directory is created private', () => {
+    withHome(home => {
+      const dir = join(
+        home,
+        'Library',
+        'Application Support',
+        'actual-mcp',
+        'x',
+      );
+      ensurePrivateDir(dir);
+      expect(statSync(dir).mode & 0o777).toBe(0o700);
+      expect(statSync(dirname(dir)).mode & 0o777).toBe(0o700);
+    });
+  });
+
+  it('A refused directory is matched case-insensitively on macOS', () => {
+    if (process.platform !== 'darwin') return;
+    withHome(home => {
+      expect(() =>
+        ensurePrivateDir(join(home, 'documents', 'actual-mcp')),
+      ).toThrow(/synced location/);
+      expect(() =>
+        ensurePrivateDir(join(home, 'dropbox', 'actual-mcp')),
+      ).toThrow(/synced location/);
+      expect(existsSync(join(home, 'documents'))).toBe(false);
+    });
+  });
+
+  it('An existing directory owned by someone else is refused', () => {
+    const dir = join(mkdtempSync(join(tmpdir(), 'actual-mcp-')), 'owned');
+    mkdirSync(dir, { mode: 0o700 });
+    vi.spyOn(process, 'getuid').mockReturnValue(statSync(dir).uid + 1);
+    expect(() => ensurePrivateDir(dir)).toThrow(/owned by you/);
   });
 });

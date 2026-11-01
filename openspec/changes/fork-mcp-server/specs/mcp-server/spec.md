@@ -192,7 +192,7 @@ A write SHALL NOT set a category on moved history: a transaction of an account m
 - **THEN** the call fails and the account is still off budget
 
 ### Requirement: Write audit log
-The server SHALL append one JSON line per write to `~/Library/Application Support/actual-mcp/<env>.audit.jsonl`, mode 0600, with the time, tool, ids and the fields changed with their before and after values, and never a secret. A write SHALL NOT run when its audit line cannot be appended.
+The server SHALL append one JSON line per write to `~/Library/Application Support/actual-mcp/<env>.audit.jsonl` (`<env>-writes.audit.jsonl` for the `--writes` entry), mode 0600, with the time, tool, ids and the fields changed with their before and after values, and never a secret. A write SHALL NOT run when its audit line cannot be appended.
 
 #### Scenario: A write is logged
 - **WHEN** a client updates one transaction's notes
@@ -370,4 +370,52 @@ A write SHALL refuse, with fixed error text and before the attempt line, an `amo
 #### Scenario: An impossible month
 - **WHEN** a client calls `write_set_budget_amount` with a month of 2026-13
 - **THEN** the call is refused and no audit line is written
+
+### Requirement: Budget months are paged
+`get_budget_month` SHALL page the month's categories (`limit`, default 50 and at most 200, and `cursor`), returning the groups that hold the page's categories with `has_more` and `next_cursor`, and SHALL return the month's totals (`to_budget`, `total_budgeted`, `total_spent`, `total_balance`, `total_income`) and the number of categories in the month (`category_count`) on every page.
+
+#### Scenario: A month larger than one page
+- **GIVEN** a month with 120 categories in 6 groups
+- **WHEN** a client calls `get_budget_month` with no limit and then follows `next_cursor` until `has_more` is false
+- **THEN** it receives pages of 50, 50 and 20 categories, every category exactly once, the same totals and a `category_count` of 120 on each page, and each category under its own group
+
+#### Scenario: A small month is one page
+- **GIVEN** a month with 12 categories
+- **WHEN** a client calls `get_budget_month`
+- **THEN** all 12 are returned with `has_more` false and no `next_cursor`
+
+#### Scenario: A malformed cursor
+- **WHEN** a client calls `get_budget_month` with a cursor that is not one this tool issued
+- **THEN** the call fails with the fixed error text and returns no data
+
+### Requirement: The data directory is checked before it is created
+The server SHALL find the nearest existing parent of the data directory, check that parent's real path together with the remaining path against the refused locations, and only then create the directory with mode 0700, so a refused start creates no directory.
+
+#### Scenario: A refused directory is not created
+- **GIVEN** a data directory under a refused location (for example inside `~/Documents`) that does not exist yet
+- **WHEN** the server starts
+- **THEN** it exits with the fixed error, and neither the directory nor any missing parent of it exists afterwards
+
+#### Scenario: A symlinked parent is checked
+- **GIVEN** a data directory whose nearest existing parent is a symlink into a refused location
+- **WHEN** the server starts
+- **THEN** it exits with the fixed error and creates nothing
+
+#### Scenario: An allowed directory is created private
+- **GIVEN** an allowed data directory that does not exist yet
+- **WHEN** the server starts
+- **THEN** it is created with mode 0700
+
+### Requirement: The writes entry has its own data directory
+The `--writes` entry SHALL keep its budget copy and its audit log in `<env>-writes`, beside the read entry's `<env>` directory, so that a message a write session has not yet sent is never in the copy a read entry syncs.
+
+#### Scenario: The entries use separate data directories
+- **GIVEN** the server's default data directories for `staging`
+- **WHEN** it is started once with and once without `--writes`
+- **THEN** the first uses `…/actual-mcp/staging-writes` and the second `…/actual-mcp/staging`, and the audit log of the first is `staging-writes.audit.jsonl`
+
+#### Scenario: A write session's unsent message stays out of a read session
+- **GIVEN** a write session that applied a change and ended before its sync
+- **WHEN** a read entry starts and syncs
+- **THEN** the sync pushes nothing, because the read entry's copy never held that change
 

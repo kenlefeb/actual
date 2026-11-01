@@ -13,6 +13,10 @@ import type { RegisterTool } from './shared';
 const PLAIN_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const KINDS = new Set(['fixed', 'percent', 'remainder']);
 
+// A number from the definition, or null: a string there is untrusted text.
+const finite = (n: unknown): number | null =>
+  typeof n === 'number' && Number.isFinite(n) ? n : null;
+
 function splitIds(ids: Record<string, string | null | undefined>) {
   const plain: Record<string, string | null | undefined> = {};
   const text: Record<string, string> = {};
@@ -51,12 +55,14 @@ export function registerPaycheckTools(tool: RegisterTool) {
           withIds(
             {
               id,
-              ...moneyAs('gross_amount', d.grossAmount),
+              ...(finite(d.grossAmount) === null
+                ? { gross_amount: null, gross_amount_decimal: null }
+                : moneyAs('gross_amount', d.grossAmount)),
               deposits: d.deposits.map(x =>
                 withIds(
                   {
                     kind: KINDS.has(x.kind) ? x.kind : 'unknown',
-                    value: x.value,
+                    value: finite(x.value),
                   },
                   { id: x.id, account_id: x.account },
                 ),

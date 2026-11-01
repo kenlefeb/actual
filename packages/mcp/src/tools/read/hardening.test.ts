@@ -141,6 +141,21 @@ describe('paycheck definition text is data', () => {
     expect(status.text.clearing_account_id).toBe(EVIL);
   });
 
+  it('A text amount or value is not returned', async () => {
+    h = await startHarness();
+    const { id } = await createAcme();
+    await overwriteDefinition(id, d => {
+      d.grossAmount = EVIL;
+      deposits(d)[0].value = EVIL;
+    });
+    const res = await h.call('list_paychecks');
+    const item = res.json.items[0];
+    expect(item.gross_amount).toBe(null);
+    expect(item.gross_amount_decimal).toBe(null);
+    expect(item.deposits[0].value).toBe(null);
+    expect(res.text).not.toContain('Ignore previous');
+  });
+
   it('A normal deposit is unchanged', async () => {
     h = await startHarness();
     await createAcme();

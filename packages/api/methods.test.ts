@@ -1866,3 +1866,41 @@ describe('API fork handlers', () => {
     ).rejects.toThrow('Invalid start date');
   });
 });
+
+// The handlers the fork registers beyond upstream's, and the method for each.
+// shortcut: a fixed list, so a new fork handler must be added here; sc-1570's
+// coverage manifest finds new handlers by scanning.
+const FORK_HANDLER_METHODS = {
+  'paychecks-get': 'getPaychecks',
+  'paycheck-create': 'createPaycheck',
+  'paycheck-update': 'updatePaycheck',
+  'paycheck-delete': 'deletePaycheck',
+  'paycheck-skip-next': 'skipNextPaycheck',
+  'paycheck-year-to-date': 'getPaycheckYearToDate',
+  'paychecks-clearing-status': 'getPaychecksClearingStatus',
+  'account-set-business-days': 'setAccountBusinessDays',
+  'account-move-on-budget-preview': 'previewMoveAccountOnBudget',
+  'account-move-on-budget': 'moveAccountOnBudget',
+  'business-calendars-get': 'getBusinessCalendars',
+  'business-calendar-create': 'createBusinessCalendar',
+  'business-calendar-update': 'updateBusinessCalendar',
+  'business-calendar-delete': 'deleteBusinessCalendar',
+} as const;
+
+describe('API fork handler coverage', () => {
+  test('A handler without a method', async () => {
+    const source = await fs.readFile(
+      path.join(__dirname, 'methods.ts'),
+      'utf8',
+    );
+    const missing = Object.entries(FORK_HANDLER_METHODS)
+      .filter(
+        ([handler, method]) =>
+          typeof (api as Record<string, unknown>)[method] !== 'function' ||
+          !source.includes(`send('${handler}'`),
+      )
+      .map(([handler]) => handler);
+
+    expect(missing).toEqual([]);
+  });
+});

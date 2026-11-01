@@ -3,7 +3,7 @@
 ## 1. Typed API methods (sc-1568)
 
 - [x] 1.1 Spec `api-fork-handlers` and the `paychecks` guard message (modified requirement "Editing and deleting paychecks"). Verify with `openspec validate fork-mcp-server --strict`.
-- [ ] 1.2 Add failing tests in `packages/api/methods.test.ts`, named after the scenarios: "A script edits a paycheck", "Move on budget through the API", "Errors are the handler's errors" and "A handler without a method" (compare the fork-only handlers, found from `app.method` registrations including multi-line ones, with the exports of `methods.ts`).
+- [x] 1.2 Add failing tests in `packages/api/methods.test.ts`, named after the scenarios: "A script edits a paycheck", "Move on budget through the API", "Errors are the handler's errors" and "A handler without a method" (compare the fork-only handlers, found from `app.method` registrations including multi-line ones, with the exports of `methods.ts`).
 - [x] 1.3 Add the 14 typed methods in `packages/api/methods.ts` as thin `send(...)` wrappers with types from `Handlers`; export them from `index.ts`; refresh the API type snapshots.
 - [x] 1.4 Let the CLI use them only if a command already needs one; add no commands in this slice.
 

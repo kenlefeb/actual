@@ -140,7 +140,7 @@ requirement text into a story or status into OpenSpec.
 | #470 Baseline fork behavior              | `transaction-notes`, `split-transaction-editing`, `mobile-note-links`, `mobile-sync-status`, `api-transaction-mutations`, `fork-release-news` |
 | #543 Accounts & budgeting                | none yet                                                                                                                                      |
 | #27 Upstream relationship                | none                                                                                                                                          |
-| #1550 Integrations                       | `mcp-server`, `api-fork-handlers`, `api-read-only-mode`                                                                                       |
+| #1550 Integrations                       | `mcp-server`, `api-fork-handlers`, `api-read-only-mode`, `production-identities`                                                              |
 
 A new capability joins the epic of its product area: add it to this table, the
 epic description and a new `spec:<capability>` label. Upstream delivery of a

@@ -77,7 +77,7 @@ The server SHALL offer read tools for accounts and balances, category groups and
 #### Scenario: A read entry writes nothing
 - **GIVEN** a budget with an auto-post schedule that is due today and paycheck edits that arrive by sync
 - **WHEN** the server starts without `--writes` and the client calls `sync_budget`
-- **THEN** no transaction was created in the local copy, and the sync server received no messages from this client
+- **THEN** no transaction was created in the local copy, the sync server received no messages from this client, and no budget file was uploaded
 
 #### Scenario: A query that is not a select
 - **WHEN** a client calls `run_query` with a query that would change data

@@ -41,13 +41,17 @@ case "$cwd" in
     esac ;;
 esac
 
-# Delegate the git-safety checks to the shared guard (reads .tool_input.command).
-# Fail closed: deny on a block (exit 2) AND on any unexpected guard failure.
-status=0
-err=$(printf '{"tool_input":{"command":%s}}' "$(jq -n --arg c "$cmd" '$c')" |
-  "$ROOT/scripts/agent-hooks/git-guard.sh" 2>&1) || status=$?
-case "$status" in
-  0) allow ;;
-  2) deny "$err" ;;
-  *) deny "git-guard failed (exit $status): $err" ;;
-esac
+# Delegate to the shared guards (they read .tool_input.command): git-safety and
+# repo-admin writes. Fail closed: deny on a block (exit 2) AND on any
+# unexpected guard failure.
+payload=$(printf '{"tool_input":{"command":%s}}' "$(jq -n --arg c "$cmd" '$c')")
+for guard in git-guard no-repo-admin; do
+  status=0
+  err=$(printf '%s' "$payload" | "$ROOT/scripts/agent-hooks/$guard.sh" 2>&1) || status=$?
+  case "$status" in
+    0) ;;
+    2) deny "$err" ;;
+    *) deny "$guard failed (exit $status): $err" ;;
+  esac
+done
+allow

@@ -39,6 +39,10 @@ matcher = "^Bash$"
 type = "command"
 command = '"$(git rev-parse --show-toplevel)/scripts/agent-hooks/git-guard.sh"'
 statusMessage = "Checking shell command against repo policy"
+[[hooks.PreToolUse.hooks]]
+type = "command"
+command = '"$(git rev-parse --show-toplevel)/scripts/agent-hooks/no-repo-admin.sh"'
+statusMessage = "Checking shell command is not a repo-admin write"
 
 # Block creating a new file that contains // @ts-strict-ignore.
 [[hooks.PreToolUse]]

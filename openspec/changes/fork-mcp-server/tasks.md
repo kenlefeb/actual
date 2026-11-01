@@ -65,5 +65,14 @@
 - [ ] 9.2 Add failing tests named after the scenarios: "A create's outcome line", "A failed write's outcome line", "The outcome line can't be written", "A failure partway", "An extreme amount", "An impossible date" and "An impossible month".
 - [ ] 9.3 Add the call id, the outcome line and `audit_outcome` to the write tools and `appendAudit`; make `write_update_transactions` stop at the first failure and report applied and failed rows; add the amount, date and month bounds with fixed refusal text before the attempt line.
 - [ ] 9.4 Update the README and the docs page for the outcome line and the bounds. Security Analyst approves the PR.
-- [ ] 9.5 Archive this change when its last story merges, update the #1550 row in the epic table of `docs/agents/issue-tracker.md` with `mcp-server` and `api-fork-handlers`, and file Backlog stories for any open follow-up (for example a public batch update method, if partial failures are seen).
+- [ ] 9.5 Archive this change when its last story merges (task 10.6 if sc-1601 is later), update the #1550 row in the epic table of `docs/agents/issue-tracker.md` with `mcp-server`, `api-fork-handlers` and `api-read-only-mode`, and file Backlog stories for any open follow-up (for example a public batch update method, if partial failures are seen).
+
+## 10. A push-free read mode (sc-1601)
+
+- [ ] 10.1 Spec capability `api-read-only-mode` and, in `mcp-server`, the scenarios "A read entry writes nothing" and "The writes entry runs the engine normally" (replacing "A sync has the app's side effects"). Verify with `openspec validate fork-mcp-server --strict`.
+- [ ] 10.2 Add failing tests named after the scenarios. Engine (loot-core, mock sync server): "A read-only session posts nothing" and "A normal session still posts" (a due auto-post schedule; the first run is red with the flag off because it posts and the server's messages grow), "A read-only session does not reconcile paycheck edits" and "A read-only session uploads no budget file", "A normal session still uploads", "A read-only session sends no repair messages" and "A read-only session still pulls". MCP: a wiring test that `openBudget` passes `readOnly: true` unless `--writes`.
+- [ ] 10.3 Add `readOnly` to `InitConfig` and the engine flag; guard `runTrackedMutator`, the schedules `sync` handler (no run, no `lastScheduleRun`), `possiblyUpload` (return early) and `syncMigrations.listen()` (register nothing); pass `readOnly` from the MCP read entry.
+- [ ] 10.4 Remove the side-effect wording from `packages/mcp/README.md` ("Sync side effects"), `packages/docs/docs/api/mcp-server.md` ("Notes on Syncing") and the `sync_budget` description in `tools/read/core.ts`, and document `readOnly` in the API reference.
+- [ ] 10.5 Check every caller of `sendMessages` and, if it is safe, file a Backlog story for the optional throw-in-read-only backstop; do not build it here. Security Analyst approves the PR.
+- [ ] 10.6 Archive this change when its last story merges, and add `api-read-only-mode` to the #1550 row in the epic table of `docs/agents/issue-tracker.md`.
 

@@ -16,16 +16,16 @@ fetches a URL named in the data.
 List tools take `limit` (default 50, at most 200) and `cursor`, and return `has_more` and
 `next_cursor`. A response stays under 100 KB; rows past that wait for the next page.
 
-| Tool                                   | Returns                                                      |
-| -------------------------------------- | ------------------------------------------------------------ |
-| `list_accounts`, `get_account_balance` | Accounts with balances; one balance, optionally as of a date |
-| `list_category_groups`                 | Category groups with their categories                        |
-| `list_payees`                          | Payees, optional name search                                 |
-| `list_transactions`                    | By `account_id`, `category_id`, `start_date`, `end_date`     |
-| `get_budget_month`                     | One month's totals and per-category budgeted/spent/balance   |
-| `list_schedules`, `list_rules`         | Schedules; rules with conditions and actions                 |
-| `run_query`                            | A read-only ActualQL select over one table; all else refused |
-| `sync_budget`                          | Syncs the local copy with the server (see below)             |
+| Tool                                   | Returns                                                          |
+| -------------------------------------- | ---------------------------------------------------------------- |
+| `list_accounts`, `get_account_balance` | Accounts with balances; one balance, optionally as of a date     |
+| `list_category_groups`                 | Category groups with their categories                            |
+| `list_payees`                          | Payees, optional name search                                     |
+| `list_transactions`                    | By `account_id`, `category_id`, `start_date`, `end_date`         |
+| `get_budget_month`                     | One month's totals and paged per-category budgeted/spent/balance |
+| `list_schedules`, `list_rules`         | Schedules; rules with conditions and actions                     |
+| `run_query`                            | A read-only ActualQL select over one table; all else refused     |
+| `sync_budget`                          | Syncs the local copy with the server (see below)                 |
 
 Fork read tools (all take ids, never names):
 

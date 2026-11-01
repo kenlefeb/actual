@@ -78,8 +78,8 @@
 
 ## 11. Paging `get_budget_month` (sc-1912)
 
-- [ ] 11.1 Spec requirement "Budget months are paged". Verify with `openspec validate fork-mcp-server --strict`.
-- [ ] 11.2 Add failing tests named after the scenarios: "A month larger than one page" (120 categories in 6 groups, including a group that straddles a page boundary), "A small month is one page" and "A malformed cursor".
+- [x] 11.1 Spec requirement "Budget months are paged". Verify with `openspec validate fork-mcp-server --strict`.
+- [x] 11.2 Add failing tests named after the scenarios: "A month larger than one page" (120 categories in 6 groups, including a group that straddles a page boundary), "A small month is one page" and "A malformed cursor".
 - [ ] 11.3 Page the categories in `get_budget_month` with the shared paging helpers, return the whole-month totals and `category_count` on every page, group the page's categories under their groups, and update the tool description, README and `coverage.json` if needed. Security Analyst approves the PR.
 
 ## 12. Checking the data directory before creating it (sc-1913)

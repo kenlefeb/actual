@@ -25,7 +25,7 @@ Story to be filed when this merges. Needs Ken's choice of identity provider firs
 
 Story to be filed when this merges. Needs Ken's answers on Funnel, the hostname and the plaintext staging copy.
 
-- [ ] 4.1 Add the image build, a compose file in actual-hosting with its own exposure node, the secrets runbook, the LOCKDOWN inventory and revocation rows, and the staging deployment, reviewed by the Security Analyst and approved by Ken.
+- [ ] 4.1 Add the image build and a compose file in actual-hosting with its own exposure node, a dedicated Docker network that reaches only the staging sync server (never `network_mode: host`, never production's network or loopback address) with outbound traffic limited to that server and the identity provider, the secrets runbook, and the LOCKDOWN inventory rows (container, exposure node, signing key, token state file, pre-registered client secret, identity-provider client credentials, the Actual credential) with the five-step revocation order; the review checks the isolation with `docker inspect`; then the staging deployment, reviewed by the Security Analyst and approved by Ken.
 
 ## 5. Connection checklist
 

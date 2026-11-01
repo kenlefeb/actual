@@ -2,7 +2,7 @@
 
 ## Why
 
-Ken wants to use the fork's MCP server from Claude on his phone and the web, and from Claude Duet, which runs in the cloud and can only use the account's remote connectors (Shortcut sc-1950). The server today is local stdio only, with no network listener; that rule was central to the Security Analyst's acceptance of v1 and stays true for the stdio entry.
+Ken wants to use the fork's MCP server from Claude on his phone and the web, and, as far as we know, from Claude Duet, which is reported to run in the cloud and use the account's connectors (Shortcut sc-1950; how Duet connects is unverified, see the design). The server today is local stdio only, with no network listener; that rule was central to the Security Analyst's acceptance of v1 and stays true for the stdio entry.
 
 Anthropic's connectors are called from Anthropic's infrastructure, not from the user's machine ([connector documentation](https://support.claude.com/en/articles/11503834-building-custom-connectors-via-remote-mcp-servers)), so the earlier tailnet-only plan (sc-1554, now folded into this change) cannot serve them. A hosted server must be reachable from the public internet, so it has to be safe there.
 

@@ -58,11 +58,16 @@ Every request to the MCP endpoint SHALL carry a valid access token from this ser
 - **THEN** the call is refused with 401
 
 ### Requirement: Short-lived, revocable tokens
-Access tokens SHALL be short-lived (no more than one hour) and refresh tokens SHALL be revocable. Revoking a refresh token SHALL stop it, and rotating the signing key SHALL invalidate every token at once.
+Access tokens SHALL be short-lived (no more than one hour), and refresh tokens SHALL expire (no more than 30 days after issue) and be revocable. Revoking a refresh token SHALL stop it, and rotating the signing key SHALL invalidate every token at once.
 
 #### Scenario: A revoked refresh token
 - **GIVEN** a client holding a refresh token that has been revoked
 - **WHEN** it asks for a new access token
+- **THEN** the request is refused
+
+#### Scenario: An expired refresh token
+- **GIVEN** a refresh token issued 31 days ago
+- **WHEN** a client asks for a new access token with it
 - **THEN** the request is refused
 
 #### Scenario: Rotating the signing key
@@ -94,7 +99,7 @@ The server SHALL serve one pre-registered confidential client, SHALL NOT expose 
 - **THEN** the endpoint does not exist
 
 ### Requirement: Host, origin and rate checks
-The hosted entry SHALL refuse a request whose `Host` is not on the configured public hostname list, SHALL refuse a request carrying a browser `Origin` that is not on a configured allowlist, and SHALL rate-limit the authorization, token and MCP endpoints.
+The hosted entry SHALL refuse a request whose `Host` is not on the configured public hostname list, SHALL refuse a request carrying a browser `Origin` that is not on a configured allowlist, and SHALL rate-limit the authorization, token and MCP endpoints, per endpoint and per client id.
 
 #### Scenario: A rebinding host
 - **WHEN** a request arrives with a `Host` that is not configured
@@ -104,9 +109,22 @@ The hosted entry SHALL refuse a request whose `Host` is not on the configured pu
 - **WHEN** a request arrives with an `Origin` that is not allowed
 - **THEN** it is refused
 
+#### Scenario: One client over its limit
+- **GIVEN** two clients, one of which exceeds its per-client limit
+- **WHEN** both call the MCP endpoint
+- **THEN** the first is refused with 429 and the second is served
+
 #### Scenario: A flood
 - **WHEN** a client sends more token requests than the limit in a minute
 - **THEN** the extra requests are refused with 429
+
+### Requirement: Only configured upstreams
+The hosted entry SHALL make outbound requests only to the configured sync server and the configured identity provider, and SHALL fetch no URL named in budget data.
+
+#### Scenario: A URL in a note
+- **GIVEN** a transaction note that contains a URL
+- **WHEN** a client lists the transaction
+- **THEN** the server makes no request to that URL
 
 ### Requirement: Secrets live in read-only files
 The server SHALL read its Actual credential, optional encryption key and signing key from files whose paths are configured, SHALL refuse to start when one is missing or readable by more than its owner, and SHALL never put a secret on a command line, in a URL, in a log, in an error or in a tool result.

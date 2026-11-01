@@ -19,6 +19,7 @@ import {
 import { runMutator } from './mutators';
 import { getServerErrorReason, post } from './post';
 import * as prefs from './prefs';
+import { isReadOnly } from './read-only';
 import { getServer } from './server-config';
 import {
   exceedsSafeUnzipLimits,
@@ -387,6 +388,11 @@ export async function upload() {
 }
 
 export async function possiblyUpload() {
+  // A read-only session never replaces the server's copy of the budget
+  if (isReadOnly()) {
+    return;
+  }
+
   const { cloudFileId, groupId, lastUploaded } = prefs.getPrefs();
 
   const threshold =

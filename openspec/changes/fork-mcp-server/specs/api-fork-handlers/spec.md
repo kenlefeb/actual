@@ -1,0 +1,28 @@
+# Spec Delta
+
+## ADDED Requirements
+
+### Requirement: Typed API methods for the fork's handlers
+`@actual-app/api` SHALL export a typed method for each of the 14 handlers the fork adds beyond upstream's (paychecks, account business days, move on budget and its preview, and business calendars), so a script needs no untyped `internal.send` call. Each SHALL call its handler with the arguments unchanged and return its result with the same errors, and its types SHALL come from the handler's own types.
+
+#### Scenario: A script edits a paycheck
+- **GIVEN** a budget with the paycheck "Acme", whose schedules the API refuses to edit
+- **WHEN** a script calls `updatePaycheck` with a new deposit amount
+- **THEN** the paycheck's definition changes and its schedules are regenerated, as when the app saves it
+
+#### Scenario: Move on budget through the API
+- **GIVEN** an open off-budget account "Vanguard 401k"
+- **WHEN** a script calls `previewMoveAccountOnBudget` and then `moveAccountOnBudget` with the same start date
+- **THEN** the preview changes nothing, and the move produces the result the app's move produces
+
+#### Scenario: Errors are the handler's errors
+- **WHEN** a script calls `moveAccountOnBudget` for an account that is already on budget
+- **THEN** the call rejects with the handler's error, not a wrapper's
+
+### Requirement: Every fork handler has a method
+The tests SHALL fail when a handler the fork registers beyond upstream's has no typed method, so the list above can't fall behind (the full mapping is checked by `mcp-server` "Coverage manifest").
+
+#### Scenario: A handler without a method
+- **GIVEN** a fork handler `paycheck-foo` with no entry in `methods.ts`
+- **WHEN** the API tests run
+- **THEN** a test names `paycheck-foo` as missing

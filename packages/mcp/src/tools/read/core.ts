@@ -1,18 +1,11 @@
 import * as api from '@actual-app/api';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { ToolCallback } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
-import { buildPage, pageList, pageParams } from './paging';
-import { DATA_NOTE, sanitizeDeep, scrubSecrets, withText } from './sanitize';
-import { registerAccountTools } from './tools/read/accounts';
-import { registerCalendarTools } from './tools/read/calendars';
-import { registerPaycheckTools } from './tools/read/paychecks';
-import { date, money, pageShape } from './tools/read/shared';
-import { version } from './version';
+import { buildPage, pageList, pageParams } from '#paging';
+import { sanitizeDeep, withText } from '#sanitize';
 
-const DESCRIPTION_NOTE = ` Read-only. ${DATA_NOTE}`;
+import { date, money, pageShape } from './shared';
+import type { RegisterTool } from './shared';
 
 // Tables run_query may read.
 const QUERY_TABLES = [
@@ -40,52 +33,8 @@ const querySchema = z
   // Anything beyond a select (or an unknown key) is refused, not ignored.
   .strict();
 
-export function createServer(secrets: string[] = []) {
-  const server = new McpServer({ name: 'actual-budget', version });
-
-  // All tools are read-only; amounts are integer minor units (cents).
-  function tool<S extends z.ZodRawShape>(
-    name: string,
-    description: string,
-    shape: S,
-    fn: (args: z.infer<z.ZodObject<S>>) => Promise<unknown>,
-  ) {
-    const callback = async (
-      args: z.infer<z.ZodObject<S>>,
-    ): Promise<CallToolResult> => {
-      try {
-        const result = await fn(args);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({ note: DATA_NOTE, ...(result as object) }),
-            },
-          ],
-        };
-      } catch (error) {
-        // Fixed text to the model; details (scrubbed) go to stderr only.
-        const detail =
-          error instanceof Error ? error.message : JSON.stringify(error);
-        process.stderr.write(
-          `${name} failed: ${scrubSecrets(detail, secrets)}\n`,
-        );
-        return {
-          isError: true,
-          content: [
-            { type: 'text', text: `${name} failed. See the server log.` },
-          ],
-        };
-      }
-    };
-    // The SDK's generic callback type can't be inferred through our wrapper.
-    server.registerTool(
-      name,
-      { description: description + DESCRIPTION_NOTE, inputSchema: shape },
-      callback as unknown as ToolCallback<S>,
-    );
-  }
-
+/** Core read tools: accounts, categories, payees, transactions, budget, schedules, rules, query, sync. */
+export function registerCoreTools(tool: RegisterTool) {
   tool(
     'list_accounts',
     'List accounts with their current balances.',
@@ -320,11 +269,4 @@ export function createServer(secrets: string[] = []) {
       return { synced: true };
     },
   );
-
-  // Fork read tools, split by area (tools/read/*)
-  registerPaycheckTools(tool);
-  registerCalendarTools(tool);
-  registerAccountTools(tool);
-
-  return server;
 }

@@ -4,7 +4,7 @@ title: 'MCP Server'
 
 # MCP Server
 
-The `@actual-app/mcp` package lets an AI assistant that speaks the [Model Context Protocol](https://modelcontextprotocol.io) (such as Claude Code or Claude Desktop) read your budget. It is read-only: it offers no tools that change your data. It talks to the assistant over standard input and output and opens no network port.
+The `@actual-app/mcp` package lets an AI assistant that speaks the [Model Context Protocol](https://modelcontextprotocol.io) (such as Claude Code or Claude Desktop) read your budget. It is read-only by default. It talks to the assistant over standard input and output and opens no network port.
 
 :::note
 This server ships with Ken's Actual fork and is released with the same version number as the other fork packages. It is not part of upstream Actual.
@@ -77,6 +77,28 @@ Add the server to your assistant's MCP settings, wrapping it in `op run` so 1Pas
 ```
 
 Restart your assistant. It should now list tools such as `list_accounts` and `get_budget_month`.
+
+## Allow Changes (Optional)
+
+To let the assistant change your budget, add a second, separate entry that runs the server with `--writes`, so you can load the read-only entry without it:
+
+```json
+"actual-staging-writes": {
+  "command": "op",
+  "args": [
+    "run",
+    "--env-file=/path/to/actual-mcp-staging.env",
+    "--",
+    "node",
+    "/path/to/actual/packages/mcp/dist/mcp.js",
+    "--writes"
+  ]
+}
+```
+
+This entry adds five tools whose names start with `write_`: create transactions, change a transaction's category, payee or notes, set a budget amount, skip a paycheck, and move an account on budget. Each write is recorded in a private audit log before it runs; if the log can't be written, the change doesn't happen.
+
+`--writes` is never allowed for production. With `ACTUAL_MCP_ALLOW_PRODUCTION=1`, the server connects to production read-only.
 
 ## Notes on Syncing
 

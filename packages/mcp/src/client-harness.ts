@@ -1,16 +1,29 @@
+import { mkdtemp, rm } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
+
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 
 import { buildFixtureBudget } from './fixture';
-import { createServer } from './tools';
+import { createServer } from './server';
 
-/** A fixture budget plus an in-memory MCP client on a server over it. */
+const SECRET = 'harness-secret-password';
+
+/**
+ * A fixture budget plus an in-memory MCP client on a server over it. With
+ * `writes`, the server gets the write tools and an audit log in its own temp
+ * directory.
+ */
 export async function startHarness(
   options?: Parameters<typeof buildFixtureBudget>[0],
+  { writes = false }: { writes?: boolean } = {},
 ) {
   const fixture = await buildFixtureBudget(options);
+  const auditDir = await mkdtemp(join(tmpdir(), 'actual-mcp-audit-'));
+  const auditLog = join(auditDir, 'test.audit.jsonl');
   const [clientT, serverT] = InMemoryTransport.createLinkedPair();
-  await createServer().connect(serverT);
+  await createServer([SECRET], writes ? { auditLog } : {}).connect(serverT);
   const client = new Client({ name: 'test', version: '0' });
   await client.connect(clientT);
 
@@ -29,9 +42,13 @@ export async function startHarness(
     fixture,
     client,
     call,
+    auditDir,
+    auditLog,
+    secret: SECRET,
     close: async () => {
       await client.close();
       await fixture.cleanup();
+      await rm(auditDir, { recursive: true, force: true });
     },
   };
 }

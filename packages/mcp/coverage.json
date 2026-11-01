@@ -30,58 +30,58 @@
     "tool": "preview_move_on_budget"
   },
   "paycheck-create": {
-    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+    "skip": "Not in the v1 write set (mcp-server \"Write tools\"): paychecks are created and edited in the app"
   },
   "createPaycheck": {
-    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+    "skip": "Not in the v1 write set (mcp-server \"Write tools\"): paychecks are created and edited in the app"
   },
   "paycheck-update": {
-    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+    "skip": "Not in the v1 write set (mcp-server \"Write tools\"): paychecks are created and edited in the app"
   },
   "updatePaycheck": {
-    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+    "skip": "Not in the v1 write set (mcp-server \"Write tools\"): paychecks are created and edited in the app"
   },
   "paycheck-delete": {
-    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+    "skip": "Destructive: no delete tools in v1 (mcp-server \"Write tools\"); destructive tools are sc-1556"
   },
   "deletePaycheck": {
-    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+    "skip": "Destructive: no delete tools in v1 (mcp-server \"Write tools\"); destructive tools are sc-1556"
   },
   "paycheck-skip-next": {
-    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+    "tool": "write_skip_paycheck"
   },
   "skipNextPaycheck": {
-    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+    "tool": "write_skip_paycheck"
   },
   "account-set-business-days": {
-    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+    "skip": "Not in the v1 write set (mcp-server \"Write tools\"): an account's business days are edited in the app"
   },
   "setAccountBusinessDays": {
-    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+    "skip": "Not in the v1 write set (mcp-server \"Write tools\"): an account's business days are edited in the app"
   },
   "account-move-on-budget": {
-    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+    "tool": "write_move_on_budget"
   },
   "moveAccountOnBudget": {
-    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+    "tool": "write_move_on_budget"
   },
   "business-calendar-create": {
-    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+    "skip": "Not in the v1 write set (mcp-server \"Write tools\"): business calendars are created and edited in the app"
   },
   "createBusinessCalendar": {
-    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+    "skip": "Not in the v1 write set (mcp-server \"Write tools\"): business calendars are created and edited in the app"
   },
   "business-calendar-update": {
-    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+    "skip": "Not in the v1 write set (mcp-server \"Write tools\"): business calendars are created and edited in the app"
   },
   "updateBusinessCalendar": {
-    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+    "skip": "Not in the v1 write set (mcp-server \"Write tools\"): business calendars are created and edited in the app"
   },
   "business-calendar-delete": {
-    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+    "skip": "Destructive: no delete tools in v1 (mcp-server \"Write tools\"); destructive tools are sc-1556"
   },
   "deleteBusinessCalendar": {
-    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+    "skip": "Destructive: no delete tools in v1 (mcp-server \"Write tools\"); destructive tools are sc-1556"
   },
   "getAccounts": {
     "tool": "list_accounts"
@@ -112,5 +112,14 @@
   },
   "sync": {
     "tool": "sync_budget"
+  },
+  "addTransactions": {
+    "tool": "write_create_transactions"
+  },
+  "updateTransaction": {
+    "tool": "write_update_transactions"
+  },
+  "setBudgetAmount": {
+    "tool": "write_set_budget_amount"
   }
 }

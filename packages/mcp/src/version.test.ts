@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 
-import { createServer } from './tools';
+import { createServer } from './server';
 
 describe('server version', () => {
   it('The server reports its version', async () => {

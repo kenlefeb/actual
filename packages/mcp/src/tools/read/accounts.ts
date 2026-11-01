@@ -1,3 +1,5 @@
+import { createHash } from 'crypto';
+
 import * as api from '@actual-app/api';
 import { isMovedHistory } from '@actual-app/core/shared/moved-history';
 import { z } from 'zod';
@@ -15,7 +17,9 @@ type BudgetStatus = {
   budget_start_offset: string | null;
 };
 
-async function getBudgetStatus(accountId: string): Promise<BudgetStatus> {
+export async function getBudgetStatus(
+  accountId: string,
+): Promise<BudgetStatus> {
   const { data } = (await api.runQuery(
     api
       .q('accounts')
@@ -29,6 +33,22 @@ async function getBudgetStatus(accountId: string): Promise<BudgetStatus> {
   )) as { data: BudgetStatus[] };
   if (!data[0]) throw new Error(`No account ${accountId}`);
   return data[0];
+}
+
+/**
+ * The `confirm` value for moving an account on budget: a digest of the
+ * account, start date and the whole preview. `write_move_on_budget`
+ * recomputes it, so a stale or invented value is refused without any state
+ * kept between calls.
+ */
+export function moveConfirm(
+  accountId: string,
+  startDate: string,
+  preview: Awaited<ReturnType<typeof api.previewMoveAccountOnBudget>>,
+) {
+  return createHash('sha256')
+    .update(JSON.stringify([accountId, startDate, preview]))
+    .digest('hex');
 }
 
 export function registerAccountTools(tool: RegisterTool) {
@@ -104,13 +124,14 @@ export function registerAccountTools(tool: RegisterTool) {
 
   tool(
     'preview_move_on_budget',
-    'Preview moving an off-budget account on budget at a start date (YYYY-MM-DD): how many transactions become uncategorized, categories cleared or kept, transfers touched and the starting balance. Changes nothing.',
+    'Preview moving an off-budget account on budget at a start date (YYYY-MM-DD): how many transactions become uncategorized, categories cleared or kept, transfers touched and the starting balance, plus the `confirm` value `write_move_on_budget` needs. Changes nothing.',
     { account_id: z.string(), start_date: date },
     async ({ account_id, start_date }) => {
       const x = await api.previewMoveAccountOnBudget(account_id, start_date);
       return {
         account_id,
         start_date,
+        confirm: moveConfirm(account_id, start_date, x),
         before: x.before,
         from_uncategorized: x.fromUncategorized,
         categories_cleared: x.categoriesCleared,

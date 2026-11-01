@@ -4,7 +4,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { vi } from 'vitest';
 
 import { buildFixtureBudget } from './fixture';
-import { createServer } from './tools';
+import { createServer } from './server';
 
 const SECRET = 'super-secret-password';
 

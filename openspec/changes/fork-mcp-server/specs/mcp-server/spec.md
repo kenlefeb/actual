@@ -149,6 +149,31 @@ Writes SHALL take explicit ids and never a name matched from text, SHALL change 
 - **WHEN** a client calls `write_update_transactions` with the category name "Dining" instead of its id
 - **THEN** the call fails and nothing changed
 
+### Requirement: Moved history is not categorized by a write
+A write SHALL NOT set a category on moved history: a transaction of an account moved on budget dated before its budget start date, or its offset line. When `write_update_transactions` would set a category on one, or `write_create_transactions` would create a row with a category dated before the account's start date, the server SHALL refuse the whole call with fixed text saying to do it in the app, write no audit line and change nothing.
+
+#### Scenario: Categorizing a pre-start transaction is refused
+- **GIVEN** an account moved on budget at 2026-10-01 with a transaction dated 2026-09-15
+- **WHEN** a client calls `write_update_transactions` to set that transaction's `category_id`
+- **THEN** the call fails with text saying to categorize it in the app, and no transaction changed
+
+#### Scenario: Categorizing the offset line is refused
+- **GIVEN** that account's offset line
+- **WHEN** a client calls `write_update_transactions` to set its `category_id`
+- **THEN** the call fails and no transaction changed
+
+#### Scenario: Creating a categorized pre-start row is refused
+- **WHEN** a client calls `write_create_transactions` on that account with a row dated 2026-09-20 and a `category_id`
+- **THEN** the call fails and no transaction was created
+
+#### Scenario: A transaction from the start date on can be categorized
+- **WHEN** a client sets the `category_id` of that account's transaction dated 2026-10-01 or later
+- **THEN** the category changes
+
+#### Scenario: Notes and payee on moved history can change
+- **WHEN** a client calls `write_update_transactions` with only `notes` or `payee_id` for a transaction dated 2026-09-15 in that account
+- **THEN** the change is made
+
 ### Requirement: Moving on budget needs the preview
 `write_move_on_budget` SHALL require a `confirm` value taken from `preview_move_on_budget` for the same account and start date, and SHALL refuse when the preview computed now differs from the one the value came from.
 

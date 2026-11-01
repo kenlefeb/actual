@@ -19,6 +19,8 @@ describe('openBudget', () => {
       encryptionPassword,
       dataDir: mkdtempSync(join(tmpdir(), 'actual-mcp-')),
       env: 'local',
+      writes: false,
+      auditLog: '',
       secrets: [password, encryptionPassword],
     }).then(
       () => null,

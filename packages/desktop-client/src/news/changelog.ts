@@ -13,9 +13,13 @@ export type Changelog = {
 
 const CATEGORY_HEADING_PATTERN = /^#{2,4} +(.+)$/m;
 
-/** Number of top-level bullets, i.e. individual changes, in a markdown list. */
+/**
+ * Number of top-level bullets, i.e. individual changes, in a markdown list.
+ * The "None in this release." bullet that fork notes use for an empty
+ * section is a placeholder, not a change.
+ */
 export function countChanges(markdown: string): number {
-  return markdown.match(/^[-*] /gm)?.length ?? 0;
+  return markdown.match(/^[-*] (?!None in this release\.?\s*$)/gm)?.length ?? 0;
 }
 
 /**

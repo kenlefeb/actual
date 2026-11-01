@@ -620,3 +620,26 @@ describe('write bounds', () => {
     expect(auditLines()).toEqual([]);
   });
 });
+
+describe('first-row failure', () => {
+  it('A failure on the first row', async () => {
+    h = await startHarness({ count: 2 }, { writes: true });
+    const [a, b] = await transactions();
+    vi.spyOn(api, 'updateTransaction').mockRejectedValue(new Error('no'));
+    const res = await h.call('write_update_transactions', {
+      updates: [a, b].map(t => ({ id: t.id, notes: 'changed' })),
+    });
+    expect(res.isError).toBe(false);
+    expect(res.json).toMatchObject({
+      applied: [],
+      failed: a.id,
+      not_attempted: [b.id],
+      items: [],
+    });
+    expect(auditLines()[1]).toMatchObject({
+      status: 'failed',
+      applied: [],
+      failed: a.id,
+    });
+  });
+});

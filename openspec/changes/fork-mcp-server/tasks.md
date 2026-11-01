@@ -61,7 +61,7 @@
 
 ## 9. Write-tool hardening (sc-1684)
 
-- [ ] 9.1 Spec requirements "Write outcomes are logged", "Multi-row updates stop at the first failure" and "Write amounts and dates are bounded". Verify with `openspec validate fork-mcp-server --strict`.
+- [x] 9.1 Spec requirements "Write outcomes are logged", "Multi-row updates stop at the first failure" and "Write amounts and dates are bounded". Verify with `openspec validate fork-mcp-server --strict`.
 - [x] 9.2 Add failing tests named after the scenarios: "A create's outcome line", "A failed write's outcome line", "The outcome line can't be written", "A failure partway", "An extreme amount", "An impossible date" and "An impossible month".
 - [x] 9.3 Add the call id, the outcome line and `audit_outcome` to the write tools and `appendAudit`; make `write_update_transactions` stop at the first failure and report applied and failed rows; add the amount, date and month bounds with fixed refusal text before the attempt line.
 - [x] 9.4 Update the README and the docs page for the outcome line and the bounds. Security Analyst approves the PR.

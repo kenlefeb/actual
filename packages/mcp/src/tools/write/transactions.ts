@@ -158,6 +158,7 @@ export function registerTransactionWriteTools(
       }));
 
       let created: Row[] = [];
+      let readBack = true;
       return loggedWrite(
         auditLog,
         'write_create_transactions',
@@ -173,14 +174,29 @@ export function registerTransactionWriteTools(
         async () => {
           await api.addTransactions(account_id, rows);
           // shortcut: the API returns no ids, so a read-back diff finds them;
-          // upgrade if addTransactions ever returns the created ids.
-          created = (await rowsWhere({ account: account_id })).filter(
-            t => !existing.has(t.id),
-          );
+          // upgrade if addTransactions ever returns the created ids. A failed
+          // read-back must not turn a write that happened into a "failed" one:
+          // the outcome line is `ok` with no ids and the result says so.
+          try {
+            created = (await rowsWhere({ account: account_id })).filter(
+              t => !existing.has(t.id),
+            );
+          } catch {
+            readBack = false;
+          }
           const ids = created.map(t => t.id);
           return { applied: ids, created: ids };
         },
-        async () => ({ account_id, items: created.map(rowOut) }),
+        async () => ({
+          account_id,
+          items: created.map(rowOut),
+          ...(readBack
+            ? {}
+            : {
+                read_back:
+                  'The rows were created but could not be read back. Check the account.',
+              }),
+        }),
       );
     },
   );
@@ -271,8 +287,12 @@ async function updateResult(
   allChanges: AuditChange[],
 ) {
   const changes = allChanges.filter(c => applied.includes(c.id));
+  // An empty $oneof is not a safe query: skip it when the first row failed.
   const after = new Map(
-    (await rowsWhere({ id: { $oneof: applied } })).map(t => [t.id, t]),
+    (applied.length === 0
+      ? []
+      : await rowsWhere({ id: { $oneof: applied } })
+    ).map(t => [t.id, t]),
   );
   const values = [
     ...changes.map(c => c.before),

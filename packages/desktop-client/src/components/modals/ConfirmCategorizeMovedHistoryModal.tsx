@@ -8,7 +8,12 @@ import { Paragraph } from '@actual-app/components/paragraph';
 import { styles } from '@actual-app/components/styles';
 import { View } from '@actual-app/components/view';
 
-import { Modal, ModalCloseButton, ModalHeader } from '#components/common/Modal';
+import {
+  Modal,
+  ModalCloseButton,
+  ModalHeader,
+  ModalTitle,
+} from '#components/common/Modal';
 import type { Modal as ModalType } from '#modals/modalsSlice';
 
 type ConfirmCategorizeMovedHistoryModalProps = Extract<
@@ -31,7 +36,12 @@ export function ConfirmCategorizeMovedHistoryModal({
       {({ state }) => (
         <>
           <ModalHeader
-            title={t('Categorize moved history?')}
+            title={
+              <ModalTitle
+                title={t('Categorize moved history?')}
+                shrinkOnOverflow
+              />
+            }
             rightContent={<ModalCloseButton onPress={() => state.close()} />}
           />
           <View style={{ lineHeight: 1.5 }}>

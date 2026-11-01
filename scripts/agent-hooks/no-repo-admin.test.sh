@@ -35,6 +35,9 @@ cmd 2 'blocked 6: gh repo edit' 'gh repo edit kenlefeb/actual --default-branch m
 cmd 2 'blocked 7: gh secret set' 'gh secret set FOO -R kenlefeb/actual'
 cmd 2 'blocked 8: gh repo deploy-key add' 'gh repo deploy-key add k.pub -R kenlefeb/actual-hosting'
 check 2 'blocked 9: malformed payload' 'not json {'
+cmd 2 'blocked 16: timeout wrapper' 'timeout 30 gh api -X DELETE repos/kenlefeb/actual/branches/development/protection'
+cmd 2 'blocked 17: nice wrapper' 'nice gh repo edit kenlefeb/actual --visibility public'
+cmd 2 'blocked 18: absolute path to gh' '/opt/homebrew/bin/gh api -X DELETE repos/kenlefeb/actual/branches/development/protection'
 
 # Allowed (exit 0)
 cmd 0 'allowed 10: GET protection' 'gh api repos/kenlefeb/actual/branches/development/protection'

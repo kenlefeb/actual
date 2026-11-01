@@ -107,10 +107,26 @@ check_segment() {
   while [ $# -gt 0 ]; do
     case "$1" in
       *=* | env | command | exec | sudo | time | nohup | op | plugin | run | --) shift ;;
+      timeout)
+        shift
+        while [ $# -gt 0 ]; do
+          case "$1" in
+            -s | --signal | -k | --kill-after) shift; [ $# -gt 0 ] && shift ;;
+            -*) shift ;;
+            *) break ;;
+          esac
+        done
+        case "${1:-}" in [0-9]*) shift ;; esac ;; # the duration
+      nice)
+        shift
+        case "${1:-}" in
+          -n | --adjustment) shift; [ $# -gt 0 ] && shift ;;
+          -*) shift ;;
+        esac ;;
       *) break ;;
     esac
   done
-  [ "${1:-}" = gh ] || return 0
+  case "${1:-}" in gh | */gh) ;; *) return 0 ;; esac
   shift
   rest="$*"
   skip=0 words=''

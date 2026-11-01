@@ -31,6 +31,35 @@ it.each(['SIGINT', 'SIGTERM'])('still shuts down on %s', async signal => {
   expect(exit).toHaveBeenCalledWith(0);
 });
 
+it('still exits once, with a fixed stderr message, when closing fails', async () => {
+  const unhandled = vi.fn();
+  process.on('unhandledRejection', unhandled);
+  const write = vi
+    .spyOn(process.stderr, 'write')
+    .mockImplementation(() => true);
+  try {
+    const exit = vi.fn();
+    const stop = registerShutdown(
+      () => Promise.reject(new Error('secret-url')),
+      exit,
+      new PassThrough(),
+      new EventEmitter(),
+    );
+    stop();
+    stop();
+    await settled();
+    await settled();
+    expect(exit).toHaveBeenCalledTimes(1);
+    expect(exit).toHaveBeenCalledWith(0);
+    expect(write).toHaveBeenCalledWith('actual-mcp: shutdown failed\n');
+    expect(JSON.stringify(write.mock.calls)).not.toContain('secret-url');
+    expect(unhandled).not.toHaveBeenCalled();
+  } finally {
+    write.mockRestore();
+    process.off('unhandledRejection', unhandled);
+  }
+});
+
 it('shuts down once even when several close events fire', async () => {
   const { close, exit, stdin, proc, stop } = setup();
   stdin.resume();

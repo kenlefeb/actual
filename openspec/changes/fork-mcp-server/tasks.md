@@ -53,18 +53,18 @@
 
 ## 8. Read-tool hardening (sc-1664)
 
-- [ ] 8.1 Spec requirements "Paycheck definition text is data", "The move preview pages its transfers" and "Next-date search is bounded". Verify with `openspec validate fork-mcp-server --strict`.
-- [ ] 8.2 Add failing tests named after the scenarios: "An injected deposit kind", "A hostile deposit id", "A hostile account id", "Clearing status ids are checked too", "A normal deposit is unchanged", "More transfers than one page", "The digest covers every page", "A transfer on a later page changes", "A rule that never matches" (with a time bound) and "A malformed rule is still an error".
-- [ ] 8.3 Map `kind` onto the three values or `unknown` and sanitize every id field read from the definition (clearing account, payee, income category, pay schedule, and each deposit's id, account and schedule) in `list_paychecks` and `get_paychecks_clearing_status`; page `transfers` with a whole-preview `confirm`; catch the engine's "Cannot expand schedule date: Failed to find a matching occurrence" error and return the "No matching date" result, with a test that pins that exact prefix.
-- [ ] 8.4 Move `@actual-app/core` to `devDependencies` in `packages/mcp/package.json`, and make the `mcp-build` job fail if `dist/mcp.js` imports it.
+- [x] 8.1 Spec requirements "Paycheck definition text is data", "The move preview pages its transfers" and "Next-date search is bounded". Verify with `openspec validate fork-mcp-server --strict`.
+- [x] 8.2 Add failing tests named after the scenarios: "An injected deposit kind", "A hostile deposit id", "A hostile account id", "Clearing status ids are checked too", "A normal deposit is unchanged", "More transfers than one page", "The digest covers every page", "A transfer on a later page changes", "A rule that never matches" (with a time bound) and "A malformed rule is still an error".
+- [x] 8.3 Map `kind` onto the three values or `unknown` and sanitize every id field read from the definition (clearing account, payee, income category, pay schedule, and each deposit's id, account and schedule) in `list_paychecks` and `get_paychecks_clearing_status`; page `transfers` with a whole-preview `confirm`; catch the recurrence library's "Failed to find a matching occurrence" error and return the "No matching date" result, with a test that pins the message prefix.
+- [x] 8.4 Move `@actual-app/core` to `devDependencies` in `packages/mcp/package.json`, and make the `mcp-build` job fail if `dist/mcp.js` imports it.
 - [ ] 8.5 Update `coverage.json` and the README for any changed tool output. Security Analyst approves the PR.
 
 ## 9. Write-tool hardening (sc-1684)
 
-- [ ] 9.1 Spec requirements "Write outcomes are logged", "Multi-row updates stop at the first failure" and "Write amounts and dates are bounded". Verify with `openspec validate fork-mcp-server --strict`.
-- [ ] 9.2 Add failing tests named after the scenarios: "A create's outcome line", "A failed write's outcome line", "The outcome line can't be written", "A failure partway", "An extreme amount", "An impossible date" and "An impossible month".
-- [ ] 9.3 Add the call id, the outcome line and `audit_outcome` to the write tools and `appendAudit`; make `write_update_transactions` stop at the first failure and report applied and failed rows; add the amount, date and month bounds with fixed refusal text before the attempt line.
-- [ ] 9.4 Update the README and the docs page for the outcome line and the bounds. Security Analyst approves the PR.
+- [x] 9.1 Spec requirements "Write outcomes are logged", "Multi-row updates stop at the first failure" and "Write amounts and dates are bounded". Verify with `openspec validate fork-mcp-server --strict`.
+- [x] 9.2 Add failing tests named after the scenarios: "A create's outcome line", "A failed write's outcome line", "The outcome line can't be written", "A failure partway", "An extreme amount", "An impossible date" and "An impossible month".
+- [x] 9.3 Add the call id, the outcome line and `audit_outcome` to the write tools and `appendAudit`; make `write_update_transactions` stop at the first failure and report applied and failed rows; add the amount, date and month bounds with fixed refusal text before the attempt line.
+- [x] 9.4 Update the README and the docs page for the outcome line and the bounds. Security Analyst approves the PR.
 - [ ] 9.5 Archive this change when its last story merges (task 13.4 now), update the #1550 row in the epic table of `docs/agents/issue-tracker.md` with `mcp-server`, `api-fork-handlers` and `api-read-only-mode`, and file Backlog stories for any open follow-up (for example a public batch update method, if partial failures are seen).
 
 ## 10. A push-free read mode (sc-1601)

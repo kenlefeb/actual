@@ -4,7 +4,7 @@ import * as api from '@actual-app/api';
 import { isMovedHistory } from '@actual-app/core/shared/moved-history';
 import { z } from 'zod';
 
-import { buildPage, pageParams } from '#paging';
+import { buildPage, pageList, pageParams } from '#paging';
 import { withText } from '#sanitize';
 
 import { date, money, moneyAs, pageShape } from './shared';
@@ -124,9 +124,9 @@ export function registerAccountTools(tool: RegisterTool) {
 
   tool(
     'preview_move_on_budget',
-    'Preview moving an off-budget account on budget at a start date (YYYY-MM-DD): how many transactions become uncategorized, categories cleared or kept, transfers touched and the starting balance, plus the `confirm` value `write_move_on_budget` needs. Changes nothing.',
-    { account_id: z.string(), start_date: date },
-    async ({ account_id, start_date }) => {
+    'Preview moving an off-budget account on budget at a start date (YYYY-MM-DD): how many transactions become uncategorized, categories cleared or kept, transfers touched (paged with `limit` and `cursor`) and the starting balance, plus the `confirm` value `write_move_on_budget` needs. The `confirm` covers the whole preview and is the same on every page. Changes nothing.',
+    { account_id: z.string(), start_date: date, ...pageShape },
+    async ({ account_id, start_date, ...input }) => {
       const x = await api.previewMoveAccountOnBudget(account_id, start_date);
       return {
         account_id,
@@ -137,18 +137,28 @@ export function registerAccountTools(tool: RegisterTool) {
         categories_cleared: x.categoriesCleared,
         categories_kept: x.categoriesKept,
         ...moneyAs('starting_balance', x.startingBalance),
-        transfers: x.transfers.map(t =>
-          withText(
-            {
-              id: t.id,
-              date: t.date,
-              ...money(t.amount),
-              other_account_id: t.otherAccount,
-              kept_category_id: t.keptCategory,
-            },
-            { other_account: t.otherAccountName },
-          ),
-        ),
+        ...(() => {
+          const page = pageList(
+            x.transfers.map(t =>
+              withText(
+                {
+                  id: t.id,
+                  date: t.date,
+                  ...money(t.amount),
+                  other_account_id: t.otherAccount,
+                  kept_category_id: t.keptCategory,
+                },
+                { other_account: t.otherAccountName },
+              ),
+            ),
+            input,
+          );
+          return {
+            transfers: page.items,
+            has_more: page.has_more,
+            next_cursor: page.next_cursor,
+          };
+        })(),
       };
     },
   );

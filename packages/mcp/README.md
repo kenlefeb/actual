@@ -29,16 +29,16 @@ List tools take `limit` (default 50, at most 200) and `cursor`, and return `has_
 
 Fork read tools (all take ids, never names):
 
-| Tool                            | Returns                                                               |
-| ------------------------------- | --------------------------------------------------------------------- |
-| `list_paychecks`                | Paychecks with clearing account, gross amount and deposits            |
-| `get_paycheck_year_to_date`     | A paycheck's gross, deductions and net for this year and last         |
-| `get_paychecks_clearing_status` | Clearing balance, latest pay date, missing deposits and warning       |
-| `list_business_calendars`       | Non-working days, holiday rules and exceptions                        |
-| `get_schedule_next_dates`       | Upcoming dates for a day, a repeat rule or a relative date            |
-| `get_account_budget_status`     | Business calendar, days early, budget start date and offset line      |
-| `list_moved_history`            | A moved account's transactions before its start date, and offset line |
-| `preview_move_on_budget`        | What moving an account on budget would change, and its `confirm`      |
+| Tool                            | Returns                                                                                                                                                |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `list_paychecks`                | Paychecks with clearing account, gross amount and deposits (ids that aren't plain identifiers move under `text`; unknown deposit kinds read `unknown`) |
+| `get_paycheck_year_to_date`     | A paycheck's gross, deductions and net for this year and last                                                                                          |
+| `get_paychecks_clearing_status` | Clearing balance, latest pay date, missing deposits and warning                                                                                        |
+| `list_business_calendars`       | Non-working days, holiday rules and exceptions                                                                                                         |
+| `get_schedule_next_dates`       | Upcoming dates for a day, a repeat rule or a relative date; "No matching date" for a rule that never matches                                           |
+| `get_account_budget_status`     | Business calendar, days early, budget start date and offset line                                                                                       |
+| `list_moved_history`            | A moved account's transactions before its start date, and offset line                                                                                  |
+| `preview_move_on_budget`        | What moving an account on budget would change (transfers paged), and its `confirm` for the whole preview                                               |
 
 ## Write tools
 
@@ -73,8 +73,21 @@ budget-reset tools.
   `<data dir>.audit.jsonl` (by default `~/Library/Application Support/actual-mcp/<env>.audit.jsonl`),
   mode 0600: the time, tool, ids and each field's before and after values. It never holds a
   credential. If the line can't be appended, the write doesn't run. A
-  `write_create_transactions` line names the account and the new rows; their ids are in the
-  result.
+  `write_create_transactions` line names the account and the new rows.
+- **Outcome line.** After each write the server appends a second line with the same `call_id`:
+  `status` (`ok` or `failed`), the ids `applied`, the row that `failed` and the ids `created`. If
+  only that line can't be appended, the change stands and the result says
+  `audit_outcome: "not-logged"`.
+- **Multi-row updates stop at the first failure.** `write_update_transactions` applies its rows one
+  at a time. If the engine rejects one, the result lists `applied`, the `failed` id and
+  `not_attempted`; the applied rows stay changed (there is no all-or-nothing batch). The engine
+  error goes only to the server's stderr (scrubbed, with the call id and row id), never to the
+  model or the audit log.
+- **A read-back failure is not a failed write.** If a write is applied but its result can't be
+  read, the call still succeeds, with `applied` and a fixed `read_back` note saying not to retry.
+- **Bounds.** A write is refused, with fixed text and before any audit line, for an `amount` that
+  is not an integer within ±1,000,000,000,000 cents, a date that is not a real date from
+  1970-01-01 to 2100-12-31, or a budget month outside 01 to 12.
 - Writes are pushed to the server by the engine's next sync, as in the app.
 
 Register the write entry beside the read entry, so a session can load reads without writes:

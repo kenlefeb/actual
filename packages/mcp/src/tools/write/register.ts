@@ -10,9 +10,14 @@ import { registerTransactionWriteTools } from './transactions';
  * account close or budget reset tools (those are a later story). Each tool
  * appends its audit line to `auditLog` before it writes.
  */
-export function registerWriteTools(tool: RegisterTool, auditLog: string) {
-  registerTransactionWriteTools(tool, auditLog);
-  registerBudgetWriteTools(tool, auditLog);
-  registerPaycheckWriteTools(tool, auditLog);
-  registerAccountWriteTools(tool, auditLog);
+export function registerWriteTools(
+  tool: RegisterTool,
+  auditLog: string,
+  scrub: (message: string) => string,
+) {
+  const log = { path: auditLog, scrub };
+  registerTransactionWriteTools(tool, log);
+  registerBudgetWriteTools(tool, log);
+  registerPaycheckWriteTools(tool, log);
+  registerAccountWriteTools(tool, log);
 }

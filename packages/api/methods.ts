@@ -1,4 +1,5 @@
 import { send } from '@actual-app/core/platform/client/connection';
+import type { MoveOnBudgetPreview } from '@actual-app/core/server/accounts/move-on-budget';
 import type {
   APIAccountEntity,
   APIAccountGroupEntity,
@@ -14,8 +15,14 @@ import type { ImportableBudgetType } from '@actual-app/core/server/importers/ind
 import type { Query } from '@actual-app/core/shared/query';
 import type { ImportTransactionsOpts } from '@actual-app/core/types/api-handlers';
 import type {
+  AccountEntity,
+  BusinessCalendarEntity,
   ImportTransactionEntity,
   NoteEntity,
+  PaycheckClearingStatus,
+  PaycheckDefinition,
+  PaycheckEntity,
+  PaycheckYearToDate,
   RuleEntity,
   TransactionEntity,
 } from '@actual-app/core/types/models';
@@ -467,4 +474,109 @@ export function setPreference<T extends keyof SyncedPrefs>(
   value: SyncedPrefs[T] | undefined,
 ): Promise<void> {
   return send('preferences/save', { id, value });
+}
+
+// Fork-only: paychecks, business calendars and moving accounts on budget.
+// These wrap handlers that upstream's API doesn't have.
+
+export function getPaychecks(): Promise<PaycheckEntity[]> {
+  return send('paychecks-get');
+}
+
+/**
+ * Creates a paycheck and the schedules it manages. Pass
+ * `newClearingAccountName` to create the on-budget clearing account too.
+ * Resolves with the new paycheck's id.
+ */
+export function createPaycheck(paycheck: {
+  name: PaycheckEntity['name'];
+  definition: PaycheckDefinition;
+  newClearingAccountName?: string;
+}): Promise<PaycheckEntity['id']> {
+  return send('paycheck-create', paycheck);
+}
+
+/** Replaces a paycheck's name and definition, regenerating its schedules. */
+export function updatePaycheck(
+  id: PaycheckEntity['id'],
+  fields: {
+    name: PaycheckEntity['name'];
+    definition: PaycheckDefinition;
+  },
+) {
+  return send('paycheck-update', { id, ...fields });
+}
+
+export function deletePaycheck(id: PaycheckEntity['id']) {
+  return send('paycheck-delete', { id });
+}
+
+/** Skips the next pay date, for the paycheck's pay and deposit schedules. */
+export function skipNextPaycheck(id: PaycheckEntity['id']) {
+  return send('paycheck-skip-next', { id });
+}
+
+/** Totals for the current and previous calendar year, current first. */
+export function getPaycheckYearToDate(
+  id: PaycheckEntity['id'],
+): Promise<PaycheckYearToDate[]> {
+  return send('paycheck-year-to-date', { id });
+}
+
+export function getPaychecksClearingStatus(): Promise<
+  PaycheckClearingStatus[]
+> {
+  return send('paychecks-clearing-status');
+}
+
+/**
+ * Sets the business calendar and days early an account's deposits use, and
+ * regenerates the paychecks that deposit into it.
+ */
+export function setAccountBusinessDays(
+  id: AccountEntity['id'],
+  fields: {
+    businessCalendarId: BusinessCalendarEntity['id'] | null;
+    depositDaysEarly: number;
+  },
+) {
+  return send('account-set-business-days', { id, ...fields });
+}
+
+/** What moving the account on budget at `startDate` would change. */
+export function previewMoveAccountOnBudget(
+  id: AccountEntity['id'],
+  startDate: string,
+): Promise<MoveOnBudgetPreview> {
+  return send('account-move-on-budget-preview', { id, startDate });
+}
+
+export function moveAccountOnBudget(
+  id: AccountEntity['id'],
+  startDate: string,
+) {
+  return send('account-move-on-budget', { id, startDate });
+}
+
+export function getBusinessCalendars(): Promise<BusinessCalendarEntity[]> {
+  return send('business-calendars-get');
+}
+
+/** Resolves with the new calendar's id. */
+export function createBusinessCalendar(
+  calendar: Pick<BusinessCalendarEntity, 'name'> &
+    Partial<Omit<BusinessCalendarEntity, 'id'>>,
+): Promise<BusinessCalendarEntity['id']> {
+  return send('business-calendar-create', calendar);
+}
+
+export function updateBusinessCalendar(
+  id: BusinessCalendarEntity['id'],
+  fields: Partial<Omit<BusinessCalendarEntity, 'id'>>,
+) {
+  return send('business-calendar-update', { id, ...fields });
+}
+
+export function deleteBusinessCalendar(id: BusinessCalendarEntity['id']) {
+  return send('business-calendar-delete', { id });
 }

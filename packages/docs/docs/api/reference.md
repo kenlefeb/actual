@@ -791,7 +791,7 @@ Create schedule based on information filled in the schedule object. Please refer
 
 Update fields of a schedule. `fields` can specify any field described in [`Schedule`](#schedule). Returns the updated schedule.
 
-Schedules that a paycheck generated are managed by the app and regenerated each time the paycheck is saved, so this call fails for them with an error naming the paycheck. Edit the paycheck in the app instead.
+Schedules that a paycheck generated are managed by the app and regenerated each time the paycheck is saved, so this call fails for them with an error naming the paycheck. Edit the paycheck instead, in the app or with `updatePaycheck`.
 
 #### `deleteSchedule`
 

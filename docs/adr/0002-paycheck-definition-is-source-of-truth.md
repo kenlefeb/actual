@@ -35,7 +35,7 @@ paycheck itself, or the receiving account's business calendar and **days early**
 - **The API refuses to change generated schedules (sc-558).**
   `updateSchedule`, `deleteSchedule`, and `updateRule` on such a schedule's
   rule, fail with "This schedule is managed by paycheck "<name>". Edit the
-  paycheck in the app." `deleteRule` already resolves to `false` for the rule
+  paycheck in the app." (message amended below). `deleteRule` already resolves to `false` for the rule
   of any schedule. The check is `getPaycheckManagingSchedule`
   (`paychecks/app.ts`). `internal.send` and the internal `schedule/*` handlers
   aren't the public API and aren't guarded.
@@ -69,7 +69,8 @@ methods for the paycheck handlers (`getPaychecks`, `createPaycheck`,
 `updatePaycheck`, `deletePaycheck`, `skipNextPaycheck`,
 `getPaycheckYearToDate`, `getPaychecksClearingStatus`) and for the other
 fork-only handlers, under the change `fork-mcp-server` (sc-1568). The
-decision above is otherwise unchanged: the definition is the source of truth,
+same go-ahead also supersedes the decision of no public API for business
+calendars (epic 469), so the business calendar methods exist too. The decision above is otherwise unchanged: the definition is the source of truth,
 and the API still refuses to edit a generated schedule or its rule. The error
 now says to edit the paycheck "in the app, or with `updatePaycheck`" and
 gives the paycheck's id, so a script can follow it. Paychecks stay fork-only

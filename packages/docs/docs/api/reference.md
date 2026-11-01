@@ -88,6 +88,29 @@ import APIList from './APIList';
 "getScheduleDates"
 ]} />
 
+<APIList title="Paychecks" sections={[
+"getPaychecks",
+"createPaycheck",
+"updatePaycheck",
+"deletePaycheck",
+"skipNextPaycheck",
+"getPaycheckYearToDate",
+"getPaychecksClearingStatus"
+]} />
+
+<APIList title="Business Calendars" sections={[
+"getBusinessCalendars",
+"createBusinessCalendar",
+"updateBusinessCalendar",
+"deleteBusinessCalendar",
+"setAccountBusinessDays"
+]} />
+
+<APIList title="Moving Accounts on Budget" sections={[
+"previewMoveAccountOnBudget",
+"moveAccountOnBudget"
+]} />
+
 <APIList title="Notes" sections={[
 "getNote",
 "updateNote"
@@ -836,6 +859,100 @@ await api.getScheduleDates(
 );
 // ['2025-01-31', '2025-02-28']
 ```
+
+## Paychecks
+
+Paychecks are specific to this fork. A paycheck describes your gross pay, deductions and deposits, and it manages the pay and deposit schedules for you. Each paycheck has an `id`, a `name` and a `definition`.
+
+#### `getPaychecks`
+
+<Method name="getPaychecks" args={[]} returns="Promise<Paycheck[]>" />
+
+Returns all paychecks, sorted by name.
+
+#### `createPaycheck`
+
+<Method name="createPaycheck" args={[{ name: 'paycheck', properties: [{ name: 'name', type: 'string' }, { name: 'definition', type: 'object' }, { name: 'newClearingAccountName?', type: 'string' }] }]} returns="Promise<id>" />
+
+Creates a paycheck and the schedules it manages, and returns the new paycheck's id. Pass `newClearingAccountName` to create the on-budget clearing account at the same time.
+
+#### `updatePaycheck`
+
+<Method name="updatePaycheck" args={[{ name: 'id', type: 'id' }, { name: 'fields', properties: [{ name: 'name', type: 'string' }, { name: 'definition', type: 'object' }] }]} returns="Promise<void>" />
+
+Replaces a paycheck's name and definition, and regenerates its schedules. Send the whole definition, not only the fields that changed.
+
+#### `deletePaycheck`
+
+<Method name="deletePaycheck" args={[{ name: 'id', type: 'id' }]} returns="Promise<void>" />
+
+Deletes a paycheck and its schedules. The clearing account and the transactions already posted stay.
+
+#### `skipNextPaycheck`
+
+<Method name="skipNextPaycheck" args={[{ name: 'id', type: 'id' }]} returns="Promise<void>" />
+
+Skips the next pay date for the paycheck's pay and deposit schedules.
+
+#### `getPaycheckYearToDate`
+
+<Method name="getPaycheckYearToDate" args={[{ name: 'id', type: 'id' }]} returns="Promise<PaycheckYearToDate[]>" />
+
+Returns the gross pay, deductions and net pay posted so far for the current year and the previous year, current year first.
+
+#### `getPaychecksClearingStatus`
+
+<Method name="getPaychecksClearingStatus" args={[]} returns="Promise<PaycheckClearingStatus[]>" />
+
+Returns, for each paycheck, the balance of its clearing account and whether it has deposits that are late.
+
+## Business Calendars
+
+Business calendars are specific to this fork. A business calendar lists the days of the week that aren't business days, plus holidays and one-off exceptions. Schedules and paycheck deposits use them to find the nearest business day.
+
+#### `getBusinessCalendars`
+
+<Method name="getBusinessCalendars" args={[]} returns="Promise<BusinessCalendar[]>" />
+
+Returns all business calendars, sorted by name.
+
+#### `createBusinessCalendar`
+
+<Method name="createBusinessCalendar" args={[{ name: 'calendar', properties: [{ name: 'name', type: 'string' }, { name: 'nonWorkingDays?', type: 'number[]' }, { name: 'holidays?', type: 'object[]' }, { name: 'exceptions?', type: 'object[]' }] }]} returns="Promise<id>" />
+
+Creates a business calendar and returns its id. Days are numbered from 0 (Sunday) to 6 (Saturday). Without `nonWorkingDays`, Saturday and Sunday are non-working days.
+
+#### `updateBusinessCalendar`
+
+<Method name="updateBusinessCalendar" args={[{ name: 'id', type: 'id' }, { name: 'fields', type: 'object' }]} returns="Promise<void>" />
+
+Updates the fields you pass and leaves the others as they are. Schedules that use the calendar get new next dates.
+
+#### `deleteBusinessCalendar`
+
+<Method name="deleteBusinessCalendar" args={[{ name: 'id', type: 'id' }]} returns="Promise<void>" />
+
+Deletes a business calendar.
+
+#### `setAccountBusinessDays`
+
+<Method name="setAccountBusinessDays" args={[{ name: 'id', type: 'id' }, { name: 'fields', properties: [{ name: 'businessCalendarId', type: 'id | null' }, { name: 'depositDaysEarly', type: 'number' }] }]} returns="Promise<void>" />
+
+Sets the business calendar an account uses and how many business days early its deposits arrive (0 to 10), and regenerates the paychecks that deposit into the account. Pass `null` for `businessCalendarId` to use no calendar.
+
+## Moving Accounts on Budget
+
+#### `previewMoveAccountOnBudget`
+
+<Method name="previewMoveAccountOnBudget" args={[{ name: 'id', type: 'id' }, { name: 'startDate', type: 'string' }]} returns="Promise<MoveOnBudgetPreview>" />
+
+Shows what moving an off-budget account on budget from `startDate` (`YYYY-MM-DD`) would change, without changing anything: how many transactions lose their category, which transfers are affected, and the starting balance the budget gains.
+
+#### `moveAccountOnBudget`
+
+<Method name="moveAccountOnBudget" args={[{ name: 'id', type: 'id' }, { name: 'startDate', type: 'string' }]} returns="Promise<void>" />
+
+Moves an open off-budget account on budget from `startDate` (`YYYY-MM-DD`). Run `previewMoveAccountOnBudget` first to see the result. The call fails if the account is already on budget or closed.
 
 ## Notes
 

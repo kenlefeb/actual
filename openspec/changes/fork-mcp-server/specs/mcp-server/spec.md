@@ -178,10 +178,15 @@ The server SHALL append one JSON line per write to `~/Library/Application Suppor
 - **THEN** it passes
 
 ### Requirement: Coverage check
-`yarn check:mcp-coverage` SHALL run in fork CI and fail on a name with no entry, on an entry whose tool is not registered or has no test naming it, and on a skip with no reason. It SHALL read whole files, so a registration that spans lines is found.
+`yarn check:mcp-coverage` SHALL run in fork CI and fail on a name with no entry, on an entry whose tool is not registered or has no test naming it, and on a skip with no reason. It SHALL also fail on a fork handler outside the upstream baseline that has no `send('<handler>'` call in `packages/api/methods.ts` and no skip reason. It SHALL read whole files, so a registration that spans lines is found.
 
 #### Scenario: A new handler without coverage
 - **GIVEN** a PR adds `app.method('paycheck-foo', ...)` and no manifest entry
+- **WHEN** the check runs
+- **THEN** it fails and names `paycheck-foo`
+
+#### Scenario: A new handler without an API method
+- **GIVEN** a PR adds `app.method('paycheck-foo', ...)` outside the upstream baseline, and `methods.ts` has no `send('paycheck-foo'` call and the manifest has no skip reason for it
 - **WHEN** the check runs
 - **THEN** it fails and names `paycheck-foo`
 

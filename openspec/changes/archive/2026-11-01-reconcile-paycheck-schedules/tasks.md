@@ -63,7 +63,7 @@
 
 ## 4. Edit paycheck instead of Delete
 
-- [ ] 4.1 On the mobile schedule edit page, show the paycheck note for a schedule `usePaycheckMembership().scheduleIds` contains, following the UX Designer's conditions (PR #91, sc-556):
+- [x] 4.1 On the mobile schedule edit page, show the paycheck note for a schedule `usePaycheckMembership().scheduleIds` contains, following the UX Designer's conditions (PR #91, sc-556):
   1. Reuse the desktop note's text word for word, with the "Edit paycheck" button. Add no phone-only text.
   2. On a phone, the button opens the paycheck's own page, not the desktop dialog, the same way the Schedules page opens paychecks.
   3. Put the note at the top of the page, above the schedule form, aligned with the form's side padding.

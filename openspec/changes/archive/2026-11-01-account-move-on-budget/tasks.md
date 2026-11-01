@@ -32,5 +32,5 @@
 ## 4. Checks
 
 - [x] 4.1 `yarn typecheck`, `yarn lint` and the loot-core and desktop-client tests.
-- [ ] 4.2 Check the move by hand in a browser, desktop and 375px, on a demo budget: before and after, the sidebar groups, the account balance, the start month's "To Budget", and undo.
-- [ ] 4.3 A release note and fork news entry for the next fork prerelease.
+- [x] 4.2 Check the move by hand in a browser, desktop and 375px, on a demo budget: before and after, the sidebar groups, the account balance, the start month's "To Budget", and undo.
+- [x] 4.3 A release note and fork news entry for the next fork prerelease.

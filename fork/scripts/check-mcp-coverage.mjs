@@ -13,7 +13,7 @@ const SERVER_DIR = 'packages/loot-core/src/server';
 const METHODS = 'packages/api/methods.ts';
 const BASELINE = 'packages/mcp/upstream-handlers.json';
 const isSource = f => /\.(ts|tsx|js)$/.test(f) && !/\.test\./.test(f);
-const captures = (text, re) => [...text.matchAll(re)].map(m => m[1]);
+const captures = (text, re) => [...text.matchAll(re)].map(m => m[1] ?? m[2]);
 
 // shortcut: regex, not a parser; a `//` inside a string (not after `:`, so
 // URLs survive) would cut that line. Upgrade if a scanned file needs it.
@@ -21,8 +21,13 @@ const stripComments = text =>
   text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:\\])\/\/.*$/gm, '$1');
 
 // Matches whole text, so a registration split over lines is found
+// `app.method('x'` and `handlers['x'] =`; `=(?![=>])` leaves out comparisons,
+// and calls like `handlers['x'](...)` have no `=` after the bracket
 export const findHandlers = text =>
-  captures(stripComments(text), /\bapp\.method\(\s*['"`]([^'"`]+)['"`]/g);
+  captures(
+    stripComments(text),
+    /\bapp\.method\(\s*['"`]([^'"`]+)['"`]|\bhandlers\[\s*['"`]([^'"`]+)['"`]\s*,?\s*\]\s*=(?![=>])/g,
+  );
 
 export function findApiExports(text) {
   const out = captures(

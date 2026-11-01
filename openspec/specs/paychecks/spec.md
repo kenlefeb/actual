@@ -190,7 +190,7 @@ Each direct deposit SHALL have a "Post automatically" option, off by default. Wh
 - **THEN** the editor notes that a bank-synced deposit merges only when its amount is exactly the same
 
 ### Requirement: Editing and deleting paychecks
-Opening a paycheck's schedule SHALL offer to edit the paycheck. Saving changes SHALL update its schedules in one undoable step and SHALL NOT change transactions already posted or linked. Deleting a paycheck SHALL delete its schedules and keep its clearing account and existing transactions. Undo SHALL restore the previous paycheck and schedules. The API SHALL refuse to update or delete a paycheck's pay or deposit schedule, or to update its rule, with an error naming the paycheck and no change.
+Opening a paycheck's schedule SHALL offer to edit the paycheck. Saving changes SHALL update its schedules in one undoable step and SHALL NOT change transactions already posted or linked. Deleting a paycheck SHALL delete its schedules and keep its clearing account and existing transactions. Undo SHALL restore the previous paycheck and schedules. The API SHALL refuse to update or delete a paycheck's pay or deposit schedule, or to update its rule, with an error naming the paycheck and the API method that edits it, and no change.
 
 #### Scenario: Raise
 - **WHEN** the user changes "Acme" gross pay to 3,200.00
@@ -210,7 +210,7 @@ Opening a paycheck's schedule SHALL offer to edit the paycheck. Saving changes S
 
 #### Scenario: A script edits Acme's Checking deposit schedule
 - **WHEN** an API script calls `updateSchedule` on the "Acme → Checking" deposit schedule to change its amount
-- **THEN** the call fails with "This schedule is managed by paycheck "Acme". Edit the paycheck in the app." and the schedule's amount, date and name are unchanged
+- **THEN** the call fails with "This schedule is managed by paycheck "Acme". Edit the paycheck in the app, or with updatePaycheck("<Acme's id>", ...)." with Acme's real id and the schedule's amount, date and name are unchanged
 
 #### Scenario: A script deletes Acme's pay schedule
 - **WHEN** an API script calls `deleteSchedule` on the "Acme" pay schedule

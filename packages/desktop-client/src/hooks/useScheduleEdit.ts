@@ -4,6 +4,7 @@ import { useEffect, useEffectEvent, useReducer, useState } from 'react';
 import { send, sendCatch } from '@actual-app/core/platform/client/connection';
 import * as monthUtils from '@actual-app/core/shared/months';
 import { q } from '@actual-app/core/shared/query';
+import { isRelativeDate } from '@actual-app/core/shared/relative-dates';
 import {
   extractScheduleConds,
   getScheduledAmount,
@@ -367,6 +368,17 @@ export function useScheduleEdit({
     let unsubscribe: (() => void) | undefined;
 
     if (state.schedule && state.transactionsMode === 'matched') {
+      // No source schedule chosen yet: an empty preview, not an error. Save
+      // still refuses it (updateScheduleConditions).
+      if (
+        isRelativeDate(state.fields.date) &&
+        !state.fields.date.relativeTo.scheduleId
+      ) {
+        dispatch({ type: 'form-error', error: null });
+        dispatch({ type: 'set-transactions', transactions: [] });
+        return;
+      }
+
       const updated = updateScheduleConditions(state.schedule, state.fields);
 
       if ('error' in updated) {

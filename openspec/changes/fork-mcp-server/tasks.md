@@ -24,9 +24,9 @@
 
 ## 4. Fork read tools (sc-1571)
 
-- [ ] 4.1 Spec "Fork read tools". Verify with `openspec validate fork-mcp-server --strict`.
-- [ ] 4.2 Add failing tests: "Year to date", "Moved history" and "A preview changes nothing", plus one per remaining fork read tool (paychecks, clearing status, business calendars, schedule next dates with a relative date, account budget status).
-- [ ] 4.3 Implement the tools over the typed methods of group 1 and the shared `isMovedHistory` helper. Update `coverage.json`.
+- [x] 4.1 Spec "Fork read tools". Verify with `openspec validate fork-mcp-server --strict`.
+- [x] 4.2 Add failing tests: "Year to date", "Moved history" and "A preview changes nothing", plus one per remaining fork read tool (paychecks, clearing status, business calendars, schedule next dates with a relative date, account budget status).
+- [x] 4.3 Implement the tools over the typed methods of group 1 and the shared `isMovedHistory` helper. Update `coverage.json`.
 
 ## 5. Opt-in write tools with an audit log (sc-1572)
 

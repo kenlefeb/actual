@@ -6,22 +6,12 @@ import { z } from 'zod';
 
 import { buildPage, pageList, pageParams } from './paging';
 import { DATA_NOTE, sanitizeDeep, scrubSecrets, withText } from './sanitize';
+import { registerAccountTools } from './tools/read/accounts';
+import { registerCalendarTools } from './tools/read/calendars';
+import { registerPaycheckTools } from './tools/read/paychecks';
+import { date, money, pageShape } from './tools/read/shared';
 
 const DESCRIPTION_NOTE = ` Read-only. ${DATA_NOTE}`;
-
-const pageShape = {
-  limit: z.number().int().optional(),
-  cursor: z.string().optional(),
-};
-
-const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD');
-
-/** Integer minor units plus a decimal string, so the model never does cent math. */
-function money(amount: number) {
-  const abs = Math.abs(amount);
-  const decimal = `${amount < 0 ? '-' : ''}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, '0')}`;
-  return { amount, amount_decimal: decimal };
-}
 
 // Tables run_query may read.
 const QUERY_TABLES = [
@@ -329,6 +319,11 @@ export function createServer(secrets: string[] = []) {
       return { synced: true };
     },
   );
+
+  // Fork read tools, split by area (tools/read/*)
+  registerPaycheckTools(tool);
+  registerCalendarTools(tool);
+  registerAccountTools(tool);
 
   return server;
 }

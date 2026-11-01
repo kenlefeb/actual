@@ -67,7 +67,7 @@ The server SHALL offer read tools for accounts and balances, category groups and
 
 #### Scenario: Transactions from a fixture budget
 - **GIVEN** a fixture budget with 120 transactions in "Checking"
-- **WHEN** a client calls `list_transactions` for "Checking" with no limit
+- **WHEN** a client calls `list_transactions` with Checking's `account_id` and no limit
 - **THEN** it receives 50 transactions, `has_more` true and a `next_cursor`
 
 #### Scenario: A sync has the app's side effects
@@ -84,16 +84,16 @@ The server SHALL offer read tools for paychecks, paycheck year-to-date totals an
 
 #### Scenario: Year to date
 - **GIVEN** a fixture budget with the paycheck "Acme" and posted deposits
-- **WHEN** a client calls `get_paycheck_year_to_date` for "Acme"
+- **WHEN** a client calls `get_paycheck_year_to_date` with Acme's `paycheck_id`
 - **THEN** it receives the same totals the app shows
 
 #### Scenario: Moved history
 - **GIVEN** an account moved on budget with start date 2026-10-01 and 3 transactions before it
-- **WHEN** a client calls `list_moved_history` for the account
+- **WHEN** a client calls `list_moved_history` with the account's `account_id`
 - **THEN** it receives those 3 transactions and the offset line, and no later ones
 
 #### Scenario: A preview changes nothing
-- **WHEN** a client calls `preview_move_on_budget` for an off-budget account
+- **WHEN** a client calls `preview_move_on_budget` with that account's `account_id` and a start date
 - **THEN** the account is still off budget and no transaction changed
 
 ### Requirement: Text from the budget is data
@@ -142,7 +142,7 @@ Writes SHALL take explicit ids and never a name matched from text, SHALL change 
 
 #### Scenario: Before and after
 - **GIVEN** a transaction categorized "Groceries"
-- **WHEN** a client calls `write_update_transactions` to set it to "Dining"
+- **WHEN** a client calls `write_update_transactions` to set it to the `category_id` of "Dining"
 - **THEN** the result shows category "Groceries" before and "Dining" after, and the transaction is "Dining"
 
 #### Scenario: A name where an id is required

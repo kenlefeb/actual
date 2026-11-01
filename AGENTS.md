@@ -623,9 +623,12 @@ When running the app for manual testing or demos, use **"View demo"** on the ini
 Every changed customized build must use a new semantic version with a prerelease
 suffix until Ken explicitly approves a stable release. Current series starts at
 `26.10.1-alpha.1`; use `alpha.2`, `alpha.3`, etc. for subsequent changes in this
-patch series. Keep all seven release-package versions aligned, following the
-package list in `.github/workflows/cut-release-branch.yml`. Settings must show the
-custom client and server versions. Preserve the upstream base version separately
+patch series. Keep all eight release-package versions aligned: `desktop-client`,
+`desktop-electron`, `sync-server`, `api`, `cli`, `loot-core`, `mobile-client` (the
+seven in upstream's `.github/workflows/cut-release-branch.yml`, which never runs
+here) and `mcp`. Bump each `packages/<name>/package.json` by hand, then run
+`yarn check:package-versions`; Fork CI runs it and fails when any version differs.
+Settings must show the custom client and server versions. Preserve the upstream base version separately
 in `actual-hosting/source.json`; update its `buildVersion`, fork commit and
 provenance before building. Never publish changed source under an existing version.
 

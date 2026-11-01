@@ -49,7 +49,7 @@
 - [x] 7.1 Spec "Registration forms" and the reworded "Coverage manifest" (in this change). Verify with `openspec validate fork-mcp-server --strict`.
 - [x] 7.2 Add failing tests in `fork/scripts/check-mcp-coverage.test.mjs`, named after the scenarios: "An assigned handler without coverage", "An assigned handler with an entry", "An assigned handler across lines", "A call is not a registration" (a call, a `===` comparison and an argument) and, for the baseline, a test that the rebuilt file lists an assigned upstream handler.
 - [x] 7.3 Add the `handlers[...] =` pattern to the extractor (whole-file, `=` not `==`, `=>` or a call), rebuild `packages/mcp/upstream-handlers.json` with `--baseline-from upstream/master` (an upstream ref only; review the diff), and map or skip any fork-only handlers it finds, with reasons (none found when this was written).
-- [ ] 7.4 Archive this change when its last story merges (task 12.4 now); otherwise do it in 6.5.
+- [ ] 7.4 Archive this change when its last story merges (task 13.4 now); otherwise do it in 6.5.
 
 ## 8. Read-tool hardening (sc-1664)
 
@@ -65,16 +65,16 @@
 - [ ] 9.2 Add failing tests named after the scenarios: "A create's outcome line", "A failed write's outcome line", "The outcome line can't be written", "A failure partway", "An extreme amount", "An impossible date" and "An impossible month".
 - [ ] 9.3 Add the call id, the outcome line and `audit_outcome` to the write tools and `appendAudit`; make `write_update_transactions` stop at the first failure and report applied and failed rows; add the amount, date and month bounds with fixed refusal text before the attempt line.
 - [ ] 9.4 Update the README and the docs page for the outcome line and the bounds. Security Analyst approves the PR.
-- [ ] 9.5 Archive this change when its last story merges (task 12.4 now), update the #1550 row in the epic table of `docs/agents/issue-tracker.md` with `mcp-server`, `api-fork-handlers` and `api-read-only-mode`, and file Backlog stories for any open follow-up (for example a public batch update method, if partial failures are seen).
+- [ ] 9.5 Archive this change when its last story merges (task 13.4 now), update the #1550 row in the epic table of `docs/agents/issue-tracker.md` with `mcp-server`, `api-fork-handlers` and `api-read-only-mode`, and file Backlog stories for any open follow-up (for example a public batch update method, if partial failures are seen).
 
 ## 10. A push-free read mode (sc-1601)
 
-- [ ] 10.1 Spec capability `api-read-only-mode` and, in `mcp-server`, the scenarios "A read entry writes nothing" and "The writes entry runs the engine normally" (replacing "A sync has the app's side effects"). Verify with `openspec validate fork-mcp-server --strict`.
-- [ ] 10.2 Add failing tests named after the scenarios. Engine (loot-core, mock sync server): "A read-only session posts nothing" and "A normal session still posts" (a due auto-post schedule; the first run is red with the flag off because it posts and the server's messages grow), "A read-only session does not reconcile paycheck edits" and "A read-only session uploads no budget file", "A normal session still uploads", "A read-only session sends no repair messages" and "A read-only session still pulls". MCP: a wiring test that `openBudget` passes `readOnly: true` unless `--writes`.
-- [ ] 10.3 Add `readOnly` to `InitConfig` and the engine flag; guard `runTrackedMutator`, the schedules `sync` handler (no run, no `lastScheduleRun`), `possiblyUpload` (return early) and `syncMigrations.listen()` (register nothing); pass `readOnly` from the MCP read entry; give the `--writes` entry its own `<env>-writes` data directory and audit log (design Decision 17), with a config test for both defaults, and a README line telling anyone who used the read directory for a write session before this change to delete it once.
-- [ ] 10.4 Remove the side-effect wording from `packages/mcp/README.md` ("Sync side effects"), `packages/docs/docs/api/mcp-server.md` ("Notes on Syncing") and the `sync_budget` description in `tools/read/core.ts`, and document `readOnly` in the API reference.
+- [x] 10.1 Spec capability `api-read-only-mode` and, in `mcp-server`, the scenarios "A read entry writes nothing" and "The writes entry runs the engine normally" (replacing "A sync has the app's side effects"). Verify with `openspec validate fork-mcp-server --strict`.
+- [x] 10.2 Add failing tests named after the scenarios. Engine (loot-core, mock sync server): "A read-only session posts nothing" and "A normal session still posts" (a due auto-post schedule; the first run is red with the flag off because it posts and the server's messages grow), "A read-only session does not reconcile paycheck edits" and "A read-only session uploads no budget file", "A normal session still uploads", "A read-only session sends no repair messages" and "A read-only session still pulls". MCP: a wiring test that `openBudget` passes `readOnly: true` unless `--writes`.
+- [x] 10.3 Add `readOnly` to `InitConfig` and the engine flag; guard `runTrackedMutator`, the schedules `sync` handler (no run, no `lastScheduleRun`), `possiblyUpload` (return early) and `syncMigrations.listen()` (register nothing); pass `readOnly` from the MCP read entry.
+- [x] 10.4 Remove the side-effect wording from `packages/mcp/README.md` ("Sync side effects"), `packages/docs/docs/api/mcp-server.md` ("Notes on Syncing") and the `sync_budget` description in `tools/read/core.ts`, and document `readOnly` in the API reference.
 - [ ] 10.5 Check every caller of `sendMessages` and, if it is safe, file a Backlog story for the optional throw-in-read-only backstop; do not build it here. Security Analyst approves the PR.
-- [ ] 10.6 Archive this change when its last story merges (task 12.4 now), and add `api-read-only-mode` to the #1550 row in the epic table of `docs/agents/issue-tracker.md`.
+- [ ] 10.6 Archive this change when its last story merges (task 13.4 now), and add `api-read-only-mode` to the #1550 row in the epic table of `docs/agents/issue-tracker.md`.
 
 ## 11. Paging `get_budget_month` (sc-1912)
 
@@ -87,5 +87,10 @@
 - [ ] 12.1 Spec requirement "The data directory is checked before it is created". Verify with `openspec validate fork-mcp-server --strict`.
 - [ ] 12.2 Add failing tests named after the scenarios, using a temporary home: "A refused directory is not created" (nothing exists afterwards, including missing parents), "A symlinked parent is checked" and "An allowed directory is created private".
 - [ ] 12.3 In `ensurePrivateDir`, resolve the nearest existing ancestor's real path, check it with the remaining path before any `mkdir`, create with mode 0700 only after the check, and re-check after creating, removing only what this call created on a failure (design Decision 16). Security Analyst approves the PR.
-- [ ] 12.4 Archive this change when its last story merges, update the #1550 row in the epic table of `docs/agents/issue-tracker.md` with `mcp-server`, `api-fork-handlers` and `api-read-only-mode`, and file Backlog stories for any open follow-up (a public batch update method if partial failures are seen, and the `sendMessages` backstop for read-only mode after every caller is checked).
 
+## 13. The `--writes` entry has its own data directory (sc-1948)
+
+- [ ] 13.1 Spec requirement "The writes entry has its own data directory" (already in this change), and design Decision 17. Verify with `openspec validate fork-mcp-server --strict`.
+- [ ] 13.2 Add failing tests named after the scenarios: "The entries use separate data directories" (a config test for both defaults and the audit log names) and "A write session's unsent message stays out of a read session".
+- [ ] 13.3 Give the `--writes` entry its own `<env>-writes` data directory and audit log (`<env>-writes.audit.jsonl`), with a README and docs line telling anyone who used the read directory for a write session before this change to delete it once. Security Analyst approves the PR.
+- [ ] 13.4 Archive this change when its last story merges, update the #1550 row in the epic table of `docs/agents/issue-tracker.md` with `mcp-server`, `api-fork-handlers` and `api-read-only-mode`, and file Backlog stories for any open follow-up (a public batch update method if partial failures are seen, and the `sendMessages` backstop for read-only mode after every caller is checked).

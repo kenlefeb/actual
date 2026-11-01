@@ -107,10 +107,10 @@ The host decides the environment: `actual-staging.owl-becrux.ts.net` is `staging
 
 The data directory is refused if it is looser than 0700 or under a synced or vault location (Dropbox, iCloud, Obsidian, `Library/CloudStorage`, `~/Documents`, `~/Desktop`), checked after resolving symlinks.
 
-**Sync side effects.** Without `--writes` the server offers no write tools, but a sync is not push-free. Every
-successful sync, including the one when the server starts and `sync_budget`, makes the engine run
-its after-sync work, exactly as the app does: it can post due auto-post schedules and reconcile
-paychecks, and the next sync pushes those changes. A push-free mode is tracked as sc-1601.
+**Syncing is push-free.** Without `--writes` the server starts the engine with `readOnly: true`: a
+sync (including the one at startup and `sync_budget`) pulls the server's changes but posts no
+schedules, reconciles no paychecks and uploads nothing, so nothing is sent to the server. The
+`--writes` entry runs the engine as the app does.
 
 Set these variables only in the `op run` env file. Never export them in a shell profile.
 

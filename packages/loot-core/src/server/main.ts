@@ -33,6 +33,7 @@ import { app as payeesApp } from './payees/app';
 import { get } from './post';
 import { app as preferencesApp } from './preferences/app';
 import * as prefs from './prefs';
+import { setReadOnly } from './read-only';
 import { app as reportsApp } from './reports/app';
 import { app as rulesApp } from './rules/app';
 import { app as schedulesApp } from './schedules/app';
@@ -268,6 +269,12 @@ type BaseInitConfig = {
    */
   dataDir?: string;
   verbose?: boolean;
+  /**
+   * A read-only session writes nothing and pushes nothing: no schedule
+   * auto-posting, paycheck reconcile or backfill, parent-id repair or
+   * periodic budget upload. Loading, reading and pulling work as usual.
+   */
+  readOnly?: boolean;
 };
 
 type ServerInitConfig = BaseInitConfig & {
@@ -311,6 +318,8 @@ export async function init(config: InitConfig) {
     dataDir = process.env.ACTUAL_DATA_DIR;
     serverURL = process.env.ACTUAL_SERVER_URL;
   }
+
+  setReadOnly(Boolean(config?.readOnly));
 
   await sqlite.init();
   asyncStorage.init({ persist: false });

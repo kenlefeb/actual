@@ -108,7 +108,7 @@ Today the server creates the directory (recursively) and only then resolves its 
 6. Check again after creating (a symlink could have been put in place between steps 3 and 5): on a failure, refuse, and remove only the empty directories this call created, best effort.
 An existing directory that is too loose is refused as now, without changing its mode.
 
-### 17. Separate data directories for the read and writes entries (sc-1601)
+### 17. Separate data directories for the read and writes entries (sc-1948)
 Security noted on the push-free read mode that the read and `--writes` entries share one data directory. A write session that ends before it syncs leaves an unsent message in that copy, and the read entry's next sync would push it, which makes "pushes nothing" false for the read entry. The `--writes` entry therefore uses its own directory, `<env>-writes`, beside `<env>`, with its own audit log `<env>-writes.audit.jsonl`, so the read entry's copy has never held a local write and the read-only mode's guarantee is literal. The cost is a second downloaded copy of the budget, made on the writes entry's first start. A read directory that was ever used by a `--writes` session before this change may hold unsent messages and should be deleted once; the README says so.
 
 ## Slice order

@@ -110,3 +110,18 @@ describe('subdued and warning text contrast (sc-1212)', () => {
     }
   });
 });
+
+describe('Notifications row count pill contrast (sc-1848)', () => {
+  it.each(['light', 'dark', 'midnight'])(
+    'pillTextSelected on pillBackgroundSelected meets WCAG AA in the %s theme',
+    themeName => {
+      const css = read(`${themeName}.css`);
+      expect(
+        contrast(
+          color(css, 'pillTextSelected'),
+          color(css, 'pillBackgroundSelected'),
+        ),
+      ).toBeGreaterThanOrEqual(4.5);
+    },
+  );
+});

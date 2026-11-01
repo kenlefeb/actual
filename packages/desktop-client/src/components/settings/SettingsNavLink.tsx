@@ -1,4 +1,4 @@
-import type { ComponentType, SVGProps } from 'react';
+import type { ComponentType, ReactNode, SVGProps } from 'react';
 import { NavLink } from 'react-router';
 
 import { useResponsive } from '@actual-app/components/hooks/useResponsive';
@@ -14,15 +14,26 @@ type SettingsNavLinkProps = {
     | ComponentType<SVGProps<SVGElement>>
     | ComponentType<SVGProps<SVGSVGElement>>;
   to: string;
+  /** Phone only: shown between the title and the chevron. */
+  badge?: ReactNode;
+  /** Replaces the title as the accessible name. */
+  'aria-label'?: string;
 };
 
-export function SettingsNavLink({ title, Icon, to }: SettingsNavLinkProps) {
+export function SettingsNavLink({
+  title,
+  Icon,
+  to,
+  badge,
+  'aria-label': ariaLabel,
+}: SettingsNavLinkProps) {
   const { isNarrowWidth } = useResponsive();
 
   if (isNarrowWidth) {
     return (
       <NavLink
         to={to}
+        aria-label={ariaLabel}
         className={css({
           ...styles.mediumText,
           display: 'flex',
@@ -37,6 +48,7 @@ export function SettingsNavLink({ title, Icon, to }: SettingsNavLinkProps) {
       >
         <Icon width={16} height={16} style={{ flexShrink: 0 }} />
         <span style={{ flex: 1 }}>{title}</span>
+        {badge}
         <SvgCheveronRight
           width={20}
           height={20}

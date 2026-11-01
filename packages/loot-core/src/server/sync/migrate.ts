@@ -1,6 +1,8 @@
 // @ts-strict-ignore
 import { Timestamp } from '@actual-app/crdt';
 
+import { isReadOnly } from '#server/read-only';
+
 import { addSyncListener, applyMessages } from './index';
 import type { Message } from './index';
 
@@ -37,6 +39,10 @@ function migrateParentIds(_oldValues, newValues) {
 let _unlisten = null;
 export function listen() {
   unlisten();
+  // The repair creates messages that the next sync would push
+  if (isReadOnly()) {
+    return;
+  }
   _unlisten = addSyncListener(migrateParentIds);
 }
 

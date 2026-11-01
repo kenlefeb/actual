@@ -204,13 +204,15 @@ These are the public methods that you can use. The API also exports low-level fu
 
 #### `init`
 
-<Method name="init" argsObject={true} args={[{ properties: [{ name: 'dataDir', type: 'string' }, { name: 'serverURL', type: 'string' }, { name: 'password', type: 'string' }, { name: 'verbose', type: 'boolean' }]}]} returns="Promise<void>" />
+<Method name="init" argsObject={true} args={[{ properties: [{ name: 'dataDir', type: 'string' }, { name: 'serverURL', type: 'string' }, { name: 'password', type: 'string' }, { name: 'verbose', type: 'boolean' }, { name: 'readOnly', type: 'boolean' }]}]} returns="Promise<void>" />
 
 Call this before attempting to use any of the API methods. This will connect to the server using the provided password and load the budget data.
 
 `dataDir` defaults to the current working directory in Node.js, and to `/documents` in the [browser build](#using-the-api-in-a-browser).
 
 If no `serverURL` is provided, no network connections will be made, and you'll only be able to access budget files already downloaded locally.
+
+With `readOnly: true` the session writes nothing and pushes nothing to the server (a fork option). The engine does not post due auto-post schedules, reconcile or backfill paychecks, repair child transactions that lack a parent id, or upload the budget file. Loading a budget, reading and pulling the server's changes work as usual.
 
 You can find your budget id in the "Advanced" section of the settings page.
 

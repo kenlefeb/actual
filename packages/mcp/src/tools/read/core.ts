@@ -262,7 +262,7 @@ export function registerCoreTools(tool: RegisterTool) {
 
   tool(
     'sync_budget',
-    'Syncs the local budget copy with the server, exactly as the app does. A sync can post due auto-post schedules and paycheck reconciles, and a later sync pushes them.',
+    'Syncs the local budget copy with the server: pulls its changes. Sends nothing, and posts no schedules or paycheck changes, on this read-only entry.',
     {},
     async () => {
       await api.sync();

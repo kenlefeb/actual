@@ -12,6 +12,7 @@ import * as db from '#server/db';
 import { toDateRepr } from '#server/models';
 import { mutator, runMutator } from '#server/mutators';
 import * as prefs from '#server/prefs';
+import { isReadOnly } from '#server/read-only';
 import { Rule } from '#server/rules';
 import { addSyncListener, batchMessages } from '#server/sync';
 import {
@@ -1079,6 +1080,11 @@ export async function waitOnSchedulesService() {
 // Queues work that closing a budget must wait for. runMutator is sequential,
 // so the newest run finishes last and is the only one to track.
 export function runTrackedMutator(name: string, func: () => Promise<unknown>) {
+  // A read-only session runs none of the automatic writers
+  if (isReadOnly()) {
+    logger.debug(`${name} skipped: read-only session`);
+    return;
+  }
   // Handling the failure here reports it; closing the budget only waits
   serviceRun = runMutator(func).then(
     () => undefined,
@@ -1101,6 +1107,11 @@ app.events.on('sync', event => {
   const { type } = event;
   for (const step of syncSteps) {
     step(event);
+  }
+
+  // No run, and no lastScheduleRun for a run that did not happen
+  if (isReadOnly()) {
+    return;
   }
 
   const completeEvent =

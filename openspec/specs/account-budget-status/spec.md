@@ -52,7 +52,7 @@ A moved account's transactions dated before its start date, and its offset line,
 - **THEN** both devices show the same uncategorized count, without the moved history
 
 ### Requirement: Categorizing moved history asks first
-Choosing a category for a moved account's transaction dated before its start date, or for its offset line, SHALL first show a confirmation that explains the double count. Cancel SHALL leave the transaction uncategorized. When the user sets a category on several selected transactions at once and any of them is moved history, the app SHALL show one confirmation for the batch, and Cancel SHALL change none of them. The same holds when a rule's actions set a category and the user applies the rule from the Rules page to selected transactions.
+Choosing a category for a moved account's transaction dated before its start date, or for its offset line, SHALL first show a confirmation that explains the double count. Cancel SHALL leave the transaction uncategorized. When the user sets a category on several selected transactions at once and any of them is moved history, the app SHALL show one confirmation for the batch, and Cancel SHALL change none of them.
 
 #### Scenario: Cancel
 - **GIVEN** the moved account's offset line
@@ -71,17 +71,20 @@ Choosing a category for a moved account's transaction dated before its start dat
 - **AND WHEN** they set "Groceries" on both and confirm
 - **THEN** both have the category "Groceries"
 
+#### Scenario: Later transactions don't ask
+- **GIVEN** the moved account's transaction on 2026-10-05 with no category
+- **WHEN** the user chooses "Groceries" for it
+- **THEN** it has the category "Groceries", with no confirmation
+
+### Requirement: Applying a rule to moved history asks first
+When a rule's actions set a category and the user applies the rule from the Rules page to selected transactions, the same confirmation SHALL apply as when choosing the category directly: one confirmation for the batch when any of them is moved history, and Cancel SHALL change none of them.
+
 #### Scenario: Applying a rule to moved history asks once
 - **GIVEN** a rule that sets "Groceries", and its matching transactions include the moved account's transaction on 2026-09-15 and its transaction on 2026-10-05
 - **WHEN** the user selects both and chooses "Apply actions" and cancels the confirmation
 - **THEN** neither changes
 - **AND WHEN** they choose "Apply actions" and confirm
 - **THEN** both have the category "Groceries"
-
-#### Scenario: Later transactions don't ask
-- **GIVEN** the moved account's transaction on 2026-10-05 with no category
-- **WHEN** the user chooses "Groceries" for it
-- **THEN** it has the category "Groceries", with no confirmation
 
 ### Requirement: Move an off-budget account on budget
 The app SHALL let the user move an open off-budget account on budget, from the account menu on desktop and on phones. The option SHALL NOT be offered for on-budget or closed accounts. Moving an account on budget SHALL keep its id, transactions, balance, bank-sync link and schedules.

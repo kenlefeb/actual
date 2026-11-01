@@ -56,13 +56,28 @@ paycheck itself, or the receiving account's business calendar and **days early**
   the once-a-day posting guard; at budget load after the backfill; and at the
   end of each paycheck save. It runs only while the effective `paychecks`
   flag is on ([ADR 6](0006-feature-flag-policy.md)).
-- There's no public paychecks API (Ken, 2026-10-29).
+- There's no public paychecks API (Ken, 2026-10-29). _Amended 2026-11-01:
+  superseded, see below._
 - Paychecks stay fork-only for now (Ken, 2026-10-29). There's no upstream
   story. Revisit once the schedule upstream PRs, through sc-496, have merged.
+
+## Amended 2026-11-01: a typed paychecks API now exists
+
+Ken's go-ahead on sc-1536 (2026-10-31) to ship a fork MCP server needed the
+fork's handlers reachable from scripts. `@actual-app/api` now has typed
+methods for the paycheck handlers (`getPaychecks`, `createPaycheck`,
+`updatePaycheck`, `deletePaycheck`, `skipNextPaycheck`,
+`getPaycheckYearToDate`, `getPaychecksClearingStatus`) and for the other
+fork-only handlers, under the change `fork-mcp-server` (sc-1568). The
+decision above is otherwise unchanged: the definition is the source of truth,
+and the API still refuses to edit a generated schedule or its rule. The error
+now says to edit the paycheck "in the app, or with `updatePaycheck`" and
+gives the paycheck's id, so a script can follow it. Paychecks stay fork-only
+upstream.
 
 ## Links
 
 - Specs: `paychecks` ("Deposit schedules", "Editing and deleting paychecks"),
   `account-business-days` ("Account changes update deposit dates").
 - Change: `openspec/changes/archive/2026-10-27-paychecks/design.md`.
-- Stories: sc-556, sc-558.
+- Stories: sc-556, sc-558, sc-1568.

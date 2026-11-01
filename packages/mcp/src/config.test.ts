@@ -229,3 +229,46 @@ describe('data directory is checked before it is created', () => {
     expect(() => ensurePrivateDir(dir)).toThrow(/owned by you/);
   });
 });
+
+describe('the writes entry has its own data directory', () => {
+  const staging = {
+    ...base,
+    ACTUAL_SERVER_URL: 'https://actual-staging.owl-becrux.ts.net',
+  };
+
+  it('The entries use separate data directories', () => {
+    const read = loadConfig(staging);
+    const write = loadConfig(staging, ['--writes']);
+    expect(read.dataDir).toMatch(/actual-mcp\/staging$/);
+    expect(write.dataDir).toMatch(/actual-mcp\/staging-writes$/);
+    expect(write.auditLog).toMatch(/actual-mcp\/staging-writes\.audit\.jsonl$/);
+    expect(read.auditLog).toMatch(/actual-mcp\/staging\.audit\.jsonl$/);
+  });
+
+  it("A write session's unsent message stays out of a read session", () => {
+    // No path is shared, so a write session's copy (and anything it has not
+    // sent) is never the copy a read entry opens and syncs.
+    for (const url of [
+      'http://localhost:5006',
+      'https://actual-staging.owl-becrux.ts.net',
+    ]) {
+      const read = loadConfig({ ...base, ACTUAL_SERVER_URL: url });
+      const write = loadConfig({ ...base, ACTUAL_SERVER_URL: url }, [
+        '--writes',
+      ]);
+      expect(write.dataDir).not.toBe(read.dataDir);
+      expect(write.dataDir.startsWith(`${read.dataDir}/`)).toBe(false);
+      expect(write.auditLog).not.toBe(read.auditLog);
+    }
+  });
+
+  it('An explicit data directory is never shared with the read entry', () => {
+    const env = { ...staging, ACTUAL_DATA_DIR: '/tmp/x/y' };
+    const read = loadConfig(env);
+    const write = loadConfig(env, ['--writes']);
+    expect(read.dataDir).toBe('/tmp/x/y');
+    expect(read.auditLog).toBe('/tmp/x/y.audit.jsonl');
+    expect(write.dataDir).toBe('/tmp/x/y-writes');
+    expect(write.auditLog).toBe('/tmp/x/y-writes.audit.jsonl');
+  });
+});

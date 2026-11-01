@@ -109,10 +109,16 @@ export function loadConfig(env: Env, argv: string[] = []): McpConfig {
   if (label === 'production' && argv.includes('--writes')) {
     throw new Error('--writes is not allowed for a production host.');
   }
-  const dataDir = resolve(
+  // The writes entry has its own copy, so a write that ends before it syncs
+  // never sits in the copy a read entry opens and syncs.
+  const writes = argv.includes('--writes');
+  const baseDir = resolve(
     env.ACTUAL_DATA_DIR ||
       join(homedir(), 'Library', 'Application Support', 'actual-mcp', label),
   );
+  // Derived, never taken as given, so the two entries can't share a copy even
+  // when ACTUAL_DATA_DIR is set.
+  const dataDir = writes ? `${baseDir}-writes` : baseDir;
 
   return {
     serverUrl,
@@ -121,7 +127,7 @@ export function loadConfig(env: Env, argv: string[] = []): McpConfig {
     encryptionPassword,
     env: label,
     dataDir,
-    writes: argv.includes('--writes'),
+    writes,
     auditLog: `${dataDir}.audit.jsonl`,
     secrets: [password, encryptionPassword].filter((s): s is string =>
       Boolean(s),

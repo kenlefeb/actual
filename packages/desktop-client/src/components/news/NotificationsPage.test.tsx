@@ -126,6 +126,29 @@ describe('NotificationsPage', () => {
     expect(screen.queryByRole('button', { name: 'Back' })).toBe(null);
   });
 
+  it('labels a fork release link for where it goes', () => {
+    mockEntries = [
+      {
+        ...releaseEntry,
+        id: 'fork-release-26.10.1-alpha.1',
+        url: 'https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.1.md',
+      },
+      releaseEntry,
+    ];
+    renderPage();
+
+    expect(
+      screen.getByRole('link', { name: 'View release notes on GitHub' }),
+    ).toHaveAttribute(
+      'href',
+      'https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.1.md',
+    );
+    // Upstream's release keeps its label
+    expect(
+      screen.getAllByRole('link', { name: 'View on actualbudget.org' }),
+    ).toHaveLength(1);
+  });
+
   it('renders entries with markdown, dates and links, and marks them seen', async () => {
     mockEntries = [releaseEntry, postEntry];
     mockLastSeenNewsDate = '2026-07-15';

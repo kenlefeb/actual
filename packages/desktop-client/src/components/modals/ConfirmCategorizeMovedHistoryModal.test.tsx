@@ -21,6 +21,12 @@ describe('ConfirmCategorizeMovedHistoryModal', () => {
     expect(screen.getByText(/would count the money twice/)).toBeInTheDocument();
   });
 
+  it('shrinks the title to fit instead of cutting it off', () => {
+    renderModal(vi.fn());
+    const title = screen.getByText('Categorize moved history?');
+    expect(getComputedStyle(title).textOverflow).not.toBe('ellipsis');
+  });
+
   it('Cancel changes nothing', async () => {
     const onConfirm = vi.fn();
     renderModal(onConfirm);

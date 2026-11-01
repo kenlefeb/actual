@@ -57,4 +57,13 @@ describe('countChanges', () => {
     expect(countChanges('- One\n  - nested\n* Two\n\nText')).toBe(2);
     expect(countChanges('No list here')).toBe(0);
   });
+
+  it('does not count the "None in this release." placeholder', () => {
+    expect(countChanges('- None in this release.')).toBe(0);
+    expect(countChanges('- None in this release.\n- Real change')).toBe(1);
+    expect(
+      splitChangelog('#### Features\n\n- None in this release.').sections[0]
+        .changeCount,
+    ).toBe(0);
+  });
 });

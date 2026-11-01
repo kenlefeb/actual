@@ -1,5 +1,6 @@
 // Run from the repo root: `node --test fork/scripts/*.test.mjs`.
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 // oxlint-disable-next-line actual/no-extraneous-dependencies -- node:test is a builtin that exists only with the node: prefix, so Module.builtinModules omits it
 import { test } from 'node:test';
 
@@ -117,6 +118,63 @@ void test('A tool named only in comments: fails', () => {
   assert.match(problems(ghost)[0], /ghost_tool.*not registered/);
   const noTest = { ...ghost, tools: ['ghost_tool'] };
   assert.match(problems(noTest)[0], /ghost_tool.*no test/);
+});
+
+const assigned = "handlers['zz-new-handler'] = async () => {};";
+const noBaseline = { handlers: [], apiExports: [] };
+
+void test('An assigned handler without coverage: fails and names the handler', () => {
+  const out = problems(
+    world({
+      handlers: findHandlers(assigned),
+      baseline: noBaseline,
+      methodsText: "send('zz-new-handler', args)",
+    }),
+  );
+  assert.equal(out.length, 1);
+  assert.match(out[0], /zz-new-handler.*no entry/);
+});
+
+void test('An assigned handler with an entry: passes', () => {
+  const out = problems(
+    world({
+      handlers: findHandlers(assigned),
+      baseline: noBaseline,
+      manifest: { 'zz-new-handler': { skip: 'UI only' } },
+    }),
+  );
+  assert.deepEqual(out, []);
+});
+
+void test('An assigned handler across lines: finds the handler', () => {
+  assert.deepEqual(
+    findHandlers(
+      "handlers[\n  'zz-new-handler',\n] = mutator(async () => {});",
+    ),
+    ['zz-new-handler'],
+  );
+});
+
+void test('A call is not a registration: a call, a comparison and an argument', () => {
+  const text = [
+    "await handlers['load-budget']({ id });",
+    "if (handlers['x'] === y) {}",
+    "if (handlers['x'] == y) {}",
+    "run(handlers['x']);",
+    "// handlers['commented'] = 1",
+    "handlers['real'] = 1;",
+  ].join('\n');
+  assert.deepEqual(findHandlers(text), ['real']);
+});
+
+void test('The baseline holds assigned handlers', () => {
+  const baseline = JSON.parse(
+    readFileSync(
+      new URL('../../packages/mcp/upstream-handlers.json', import.meta.url),
+      'utf8',
+    ),
+  );
+  assert.ok(baseline.handlers.includes('api/abort-import'));
 });
 
 void test('A commented registration or send does not count', () => {

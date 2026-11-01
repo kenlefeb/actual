@@ -45,7 +45,7 @@
 
 ## 7. Coverage check finds `handlers[...]` registrations (sc-1637)
 
-- [ ] 7.1 Spec "Registration forms" and the reworded "Coverage manifest" (in this change). Verify with `openspec validate fork-mcp-server --strict`.
-- [ ] 7.2 Add failing tests in `fork/scripts/check-mcp-coverage.test.mjs`, named after the scenarios: "An assigned handler without coverage", "An assigned handler with an entry", "An assigned handler across lines", "A call is not a registration" (a call, a `===` comparison and an argument) and, for the baseline, a test that the rebuilt file lists an assigned upstream handler.
-- [ ] 7.3 Add the `handlers[...] =` pattern to the extractor (whole-file, `=` not `==`, `=>` or a call), rebuild `packages/mcp/upstream-handlers.json` with `--baseline-from upstream/master` (an upstream ref only; review the diff), and map or skip any fork-only handlers it finds, with reasons (none found when this was written).
+- [x] 7.1 Spec "Registration forms" and the reworded "Coverage manifest" (in this change). Verify with `openspec validate fork-mcp-server --strict`.
+- [x] 7.2 Add failing tests in `fork/scripts/check-mcp-coverage.test.mjs`, named after the scenarios: "An assigned handler without coverage", "An assigned handler with an entry", "An assigned handler across lines", "A call is not a registration" (a call, a `===` comparison and an argument) and, for the baseline, a test that the rebuilt file lists an assigned upstream handler.
+- [x] 7.3 Add the `handlers[...] =` pattern to the extractor (whole-file, `=` not `==`, `=>` or a call), rebuild `packages/mcp/upstream-handlers.json` with `--baseline-from upstream/master` (an upstream ref only; review the diff), and map or skip any fork-only handlers it finds, with reasons (none found when this was written).
 - [ ] 7.4 Archive this change when sc-1637 merges, if it is the last story; otherwise do it in 6.5.

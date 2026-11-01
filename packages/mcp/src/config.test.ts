@@ -262,11 +262,13 @@ describe('the writes entry has its own data directory', () => {
     }
   });
 
-  it('An explicit data directory is used as given', () => {
-    const config = loadConfig({ ...staging, ACTUAL_DATA_DIR: '/tmp/x/y' }, [
-      '--writes',
-    ]);
-    expect(config.dataDir).toBe('/tmp/x/y');
-    expect(config.auditLog).toBe('/tmp/x/y.audit.jsonl');
+  it('An explicit data directory is never shared with the read entry', () => {
+    const env = { ...staging, ACTUAL_DATA_DIR: '/tmp/x/y' };
+    const read = loadConfig(env);
+    const write = loadConfig(env, ['--writes']);
+    expect(read.dataDir).toBe('/tmp/x/y');
+    expect(read.auditLog).toBe('/tmp/x/y.audit.jsonl');
+    expect(write.dataDir).toBe('/tmp/x/y-writes');
+    expect(write.auditLog).toBe('/tmp/x/y-writes.audit.jsonl');
   });
 });

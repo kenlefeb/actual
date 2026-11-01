@@ -73,7 +73,7 @@ describe('write entry', () => {
     const config = loadConfig(env, ['--writes']);
     expect(config.writes).toBe(true);
     expect(config.auditLog).toBe(
-      '/private/tmp/actual-mcp-test/staging.audit.jsonl',
+      '/private/tmp/actual-mcp-test/staging-writes.audit.jsonl',
     );
 
     h = await startHarness({ count: 1 }, { writes: true });

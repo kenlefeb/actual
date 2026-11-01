@@ -90,9 +90,12 @@ budget-reset tools.
   1970-01-01 to 2100-12-31, or a budget month outside 01 to 12.
 - **A separate copy.** The `--writes` entry keeps its budget copy in `<env>-writes`, beside the read
   entry's `<env>`, so a write that ends before it syncs never sits in the copy a read entry
-  syncs. Its first start downloads the budget again. If you used the read directory
-  (`<env>`) for a write session before this change, delete that directory once
-  (`rm -r ~/Library/Application Support/actual-mcp/<env>`); the next read start downloads a clean copy.
+  syncs. Its first start downloads the budget again. The two entries always get separate copies:
+  with `ACTUAL_DATA_DIR` set, the writes entry uses `${ACTUAL_DATA_DIR}-writes`. If you used the
+  read directory (`<env>`) for a write session before this change, stop the read entry first, then
+  delete that directory once, for example
+  `rm -r "$HOME/Library/Application Support/actual-mcp/staging"`; the next read start downloads a
+  clean copy.
 - Writes are pushed to the server by the engine's next sync, as in the app.
 
 Register the write entry beside the read entry, so a session can load reads without writes:

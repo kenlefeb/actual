@@ -112,16 +112,13 @@ export function loadConfig(env: Env, argv: string[] = []): McpConfig {
   // The writes entry has its own copy, so a write that ends before it syncs
   // never sits in the copy a read entry opens and syncs.
   const writes = argv.includes('--writes');
-  const dataDir = resolve(
+  const baseDir = resolve(
     env.ACTUAL_DATA_DIR ||
-      join(
-        homedir(),
-        'Library',
-        'Application Support',
-        'actual-mcp',
-        writes ? `${label}-writes` : label,
-      ),
+      join(homedir(), 'Library', 'Application Support', 'actual-mcp', label),
   );
+  // Derived, never taken as given, so the two entries can't share a copy even
+  // when ACTUAL_DATA_DIR is set.
+  const dataDir = writes ? `${baseDir}-writes` : baseDir;
 
   return {
     serverUrl,

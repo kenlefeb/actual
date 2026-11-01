@@ -13,7 +13,7 @@
 - [x] 2.2 Scaffold `packages/mcp` (`@actual-app/mcp`, vite build, `tsgo` typecheck, project references, `bin/actual-mcp`), patterned on `packages/cli`. The version matches the other packages. It is not yet in the aligned set (group 6).
 - [x] 2.3 Add the fixture-budget builder (a temp data directory seeded through the real API, no server) and failing tests named after the scenarios: "No listener", "A secret on argv", "A failed sign-in", "Production is refused by default", "Production is read-only even when allowed", "A look-alike host", "Directory mode", "A loose directory", "Reads only by default", "Transactions from a fixture budget", "A query that is not a select", "An injected note", "A long field", "A URL in a note", "Limit above the maximum" and "Large rows".
 - [x] 2.4 Implement `config` (environment, allowlist, labels), `connection` (init, download, load, shutdown), `sanitize`, `paging` and the core read tools.
-- [ ] 2.5 Security Analyst approves the PR (credentials, allowlist, injection hygiene).
+- [x] 2.5 Security Analyst approves the PR (credentials, allowlist, injection hygiene).
 
 ## 3. Coverage manifest and CI check (sc-1570)
 

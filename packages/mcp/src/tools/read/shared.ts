@@ -22,6 +22,9 @@ export function money(amount: number) {
   return { amount, amount_decimal: decimal };
 }
 
+/** A refusal whose message (fixed text, never budget data) the model may see. */
+export class Refusal extends Error {}
+
 /** `money` for a named field: `gross` becomes `gross` and `gross_decimal`. */
 export function moneyAs(name: string, amount: number) {
   const m = money(amount);

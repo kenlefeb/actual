@@ -1,6 +1,6 @@
 import { mkdirSync, realpathSync, statSync } from 'fs';
 import { homedir } from 'os';
-import { join, sep } from 'path';
+import { join, resolve, sep } from 'path';
 
 // Staging lives on the tailnet; see actual-hosting (compose.tailnet.yaml).
 const STAGING_HOST = 'actual-staging.owl-becrux.ts.net';
@@ -35,6 +35,10 @@ export type McpConfig = {
   encryptionPassword?: string;
   dataDir: string;
   env: EnvLabel;
+  /** `--writes`: register the write tools (never for production). */
+  writes: boolean;
+  /** Write audit log, beside the data directory: `<dataDir>.audit.jsonl`. */
+  auditLog: string;
   /** Every secret the server holds, for scrubbing. */
   secrets: string[];
 };
@@ -90,9 +94,10 @@ export function loadConfig(env: Env, argv: string[] = []): McpConfig {
   if (label === 'production' && argv.includes('--writes')) {
     throw new Error('--writes is not allowed for a production host.');
   }
-  if (argv.includes('--writes')) {
-    throw new Error('Write tools are not available in this version.');
-  }
+  const dataDir = resolve(
+    env.ACTUAL_DATA_DIR ||
+      join(homedir(), 'Library', 'Application Support', 'actual-mcp', label),
+  );
 
   return {
     serverUrl,
@@ -100,9 +105,9 @@ export function loadConfig(env: Env, argv: string[] = []): McpConfig {
     syncId,
     encryptionPassword,
     env: label,
-    dataDir:
-      env.ACTUAL_DATA_DIR ||
-      join(homedir(), 'Library', 'Application Support', 'actual-mcp', label),
+    dataDir,
+    writes: argv.includes('--writes'),
+    auditLog: `${dataDir}.audit.jsonl`,
     secrets: [password, encryptionPassword].filter((s): s is string =>
       Boolean(s),
     ),

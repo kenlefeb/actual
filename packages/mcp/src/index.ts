@@ -2,9 +2,9 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 
 import { ensurePrivateDir, loadConfig } from './config';
 import { closeBudget, openBudget } from './connection';
+import { createServer } from './server';
 import { registerShutdown } from './shutdown';
 import { redirectConsoleToStderr } from './stdio';
-import { createServer } from './tools';
 
 async function main() {
   redirectConsoleToStderr();
@@ -13,7 +13,10 @@ async function main() {
   ensurePrivateDir(config.dataDir);
   await openBudget(config);
 
-  const server = createServer(config.secrets);
+  const server = createServer(
+    config.secrets,
+    config.writes ? { auditLog: config.auditLog } : {},
+  );
   server.server.onclose = registerShutdown(closeBudget);
   await server.connect(new StdioServerTransport());
 }

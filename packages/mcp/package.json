@@ -2,7 +2,7 @@
   "name": "@actual-app/mcp",
   "version": "26.10.1-alpha.20",
   "private": true,
-  "description": "Read-only MCP server for Actual Budget (fork)",
+  "description": "MCP server for Actual Budget (fork): reads by default, opt-in writes",
   "license": "MIT",
   "bin": {
     "actual-mcp": "./dist/mcp.js"
@@ -12,9 +12,12 @@
   ],
   "type": "module",
   "imports": {
+    "#audit": "./src/audit.ts",
     "#client-harness": "./src/client-harness.ts",
+    "#config": "./src/config.ts",
     "#paging": "./src/paging.ts",
-    "#sanitize": "./src/sanitize.ts"
+    "#sanitize": "./src/sanitize.ts",
+    "#tools/*": "./src/tools/*.ts"
   },
   "scripts": {
     "build": "vite build",

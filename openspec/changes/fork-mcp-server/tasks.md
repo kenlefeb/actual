@@ -30,9 +30,9 @@
 
 ## 5. Opt-in write tools with an audit log (sc-1572)
 
-- [ ] 5.1 Spec "Write tools", "Moving on budget needs the preview" and "Write audit log". Verify with `openspec validate fork-mcp-server --strict`.
-- [ ] 5.2 Add failing tests against the fixture budget: "Over the row limit", "Before and after", "A name where an id is required", "No destructive tools", "Confirm matches", "A stale confirm", "A write is logged", "The log can't be written", "Writes on a separate entry".
-- [ ] 5.3 Implement the `--writes` entry, the five `write_` tools, `confirm` digests and the audit log (log first, then write). Update `coverage.json`.
+- [x] 5.1 Spec "Write tools", "Moving on budget needs the preview" and "Write audit log". Verify with `openspec validate fork-mcp-server --strict`.
+- [x] 5.2 Add failing tests against the fixture budget: "Over the row limit", "Before and after", "A name where an id is required", "No destructive tools", "Confirm matches", "A stale confirm", "A write is logged", "The log can't be written", "Writes on a separate entry".
+- [x] 5.3 Implement the `--writes` entry, the five `write_` tools, `confirm` digests and the audit log (log first, then write). Update `coverage.json`.
 - [ ] 5.4 Security Analyst approves the PR; the Tester runs the writes against staging only.
 
 ## 6. Eighth aligned package (sc-1573)

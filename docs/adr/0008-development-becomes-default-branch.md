@@ -1,7 +1,8 @@
 # 8. `development` becomes the fork's default branch
 
-Fork-only; never upstream. Accepted 2026-10-30 (sc-697). The settings change
-itself is pending Security Analyst sign-off and is run by the Director.
+Fork-only; never upstream. Accepted 2026-10-30 (sc-697). Applied 2026-10-31
+00:05 UTC by the Director, after the Security Analyst's sign-off on the prep PR
+(#131). The old setting was `default_branch` = `master`; the rollback is step 6.
 
 ## Context
 
@@ -52,8 +53,11 @@ and is only ever fast-forwarded from upstream.
 3. **Docs and notes that assume the default is the mirror**: `fork/README.md`,
    `docs/agents/*`, the fork-sync instructions and memory notes. Update them in
    the same PR as the workflow fixes.
-4. **Branch protection.** Rules are per branch and carry over. `master` gets a
-   documented mirror-only rule (no direct pushes except the sync).
+4. **Branch protection.** Rules are per branch and carry over. `master` has no
+   branch protection (2026-11-01: the API returns 404). The mirror-only rule
+   (no direct pushes except the sync) is documentation only for now; protecting
+   `master` is a separate settings story that needs the Security Analyst's
+   approval.
 5. **PR base defaults.** They improve: `--base development` becomes redundant.
    Open PRs against `master` (if any) are untouched.
 6. Old `blob/master/...` links still work.

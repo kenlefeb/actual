@@ -17,10 +17,10 @@
 
 ## 3. Coverage manifest and CI check (sc-1570)
 
-- [ ] 3.1 Spec requirement "Coverage manifest" (already in this change; confirm). Verify with `openspec validate fork-mcp-server --strict`.
-- [ ] 3.2 Add `fork/scripts/check-mcp-coverage.test.mjs` with the scenarios "A new handler without coverage", "A deliberate skip", "A registration across lines" and "Skip without a reason".
-- [ ] 3.3 Add `fork/scripts/check-mcp-coverage.mjs`, `packages/mcp/coverage.json` and `upstream-handlers.json` (from `upstream/master`), the `check:mcp-coverage` script and the `fork-ci.yml` step. The check also fails on a fork handler outside the baseline with no `send('<handler>'` in `packages/api/methods.ts` and no skip reason. Record the fork-only handlers as mapped to the tools of groups 2 and 4, or as skips with reasons.
-- [ ] 3.4 Add the manifest line to the story-template checklist in `docs/agents/issue-tracker.md`, and note it in `docs/agents/team.md` if reviewers need it.
+- [x] 3.1 Spec requirement "Coverage manifest" (already in this change; confirm). Verify with `openspec validate fork-mcp-server --strict`.
+- [x] 3.2 Add `fork/scripts/check-mcp-coverage.test.mjs` with the scenarios "A new handler without coverage", "A deliberate skip", "A registration across lines" and "Skip without a reason".
+- [x] 3.3 Add `fork/scripts/check-mcp-coverage.mjs`, `packages/mcp/coverage.json` and `upstream-handlers.json` (from `upstream/master`), the `check:mcp-coverage` script and the `fork-ci.yml` step. The check also fails on a fork handler outside the baseline with no `send('<handler>'` in `packages/api/methods.ts` and no skip reason. Record the fork-only handlers as mapped to the tools of groups 2 and 4, or as skips with reasons.
+- [x] 3.4 Add the manifest line to the story-template checklist in `docs/agents/issue-tracker.md`, and note it in `docs/agents/team.md` if reviewers need it.
 
 ## 4. Fork read tools (sc-1571)
 

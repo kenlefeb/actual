@@ -1,0 +1,116 @@
+{
+  "paychecks-get": {
+    "skip": "Read tool arrives in sc-1571 (fork read tools)"
+  },
+  "getPaychecks": {
+    "skip": "Read tool arrives in sc-1571 (fork read tools)"
+  },
+  "paycheck-year-to-date": {
+    "skip": "Read tool arrives in sc-1571 (fork read tools)"
+  },
+  "getPaycheckYearToDate": {
+    "skip": "Read tool arrives in sc-1571 (fork read tools)"
+  },
+  "paychecks-clearing-status": {
+    "skip": "Read tool arrives in sc-1571 (fork read tools)"
+  },
+  "getPaychecksClearingStatus": {
+    "skip": "Read tool arrives in sc-1571 (fork read tools)"
+  },
+  "business-calendars-get": {
+    "skip": "Read tool arrives in sc-1571 (fork read tools)"
+  },
+  "getBusinessCalendars": {
+    "skip": "Read tool arrives in sc-1571 (fork read tools)"
+  },
+  "account-move-on-budget-preview": {
+    "skip": "Read tool arrives in sc-1571 (fork read tools)"
+  },
+  "previewMoveAccountOnBudget": {
+    "skip": "Read tool arrives in sc-1571 (fork read tools)"
+  },
+  "paycheck-create": {
+    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+  },
+  "createPaycheck": {
+    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+  },
+  "paycheck-update": {
+    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+  },
+  "updatePaycheck": {
+    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+  },
+  "paycheck-delete": {
+    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+  },
+  "deletePaycheck": {
+    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+  },
+  "paycheck-skip-next": {
+    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+  },
+  "skipNextPaycheck": {
+    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+  },
+  "account-set-business-days": {
+    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+  },
+  "setAccountBusinessDays": {
+    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+  },
+  "account-move-on-budget": {
+    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+  },
+  "moveAccountOnBudget": {
+    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+  },
+  "business-calendar-create": {
+    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+  },
+  "createBusinessCalendar": {
+    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+  },
+  "business-calendar-update": {
+    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+  },
+  "updateBusinessCalendar": {
+    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+  },
+  "business-calendar-delete": {
+    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+  },
+  "deleteBusinessCalendar": {
+    "skip": "Write tool arrives in sc-1572 (opt-in write tools)"
+  },
+  "getAccounts": {
+    "tool": "list_accounts"
+  },
+  "getAccountBalance": {
+    "tool": "get_account_balance"
+  },
+  "getCategoryGroups": {
+    "tool": "list_category_groups"
+  },
+  "getPayees": {
+    "tool": "list_payees"
+  },
+  "getTransactions": {
+    "tool": "list_transactions"
+  },
+  "getBudgetMonth": {
+    "tool": "get_budget_month"
+  },
+  "getRules": {
+    "tool": "list_rules"
+  },
+  "getSchedules": {
+    "tool": "list_schedules"
+  },
+  "runQuery": {
+    "tool": "run_query"
+  },
+  "sync": {
+    "tool": "sync_budget"
+  }
+}

@@ -98,7 +98,9 @@ Right after creating the story, add the checklist as Shortcut tasks
 1. Spec: OpenSpec change proposed or updated
 2. Tests: failing tests written first
 3. Build: implementation done
-4. Checks: lint, typecheck and tests pass
+4. Checks: lint, typecheck and tests pass (`yarn check:mcp-coverage` too, and
+   a story that adds or renames a server handler or API method adds its
+   `packages/mcp/coverage.json` line, a tool or a skip with a reason)
 5. Self-review: the author read the whole diff
 6. Code review: the required roles approved the PR
 7. Release note or fork news, if user-facing

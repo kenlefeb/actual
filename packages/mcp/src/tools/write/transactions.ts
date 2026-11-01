@@ -2,7 +2,6 @@ import * as api from '@actual-app/api';
 import { isMovedHistory } from '@actual-app/core/shared/moved-history';
 import { z } from 'zod';
 
-import { appendAudit } from '#audit';
 import type { AuditChange } from '#audit';
 import { Refusal } from '#refusal';
 import { withText } from '#sanitize';
@@ -10,7 +9,15 @@ import { getBudgetStatus } from '#tools/read/accounts';
 import { date, money } from '#tools/read/shared';
 import type { RegisterTool } from '#tools/read/shared';
 
-import { id, MAX_WRITE_ROWS, notes, requireIds } from './shared';
+import {
+  id,
+  loggedWrite,
+  MAX_WRITE_ROWS,
+  notes,
+  requireAmount,
+  requireDate,
+  requireIds,
+} from './shared';
 
 const ROW_FIELDS = [
   'id',
@@ -110,7 +117,7 @@ export function registerTransactionWriteTools(
           z
             .object({
               date,
-              amount: z.number().int(),
+              amount: z.number(), // bounds: requireAmount, with fixed text
               payee_id: id.optional(),
               category_id: id.optional(),
               notes: notes.optional(),
@@ -121,6 +128,10 @@ export function registerTransactionWriteTools(
         .max(MAX_WRITE_ROWS),
     },
     async ({ account_id, transactions }) => {
+      for (const t of transactions) {
+        requireAmount(t.amount);
+        requireDate(t.date);
+      }
       await requireIds('accounts', [account_id]);
       await requireIds(
         'payees',
@@ -146,23 +157,31 @@ export function registerTransactionWriteTools(
         notes: t.notes,
       }));
 
-      // Log first: a failed append stops the write.
-      appendAudit(auditLog, {
-        tool: 'write_create_transactions',
-        ids: [account_id],
-        changes: rows.map((row, i) => ({
-          id: `new:${i}`,
-          field: 'transaction',
-          before: null,
-          after: row,
-        })),
-      });
-      await api.addTransactions(account_id, rows);
-
-      const created = (await rowsWhere({ account: account_id })).filter(
-        t => !existing.has(t.id),
+      let created: Row[] = [];
+      return loggedWrite(
+        auditLog,
+        'write_create_transactions',
+        {
+          ids: [account_id],
+          changes: rows.map((row, i) => ({
+            id: `new:${i}`,
+            field: 'transaction',
+            before: null,
+            after: row,
+          })),
+        },
+        async () => {
+          await api.addTransactions(account_id, rows);
+          // shortcut: the API returns no ids, so a read-back diff finds them;
+          // upgrade if addTransactions ever returns the created ids.
+          created = (await rowsWhere({ account: account_id })).filter(
+            t => !existing.has(t.id),
+          );
+          const ids = created.map(t => t.id);
+          return { applied: ids, created: ids };
+        },
+        async () => ({ account_id, items: created.map(rowOut) }),
       );
-      return { account_id, items: created.map(rowOut) };
     },
   );
 
@@ -214,58 +233,85 @@ export function registerTransactionWriteTools(
         throw new Refusal('No field to change.');
       }
 
-      // Log first: a failed append stops the write.
-      appendAudit(auditLog, {
-        tool: 'write_update_transactions',
-        ids,
-        changes,
-      });
-      for (const u of updates) {
-        const fields = Object.fromEntries(
-          (Object.keys(FIELDS) as Field[])
-            .filter(f => u[f] !== undefined)
-            .map(f => [FIELDS[f], u[f] ?? null]),
-        );
-        await api.updateTransaction(u.id, fields);
-      }
-
-      const after = new Map(
-        (await rowsWhere({ id: { $oneof: ids } })).map(t => [t.id, t]),
+      // Row by row: stop at the first row the engine rejects.
+      const applied: string[] = [];
+      let failed: string | undefined;
+      return loggedWrite(
+        auditLog,
+        'write_update_transactions',
+        { ids, changes },
+        async () => {
+          for (const u of updates) {
+            const fields = Object.fromEntries(
+              (Object.keys(FIELDS) as Field[])
+                .filter(f => u[f] !== undefined)
+                .map(f => [FIELDS[f], u[f] ?? null]),
+            );
+            try {
+              await api.updateTransaction(u.id, fields);
+            } catch {
+              failed = u.id;
+              break;
+            }
+            applied.push(u.id);
+          }
+          return { applied, failed };
+        },
+        () => updateResult(applied, failed, ids, changes),
       );
-      const values = [
-        ...changes.map(c => c.before),
-        ...changes.map(c => after.get(c.id)?.[FIELDS[c.field as Field]]),
-      ];
-      const categoryNames = await names('categories', values);
-      const payeeNames = await names('payees', values);
-      const label = (field: string, value: unknown) =>
-        field === 'category_id'
-          ? (categoryNames.get(value as string) ?? null)
-          : field === 'payee_id'
-            ? (payeeNames.get(value as string) ?? null)
-            : value;
-
-      return {
-        items: ids.map(txId => ({
-          id: txId,
-          changes: changes
-            .filter(c => c.id === txId)
-            .map(c => {
-              const now = after.get(txId)?.[FIELDS[c.field as Field]] ?? null;
-              const text = {
-                before: label(c.field, c.before),
-                after: label(c.field, now),
-              };
-              // Notes are free text: only under `text`.
-              return c.field === 'notes'
-                ? withText({ field: c.field }, text)
-                : withText(
-                    { field: c.field, before: c.before, after: now },
-                    text,
-                  );
-            }),
-        })),
-      };
     },
   );
+}
+
+/** The update tool's result: before and after for each row applied, plus what failed. */
+async function updateResult(
+  applied: string[],
+  failed: string | undefined,
+  ids: string[],
+  allChanges: AuditChange[],
+) {
+  const changes = allChanges.filter(c => applied.includes(c.id));
+  const after = new Map(
+    (await rowsWhere({ id: { $oneof: applied } })).map(t => [t.id, t]),
+  );
+  const values = [
+    ...changes.map(c => c.before),
+    ...changes.map(c => after.get(c.id)?.[FIELDS[c.field as Field]]),
+  ];
+  const categoryNames = await names('categories', values);
+  const payeeNames = await names('payees', values);
+  const label = (field: string, value: unknown) =>
+    field === 'category_id'
+      ? (categoryNames.get(value as string) ?? null)
+      : field === 'payee_id'
+        ? (payeeNames.get(value as string) ?? null)
+        : value;
+
+  return {
+    applied,
+    ...(failed === undefined
+      ? {}
+      : {
+          failed,
+          not_attempted: ids.slice(ids.indexOf(failed) + 1),
+          failure:
+            'The engine rejected this row. Later rows were not attempted. Rows in `applied` did change.',
+        }),
+    items: applied.map(txId => ({
+      id: txId,
+      changes: changes
+        .filter(c => c.id === txId)
+        .map(c => {
+          const now = after.get(txId)?.[FIELDS[c.field as Field]] ?? null;
+          const text = {
+            before: label(c.field, c.before),
+            after: label(c.field, now),
+          };
+          // Notes are free text: only under `text`.
+          return c.field === 'notes'
+            ? withText({ field: c.field }, text)
+            : withText({ field: c.field, before: c.before, after: now }, text);
+        }),
+    })),
+  };
 }

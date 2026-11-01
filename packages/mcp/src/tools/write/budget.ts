@@ -1,13 +1,12 @@
 import * as api from '@actual-app/api';
 import { z } from 'zod';
 
-import { appendAudit } from '#audit';
 import { Refusal } from '#refusal';
 import { withText } from '#sanitize';
 import { moneyAs } from '#tools/read/shared';
 import type { RegisterTool } from '#tools/read/shared';
 
-import { id } from './shared';
+import { id, loggedWrite, requireAmount, requireMonth } from './shared';
 
 const month = z.string().regex(/^\d{4}-\d{2}$/, 'YYYY-MM');
 
@@ -31,35 +30,43 @@ export function registerBudgetWriteTools(tool: RegisterTool, auditLog: string) {
     {
       month,
       category_id: id,
-      amount: z.number().int().min(-1e12).max(1e12),
+      amount: z.number(), // bounds: requireAmount, with fixed text
     },
     async ({ month: m, category_id, amount }) => {
+      requireMonth(m);
+      requireAmount(amount);
       const before = await budgeted(m, category_id);
 
-      // Log first: a failed append stops the write.
-      appendAudit(auditLog, {
-        tool: 'write_set_budget_amount',
-        ids: [category_id],
-        changes: [
-          {
-            id: category_id,
-            field: `budgeted:${m}`,
-            before: before.amount,
-            after: amount,
-          },
-        ],
-      });
-      await api.setBudgetAmount(m, category_id, amount);
-
-      const after = await budgeted(m, category_id);
-      return withText(
+      return loggedWrite(
+        auditLog,
+        'write_set_budget_amount',
         {
-          month: m,
-          category_id,
-          ...moneyAs('before', before.amount),
-          ...moneyAs('after', after.amount),
+          ids: [category_id],
+          changes: [
+            {
+              id: category_id,
+              field: `budgeted:${m}`,
+              before: before.amount,
+              after: amount,
+            },
+          ],
         },
-        { category: after.name },
+        async () => {
+          await api.setBudgetAmount(m, category_id, amount);
+          return { applied: [category_id] };
+        },
+        async () => {
+          const after = await budgeted(m, category_id);
+          return withText(
+            {
+              month: m,
+              category_id,
+              ...moneyAs('before', before.amount),
+              ...moneyAs('after', after.amount),
+            },
+            { category: after.name },
+          );
+        },
       );
     },
   );

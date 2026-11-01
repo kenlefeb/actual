@@ -1,10 +1,9 @@
 import * as api from '@actual-app/api';
 
-import { appendAudit } from '#audit';
 import { Refusal } from '#refusal';
 import type { RegisterTool } from '#tools/read/shared';
 
-import { id } from './shared';
+import { id, loggedWrite } from './shared';
 
 async function nextDate(scheduleId: string | null | undefined) {
   if (!scheduleId) return null;
@@ -34,20 +33,24 @@ export function registerPaycheckWriteTools(
       const schedule = paycheck.definition.paySchedule;
       const before = await nextDate(schedule);
 
-      // Log first: a failed append stops the write.
-      appendAudit(auditLog, {
-        tool: 'write_skip_paycheck',
-        ids: [paycheck_id],
-        changes: [
-          { id: paycheck_id, field: 'next_date', before, after: 'skipped' },
-        ],
-      });
-      await api.skipNextPaycheck(paycheck_id);
-
-      return {
-        paycheck_id,
-        next_date: { before, after: await nextDate(schedule) },
-      };
+      return loggedWrite(
+        auditLog,
+        'write_skip_paycheck',
+        {
+          ids: [paycheck_id],
+          changes: [
+            { id: paycheck_id, field: 'next_date', before, after: 'skipped' },
+          ],
+        },
+        async () => {
+          await api.skipNextPaycheck(paycheck_id);
+          return { applied: [paycheck_id] };
+        },
+        async () => ({
+          paycheck_id,
+          next_date: { before, after: await nextDate(schedule) },
+        }),
+      );
     },
   );
 }

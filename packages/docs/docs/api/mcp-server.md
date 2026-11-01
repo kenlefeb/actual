@@ -102,6 +102,6 @@ This entry adds five tools whose names start with `write_`: create transactions,
 
 ## Notes on Syncing
 
-Every sync, including the one when the server starts, runs the same after-sync work as the app. This can post due schedules and reconcile paychecks, and the next sync sends those changes to the server.
+Without `--writes` the server starts the engine read-only (`init({ readOnly: true })`), so a sync never posts schedules, reconciles paychecks or uploads the budget, and sends nothing to the server. It still pulls the server's changes. The `--writes` entry runs the engine as the app does.
 
 For the full list of tools and settings, see the [package README](https://github.com/kenlefeb/actual/blob/development/packages/mcp/README.md).

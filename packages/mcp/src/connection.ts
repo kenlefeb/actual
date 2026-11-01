@@ -12,6 +12,8 @@ export async function openBudget(config: McpConfig) {
       serverURL: config.serverUrl,
       dataDir: config.dataDir,
       password: config.password,
+      // The read entry writes and pushes nothing; --writes runs the engine as the app does
+      readOnly: !config.writes,
     });
   } catch {
     throw new Error('Could not sign in to the Actual server');

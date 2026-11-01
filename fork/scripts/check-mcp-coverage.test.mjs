@@ -107,3 +107,32 @@ void test('findApiExports and findTools read declarations', () => {
     ['list_a', 'b_c'],
   );
 });
+
+void test('A tool named only in comments: fails', () => {
+  const ghost = world({
+    manifest: { 'paycheck-foo': { tool: 'ghost_tool' } },
+    tools: findTools("// tool('ghost_tool', 'x')\n/* tool(\n 'ghost_tool' */"),
+    testText: "// it('ghost_tool')\n/* 'ghost_tool' */",
+  });
+  assert.match(problems(ghost)[0], /ghost_tool.*not registered/);
+  const noTest = { ...ghost, tools: ['ghost_tool'] };
+  assert.match(problems(noTest)[0], /ghost_tool.*no test/);
+});
+
+void test('A commented registration or send does not count', () => {
+  assert.deepEqual(
+    findHandlers(
+      "// app.method('a', x)\n/* app.method('b', x) */\napp.method('c', x)",
+    ),
+    ['c'],
+  );
+  const out = problems(
+    world({
+      methodsText: "// send('paycheck-foo', args)",
+      manifest: { 'paycheck-foo': { tool: 'list_x' } },
+      tools: ['list_x'],
+      testText: "'list_x'",
+    }),
+  );
+  assert.match(out[0], /paycheck-foo.*methods\.ts/);
+});

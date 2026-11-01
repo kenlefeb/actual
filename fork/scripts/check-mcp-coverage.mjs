@@ -15,9 +15,14 @@ const BASELINE = 'packages/mcp/upstream-handlers.json';
 const isSource = f => /\.(ts|tsx|js)$/.test(f) && !/\.test\./.test(f);
 const captures = (text, re) => [...text.matchAll(re)].map(m => m[1]);
 
+// shortcut: regex, not a parser; a `//` inside a string (not after `:`, so
+// URLs survive) would cut that line. Upgrade if a scanned file needs it.
+const stripComments = text =>
+  text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:\\])\/\/.*$/gm, '$1');
+
 // Matches whole text, so a registration split over lines is found
 export const findHandlers = text =>
-  captures(text, /\bapp\.method\(\s*['"`]([^'"`]+)['"`]/g);
+  captures(stripComments(text), /\bapp\.method\(\s*['"`]([^'"`]+)['"`]/g);
 
 export function findApiExports(text) {
   const out = captures(
@@ -37,7 +42,10 @@ export function findApiExports(text) {
 }
 
 export const findTools = text =>
-  captures(text, /\b(?:registerTool|tool)\(\s*['"]([a-z_]+)['"]/g);
+  captures(
+    stripComments(text),
+    /\b(?:registerTool|tool)\(\s*['"]([a-z_]+)['"]/g,
+  );
 
 // Returns failure messages; an empty list means the check passes
 export function problems({
@@ -46,10 +54,12 @@ export function problems({
   baseline,
   manifest,
   tools,
-  testText,
-  methodsText,
+  testText: rawTestText,
+  methodsText: rawMethodsText,
 }) {
   const out = [];
+  const testText = stripComments(rawTestText);
+  const methodsText = stripComments(rawMethodsText);
   const forkHandlers = handlers.filter(n => !baseline.handlers.includes(n));
   const forkExports = exports.filter(n => !baseline.apiExports.includes(n));
 

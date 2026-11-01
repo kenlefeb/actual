@@ -353,3 +353,116 @@ describe('write audit log', () => {
     expect((await transactions())[0].notes).toBe('old note');
   });
 });
+
+describe('moved history is not categorized by a write', () => {
+  // An account moved on budget at 2026-10-01, with one transaction before it
+  // and one after
+  async function moved() {
+    const account = await api.createAccount(
+      { name: 'Brokerage', offbudget: true },
+      0,
+    );
+    await api.addTransactions(account, [
+      { date: '2026-09-15', amount: 100 },
+      { date: '2026-10-05', amount: 400 },
+    ]);
+    await api.moveAccountOnBudget(account, '2026-10-01');
+    const { data } = (await api.runQuery(
+      api.q('accounts').filter({ id: account }).select(['budget_start_offset']),
+    )) as { data: Array<{ budget_start_offset: string }> };
+    const rows = await transactions(account);
+    return {
+      account,
+      rent: await categoryId('Rent'),
+      early: rows.find(t => t.date === '2026-09-15')!,
+      late: rows.find(t => t.date === '2026-10-05')!,
+      offset: rows.find(t => t.id === data[0].budget_start_offset)!,
+    };
+  }
+
+  async function expectRefused(name: string, args: Record<string, unknown>) {
+    const res = await h.call(name, args);
+    expect(res.isError).toBe(true);
+    expect(res.text).toMatch(/in the app/);
+  }
+
+  it('Categorizing a pre-start transaction is refused', async () => {
+    h = await startHarness({ count: 1 }, { writes: true });
+    const m = await moved();
+    const before = await transactions(m.account);
+    await expectRefused('write_update_transactions', {
+      updates: [
+        { id: m.late.id, notes: 'fine' },
+        { id: m.early.id, category_id: m.rent },
+      ],
+    });
+    expect(await transactions(m.account)).toEqual(before);
+    expect(auditLines()).toEqual([]);
+  });
+
+  it('Categorizing the offset line is refused', async () => {
+    h = await startHarness({ count: 1 }, { writes: true });
+    const m = await moved();
+    expect(m.offset).toBeDefined();
+    const before = await transactions(m.account);
+    await expectRefused('write_update_transactions', {
+      updates: [{ id: m.offset.id, category_id: m.rent }],
+    });
+    expect(await transactions(m.account)).toEqual(before);
+    expect(auditLines()).toEqual([]);
+  });
+
+  it('Creating a categorized pre-start row is refused', async () => {
+    h = await startHarness({ count: 1 }, { writes: true });
+    const m = await moved();
+    const before = await transactions(m.account);
+    await expectRefused('write_create_transactions', {
+      account_id: m.account,
+      transactions: [
+        { date: '2026-10-02', amount: 1, category_id: m.rent },
+        { date: '2026-09-20', amount: 1, category_id: m.rent },
+      ],
+    });
+    expect(await transactions(m.account)).toEqual(before);
+    expect(auditLines()).toEqual([]);
+  });
+
+  it('A transaction from the start date on can be categorized', async () => {
+    h = await startHarness({ count: 1 }, { writes: true });
+    const m = await moved();
+    const res = await h.call('write_update_transactions', {
+      updates: [{ id: m.late.id, category_id: m.rent }],
+    });
+    expect(res.isError).toBe(false);
+    const created = await h.call('write_create_transactions', {
+      account_id: m.account,
+      transactions: [{ date: '2026-10-01', amount: 1, category_id: m.rent }],
+    });
+    expect(created.isError).toBe(false);
+    const rows = await transactions(m.account);
+    expect(rows.find(t => t.id === m.late.id)?.category).toBe(m.rent);
+    expect(rows.find(t => t.id === created.json.items[0].id)?.category).toBe(
+      m.rent,
+    );
+  });
+
+  it('Notes and payee on moved history can change', async () => {
+    h = await startHarness({ count: 1 }, { writes: true });
+    const m = await moved();
+    const landlord = (await api.getPayees()).find(p => p.name === 'Landlord')!;
+    const res = await h.call('write_update_transactions', {
+      updates: [
+        { id: m.early.id, notes: 'history', payee_id: landlord.id },
+        { id: m.offset.id, notes: 'offset' },
+      ],
+    });
+    expect(res.isError).toBe(false);
+    const rows = await transactions(m.account);
+    expect(rows.find(t => t.id === m.early.id)).toMatchObject({
+      notes: 'history',
+      payee: landlord.id,
+      category: null,
+    });
+    expect(rows.find(t => t.id === m.offset.id)?.notes).toBe('offset');
+  });
+});

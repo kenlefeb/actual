@@ -1,18 +1,30 @@
 import * as api from '@actual-app/api';
+import { isMovedHistory } from '@actual-app/core/shared/moved-history';
 import { z } from 'zod';
 
 import { appendAudit } from '#audit';
 import type { AuditChange } from '#audit';
+import { Refusal } from '#refusal';
 import { withText } from '#sanitize';
-import { date, money, Refusal } from '#tools/read/shared';
+import { getBudgetStatus } from '#tools/read/accounts';
+import { date, money } from '#tools/read/shared';
 import type { RegisterTool } from '#tools/read/shared';
 
 import { id, MAX_WRITE_ROWS, notes, requireIds } from './shared';
 
-const ROW_FIELDS = ['id', 'date', 'amount', 'category', 'payee', 'notes'];
+const ROW_FIELDS = [
+  'id',
+  'account',
+  'date',
+  'amount',
+  'category',
+  'payee',
+  'notes',
+];
 
 type Row = {
   id: string;
+  account: string;
   date: string;
   amount: number;
   category: string | null;
@@ -50,6 +62,30 @@ function rowOut(t: Row) {
     },
     { notes: t.notes },
   );
+}
+
+/**
+ * Refuses (before any audit line or write) when a category would be set on
+ * moved history: a moved account's transactions before its budget start date,
+ * and its offset line, are already in the starting balance.
+ */
+async function refuseCategorizingMovedHistory(
+  rows: Array<{ id: string; account: string; date: string }>,
+) {
+  const statuses = new Map<
+    string,
+    Awaited<ReturnType<typeof getBudgetStatus>>
+  >();
+  for (const row of rows) {
+    if (!statuses.has(row.account)) {
+      statuses.set(row.account, await getBudgetStatus(row.account));
+    }
+    if (isMovedHistory(row, statuses.get(row.account))) {
+      throw new Refusal(
+        "A category cannot be set on moved history (transactions before an account's budget start date, or its offset line). Do it in the app. Nothing changed.",
+      );
+    }
+  }
 }
 
 // Field in the tool's input -> column in the transactions table
@@ -93,6 +129,11 @@ export function registerTransactionWriteTools(
       await requireIds(
         'categories',
         transactions.flatMap(t => (t.category_id ? [t.category_id] : [])),
+      );
+      await refuseCategorizingMovedHistory(
+        transactions
+          .filter(t => t.category_id)
+          .map(t => ({ id: '', account: account_id, date: t.date })),
       );
       const existing = new Set(
         (await rowsWhere({ account: account_id })).map(t => t.id),
@@ -153,6 +194,11 @@ export function registerTransactionWriteTools(
         updates.flatMap(u => (typeof u[f] === 'string' ? [u[f]] : []));
       await requireIds('categories', pick('category_id'));
       await requireIds('payees', pick('payee_id'));
+      await refuseCategorizingMovedHistory(
+        updates
+          .filter(u => u.category_id)
+          .map(u => before.get(u.id) as unknown as Row),
+      );
 
       const changes: AuditChange[] = updates.flatMap(u =>
         (Object.keys(FIELDS) as Field[])

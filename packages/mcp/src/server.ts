@@ -3,12 +3,12 @@ import type { ToolCallback } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { z } from 'zod';
 
+import { Refusal } from './refusal';
 import { DATA_NOTE, scrubSecrets } from './sanitize';
 import { registerAccountTools } from './tools/read/accounts';
 import { registerCalendarTools } from './tools/read/calendars';
 import { registerCoreTools } from './tools/read/core';
 import { registerPaycheckTools } from './tools/read/paychecks';
-import { Refusal } from './tools/read/shared';
 import { registerWriteTools } from './tools/write/register';
 
 const READ_NOTE = ` Read-only. ${DATA_NOTE}`;

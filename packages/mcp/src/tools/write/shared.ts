@@ -1,7 +1,7 @@
 import * as api from '@actual-app/api';
 import { z } from 'zod';
 
-import { Refusal } from '#tools/read/shared';
+import { Refusal } from '#refusal';
 
 /** At most this many rows change in one write call. */
 export const MAX_WRITE_ROWS = 50;

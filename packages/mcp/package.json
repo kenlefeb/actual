@@ -16,6 +16,7 @@
     "#client-harness": "./src/client-harness.ts",
     "#config": "./src/config.ts",
     "#paging": "./src/paging.ts",
+    "#refusal": "./src/refusal.ts",
     "#sanitize": "./src/sanitize.ts",
     "#tools/*": "./src/tools/*.ts"
   },

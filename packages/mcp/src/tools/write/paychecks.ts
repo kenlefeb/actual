@@ -1,7 +1,7 @@
 import * as api from '@actual-app/api';
 
 import { appendAudit } from '#audit';
-import { Refusal } from '#tools/read/shared';
+import { Refusal } from '#refusal';
 import type { RegisterTool } from '#tools/read/shared';
 
 import { id } from './shared';

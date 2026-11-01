@@ -59,6 +59,9 @@ budget-reset tools.
 
 - **Ids only.** Accounts, transactions, payees, categories and paychecks are named by the ids the
   read tools return. A name where an id belongs is refused, never looked up.
+- **Moved history keeps no category.** A call that would set a category on a moved account's
+  transactions before its budget start date, or on its offset line (they are already in the
+  starting balance), is refused whole; do that in the app. Notes and payee can still change.
 - **50 rows at most** per call; more is refused before anything changes.
 - **Before and after.** Each result carries the before and after values of every field it
   changed (`write_create_transactions` returns the new rows and their ids).

@@ -34,6 +34,7 @@
 - [x] 5.2 Add failing tests against the fixture budget: "Over the row limit", "Before and after", "A name where an id is required", "No destructive tools", "Confirm matches", "A stale confirm", "A write is logged", "The log can't be written", "Writes on a separate entry".
 - [x] 5.3 Implement the `--writes` entry, the five `write_` tools, `confirm` digests and the audit log (log first, then write). Update `coverage.json`.
 - [ ] 5.4 Security Analyst approves the PR; the Tester runs the writes against staging only.
+- [x] 5.5 Spec "Moved history is not categorized by a write"; add failing tests named after its five scenarios, then refuse (before the audit append) any write that would categorize moved history, using the shared `isMovedHistory`.
 
 ## 6. Eighth aligned package (sc-1573)
 

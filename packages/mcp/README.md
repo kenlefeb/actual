@@ -73,8 +73,21 @@ budget-reset tools.
   `<data dir>.audit.jsonl` (by default `~/Library/Application Support/actual-mcp/<env>.audit.jsonl`),
   mode 0600: the time, tool, ids and each field's before and after values. It never holds a
   credential. If the line can't be appended, the write doesn't run. A
-  `write_create_transactions` line names the account and the new rows; their ids are in the
-  result.
+  `write_create_transactions` line names the account and the new rows.
+- **Outcome line.** After each write the server appends a second line with the same `call_id`:
+  `status` (`ok` or `failed`), the ids `applied`, the row that `failed` and the ids `created`. If
+  only that line can't be appended, the change stands and the result says
+  `audit_outcome: "not-logged"`.
+- **Multi-row updates stop at the first failure.** `write_update_transactions` applies its rows one
+  at a time. If the engine rejects one, the result lists `applied`, the `failed` id and
+  `not_attempted`; the applied rows stay changed (there is no all-or-nothing batch). The engine
+  error goes only to the server's stderr (scrubbed, with the call id and row id), never to the
+  model or the audit log.
+- **A read-back failure is not a failed write.** If a write is applied but its result can't be
+  read, the call still succeeds, with `applied` and a fixed `read_back` note saying not to retry.
+- **Bounds.** A write is refused, with fixed text and before any audit line, for an `amount` that
+  is not an integer within ±1,000,000,000,000 cents, a date that is not a real date from
+  1970-01-01 to 2100-12-31, or a budget month outside 01 to 12.
 - Writes are pushed to the server by the engine's next sync, as in the app.
 
 Register the write entry beside the read entry, so a session can load reads without writes:

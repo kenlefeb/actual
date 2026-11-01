@@ -96,7 +96,7 @@ To let the assistant change your budget, add a second, separate entry that runs 
 }
 ```
 
-This entry adds five tools whose names start with `write_`: create transactions, change a transaction's category, payee or notes, set a budget amount, skip a paycheck, and move an account on budget. Each write is recorded in a private audit log before it runs; if the log can't be written, the change doesn't happen.
+This entry adds five tools whose names start with `write_`: create transactions, change a transaction's category, payee or notes, set a budget amount, skip a paycheck, and move an account on budget. Each write is recorded in a private audit log before it runs; if the log can't be written, the change doesn't happen. A second line records the outcome, with the ids of anything created; if only that line fails, the change stands and the result says `audit_outcome` is `not-logged`. A multi-row update stops at the first row the engine rejects and reports which rows changed. A write is refused before it is logged when an amount is not an integer within ±1,000,000,000,000 cents, a date is not a real date from 1970 to 2100, or a budget month is not a real month.
 
 `--writes` is never allowed for production. With `ACTUAL_MCP_ALLOW_PRODUCTION=1`, the server connects to production read-only.
 

@@ -6,6 +6,7 @@ import { withText } from '#sanitize';
 import { moneyAs } from '#tools/read/shared';
 import type { RegisterTool } from '#tools/read/shared';
 
+import type { WriteLog } from './shared';
 import { id, loggedWrite, requireAmount, requireMonth } from './shared';
 
 const month = z.string().regex(/^\d{4}-\d{2}$/, 'YYYY-MM');
@@ -23,7 +24,10 @@ async function budgeted(m: string, categoryId: string) {
   return { amount: Number(category.budgeted ?? 0), name: category.name };
 }
 
-export function registerBudgetWriteTools(tool: RegisterTool, auditLog: string) {
+export function registerBudgetWriteTools(
+  tool: RegisterTool,
+  auditLog: WriteLog,
+) {
   tool(
     'write_set_budget_amount',
     "Set one category's budgeted amount for a month (YYYY-MM), by category id (never a name). Amounts are integer cents. Returns the amount before and after.",

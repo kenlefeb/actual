@@ -87,7 +87,11 @@ export function createServer(
   registerAccountTools(tool);
 
   // Write tools exist only on the `--writes` entry (tools/write/*)
-  if (auditLog) registerWriteTools(register(WRITE_NOTE), auditLog);
+  if (auditLog) {
+    registerWriteTools(register(WRITE_NOTE), auditLog, m =>
+      scrubSecrets(m, secrets),
+    );
+  }
 
   return server;
 }

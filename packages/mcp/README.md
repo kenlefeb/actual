@@ -80,7 +80,11 @@ budget-reset tools.
   `audit_outcome: "not-logged"`.
 - **Multi-row updates stop at the first failure.** `write_update_transactions` applies its rows one
   at a time. If the engine rejects one, the result lists `applied`, the `failed` id and
-  `not_attempted`; the applied rows stay changed (there is no all-or-nothing batch).
+  `not_attempted`; the applied rows stay changed (there is no all-or-nothing batch). The engine
+  error goes only to the server's stderr (scrubbed, with the call id and row id), never to the
+  model or the audit log.
+- **A read-back failure is not a failed write.** If a write is applied but its result can't be
+  read, the call still succeeds, with `applied` and a fixed `read_back` note saying not to retry.
 - **Bounds.** A write is refused, with fixed text and before any audit line, for an `amount` that
   is not an integer within ±1,000,000,000,000 cents, a date that is not a real date from
   1970-01-01 to 2100-12-31, or a budget month outside 01 to 12.

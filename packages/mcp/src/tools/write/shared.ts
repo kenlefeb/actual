@@ -61,18 +61,39 @@ export type WriteOutcome = {
  * would hide a change that happened. If the write throws, a `failed` outcome
  * line is appended (best effort) and the error rethrown.
  */
+export type WriteLog = {
+  /** The audit log file. */
+  path: string;
+  /** Removes secrets from an error before it goes to stderr. */
+  scrub: (message: string) => string;
+};
+
+/** One scrubbed stderr line; the model never sees it and the audit log never holds it. */
+export function stderrLine(log: WriteLog, what: string, error: unknown) {
+  const detail = error instanceof Error ? error.message : JSON.stringify(error);
+  process.stderr.write(`${what}: ${log.scrub(detail)}\n`);
+}
+
+/** Sent when the write was applied but its result could not be read back. */
+const READ_BACK_FAILED =
+  'The write was applied, but its details could not be read back. Do not retry it; check the budget.';
+
 export async function loggedWrite<R extends object>(
-  auditLog: string,
+  log: WriteLog,
   tool: string,
   entry: { ids: string[]; changes: AuditChange[] },
-  write: () => Promise<WriteOutcome>,
+  write: (callId: string) => Promise<WriteOutcome>,
   result: (outcome: WriteOutcome) => Promise<R>,
-): Promise<R & { audit_outcome?: 'not-logged' }> {
+): Promise<
+  (R | { applied: string[]; read_back: string }) & {
+    audit_outcome?: 'not-logged';
+  }
+> {
   const call_id = randomUUID();
-  appendAudit(auditLog, { tool, call_id, phase: 'attempt', ...entry });
+  appendAudit(log.path, { tool, call_id, phase: 'attempt', ...entry });
 
   const outcomeLine = (o: WriteOutcome, status: 'ok' | 'failed') =>
-    appendAudit(auditLog, {
+    appendAudit(log.path, {
       tool,
       call_id,
       phase: 'outcome',
@@ -84,7 +105,7 @@ export async function loggedWrite<R extends object>(
 
   let outcome: WriteOutcome;
   try {
-    outcome = await write();
+    outcome = await write(call_id);
   } catch (error) {
     try {
       outcomeLine({ applied: [] }, 'failed');
@@ -99,7 +120,15 @@ export async function loggedWrite<R extends object>(
   } catch {
     logged = false;
   }
-  const out = await result(outcome);
+  // A read-back that fails after the write must never look like a failed
+  // call: the model may retry (a second skip would skip two pay dates).
+  let out: R | { applied: string[]; read_back: string };
+  try {
+    out = await result(outcome);
+  } catch (error) {
+    stderrLine(log, `${tool} result read-back failed (call ${call_id})`, error);
+    out = { applied: outcome.applied, read_back: READ_BACK_FAILED };
+  }
   return logged ? out : { ...out, audit_outcome: 'not-logged' as const };
 }
 

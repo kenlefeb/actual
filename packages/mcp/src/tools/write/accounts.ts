@@ -6,11 +6,12 @@ import { getBudgetStatus, moveConfirm } from '#tools/read/accounts';
 import { date } from '#tools/read/shared';
 import type { RegisterTool } from '#tools/read/shared';
 
+import type { WriteLog } from './shared';
 import { id, loggedWrite, requireDate } from './shared';
 
 export function registerAccountWriteTools(
   tool: RegisterTool,
-  auditLog: string,
+  auditLog: WriteLog,
 ) {
   tool(
     'write_move_on_budget',

@@ -16,6 +16,7 @@ const WRITE_TOOLS = [
 let h: Awaited<ReturnType<typeof startHarness>>;
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await h.close();
 });
 
@@ -641,5 +642,85 @@ describe('first-row failure', () => {
       applied: [],
       failed: a.id,
     });
+  });
+});
+
+describe('write read-back failures and partial-failure logging', () => {
+  it("A skip whose result can't be read", async () => {
+    h = await startHarness({ count: 1 }, { writes: true });
+    const id = await api.createPaycheck({
+      name: 'Acme',
+      newClearingAccountName: 'Acme Paycheck',
+      definition: {
+        payee: null,
+        clearingAccount: '',
+        date: { start: '2027-01-01', frequency: 'monthly' },
+        weekendSolveMode: 'before',
+        grossAmount: 300000,
+        incomeCategory: null,
+        deductions: [],
+        deposits: [
+          {
+            id: 'checking',
+            account: h.fixture.accountId,
+            kind: 'remainder',
+            value: 0,
+          },
+        ],
+      },
+    });
+    const original = api.skipNextPaycheck;
+    // The skip goes through, then the next read fails.
+    vi.spyOn(api, 'skipNextPaycheck').mockImplementationOnce(
+      async (...args: Parameters<typeof original>) => {
+        const out = await original(...args);
+        vi.spyOn(api, 'runQuery').mockRejectedValueOnce(
+          new Error(`read failed ${h.secret}`),
+        );
+        return out;
+      },
+    );
+    const stderr = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation(() => true);
+    const res = await h.call('write_skip_paycheck', { paycheck_id: id });
+    // Not an error: the model must not retry a skip that was applied.
+    expect(res.isError).toBe(false);
+    expect(res.json.applied).toEqual([id]);
+    expect(res.json.read_back).toMatch(/applied.*Do not retry/);
+    expect(auditLines()[1]).toMatchObject({ status: 'ok', applied: [id] });
+    const logged = stderr.mock.calls.map(c => String(c[0])).join('');
+    expect(logged).toContain('write_skip_paycheck');
+    expect(logged).toContain('[redacted]');
+    expect(logged).not.toContain(h.secret);
+  });
+
+  it('A partial failure is logged to stderr', async () => {
+    h = await startHarness({ count: 2 }, { writes: true });
+    const [a, b] = await transactions();
+    const original = api.updateTransaction;
+    let calls = 0;
+    vi.spyOn(api, 'updateTransaction').mockImplementation(
+      async (...args: Parameters<typeof original>) => {
+        if (++calls === 2) throw new Error(`engine said ${h.secret}`);
+        return original(...args);
+      },
+    );
+    const stderr = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation(() => true);
+    const res = await h.call('write_update_transactions', {
+      updates: [a, b].map(t => ({ id: t.id, notes: 'changed' })),
+    });
+    const logged = stderr.mock.calls.map(c => String(c[0])).join('');
+    const attempt = auditLines()[0];
+    expect(logged).toContain('write_update_transactions');
+    expect(logged).toContain(attempt.call_id);
+    expect(logged).toContain(b.id);
+    expect(logged).toContain('engine said [redacted]');
+    expect(logged).not.toContain(h.secret);
+    // The model sees only the fixed note; the audit log holds no error text.
+    expect(res.text).not.toContain('engine said');
+    expect(readFileSync(h.auditLog, 'utf8')).not.toContain('engine said');
   });
 });

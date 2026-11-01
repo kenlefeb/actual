@@ -17,7 +17,9 @@ import {
   requireAmount,
   requireDate,
   requireIds,
+  stderrLine,
 } from './shared';
+import type { WriteLog } from './shared';
 
 const ROW_FIELDS = [
   'id',
@@ -105,7 +107,7 @@ type Field = keyof typeof FIELDS;
 
 export function registerTransactionWriteTools(
   tool: RegisterTool,
-  auditLog: string,
+  auditLog: WriteLog,
 ) {
   tool(
     'write_create_transactions',
@@ -256,7 +258,7 @@ export function registerTransactionWriteTools(
         auditLog,
         'write_update_transactions',
         { ids, changes },
-        async () => {
+        async callId => {
           for (const u of updates) {
             const fields = Object.fromEntries(
               (Object.keys(FIELDS) as Field[])
@@ -265,7 +267,12 @@ export function registerTransactionWriteTools(
             );
             try {
               await api.updateTransaction(u.id, fields);
-            } catch {
+            } catch (error) {
+              stderrLine(
+                auditLog,
+                `write_update_transactions partial failure (call ${callId}, row ${u.id})`,
+                error,
+              );
               failed = u.id;
               break;
             }

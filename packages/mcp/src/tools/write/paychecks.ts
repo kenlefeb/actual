@@ -3,6 +3,7 @@ import * as api from '@actual-app/api';
 import { Refusal } from '#refusal';
 import type { RegisterTool } from '#tools/read/shared';
 
+import type { WriteLog } from './shared';
 import { id, loggedWrite } from './shared';
 
 async function nextDate(scheduleId: string | null | undefined) {
@@ -15,7 +16,7 @@ async function nextDate(scheduleId: string | null | undefined) {
 
 export function registerPaycheckWriteTools(
   tool: RegisterTool,
-  auditLog: string,
+  auditLog: WriteLog,
 ) {
   tool(
     'write_skip_paycheck',

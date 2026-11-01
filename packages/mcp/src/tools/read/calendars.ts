@@ -11,6 +11,9 @@ import type { RegisterTool } from './shared';
 // engine validates the shape and refuses anything else.
 const scheduleDate = z.union([date, z.record(z.string(), z.unknown())]);
 
+const NO_MATCH =
+  'Cannot expand schedule date: Failed to find a matching occurrence';
+
 type ScheduleDate = Parameters<typeof api.getScheduleDates>[0];
 
 export function registerCalendarTools(tool: RegisterTool) {
@@ -41,12 +44,25 @@ export function registerCalendarTools(tool: RegisterTool) {
       end: date.optional(),
       count: z.number().int().min(0).max(100).optional(),
     },
-    async ({ date: d, start, end, count }) => ({
-      dates: await api.getScheduleDates(d as ScheduleDate, {
-        start,
-        end,
-        count: count ?? 10,
-      }),
-    }),
+    async ({ date: d, start, end, count }) => {
+      try {
+        return {
+          dates: await api.getScheduleDates(d as ScheduleDate, {
+            start,
+            end,
+            count: count ?? 10,
+          }),
+        };
+      } catch (error) {
+        // Only the recurrence library's "no matching date" error is a result.
+        // The engine wraps it, and a test pins this prefix.
+        if (
+          String((error as { message?: unknown })?.message).startsWith(NO_MATCH)
+        ) {
+          return { dates: [], note: 'No matching date' };
+        }
+        throw error;
+      }
+    },
   );
 }

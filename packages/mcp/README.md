@@ -29,16 +29,16 @@ List tools take `limit` (default 50, at most 200) and `cursor`, and return `has_
 
 Fork read tools (all take ids, never names):
 
-| Tool                            | Returns                                                               |
-| ------------------------------- | --------------------------------------------------------------------- |
-| `list_paychecks`                | Paychecks with clearing account, gross amount and deposits            |
-| `get_paycheck_year_to_date`     | A paycheck's gross, deductions and net for this year and last         |
-| `get_paychecks_clearing_status` | Clearing balance, latest pay date, missing deposits and warning       |
-| `list_business_calendars`       | Non-working days, holiday rules and exceptions                        |
-| `get_schedule_next_dates`       | Upcoming dates for a day, a repeat rule or a relative date            |
-| `get_account_budget_status`     | Business calendar, days early, budget start date and offset line      |
-| `list_moved_history`            | A moved account's transactions before its start date, and offset line |
-| `preview_move_on_budget`        | What moving an account on budget would change, and its `confirm`      |
+| Tool                            | Returns                                                                                                                                                |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `list_paychecks`                | Paychecks with clearing account, gross amount and deposits (ids that aren't plain identifiers move under `text`; unknown deposit kinds read `unknown`) |
+| `get_paycheck_year_to_date`     | A paycheck's gross, deductions and net for this year and last                                                                                          |
+| `get_paychecks_clearing_status` | Clearing balance, latest pay date, missing deposits and warning                                                                                        |
+| `list_business_calendars`       | Non-working days, holiday rules and exceptions                                                                                                         |
+| `get_schedule_next_dates`       | Upcoming dates for a day, a repeat rule or a relative date; "No matching date" for a rule that never matches                                           |
+| `get_account_budget_status`     | Business calendar, days early, budget start date and offset line                                                                                       |
+| `list_moved_history`            | A moved account's transactions before its start date, and offset line                                                                                  |
+| `preview_move_on_budget`        | What moving an account on budget would change (transfers paged), and its `confirm` for the whole preview                                               |
 
 ## Write tools
 

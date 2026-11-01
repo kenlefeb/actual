@@ -16,6 +16,7 @@ const WRITE_TOOLS = [
 let h: Awaited<ReturnType<typeof startHarness>>;
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await h.close();
 });
 
@@ -54,6 +55,10 @@ function auditLines() {
     .split('\n')
     .filter(Boolean)
     .map(line => JSON.parse(line));
+}
+
+function attemptLines() {
+  return auditLines().filter(l => l.phase === 'attempt');
 }
 
 describe('write entry', () => {
@@ -208,7 +213,7 @@ describe('write limits', () => {
         })
       ).isError,
     ).toBe(true);
-    expect(auditLines().map(l => l.tool)).toEqual([
+    expect(attemptLines().map(l => l.tool)).toEqual([
       'write_create_transactions',
       'write_set_budget_amount',
     ]);
@@ -321,7 +326,7 @@ describe('write audit log', () => {
       updates: [{ id: t.id, notes: 'new note' }],
     });
     expect(res.isError).toBe(false);
-    const lines = auditLines();
+    const lines = attemptLines();
     expect(lines).toHaveLength(1);
     expect(lines[0]).toMatchObject({
       tool: 'write_update_transactions',
@@ -464,5 +469,258 @@ describe('moved history is not categorized by a write', () => {
       category: null,
     });
     expect(rows.find(t => t.id === m.offset.id)?.notes).toBe('offset');
+  });
+});
+
+describe('write outcomes', () => {
+  it("A create's outcome line", async () => {
+    h = await startHarness({ count: 1 }, { writes: true });
+    const res = await h.call('write_create_transactions', {
+      account_id: h.fixture.accountId,
+      transactions: [
+        { date: '2026-02-01', amount: -100 },
+        { date: '2026-02-02', amount: -200 },
+      ],
+    });
+    expect(res.isError).toBe(false);
+    expect(res.json.audit_outcome).toBeUndefined();
+    const ids = res.json.items.map((i: { id: string }) => i.id);
+    expect(ids).toHaveLength(2);
+    const [attempt, outcome, ...rest] = auditLines();
+    expect(rest).toEqual([]);
+    expect(attempt).toMatchObject({ phase: 'attempt' });
+    expect(attempt.call_id).toEqual(expect.any(String));
+    expect(outcome).toMatchObject({
+      phase: 'outcome',
+      tool: 'write_create_transactions',
+      call_id: attempt.call_id,
+      status: 'ok',
+      created: ids,
+    });
+  });
+
+  it("A failed write's outcome line", async () => {
+    h = await startHarness({ count: 1 }, { writes: true });
+    vi.spyOn(api, 'addTransactions').mockRejectedValueOnce(
+      new Error(`boom ${h.secret}`),
+    );
+    const res = await h.call('write_create_transactions', {
+      account_id: h.fixture.accountId,
+      transactions: [{ date: '2026-02-01', amount: -100 }],
+    });
+    expect(res.isError).toBe(true);
+    const [attempt, outcome, ...rest] = auditLines();
+    expect(rest).toEqual([]);
+    expect(outcome).toMatchObject({
+      phase: 'outcome',
+      call_id: attempt.call_id,
+      status: 'failed',
+      created: [],
+      applied: [],
+    });
+    expect(readFileSync(h.auditLog, 'utf8')).not.toContain(h.secret);
+  });
+
+  it("The outcome line can't be written", async () => {
+    h = await startHarness({ count: 1 }, { writes: true });
+    const original = api.addTransactions;
+    // The write goes through, then the log becomes unwritable.
+    vi.spyOn(api, 'addTransactions').mockImplementationOnce(
+      async (...args: Parameters<typeof original>) => {
+        const out = await original(...args);
+        chmodSync(h.auditLog, 0o400);
+        return out;
+      },
+    );
+    const res = await h.call('write_create_transactions', {
+      account_id: h.fixture.accountId,
+      transactions: [{ date: '2026-02-01', amount: -100 }],
+    });
+    expect(res.isError).toBe(false);
+    expect(res.json.audit_outcome).toBe('not-logged');
+    expect(res.json.items).toHaveLength(1);
+    expect(await transactions()).toHaveLength(2);
+    expect(auditLines()).toHaveLength(1);
+  });
+
+  it('A failure partway', async () => {
+    h = await startHarness({ count: 3 }, { writes: true });
+    const [a, b, c] = await transactions();
+    const original = api.updateTransaction;
+    let calls = 0;
+    vi.spyOn(api, 'updateTransaction').mockImplementation(
+      async (...args: Parameters<typeof original>) => {
+        if (++calls === 2) throw new Error('engine rejected the row');
+        return original(...args);
+      },
+    );
+    const res = await h.call('write_update_transactions', {
+      updates: [a, b, c].map(t => ({ id: t.id, notes: 'changed' })),
+    });
+    expect(res.isError).toBe(false);
+    expect(res.json).toMatchObject({
+      applied: [a.id],
+      failed: b.id,
+      not_attempted: [c.id],
+    });
+    expect(res.json.items.map((i: { id: string }) => i.id)).toEqual([a.id]);
+    const rows = await transactions();
+    expect(rows.find(t => t.id === a.id)!.notes).toBe('changed');
+    expect(rows.find(t => t.id === b.id)!.notes).not.toBe('changed');
+    expect(rows.find(t => t.id === c.id)!.notes).not.toBe('changed');
+    expect(auditLines()[1]).toMatchObject({
+      phase: 'outcome',
+      status: 'failed',
+      applied: [a.id],
+      failed: b.id,
+    });
+  });
+});
+
+describe('write bounds', () => {
+  it('An extreme amount', async () => {
+    h = await startHarness({ count: 1 }, { writes: true });
+    for (const amount of [1e300, 1e12 + 1, 1.5]) {
+      const res = await h.call('write_create_transactions', {
+        account_id: h.fixture.accountId,
+        transactions: [{ date: '2026-02-01', amount }],
+      });
+      expect(res.isError).toBe(true);
+      expect(res.text).toMatch(/amount must be an integer/);
+    }
+    expect(await transactions()).toHaveLength(1);
+    expect(auditLines()).toEqual([]);
+  });
+
+  it('An impossible date', async () => {
+    h = await startHarness({ count: 1 }, { writes: true });
+    for (const date of ['2026-02-31', '1969-12-31', '2101-01-01']) {
+      const res = await h.call('write_create_transactions', {
+        account_id: h.fixture.accountId,
+        transactions: [{ date, amount: -100 }],
+      });
+      expect(res.isError).toBe(true);
+      expect(res.text).toMatch(/date must be a real date/);
+    }
+    expect(await transactions()).toHaveLength(1);
+    expect(auditLines()).toEqual([]);
+  });
+
+  it('An impossible month', async () => {
+    h = await startHarness({ count: 1 }, { writes: true });
+    const rent = await categoryId('Rent');
+    for (const month of ['2026-13', '2026-00']) {
+      const res = await h.call('write_set_budget_amount', {
+        month,
+        category_id: rent,
+        amount: 100,
+      });
+      expect(res.isError).toBe(true);
+      expect(res.text).toMatch(/month must be a real month/);
+    }
+    expect(auditLines()).toEqual([]);
+  });
+});
+
+describe('first-row failure', () => {
+  it('A failure on the first row', async () => {
+    h = await startHarness({ count: 2 }, { writes: true });
+    const [a, b] = await transactions();
+    vi.spyOn(api, 'updateTransaction').mockRejectedValue(new Error('no'));
+    const res = await h.call('write_update_transactions', {
+      updates: [a, b].map(t => ({ id: t.id, notes: 'changed' })),
+    });
+    expect(res.isError).toBe(false);
+    expect(res.json).toMatchObject({
+      applied: [],
+      failed: a.id,
+      not_attempted: [b.id],
+      items: [],
+    });
+    expect(auditLines()[1]).toMatchObject({
+      status: 'failed',
+      applied: [],
+      failed: a.id,
+    });
+  });
+});
+
+describe('write read-back failures and partial-failure logging', () => {
+  it("A skip whose result can't be read", async () => {
+    h = await startHarness({ count: 1 }, { writes: true });
+    const id = await api.createPaycheck({
+      name: 'Acme',
+      newClearingAccountName: 'Acme Paycheck',
+      definition: {
+        payee: null,
+        clearingAccount: '',
+        date: { start: '2027-01-01', frequency: 'monthly' },
+        weekendSolveMode: 'before',
+        grossAmount: 300000,
+        incomeCategory: null,
+        deductions: [],
+        deposits: [
+          {
+            id: 'checking',
+            account: h.fixture.accountId,
+            kind: 'remainder',
+            value: 0,
+          },
+        ],
+      },
+    });
+    const original = api.skipNextPaycheck;
+    // The skip goes through, then the next read fails.
+    vi.spyOn(api, 'skipNextPaycheck').mockImplementationOnce(
+      async (...args: Parameters<typeof original>) => {
+        const out = await original(...args);
+        vi.spyOn(api, 'runQuery').mockRejectedValueOnce(
+          new Error(`read failed ${h.secret}`),
+        );
+        return out;
+      },
+    );
+    const stderr = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation(() => true);
+    const res = await h.call('write_skip_paycheck', { paycheck_id: id });
+    // Not an error: the model must not retry a skip that was applied.
+    expect(res.isError).toBe(false);
+    expect(res.json.applied).toEqual([id]);
+    expect(res.json.read_back).toMatch(/applied.*Do not retry/);
+    expect(auditLines()[1]).toMatchObject({ status: 'ok', applied: [id] });
+    const logged = stderr.mock.calls.map(c => String(c[0])).join('');
+    expect(logged).toContain('write_skip_paycheck');
+    expect(logged).toContain('[redacted]');
+    expect(logged).not.toContain(h.secret);
+  });
+
+  it('A partial failure is logged to stderr', async () => {
+    h = await startHarness({ count: 2 }, { writes: true });
+    const [a, b] = await transactions();
+    const original = api.updateTransaction;
+    let calls = 0;
+    vi.spyOn(api, 'updateTransaction').mockImplementation(
+      async (...args: Parameters<typeof original>) => {
+        if (++calls === 2) throw new Error(`engine said ${h.secret}`);
+        return original(...args);
+      },
+    );
+    const stderr = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation(() => true);
+    const res = await h.call('write_update_transactions', {
+      updates: [a, b].map(t => ({ id: t.id, notes: 'changed' })),
+    });
+    const logged = stderr.mock.calls.map(c => String(c[0])).join('');
+    const attempt = auditLines()[0];
+    expect(logged).toContain('write_update_transactions');
+    expect(logged).toContain(attempt.call_id);
+    expect(logged).toContain(b.id);
+    expect(logged).toContain('engine said [redacted]');
+    expect(logged).not.toContain(h.secret);
+    // The model sees only the fixed note; the audit log holds no error text.
+    expect(res.text).not.toContain('engine said');
+    expect(readFileSync(h.auditLog, 'utf8')).not.toContain('engine said');
   });
 });

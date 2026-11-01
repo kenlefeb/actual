@@ -17,15 +17,21 @@ const KINDS = new Set(['fixed', 'percent', 'remainder']);
 const finite = (n: unknown): number | null =>
   typeof n === 'number' && Number.isFinite(n) ? n : null;
 
-function splitIds(ids: Record<string, string | null | undefined>) {
-  const plain: Record<string, string | null | undefined> = {};
-  const text: Record<string, string> = {};
+function splitIds(ids: Record<string, unknown>) {
+  const plain: Record<string, unknown> = {};
+  const text: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(ids)) {
-    if (typeof value === 'string' && value !== '' && !PLAIN_ID.test(value)) {
+    // Only null, empty or a plain identifier stays an id. Anything else,
+    // including a number, object or array, is data.
+    const isPlain =
+      value == null ||
+      value === '' ||
+      (typeof value === 'string' && PLAIN_ID.test(value));
+    if (isPlain) {
+      plain[key] = value;
+    } else {
       plain[key] = null;
       text[key] = value;
-    } else {
-      plain[key] = value;
     }
   }
   return { plain, text };
@@ -34,7 +40,7 @@ function splitIds(ids: Record<string, string | null | undefined>) {
 /** A record with its id fields; a `text` group only when one is not plain. */
 function withIds(
   record: Record<string, unknown>,
-  ids: Record<string, string | null | undefined>,
+  ids: Record<string, unknown>,
   text: Record<string, unknown> = {},
 ) {
   const split = splitIds(ids);

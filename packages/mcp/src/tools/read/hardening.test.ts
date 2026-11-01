@@ -141,6 +141,53 @@ describe('paycheck definition text is data', () => {
     expect(status.text.clearing_account_id).toBe(EVIL);
   });
 
+  it('A non-string id is data too', async () => {
+    h = await startHarness();
+    const { id, paycheck } = await createAcme();
+    const { paySchedule, clearingAccount } = paycheck.definition;
+    await api.addTransactions(clearingAccount, [
+      { date: '2026-11-01', amount: 250000, schedule: paySchedule },
+    ] as never);
+    const note = { note: EVIL };
+    await overwriteDefinition(id, d => {
+      d.clearingAccount = note;
+      d.payee = [EVIL];
+      d.incomeCategory = 42;
+      deposits(d)[0].id = true;
+      deposits(d)[0].account = note;
+    });
+
+    const res = await h.call('list_paychecks');
+    const item = res.json.items[0];
+    expect(item.clearing_account_id).toBe(null);
+    expect(item.payee_id).toBe(null);
+    expect(item.income_category_id).toBe(null);
+    expect(item.text).toMatchObject({
+      clearing_account_id: note,
+      payee_id: [EVIL],
+      income_category_id: 42,
+    });
+    expect(item.deposits[0].id).toBe(null);
+    expect(item.deposits[0].account_id).toBe(null);
+    expect(item.deposits[0].text).toMatchObject({ id: true, account_id: note });
+
+    // The engine's own query refuses an object as an account, so the status
+    // tool is checked with a number there and an object on the deposit
+    await overwriteDefinition(id, d => {
+      d.clearingAccount = 42;
+    });
+    const status = (await h.call('get_paychecks_clearing_status')).json
+      .items[0];
+    expect(status.clearing_account_id).toBe(null);
+    expect(status.text.clearing_account_id).toBe(42);
+    expect(status.missing_deposits[0].id).toBe(null);
+    expect(status.missing_deposits[0].account_id).toBe(null);
+    expect(status.missing_deposits[0].text).toMatchObject({
+      id: true,
+      account_id: note,
+    });
+  });
+
   it('A text amount or value is not returned', async () => {
     h = await startHarness();
     const { id } = await createAcme();

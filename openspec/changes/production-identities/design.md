@@ -20,7 +20,7 @@ Facts the design rests on (read from `packages/sync-server` and `packages/mcp`; 
 Three kinds, no more. Ken is ADMIN through his own identity at the identity provider, protected by a passkey or second factor and never by an emailed link (agents can read his mail). The assistant is one BASIC user. Development agents have none on production. The identity provider, its client registration and callback are configuration (like `mcp-remote`); Ken's choice is open and is needed before slice C.
 
 ### 2. One rule for the credential
-The record is a 1Password item in a new vault, "Ken Assistant", that only Ken's interactive 1Password opens: no service account (its token would sit in a keychain any process running as Ken can ask for), no CLI integration (it stays off, see sc-696), no file on the Mac. The only deployed copy is the connector's root-owned 0400 file on the host, drawn from the item by Ken at install time. Rotation replaces both. "Ken & Agents" keeps staging credentials only: the staging promote token, the staging SSH key, staging passwords and age identity. Ken's Private vault keeps his own production admin items ("Actual (Production) login", the backup recovery key).
+The record is a 1Password item in a new vault, "Ken Assistant", that only Ken's interactive 1Password opens: no service account (its token would sit in a keychain any process running as Ken can ask for), no CLI integration (it stays off, see sc-696), no file on the Mac. Never grant computer-use to 1Password: the vault is protected only by Ken's unlocked desktop app (the rule from the sc-1460 checklist). The only deployed copy is the connector's root-owned 0400 file on the host, drawn from the item by Ken at install time. Rotation replaces both. "Ken & Agents" keeps staging credentials only: the staging promote token, the staging SSH key, staging passwords and age identity. Ken's Private vault keeps his own production admin items ("Actual (Production) login", the backup recovery key).
 
 Why not "no vault, file only": the file is lost with the host; the record lets Ken re-mint after a restore.
 
@@ -30,7 +30,7 @@ Moving production to OpenID retires the shared password for everyone. Each place
 | Use today | After the switch |
 |---|---|
 | Ken's browser sign-in (`production/README.md`, Ken's phone and laptop) | Sign in through the identity provider as Ken (ADMIN). |
-| `RESTORE.md` restore drill and snapshot restore ("sign in with the production password that was current when the archive was made") | Sign in through the identity provider. The drill and the restore are rehearsed on a staging instance with OpenID on (slice C). A snapshot older than the switch brings the password mode and users back: the restore step re-checks the login mode and re-applies the switch before anyone signs in. |
+| `RESTORE.md` restore drill and snapshot restore ("sign in with the production password that was current when the archive was made") | Sign in through the identity provider. The drill and the restore are rehearsed on a staging instance with OpenID on (slice C). A snapshot older than the switch brings the password row and users back. The two login settings live in the root-owned compose template that every promote builds from (decision 8), so password login stays refused from the first start, and the restore step re-applies the switch (including deleting password sessions) before anyone signs in. |
 | `LOCKDOWN.md` 4a (change server password in the app, console `reset-password.js`) | These apply to password mode only. After the switch the equivalent is revoking the assistant (set the user to disabled) or re-minting the token; the LOCKDOWN checklist notes the change when slice E lands. `reset-password.js` stays as the recovery path if the identity provider is lost (re-enabling password login is a console step Ken approves). |
 | The nightly backup, the Mac mini pull, `export-backup.py`, `prune-backups.py`, `pull-backup.py` | Unchanged: they use an SSH forced command and an age key, not a login. |
 | Promotes (`promote.py`) and the health check | Unchanged unless a health check signs in; slice C lists it. |
@@ -40,19 +40,26 @@ Moving production to OpenID retires the shared password for everyone. Each place
 ### 4. Headless sign-in: a token Ken mints
 Option (a) from the Architect's comment: Ken signs in once through the OpenID flow as the assistant's user to mint a session token, kept in the connector's 0400 file, with `token_expiration` raised for that session to a stated period (the default for this change is 30 days with a calendar reminder in the checklist; the period is configuration). Revocation is `enabled = 0`. Rejected for now: a server change so a service user can sign in without a browser (more fork code in the authentication path, to revisit if re-minting becomes painful). Slice C proves on staging that `@actual-app/api` signs in with a minted token as a BASIC user.
 
+The assistant's BASIC user is a dedicated account at the identity provider (configuration, like the provider itself), not Ken's. It uses a passkey or authenticator-app 2FA, has no recovery through a mailbox agents can read, and its credentials are kept in the "Ken Assistant" vault and the LOCKDOWN inventory.
+
+`token_expiration` is read from server configuration (`config.get('token_expiration')`) when a session is created (`accounts/openid.ts`), so it is server-wide, not per session. The minting procedure therefore raises it, mints the assistant's token, and puts it back before Ken signs in as ADMIN, so his own sessions keep the default. Slice C verifies this. If it turns out to be per session after all, the raise is dropped.
+
 ### 5. The access path
 The assistant reads production only through the hosted connector (the production slice of `mcp-remote`), read-only by default, as its own user. `mcp-remote`'s threat 8 ("the stored credential is a full-access password until a per-budget identity exists") is replaced by this change's identity: a stolen token can act only as the assistant, on its budgets, until disabled. The local `actual-production` entry is removed from Claude Desktop in slice D.
 
 ### 6. Development agents
-Staging and synthetic data only. A defect that needs production data uses a restored backup on a throwaway staging instance, with Ken approving each time (it is plaintext of real data on an agent-reachable host, so it is Ken's call). The optional server-enforced read-only grant is a separate Backlog story.
+Staging and synthetic data only. A defect that needs production data uses a restored backup on a throwaway staging instance, with Ken approving each time (it is plaintext of real data on an agent-reachable host, so it is Ken's call). The copy is destroyed afterwards, with its own check-off step. The optional server-enforced read-only grant is a separate Backlog story.
 
 ### 7. The account split
 Agent sessions and Ken's chats share his Anthropic account, so any claude.ai connector (hosted or the Hostinger one in LOCKDOWN) shows up in both. Claude Code documents `ENABLE_CLAUDEAI_MCP_SERVERS=false` (changelog: opts out of making claude.ai MCP servers available); it hides claude.ai connectors in a Claude Code session. It does not remove local Claude Desktop entries, which are separate and are removed in slice D, nor change who owns the account's OAuth grants. So: set the variable for agent sessions, verify by listing a fresh session's tools (slice F), and if anything remains visible, development agents move to a separate Anthropic account or seat, which is the only robust separation. Slice F is Ken-gated because it changes how agents are run on his account.
 
-### 8. Audit
+### 8. Turning the password off persists
+`ACTUAL_ALLOWED_LOGIN_METHODS=openid` and `ACTUAL_OPENID_ENFORCE=true` go in production's root-owned compose template, the file `promote.py` builds every release from. Without them a restored pre-switch snapshot brings the password row back and the old password works again as soon as the server starts. Both variables are added to the LOCKDOWN inventory and to the persistence check, so a template change is caught. Sessions issued by password login before the switch stay valid after OpenID is on, so slice E deletes them (`DELETE FROM sessions WHERE auth_method = 'password'`, or the equivalent admin step) and verifies none remain. Any token taken while agents had root, or by anyone holding the old password, dies with them.
+
+### 9. Audit
 Slice A adds the user id (and OAuth subject, or `local` for stdio) to every audit line and adds a read record for the hosted entry (tool name, status, identity, no data), as `mcp-remote` already requires for access. Slice B adds a fork log line per budget-touching request on the sync server (user id, file id, route, time; never content or token), at the point `requireFileAccess` passes or fails. Both ship daily to somewhere agents cannot rewrite (the Mac mini's pull, 90 days), after LOCKDOWN.
 
-### 9. Order
+### 10. Order
 1. LOCKDOWN (sc-563) done by Ken. Nothing below counts as separation before it, because root reads the host's 0400 files and the sync server's volume (the `actual-production_data` volume holds sessions).
 2. Slices A and B can ship before, since they touch no production.
 3. Slice C rehearses everything on staging, including the restore.
@@ -70,6 +77,8 @@ Slice A adds the user id (and OAuth subject, or `local` for stdio) to every audi
 - The password row is refused with `ACTUAL_ALLOWED_LOGIN_METHODS=openid` and `ACTUAL_OPENID_ENFORCE=true`.
 - `@actual-app/api` signs in headless with a minted `sessionToken` as a BASIC user, and the token's lifetime matches `token_expiration`.
 - `enabled = 0` ends a session immediately.
+- `token_expiration` is server-wide, so the raise-mint-restore procedure keeps new ADMIN sessions at the default.
+- Deleting the password sessions ends a password-issued token.
 - A restore onto an OpenID instance, and of a pre-switch snapshot, behave as Decision 3 says.
 - Whether the promote health check signs in.
 

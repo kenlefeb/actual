@@ -23,7 +23,7 @@ Each group ends with the story that ships it. Until the slice stories are filed,
 Needs Ken's identity-provider choice. The staging half of sc-1555.
 
 - [ ] 4.1 On a throwaway staging instance: OpenID on, `ACTUAL_ALLOWED_LOGIN_METHODS=openid`, `ACTUAL_OPENID_ENFORCE=true`; an ADMIN and a BASIC user; one budget shared. Record that the old password is refused ("The shared password no longer works") and that the BASIC user sees only the shared budget ("An unshared budget is invisible").
-- [ ] 4.2 Prove headless sign-in with `@actual-app/api` `sessionToken` as the BASIC user, the token's lifetime, and that `enabled = 0` ends it ("Staging proves the sign-in first", "Disabling the user ends the token").
+- [ ] 4.2 Prove headless sign-in with `@actual-app/api` `sessionToken` as the BASIC user, the token's lifetime, whether `token_expiration` is server-wide (if so, the raise-mint-restore procedure leaves a new ADMIN session at the default: "Minting does not lengthen Ken's sessions"), and that `enabled = 0` ends it ("Staging proves the sign-in first", "Disabling the user ends the token").
 - [ ] 4.3 Rehearse the restore drill and a snapshot restore (post-switch and pre-switch) onto an OpenID instance, and list every other use of the production password found (promote health check included) in the design's table ("A restore under OpenID", "A pre-switch snapshot is restored").
 - [ ] 4.4 Rehearse the identity-provider-lost recovery (console `reset-password.js`, re-enable password login).
 
@@ -32,11 +32,12 @@ Needs Ken's identity-provider choice. The staging half of sc-1555.
 Needs LOCKDOWN (sc-563) done first.
 
 - [ ] 5.1 Write the checklist for Ken (reviewed by the Checklist Reviewer; each step says why it needs Ken): create the "Ken Assistant" vault; confirm "Ken & Agents" holds staging only; remove the local `actual-production` Claude Desktop entry and any production launcher; inventory where the assistant's token exists ("One rule for where the credential lives", "No local production entry").
-- [ ] 5.2 Add the vault, the 0400 file and the token to `LOCKDOWN.md`'s inventory rows in the same PR.
+- [ ] 5.2 Add the vault, the 0400 file, the token and the assistant's identity-provider account (passkey or 2FA, no agent-readable recovery: "Recovery does not reach agent-readable mail") to `LOCKDOWN.md`'s inventory rows in the same PR.
+- [ ] 5.3 Put "never grant computer-use to 1Password" in the checklist, and add the break-glass copy's destruction as its own check-off step ("The break-glass copy is destroyed").
 
 ## 6. Slice E: the production switch, Ken's gate (sc-2004)
 
-- [ ] 6.1 Write the checklist for Ken: confirm LOCKDOWN is done; back up and verify a restore; sign in as Ken (ADMIN); enable OpenID with the two login settings; create the assistant (BASIC), share only the named budgets; mint the token into the connector's 0400 file; disable password login and verify it is refused; update `README.md`, `RESTORE.md` and `LOCKDOWN.md` for OpenID; then the production slice of `mcp-remote` may start ("LOCKDOWN comes first", "Production signs in only through OpenID", "The assistant is not an administrator").
+- [ ] 6.1 Write the checklist for Ken: confirm LOCKDOWN is done; back up and verify a restore; sign in as Ken (ADMIN); enable OpenID with the two login settings; create the assistant (BASIC), share only the named budgets; mint the token into the connector's 0400 file; disable password login and verify it is refused; set `ACTUAL_ALLOWED_LOGIN_METHODS=openid` and `ACTUAL_OPENID_ENFORCE=true` in the root-owned compose template (not as one-off settings) and add both to the LOCKDOWN inventory and persistence check ("A template change is caught"); delete the sessions with `auth_method = 'password'` and verify none remain ("A password session from before the switch is refused"); raise `token_expiration` only for the minting and restore it before signing in as ADMIN; update `README.md`, `RESTORE.md` and `LOCKDOWN.md` for OpenID; then the production slice of `mcp-remote` may start ("LOCKDOWN comes first", "Production signs in only through OpenID", "The assistant is not an administrator").
 
 ## 7. Slice F: the account split, Ken's gate (sc-2004)
 

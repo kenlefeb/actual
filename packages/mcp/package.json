@@ -5,7 +5,8 @@
   "description": "MCP server for Actual Budget (fork): reads by default, opt-in writes",
   "license": "MIT",
   "bin": {
-    "actual-mcp": "./dist/mcp.js"
+    "actual-mcp": "./dist/mcp.js",
+    "actual-mcp-http": "./dist/mcp-http.js"
   },
   "files": [
     "dist"
@@ -18,6 +19,7 @@
     "#paging": "./src/paging.ts",
     "#refusal": "./src/refusal.ts",
     "#sanitize": "./src/sanitize.ts",
+    "#sync": "./src/sync.ts",
     "#tools/*": "./src/tools/*.ts"
   },
   "scripts": {

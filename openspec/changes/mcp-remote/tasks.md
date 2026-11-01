@@ -9,9 +9,9 @@
 
 ## 2. Hosted entry and sync freshness (sc-1971)
 
-- [ ] 2.1 Add the separate hosted entry over stateless streamable HTTP, with the read-only init fixed in code, the staging-only check, `--writes` refused, the `<env>-remote` data directory, host and origin checks and rate limits, with tests named after the "A separate hosted entry", "Hosted means read-only, in code", "Staging only in v1", "One budget per instance" and "Host, origin and rate checks" scenarios.
-- [ ] 2.2 Add the sync schedule, its lock with `sync_budget`, last-good serving and `get_sync_status`, with tests named after "The copy stays fresh".
-- [ ] 2.3 Add access recording and secret-file handling, with tests named after "Access is recorded without data" and "Secrets live in read-only files".
+- [x] 2.1 Add the separate hosted entry over stateless streamable HTTP, with the read-only init fixed in code, the staging-only check, `--writes` refused, the `<env>-remote` data directory, host and origin checks and rate limits, with tests named after the "A separate hosted entry", "Hosted means read-only, in code", "Staging only in v1", "One budget per instance" and "Host, origin and rate checks" scenarios.
+- [x] 2.2 Add the sync schedule, its lock with `sync_budget`, last-good serving and `get_sync_status`, with tests named after "The copy stays fresh".
+- [x] 2.3 Add access recording and secret-file handling, with tests named after "Access is recorded without data" and "Secrets live in read-only files".
 
 ## 3. OAuth provider and token store (sc-1972)
 

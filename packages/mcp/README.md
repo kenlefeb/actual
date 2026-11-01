@@ -138,6 +138,32 @@ Set these variables only in the `op run` env file. Never export them in a shell 
 Credentials come from the "Ken & Agents" 1Password vault, passed in at launch by `op run` (or the
 service-account helper). Don't write them into `.mcp.json` or `~/.claude.json`.
 
+## Hosted entry (`actual-mcp-http`, staging only)
+
+A separate, read-only entry that serves the same read tools plus `get_sync_status` over stateless
+streamable HTTP on `POST /mcp`. The stdio entry above is unchanged and still opens no listener.
+Authentication arrives with the OAuth slice (sc-1972); until then the entry refuses to listen on
+anything but loopback. It is not deployed by this change.
+
+- **Read-only in code.** The engine always starts read-only, no `write_` tool is registered, and
+  `--writes` is a usage error. It serves staging or local only: a production host is refused, even
+  with `ACTUAL_MCP_ALLOW_PRODUCTION=1`.
+- **One budget per instance.** The data directory is the configured one (or the default
+  `actual-mcp/<env>`) with `-remote` added, mode 0700.
+- **Secrets in files.** `ACTUAL_PASSWORD_FILE`, optional `ACTUAL_ENCRYPTION_PASSWORD_FILE` and
+  `ACTUAL_MCP_SIGNING_KEY_FILE` name files only their owner can read (mode 0600 or tighter); the
+  entry refuses to start otherwise and never reads a secret from an environment value or argument.
+- **Host, Origin and rate checks.** `ACTUAL_MCP_ALLOWED_HOSTS` (the public hostname goes here),
+  `ACTUAL_MCP_ALLOWED_ORIGINS` (default none: server-to-server traffic sends no `Origin`) and
+  per-minute limits `ACTUAL_MCP_RATE_PER_ENDPOINT` and `ACTUAL_MCP_RATE_PER_CLIENT`.
+- **Fresh copy.** It syncs at start and every `ACTUAL_MCP_SYNC_INTERVAL_SECONDS` (default 300),
+  one sync at a time (the schedule and `sync_budget` share a lock), keeps serving the last copy when
+  a sync fails, and `get_sync_status` shows the last success and whether the latest attempt failed.
+- **Access records.** Refusals and each tool call's name and outcome, with the client id and time,
+  go to stderr as JSON lines. Tokens, secrets, arguments and budget data are never recorded.
+- Also set `ACTUAL_SERVER_URL`, `ACTUAL_SYNC_ID`, `ACTUAL_MCP_LISTEN_HOST` (default `127.0.0.1`) and
+  `ACTUAL_MCP_LISTEN_PORT` (default 8787).
+
 ## Claude Code / Claude Desktop
 
 Build once with `yarn build:mcp`, then register a command that wraps the server in `op run` with an

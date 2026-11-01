@@ -101,10 +101,11 @@ jobs:
         run: |
           yarn build:mcp
           test -s packages/mcp/dist/mcp.js
+          test -s packages/mcp/dist/mcp-http.js
           # @actual-app/core is only a devDependency of the package, so the
           # packaged server must not import it at run time
-          if grep -Eq "[\"']@actual-app/core" packages/mcp/dist/mcp.js; then
-            echo 'dist/mcp.js references @actual-app/core, which is not a runtime dependency.'
+          if grep -Eq "[\"']@actual-app/core" packages/mcp/dist/*.js; then
+            echo 'The MCP bundles reference @actual-app/core, which is not a runtime dependency.'
             exit 1
           fi
 

@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { buildPage, pageList, pageParams } from '#paging';
 import { sanitizeDeep, withText } from '#sanitize';
+import { syncNow } from '#sync';
 
 import { date, money, pageShape } from './shared';
 import type { RegisterTool } from './shared';
@@ -290,7 +291,7 @@ export function registerCoreTools(tool: RegisterTool) {
     'Syncs the local budget copy with the server: pulls its changes. Sends nothing, and posts no schedules or paycheck changes, on this read-only entry.',
     {},
     async () => {
-      await api.sync();
+      await syncNow();
       return { synced: true };
     },
   );

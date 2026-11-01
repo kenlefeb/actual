@@ -26,12 +26,15 @@ export default defineConfig({
     outDir: path.resolve(__dirname, 'dist'),
     emptyOutDir: true,
     lib: {
-      entry: path.resolve(__dirname, 'src/index.ts'),
+      entry: {
+        mcp: path.resolve(__dirname, 'src/index.ts'),
+        'mcp-http': path.resolve(__dirname, 'src/remote-index.ts'),
+      },
       formats: ['es'],
     },
     rollupOptions: {
       output: {
-        entryFileNames: 'mcp.js',
+        entryFileNames: '[name].js',
         banner: chunk => (chunk.isEntry ? '#!/usr/bin/env node' : ''),
       },
     },

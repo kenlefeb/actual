@@ -41,7 +41,7 @@
 - [x] 6.1 Spec "An aligned release package". Verify with `openspec validate fork-mcp-server --strict`.
 - [x] 6.2 Add failing tests: "Versions drift" (a script or vitest test comparing the eight `package.json` versions) and "The server reports its version".
 - [x] 6.3 Join `@actual-app/mcp` to the version bumps: update the "Private customized build versions" rule in `AGENTS.md`, the bump process and `actual-hosting` steps; add the build artifact to `fork-build.yml`; write `docs` for setting up the server with `op run`.
-- [ ] 6.4 Release note and fork news for the version that first carries the package (`fork/release-notes/<buildVersion>.md`, `yarn generate:fork-news`).
+- [x] 6.4 Release note and fork news for the version that first carries the package (`fork/release-notes/<buildVersion>.md`, `yarn generate:fork-news`).
 - [ ] 6.5 Archive this change when its last story merges (task 7.4 if sc-1637 is later than sc-1573), update the #1550 row in the epic table of `docs/agents/issue-tracker.md` with `mcp-server` and `api-fork-handlers`, and file Backlog stories for any open follow-ups.
 
 ## 7. Coverage check finds `handlers[...]` registrations (sc-1637)

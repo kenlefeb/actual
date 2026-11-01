@@ -1,33 +1,33 @@
 {
   "paychecks-get": {
-    "skip": "Read tool arrives in sc-1571 (fork read tools)"
+    "tool": "list_paychecks"
   },
   "getPaychecks": {
-    "skip": "Read tool arrives in sc-1571 (fork read tools)"
+    "tool": "list_paychecks"
   },
   "paycheck-year-to-date": {
-    "skip": "Read tool arrives in sc-1571 (fork read tools)"
+    "tool": "get_paycheck_year_to_date"
   },
   "getPaycheckYearToDate": {
-    "skip": "Read tool arrives in sc-1571 (fork read tools)"
+    "tool": "get_paycheck_year_to_date"
   },
   "paychecks-clearing-status": {
-    "skip": "Read tool arrives in sc-1571 (fork read tools)"
+    "tool": "get_paychecks_clearing_status"
   },
   "getPaychecksClearingStatus": {
-    "skip": "Read tool arrives in sc-1571 (fork read tools)"
+    "tool": "get_paychecks_clearing_status"
   },
   "business-calendars-get": {
-    "skip": "Read tool arrives in sc-1571 (fork read tools)"
+    "tool": "list_business_calendars"
   },
   "getBusinessCalendars": {
-    "skip": "Read tool arrives in sc-1571 (fork read tools)"
+    "tool": "list_business_calendars"
   },
   "account-move-on-budget-preview": {
-    "skip": "Read tool arrives in sc-1571 (fork read tools)"
+    "tool": "preview_move_on_budget"
   },
   "previewMoveAccountOnBudget": {
-    "skip": "Read tool arrives in sc-1571 (fork read tools)"
+    "tool": "preview_move_on_budget"
   },
   "paycheck-create": {
     "skip": "Write tool arrives in sc-1572 (opt-in write tools)"

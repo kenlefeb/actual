@@ -22,13 +22,27 @@ export type RemoteOptions = {
 const MAX_BODY_BYTES = 1_000_000;
 const LOOPBACK = ['127.0.0.1', '::1', 'localhost'];
 
-/** A fixed-window counter per key; expired keys are dropped as new ones arrive. */
+/** Endpoints with their own rate-limit counter; every other path shares "other". */
+const RATE_ENDPOINTS = ['/mcp'];
+
+/**
+ * A fixed-window counter per key. Keys must come from a bounded set (never a
+ * raw request path); expired windows are dropped once per window.
+ */
 function createLimiter(limit: number, windowMs: number) {
   const hits = new Map<string, { count: number; resetAt: number }>();
+  let nextPrune = 0;
   return (key: string) => {
     const now = Date.now();
-    for (const [k, v] of hits) if (v.resetAt <= now) hits.delete(k);
-    const hit = hits.get(key) ?? { count: 0, resetAt: now + windowMs };
+    if (now >= nextPrune) {
+      for (const [k, v] of hits) if (v.resetAt <= now) hits.delete(k);
+      nextPrune = now + windowMs;
+    }
+    const known = hits.get(key);
+    const hit =
+      known && known.resetAt > now
+        ? known
+        : { count: 0, resetAt: now + windowMs };
     hit.count++;
     hits.set(key, hit);
     return hit.count <= limit;
@@ -122,6 +136,9 @@ export function createRemoteHttpServer(
 
   async function handle(req: IncomingMessage, res: ServerResponse) {
     const endpoint = new URL(req.url ?? '/', 'http://localhost').pathname;
+    // The limiters are keyed by this bounded value, so a path a client makes up
+    // cannot start a fresh counter or grow the maps.
+    const rateKey = RATE_ENDPOINTS.includes(endpoint) ? endpoint : 'other';
 
     if (!config.allowedHosts.includes(hostName(req.headers.host))) {
       return refuse(res, 403, 'host');
@@ -133,7 +150,7 @@ export function createRemoteHttpServer(
     ) {
       return refuse(res, 403, 'origin');
     }
-    if (!perEndpoint(endpoint)) {
+    if (!perEndpoint(rateKey)) {
       return refuse(res, 429, 'rate-endpoint', undefined, {
         'retry-after': '60',
       });
@@ -145,7 +162,7 @@ export function createRemoteHttpServer(
       if (!who) return refuse(res, 401, 'unauthenticated');
       client = who.clientId;
     }
-    if (!perClient(`${endpoint}|${client}`)) {
+    if (!perClient(`${rateKey}|${client}`)) {
       return refuse(res, 429, 'rate-client', client, { 'retry-after': '60' });
     }
 

@@ -223,6 +223,20 @@ describe('host, origin and rate checks', () => {
     expect(statuses.slice(3)).toEqual([429, 429]);
   });
 
+  it('Distinct paths share one limit', async () => {
+    await start({
+      rate: { perEndpoint: 3, perClient: 1000, windowMs: 60_000 },
+    });
+    const statuses: number[] = [];
+    for (let i = 0; i < 6; i++) {
+      statuses.push(
+        (await raw({ path: `/probe-${i}`, headers: MCP_HEADERS })).status,
+      );
+    }
+    expect(statuses.filter(s => s === 429)).toHaveLength(3);
+    expect(statuses.slice(3).every(s => s === 429)).toBe(true);
+  });
+
   it('A refusal is recorded', async () => {
     await start();
     await raw({ headers: { ...MCP_HEADERS, host: 'evil.example.test' } });

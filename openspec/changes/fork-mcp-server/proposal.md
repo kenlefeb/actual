@@ -14,6 +14,7 @@ Today the fork's handlers are reachable only through the deprecated `internal.se
 - **Fork read tools (sc-1571).** Paychecks, year-to-date, clearing status, business calendars, schedule dates, account budget status, moved-history classification and a move-on-budget preview.
 - **Opt-in write tools with an audit log (sc-1572).** A separate server entry with `--writes`, `write_`-prefixed tools, a small write set with explicit ids and a 50-row cap, before and after values, and a local JSONL audit log. Fixture-budget tests for writes live here.
 - **Eighth aligned package (sc-1573).** `@actual-app/mcp` joins the version-aligned release packages, with a check that all eight `package.json` versions agree, docs, the build artifact and a fork release note.
+- **Push-free read mode (sc-1601).** `@actual-app/api`'s `init` gains `readOnly: true`, under which the engine runs none of its automatic writers (schedule auto-posting, the paycheck reconcile and backfill) and pushes nothing. The read entry of the MCP server uses it, so "read-only" is literally true, production included.
 
 Non-goals (already filed, deferred):
 - A remote or HTTP transport (sc-1554).
@@ -27,6 +28,7 @@ Non-goals (already filed, deferred):
 
 - `mcp-server`: what the fork's MCP server exposes and how it protects the budget and its credentials.
 - `api-fork-handlers`: typed `@actual-app/api` methods for the fork-only handlers.
+- `api-read-only-mode`: the `readOnly` option of `init`, under which a session writes and pushes nothing.
 
 ### Modified Capabilities
 

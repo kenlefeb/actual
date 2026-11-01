@@ -18,11 +18,16 @@ The row is added in `SettingsNav` beside General, Advanced and Experimental. It 
 ### 4. Nothing else changes
 Desktop keeps the bell and gains no row. The "What's new" message and the link in the About group stay.
 
-## Open questions (for the UX designer; not decided here)
+## UX decisions (UX designer, mock: Figma node 3-474 in file T8dvalNySZboEI17QlwRCb)
 
-- Where the row sits in the list (right after General, or above Advanced).
-- How the unseen count is styled on a 40px row in all three themes.
-- Whether the Settings tab in the bottom bar also shows a marker when entries are unseen.
-- Whether the Notifications page needs a back button on a narrow screen now that it is reached from a list (check at implementation).
+### 5. Position and size
+The row goes right after General, because it is the one row about reading rather than configuring and the count is most useful where it is seen first. It is 40px high with the same icon, label and chevron as its neighbours.
 
-The spec and tests stay true whichever way these go: they assert that the row exists, opens the page, shows the count and is absent when notifications are off.
+### 6. The count pill
+The pill sits between the label and the chevron: 20px high, at least 20px wide, 6px side padding, fully rounded, 12px bold text with tabular numbers. It uses the themed `pillBackgroundSelected` and `pillTextSelected` pair, not the bell's white on `buttonPrimaryBackground`, which fails for 12px text in midnight (3.5:1). A test checks the pair is at least 4.5:1 in light, dark and midnight. The count is capped at "9+" like the bell, and the row's screen-reader label is "Notifications: N unread". With nothing unseen there is no pill.
+
+### 7. No Settings tab dot
+One count on the row is enough; a dot on the tab would repeat it and suggest settings need attention. The "What's new" message already announces a release.
+
+### 8. Back on the Notifications page
+On a narrow screen the page header has a Back button. It goes back to where the user came from and falls back to /settings when there is no history to go back to, so it works when the page is opened from the "What's new" message.

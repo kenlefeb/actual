@@ -1,7 +1,9 @@
 import { useEffect, useEffectEvent, useRef } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router';
 
 import { Button } from '@actual-app/components/button';
+import { useResponsive } from '@actual-app/components/hooks/useResponsive';
 import { AnimatedLoading } from '@actual-app/components/icons/AnimatedLoading';
 import { styles } from '@actual-app/components/styles';
 import { Text } from '@actual-app/components/text';
@@ -9,9 +11,11 @@ import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
 
 import { Link } from '#components/common/Link';
+import { MobileBackButton } from '#components/mobile/MobileBackButton';
 import { MOBILE_NAV_HEIGHT } from '#components/mobile/MobileNavTabs';
-import { Page } from '#components/Page';
+import { MobilePageHeader, Page } from '#components/Page';
 import { Setting } from '#components/settings/UI';
+import { useNavigate } from '#hooks/useNavigate';
 import { useNewsFeed } from '#hooks/useNewsFeed';
 import { getUnseenEntries } from '#news/utils';
 
@@ -23,6 +27,9 @@ const DISCORD_URL = 'https://discord.gg/pRYNYr4W5A';
 
 export function NotificationsPage() {
   const { t } = useTranslation();
+  const { isNarrowWidth } = useResponsive();
+  const navigate = useNavigate();
+  const location = useLocation();
   const {
     entries,
     isLoading,
@@ -48,7 +55,30 @@ export function NotificationsPage() {
   }, [entries]);
 
   return (
-    <Page header={t('Notifications')}>
+    <Page
+      header={
+        isNarrowWidth ? (
+          <MobilePageHeader
+            title={t('Notifications')}
+            leftContent={
+              <MobileBackButton
+                // Where the user came from; /settings when this page was the
+                // first one opened (for example from the "What's new" message)
+                onPress={() => {
+                  if (location.key === 'default') {
+                    void navigate('/settings');
+                  } else {
+                    void navigate(-1);
+                  }
+                }}
+              />
+            }
+          />
+        ) : (
+          t('Notifications')
+        )
+      }
+    >
       <View
         style={{
           marginTop: 10,

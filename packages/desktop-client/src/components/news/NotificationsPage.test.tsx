@@ -1,4 +1,4 @@
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -26,6 +26,14 @@ vi.mock('#hooks/useNewsFeed', () => ({
     isLoading: mockIsLoading,
     errorKind: mockErrorKind,
     retry: mockRetry,
+  }),
+}));
+
+const phone = vi.hoisted(() => ({ isNarrowWidth: false }));
+vi.mock('@actual-app/components/hooks/useResponsive', () => ({
+  useResponsive: () => ({
+    isNarrowWidth: phone.isNarrowWidth,
+    isWideWidth: !phone.isNarrowWidth,
   }),
 }));
 
@@ -67,13 +75,55 @@ function renderPage() {
   );
 }
 
+function Where() {
+  return <div data-testid="where">{useLocation().pathname}</div>;
+}
+
+function renderRouted(entries: string[], index: number) {
+  return render(
+    <TestProviders>
+      <MemoryRouter initialEntries={entries} initialIndex={index}>
+        <Routes>
+          <Route path="/notifications" element={<NotificationsPage />} />
+          <Route path="*" element={<Where />} />
+        </Routes>
+      </MemoryRouter>
+    </TestProviders>,
+  );
+}
+
 describe('NotificationsPage', () => {
   beforeEach(() => {
+    phone.isNarrowWidth = false;
     vi.clearAllMocks();
     mockEntries = [];
     mockIsLoading = false;
     mockErrorKind = undefined;
     mockLastSeenNewsDate = undefined;
+  });
+
+  it('Back returns to the previous page on a phone', async () => {
+    phone.isNarrowWidth = true;
+    renderRouted(['/budget', '/notifications'], 1);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Back' }));
+
+    expect(screen.getByTestId('where')).toHaveTextContent('/budget');
+  });
+
+  it('Back falls back to /settings when there is no history', async () => {
+    phone.isNarrowWidth = true;
+    renderRouted(['/notifications'], 0);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Back' }));
+
+    expect(screen.getByTestId('where')).toHaveTextContent('/settings');
+  });
+
+  it('has no Back button on a wide screen', () => {
+    renderRouted(['/notifications'], 0);
+
+    expect(screen.queryByRole('button', { name: 'Back' })).toBe(null);
   });
 
   it('renders entries with markdown, dates and links, and marks them seen', async () => {

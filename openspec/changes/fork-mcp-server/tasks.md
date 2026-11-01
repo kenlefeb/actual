@@ -41,4 +41,11 @@
 - [ ] 6.2 Add failing tests: "Versions drift" (a script or vitest test comparing the eight `package.json` versions) and "The server reports its version".
 - [ ] 6.3 Join `@actual-app/mcp` to the version bumps: update the "Private customized build versions" rule in `AGENTS.md`, the bump process and `actual-hosting` steps; add the build artifact to `fork-build.yml`; write `docs` for setting up the server with `op run`.
 - [ ] 6.4 Release note and fork news for the version that first carries the package (`fork/release-notes/<buildVersion>.md`, `yarn generate:fork-news`).
-- [ ] 6.5 Archive this change when sc-1573 merges (the last story), update the #1550 row in the epic table of `docs/agents/issue-tracker.md` with `mcp-server` and `api-fork-handlers`, and file Backlog stories for any open follow-ups.
+- [ ] 6.5 Archive this change when its last story merges (task 7.4 if sc-1637 is later than sc-1573), update the #1550 row in the epic table of `docs/agents/issue-tracker.md` with `mcp-server` and `api-fork-handlers`, and file Backlog stories for any open follow-ups.
+
+## 7. Coverage check finds `handlers[...]` registrations (sc-1637)
+
+- [ ] 7.1 Spec "Registration forms" and the reworded "Coverage manifest" (in this change). Verify with `openspec validate fork-mcp-server --strict`.
+- [ ] 7.2 Add failing tests in `fork/scripts/check-mcp-coverage.test.mjs`, named after the scenarios: "An assigned handler without coverage", "An assigned handler with an entry", "An assigned handler across lines", "A call is not a registration" (a call, a `===` comparison and an argument) and, for the baseline, a test that the rebuilt file lists an assigned upstream handler.
+- [ ] 7.3 Add the `handlers[...] =` pattern to the extractor (whole-file, `=` not `==`, `=>` or a call), rebuild `packages/mcp/upstream-handlers.json` with `--baseline-from upstream/master` (an upstream ref only; review the diff), and map or skip any fork-only handlers it finds, with reasons (none found when this was written).
+- [ ] 7.4 Archive this change when sc-1637 merges, if it is the last story; otherwise do it in 6.5.

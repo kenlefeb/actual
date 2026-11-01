@@ -32,7 +32,7 @@ The server SHALL label the environment from the server URL's host: `actual-stagi
 #### Scenario: Production is read-only even when allowed
 - **GIVEN** `ACTUAL_MCP_ALLOW_PRODUCTION=1` and a production host
 - **WHEN** the server starts with `--writes`
-- **THEN** it exits with an error, and without `--writes` it lists read tools only (no write tools; sync side effects such as posting due schedules can still occur, see sc-1601)
+- **THEN** it exits with an error, and without `--writes` it lists read tools only, and a sync writes nothing
 
 #### Scenario: A look-alike host
 - **GIVEN** `ACTUAL_SERVER_URL` is `https://actual-staging.owl-becrux.ts.net.evil.example`
@@ -62,18 +62,22 @@ The server SHALL offer read tools only unless started with `--writes`. Write too
 - **WHEN** a client lists the tools of a server started with `--writes` on a `staging` host
 - **THEN** it lists the read tools and the `write_` tools
 
+#### Scenario: The writes entry runs the engine normally
+- **WHEN** the server is started with `--writes` on a `staging` host
+- **THEN** the budget is opened without `readOnly`, so the engine keeps its normal behavior there, while a server started without `--writes` opens it with `readOnly`
+
 ### Requirement: Core read tools
-The server SHALL offer read tools for accounts and balances, category groups and categories, payees, transactions, budget months, schedules, rules, a read-only ActualQL query and `sync_budget`, and no write tools unless started with `--writes`. A sync is not push-free: its side effects are tracked as sc-1601.
+The server SHALL offer read tools for accounts and balances, category groups and categories, payees, transactions, budget months, schedules, rules, a read-only ActualQL query and `sync_budget`, and no write tools unless started with `--writes`. The read entry SHALL open the budget read-only (`api-read-only-mode`), so a sync writes nothing locally and pushes nothing.
 
 #### Scenario: Transactions from a fixture budget
 - **GIVEN** a fixture budget with 120 transactions in "Checking"
 - **WHEN** a client calls `list_transactions` with Checking's `account_id` and no limit
 - **THEN** it receives 50 transactions, `has_more` true and a `next_cursor`
 
-#### Scenario: A sync has the app's side effects
-- **GIVEN** an auto-post schedule is due
-- **WHEN** the server syncs, at startup or through `sync_budget`
-- **THEN** the engine's after-sync work may post it and reconcile paychecks as the app would, the next sync pushes the result, and `sync_budget` and the README say so (push-free mode: sc-1601)
+#### Scenario: A read entry writes nothing
+- **GIVEN** a budget with an auto-post schedule that is due today and paycheck edits that arrive by sync
+- **WHEN** the server starts without `--writes` and the client calls `sync_budget`
+- **THEN** no transaction was created in the local copy, the sync server received no messages from this client, and no budget file was uploaded
 
 #### Scenario: A query that is not a select
 - **WHEN** a client calls `run_query` with a query that would change data

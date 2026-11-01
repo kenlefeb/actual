@@ -174,10 +174,27 @@ export function registerCoreTools(tool: RegisterTool) {
 
   tool(
     'get_budget_month',
-    'Get the budget summary for one month (YYYY-MM): totals plus budgeted, spent and balance per category. Amounts are cents.',
-    { month: z.string().regex(/^\d{4}-\d{2}$/, 'YYYY-MM') },
-    async ({ month }) => {
+    "Get the budget summary for one month (YYYY-MM): the month's totals (`to_budget`, `total_budgeted`, `total_spent`, `total_balance`, `total_income`) and `category_count`, plus budgeted, spent and balance per category, grouped. Categories are paged with `limit` and `cursor`: a group that spans pages appears on each with only that page's categories, and empty groups appear on the first page. The totals are for the whole month on every page. Amounts are cents.",
+    { month: z.string().regex(/^\d{4}-\d{2}$/, 'YYYY-MM'), ...pageShape },
+    async ({ month, ...input }) => {
       const m = await api.getBudgetMonth(month);
+      const p = pageParams(input);
+      // Page the flattened category list, in the order the budget lists it
+      const rows = m.categoryGroups.flatMap((g, group) =>
+        (g.categories ?? []).map(c => ({
+          group,
+          category: withText(
+            {
+              id: c.id,
+              budgeted: c.budgeted,
+              spent: c.spent,
+              balance: c.balance,
+            },
+            { name: c.name },
+          ),
+        })),
+      );
+      const page = buildPage(rows.slice(p.offset, p.offset + p.limit + 1), p);
       return {
         month: m.month,
         to_budget: m.toBudget,
@@ -185,20 +202,28 @@ export function registerCoreTools(tool: RegisterTool) {
         total_spent: m.totalSpent,
         total_balance: m.totalBalance,
         total_income: m.totalIncome,
-        groups: m.categoryGroups.map(g => ({
-          ...withText({ id: g.id, is_income: g.is_income }, { name: g.name }),
-          categories: (g.categories ?? []).map(c =>
-            withText(
-              {
-                id: c.id,
-                budgeted: c.budgeted,
-                spent: c.spent,
-                balance: c.balance,
-              },
-              { name: c.name },
-            ),
-          ),
-        })),
+        category_count: rows.length,
+        groups: m.categoryGroups.flatMap((g, group) => {
+          const categories = page.items
+            .filter(row => row.group === group)
+            .map(row => row.category);
+          // Empty groups have no row to page, so they go on the first page
+          const isEmpty = (g.categories ?? []).length === 0;
+          if (categories.length === 0 && !(isEmpty && p.offset === 0)) {
+            return [];
+          }
+          return [
+            {
+              ...withText(
+                { id: g.id, is_income: g.is_income },
+                { name: g.name },
+              ),
+              categories,
+            },
+          ];
+        }),
+        has_more: page.has_more,
+        next_cursor: page.next_cursor,
       };
     },
   );

@@ -90,7 +90,7 @@
 
 ## 13. The `--writes` entry has its own data directory (sc-1948)
 
-- [ ] 13.1 Spec requirement "The writes entry has its own data directory" (already in this change), and design Decision 17. Verify with `openspec validate fork-mcp-server --strict`.
-- [ ] 13.2 Add failing tests named after the scenarios: "The entries use separate data directories" (a config test for both defaults and the audit log names) and "A write session's unsent message stays out of a read session".
-- [ ] 13.3 Give the `--writes` entry its own `<env>-writes` data directory and audit log (`<env>-writes.audit.jsonl`), with a README and docs line telling anyone who used the read directory for a write session before this change to delete it once. Security Analyst approves the PR.
+- [x] 13.1 Spec requirement "The writes entry has its own data directory" (already in this change), and design Decision 17. Verify with `openspec validate fork-mcp-server --strict`.
+- [x] 13.2 Add failing tests named after the scenarios: "The entries use separate data directories" (a config test for both defaults and the audit log names) and "A write session's unsent message stays out of a read session".
+- [x] 13.3 Give the `--writes` entry its own `<env>-writes` data directory and audit log (`<env>-writes.audit.jsonl`), with a README and docs line telling anyone who used the read directory for a write session before this change to delete it once. Security Analyst approves the PR.
 - [ ] 13.4 Archive this change when its last story merges, update the #1550 row in the epic table of `docs/agents/issue-tracker.md` with `mcp-server`, `api-fork-handlers` and `api-read-only-mode`, and file Backlog stories for any open follow-up (a public batch update method if partial failures are seen, and the `sendMessages` backstop for read-only mode after every caller is checked).

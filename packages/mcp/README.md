@@ -70,7 +70,7 @@ budget-reset tools.
   refuses if it differs (a new transaction, another date, an invented value). It keeps no state
   between calls.
 - **Audit log, written first.** Before each write runs, the server appends one JSON line to
-  `<data dir>.audit.jsonl` (by default `~/Library/Application Support/actual-mcp/<env>.audit.jsonl`),
+  `<data dir>.audit.jsonl` (by default `~/Library/Application Support/actual-mcp/<env>-writes.audit.jsonl`),
   mode 0600: the time, tool, ids and each field's before and after values. It never holds a
   credential. If the line can't be appended, the write doesn't run. A
   `write_create_transactions` line names the account and the new rows.
@@ -88,6 +88,11 @@ budget-reset tools.
 - **Bounds.** A write is refused, with fixed text and before any audit line, for an `amount` that
   is not an integer within ±1,000,000,000,000 cents, a date that is not a real date from
   1970-01-01 to 2100-12-31, or a budget month outside 01 to 12.
+- **A separate copy.** The `--writes` entry keeps its budget copy in `<env>-writes`, beside the read
+  entry's `<env>`, so a write that ends before it syncs never sits in the copy a read entry
+  syncs. Its first start downloads the budget again. If you used the read directory
+  (`<env>`) for a write session before this change, delete that directory once
+  (`rm -r ~/Library/Application Support/actual-mcp/<env>`); the next read start downloads a clean copy.
 - Writes are pushed to the server by the engine's next sync, as in the app.
 
 Register the write entry beside the read entry, so a session can load reads without writes:
@@ -105,14 +110,14 @@ Register the write entry beside the read entry, so a session can load reads with
 Environment variables only (the same names as the CLI). Never put secrets on the command line:
 any argument other than `--writes` is a usage error.
 
-| Variable                      | Required | Meaning                                                             |
-| ----------------------------- | -------- | ------------------------------------------------------------------- |
-| `ACTUAL_SERVER_URL`           | yes      | Sync server URL                                                     |
-| `ACTUAL_PASSWORD`             | yes      | Sync server password                                                |
-| `ACTUAL_SYNC_ID`              | yes      | Budget sync ID                                                      |
-| `ACTUAL_ENCRYPTION_PASSWORD`  | no       | End-to-end encryption key                                           |
-| `ACTUAL_DATA_DIR`             | no       | Default `~/Library/Application Support/actual-mcp/<env>`, mode 0700 |
-| `ACTUAL_MCP_ALLOW_PRODUCTION` | no       | `1` to allow any other host. Still read-only.                       |
+| Variable                      | Required | Meaning                                                                                              |
+| ----------------------------- | -------- | ---------------------------------------------------------------------------------------------------- |
+| `ACTUAL_SERVER_URL`           | yes      | Sync server URL                                                                                      |
+| `ACTUAL_PASSWORD`             | yes      | Sync server password                                                                                 |
+| `ACTUAL_SYNC_ID`              | yes      | Budget sync ID                                                                                       |
+| `ACTUAL_ENCRYPTION_PASSWORD`  | no       | End-to-end encryption key                                                                            |
+| `ACTUAL_DATA_DIR`             | no       | Default `~/Library/Application Support/actual-mcp/<env>` (`<env>-writes` with `--writes`), mode 0700 |
+| `ACTUAL_MCP_ALLOW_PRODUCTION` | no       | `1` to allow any other host. Still read-only.                                                        |
 
 The host decides the environment: `actual-staging.owl-becrux.ts.net` is `staging`, `localhost`,
 `127.0.0.1` and `[::1]` are `local`, anything else is `production` and refused unless

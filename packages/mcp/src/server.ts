@@ -10,6 +10,7 @@ import { registerCalendarTools } from './tools/read/calendars';
 import { registerCoreTools } from './tools/read/core';
 import { registerPaycheckTools } from './tools/read/paychecks';
 import { registerWriteTools } from './tools/write/register';
+import { version } from './version';
 
 const READ_NOTE = ` Read-only. ${DATA_NOTE}`;
 const WRITE_NOTE = ` Changes the budget; ids only, at most 50 rows, every write is audit-logged first. ${DATA_NOTE}`;
@@ -23,7 +24,7 @@ export function createServer(
   secrets: string[] = [],
   { auditLog }: ServerOptions = {},
 ) {
-  const server = new McpServer({ name: 'actual-budget', version: '0.1.0' });
+  const server = new McpServer({ name: 'actual-budget', version });
 
   // Amounts are integer minor units (cents).
   const register =

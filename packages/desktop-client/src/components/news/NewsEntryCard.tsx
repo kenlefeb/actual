@@ -96,7 +96,12 @@ export function NewsEntryCard({ entry, isUnread }: NewsEntryCardProps) {
       <Text style={{ fontSize: 13 }}>
         <Link variant="external" to={entry.url} linkColor="purple">
           {isRelease ? (
-            <Trans>View on actualbudget.org</Trans>
+            // Fork release notes live on GitHub, upstream's on actualbudget.org
+            new URL(entry.url).hostname === 'github.com' ? (
+              <Trans>View release notes on GitHub</Trans>
+            ) : (
+              <Trans>View on actualbudget.org</Trans>
+            )
           ) : (
             <Trans>Read the full post</Trans>
           )}

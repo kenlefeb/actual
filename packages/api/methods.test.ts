@@ -1605,18 +1605,11 @@ describe('API preferences: setPreference', () => {
 });
 
 describe('API paycheck schedules', () => {
+  // Names the method a script can follow (ADR 2)
   const MANAGED =
-    'This schedule is managed by paycheck "Acme". Edit the paycheck in the app.';
+    'This schedule is managed by paycheck "Acme". Edit the paycheck in the app, or with updatePaycheck(';
 
-  async function paychecks() {
-    return (await api.internal!.send('paychecks-get')) as Array<{
-      id: string;
-      definition: {
-        paySchedule?: string | null;
-        deposits: Array<{ account: string; schedule?: string | null }>;
-      };
-    }>;
-  }
+  const paychecks = () => api.getPaychecks();
 
   // The "Acme" paycheck, made by the app, with Checking and Savings deposits
   async function createAcme() {
@@ -1626,7 +1619,7 @@ describe('API paycheck schedules', () => {
     const income = (await api.getCategories()).find(
       c => 'is_income' in c && c.is_income && 'group_id' in c,
     );
-    const id = (await api.internal!.send('paycheck-create', {
+    const id = await api.createPaycheck({
       name: 'Acme',
       newClearingAccountName: 'Acme Paycheck',
       definition: {
@@ -1642,7 +1635,7 @@ describe('API paycheck schedules', () => {
           { id: 'checking', account: checking, kind: 'remainder', value: 0 },
         ],
       },
-    } as never)) as string;
+    });
     const { definition } = (await paychecks()).find(p => p.id === id)!;
     const deposit = (account: string) =>
       definition.deposits.find(d => d.account === account)!.schedule!;
@@ -1666,6 +1659,14 @@ describe('API paycheck schedules', () => {
     ).rejects.toThrow(MANAGED);
 
     expect(await schedule(checking)).toEqual(before);
+  });
+
+  test('The error names the paycheck id to pass to updatePaycheck', async () => {
+    const { id, checking } = await createAcme();
+
+    await expect(api.updateSchedule(checking, { amount: 1 })).rejects.toThrow(
+      `updatePaycheck("${id}", ...)`,
+    );
   });
 
   test("A script deletes Acme's pay schedule", async () => {
@@ -1730,22 +1731,176 @@ describe('API paycheck schedules', () => {
     const { definition } = (await paychecks()).find(p => p.id === id)!;
 
     // A raise updates the deposit amounts
-    await api.internal!.send('paycheck-update', {
-      id,
+    await api.updatePaycheck(id, {
       name: 'Acme',
       definition: { ...definition, grossAmount: 320000 },
-    } as never);
+    });
     expect((await schedule(savings))?.amount).toBe(32000);
 
     // Skipping advances the pay schedule
     const nextPay = (await schedule(pay))?.next_date;
-    await api.internal!.send('paycheck-skip-next', { id } as never);
+    await api.skipNextPaycheck(id);
     expect((await schedule(pay))?.next_date).not.toBe(nextPay);
 
     // Deleting removes every schedule
-    await api.internal!.send('paycheck-delete', { id } as never);
+    await api.deletePaycheck(id);
     for (const s of [pay, checking, savings]) {
       expect(await schedule(s)).toBeUndefined();
     }
+  });
+});
+
+describe('API fork handlers', () => {
+  test('Business calendars are created, read, updated and deleted', async () => {
+    await api.loadBudget(budgetName);
+
+    const id = await api.createBusinessCalendar({ name: 'Bank' });
+    expect(await api.getBusinessCalendars()).toEqual([
+      {
+        id,
+        name: 'Bank',
+        nonWorkingDays: [0, 6],
+        holidays: [],
+        exceptions: [],
+      },
+    ]);
+
+    await api.updateBusinessCalendar(id, {
+      name: 'Credit union',
+      nonWorkingDays: [0],
+    });
+    expect((await api.getBusinessCalendars())[0]).toMatchObject({
+      name: 'Credit union',
+      nonWorkingDays: [0],
+    });
+
+    await api.deleteBusinessCalendar(id);
+    expect(await api.getBusinessCalendars()).toEqual([]);
+  });
+
+  test('A business calendar needs valid fields', async () => {
+    await api.loadBudget(budgetName);
+
+    await expect(
+      api.createBusinessCalendar({
+        name: 'Bank',
+        nonWorkingDays: [9 as never],
+      }),
+    ).rejects.toThrow();
+    expect(await api.getBusinessCalendars()).toEqual([]);
+  });
+
+  test('An account takes a business calendar and days early', async () => {
+    await api.loadBudget(budgetName);
+    const calendar = await api.createBusinessCalendar({ name: 'Bank' });
+    const account = await api.createAccount({ name: 'Checking' }, 0);
+
+    await api.setAccountBusinessDays(account, {
+      businessCalendarId: calendar,
+      depositDaysEarly: 2,
+    });
+
+    expect((await api.getAccounts()).find(a => a.id === account)).toMatchObject(
+      { business_calendar_id: calendar, deposit_days_early: 2 },
+    );
+    await expect(
+      api.setAccountBusinessDays(account, {
+        businessCalendarId: null,
+        depositDaysEarly: -1,
+      }),
+    ).rejects.toThrow('Days early must be a whole number');
+  });
+
+  test('A paycheck reports its year to date and clearing status', async () => {
+    await api.loadBudget(budgetName);
+    const checking = await api.createAccount({ name: 'Checking' }, 0);
+    const id = await api.createPaycheck({
+      name: 'Acme',
+      newClearingAccountName: 'Acme Paycheck',
+      definition: {
+        payee: null,
+        clearingAccount: '',
+        date: { start: '2026-11-01', frequency: 'monthly' },
+        weekendSolveMode: 'before',
+        grossAmount: 300000,
+        incomeCategory: null,
+        deductions: [],
+        deposits: [
+          { id: 'checking', account: checking, kind: 'remainder', value: 0 },
+        ],
+      },
+    });
+
+    const year = new Date().getFullYear();
+    expect((await api.getPaycheckYearToDate(id)).map(t => t.year)).toEqual([
+      year,
+      year - 1,
+    ]);
+    expect(await api.getPaychecksClearingStatus()).toEqual([
+      expect.objectContaining({ paycheck: id }),
+    ]);
+  });
+
+  test('An off-budget account is previewed and moved on budget', async () => {
+    await api.loadBudget(budgetName);
+    const account = await api.createAccount(
+      { name: 'Brokerage', offbudget: true },
+      10000,
+    );
+
+    const preview = await api.previewMoveAccountOnBudget(account, '2026-01-01');
+    expect(preview.startingBalance).toBe(10000);
+    expect(
+      (await api.getAccounts()).find(a => a.id === account)?.offbudget,
+    ).toBe(true);
+
+    await api.moveAccountOnBudget(account, '2026-01-01');
+    expect(
+      (await api.getAccounts()).find(a => a.id === account)?.offbudget,
+    ).toBe(false);
+    await expect(
+      api.moveAccountOnBudget(account, '2026-01-01'),
+    ).rejects.toThrow('already on budget');
+    await expect(
+      api.previewMoveAccountOnBudget(account, 'soon'),
+    ).rejects.toThrow('Invalid start date');
+  });
+});
+
+// The handlers the fork registers beyond upstream's, and the method for each.
+// shortcut: a fixed list, so a new fork handler must be added here; sc-1570's
+// coverage manifest finds new handlers by scanning.
+const FORK_HANDLER_METHODS = {
+  'paychecks-get': 'getPaychecks',
+  'paycheck-create': 'createPaycheck',
+  'paycheck-update': 'updatePaycheck',
+  'paycheck-delete': 'deletePaycheck',
+  'paycheck-skip-next': 'skipNextPaycheck',
+  'paycheck-year-to-date': 'getPaycheckYearToDate',
+  'paychecks-clearing-status': 'getPaychecksClearingStatus',
+  'account-set-business-days': 'setAccountBusinessDays',
+  'account-move-on-budget-preview': 'previewMoveAccountOnBudget',
+  'account-move-on-budget': 'moveAccountOnBudget',
+  'business-calendars-get': 'getBusinessCalendars',
+  'business-calendar-create': 'createBusinessCalendar',
+  'business-calendar-update': 'updateBusinessCalendar',
+  'business-calendar-delete': 'deleteBusinessCalendar',
+} as const;
+
+describe('API fork handler coverage', () => {
+  test('A handler without a method', async () => {
+    const source = await fs.readFile(
+      path.join(__dirname, 'methods.ts'),
+      'utf8',
+    );
+    const missing = Object.entries(FORK_HANDLER_METHODS)
+      .filter(
+        ([handler, method]) =>
+          typeof (api as Record<string, unknown>)[method] !== 'function' ||
+          !source.includes(`send('${handler}'`),
+      )
+      .map(([handler]) => handler);
+
+    expect(missing).toEqual([]);
   });
 });

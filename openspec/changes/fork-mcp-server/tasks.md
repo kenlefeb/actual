@@ -2,10 +2,10 @@
 
 ## 1. Typed API methods (sc-1568)
 
-- [ ] 1.1 Spec `api-fork-handlers`. Verify with `openspec validate fork-mcp-server --strict`.
-- [ ] 1.2 Add failing tests in `packages/api/methods.test.ts`, named after the scenarios: "A script edits a paycheck", "Move on budget through the API", "Errors are the handler's errors" and "A handler without a method" (compare the fork-only handlers, found from `app.method` registrations including multi-line ones, with the exports of `methods.ts`).
-- [ ] 1.3 Add the 14 typed methods in `packages/api/methods.ts` as thin `send(...)` wrappers with types from `Handlers`; export them from `index.ts`; refresh the API type snapshots.
-- [ ] 1.4 Let the CLI use them only if a command already needs one; add no commands in this slice.
+- [x] 1.1 Spec `api-fork-handlers` and the `paychecks` guard message (modified requirement "Editing and deleting paychecks"). Verify with `openspec validate fork-mcp-server --strict`.
+- [x] 1.2 Add failing tests in `packages/api/methods.test.ts`, named after the scenarios: "A script edits a paycheck", "Move on budget through the API", "Errors are the handler's errors" and "A handler without a method" (compare the fork-only handlers, found from `app.method` registrations including multi-line ones, with the exports of `methods.ts`).
+- [x] 1.3 Add the 14 typed methods in `packages/api/methods.ts` as thin `send(...)` wrappers with types from `Handlers`; export them from `index.ts`; refresh the API type snapshots.
+- [x] 1.4 Let the CLI use them only if a command already needs one; add no commands in this slice.
 
 ## 2. `packages/mcp` skeleton and read-only core tools (sc-1569)
 
@@ -19,7 +19,7 @@
 
 - [ ] 3.1 Spec requirement "Coverage manifest" (already in this change; confirm). Verify with `openspec validate fork-mcp-server --strict`.
 - [ ] 3.2 Add `fork/scripts/check-mcp-coverage.test.mjs` with the scenarios "A new handler without coverage", "A deliberate skip", "A registration across lines" and "Skip without a reason".
-- [ ] 3.3 Add `fork/scripts/check-mcp-coverage.mjs`, `packages/mcp/coverage.json` and `upstream-handlers.json` (from `upstream/master`), the `check:mcp-coverage` script and the `fork-ci.yml` step. Record the fork-only handlers as mapped to the tools of groups 2 and 4, or as skips with reasons.
+- [ ] 3.3 Add `fork/scripts/check-mcp-coverage.mjs`, `packages/mcp/coverage.json` and `upstream-handlers.json` (from `upstream/master`), the `check:mcp-coverage` script and the `fork-ci.yml` step. The check also fails on a fork handler outside the baseline with no `send('<handler>'` in `packages/api/methods.ts` and no skip reason. Record the fork-only handlers as mapped to the tools of groups 2 and 4, or as skips with reasons.
 - [ ] 3.4 Add the manifest line to the story-template checklist in `docs/agents/issue-tracker.md`, and note it in `docs/agents/team.md` if reviewers need it.
 
 ## 4. Fork read tools (sc-1571)

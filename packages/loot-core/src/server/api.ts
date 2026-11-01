@@ -1018,7 +1018,7 @@ async function refuseIfManagedByPaycheck(scheduleId: string) {
   const paycheck = await getPaycheckManagingSchedule(scheduleId);
   if (paycheck) {
     throw APIError(
-      `This schedule is managed by paycheck "${paycheck.name}". Edit the paycheck in the app.`,
+      `This schedule is managed by paycheck "${paycheck.name}". Edit the paycheck in the app, or with updatePaycheck("${paycheck.id}", ...).`,
     );
   }
 }

@@ -30,4 +30,4 @@ Non-goals (already filed, deferred):
 
 ### Modified Capabilities
 
-None.
+- `paychecks`: the API's refusal to edit a paycheck's schedule also names `updatePaycheck` and the paycheck id.

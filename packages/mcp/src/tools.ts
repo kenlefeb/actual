@@ -10,6 +10,7 @@ import { registerAccountTools } from './tools/read/accounts';
 import { registerCalendarTools } from './tools/read/calendars';
 import { registerPaycheckTools } from './tools/read/paychecks';
 import { date, money, pageShape } from './tools/read/shared';
+import { version } from './version';
 
 const DESCRIPTION_NOTE = ` Read-only. ${DATA_NOTE}`;
 
@@ -40,7 +41,7 @@ const querySchema = z
   .strict();
 
 export function createServer(secrets: string[] = []) {
-  const server = new McpServer({ name: 'actual-budget', version: '0.1.0' });
+  const server = new McpServer({ name: 'actual-budget', version });
 
   // All tools are read-only; amounts are integer minor units (cents).
   function tool<S extends z.ZodRawShape>(

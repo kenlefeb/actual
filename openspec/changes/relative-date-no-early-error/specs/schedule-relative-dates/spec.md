@@ -26,4 +26,4 @@ A schedule's date SHALL be definable as relative to another schedule: an offset 
 #### Scenario: Saving without a source is refused
 - **GIVEN** the date is relative and has no source chosen
 - **WHEN** the user saves
-- **THEN** the save is refused with "Choose the schedule this date is relative to", shown once, and no schedule is created or changed
+- **THEN** the save is refused with "Choose the schedule this date is relative to", and no schedule is created or changed

@@ -46,7 +46,7 @@ Community servers (henfrydls, KazeFreeze, marcoaperez; all MIT) pin the npm API 
 List tools take `limit` (default 50, max 200) and `cursor` and return `has_more` and `next_cursor`. A response whose serialized size would pass 100 KB drops trailing rows and sets `has_more`, so a tool call can't flood the client's context. `run_query` runs a read-only ActualQL query with the same cap and refuses anything that isn't a select.
 
 ### 8. Read tools
-Core (sc-1569): `list_accounts`, `get_account_balance`, `list_category_groups`, `list_payees`, `list_transactions`, `get_budget_month`, `list_schedules`, `list_rules`, `run_query` and `sync_budget` (pulls the server's changes into the local copy; changes nothing on the server). Fork (sc-1571): `list_paychecks`, `get_paycheck_year_to_date`, `get_paychecks_clearing_status`, `list_business_calendars`, `get_schedule_next_dates` (uses `api/schedule-dates-get`, which understands relative dates), `get_account_budget_status` (business calendar, days early, budget start date and offset), `list_moved_history` (transactions where `isMovedHistory` is true, via `notMovedHistoryFilter`; no handler is needed) and `preview_move_on_budget` (a read: it changes nothing).
+Core (sc-1569): `list_accounts`, `get_account_balance`, `list_category_groups`, `list_payees`, `list_transactions`, `get_budget_month`, `list_schedules`, `list_rules`, `run_query` and `sync_budget` (syncs the local copy; a sync can post due auto-post schedules and reconcile paychecks as the app does, see sc-1601). Fork (sc-1571): `list_paychecks`, `get_paycheck_year_to_date`, `get_paychecks_clearing_status`, `list_business_calendars`, `get_schedule_next_dates` (uses `api/schedule-dates-get`, which understands relative dates), `get_account_budget_status` (business calendar, days early, budget start date and offset), `list_moved_history` (transactions where `isMovedHistory` is true, via `notMovedHistoryFilter`; no handler is needed) and `preview_move_on_budget` (a read: it changes nothing).
 
 ### 9. Write tools and the audit log (sc-1572)
 - Names carry a `write_` prefix so a client can auto-allow reads and prompt on each write. v1 set: `write_create_transactions`, `write_update_transactions` (category, payee, notes), `write_set_budget_amount`, `write_skip_paycheck`, `write_move_on_budget`.
@@ -74,7 +74,7 @@ sc-1568 and sc-1569 first, in parallel. Then sc-1570 (the manifest starts comple
 - **Shared password.** One server password opens every budget, so the allowlist and read-only default are the scope control. Agent identity (sc-1555) is the real fix.
 - **Plaintext data directory.** The budget copy is unencrypted at rest; mitigated by 0700, location and FileVault, not removed.
 - **Prompt injection.** Labelling and stripping reduce but don't remove the risk; hence read-only by default, `write_` prefixes for per-call prompts, and ids-only writes.
-- **Stale local copy.** Reads can lag the server. Each read entry syncs at startup and `sync` is exposed as a read tool (`sync_budget`, pulls only); writes sync after.
+- **Stale local copy.** Reads can lag the server. Each read entry syncs at startup and `sync` is exposed as a read tool (`sync_budget`; not push-free, see sc-1601); writes sync after.
 
 ## Decisions for Ken
 

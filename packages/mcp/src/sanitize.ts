@@ -7,24 +7,24 @@ export const DATA_NOTE =
 // then controls and line/paragraph separators (Cc, Zl, Zp, become a space).
 const ESC = String.fromCharCode(27);
 const ANSI = new RegExp(`${ESC}\\[[0-9;?]*[ -/]*[@-~]|${ESC}[@-_]`, 'g');
-const FORMAT = /\p{Cf}/gu;
+const FORMAT = /[\p{Cf}\uFE00-\uFE0F\u{E0100}-\u{E01EF}]/gu;
 const CONTROL = /[\p{Cc}\p{Zl}\p{Zp}]/gu;
 
 /** Makes untrusted text safe to hand to a model: strips, then truncates to 200. */
-export function sanitizeText(value: string): {
+export function sanitizeText(input: string): {
   value: string;
   truncated: boolean;
 } {
-  const clean = value
+  const clean = input
     .replace(ANSI, '')
     .replace(FORMAT, '')
     .replace(CONTROL, ' ')
     .trim();
   const truncated = clean.length > MAX_FIELD_LENGTH;
-  return {
-    value: truncated ? clean.slice(0, MAX_FIELD_LENGTH) : clean,
-    truncated,
-  };
+  let value = truncated ? clean.slice(0, MAX_FIELD_LENGTH) : clean;
+  // Don't leave half of a surrogate pair at the cut.
+  if (truncated && /[\uD800-\uDBFF]$/.test(value)) value = value.slice(0, -1);
+  return { value, truncated };
 }
 
 /** Sanitizes every string (and key) in a JSON-like value. */

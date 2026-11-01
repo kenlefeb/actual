@@ -10,6 +10,17 @@ describe('sanitizeText', () => {
     expect(sanitizeText('line\none\ttwo').value).toBe('line one two');
   });
 
+  it('strips variation selectors', () => {
+    expect(sanitizeText('a\uFE0Fb\u{E0100}c\u{E01EF}').value).toBe('abc');
+  });
+
+  it('does not split a surrogate pair when truncating', () => {
+    // The emoji's first half would land at index 199.
+    const out = sanitizeText('x'.repeat(199) + '\u{1F600}');
+    expect(out.truncated).toBe(true);
+    expect(out.value).toBe('x'.repeat(199));
+  });
+
   it('truncates to exactly 200 characters and says so', () => {
     const out = sanitizeText('x'.repeat(500));
     expect(out.value).toHaveLength(200);

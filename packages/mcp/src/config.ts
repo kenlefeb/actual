@@ -1,12 +1,30 @@
-import { mkdirSync, statSync } from 'fs';
+import { mkdirSync, realpathSync, statSync } from 'fs';
 import { homedir } from 'os';
-import { join } from 'path';
+import { join, sep } from 'path';
 
 // Staging lives on the tailnet; see actual-hosting (compose.tailnet.yaml).
 const STAGING_HOST = 'actual-staging.owl-becrux.ts.net';
 const LOCAL_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
 // Synced or vault locations that must never hold the plaintext budget.
-const SYNCED_PATHS = ['Mobile Documents', 'Dropbox', 'Obsidian'];
+const SYNCED_PATHS = [
+  'Mobile Documents',
+  'Dropbox',
+  'Obsidian',
+  join('Library', 'CloudStorage'),
+];
+// Folders that sync or are commonly shared; refused under the home directory.
+const HOME_FOLDERS = ['Documents', 'Desktop'];
+
+function isRefusedPath(dir: string): boolean {
+  const home = homedir();
+  return (
+    SYNCED_PATHS.some(p => dir.includes(p)) ||
+    HOME_FOLDERS.some(f => {
+      const folder = join(home, f);
+      return dir === folder || dir.startsWith(folder + sep);
+    })
+  );
+}
 
 export type EnvLabel = 'local' | 'staging' | 'production';
 
@@ -96,10 +114,13 @@ export function loadConfig(env: Env, argv: string[] = []): McpConfig {
  * and refuses one that is looser or inside a synced or vault location.
  */
 export function ensurePrivateDir(dir: string) {
-  if (SYNCED_PATHS.some(p => dir.includes(p))) {
+  const refuse = () => {
     throw new Error('The data directory must not be in a synced location.');
-  }
+  };
+  if (isRefusedPath(dir)) refuse();
   mkdirSync(dir, { recursive: true, mode: 0o700 });
+  // A symlink must not smuggle the directory into a refused location.
+  if (isRefusedPath(realpathSync(dir))) refuse();
   if ((statSync(dir).mode & 0o077) !== 0) {
     throw new Error('The data directory must have mode 0700.');
   }

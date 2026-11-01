@@ -2,11 +2,11 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 
 import { ensurePrivateDir, loadConfig } from './config';
 import { closeBudget, openBudget } from './connection';
+import { redirectConsoleToStderr } from './stdio';
 import { createServer } from './tools';
 
 async function main() {
-  // stdout carries the MCP protocol; anything else writing to it would corrupt it.
-  console.log = console.error;
+  redirectConsoleToStderr();
 
   const config = loadConfig(process.env, process.argv.slice(2));
   ensurePrivateDir(config.dataDir);

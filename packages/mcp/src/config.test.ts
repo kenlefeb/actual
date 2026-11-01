@@ -1,5 +1,5 @@
-import { chmodSync, mkdirSync, mkdtempSync, statSync } from 'fs';
-import { tmpdir } from 'os';
+import { chmodSync, mkdirSync, mkdtempSync, statSync, symlinkSync } from 'fs';
+import { homedir, tmpdir } from 'os';
 import { join } from 'path';
 
 import { ensurePrivateDir, loadConfig } from './config';
@@ -130,5 +130,24 @@ describe('data directory', () => {
     expect(() => ensurePrivateDir('/Users/x/Dropbox/actual-mcp')).toThrow(
       /synced location/,
     );
+  });
+
+  it('refuses CloudStorage, Documents and Desktop', () => {
+    for (const dir of [
+      join(homedir(), 'Library', 'CloudStorage', 'OneDrive', 'actual-mcp'),
+      join(homedir(), 'Documents', 'actual-mcp'),
+      join(homedir(), 'Desktop'),
+    ]) {
+      expect(() => ensurePrivateDir(dir)).toThrow(/synced location/);
+    }
+  });
+
+  it('checks the real path behind a symlink', () => {
+    const root = mkdtempSync(join(tmpdir(), 'actual-mcp-'));
+    const real = join(root, 'Dropbox', 'real');
+    mkdirSync(real, { recursive: true, mode: 0o700 });
+    const link = join(root, 'innocent');
+    symlinkSync(real, link);
+    expect(() => ensurePrivateDir(link)).toThrow(/synced location/);
   });
 });

@@ -322,7 +322,7 @@ export function createServer(secrets: string[] = []) {
 
   tool(
     'sync_budget',
-    'Pull the server changes into the local budget copy. Changes nothing on the server.',
+    'Syncs the local budget copy with the server, exactly as the app does. A sync can post due auto-post schedules and paycheck reconciles, and a later sync pushes them.',
     {},
     async () => {
       await api.sync();

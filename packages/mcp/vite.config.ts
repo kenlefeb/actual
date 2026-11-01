@@ -38,6 +38,7 @@ export default defineConfig({
   },
   test: {
     globals: true,
+    setupFiles: ['src/test-setup.ts'],
     include: ['src/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**'],
     testTimeout: 30_000,

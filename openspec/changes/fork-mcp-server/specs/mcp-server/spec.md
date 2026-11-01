@@ -175,7 +175,7 @@ The server SHALL append one JSON line per write to `~/Library/Application Suppor
 - **THEN** the call fails and the budget is unchanged
 
 ### Requirement: Coverage manifest
-`packages/mcp/coverage.json` SHALL map every handler registered by `app.method(...)` in `loot-core/src/server`, and every function `@actual-app/api` exports, to an MCP tool or to a skip with a reason. Handlers upstream already had SHALL be recorded as a baseline, so only new ones need an entry.
+`packages/mcp/coverage.json` SHALL map every handler registered in `loot-core/src/server`, by `app.method(...)` or by `handlers['name'] = ...`, and every function `@actual-app/api` exports, to an MCP tool or to a skip with a reason. Handlers upstream already had SHALL be recorded as a baseline, so only new ones need an entry.
 
 #### Scenario: A deliberate skip
 - **GIVEN** the manifest maps `paycheck-foo` to `{ "skip": "UI only" }`
@@ -183,7 +183,7 @@ The server SHALL append one JSON line per write to `~/Library/Application Suppor
 - **THEN** it passes
 
 ### Requirement: Coverage check
-`yarn check:mcp-coverage` SHALL run in fork CI and fail on a name with no entry, on an entry whose tool is not registered or has no test naming it, and on a skip with no reason. It SHALL also fail on a fork handler outside the upstream baseline that has no `send('<handler>'` call in `packages/api/methods.ts` and no skip reason. It SHALL read whole files, so a registration that spans lines is found.
+`yarn check:mcp-coverage` SHALL run in fork CI and fail on a name with no entry, on an entry whose tool is not registered or has no test naming it, and on a skip with no reason. It SHALL also fail on a fork handler outside the upstream baseline that has no `send('<handler>'` call in `packages/api/methods.ts` and no skip reason.
 
 #### Scenario: A new handler without coverage
 - **GIVEN** a PR adds `app.method('paycheck-foo', ...)` and no manifest entry
@@ -194,11 +194,6 @@ The server SHALL append one JSON line per write to `~/Library/Application Suppor
 - **GIVEN** a PR adds `app.method('paycheck-foo', ...)` outside the upstream baseline, and `methods.ts` has no `send('paycheck-foo'` call and the manifest has no skip reason for it
 - **WHEN** the check runs
 - **THEN** it fails and names `paycheck-foo`
-
-#### Scenario: A registration across lines
-- **GIVEN** a handler registered as `app.method(\n  'account-set-business-days',\n  ...)`
-- **WHEN** the check runs
-- **THEN** it finds `account-set-business-days`
 
 #### Scenario: Skip without a reason
 - **GIVEN** the manifest maps a handler to `{ "skip": "" }`
@@ -216,3 +211,35 @@ The server SHALL append one JSON line per write to `~/Library/Application Suppor
 #### Scenario: The server reports its version
 - **WHEN** a client connects
 - **THEN** the server's reported version equals its package version
+
+### Requirement: Registration forms
+The coverage check SHALL find a handler registered as `app.method('name', ...)` or as `handlers['name'] = ...`, and SHALL treat both forms the same: the name needs a manifest entry unless it is in the upstream baseline. It SHALL read whole files, so a registration that spans lines is found. A call such as `handlers['name'](args)`, a comparison or a reference SHALL NOT count as a registration. The baseline SHALL record both forms from the upstream ref it is built from.
+
+#### Scenario: A registration across lines
+- **GIVEN** a handler registered as `app.method(\n  'account-set-business-days',\n  ...)`
+- **WHEN** the check runs
+- **THEN** it finds `account-set-business-days`
+
+#### Scenario: An assigned handler without coverage
+- **GIVEN** a PR adds `handlers['zz-new-handler'] = async () => {}` in `loot-core/src/server/main.ts`, outside the upstream baseline, and no manifest entry
+- **WHEN** the check runs
+- **THEN** it fails and names `zz-new-handler`
+
+#### Scenario: An assigned handler with an entry
+- **GIVEN** the same registration and a manifest entry `{ "skip": "UI only" }` for `zz-new-handler`
+- **WHEN** the check runs
+- **THEN** it passes
+
+#### Scenario: An assigned handler across lines
+- **GIVEN** a handler registered as `handlers[\n  'zz-new-handler',\n] = mutator(...)`
+- **WHEN** the check runs
+- **THEN** it finds `zz-new-handler`
+
+#### Scenario: A call is not a registration
+- **GIVEN** code that reads `await handlers['load-budget']({ id })`, compares `handlers['x'] === y` or passes `handlers['x']` as an argument, and `load-budget` is not in the baseline
+- **WHEN** the check runs
+- **THEN** none of these is found as a registration
+
+#### Scenario: The baseline holds assigned handlers
+- **WHEN** the baseline is rebuilt with `--baseline-from upstream/master`
+- **THEN** it lists upstream's `handlers['name'] = ...` registrations (82 at the time of writing) beside its `app.method` registrations, so none of them needs an entry

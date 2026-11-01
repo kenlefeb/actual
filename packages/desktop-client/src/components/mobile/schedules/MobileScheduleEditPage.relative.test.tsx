@@ -72,9 +72,9 @@ describe('MobileScheduleEditPage relative date', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
-    // The message is shown after Save (at least once). Like every save error,
-    // it is also echoed inside the empty transactions table as "Could not
-    // search: …"; that echo is not asserted here.
-    expect((await screen.findAllByText(CHOOSE)).length).toBeGreaterThan(0);
+    // The message is shown once after Save, with no "Could not search" echo
+    expect(await screen.findAllByText(CHOOSE)).toHaveLength(1);
+    expect(screen.queryByText(/Could not search/)).not.toBeInTheDocument();
+    expect(screen.getByText('No matching transactions')).toBeInTheDocument();
   });
 });

@@ -607,10 +607,7 @@ export function ScheduleEditForm({
 
           <SimpleTransactionsTable
             renderEmpty={
-              <NoTransactionsMessage
-                error={error}
-                transactionsMode={transactionsMode}
-              />
+              <NoTransactionsMessage transactionsMode={transactionsMode} />
             }
             transactions={transactions}
             fields={['date', 'payee', 'notes', 'amount']}
@@ -631,7 +628,6 @@ export function ScheduleEditForm({
 }
 
 type NoTransactionsMessageProps = {
-  error: string | null;
   transactionsMode: 'matched' | 'linked';
 };
 
@@ -646,15 +642,9 @@ function NoTransactionsMessage(props: NoTransactionsMessageProps) {
         textAlign: 'center',
       }}
     >
-      {props.error ? (
-        <Text style={{ color: theme.errorText }}>
-          <Trans>Could not search: {{ errorReason: props.error }}</Trans>
-        </Text>
-      ) : props.transactionsMode === 'matched' ? (
-        t('No matching transactions')
-      ) : (
-        t('No linked transactions')
-      )}
+      {props.transactionsMode === 'matched'
+        ? t('No matching transactions')
+        : t('No linked transactions')}
     </View>
   );
 }

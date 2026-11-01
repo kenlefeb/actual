@@ -3,7 +3,7 @@
 ## ADDED Requirements
 
 ### Requirement: Local stdio only
-The MCP server SHALL run as a child process of the MCP client and talk over stdio. It SHALL open no network listener and offer no HTTP or SSE transport.
+The `actual-mcp` entry SHALL run as a child process of the MCP client and talk over stdio. It SHALL open no network listener and offer no HTTP or SSE transport. A hosted entry is a separate entry specified in `mcp-remote`.
 
 #### Scenario: No listener
 - **WHEN** the server is running with a budget loaded

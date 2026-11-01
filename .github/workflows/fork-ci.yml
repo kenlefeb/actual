@@ -63,6 +63,18 @@ jobs:
             node fork/scripts/check-openspec-shortcut.mjs
           fi
 
+  # The repo-admin agent hook blocks and allows what sc-696 says. Needs only
+  # jq (preinstalled on GitHub-hosted runners) and the checkout.
+  agent-hooks:
+    if: github.repository == 'kenlefeb/actual'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Test the repo-admin hook
+        run: sh scripts/agent-hooks/no-repo-admin.test.sh
+
   # Every server handler and API export maps to an MCP tool or a skip with a
   # reason (sc-1570). Needs only Node and the checkout.
   mcp-coverage:

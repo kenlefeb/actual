@@ -49,10 +49,11 @@ stories" section of `AGENTS.md`.
   (`stories-search`) so you don't file a duplicate. Use the story template
   below, including its checklist.
 - **Epics**: product areas #469 Business calendars & schedule dates, #28
-  Paychecks, #470 Baseline fork behavior and #543 Accounts & budgeting; work
-  streams #27 Fork maintenance & hosting and #26 Upstream contributions. Ask
-  before creating a new epic. Which epic owns each spec is under "OpenSpec
-  changes and specs" below.
+  Paychecks, #543 Accounts & budgeting, #470 Baseline fork behavior and #1550
+  Integrations; work streams #27 Upstream relationship, #26 Upstream
+  contributions, #1548 Hosting, operations & security and #1549 Engineering &
+  agent workflow. Ask before creating a new epic. Which epic owns each spec is
+  under "OpenSpec changes and specs" below.
 - **Read a story**: `stories-get-by-id`, including its comments and relations.
 - **List stories**: `stories-search` filtered by `epic`, `label`, `state` or
   `team`.
@@ -130,13 +131,14 @@ decisions and each change's task checklist. Shortcut owns work state: owner,
 status, priority, epic, PR links and discussion. Link the two by id; never copy
 requirement text into a story or status into OpenSpec.
 
-| Epic                                     | Specs (`openspec/specs/<capability>/`)                                                                                   |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| #469 Business calendars & schedule dates | `business-calendars`, `schedule-business-days`, `schedule-relative-dates`                                                |
-| #28 Paychecks                            | `paychecks`, `account-business-days`, `paycheck-planning`                                                                |
-| #470 Baseline fork behavior              | `transaction-notes`, `split-transaction-editing`, `mobile-note-links`, `mobile-sync-status`, `api-transaction-mutations` |
-| #543 Accounts & budgeting                | none yet                                                                                                                 |
-| #27 Fork maintenance & hosting           | `fork-release-news`                                                                                                      |
+| Epic                                     | Specs (`openspec/specs/<capability>/`)                                                                                                        |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| #469 Business calendars & schedule dates | `business-calendars`, `schedule-business-days`, `schedule-relative-dates`                                                                     |
+| #28 Paychecks                            | `paychecks`, `account-business-days`, `paycheck-planning`                                                                                     |
+| #470 Baseline fork behavior              | `transaction-notes`, `split-transaction-editing`, `mobile-note-links`, `mobile-sync-status`, `api-transaction-mutations`, `fork-release-news` |
+| #543 Accounts & budgeting                | none yet                                                                                                                                      |
+| #27 Upstream relationship                | none                                                                                                                                          |
+| #1550 Integrations                       | none yet                                                                                                                                      |
 
 A new capability joins the epic of its product area: add it to this table, the
 epic description and a new `spec:<capability>` label. Upstream delivery of a

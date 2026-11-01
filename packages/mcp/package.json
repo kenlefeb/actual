@@ -1,0 +1,34 @@
+{
+  "name": "@actual-app/mcp",
+  "version": "26.10.1-alpha.20",
+  "private": true,
+  "description": "Read-only MCP server for Actual Budget (fork)",
+  "license": "MIT",
+  "bin": {
+    "actual-mcp": "./dist/mcp.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "test": "vitest --run",
+    "typecheck": "tsgo -b"
+  },
+  "dependencies": {
+    "@actual-app/api": "workspace:*",
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@actual-app/vite-plugin-peggy": "workspace:*",
+    "@types/node": "^22.20.5",
+    "@typescript/native-preview": "beta",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.4"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

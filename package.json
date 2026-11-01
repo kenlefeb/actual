@@ -43,6 +43,7 @@
     "build:api": "yarn build --scope=@actual-app/api",
     "build:mobile": "yarn build --scope=mobile-client",
     "build:cli": "yarn build --scope=@actual-app/cli",
+    "build:mcp": "yarn build --scope=@actual-app/mcp",
     "build:docs": "yarn workspace docs build",
     "build:storybook": "yarn workspace @actual-app/components build:storybook",
     "deploy:docs": "yarn workspace docs deploy",

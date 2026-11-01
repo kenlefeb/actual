@@ -32,7 +32,7 @@ The server SHALL label the environment from the server URL's host: `actual-stagi
 #### Scenario: Production is read-only even when allowed
 - **GIVEN** `ACTUAL_MCP_ALLOW_PRODUCTION=1` and a production host
 - **WHEN** the server starts with `--writes`
-- **THEN** it exits with an error, and without `--writes` it lists read tools only
+- **THEN** it exits with an error, and without `--writes` it lists read tools only (no write tools; sync side effects such as posting due schedules can still occur, see sc-1601)
 
 #### Scenario: A look-alike host
 - **GIVEN** `ACTUAL_SERVER_URL` is `https://actual-staging.owl-becrux.ts.net.evil.example`
@@ -63,12 +63,17 @@ The server SHALL offer read tools only unless started with `--writes`. Write too
 - **THEN** it lists the read tools and the `write_` tools
 
 ### Requirement: Core read tools
-The server SHALL offer read tools for accounts and balances, category groups and categories, payees, transactions, budget months, schedules, rules, a read-only ActualQL query and a pull-only `sync_budget`.
+The server SHALL offer read tools for accounts and balances, category groups and categories, payees, transactions, budget months, schedules, rules, a read-only ActualQL query and `sync_budget`, and no write tools unless started with `--writes`. A sync is not push-free: its side effects are tracked as sc-1601.
 
 #### Scenario: Transactions from a fixture budget
 - **GIVEN** a fixture budget with 120 transactions in "Checking"
 - **WHEN** a client calls `list_transactions` for "Checking" with no limit
 - **THEN** it receives 50 transactions, `has_more` true and a `next_cursor`
+
+#### Scenario: A sync has the app's side effects
+- **GIVEN** an auto-post schedule is due
+- **WHEN** the server syncs, at startup or through `sync_budget`
+- **THEN** the engine's after-sync work may post it and reconcile paychecks as the app would, the next sync pushes the result, and `sync_budget` and the README say so (push-free mode: sc-1601)
 
 #### Scenario: A query that is not a select
 - **WHEN** a client calls `run_query` with a query that would change data

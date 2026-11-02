@@ -8,3 +8,8 @@
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+# Local env files (secrets); the committed .env.browser/.env.production are build inputs and stay
+**/.env
+**/.env.local
+**/.env.*.local

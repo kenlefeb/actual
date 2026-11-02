@@ -58,11 +58,18 @@ The identity provider SHALL be an Auth0 tenant that holds only Ken's account and
 - **THEN** the provider refuses it
 
 ### Requirement: The assistant has its own sign-in identity
-The assistant's BASIC user SHALL be a dedicated account in the Auth0 tenant, not Ken's, protected by a passkey or authenticator-app two-factor sign-in, with no account recovery through any mailbox agents can read. Its credentials SHALL be kept in the "Ken Assistant" vault and listed in the LOCKDOWN inventory. Ken's account in the same tenant SHALL meet the same two-factor and recovery rules, because the first OpenID sign-in on the server becomes ADMIN. Ken's ADMIN credentials, recovery codes and second factor SHALL NOT be stored in "Ken & Agents" or in any other vault an agent can read.
+The assistant's BASIC user SHALL be a dedicated account in the Auth0 tenant, not Ken's, protected by a passkey or authenticator-app two-factor sign-in, with no account recovery through any mailbox agents can read. Its credentials SHALL be kept in the "Ken Assistant" vault and listed in the LOCKDOWN inventory.
 
 #### Scenario: Recovery does not reach agent-readable mail
 - **WHEN** the assistant's account recovery options are reviewed
 - **THEN** none sends a link or code to Ken's mailbox
+
+### Requirement: Ken's ADMIN identity is as protected as the assistant's
+Ken's account in the same tenant SHALL meet the same two-factor and recovery rules, because the first OpenID sign-in on the server becomes ADMIN. Ken's ADMIN credentials, recovery codes and second factor SHALL NOT be stored in "Ken & Agents" or in any other vault an agent can read.
+
+#### Scenario: Ken's credentials are not in an agent-readable vault
+- **WHEN** every vault an agent can read is searched for Ken's ADMIN credentials, recovery codes and second factor
+- **THEN** none is found
 
 ### Requirement: The assistant sees only the budgets it is given
 The assistant's user SHALL have access (an owner or `user_access` row) to exactly the budgets named in the migration checklist, and the budget's end-to-end encryption key SHALL be known only to Ken and the assistant's connector.

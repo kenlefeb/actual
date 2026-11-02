@@ -47,4 +47,4 @@ Needs LOCKDOWN (sc-563) done first.
 
 Found by the slice C rehearsal: `packages/mcp` (stdio and hosted entries) can only sign in with `ACTUAL_PASSWORD` or `ACTUAL_PASSWORD_FILE`.
 
-- [ ] 8.1 Let both MCP entries read a session token from `ACTUAL_SESSION_TOKEN_FILE` (0400, never an environment value) and pass it to `api.init({ sessionToken })`, refusing a password and a token together; edit the `mcp-server` credentials requirement and the `mcp-remote` credential requirement in this slice; add the `packages/mcp/coverage.json` line if a handler changes. Tests first.
+- [x] 8.1 Let both MCP entries read a session token from `ACTUAL_SESSION_TOKEN_FILE` (0400, never an environment value) and pass it to `api.init({ sessionToken })`, refusing a password and a token together; edit the `mcp-server` credentials requirement and the `mcp-remote` credential requirement in this slice; add the `packages/mcp/coverage.json` line if a handler changes. Tests first.

@@ -32,13 +32,17 @@ export async function lookupUserId(
  */
 export async function openBudget(config: McpConfig) {
   try {
-    await api.init({
+    const base = {
       serverURL: config.serverUrl,
       dataDir: config.dataDir,
-      password: config.password,
       // The read entry writes and pushes nothing; --writes runs the engine as the app does
       readOnly: !config.writes,
-    });
+    };
+    await api.init(
+      config.sessionToken
+        ? { ...base, sessionToken: config.sessionToken }
+        : { ...base, password: config.password ?? '' },
+    );
   } catch {
     throw new Error('Could not sign in to the Actual server');
   }

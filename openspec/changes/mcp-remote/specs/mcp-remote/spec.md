@@ -127,10 +127,20 @@ The hosted entry SHALL make outbound requests only to the configured sync server
 - **THEN** the server makes no request to that URL
 
 ### Requirement: Secrets live in read-only files
-The server SHALL read its Actual credential, optional encryption key and signing key from files whose paths are configured, SHALL refuse to start when one is missing or readable by more than its owner, and SHALL never put a secret on a command line, in a URL, in a log, in an error or in a tool result.
+The server SHALL read its Actual credential, optional encryption key and signing key from configured files, and refuse to start when one is missing or readable by more than its owner. The Actual credential is exactly one of `ACTUAL_PASSWORD_FILE` or a session token in `ACTUAL_SESSION_TOKEN_FILE` (mode 0400). No secret SHALL appear on a command line, in a URL, a log, an error or a tool result.
 
 #### Scenario: A loose secret file
 - **GIVEN** the signing key file has mode 0644
+- **WHEN** the hosted entry starts
+- **THEN** it exits with a fixed error that does not name the secret
+
+#### Scenario: A session token instead of a password
+- **GIVEN** `ACTUAL_SESSION_TOKEN_FILE` names a 0400 file and `ACTUAL_PASSWORD_FILE` is unset
+- **WHEN** the hosted entry starts
+- **THEN** it signs in to the sync server with the token
+
+#### Scenario: A token file looser than 0400, or a password with it
+- **GIVEN** the token file has mode 0600, or `ACTUAL_PASSWORD_FILE` is also set
 - **WHEN** the hosted entry starts
 - **THEN** it exits with a fixed error that does not name the secret
 

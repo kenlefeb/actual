@@ -1,4 +1,4 @@
-import { mkdirSync, realpathSync, rmdirSync, statSync } from 'fs';
+import { mkdirSync, readFileSync, realpathSync, rmdirSync, statSync } from 'fs';
 import { homedir } from 'os';
 import { basename, dirname, join, resolve, sep } from 'path';
 
@@ -45,7 +45,10 @@ export type EnvLabel = 'local' | 'staging' | 'production';
 
 export type McpConfig = {
   serverUrl: string;
-  password: string;
+  /** Exactly one of `password` and `sessionToken` is set. */
+  password?: string;
+  /** A minted session token, read from a 0400 file; signs in without a password. */
+  sessionToken?: string;
   syncId: string;
   encryptionPassword?: string;
   dataDir: string;
@@ -83,6 +86,64 @@ function required(env: Env, name: string): string {
 }
 
 /**
+ * Reads a secret from a file only its owner can read. `forbidden` is the mode
+ * bits that must be clear; the fixed error never names the path or content.
+ */
+export function readSecretFile(
+  path: string,
+  forbidden = 0o077,
+  error = 'A secret file is missing or readable by others (it must be a file only its owner can read).',
+): string {
+  try {
+    const info = statSync(path);
+    if (
+      !info.isFile() ||
+      (info.mode & forbidden) !== 0 ||
+      info.uid !== process.getuid?.()
+    ) {
+      throw new Error('loose');
+    }
+    return readFileSync(path, 'utf8').trim();
+  } catch {
+    throw new Error(error);
+  }
+}
+
+/**
+ * Exactly one of a password or a session token. The token is only ever a file
+ * named by `ACTUAL_SESSION_TOKEN_FILE` and that file must be mode 0400.
+ */
+export function resolveCredential(
+  env: Env,
+  password: string | undefined,
+  passwordName: string,
+) {
+  if (env.ACTUAL_SESSION_TOKEN) {
+    throw new Error(
+      'A session token is read only from the file named by ACTUAL_SESSION_TOKEN_FILE, never from an environment value.',
+    );
+  }
+  const sessionToken = env.ACTUAL_SESSION_TOKEN_FILE
+    ? readSecretFile(
+        env.ACTUAL_SESSION_TOKEN_FILE,
+        0o377,
+        'The session token file is missing or not mode 0400 (read-only for its owner, nothing for others).',
+      )
+    : undefined;
+  if (!password && !sessionToken) {
+    throw new Error(
+      `${passwordName} is required, or ACTUAL_SESSION_TOKEN_FILE: set exactly one.`,
+    );
+  }
+  if (password && sessionToken) {
+    throw new Error(
+      `${passwordName} and ACTUAL_SESSION_TOKEN_FILE are both set: set exactly one.`,
+    );
+  }
+  return { password, sessionToken };
+}
+
+/**
  * Reads config from the environment only. Secrets are never accepted on
  * argv: the only flag is `--writes`, and anything else is a fixed usage error.
  */
@@ -95,7 +156,11 @@ export function loadConfig(env: Env, argv: string[] = []): McpConfig {
   }
 
   const serverUrl = required(env, 'ACTUAL_SERVER_URL');
-  const password = required(env, 'ACTUAL_PASSWORD');
+  const { password, sessionToken } = resolveCredential(
+    env,
+    env.ACTUAL_PASSWORD || undefined,
+    'ACTUAL_PASSWORD',
+  );
   const syncId = required(env, 'ACTUAL_SYNC_ID');
   const encryptionPassword = env.ACTUAL_ENCRYPTION_PASSWORD || undefined;
 
@@ -123,14 +188,15 @@ export function loadConfig(env: Env, argv: string[] = []): McpConfig {
   return {
     serverUrl,
     password,
+    sessionToken,
     syncId,
     encryptionPassword,
     env: label,
     dataDir,
     writes,
     auditLog: `${dataDir}.audit.jsonl`,
-    secrets: [password, encryptionPassword].filter((s): s is string =>
-      Boolean(s),
+    secrets: [password, sessionToken, encryptionPassword].filter(
+      (s): s is string => Boolean(s),
     ),
   };
 }

@@ -171,7 +171,8 @@ cannot start without it. It is not deployed by this change.
   (a verified email, or the provider's stable subject). Optional: `ACTUAL_MCP_REDIRECT_URIS`
   (comma-separated, https, exact match, never a loopback address; default `https://claude.ai/api/mcp/auth_callback`) and
   `ACTUAL_MCP_ALLOW_DYNAMIC_REGISTRATION=1` (off by default; when on, limited to those redirects).
-  Any OpenID Connect provider works. For Auth0 (one tenant per environment) the provider values are issuer
+  The provider must support the authorization-code flow with PKCE and a nonce, return an ID token, and accept the
+  client secret in the token request body (`client_secret_post`). For Auth0 (one tenant per environment) the provider values are issuer
   `https://<tenant-domain>/` (with the trailing slash), authorization URL `https://<tenant-domain>/authorize` and
   token URL `https://<tenant-domain>/oauth/token`; `ACTUAL_MCP_ALLOWED_ACCOUNT` is the user's `auth0|…` user_id (the ID
   token's `sub`); and the application's allowed callback URL is `<public url>/oauth/callback`.

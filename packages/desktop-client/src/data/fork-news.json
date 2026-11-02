@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "id": "fork-release-26.10.1-alpha.22",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.22 — Ken's Actual fork",
+      "date": "2026-11-02",
+      "version": "26.10.1-alpha.22",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.22.md",
+      "body": "**Unofficial fork prerelease.** Based on upstream Actual `master` at `21c2b3f703142f858af4c653a31e675ca5ff85d7` (October 26, 2026), which comes after Actual 26.10.0 and is not itself an upstream release; not an official Actual Budget release.\n\nThis release adds a hosted, read-only entry for the MCP server, a content-free access log for the sync server, and a clearer record of who acted through the MCP server.",
+      "details": "#### Features\n\n- The MCP server has a hosted, read-only entry that serves the Model Context Protocol over streamable HTTP, with sync freshness checks and a rate limit on a bounded endpoint key. It includes an OAuth provider and token store, so an assistant signs in through an identity provider instead of a shared password. It is meant for staging first and is not a standalone install.\n\n#### Enhancements\n\n- Every MCP audit line records the identity that acted, so a change can be traced to the assistant or person behind it.\n- The MCP server can sign in with a session token read from a file that only its owner can read (mode 0400).\n- The sync server writes a content-free access log (no budget content, no passwords) and ships a runbook for keeping it off the host.\n- The sync server logs access decisions on every file route, and new uploads.\n- The hosted MCP entry carries the verified OAuth subject on its access lines, requires a long client secret, and refuses loopback redirects.\n\n#### Bugfixes\n\n- None in this release.\n\n#### Maintenance\n\n- Documentation for the hosted MCP identity provider (Auth0 as the example) and what any provider must support.\n- OpenSpec records for the production-identities design and the OpenID staging rehearsal findings.\n- The `actual-mcp-http` command is recorded in `yarn.lock`.\n\n#### Known limitations\n\n- Experimental.\n- Upstream changes made after 26.10.0 have not yet been through an upstream release.\n- The hosted MCP entry is read-only and has been rehearsed on staging only; production is unchanged.\n- The stdio MCP server still runs on your own computer and needs Node.js 22 or later and the 1Password CLI.\n- No iPhone acceptance test is claimed."
+    },
+    {
       "id": "fork-release-26.10.1-alpha.21",
       "type": "release",
       "title": "Release 26.10.1-alpha.21 — Ken's Actual fork",

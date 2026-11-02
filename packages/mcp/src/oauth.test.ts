@@ -580,6 +580,40 @@ describe('audit identity', () => {
   });
 });
 
+describe('the access record', () => {
+  it('An audit line names its identity', async () => {
+    idp.sub = 'provider-subject-42';
+    const tokens = await signIn();
+    const res = await raw({
+      method: 'POST',
+      path: '/mcp',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        authorization: `Bearer ${tokens.access_token}`,
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: { name: 'get_sync_status', arguments: {} },
+      }),
+    });
+    expect(res.status).toBe(200);
+    const call = records.find(r => r.event === 'tool_call');
+    expect(call).toMatchObject({
+      tool: 'get_sync_status',
+      client: 'claude-staging',
+      subject: 'provider-subject-42',
+    });
+    // The id, never the token or the configured email.
+    const logged = JSON.stringify(records);
+    expect(logged).not.toContain(tokens.access_token);
+    expect(logged).not.toContain(tokens.refresh_token);
+    expect(logged).not.toContain(ACCOUNT);
+  });
+});
+
 describe('exactly one identity', () => {
   it('Another account', async () => {
     const { callback, back, code } = await login({

@@ -340,6 +340,36 @@ describe('write audit log', () => {
     expect(readFileSync(h.auditLog, 'utf8')).not.toContain(h.secret);
   });
 
+  it('An audit line names its identity', async () => {
+    h = await startHarness(
+      { count: 1, overrides: { notes: 'old note' } },
+      { writes: true, identity: { user_id: 'user-42', subject: 'local' } },
+    );
+    const [t] = await transactions();
+    await h.call('write_update_transactions', {
+      updates: [{ id: t.id, notes: 'new note' }],
+    });
+    const lines = auditLines();
+    expect(lines.map(l => l.phase)).toEqual(['attempt', 'outcome']);
+    for (const line of lines) {
+      expect(line).toMatchObject({ user_id: 'user-42', subject: 'local' });
+    }
+  });
+
+  it('An audit line with no known user id says so', async () => {
+    h = await startHarness(
+      { count: 1, overrides: { notes: 'old note' } },
+      { writes: true },
+    );
+    const [t] = await transactions();
+    await h.call('write_update_transactions', {
+      updates: [{ id: t.id, notes: 'new note' }],
+    });
+    for (const line of auditLines()) {
+      expect(line).toMatchObject({ user_id: 'unknown', subject: 'local' });
+    }
+  });
+
   it("The log can't be written", async () => {
     h = await startHarness(
       { count: 1, overrides: { notes: 'old note' } },

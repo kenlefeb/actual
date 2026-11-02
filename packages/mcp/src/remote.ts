@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 
+import { actingUserId } from './connection';
 import { OAUTH_ENDPOINTS } from './oauth';
 import type { OAuthServer } from './oauth';
 import type { RemoteConfig } from './remote-config';
@@ -10,10 +11,11 @@ import { scrubSecrets } from './sanitize';
 import { createServer } from './server';
 import { registerSyncStatusTool } from './sync';
 
-/** Who is calling. The OAuth server supplies this; tests may pass their own. */
+/** Who is calling. `subject` is the OAuth subject (an id, never a token); the OAuth server supplies it. */
+export type Caller = { clientId: string; subject?: string };
 export type Authenticate = (
   req: IncomingMessage,
-) => { clientId: string } | null | Promise<{ clientId: string } | null>;
+) => Caller | null | Promise<Caller | null>;
 
 export type RemoteOptions = {
   authenticate?: Authenticate;
@@ -194,6 +196,7 @@ export function createRemoteHttpServer(
     }
 
     let client = 'anonymous';
+    let subject = 'anonymous';
     if (authenticate) {
       const who = await authenticate(req);
       if (!who) {
@@ -210,6 +213,7 @@ export function createRemoteHttpServer(
         );
       }
       client = who.clientId;
+      subject = who.subject ?? 'unknown';
     }
     if (!perClient(`${rateKey}|${client}`)) {
       return refuse(res, 429, 'rate-client', client, { 'retry-after': '60' });
@@ -232,7 +236,14 @@ export function createRemoteHttpServer(
       registerExtra: registerSyncStatusTool,
       // Name and outcome only: arguments and results can hold budget data.
       onToolCall: (tool, status) =>
-        record({ event: 'tool_call', tool, status, client }),
+        record({
+          event: 'tool_call',
+          tool,
+          status,
+          client,
+          user_id: actingUserId(),
+          subject,
+        }),
     });
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,

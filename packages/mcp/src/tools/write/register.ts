@@ -1,3 +1,4 @@
+import type { Identity } from '#audit';
 import type { RegisterTool } from '#tools/read/shared';
 
 import { registerAccountWriteTools } from './accounts';
@@ -14,8 +15,9 @@ export function registerWriteTools(
   tool: RegisterTool,
   auditLog: string,
   scrub: (message: string) => string,
+  identity: Identity,
 ) {
-  const log = { path: auditLog, scrub };
+  const log = { path: auditLog, scrub, identity };
   registerTransactionWriteTools(tool, log);
   registerBudgetWriteTools(tool, log);
   registerPaycheckWriteTools(tool, log);

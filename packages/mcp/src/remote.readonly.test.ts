@@ -7,6 +7,7 @@ vi.mock('@actual-app/api', () => ({
   init: vi.fn(async () => undefined),
   downloadBudget: vi.fn(async () => undefined),
   shutdown: vi.fn(async () => undefined),
+  internal: null,
 }));
 
 const config: RemoteConfig = {

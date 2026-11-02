@@ -116,7 +116,8 @@ any argument other than `--writes` is a usage error.
 | Variable                      | Required | Meaning                                                                                              |
 | ----------------------------- | -------- | ---------------------------------------------------------------------------------------------------- |
 | `ACTUAL_SERVER_URL`           | yes      | Sync server URL                                                                                      |
-| `ACTUAL_PASSWORD`             | yes      | Sync server password                                                                                 |
+| `ACTUAL_PASSWORD`             | one of   | Sync server password                                                                                 |
+| `ACTUAL_SESSION_TOKEN_FILE`   | one of   | Path to a mode 0400 file holding a minted session token; signs in without a password                 |
 | `ACTUAL_SYNC_ID`              | yes      | Budget sync ID                                                                                       |
 | `ACTUAL_ENCRYPTION_PASSWORD`  | no       | End-to-end encryption key                                                                            |
 | `ACTUAL_DATA_DIR`             | no       | Default `~/Library/Application Support/actual-mcp/<env>` (`<env>-writes` with `--writes`), mode 0700 |
@@ -150,7 +151,8 @@ cannot start without it. It is not deployed by this change.
   with `ACTUAL_MCP_ALLOW_PRODUCTION=1`.
 - **One budget per instance.** The data directory is the configured one (or the default
   `actual-mcp/<env>`) with `-remote` added, mode 0700.
-- **Secrets in files.** `ACTUAL_PASSWORD_FILE`, optional `ACTUAL_ENCRYPTION_PASSWORD_FILE` and
+- **Secrets in files.** `ACTUAL_PASSWORD_FILE` (or, instead of it, `ACTUAL_SESSION_TOKEN_FILE`,
+  which must be mode 0400; setting both or neither is a startup error), optional `ACTUAL_ENCRYPTION_PASSWORD_FILE` and
   `ACTUAL_MCP_SIGNING_KEY_FILE` name files only their owner can read (mode 0600 or tighter); the
   entry refuses to start otherwise and never reads a secret from an environment value or argument.
 - **OAuth, one identity.** The entry runs the SDK's authorization router around its own provider:

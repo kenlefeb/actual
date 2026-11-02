@@ -13,11 +13,26 @@ The `actual-mcp` entry SHALL run as a child process of the MCP client and talk o
 - **THEN** the process has no listening socket, and stdout carries only MCP messages
 
 ### Requirement: Credentials from the environment
-The server SHALL read the sync server URL, password, sync id and budget encryption key only from `ACTUAL_SERVER_URL`, `ACTUAL_PASSWORD`, `ACTUAL_SYNC_ID` and `ACTUAL_ENCRYPTION_PASSWORD`, and SHALL accept no secret on its command line. It SHALL never print, log or return a secret, and its errors SHALL use fixed text that contains no credential, no URL userinfo and no server response body.
+The server SHALL read the sync server URL, sync id and budget encryption key from `ACTUAL_SERVER_URL`, `ACTUAL_SYNC_ID` and `ACTUAL_ENCRYPTION_PASSWORD`, and sign in with exactly one of `ACTUAL_PASSWORD` or a session token in the 0400 file named by `ACTUAL_SESSION_TOKEN_FILE` (never an environment value). It SHALL accept no secret on its command line, never print, log or return a secret, and use fixed error text with no credential, URL userinfo or response body.
 
 #### Scenario: A secret on argv
 - **WHEN** the server is started with `--password hunter2`
 - **THEN** it exits with a fixed usage error that does not repeat `hunter2`
+
+#### Scenario: Sign-in with a session token
+- **GIVEN** `ACTUAL_SESSION_TOKEN_FILE` names a 0400 file holding a valid token and no password is set
+- **WHEN** the server starts
+- **THEN** it signs in with that token, and the audit-identity user lookup (`subscribe-get-user`) returns the token's user id
+
+#### Scenario: A loose token file
+- **GIVEN** the token file has mode 0600
+- **WHEN** the server starts
+- **THEN** it exits with a fixed error that names neither the path nor the token
+
+#### Scenario: A password and a token together
+- **GIVEN** both `ACTUAL_PASSWORD` and `ACTUAL_SESSION_TOKEN_FILE` are set
+- **WHEN** the server starts
+- **THEN** it exits with a fixed error saying to set exactly one
 
 #### Scenario: A failed sign-in
 - **GIVEN** `ACTUAL_PASSWORD` is wrong

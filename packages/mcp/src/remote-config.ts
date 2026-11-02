@@ -1,8 +1,7 @@
-import { readFileSync, statSync } from 'fs';
 import { homedir } from 'os';
 import { join, resolve } from 'path';
 
-import { labelHost } from './config';
+import { labelHost, readSecretFile, resolveCredential } from './config';
 import type { McpConfig } from './config';
 import { isLoopbackUri } from './oauth';
 import type { OAuthConfig } from './oauth';
@@ -21,29 +20,6 @@ export type RemoteConfig = McpConfig & {
 };
 
 type Env = Record<string, string | undefined>;
-
-const SECRET_FILE_ERROR =
-  'A secret file is missing or readable by others (it must be a file only its owner can read).';
-
-/**
- * Reads a secret from a file. The file must exist and be readable by its
- * owner alone; the fixed error never names the path or the content.
- */
-function readSecretFile(path: string): string {
-  try {
-    const info = statSync(path);
-    if (
-      !info.isFile() ||
-      (info.mode & 0o077) !== 0 ||
-      info.uid !== process.getuid?.()
-    ) {
-      throw new Error('loose');
-    }
-    return readFileSync(path, 'utf8').trim();
-  } catch {
-    throw new Error(SECRET_FILE_ERROR);
-  }
-}
 
 const MIN_SIGNING_KEY_LENGTH = 32;
 const LOOPBACK_HOSTS = ['127.0.0.1', '::1', 'localhost'];
@@ -119,10 +95,13 @@ export function loadRemoteConfig(env: Env, argv: string[] = []): RemoteConfig {
     );
   }
 
-  if (!env.ACTUAL_PASSWORD_FILE) {
-    throw new Error('ACTUAL_PASSWORD_FILE is required.');
-  }
-  const password = readSecretFile(env.ACTUAL_PASSWORD_FILE);
+  const { password, sessionToken } = resolveCredential(
+    env,
+    env.ACTUAL_PASSWORD_FILE
+      ? readSecretFile(env.ACTUAL_PASSWORD_FILE)
+      : undefined,
+    'ACTUAL_PASSWORD_FILE',
+  );
   const encryptionPassword = env.ACTUAL_ENCRYPTION_PASSWORD_FILE
     ? readSecretFile(env.ACTUAL_ENCRYPTION_PASSWORD_FILE)
     : undefined;
@@ -206,6 +185,7 @@ export function loadRemoteConfig(env: Env, argv: string[] = []): RemoteConfig {
   return {
     serverUrl,
     password,
+    sessionToken,
     syncId,
     encryptionPassword,
     env: label,
@@ -214,6 +194,7 @@ export function loadRemoteConfig(env: Env, argv: string[] = []): RemoteConfig {
     auditLog: '',
     secrets: [
       password,
+      sessionToken,
       encryptionPassword,
       signingKey,
       clientSecret,

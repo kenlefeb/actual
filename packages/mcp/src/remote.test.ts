@@ -9,7 +9,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 
 import { buildFixtureBudget } from './fixture';
-import { createRemoteHttpServer } from './remote';
+import { createLimiter, createRemoteHttpServer, sourceOf } from './remote';
 import type { RemoteOptions } from './remote';
 import type { RemoteConfig } from './remote-config';
 import { createServer } from './server';
@@ -251,6 +251,45 @@ describe('host, origin and rate checks', () => {
     expect(statuses.slice(3)).toEqual([429, 429]);
   });
 
+  it('A flood from one source spares another', async () => {
+    await start({
+      rate: { perEndpoint: 3, perClient: 1000, windowMs: 60_000 },
+    });
+    const from = (ip: string, path: string) =>
+      raw({
+        path,
+        headers: { ...MCP_HEADERS, 'x-forwarded-for': ip },
+      }).then(r => r.status);
+    for (const path of ['/authorize', '/token', '/revoke']) {
+      const flood: number[] = [];
+      for (let i = 0; i < 5; i++) flood.push(await from('198.51.100.7', path));
+      expect(flood.slice(3)).toEqual([429, 429]);
+      expect(await from('203.0.113.9', path)).not.toBe(429);
+    }
+  });
+
+  it('A forged forwarded address cannot dodge the limit', async () => {
+    await start({
+      rate: { perEndpoint: 3, perClient: 1000, windowMs: 60_000 },
+    });
+    // The proxy appends the real address last; earlier entries are the caller's.
+    const statuses: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      statuses.push(
+        (
+          await raw({
+            path: '/token',
+            headers: {
+              ...MCP_HEADERS,
+              'x-forwarded-for': `10.0.0.${i}, 198.51.100.7`,
+            },
+          })
+        ).status,
+      );
+    }
+    expect(statuses.slice(3)).toEqual([429, 429]);
+  });
+
   it('Distinct paths share one limit', async () => {
     await start({
       rate: { perEndpoint: 3, perClient: 1000, windowMs: 60_000 },
@@ -324,6 +363,38 @@ describe('access is recorded without data', () => {
     expect(records).toContainEqual(
       expect.objectContaining({ event: 'tool_call', status: 'error' }),
     );
+  });
+});
+
+describe('the source of a request', () => {
+  it('trusts the forwarded address only from a loopback peer', () => {
+    expect(sourceOf('127.0.0.1', '1.2.3.4, 198.51.100.7')).toBe('198.51.100.7');
+    expect(sourceOf('::ffff:127.0.0.1', '198.51.100.7')).toBe('198.51.100.7');
+    expect(sourceOf('::1', undefined)).toBe('loopback');
+    expect(sourceOf('192.0.2.5', '198.51.100.7')).toBe('192.0.2.5');
+  });
+
+  it('keys an IPv6 source by its /64', () => {
+    const a = sourceOf('127.0.0.1', '2001:db8:1:2:aaaa::1');
+    const b = sourceOf('127.0.0.1', '2001:db8:1:2:bbbb::9');
+    expect(a).toBe(b);
+    expect(sourceOf('127.0.0.1', '2001:db8:1:3::1')).not.toBe(a);
+  });
+
+  it('falls back to the peer when the header is not an address', () => {
+    expect(sourceOf('192.0.2.5', 'garbage')).toBe('192.0.2.5');
+    expect(sourceOf('127.0.0.1', 'garbage')).toBe('loopback');
+  });
+});
+
+describe('the limiter key table', () => {
+  it('stays bounded by dropping the oldest source', () => {
+    const limit = createLimiter(1, 60_000, 2);
+    expect(limit('a')).toBe(true);
+    expect(limit('a')).toBe(false);
+    expect(limit('b')).toBe(true);
+    expect(limit('c')).toBe(true); // table is full: "a" is dropped
+    expect(limit('a')).toBe(true); // so it starts afresh
   });
 });
 

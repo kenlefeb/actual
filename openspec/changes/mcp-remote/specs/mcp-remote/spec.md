@@ -99,7 +99,7 @@ The server SHALL serve one pre-registered confidential client, SHALL NOT expose 
 - **THEN** the endpoint does not exist
 
 ### Requirement: Host, origin and rate checks
-The hosted entry SHALL refuse a request whose `Host` is not on the configured public hostname list, SHALL refuse a request carrying a browser `Origin` that is not on a configured allowlist, and SHALL rate-limit the authorization, token, revocation and MCP endpoints, per endpoint and per client id. The OAuth endpoints (reachable without a token) SHALL also be limited per source address, so one source cannot use up the limit for the signed-in user; the source is the client address that the local proxy appends to `X-Forwarded-For`, trusted only from a loopback peer, and the table of sources SHALL stay bounded.
+The hosted entry SHALL refuse a request whose `Host` is not on the configured public hostname list, SHALL refuse a request carrying a browser `Origin` that is not on a configured allowlist, and SHALL rate-limit the authorization, token, revocation and MCP endpoints, per endpoint and per client id. The per-endpoint limit SHALL be kept per endpoint and per source address, on every endpoint and with no shared counter, so one source cannot use up the limit for the signed-in user. The source is the client address that the local proxy sets in `X-Forwarded-For` (the last entry is read), trusted only from a loopback peer; the table of sources SHALL stay bounded. The per-client limit, not an aggregate cap, is what protects the engine, and there is no cap across sources. Where a loopback peer supplies no usable address the source SHALL be one shared `loopback` key, which brings back a shared limit, and the hosted entry SHALL record that (once per process, without the header value). The protection is not claimed to work until staging confirms the proxy supplies real client addresses.
 
 #### Scenario: A rebinding host
 - **WHEN** a request arrives with a `Host` that is not configured
@@ -126,6 +126,10 @@ The hosted entry SHALL refuse a request whose `Host` is not on the configured pu
 #### Scenario: A forged forwarded address
 - **WHEN** a caller adds its own earlier `X-Forwarded-For` entries, or sends the header from a non-loopback peer
 - **THEN** the limit is still keyed by the address the proxy appended, or by the peer address, so the caller cannot choose its own key
+
+#### Scenario: No usable forwarded address
+- **WHEN** a loopback peer calls an OAuth endpoint with a missing, empty or unparseable `X-Forwarded-For`
+- **THEN** the request is keyed `loopback` and a `source-unresolved` record is written once, without the header value
 
 #### Scenario: Many sources
 - **WHEN** more distinct sources call than the table holds

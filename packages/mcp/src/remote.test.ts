@@ -272,7 +272,8 @@ describe('host, origin and rate checks', () => {
     await start({
       rate: { perEndpoint: 3, perClient: 1000, windowMs: 60_000 },
     });
-    // The proxy appends the real address last; earlier entries are the caller's.
+    // The proxy sets the real address (and a different one would append it last);
+    // earlier entries are the caller's own.
     const statuses: number[] = [];
     for (let i = 0; i < 5; i++) {
       statuses.push(
@@ -288,6 +289,30 @@ describe('host, origin and rate checks', () => {
       );
     }
     expect(statuses.slice(3)).toEqual([429, 429]);
+  });
+
+  it('An unresolved source is logged once, without the header', async () => {
+    await start();
+    const unresolved = () =>
+      records.filter(r => r.reason === 'source-unresolved');
+    await raw({ path: '/token', headers: MCP_HEADERS });
+    await raw({
+      path: '/token',
+      headers: { ...MCP_HEADERS, 'x-forwarded-for': 'secret-garbage' },
+    });
+    await raw({ path: '/token', headers: MCP_HEADERS });
+    expect(unresolved()).toHaveLength(1);
+    expect(unresolved()[0]).toMatchObject({
+      event: 'warning',
+      endpoint: '/token',
+    });
+    expect(JSON.stringify(records)).not.toContain('secret-garbage');
+    // A resolved source never logs it.
+    await raw({
+      path: '/token',
+      headers: { ...MCP_HEADERS, 'x-forwarded-for': '198.51.100.7' },
+    });
+    expect(unresolved()).toHaveLength(1);
   });
 
   it('Distinct paths share one limit', async () => {
@@ -379,6 +404,20 @@ describe('the source of a request', () => {
     const b = sourceOf('127.0.0.1', '2001:db8:1:2:bbbb::9');
     expect(a).toBe(b);
     expect(sourceOf('127.0.0.1', '2001:db8:1:3::1')).not.toBe(a);
+  });
+
+  it('reads an address with a port, a trailing comma or spaces', () => {
+    expect(sourceOf('127.0.0.1', '198.51.100.7:4433')).toBe('198.51.100.7');
+    expect(sourceOf('127.0.0.1', '[2001:db8:1:2::1]:443')).toBe(
+      sourceOf('127.0.0.1', '2001:db8:1:2::9'),
+    );
+    expect(sourceOf('127.0.0.1', '198.51.100.7,')).toBe('198.51.100.7');
+    expect(sourceOf('127.0.0.1', ' 198.51.100.7 , ')).toBe('198.51.100.7');
+  });
+
+  it('keys an empty header as loopback', () => {
+    expect(sourceOf('127.0.0.1', '')).toBe('loopback');
+    expect(sourceOf('127.0.0.1', ' , ')).toBe('loopback');
   });
 
   it('falls back to the peer when the header is not an address', () => {

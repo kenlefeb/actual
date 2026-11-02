@@ -76,9 +76,12 @@ const isLoopbackPeer = (addr: string | undefined) =>
   !!addr &&
   (addr === '::1' || addr.replace(/^::ffff:/i, '').startsWith('127.'));
 
-/** An IPv4 address, or an IPv6 one cut to its /64 so one host cannot rotate within it. */
+/** An IPv4 or IPv6 address (a port is dropped), the latter cut to its /64 so one host cannot rotate within it. */
 function normalizeAddress(raw: string): string | undefined {
-  const addr = raw.trim().replace(/^::ffff:/i, '');
+  let addr = raw.trim().replace(/^::ffff:/i, '');
+  const bracketed = addr.match(/^\[(.+)\](?::\d+)?$/);
+  if (bracketed) addr = bracketed[1];
+  else if (/^[\d.]+:\d+$/.test(addr)) addr = addr.split(':')[0];
   if (net.isIPv4(addr)) return addr;
   if (!net.isIPv6(addr)) return undefined;
   const [head, tail = ''] = addr.split('::');
@@ -95,10 +98,12 @@ function normalizeAddress(raw: string): string | undefined {
 
 /**
  * Who sent a request, for the per-source rate limit. Behind the Tailscale
- * Funnel the socket peer is the local proxy, which appends the real client
- * address as the last `X-Forwarded-For` entry; earlier entries are the
- * caller's own and are ignored. The header is trusted only from a loopback
- * peer, so a direct caller cannot choose its own key.
+ * Funnel the socket peer is the local proxy, which sets `X-Forwarded-For` to
+ * the one real client address (replacing what the caller sent). The last
+ * non-empty entry is read as defence in depth, so a proxy that appends is also
+ * handled. The header is trusted only from a loopback peer, so a direct caller
+ * cannot choose its own key. With no usable address the key is the one shared
+ * `loopback`; the caller logs that, as it brings back a shared limit.
  */
 export function sourceOf(
   remoteAddress: string | undefined,
@@ -107,8 +112,13 @@ export function sourceOf(
   if (!isLoopbackPeer(remoteAddress)) {
     return normalizeAddress(remoteAddress ?? '') ?? 'unknown';
   }
-  const last = [forwardedFor ?? []].flat().join(',').split(',').pop() ?? '';
-  return normalizeAddress(last) ?? 'loopback';
+  const last = [forwardedFor ?? []]
+    .flat()
+    .join(',')
+    .split(',')
+    .filter(e => e.trim())
+    .pop();
+  return normalizeAddress(last ?? '') ?? 'loopback';
 }
 
 function hostName(header: string | undefined) {
@@ -214,6 +224,7 @@ export function createRemoteHttpServer(
     config.rate.windowMs,
     MAX_SOURCES,
   );
+  let warnedUnresolved = false;
   const refuse = (
     res: ServerResponse,
     status: number,
@@ -245,6 +256,16 @@ export function createRemoteHttpServer(
       req.socket.remoteAddress,
       req.headers['x-forwarded-for'],
     );
+    // Once per process: a proxy that sends no address puts every caller on one
+    // shared key, which would quietly bring back the lockout. No header value.
+    if (
+      source === 'loopback' &&
+      OAUTH_ENDPOINTS.includes(endpoint) &&
+      !warnedUnresolved
+    ) {
+      warnedUnresolved = true;
+      record({ event: 'warning', reason: 'source-unresolved', endpoint });
+    }
     if (!perEndpoint(`${rateKey}|${source}`)) {
       return refuse(res, 429, 'rate-endpoint', undefined, {
         'retry-after': '60',

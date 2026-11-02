@@ -24,6 +24,7 @@ const config: RemoteConfig = {
   allowedOrigins: [],
   syncIntervalMs: 300_000,
   rate: { perEndpoint: 60, perClient: 30, windowMs: 60_000 },
+  oauth: {} as RemoteConfig['oauth'],
 };
 
 describe('hosted means read-only, in code', () => {

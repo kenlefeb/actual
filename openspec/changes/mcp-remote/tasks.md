@@ -15,9 +15,9 @@
 
 ## 3. OAuth provider and token store (sc-1972)
 
-Needs Ken's choice of identity provider first.
+Ken chose Google as the identity provider (sc-1972 comment 2022); the provider stays configuration.
 
-- [ ] 3.1 Add the authorization server on the SDK router: the one identity through the configured provider, the pre-registered client, the redirect allowlist, PKCE, audience-bound short-lived tokens, hashed revocable refresh tokens and the signing key, with tests named after "Authenticated with OAuth", "Short-lived, revocable tokens", "Exactly one identity" and "Clients are registered, not open".
+- [x] 3.1 Add the authorization server on the SDK router: the one identity through the configured provider, the pre-registered client, the redirect allowlist, PKCE, audience-bound short-lived tokens, hashed revocable refresh tokens and the signing key, with tests named after "Authenticated with OAuth", "Short-lived, revocable tokens", "Exactly one identity" and "Clients are registered, not open".
 
 ## 4. Container, exposure and deployment, Ken's gate (sc-1973)
 

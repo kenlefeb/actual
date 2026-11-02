@@ -32,6 +32,23 @@ function config(over: Partial<RemoteConfig> = {}): RemoteConfig {
     allowedOrigins: [],
     syncIntervalMs: 300_000,
     rate: { perEndpoint: 1000, perClient: 1000, windowMs: 60_000 },
+    oauth: {
+      publicUrl: 'https://hosted.example.test',
+      signingKey: 'unused-in-these-tests-0123456789abcdef',
+      clientId: 'c',
+      clientSecret: 'unused-client-secret',
+      redirectUris: ['https://claude.ai/api/mcp/auth_callback'],
+      allowDynamicRegistration: false,
+      stateFile: '/tmp/actual-mcp-remote-test/oauth-state.json',
+      idp: {
+        issuer: 'https://idp.example.test',
+        authorizationUrl: 'https://idp.example.test/auth',
+        tokenUrl: 'https://idp.example.test/token',
+        clientId: 'i',
+        clientSecret: 'unused-idp-secret',
+        account: 'a@example.test',
+      },
+    },
     ...over,
   };
 }
@@ -145,14 +162,25 @@ describe('a separate hosted entry', () => {
   it('No authentication, no public listener', async () => {
     fixture = await buildFixtureBudget({ count: 1 });
     server = http.createServer();
+    const open = { listen: { host: '0.0.0.0', port: 0 } };
+    expect(() => createRemoteHttpServer(config(open))).toThrow(/loopback/);
+    // With an authentication hook the address is the operator's choice, but
+    // only the public hostname may be allowed: no loopback or wildcard names.
+    const authenticate = () => ({ clientId: 'c' });
     expect(() =>
-      createRemoteHttpServer(config({ listen: { host: '0.0.0.0', port: 0 } })),
-    ).toThrow(/loopback/);
-    // With an authentication hook the address is the operator's choice.
+      createRemoteHttpServer(config(open), { authenticate }),
+    ).toThrow(/public hostname/);
     expect(() =>
-      createRemoteHttpServer(config({ listen: { host: '0.0.0.0', port: 0 } }), {
-        authenticate: () => ({ clientId: 'c' }),
-      }),
+      createRemoteHttpServer(
+        config({ ...open, allowedHosts: ['hosted.example.test', '*'] }),
+        { authenticate },
+      ),
+    ).toThrow(/public hostname/);
+    expect(() =>
+      createRemoteHttpServer(
+        config({ ...open, allowedHosts: ['hosted.example.test'] }),
+        { authenticate },
+      ),
     ).not.toThrow();
   });
 

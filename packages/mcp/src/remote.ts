@@ -78,21 +78,39 @@ const isLoopbackPeer = (addr: string | undefined) =>
 
 /** An IPv4 or IPv6 address (a port is dropped), the latter cut to its /64 so one host cannot rotate within it. */
 function normalizeAddress(raw: string): string | undefined {
-  let addr = raw.trim().replace(/^::ffff:/i, '');
+  let addr = raw.trim();
   const bracketed = addr.match(/^\[(.+)\](?::\d+)?$/);
   if (bracketed) addr = bracketed[1];
   else if (/^[\d.]+:\d+$/.test(addr)) addr = addr.split(':')[0];
   if (net.isIPv4(addr)) return addr;
   if (!net.isIPv6(addr)) return undefined;
+  // A dotted IPv4 tail becomes two hex groups, so every spelling expands alike.
+  const dotted = addr.match(/^(.*:)(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (dotted) {
+    const [, head, ...o] = dotted;
+    const n = o.map(Number);
+    addr = `${head}${((n[0] << 8) | n[1]).toString(16)}:${((n[2] << 8) | n[3]).toString(16)}`;
+  }
   const [head, tail = ''] = addr.split('::');
   const first = head ? head.split(':') : [];
   const last = tail ? tail.split(':') : [];
-  const groups = addr.includes('::')
-    ? [...first, ...Array(8 - first.length - last.length).fill('0'), ...last]
-    : first;
+  const groups = (
+    addr.includes('::')
+      ? [...first, ...Array(8 - first.length - last.length).fill('0'), ...last]
+      : first
+  ).map(g => parseInt(g, 16));
+  // IPv4-mapped (::ffff:a.b.c.d in any spelling) is the IPv4 address.
+  if (groups.slice(0, 5).every(g => g === 0) && groups[5] === 0xffff) {
+    return [
+      groups[6] >> 8,
+      groups[6] & 255,
+      groups[7] >> 8,
+      groups[7] & 255,
+    ].join('.');
+  }
   return groups
     .slice(0, 4)
-    .map(g => parseInt(g, 16).toString(16))
+    .map(g => g.toString(16))
     .join(':');
 }
 
@@ -284,18 +302,24 @@ export function createRemoteHttpServer(
       warnedUnresolved = true;
       record({ event: 'warning', reason: 'source-unresolved', endpoint });
     }
-    if (!perEndpoint(`${rateKey}|${source}`)) {
-      return refuse(res, 429, 'rate-endpoint', undefined, {
-        'retry-after': '60',
-      });
-    }
-
-    // Only requests the source limit let through count here, so one noisy
-    // source cannot use up its neighbours' share.
-    if (!perPrefix(`${rateKey}|${prefixOf(source)}`)) {
-      return refuse(res, 429, 'rate-prefix', undefined, {
-        'retry-after': '60',
-      });
+    // A /mcp call with a valid token meets only the per-client limit: the
+    // connector arrives from shared egress ranges, so source and prefix
+    // counters there could be used up by other people's unauthenticated calls.
+    const early =
+      authenticate && endpoint === '/mcp' ? await authenticate(req) : undefined;
+    if (!early) {
+      if (!perEndpoint(`${rateKey}|${source}`)) {
+        return refuse(res, 429, 'rate-endpoint', undefined, {
+          'retry-after': '60',
+        });
+      }
+      // Only requests the source limit let through count here, so one noisy
+      // source cannot use up its neighbours' share.
+      if (!perPrefix(`${rateKey}|${prefixOf(source)}`)) {
+        return refuse(res, 429, 'rate-prefix', undefined, {
+          'retry-after': '60',
+        });
+      }
     }
 
     // The authorization server's own endpoints need no token to reach.
@@ -306,7 +330,7 @@ export function createRemoteHttpServer(
     let client = 'anonymous';
     let subject = 'anonymous';
     if (authenticate) {
-      const who = await authenticate(req);
+      const who = early ?? (await authenticate(req));
       if (!who) {
         return refuse(
           res,

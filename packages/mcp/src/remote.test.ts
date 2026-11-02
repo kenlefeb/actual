@@ -452,6 +452,19 @@ describe('the source of a request', () => {
     expect(sourceOf('127.0.0.1', ' 198.51.100.7 , ')).toBe('198.51.100.7');
   });
 
+  it('reduces any IPv4-mapped spelling to the IPv4 address', () => {
+    for (const mapped of [
+      '::ffff:198.51.100.7',
+      '0:0:0:0:0:ffff:198.51.100.7',
+      '::ffff:c633:6407',
+      '0:0:0:0:0:ffff:c633:6407',
+      '[::FFFF:C633:6407]:443',
+    ]) {
+      expect(sourceOf('127.0.0.1', mapped)).toBe('198.51.100.7');
+      expect(sourceOf('::ffff:c633:6407', undefined)).toBe('198.51.100.7');
+    }
+  });
+
   it('keys an empty header as loopback', () => {
     expect(sourceOf('127.0.0.1', '')).toBe('loopback');
     expect(sourceOf('127.0.0.1', ' , ')).toBe('loopback');
@@ -514,6 +527,44 @@ describe('the aggregate ceiling', () => {
     await start({ rate: tier });
     for (let i = 0; i < 20; i++) await from('198.51.100.1');
     expect(await from('198.51.100.2')).not.toBe(429);
+  });
+
+  it('A signed-in /mcp call is not refused by an unauthenticated flood', async () => {
+    const token = (req: http.IncomingMessage) =>
+      req.headers.authorization === 'Bearer good'
+        ? { clientId: 'c1', subject: 's' }
+        : null;
+    await start({ rate: tier }, { authenticate: token });
+    const ken = '198.51.100.7';
+    const signedIn = () =>
+      raw({
+        headers: {
+          ...MCP_HEADERS,
+          authorization: 'Bearer good',
+          'x-forwarded-for': ken,
+        },
+      }).then(r => r.status);
+    // Unauthenticated /mcp and /token from Ken's source and from neighbours in his prefix.
+    for (let i = 0; i < 20; i++) {
+      await from(ken);
+      await from(`198.51.100.${i + 20}`);
+      await from(ken, '/mcp');
+      await from(`198.51.100.${i + 20}`, '/mcp');
+    }
+    expect(await from(ken, '/mcp')).toBe(429);
+    for (let i = 0; i < 10; i++) expect(await signedIn()).not.toBe(429);
+  });
+
+  it('Signed-in /mcp calls still meet the per-client limit', async () => {
+    await start(
+      { rate: { ...tier, perClient: 2 } },
+      { authenticate: () => ({ clientId: 'c1', subject: 's' }) },
+    );
+    const statuses: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      statuses.push(await from('198.51.100.7', '/mcp'));
+    }
+    expect(statuses.slice(2)).toEqual([429, 429]);
   });
 
   it('Each endpoint keeps its own prefix counter', async () => {

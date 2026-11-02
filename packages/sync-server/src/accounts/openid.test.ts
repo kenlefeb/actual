@@ -6,7 +6,11 @@ import type * as OpenIdClient from 'openid-client';
 import { getAccountDb } from '#account-db';
 import { config } from '#load-config';
 
-import { loginWithOpenIdFinalize, loginWithOpenIdSetup } from './openid';
+import {
+  bootstrapOpenId,
+  loginWithOpenIdFinalize,
+  loginWithOpenIdSetup,
+} from './openid';
 
 const provider = vi.hoisted(() => ({
   callback: vi.fn(),
@@ -166,5 +170,67 @@ describe('first sign-in must match the configured admin subject', () => {
     config.set('openId.adminSubject', 'someone-else');
     const result = await signIn();
     expect(result.error).toBeUndefined();
+  });
+
+  it('an empty identity cannot reach the password-method user', async () => {
+    expect(
+      getAccountDb().first("SELECT id FROM users WHERE user_name = ''"),
+    ).toBeTruthy();
+    config.set('openId.adminSubject', 'someone-else');
+    for (const empty of ['', '   ']) {
+      provider.userinfo.mockResolvedValue({
+        sub: 'attacker',
+        preferred_username: empty,
+      });
+      expect((await signIn()).error).toBe('openid-grant-failed');
+    }
+    expect(
+      getAccountDb().first(
+        "SELECT count(*) as n FROM sessions WHERE auth_method = 'openid'",
+      ).n,
+    ).toBe(0);
+  });
+
+  it('refuses a sign-in whose ID token sub differs from the userinfo sub', async () => {
+    config.set('openId.adminSubject', 'fixed-id');
+    provider.callback.mockResolvedValue({
+      access_token: 'provider-token',
+      id_token: 'x',
+      claims: () => ({ iss: 'https://identity.example', sub: 'other' }),
+    });
+    expect((await signIn()).error).toBe('openid-grant-failed');
+    expect(users()).toEqual([]);
+  });
+
+  it('accepts a matching ID token sub', async () => {
+    config.set('openId.adminSubject', 'fixed-id');
+    provider.callback.mockResolvedValue({
+      access_token: 'provider-token',
+      id_token: 'x',
+      claims: () => ({ iss: 'https://identity.example', sub: 'fixed-id' }),
+    });
+    expect((await signIn()).error).toBeUndefined();
+  });
+
+  it('warns at startup when the setting is unset, and not when set', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const params = {
+      issuer: 'https://identity.example',
+      client_id: 'client',
+      client_secret: 'secret',
+      server_hostname: 'https://actual.example',
+    };
+    try {
+      await bootstrapOpenId({ ...params });
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('ACTUAL_OPENID_ADMIN_SUBJECT'),
+      );
+      warn.mockClear();
+      config.set('openId.adminSubject', 'fixed-id');
+      await bootstrapOpenId({ ...params });
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

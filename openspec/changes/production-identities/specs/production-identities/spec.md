@@ -58,7 +58,32 @@ The identity provider SHALL be an Auth0 tenant that holds only Ken's account and
 - **THEN** the provider refuses it
 
 ### Requirement: The server refuses a first sign-in that is not Ken's
-When `ACTUAL_OPENID_ADMIN_SUBJECT` is set, the sync server SHALL accept the first OpenID sign-in on a server with no OpenID user only if the provider's `sub` equals it, and SHALL otherwise refuse it and create no user. The `sub` is matched, not the e-mail, because the provider can change or reassign an e-mail. Production SHALL set it to Ken's `sub`. When it is unset the server SHALL keep upstream's rule (the first identity becomes ADMIN) and log a warning when OpenID is enabled. Later sign-ins are not affected.
+When `ACTUAL_OPENID_ADMIN_SUBJECT` is set, the sync server SHALL accept the first OpenID sign-in on a server with no OpenID user only if the provider's `sub` equals it, and SHALL otherwise refuse it and create no user. Production SHALL set it to Ken's `sub`. It needs a provider that returns a `sub`; a plain OAuth2 provider without one cannot use the backstop and is refused.
+
+#### Scenario: The match is on the subject, not the e-mail
+- **GIVEN** the setting is Ken's `sub` and Ken's e-mail later changes
+- **WHEN** Ken signs in for the first time
+- **THEN** he is accepted, because the `sub` is matched and the e-mail is not
+
+#### Scenario: Unset keeps upstream behaviour
+- **GIVEN** the setting is unset
+- **WHEN** OpenID is enabled and the first identity signs in
+- **THEN** it becomes ADMIN as upstream does, and the server logs a warning at enablement
+
+#### Scenario: Later sign-ins are not affected
+- **GIVEN** an OpenID user exists
+- **WHEN** any listed user signs in
+- **THEN** the setting is not consulted
+
+#### Scenario: An empty identity cannot reach the password user
+- **GIVEN** the setting is set and the provider returns an empty user name
+- **WHEN** the sign-in is finished
+- **THEN** the server refuses it, because an empty name would otherwise resolve to the password-method ADMIN
+
+#### Scenario: A mismatched ID token is refused
+- **GIVEN** the setting is set and the ID token's `sub` differs from the userinfo `sub`
+- **WHEN** the sign-in is finished
+- **THEN** the server refuses it
 
 #### Scenario: A first sign-in from another identity is refused
 - **GIVEN** OpenID is enabled, `ACTUAL_OPENID_ADMIN_SUBJECT` is Ken's `sub` and no OpenID user exists

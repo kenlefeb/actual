@@ -259,6 +259,19 @@ export async function loginWithOpenIdFinalize(body) {
       return { error: 'openid-grant-failed: no identification was found' };
     }
 
+    // fork: sc-2163, an empty identity would resolve to the password-method
+    // user (user_name ''), and the ID token's sub must agree with userinfo's
+    if (String(identity).trim() === '') {
+      return { error: 'openid-grant-failed' };
+    }
+    if (
+      config.get('openId.adminSubject') &&
+      tokenSet.id_token &&
+      tokenSet.claims().sub !== userInfo.sub
+    ) {
+      return { error: 'openid-grant-failed' };
+    }
+
     let userId = null;
     try {
       accountDb.transaction(() => {

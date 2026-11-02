@@ -7,12 +7,13 @@ import { assertTokenNotAdmin } from './production-guard';
 const TOKEN = 'minted-token-0123456789';
 let server: Server;
 let seenToken: string | undefined;
+let seenUrl: string | undefined;
 let reply: (res: ServerResponse) => void;
 
 async function start() {
   server = createServer((req, res) => {
     seenToken = req.headers['x-actual-token'] as string;
-    expect(req.url).toBe('/account/validate');
+    seenUrl = req.url;
     reply(res);
   });
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
@@ -67,6 +68,56 @@ describe("A production token is never an administrator's", () => {
     expect(await message('http://127.0.0.1:1')).toMatch(
       /could not be validated/,
     );
+  });
+
+  it('A redirect fails closed and the token never follows it', async () => {
+    let otherSaw: string | undefined;
+    const other = createServer((req, res) => {
+      otherSaw = req.headers['x-actual-token'] as string;
+      json(200, { data: { permission: 'BASIC' } })(res);
+    });
+    await new Promise<void>(r => other.listen(0, '127.0.0.1', r));
+    const otherUrl = `http://127.0.0.1:${(other.address() as AddressInfo).port}/account/validate`;
+    reply = res => {
+      res.statusCode = 302;
+      res.setHeader('location', otherUrl);
+      res.end();
+    };
+    const m = await message(await start());
+    await new Promise(r => other.close(r));
+    expect(m).toMatch(/could not be validated/);
+    expect(otherSaw).toBeUndefined();
+  });
+
+  it('Only exactly BASIC passes', async () => {
+    for (const permission of [
+      ' ADMIN',
+      'ADMIN ',
+      'ADMIN\n',
+      'admin',
+      'OWNER',
+      '',
+      'basic',
+      ' BASIC',
+    ]) {
+      reply = json(200, { data: { permission } });
+      const url = await start();
+      expect(await message(url), JSON.stringify(permission)).toMatch(
+        /administrator|could not be validated/,
+      );
+      await new Promise(r => server.close(r));
+    }
+    reply = json(200, { data: { permission: 'ADMIN' } });
+    expect(await message(await start())).toMatch(/administrator/);
+  });
+
+  it('A path prefix in the server URL is kept', async () => {
+    reply = json(200, { data: { permission: 'BASIC' } });
+    const url = await start();
+    for (const base of [`${url}/sync`, `${url}/sync/`]) {
+      expect(await message(base)).toBe('');
+      expect(seenUrl).toBe('/sync/account/validate');
+    }
   });
 
   it('A non-administrator token passes', async () => {

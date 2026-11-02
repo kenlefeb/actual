@@ -154,8 +154,8 @@ administrator or it cannot be validated. It stays read-only, and a loopback serv
 listener.
 
 - **Read-only in code.** The engine always starts read-only, no `write_` tool is registered, and
-  `--writes` is a usage error. It serves staging or local only: a production host is refused, even
-  with `ACTUAL_MCP_ALLOW_PRODUCTION=1`.
+  `--writes` is a usage error. A production host is served only under the production guard
+  above; `ACTUAL_MCP_ALLOW_PRODUCTION=1` never lifts it.
 - **One budget per instance.** The data directory is the configured one (or the default
   `actual-mcp/<env>`) with `-remote` added, mode 0700.
 - **Secrets in files.** `ACTUAL_PASSWORD_FILE` (or, instead of it, `ACTUAL_SESSION_TOKEN_FILE`,

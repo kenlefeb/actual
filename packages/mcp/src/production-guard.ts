@@ -12,10 +12,14 @@ export async function assertTokenNotAdmin(
 ) {
   let permission: unknown;
   try {
-    const res = await fetch(new URL('/account/validate', config.serverUrl), {
-      headers: { 'x-actual-token': config.sessionToken ?? '' },
-      signal: AbortSignal.timeout(10_000),
-    });
+    const res = await fetch(
+      new URL('account/validate', config.serverUrl.replace(/\/*$/, '/')),
+      {
+        headers: { 'x-actual-token': config.sessionToken ?? '' },
+        redirect: 'error', // the token must never follow a redirect
+        signal: AbortSignal.timeout(10_000),
+      },
+    );
     if (!res.ok) throw new Error('rejected');
     permission = (
       (await res.json()) as { data?: { permission?: unknown } } | null
@@ -23,10 +27,12 @@ export async function assertTokenNotAdmin(
   } catch {
     throw new Error(FAIL);
   }
-  if (typeof permission !== 'string' || !permission) throw new Error(FAIL);
-  if (permission.toUpperCase() === 'ADMIN') {
+  // Exact match only: no trimming, no case folding. Exactly ADMIN gets its
+  // own message; anything else that is not BASIC is "cannot be validated".
+  if (permission === 'ADMIN') {
     throw new Error(
       'The production session token belongs to an administrator; refusing to start.',
     );
   }
+  if (permission !== 'BASIC') throw new Error(FAIL);
 }

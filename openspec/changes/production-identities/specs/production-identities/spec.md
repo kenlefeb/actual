@@ -3,16 +3,20 @@
 ## ADDED Requirements
 
 ### Requirement: Production signs in only through OpenID
-The production sync server SHALL run in OpenID multi-user mode with password login disabled, so that no shared password opens a budget. Ken SHALL be its only ADMIN. The assistant SHALL be a BASIC user. No other person, agent or service SHALL have a production user, and no account the assistant uses SHALL be an ADMIN.
+The production sync server SHALL run in OpenID multi-user mode with password login disabled, so that no shared password opens a budget. Ken SHALL be its only ADMIN. The assistant SHALL be a BASIC user. No other person, agent or service SHALL have a production user, and no account the assistant uses SHALL be an ADMIN. The production password is the one carve-out (see the scenario on the drill).
 
 #### Scenario: The shared password no longer works
 - **GIVEN** production is switched to OpenID with password login off
 - **WHEN** a client posts the old server password to the login endpoint
 - **THEN** the server refuses it and issues no session
 
+#### Scenario: The password is only a drill and break-glass credential
+- **WHEN** the restore drill runs
+- **THEN** its container listens on loopback only, signs in with the password row, and is destroyed afterwards, and the password stays in Ken's Private item "Actual (Production) login" as the break-glass credential
+
 #### Scenario: The assistant is not an administrator
 - **WHEN** the assistant's session lists budgets
-- **THEN** it sees only the budgets Ken shared with it, and the admin-only user routes refuse it
+- **THEN** it sees only the budgets Ken shared with it, and the admin write routes (creating users, disabling OpenID) refuse it
 
 #### Scenario: Development agents have no production user
 - **WHEN** the production user list is reviewed
@@ -26,14 +30,32 @@ The production sync server SHALL run in OpenID multi-user mode with password log
 - **WHEN** it is used after the switch
 - **THEN** the server refuses it, and the `sessions` table holds no row with `auth_method = 'password'`
 
-#### Scenario: A restored password row stays refused
-- **GIVEN** a snapshot made before the switch is restored over production
+#### Scenario: A post-switch snapshot stays refused
+- **GIVEN** a snapshot made after the switch is restored over production
 - **WHEN** the server starts from the template with the two variables set
-- **THEN** a password login is refused until the switch is re-applied
+- **THEN** a password login is refused
+
+#### Scenario: A pre-switch snapshot is restored
+- **GIVEN** a snapshot made before the switch (it has only the password method)
+- **WHEN** it is restored over production
+- **THEN** the restore re-applies the switch (`enable-openid.js` run offline on the volume, and the sessions table in the restored copy deleted) before the server is reachable, and a password login is refused afterwards
+
+#### Scenario: A restore under OpenID
+- **GIVEN** a snapshot is restored, before or after the switch
+- **WHEN** the restore finishes
+- **THEN** every session is deleted and the assistant's token is minted again, so no token revoked since the snapshot works
 
 #### Scenario: A template change is caught
 - **WHEN** the persistence check runs and the template lacks either variable
 - **THEN** the check fails
+
+### Requirement: The first sign-in is Ken's
+The identity provider's client SHALL accept only Ken's account and the assistant's account. The first OpenID sign-in on a server with no OpenID user SHALL be Ken's, made before the server is reachable by anyone else or while `ACTUAL_OPENID_ENFORCE` is off, because with it on the server asks for no password and gives ADMIN and ownership to the first identity the provider accepts.
+
+#### Scenario: An unrelated identity cannot claim the server
+- **GIVEN** OpenID is enabled and no OpenID user exists
+- **WHEN** an identity that is not Ken's finishes the provider's sign-in
+- **THEN** the provider refuses it
 
 ### Requirement: The assistant has its own sign-in identity
 The assistant's BASIC user SHALL be a dedicated account at the configured identity provider, not Ken's, protected by a passkey or authenticator-app two-factor sign-in, with no account recovery through any mailbox agents can read. Its credentials SHALL be kept in the "Ken Assistant" vault and listed in the LOCKDOWN inventory.
@@ -62,17 +84,17 @@ The assistant's production credential SHALL have one record and one deployed cop
 - **THEN** it finds the vault item and the container's 0400 file, and no other copy
 
 ### Requirement: Headless sign-in with a long-lived token Ken mints
-The assistant's connector SHALL sign in to production with a session token that Ken mints once through the OpenID flow, stored in the connector's 0400 file, with `token_expiration` set so it outlives the 10-minute default by a stated period, and SHALL be revocable at once by disabling the assistant's user. The token SHALL be minted only after staging has shown that `@actual-app/api` signs in headless as a BASIC user with such a token.
+The assistant's connector SHALL sign in to production with a session token that Ken mints once through the OpenID flow, kept in its 0400 file, and not with a password. The token SHALL end after a stated period set through `token_expiration` for the minting (the server default is `never`), and SHALL be revocable at once by disabling the assistant's user through the admin route, which deletes its sessions. It SHALL be minted only after staging has shown a headless BASIC sign-in with such a token.
 
 #### Scenario: Disabling the user ends the token
 - **GIVEN** the connector holds a valid token
 - **WHEN** Ken sets the assistant's user to disabled
 - **THEN** the next request with that token is refused
 
-#### Scenario: Minting does not lengthen Ken's sessions
-- **GIVEN** `token_expiration` is a server-wide setting
-- **WHEN** Ken has minted the assistant's token with it raised and has put it back
-- **THEN** a new ADMIN session gets the default lifetime
+#### Scenario: Minting does not change Ken's sessions
+- **GIVEN** `token_expiration` is a server-wide setting stored per session at sign-in
+- **WHEN** Ken has minted the assistant's token with it set and has unset it
+- **THEN** a new ADMIN session gets the default lifetime and the assistant's token keeps its own end date
 
 #### Scenario: Staging proves the sign-in first
 - **WHEN** the production switch is proposed
@@ -122,14 +144,8 @@ No vault separation SHALL be counted as real separation, and no production crede
 - **THEN** its first step confirms LOCKDOWN is done, and a later step is blocked until it is
 
 ### Requirement: Switching does not break backup and restore
-The switch SHALL list every use of the production password and what replaces it, SHALL rehearse a restore onto a staging instance with OpenID on, and SHALL leave the nightly ciphertext backup and the Mac mini pull unchanged because they use SSH forced commands and an age key, not a login.
+The switch SHALL list every use of the production password and what replaces it, and SHALL leave the nightly backup and the Mac mini pull unchanged (SSH forced command and age key, no login). A restore onto production SHALL, before the server is reachable, delete the sessions table in the restored copy and run `enable-openid.js` offline; that step is to be scripted, not left as prose.
 
-#### Scenario: A restore under OpenID
-- **GIVEN** an archive made after the switch
-- **WHEN** the restore drill runs on a staging instance with OpenID on
-- **THEN** Ken signs in through the identity provider and sees the budget
-
-#### Scenario: A pre-switch snapshot is restored
-- **GIVEN** a snapshot made before the switch
-- **WHEN** it is restored over production
-- **THEN** password login is refused from the first start because the template still sets the two variables, and the checklist's next step re-applies the switch (including deleting password sessions) before anyone signs in
+#### Scenario: Every password use is listed
+- **WHEN** the design's table of password uses is reviewed
+- **THEN** it names the drill, the snapshot restore, LOCKDOWN, the backup tooling, the promote health check, the staging scripts and the MCP entries, each with what replaces the password or why it is unchanged

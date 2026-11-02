@@ -29,6 +29,7 @@ import { config } from './load-config';
 import { SecretName, secretsService } from './services/secrets-service';
 import * as UserService from './services/user-service';
 import * as simpleSync from './sync-simple';
+import { accessLogMiddleware, noteFileAccess } from './util/access-log';
 import { atomicWriteFile } from './util/atomic-write';
 import {
   errorMiddleware,
@@ -45,6 +46,7 @@ import type { GroupId } from './util/paths';
 
 const app = express();
 app.use(validateSessionMiddleware);
+app.use(accessLogMiddleware); // fork-only access log (see util/access-log.ts)
 app.use(errorMiddleware);
 app.use(requestLoggerMiddleware);
 app.use(
@@ -128,6 +130,7 @@ function requireFileOwner(file: File, userId: string) {
 }
 
 function requireFileAccess(file: File, userId: string) {
+  noteFileAccess(file.id); // fork-only access log
   if (requireFileOwner(file, userId) === null) {
     return null;
   }

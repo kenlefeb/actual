@@ -9,7 +9,7 @@ Each group ends with the story that ships it. Until the slice stories are filed,
 - [ ] 1.3 Add `production-identities` to the #1550 row of the epic table in `docs/agents/issue-tracker.md` (done in this PR) and, when the change merges, to the epic description, and create the `spec:production-identities` label.
 - [ ] 1.4 File the slice stories under epic 1550 (A to F below), give each of groups 2 to 7 its story id, add them to `x-shortcut`, and add the label to each.
 
-## 2. Slice A: MCP audit identity (sc-2004)
+## 2. Slice A: MCP audit identity (sc-2024)
 
 - [x] 2.1 Add the acting identity (sync-server user id, OAuth subject or `local`) to every audit line and to the hosted entry's read record, with tests named after "An audit line names its identity". Edit the `mcp-server` "Write audit log" requirement in this slice. No production touch.
 

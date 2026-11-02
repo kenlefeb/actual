@@ -85,7 +85,12 @@ function remoteConfig(
     allowedHosts: [new URL(oauth.publicUrl).hostname],
     allowedOrigins: [],
     syncIntervalMs: 300_000,
-    rate: { perEndpoint: 1000, perClient: 1000, windowMs: 60_000 },
+    rate: {
+      perEndpoint: 1000,
+      perClient: 1000,
+      perPrefix: 1000,
+      windowMs: 60_000,
+    },
     oauth,
     ...over,
   };
@@ -868,7 +873,14 @@ describe('host, origin and rate checks cover the OAuth endpoints', () => {
       await stop();
       await start(
         {},
-        { rate: { perEndpoint: 3, perClient: 1000, windowMs: 60_000 } },
+        {
+          rate: {
+            perEndpoint: 3,
+            perClient: 1000,
+            perPrefix: 1000,
+            windowMs: 60_000,
+          },
+        },
       );
       const hit = (path: string) =>
         raw({ method: 'POST', path, body: '{}' }).then(r => r.status);

@@ -24,7 +24,7 @@ const config: RemoteConfig = {
   allowedHosts: ['localhost'],
   allowedOrigins: [],
   syncIntervalMs: 300_000,
-  rate: { perEndpoint: 60, perClient: 30, windowMs: 60_000 },
+  rate: { perEndpoint: 60, perClient: 30, perPrefix: 1000, windowMs: 60_000 },
   oauth: {} as RemoteConfig['oauth'],
 };
 

@@ -67,12 +67,17 @@ A production instance SHALL sign users in only through an identity-provider tena
 - **THEN** the review fails and the instance is not deployed
 
 ### Requirement: A production token is never an administrator's
-In production the hosted entry SHALL validate the session token against the sync server at start and SHALL exit with a fixed error, before it listens, if the token's user holds the ADMIN permission or cannot be validated. The guard's other conditions SHALL NOT be treated as proof of the token's privilege.
+In production the hosted entry SHALL validate the session token against the sync server at start and SHALL exit with a fixed error, before it listens, unless the token's user holds exactly the BASIC permission (so ADMIN, any other permission, a missing permission, and a token that cannot be validated all exit). The guard's other conditions SHALL NOT be treated as proof of the token's privilege.
 
 #### Scenario: An administrator's token
 - **GIVEN** the production guard is met and the token file holds Ken's ADMIN token
 - **WHEN** the hosted entry starts
 - **THEN** it exits with a fixed error that does not name the token, and serves nothing
+
+#### Scenario: A token without the BASIC permission
+- **GIVEN** the sync server validates the token and its user holds neither ADMIN nor BASIC, or no permission at all
+- **WHEN** the hosted entry starts in production
+- **THEN** it exits with a fixed error and serves nothing
 
 #### Scenario: A token that cannot be validated
 - **GIVEN** the sync server rejects or does not answer the validation
@@ -208,7 +213,7 @@ The server SHALL serve one pre-registered confidential client, SHALL NOT expose 
 - **THEN** the endpoint does not exist
 
 ### Requirement: Host, origin and rate checks
-The hosted entry SHALL refuse a request whose `Host` is not on the configured public hostname list, SHALL refuse a request carrying a browser `Origin` that is not on a configured allowlist, and SHALL rate-limit the authorization, token, revocation and MCP endpoints, per endpoint and per client id. The per-endpoint limit SHALL be kept per endpoint and per source address, on every endpoint and with no shared counter, so one source cannot use up the limit for the signed-in user. The source is the client address that the local proxy sets in `X-Forwarded-For` (the last entry is read), trusted only from a loopback peer; the table of sources SHALL stay bounded. The per-client limit, not an aggregate cap, is what protects the engine, and there is no cap across sources. Where a loopback peer supplies no usable address the source SHALL be one shared `loopback` key, which brings back a shared limit, and the hosted entry SHALL record that (once per process, without the header value). The protection is not claimed to work until staging confirms the proxy supplies real client addresses.
+The hosted entry SHALL refuse a request whose `Host` is not on the configured public hostname list, SHALL refuse a request carrying a browser `Origin` that is not on a configured allowlist, and SHALL rate-limit the authorization, token, revocation and MCP endpoints, per endpoint and per client id. The per-endpoint limit SHALL be kept per endpoint and per source address, on every endpoint and with no shared counter, so one source cannot use up the limit for the signed-in user. The source is the client address that the local proxy sets in `X-Forwarded-For` (the last entry is read), trusted only from a loopback peer; the table of sources SHALL stay bounded. On top of that, an aggregate ceiling SHALL be kept per endpoint and per source prefix (the IPv4 /24 or IPv6 /48), counting only requests the per-source limit let through, with a default several times the per-source limit and set by configuration. It is a tier by prefix, never a global cap across all sources, so a flood from many prefixes cannot refuse the signed-in user's sign-in; the ceiling bounds one prefix, not the whole internet. A `/mcp` request that carries a valid access token SHALL count only against the per-client limit and skip the source and prefix counters, because the connector arrives from shared egress ranges that other people's unauthenticated calls also use; unauthenticated `/mcp` attempts and every OAuth endpoint keep both tiers. Several sources inside the signed-in user's own prefix, or other callers on the connector's shared egress, can still exhaust the tier for the OAuth endpoints (a `/token` refresh may be refused for a window), which costs availability, not data. The per-client limit is what protects the engine. Where a loopback peer supplies no usable address the source SHALL be one shared `loopback` key, which brings back a shared limit, and the hosted entry SHALL record that (once per process, without the header value). The protection is not claimed to work until staging confirms the proxy supplies real client addresses.
 
 #### Scenario: A rebinding host
 - **WHEN** a request arrives with a `Host` that is not configured
@@ -239,6 +244,26 @@ The hosted entry SHALL refuse a request whose `Host` is not on the configured pu
 #### Scenario: No usable forwarded address
 - **WHEN** a loopback peer calls an OAuth endpoint with a missing, empty or unparseable `X-Forwarded-For`
 - **THEN** the request is keyed `loopback` and a `source-unresolved` record is written once, without the header value
+
+#### Scenario: A prefix flooding from many sources
+- **GIVEN** the per-endpoint source limit and a lower prefix ceiling
+- **WHEN** several sources in one /24 (or /48) together exceed the ceiling on an endpoint
+- **THEN** the extra requests from that prefix are refused with 429, while the same endpoint still serves other prefixes
+
+#### Scenario: A many-prefix flood spares a fresh source
+- **GIVEN** a flood from many distinct prefixes, each within its ceiling
+- **WHEN** a source in a prefix not yet seen signs in
+- **THEN** the sign-in is not refused
+
+#### Scenario: One noisy source does not use up its prefix
+- **GIVEN** one source far over its own limit
+- **WHEN** a neighbour in the same prefix calls the endpoint
+- **THEN** the neighbour is served, because refused requests do not count toward the prefix
+
+#### Scenario: A signed-in call is not refused by a flood
+- **GIVEN** a flood of unauthenticated `/mcp` and `/token` requests from the signed-in user's source and prefix
+- **WHEN** the user's authenticated `/mcp` call arrives
+- **THEN** it is not refused by the source or prefix counters
 
 #### Scenario: Many sources
 - **WHEN** more distinct sources call than the table holds

@@ -9,7 +9,12 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 
 import { buildFixtureBudget } from './fixture';
-import { createLimiter, createRemoteHttpServer, sourceOf } from './remote';
+import {
+  createLimiter,
+  createRemoteHttpServer,
+  prefixOf,
+  sourceOf,
+} from './remote';
 import type { RemoteOptions } from './remote';
 import type { RemoteConfig } from './remote-config';
 import { createServer } from './server';
@@ -31,7 +36,12 @@ function config(over: Partial<RemoteConfig> = {}): RemoteConfig {
     allowedHosts: ['localhost', '127.0.0.1', 'hosted.example.test'],
     allowedOrigins: [],
     syncIntervalMs: 300_000,
-    rate: { perEndpoint: 1000, perClient: 1000, windowMs: 60_000 },
+    rate: {
+      perEndpoint: 1000,
+      perClient: 1000,
+      perPrefix: 1000,
+      windowMs: 60_000,
+    },
     oauth: {
       publicUrl: 'https://hosted.example.test',
       signingKey: 'unused-in-these-tests-0123456789abcdef',
@@ -224,7 +234,14 @@ describe('host, origin and rate checks', () => {
 
   it('One client over its limit', async () => {
     await start(
-      { rate: { perEndpoint: 1000, perClient: 2, windowMs: 60_000 } },
+      {
+        rate: {
+          perEndpoint: 1000,
+          perClient: 2,
+          perPrefix: 1000,
+          windowMs: 60_000,
+        },
+      },
       {
         authenticate: req => ({
           clientId: String(req.headers['x-client'] ?? 'anonymous'),
@@ -241,7 +258,12 @@ describe('host, origin and rate checks', () => {
 
   it('A flood', async () => {
     await start({
-      rate: { perEndpoint: 3, perClient: 1000, windowMs: 60_000 },
+      rate: {
+        perEndpoint: 3,
+        perClient: 1000,
+        perPrefix: 1000,
+        windowMs: 60_000,
+      },
     });
     const statuses: number[] = [];
     for (let i = 0; i < 5; i++) {
@@ -253,7 +275,12 @@ describe('host, origin and rate checks', () => {
 
   it('A flood from one source spares another', async () => {
     await start({
-      rate: { perEndpoint: 3, perClient: 1000, windowMs: 60_000 },
+      rate: {
+        perEndpoint: 3,
+        perClient: 1000,
+        perPrefix: 1000,
+        windowMs: 60_000,
+      },
     });
     const from = (ip: string, path: string) =>
       raw({
@@ -270,7 +297,12 @@ describe('host, origin and rate checks', () => {
 
   it('A forged forwarded address cannot dodge the limit', async () => {
     await start({
-      rate: { perEndpoint: 3, perClient: 1000, windowMs: 60_000 },
+      rate: {
+        perEndpoint: 3,
+        perClient: 1000,
+        perPrefix: 1000,
+        windowMs: 60_000,
+      },
     });
     // The proxy sets the real address (and a different one would append it last);
     // earlier entries are the caller's own.
@@ -317,7 +349,12 @@ describe('host, origin and rate checks', () => {
 
   it('Distinct paths share one limit', async () => {
     await start({
-      rate: { perEndpoint: 3, perClient: 1000, windowMs: 60_000 },
+      rate: {
+        perEndpoint: 3,
+        perClient: 1000,
+        perPrefix: 1000,
+        windowMs: 60_000,
+      },
     });
     const statuses: number[] = [];
     for (let i = 0; i < 6; i++) {
@@ -415,6 +452,19 @@ describe('the source of a request', () => {
     expect(sourceOf('127.0.0.1', ' 198.51.100.7 , ')).toBe('198.51.100.7');
   });
 
+  it('reduces any IPv4-mapped spelling to the IPv4 address', () => {
+    for (const mapped of [
+      '::ffff:198.51.100.7',
+      '0:0:0:0:0:ffff:198.51.100.7',
+      '::ffff:c633:6407',
+      '0:0:0:0:0:ffff:c633:6407',
+      '[::FFFF:C633:6407]:443',
+    ]) {
+      expect(sourceOf('127.0.0.1', mapped)).toBe('198.51.100.7');
+      expect(sourceOf('::ffff:c633:6407', undefined)).toBe('198.51.100.7');
+    }
+  });
+
   it('keys an empty header as loopback', () => {
     expect(sourceOf('127.0.0.1', '')).toBe('loopback');
     expect(sourceOf('127.0.0.1', ' , ')).toBe('loopback');
@@ -423,6 +473,108 @@ describe('the source of a request', () => {
   it('falls back to the peer when the header is not an address', () => {
     expect(sourceOf('192.0.2.5', 'garbage')).toBe('192.0.2.5');
     expect(sourceOf('127.0.0.1', 'garbage')).toBe('loopback');
+  });
+});
+
+describe('the aggregate ceiling', () => {
+  const tier = {
+    perEndpoint: 3,
+    perClient: 1000,
+    perPrefix: 5,
+    windowMs: 60_000,
+  };
+  const from = (ip: string, path = '/token') =>
+    raw({ path, headers: { ...MCP_HEADERS, 'x-forwarded-for': ip } }).then(
+      r => r.status,
+    );
+
+  it('groups a source by its /24 or /48', () => {
+    expect(prefixOf('198.51.100.7')).toBe(prefixOf('198.51.100.200'));
+    expect(prefixOf('198.51.100.7')).not.toBe(prefixOf('198.51.101.7'));
+    const a = sourceOf('127.0.0.1', '2001:db8:1:2::1');
+    const b = sourceOf('127.0.0.1', '2001:db8:1:9::1');
+    expect(prefixOf(a)).toBe(prefixOf(b));
+    expect(prefixOf(a)).not.toBe(
+      prefixOf(sourceOf('127.0.0.1', '2001:db8:2:2::1')),
+    );
+    expect(prefixOf('loopback')).toBe('loopback');
+  });
+
+  it('A prefix flooding from many sources is limited in total', async () => {
+    await start({ rate: tier });
+    const statuses: number[] = [];
+    for (let i = 1; i <= 4; i++) {
+      statuses.push(await from(`198.51.100.${i}`));
+      statuses.push(await from(`198.51.100.${i}`));
+    }
+    expect(statuses.slice(0, 5).every(s => s !== 429)).toBe(true);
+    expect(statuses.slice(5)).toEqual([429, 429, 429]);
+  });
+
+  it('A many-prefix flood does not refuse a fresh source sign-in', async () => {
+    await start({ rate: tier });
+    for (let i = 0; i < 60; i++) {
+      for (let j = 0; j < 3; j++) await from(`198.51.${i}.1`);
+      for (let j = 0; j < 3; j++) await from(`2001:db8:${i}:1::1`);
+    }
+    for (const path of ['/authorize', '/token', '/revoke']) {
+      expect(await from('203.0.113.9', path)).not.toBe(429);
+      expect(await from('2001:db8:ffff:1::1', path)).not.toBe(429);
+    }
+  });
+
+  it('One source over its own limit does not use up its prefix', async () => {
+    await start({ rate: tier });
+    for (let i = 0; i < 20; i++) await from('198.51.100.1');
+    expect(await from('198.51.100.2')).not.toBe(429);
+  });
+
+  it('A signed-in /mcp call is not refused by an unauthenticated flood', async () => {
+    const token = (req: http.IncomingMessage) =>
+      req.headers.authorization === 'Bearer good'
+        ? { clientId: 'c1', subject: 's' }
+        : null;
+    await start({ rate: tier }, { authenticate: token });
+    const ken = '198.51.100.7';
+    const signedIn = () =>
+      raw({
+        headers: {
+          ...MCP_HEADERS,
+          authorization: 'Bearer good',
+          'x-forwarded-for': ken,
+        },
+      }).then(r => r.status);
+    // Unauthenticated /mcp and /token from Ken's source and from neighbours in his prefix.
+    for (let i = 0; i < 20; i++) {
+      await from(ken);
+      await from(`198.51.100.${i + 20}`);
+      await from(ken, '/mcp');
+      await from(`198.51.100.${i + 20}`, '/mcp');
+    }
+    expect(await from(ken, '/mcp')).toBe(429);
+    for (let i = 0; i < 10; i++) expect(await signedIn()).not.toBe(429);
+  });
+
+  it('Signed-in /mcp calls still meet the per-client limit', async () => {
+    await start(
+      { rate: { ...tier, perClient: 2 } },
+      { authenticate: () => ({ clientId: 'c1', subject: 's' }) },
+    );
+    const statuses: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      statuses.push(await from('198.51.100.7', '/mcp'));
+    }
+    expect(statuses.slice(2)).toEqual([429, 429]);
+  });
+
+  it('Each endpoint keeps its own prefix counter', async () => {
+    await start({ rate: tier });
+    for (let i = 1; i <= 4; i++) {
+      await from(`198.51.100.${i}`);
+      await from(`198.51.100.${i}`);
+    }
+    expect(await from('198.51.100.9', '/token')).toBe(429);
+    expect(await from('198.51.100.9', '/authorize')).not.toBe(429);
   });
 });
 

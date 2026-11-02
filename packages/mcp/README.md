@@ -187,7 +187,8 @@ listener.
   the listener is not on loopback it may name only that hostname, no loopback name or wildcard),
   `ACTUAL_MCP_ALLOWED_ORIGINS` (default none: server-to-server traffic sends no `Origin`) and
   per-minute limits `ACTUAL_MCP_RATE_PER_ENDPOINT` (a separate counter for `/mcp` and for each OAuth
-  endpoint) and `ACTUAL_MCP_RATE_PER_CLIENT`.
+  endpoint), `ACTUAL_MCP_RATE_PER_PREFIX` (default 600: one counter per endpoint over every source in a /24
+  or IPv6 /48, a coarse ceiling that never spans prefixes) and `ACTUAL_MCP_RATE_PER_CLIENT`.
 - **Fresh copy.** It syncs at start and every `ACTUAL_MCP_SYNC_INTERVAL_SECONDS` (default 300),
   one sync at a time (the schedule and `sync_budget` share a lock), keeps serving the last copy when
   a sync fails, and `get_sync_status` shows the last success and whether the latest attempt failed.

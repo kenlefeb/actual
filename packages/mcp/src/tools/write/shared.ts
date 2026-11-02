@@ -4,7 +4,7 @@ import * as api from '@actual-app/api';
 import { z } from 'zod';
 
 import { appendAudit } from '#audit';
-import type { AuditChange } from '#audit';
+import type { AuditChange, Identity } from '#audit';
 import { Refusal } from '#refusal';
 
 const MAX_AMOUNT = 1e12;
@@ -66,6 +66,8 @@ export type WriteLog = {
   path: string;
   /** Removes secrets from an error before it goes to stderr. */
   scrub: (message: string) => string;
+  /** Who acts; written on every line. */
+  identity: Identity;
 };
 
 /** One scrubbed stderr line; the model never sees it and the audit log never holds it. */
@@ -90,18 +92,26 @@ export async function loggedWrite<R extends object>(
   }
 > {
   const call_id = randomUUID();
-  appendAudit(log.path, { tool, call_id, phase: 'attempt', ...entry });
+  appendAudit(
+    log.path,
+    { tool, call_id, phase: 'attempt', ...entry },
+    log.identity,
+  );
 
   const outcomeLine = (o: WriteOutcome, status: 'ok' | 'failed') =>
-    appendAudit(log.path, {
-      tool,
-      call_id,
-      phase: 'outcome',
-      status,
-      applied: o.applied,
-      failed: o.failed ?? null,
-      created: o.created ?? [],
-    });
+    appendAudit(
+      log.path,
+      {
+        tool,
+        call_id,
+        phase: 'outcome',
+        status,
+        applied: o.applied,
+        failed: o.failed ?? null,
+        created: o.created ?? [],
+      },
+      log.identity,
+    );
 
   let outcome: WriteOutcome;
   try {

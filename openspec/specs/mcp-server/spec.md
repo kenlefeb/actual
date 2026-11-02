@@ -195,7 +195,11 @@ A write SHALL NOT set a category on moved history: a transaction of an account m
 - **THEN** the call fails and the account is still off budget
 
 ### Requirement: Write audit log
-The server SHALL append one JSON line per write to `~/Library/Application Support/actual-mcp/<env>.audit.jsonl` (`<env>-writes.audit.jsonl` for the `--writes` entry), mode 0600, with the time, tool, ids and the fields changed with their before and after values, and never a secret. A write SHALL NOT run when its audit line cannot be appended.
+The server SHALL append one JSON line per write to `~/Library/Application Support/actual-mcp/<env>.audit.jsonl` (`<env>-writes.audit.jsonl` for the `--writes` entry), mode 0600, with the time, the acting identity (`user_id` and `subject`), tool, ids and the fields changed with their before and after values, and never a secret or token. A write SHALL NOT run when its audit line cannot be appended.
+
+#### Scenario: An audit line names its identity
+- **WHEN** a write tool records an attempt and its outcome
+- **THEN** both lines carry `user_id`, the sync-server user id (`unknown` if the server gave none), and `subject`, the OAuth subject (`local` on the stdio entry)
 
 #### Scenario: A write is logged
 - **WHEN** a client updates one transaction's notes

@@ -5,6 +5,7 @@ import { join } from 'path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 
+import type { Identity } from './audit';
 import { buildFixtureBudget } from './fixture';
 import { createServer } from './server';
 
@@ -17,13 +18,15 @@ const SECRET = 'harness-secret-password';
  */
 export async function startHarness(
   options?: Parameters<typeof buildFixtureBudget>[0],
-  { writes = false }: { writes?: boolean } = {},
+  { writes = false, identity }: { writes?: boolean; identity?: Identity } = {},
 ) {
   const fixture = await buildFixtureBudget(options);
   const auditDir = await mkdtemp(join(tmpdir(), 'actual-mcp-audit-'));
   const auditLog = join(auditDir, 'test.audit.jsonl');
   const [clientT, serverT] = InMemoryTransport.createLinkedPair();
-  await createServer([SECRET], writes ? { auditLog } : {}).connect(serverT);
+  await createServer([SECRET], writes ? { auditLog, identity } : {}).connect(
+    serverT,
+  );
   const client = new Client({ name: 'test', version: '0' });
   await client.connect(clientT);
 

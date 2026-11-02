@@ -11,7 +11,7 @@ Each group ends with the story that ships it. Until the slice stories are filed,
 
 ## 2. Slice A: MCP audit identity (sc-2004)
 
-- [ ] 2.1 Add the acting identity (sync-server user id, OAuth subject or `local`) to every audit line and to the hosted entry's read record, with tests named after "An audit line names its identity". Edit the `mcp-server` "Write audit log" requirement in this slice. No production touch.
+- [x] 2.1 Add the acting identity (sync-server user id, OAuth subject or `local`) to every audit line and to the hosted entry's read record, with tests named after "An audit line names its identity". Edit the `mcp-server` "Write audit log" requirement in this slice. No production touch.
 
 ## 3. Slice B: sync-server access log (sc-2004)
 

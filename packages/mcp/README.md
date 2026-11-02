@@ -171,9 +171,11 @@ cannot start without it. It is not deployed by this change.
   (a verified email, or the provider's stable subject). Optional: `ACTUAL_MCP_REDIRECT_URIS`
   (comma-separated, https, exact match, never a loopback address; default `https://claude.ai/api/mcp/auth_callback`) and
   `ACTUAL_MCP_ALLOW_DYNAMIC_REGISTRATION=1` (off by default; when on, limited to those redirects).
-  For Google the provider values are issuer `https://accounts.google.com`, authorization URL
-  `https://accounts.google.com/o/oauth2/v2/auth` and token URL `https://oauth2.googleapis.com/token`;
-  the Google client's authorized redirect URI is `<public url>/oauth/callback`.
+  The provider must support the authorization-code flow with PKCE and a nonce, return an ID token, and accept the
+  client secret in the token request body (`client_secret_post`). For Auth0 (one tenant per environment) the provider values are issuer
+  `https://<tenant-domain>/` (with the trailing slash), authorization URL `https://<tenant-domain>/authorize` and
+  token URL `https://<tenant-domain>/oauth/token`; `ACTUAL_MCP_ALLOWED_ACCOUNT` is the user's `auth0|…` user_id (the ID
+  token's `sub`); and the application's allowed callback URL is `<public url>/oauth/callback`.
 - **Host, Origin and rate checks.** `ACTUAL_MCP_ALLOWED_HOSTS` (the public hostname goes here; once
   the listener is not on loopback it may name only that hostname, no loopback name or wildcard),
   `ACTUAL_MCP_ALLOWED_ORIGINS` (default none: server-to-server traffic sends no `Origin`) and

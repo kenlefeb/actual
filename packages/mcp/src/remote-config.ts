@@ -1,5 +1,5 @@
 import { homedir } from 'os';
-import { join, resolve } from 'path';
+import { basename, join, resolve } from 'path';
 
 import { labelHost, readSecretFile, resolveCredential } from './config';
 import type { McpConfig } from './config';
@@ -17,6 +17,8 @@ export type RemoteConfig = McpConfig & {
   rate: { perEndpoint: number; perClient: number; windowMs: number };
   /** Required: the hosted entry never serves without its authorization server. */
   oauth: OAuthConfig;
+  /** True when the production guard was met; the entry then validates the token at start. */
+  production?: boolean;
 };
 
 type Env = Record<string, string | undefined>;
@@ -68,7 +70,7 @@ function positiveInt(
 /**
  * Configuration for the hosted, read-only entry. Secrets come from files
  * only (never argv, and never an environment value); there is no way to turn
- * writes on, and a production host is refused whatever else is set.
+ * writes on, and a production host needs the explicit production guard.
  */
 export function loadRemoteConfig(env: Env, argv: string[] = []): RemoteConfig {
   if (argv.includes('--writes')) {
@@ -88,11 +90,24 @@ export function loadRemoteConfig(env: Env, argv: string[] = []): RemoteConfig {
   if (!syncId) throw new Error('ACTUAL_SYNC_ID is required.');
 
   const { env: label } = labelHost(serverUrl);
-  if (label === 'production') {
-    // Not even ACTUAL_MCP_ALLOW_PRODUCTION lifts this: v1 serves staging only.
-    throw new Error(
-      'The hosted entry serves staging only; it will not start for a production host.',
-    );
+  const production = label === 'production';
+  if (production) {
+    // The stdio override ACTUAL_MCP_ALLOW_PRODUCTION never counts here.
+    if (env.ACTUAL_MCP_REMOTE_PRODUCTION !== '1') {
+      throw new Error(
+        'The hosted entry serves a production host only with ACTUAL_MCP_REMOTE_PRODUCTION=1.',
+      );
+    }
+    if (env.ACTUAL_PASSWORD_FILE || !env.ACTUAL_SESSION_TOKEN_FILE) {
+      throw new Error(
+        'Production needs a session token file (ACTUAL_SESSION_TOKEN_FILE) and no password.',
+      );
+    }
+    if ((env.ACTUAL_MCP_ALLOWED_ACCOUNT ?? '').includes('@')) {
+      throw new Error(
+        'Production needs the allowed account as a provider subject identifier, not an email address.',
+      );
+    }
   }
 
   const { password, sessionToken } = resolveCredential(
@@ -181,6 +196,16 @@ export function loadRemoteConfig(env: Env, argv: string[] = []): RemoteConfig {
   );
 
   const dataDir = `${base}-remote`;
+  if (production && basename(dataDir) !== 'production-remote') {
+    throw new Error('Production needs the data directory production-remote.');
+  }
+  // A loopback server is labelled local; with a public listener it could be a
+  // forward to a production server that skips the production checks.
+  if (label === 'local' && !LOOPBACK_HOSTS.includes(listenHost)) {
+    throw new Error(
+      'A loopback server needs a loopback listener on the hosted entry.',
+    );
+  }
 
   return {
     serverUrl,
@@ -191,6 +216,7 @@ export function loadRemoteConfig(env: Env, argv: string[] = []): RemoteConfig {
     env: label,
     dataDir,
     writes: false,
+    production,
     auditLog: '',
     secrets: [
       password,

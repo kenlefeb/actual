@@ -139,12 +139,19 @@ Set these variables only in the `op run` env file. Never export them in a shell 
 Credentials come from the "Ken & Agents" 1Password vault, passed in at launch by `op run` (or the
 service-account helper). Don't write them into `.mcp.json` or `~/.claude.json`.
 
-## Hosted entry (`actual-mcp-http`, staging only)
+## Hosted entry (`actual-mcp-http`)
 
 A separate, read-only entry that serves the same read tools plus `get_sync_status` over stateless
 streamable HTTP on `POST /mcp`. The stdio entry above is unchanged and still opens no listener.
 Every request needs a token from the entry's own OAuth 2.1 authorization server (below); the entry
 cannot start without it. It is not deployed by this change.
+
+It serves a production host only with `ACTUAL_MCP_REMOTE_PRODUCTION=1` (the stdio
+`ACTUAL_MCP_ALLOW_PRODUCTION` does not count), a session token file (a password is refused), a
+provider subject identifier (no `@`) as the allowed account and the `production-remote` data
+directory. At start it validates the token against the sync server and exits if its user is an
+administrator or it cannot be validated. It stays read-only, and a loopback server needs a loopback
+listener.
 
 - **Read-only in code.** The engine always starts read-only, no `write_` tool is registered, and
   `--writes` is a usage error. It serves staging or local only: a production host is refused, even

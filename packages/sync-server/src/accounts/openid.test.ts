@@ -4,8 +4,13 @@ import createDebug from 'debug';
 import type * as OpenIdClient from 'openid-client';
 
 import { getAccountDb } from '#account-db';
+import { config } from '#load-config';
 
-import { loginWithOpenIdFinalize, loginWithOpenIdSetup } from './openid';
+import {
+  bootstrapOpenId,
+  loginWithOpenIdFinalize,
+  loginWithOpenIdSetup,
+} from './openid';
 
 const provider = vi.hoisted(() => ({
   callback: vi.fn(),
@@ -91,3 +96,141 @@ it.each(['', 'actual:*', 'actual-sensitive:openid'])(
     }
   },
 );
+
+describe('first sign-in must match the configured admin subject', () => {
+  async function signIn() {
+    const start = await loginWithOpenIdSetup('https://actual.example');
+    const state = new URL(start.url ?? '').searchParams.get('state');
+    return loginWithOpenIdFinalize({ code: 'code', state });
+  }
+  const users = () =>
+    getAccountDb().all(
+      "SELECT user_name, role, owner FROM users WHERE user_name <> ''",
+    );
+
+  // The account database is shared by every test file, so empty the users
+  // table inside a transaction that is rolled back afterwards.
+  beforeEach(() => {
+    const db = getAccountDb();
+    db.exec('BEGIN');
+    const named = "(SELECT id FROM users WHERE user_name <> '')";
+    db.mutate(`DELETE FROM sessions WHERE user_id IN ${named}`);
+    db.mutate(`DELETE FROM user_access WHERE user_id IN ${named}`);
+    db.mutate("DELETE FROM users WHERE user_name <> ''");
+  });
+  afterEach(() => {
+    getAccountDb().exec('ROLLBACK');
+    config.set('openId.adminSubject', '');
+  });
+
+  it('a matching first sign-in becomes ADMIN and owner', async () => {
+    config.set('openId.adminSubject', 'fixed-id');
+    const result = await signIn();
+    expect(result.error).toBeUndefined();
+    expect(users()).toEqual([
+      { user_name: 'renamed-admin', role: 'ADMIN', owner: 1 },
+    ]);
+  });
+
+  it('a non-matching first sign-in is refused and creates nothing', async () => {
+    config.set('openId.adminSubject', 'someone-else');
+    const result = await signIn();
+    expect(result.error).toBe('openid-grant-failed');
+    expect(users()).toEqual([]);
+    expect(
+      getAccountDb().first(
+        "SELECT count(*) as n FROM sessions WHERE auth_method = 'openid'",
+      ).n,
+    ).toBe(0);
+  });
+
+  it('a non-matching first sign-in is refused even when users are created at login', async () => {
+    config.set('openId.adminSubject', 'someone-else');
+    config.set('userCreationMode', 'login');
+    try {
+      expect((await signIn()).error).toBe('openid-grant-failed');
+      expect(users()).toEqual([]);
+    } finally {
+      config.set('userCreationMode', 'manual');
+    }
+  });
+
+  it('with the setting absent, the first sign-in becomes ADMIN as upstream does', async () => {
+    const result = await signIn();
+    expect(result.error).toBeUndefined();
+    expect(users()).toEqual([
+      { user_name: 'renamed-admin', role: 'ADMIN', owner: 1 },
+    ]);
+  });
+
+  it('later sign-ins are unaffected by the setting', async () => {
+    getAccountDb().mutate(
+      "INSERT INTO users (id, user_name, display_name, enabled, owner, role) VALUES ('u2', 'renamed-admin', 'x', 1, 1, 'ADMIN')",
+    );
+    config.set('openId.adminSubject', 'someone-else');
+    const result = await signIn();
+    expect(result.error).toBeUndefined();
+  });
+
+  it('an empty identity cannot reach the password-method user', async () => {
+    expect(
+      getAccountDb().first("SELECT id FROM users WHERE user_name = ''"),
+    ).toBeTruthy();
+    config.set('openId.adminSubject', 'someone-else');
+    for (const empty of ['', '   ']) {
+      provider.userinfo.mockResolvedValue({
+        sub: 'attacker',
+        preferred_username: empty,
+      });
+      expect((await signIn()).error).toBe('openid-grant-failed');
+    }
+    expect(
+      getAccountDb().first(
+        "SELECT count(*) as n FROM sessions WHERE auth_method = 'openid'",
+      ).n,
+    ).toBe(0);
+  });
+
+  it('refuses a sign-in whose ID token sub differs from the userinfo sub', async () => {
+    config.set('openId.adminSubject', 'fixed-id');
+    provider.callback.mockResolvedValue({
+      access_token: 'provider-token',
+      id_token: 'x',
+      claims: () => ({ iss: 'https://identity.example', sub: 'other' }),
+    });
+    expect((await signIn()).error).toBe('openid-grant-failed');
+    expect(users()).toEqual([]);
+  });
+
+  it('accepts a matching ID token sub', async () => {
+    config.set('openId.adminSubject', 'fixed-id');
+    provider.callback.mockResolvedValue({
+      access_token: 'provider-token',
+      id_token: 'x',
+      claims: () => ({ iss: 'https://identity.example', sub: 'fixed-id' }),
+    });
+    expect((await signIn()).error).toBeUndefined();
+  });
+
+  it('warns at startup when the setting is unset, and not when set', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const params = {
+      issuer: 'https://identity.example',
+      client_id: 'client',
+      client_secret: 'secret',
+      server_hostname: 'https://actual.example',
+    };
+    try {
+      await bootstrapOpenId({ ...params });
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('ACTUAL_OPENID_ADMIN_SUBJECT'),
+      );
+      warn.mockClear();
+      config.set('openId.adminSubject', 'fixed-id');
+      await bootstrapOpenId({ ...params });
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+});

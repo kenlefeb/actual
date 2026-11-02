@@ -57,6 +57,44 @@ The identity provider SHALL be an Auth0 tenant that holds only Ken's account and
 - **WHEN** an identity that is not Ken's finishes the provider's sign-in
 - **THEN** the provider refuses it
 
+### Requirement: The server refuses a first sign-in that is not Ken's
+When `ACTUAL_OPENID_ADMIN_SUBJECT` is set, the sync server SHALL accept the first OpenID sign-in on a server with no OpenID user only if the provider's `sub` equals it, and SHALL otherwise refuse it and create no user. Production SHALL set it to Ken's `sub`. It needs a provider that returns a `sub`; a plain OAuth2 provider without one cannot use the backstop and is refused.
+
+#### Scenario: The match is on the subject, not the e-mail
+- **GIVEN** the setting is Ken's `sub` and Ken's e-mail later changes
+- **WHEN** Ken signs in for the first time
+- **THEN** he is accepted, because the `sub` is matched and the e-mail is not
+
+#### Scenario: Unset keeps upstream behaviour
+- **GIVEN** the setting is unset
+- **WHEN** OpenID is enabled and the first identity signs in
+- **THEN** it becomes ADMIN as upstream does, and the server logs a warning at enablement
+
+#### Scenario: Later sign-ins are not affected
+- **GIVEN** an OpenID user exists
+- **WHEN** any listed user signs in
+- **THEN** the setting is not consulted
+
+#### Scenario: An empty identity cannot reach the password user
+- **GIVEN** the setting is set and the provider returns an empty user name
+- **WHEN** the sign-in is finished
+- **THEN** the server refuses it, because an empty name would otherwise resolve to the password-method ADMIN
+
+#### Scenario: A mismatched ID token is refused
+- **GIVEN** the setting is set and the ID token's `sub` differs from the userinfo `sub`
+- **WHEN** the sign-in is finished
+- **THEN** the server refuses it
+
+#### Scenario: A first sign-in from another identity is refused
+- **GIVEN** OpenID is enabled, `ACTUAL_OPENID_ADMIN_SUBJECT` is Ken's `sub` and no OpenID user exists
+- **WHEN** an identity with another `sub` finishes the provider's sign-in
+- **THEN** the server refuses it, creates no user and issues no session
+
+#### Scenario: Ken's first sign-in still works
+- **GIVEN** the same setting
+- **WHEN** Ken's identity finishes the provider's sign-in
+- **THEN** he becomes ADMIN and owner
+
 ### Requirement: The assistant has its own sign-in identity
 The assistant's BASIC user SHALL be a dedicated account in the Auth0 tenant, not Ken's, protected by a passkey or authenticator-app two-factor sign-in, with no account recovery through any mailbox agents can read. Its credentials SHALL be kept in the "Ken Assistant" vault and listed in the LOCKDOWN inventory.
 

@@ -54,6 +54,12 @@ export async function bootstrapOpenId(configParameter: ConfigParameter) {
     }
 
     await setupOpenIdClient(configParameter);
+    // fork: sc-2163
+    if (!config.get('openId.adminSubject')) {
+      console.warn(
+        'OpenID is enabled without ACTUAL_OPENID_ADMIN_SUBJECT: the first identity the provider accepts becomes the administrator.',
+      );
+    }
   } catch (error) {
     console.error('Error setting up OpenID client');
     debugSensitive('Error setting up OpenID client: %O', error);
@@ -253,6 +259,19 @@ export async function loginWithOpenIdFinalize(body) {
       return { error: 'openid-grant-failed: no identification was found' };
     }
 
+    // fork: sc-2163, an empty identity would resolve to the password-method
+    // user (user_name ''), and the ID token's sub must agree with userinfo's
+    if (String(identity).trim() === '') {
+      return { error: 'openid-grant-failed' };
+    }
+    if (
+      config.get('openId.adminSubject') &&
+      tokenSet.id_token &&
+      tokenSet.claims().sub !== userInfo.sub
+    ) {
+      return { error: 'openid-grant-failed' };
+    }
+
     let userId = null;
     try {
       accountDb.transaction(() => {
@@ -266,6 +285,17 @@ export async function loginWithOpenIdFinalize(body) {
           'SELECT id FROM users WHERE user_name = ?',
           [identity],
         );
+
+        // fork: sc-2163, the first sign-in must be the configured admin
+        const adminSubject = config.get('openId.adminSubject');
+        if (
+          !existingUser &&
+          countUsersWithUserName === 0 &&
+          adminSubject &&
+          userInfo.sub !== adminSubject
+        ) {
+          throw new Error('openid-grant-failed');
+        }
 
         if (
           !existingUser &&

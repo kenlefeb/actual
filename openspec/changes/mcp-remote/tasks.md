@@ -15,7 +15,7 @@
 
 ## 3. OAuth provider and token store (sc-1972)
 
-Ken chose Google as the identity provider (sc-1972 comment 2022); the provider stays configuration.
+Ken chose Auth0 as the identity provider on 2026-11-02, superseding the Google choice (sc-1972 comment 2022), with a separate tenant per environment; the provider stays configuration.
 
 - [x] 3.1 Add the authorization server on the SDK router: the one identity through the configured provider, the pre-registered client, the redirect allowlist, PKCE, audience-bound short-lived tokens, hashed revocable refresh tokens and the signing key, with tests named after "Authenticated with OAuth", "Short-lived, revocable tokens", "Exactly one identity" and "Clients are registered, not open".
 

@@ -1,5 +1,6 @@
 import http from 'http';
 import type { IncomingMessage, ServerResponse } from 'http';
+import net from 'net';
 
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 
@@ -38,9 +39,14 @@ const RATE_ENDPOINTS = ['/mcp', ...OAUTH_ENDPOINTS];
 
 /**
  * A fixed-window counter per key. Keys must come from a bounded set (never a
- * raw request path); expired windows are dropped once per window.
+ * raw request path); expired windows are dropped once per window, and past
+ * `maxKeys` the oldest key is dropped (it only starts a fresh count).
  */
-function createLimiter(limit: number, windowMs: number) {
+export function createLimiter(
+  limit: number,
+  windowMs: number,
+  maxKeys = Infinity,
+) {
   const hits = new Map<string, { count: number; resetAt: number }>();
   let nextPrune = 0;
   return (key: string) => {
@@ -55,9 +61,64 @@ function createLimiter(limit: number, windowMs: number) {
         ? known
         : { count: 0, resetAt: now + windowMs };
     hit.count++;
+    if (!known && hits.size >= maxKeys) {
+      hits.delete(hits.keys().next().value as string);
+    }
     hits.set(key, hit);
     return hit.count <= limit;
   };
+}
+
+/** Source keys kept per limiter; a flood of distinct addresses cannot grow it. */
+const MAX_SOURCES = 10_000;
+
+const isLoopbackPeer = (addr: string | undefined) =>
+  !!addr &&
+  (addr === '::1' || addr.replace(/^::ffff:/i, '').startsWith('127.'));
+
+/** An IPv4 or IPv6 address (a port is dropped), the latter cut to its /64 so one host cannot rotate within it. */
+function normalizeAddress(raw: string): string | undefined {
+  let addr = raw.trim().replace(/^::ffff:/i, '');
+  const bracketed = addr.match(/^\[(.+)\](?::\d+)?$/);
+  if (bracketed) addr = bracketed[1];
+  else if (/^[\d.]+:\d+$/.test(addr)) addr = addr.split(':')[0];
+  if (net.isIPv4(addr)) return addr;
+  if (!net.isIPv6(addr)) return undefined;
+  const [head, tail = ''] = addr.split('::');
+  const first = head ? head.split(':') : [];
+  const last = tail ? tail.split(':') : [];
+  const groups = addr.includes('::')
+    ? [...first, ...Array(8 - first.length - last.length).fill('0'), ...last]
+    : first;
+  return groups
+    .slice(0, 4)
+    .map(g => parseInt(g, 16).toString(16))
+    .join(':');
+}
+
+/**
+ * Who sent a request, for the per-source rate limit. Behind the Tailscale
+ * Funnel the socket peer is the local proxy, which sets `X-Forwarded-For` to
+ * the one real client address (replacing what the caller sent). The last
+ * non-empty entry is read as defence in depth, so a proxy that appends is also
+ * handled. The header is trusted only from a loopback peer, so a direct caller
+ * cannot choose its own key. With no usable address the key is the one shared
+ * `loopback`; the caller logs that, as it brings back a shared limit.
+ */
+export function sourceOf(
+  remoteAddress: string | undefined,
+  forwardedFor: string | string[] | undefined,
+): string {
+  if (!isLoopbackPeer(remoteAddress)) {
+    return normalizeAddress(remoteAddress ?? '') ?? 'unknown';
+  }
+  const last = [forwardedFor ?? []]
+    .flat()
+    .join(',')
+    .split(',')
+    .filter(e => e.trim())
+    .pop();
+  return normalizeAddress(last ?? '') ?? 'loopback';
 }
 
 function hostName(header: string | undefined) {
@@ -152,11 +213,18 @@ export function createRemoteHttpServer(
   }
 
   const record = createRecorder(config, log);
+  // Per source and endpoint, so one caller cannot use up the limit for Ken.
   const perEndpoint = createLimiter(
     config.rate.perEndpoint,
     config.rate.windowMs,
+    MAX_SOURCES,
   );
-  const perClient = createLimiter(config.rate.perClient, config.rate.windowMs);
+  const perClient = createLimiter(
+    config.rate.perClient,
+    config.rate.windowMs,
+    MAX_SOURCES,
+  );
+  let warnedUnresolved = false;
   const refuse = (
     res: ServerResponse,
     status: number,
@@ -184,7 +252,21 @@ export function createRemoteHttpServer(
     ) {
       return refuse(res, 403, 'origin');
     }
-    if (!perEndpoint(rateKey)) {
+    const source = sourceOf(
+      req.socket.remoteAddress,
+      req.headers['x-forwarded-for'],
+    );
+    // Once per process: a proxy that sends no address puts every caller on one
+    // shared key, which would quietly bring back the lockout. No header value.
+    if (
+      source === 'loopback' &&
+      OAUTH_ENDPOINTS.includes(endpoint) &&
+      !warnedUnresolved
+    ) {
+      warnedUnresolved = true;
+      record({ event: 'warning', reason: 'source-unresolved', endpoint });
+    }
+    if (!perEndpoint(`${rateKey}|${source}`)) {
       return refuse(res, 429, 'rate-endpoint', undefined, {
         'retry-after': '60',
       });

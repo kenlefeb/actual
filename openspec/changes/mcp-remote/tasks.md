@@ -29,3 +29,8 @@ Needs Ken's answers on Funnel, the hostname and the plaintext staging copy.
 
 - [ ] 5.1 Write the checklist for Ken (claude.ai, the phone, Claude Duet), reviewed by the Checklist Reviewer, that records each client's callback, the connector's source addresses and whether the pre-registered client is accepted, and that does not claim support for a client that has not connected ("Clients are supported only after they connect on staging").
 - [ ] 5.2 Archive this change when its last story merges, add `mcp-remote` to the #1550 row in the epic table of `docs/agents/issue-tracker.md`, and file Backlog stories for any open follow-up (production after sc-1555; any write tool; an edge allowlist if verification shows it is worth it).
+
+## 6. Per-source rate limit (sc-2090)
+
+- [x] 6.1 Key the endpoint rate limit per source address (the last `X-Forwarded-For` entry, trusted only from a loopback peer) with a bounded table, with tests named after the "A flood from one source spares another", "A forged forwarded address" and "Many sources" scenarios.
+- [ ] 6.2 On staging, confirm through the Funnel that the access log shows real client addresses and no `source-unresolved` record: one flooded source and one clean sign-in from a second network. Do not claim the per-source protection until this is recorded (the connection checklist, 5.1, records the same).

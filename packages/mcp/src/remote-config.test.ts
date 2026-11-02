@@ -12,6 +12,7 @@ function secretFile(content: string, mode = 0o600) {
   return file;
 }
 
+const CLIENT_SECRET = 'registered-client-secret-0123456789abcdef';
 const KEY = 'signing-key-0123456789abcdef0123456789abcdef';
 
 const env = (extra: Record<string, string | undefined> = {}) => ({
@@ -21,7 +22,7 @@ const env = (extra: Record<string, string | undefined> = {}) => ({
   ACTUAL_MCP_PUBLIC_URL: 'https://mcp-staging.example.test',
   ACTUAL_MCP_SIGNING_KEY_FILE: secretFile(KEY),
   ACTUAL_MCP_CLIENT_ID: 'claude-staging',
-  ACTUAL_MCP_CLIENT_SECRET_FILE: secretFile('registered-client-secret'),
+  ACTUAL_MCP_CLIENT_SECRET_FILE: secretFile(CLIENT_SECRET),
   ACTUAL_MCP_IDP_ISSUER: 'https://accounts.google.com',
   ACTUAL_MCP_IDP_AUTHORIZATION_URL:
     'https://accounts.google.com/o/oauth2/v2/auth',
@@ -72,7 +73,7 @@ describe('hosted entry configuration', () => {
       'hunter2-secret',
       'enc-key',
       KEY,
-      'registered-client-secret',
+      CLIENT_SECRET,
       'idp-client-secret',
     ]);
   });
@@ -139,6 +140,32 @@ describe('the OAuth settings', () => {
     expect(() =>
       loadRemoteConfig(env({ ACTUAL_MCP_SIGNING_KEY_FILE: tmpdir() })),
     ).toThrow(/missing or readable by others/);
+  });
+
+  it('A short client secret', () => {
+    expect(() =>
+      loadRemoteConfig(
+        env({ ACTUAL_MCP_CLIENT_SECRET_FILE: secretFile('short-secret') }),
+      ),
+    ).toThrow(/client secret.*at least 32/i);
+    expect(() =>
+      loadRemoteConfig(
+        env({ ACTUAL_MCP_CLIENT_SECRET_FILE: secretFile('x'.repeat(32)) }),
+      ),
+    ).not.toThrow();
+  });
+
+  it('A loopback redirect URI', () => {
+    for (const uri of [
+      'https://localhost/cb',
+      'https://127.0.0.1:8080/cb',
+      'https://[::1]/cb',
+      'https://LOCALHOST/cb',
+    ]) {
+      expect(() =>
+        loadRemoteConfig(env({ ACTUAL_MCP_REDIRECT_URIS: uri })),
+      ).toThrow(/loopback/);
+    }
   });
 
   it('Every OAuth setting is required', () => {

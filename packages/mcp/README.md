@@ -163,11 +163,11 @@ cannot start without it. It is not deployed by this change.
   URL. Rotating the signing key (or deleting the state file) and restarting ends every token.
   Settings, all required (no default provider is built in):
   `ACTUAL_MCP_PUBLIC_URL` (https origin), `ACTUAL_MCP_SIGNING_KEY_FILE` (32+ characters),
-  `ACTUAL_MCP_CLIENT_ID` and `ACTUAL_MCP_CLIENT_SECRET_FILE` (the one pre-registered client),
+  `ACTUAL_MCP_CLIENT_ID` and `ACTUAL_MCP_CLIENT_SECRET_FILE` (the one pre-registered client; 32+ characters),
   `ACTUAL_MCP_IDP_ISSUER`, `ACTUAL_MCP_IDP_AUTHORIZATION_URL`, `ACTUAL_MCP_IDP_TOKEN_URL`,
   `ACTUAL_MCP_IDP_CLIENT_ID`, `ACTUAL_MCP_IDP_CLIENT_SECRET_FILE` and `ACTUAL_MCP_ALLOWED_ACCOUNT`
   (a verified email, or the provider's stable subject). Optional: `ACTUAL_MCP_REDIRECT_URIS`
-  (comma-separated, exact match; default `https://claude.ai/api/mcp/auth_callback`) and
+  (comma-separated, https, exact match, never a loopback address; default `https://claude.ai/api/mcp/auth_callback`) and
   `ACTUAL_MCP_ALLOW_DYNAMIC_REGISTRATION=1` (off by default; when on, limited to those redirects).
   For Google the provider values are issuer `https://accounts.google.com`, authorization URL
   `https://accounts.google.com/o/oauth2/v2/auth` and token URL `https://oauth2.googleapis.com/token`;

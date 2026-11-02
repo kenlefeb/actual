@@ -43,6 +43,19 @@ export type OAuthConfig = {
   };
 };
 
+/**
+ * The SDK relaxes the port of a loopback redirect URI, which would make the
+ * allowlist less than exact; so no loopback redirect is ever allowed.
+ */
+export function isLoopbackUri(uri: string) {
+  try {
+    const host = new URL(uri).hostname.toLowerCase();
+    return ['localhost', '127.0.0.1', '[::1]', '::1'].includes(host);
+  } catch {
+    return false;
+  }
+}
+
 const MCP_PATH = '/mcp';
 const CALLBACK_PATH = '/oauth/callback';
 
@@ -71,6 +84,8 @@ type Family = {
   id: string;
   clientId: string;
   scopes: string[];
+  /** The provider's stable subject for the signed-in account: an id, not a secret. */
+  subject: string;
   /** Keyed hash of the current refresh token, and of the one it replaced. */
   hash: string;
   prevHash?: string;
@@ -78,7 +93,14 @@ type Family = {
   expiresAt: number;
 };
 
-type AccessClaims = { f: string; c: string; s: string[]; a: string; e: number };
+type AccessClaims = {
+  f: string;
+  c: string;
+  s: string[];
+  a: string;
+  e: number;
+  u: string;
+};
 
 type SignIn = {
   clientId: string;
@@ -91,7 +113,9 @@ type SignIn = {
   expiresAt: number;
 };
 
-type Code = Omit<SignIn, 'state' | 'nonce' | 'idpVerifier'>;
+type Code = Omit<SignIn, 'state' | 'nonce' | 'idpVerifier'> & {
+  subject: string;
+};
 
 export type OAuthServer = {
   publicHost: string;
@@ -99,7 +123,9 @@ export type OAuthServer = {
   /** Answers the paths in OAUTH_ENDPOINTS. */
   handle: (req: IncomingMessage, res: ServerResponse) => void | Promise<void>;
   /** Accepts only an Authorization: Bearer token minted here for this resource. */
-  authenticate: (req: IncomingMessage) => Promise<{ clientId: string } | null>;
+  authenticate: (
+    req: IncomingMessage,
+  ) => Promise<{ clientId: string; subject: string } | null>;
 };
 
 const b64u = (value: string | Buffer) =>
@@ -161,6 +187,9 @@ export function createOAuthServer(
     now?: () => number;
   },
 ): OAuthServer {
+  if (config.redirectUris.some(isLoopbackUri)) {
+    throw new Error('Redirect URIs may not be loopback addresses.');
+  }
   const { record } = options;
   const fetchIdp = options.fetch ?? fetch;
   const now = options.now ?? Date.now;
@@ -182,7 +211,11 @@ export function createOAuthServer(
   try {
     const saved = JSON.parse(readFileSync(config.stateFile, 'utf8'));
     for (const f of Array.isArray(saved?.families) ? saved.families : []) {
-      if (typeof f?.id === 'string' && typeof f?.hash === 'string') {
+      if (
+        typeof f?.id === 'string' &&
+        typeof f?.hash === 'string' &&
+        typeof f?.subject === 'string'
+      ) {
         families.set(f.id, f);
       }
     }
@@ -219,6 +252,7 @@ export function createOAuthServer(
         typeof claims.c === 'string' &&
         typeof claims.a === 'string' &&
         typeof claims.e === 'number' &&
+        typeof claims.u === 'string' &&
         Array.isArray(claims.s)
         ? claims
         : undefined;
@@ -237,6 +271,7 @@ export function createOAuthServer(
     const payload = b64u(
       JSON.stringify({
         f: family.id,
+        u: family.subject,
         c: family.clientId,
         s: family.scopes,
         a: resource.href,
@@ -274,8 +309,10 @@ export function createOAuthServer(
       ...(config.allowDynamicRegistration
         ? {
             registerClient: (client: OAuthClientInformationFull) => {
-              const allowed = client.redirect_uris.every(uri =>
-                config.redirectUris.includes(String(uri)),
+              const allowed = client.redirect_uris.every(
+                uri =>
+                  !isLoopbackUri(String(uri)) &&
+                  config.redirectUris.includes(String(uri)),
               );
               if (!allowed || dynamic.size >= MAX_DYNAMIC_CLIENTS) {
                 throw new InvalidClientMetadataError(
@@ -360,6 +397,7 @@ export function createOAuthServer(
       }
       const tokens = issue({
         id: token(16),
+        subject: entry.subject,
         clientId: client.client_id,
         scopes: entry.scopes,
         hash: '',
@@ -415,6 +453,7 @@ export function createOAuthServer(
         token: value,
         clientId: claims.c,
         scopes: claims.s,
+        extra: { subject: claims.u },
         expiresAt: claims.e,
         resource: new URL(claims.a),
       };
@@ -432,7 +471,7 @@ export function createOAuthServer(
     },
   };
 
-  /** True when the signed-in account is the one configured account. */
+  /** The verified `sub` when the signed-in account is the configured one. */
   async function accountMatches(code: string, entry: SignIn) {
     const response = await fetchIdp(config.idp.tokenUrl, {
       method: 'POST',
@@ -457,10 +496,10 @@ export function createOAuthServer(
     const claims = claimsOf(
       ((await response.json()) as { id_token?: unknown }).id_token,
     );
-    if (!claims) return false;
+    if (!claims) return undefined;
     const audience = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
     const account = config.idp.account.toLowerCase();
-    return (
+    const matches =
       normalizeIssuer(claims.iss) === normalizeIssuer(config.idp.issuer) &&
       audience.includes(config.idp.clientId) &&
       typeof claims.exp === 'number' &&
@@ -469,8 +508,11 @@ export function createOAuthServer(
       (claims.sub === config.idp.account ||
         (claims.email_verified === true &&
           typeof claims.email === 'string' &&
-          claims.email.toLowerCase() === account))
-    );
+          claims.email.toLowerCase() === account));
+    // The audit identity is the provider's own subject, never the email.
+    return matches && typeof claims.sub === 'string' && claims.sub
+      ? claims.sub
+      : undefined;
   }
 
   /** The provider sends the user's browser back here after sign-in. */
@@ -509,14 +551,14 @@ export function createOAuthServer(
       record({ event: 'sign_in', status: 'refused', client: entry.clientId });
       return back({ error: 'access_denied' });
     }
-    let matched: boolean;
+    let subject: string | undefined;
     try {
-      matched = await accountMatches(code, entry);
+      subject = await accountMatches(code, entry);
     } catch {
       record({ event: 'sign_in', status: 'error', client: entry.clientId });
       return back({ error: 'server_error' });
     }
-    if (!matched) {
+    if (!subject) {
       record({ event: 'sign_in', status: 'refused', client: entry.clientId });
       return back({ error: 'access_denied' });
     }
@@ -527,6 +569,7 @@ export function createOAuthServer(
       redirectUri: entry.redirectUri,
       codeChallenge: entry.codeChallenge,
       scopes: entry.scopes,
+      subject,
       expiresAt: now() + CODE_TTL_MS,
     });
     record({ event: 'sign_in', status: 'ok', client: entry.clientId });
@@ -574,7 +617,7 @@ export function createOAuthServer(
         return info.resource &&
           sameResource(info.resource) &&
           info.scopes.includes(SCOPE)
-          ? { clientId: info.clientId }
+          ? { clientId: info.clientId, subject: String(info.extra?.subject) }
           : null;
       } catch {
         return null;

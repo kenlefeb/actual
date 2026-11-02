@@ -6,7 +6,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 
 import { createOAuthServer } from './oauth';
-import type { OAuthConfig } from './oauth';
+import type { OAuthConfig, OAuthServer } from './oauth';
 import { createRemoteHttpServer } from './remote';
 import type { RemoteConfig } from './remote-config';
 
@@ -32,6 +32,7 @@ type Res = {
 
 let dir: string;
 let server: http.Server;
+let oauthServer: OAuthServer;
 let port: number;
 let records: Array<Record<string, unknown>>;
 let clock: { t: number };
@@ -41,6 +42,7 @@ let idp: {
   nonce: string;
   aud: string;
   iss: string;
+  sub: string;
   calls: URLSearchParams[];
 };
 
@@ -98,7 +100,7 @@ const fakeFetch: typeof fetch = async (url, init) => {
       id_token: jwt({
         iss: idp.iss,
         aud: idp.aud,
-        sub: '1234567890',
+        sub: idp.sub,
         email: idp.email,
         email_verified: idp.verified,
         nonce: idp.nonce,
@@ -116,15 +118,13 @@ async function start(
   const oauth = oauthConfig(over);
   const config = remoteConfig(oauth, remoteOver);
   const record = (r: Record<string, unknown>) => records.push(r);
-  server = createRemoteHttpServer(config, {
-    log: record,
-    oauth: createOAuthServer(oauth, {
-      record,
-      allowedHosts: config.allowedHosts,
-      fetch: fakeFetch,
-      now: () => clock.t,
-    }),
+  oauthServer = createOAuthServer(oauth, {
+    record,
+    allowedHosts: config.allowedHosts,
+    fetch: fakeFetch,
+    now: () => clock.t,
   });
+  server = createRemoteHttpServer(config, { log: record, oauth: oauthServer });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   port = (server.address() as AddressInfo).port;
 }
@@ -317,6 +317,7 @@ beforeEach(async () => {
     nonce: '',
     aud: 'idp-client',
     iss: 'https://idp.example.test',
+    sub: '1234567890',
     calls: [],
   };
   await start();
@@ -545,6 +546,40 @@ describe('short-lived, revocable tokens', () => {
   });
 });
 
+describe('audit identity', () => {
+  const who = (accessToken: string) =>
+    oauthServer.authenticate({
+      headers: { authorization: `Bearer ${accessToken}` },
+    } as http.IncomingMessage);
+
+  it('An audit line names its identity', async () => {
+    idp.sub = 'provider-subject-42';
+    const tokens = await signIn();
+    // The account is configured as an email, yet the identity is the sub.
+    const caller = await who(tokens.access_token);
+    expect(caller).toEqual({
+      clientId: 'claude-staging',
+      subject: 'provider-subject-42',
+    });
+    expect(JSON.stringify(caller)).not.toContain(ACCOUNT);
+    expect(JSON.stringify(caller)).not.toContain(tokens.access_token);
+    // It follows the refresh family, across a rotation and a restart.
+    const next = (await refresh(tokens.refresh_token)).json as {
+      access_token: string;
+      refresh_token: string;
+    };
+    expect((await who(next.access_token))?.subject).toBe('provider-subject-42');
+    await stop();
+    await start();
+    expect((await who(next.access_token))?.subject).toBe('provider-subject-42');
+    // The state file keeps the id, and still no token.
+    const stored = readFileSync(join(dir, 'oauth-state.json'), 'utf8');
+    expect(stored).toContain('provider-subject-42');
+    expect(stored).not.toContain(next.refresh_token);
+    expect(await who('not-a-token')).toBeNull();
+  });
+});
+
 describe('exactly one identity', () => {
   it('Another account', async () => {
     const { callback, back, code } = await login({
@@ -741,6 +776,13 @@ describe('clients are registered, not open', () => {
     expect(
       (await register([REDIRECT, 'https://evil.example.test/cb'])).status,
     ).toBe(400);
+    for (const loopback of [
+      'https://localhost/cb',
+      'https://127.0.0.1:9999/cb',
+      'http://[::1]:1234/cb',
+    ]) {
+      expect((await register([loopback])).status).toBe(400);
+    }
     expect((await register([REDIRECT])).status).toBe(201);
   });
 });
@@ -801,6 +843,19 @@ describe('host, origin and rate checks cover the OAuth endpoints', () => {
       for (const other of ENDPOINTS.filter(p => p !== hot)) {
         expect(await hit(other)).not.toBe(429);
       }
+    }
+  });
+});
+
+describe('a loopback redirect URI', () => {
+  it('Is refused in the allowlist itself', () => {
+    for (const uri of ['http://localhost:3000/cb', 'https://127.0.0.1/cb']) {
+      expect(() =>
+        createOAuthServer(oauthConfig({ redirectUris: [REDIRECT, uri] }), {
+          record: () => undefined,
+          allowedHosts: ['mcp.example.test'],
+        }),
+      ).toThrow(/loopback/);
     }
   });
 });

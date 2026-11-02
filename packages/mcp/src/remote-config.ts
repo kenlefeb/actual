@@ -4,6 +4,7 @@ import { join, resolve } from 'path';
 
 import { labelHost } from './config';
 import type { McpConfig } from './config';
+import { isLoopbackUri } from './oauth';
 import type { OAuthConfig } from './oauth';
 
 export type RemoteConfig = McpConfig & {
@@ -138,6 +139,11 @@ export function loadRemoteConfig(env: Env, argv: string[] = []): RemoteConfig {
   const clientSecret = readSecretFile(
     required(env, 'ACTUAL_MCP_CLIENT_SECRET_FILE'),
   );
+  if (clientSecret.length < MIN_SIGNING_KEY_LENGTH) {
+    throw new Error(
+      `The client secret must be at least ${MIN_SIGNING_KEY_LENGTH} characters.`,
+    );
+  }
   const idpSecret = readSecretFile(
     required(env, 'ACTUAL_MCP_IDP_CLIENT_SECRET_FILE'),
   );
@@ -151,7 +157,14 @@ export function loadRemoteConfig(env: Env, argv: string[] = []): RemoteConfig {
     .split(',')
     .map(s => s.trim())
     .filter(Boolean);
-  for (const uri of redirectUris) httpsUrl(uri, 'ACTUAL_MCP_REDIRECT_URIS');
+  for (const uri of redirectUris) {
+    httpsUrl(uri, 'ACTUAL_MCP_REDIRECT_URIS');
+    if (isLoopbackUri(uri)) {
+      throw new Error(
+        'ACTUAL_MCP_REDIRECT_URIS may not name a loopback address.',
+      );
+    }
+  }
   const idpAuth = required(env, 'ACTUAL_MCP_IDP_AUTHORIZATION_URL');
   const idpToken = required(env, 'ACTUAL_MCP_IDP_TOKEN_URL');
   const idpIssuer = required(env, 'ACTUAL_MCP_IDP_ISSUER');

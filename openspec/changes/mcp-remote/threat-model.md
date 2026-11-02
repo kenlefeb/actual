@@ -1,6 +1,6 @@
 # Threat model: the hosted MCP server
 
-Scope: the hosted, read-only entry of the fork's MCP server on staging (`mcp-remote`). Production, write tools and per-client access are out of scope. This note is reviewed by the Security Analyst before any code, and is updated with each slice.
+Scope: the hosted, read-only entry of the fork's MCP server (`mcp-remote`) on staging and, from the production slice (sc-2215), on production. Write tools and per-client access are out of scope. This note is reviewed by the Security Analyst before any code, and is updated with each slice.
 
 ## Assets
 
@@ -35,15 +35,23 @@ Scope: the hosted, read-only entry of the fork's MCP server on staging (`mcp-rem
 | 11 | A steered or buggy model tries to write | No write tools exist in this entry; `--writes` is a usage error; the engine is read-only, so nothing is pushed or uploaded | None through the server; the credential is covered by 8 |
 | 12 | The server is used as a request forwarder | It fetches no URL named in budget data; its only outbound calls are the sync server and the identity provider | A configuration mistake pointing it elsewhere |
 | 13 | Secrets leak through logs or errors | Fixed error texts, scrubbing with the secrets list, no tool arguments or results in logs, secrets only in files | Operator-added logging |
-| 14 | A new path to budget data for every agent session | The connector points at staging only; staging is already within what agents reach | Pointing it at production would break "agents can't reach production": Ken's explicit decision and a LOCKDOWN entry first |
+| 14 | A new path to budget data for every agent session | Staging: the connector is within what agents already reach. Production: the account split (sc-2069) first, so a fresh agent session lists no production tool; the allowed account is the assistant's, whose credentials no agent holds | Production breaks "agents can't reach production" for whoever holds Ken's assistant sign-in; Ken's explicit decision and a LOCKDOWN entry, see 18 |
 | 15 | Stale data is trusted | Sync on start and on an interval; `get_sync_status` shows the last success and the last failure | A budget changed seconds ago may not show yet |
 | 16 | A compromised container reaches production | The container runs on its own Docker network that reaches only the staging sync server: never `network_mode: host`, never a network or loopback address production's containers use (production's Actual listens on `127.0.0.1:5075` on the same host); outbound traffic limited to the staging sync server and the identity provider; checked with `docker inspect` in the deployment review | A mistake in the compose file; hence the review check |
+| 17 | Production is served by mistake, or by the stdio override | The production guard: a dedicated flag, a session token (never the password), a subject identifier as the account, the `production-remote` directory; the stdio `ACTUAL_MCP_ALLOW_PRODUCTION` does not count | An operator who sets the flag on purpose; the deployment review checks the configuration |
+| 18 | An agent with VPS root reads the production secret files or plaintext copy | Files owned by the container's uid and 0400/0600; a data directory readable only by that uid; the lockdown (sc-563) removes agent root | **Depends on Ken's open decision:** if the lockdown is a precondition this is removed before go-live; if waived, `production-identities` must also be changed (its lockdown-first rule), and agents with root can read the session token, the signing key, the client secret and the plaintext copy, which Ken accepts |
+| 19 | A compromised production container exfiltrates the copy or reaches the host or tailnet | Mandatory egress control (sc-2203): the sidecar's Tailscale traffic by named destinations, the MCP process limited to the sync server and the tenant by a hostname allow-list (no IP rules for the CDN-fronted tenant); the node's own tailnet tag may reach only the production sync server, no inbound but Funnel; dedicated network, no host network, no `docker.sock`, loopback of production never used | A mistake in the rule; hence the `docker inspect` and from-inside connection checks |
+| 20 | The staging instance or tenant is used to reach production, or the reverse | Separate tenant, client, account, node, hostname, network and data directory; the review fails if any value is shared | Shared VPS and Docker daemon (accepted, as for staging) |
+| 21 | The production sign-in is phished or the administrator is used | The allowed account is the BASIC-role assistant, not the ADMIN; passkey or authenticator app required; sign-ups and social logins off; no agent holds its credentials | The assistant's own device and passkey |
+| 22 | A flood spread over many sources guesses the client secret | Per-source limit proven on staging (6.2) and a coarse aggregate ceiling (sc-2265) before go-live | Secret size and PKCE make guessing impractical either way |
+| 23 | An ADMIN token is placed in the token file | The entry validates the token against the sync server at start and exits if its user is ADMIN or it cannot be validated | The check trusts the sync server's answer |
+| 24 | A `local`-labelled server bypasses the production checks | The entry refuses a loopback server with a non-loopback listener | A loopback forward with a loopback listener is not public |
 
 ## Residual risks accepted for staging
 
 Also accepted from the OAuth slice: the SDK compares the pre-registered client secret with `!==` (not constant time), which the per-endpoint rate limit and a 256-bit-class secret make impractical to exploit; and the upstream ID token's signature is not re-verified because it arrives directly from the provider's token endpoint over TLS (OIDC Core 3.1.3.7). A sign-in started by an attacker cannot deliver a code anywhere but the allowlisted redirect URI, where the client's own `state` check rejects it.
 
-A public endpoint to a plaintext copy of the staging budget; the shared sync-server password stored on the server; availability depending on one process. Each is acceptable for staging data and not for production.
+A public endpoint to a plaintext copy of the staging budget; the shared sync-server password stored on the server; availability depending on one process. Each is acceptable for staging data. For production the shared password is replaced by the assistant's session token, and the plaintext copy stays in the container's data directory only, removed with it; availability on one process stays accepted. What remains for production is threat 18, Ken's decision.
 
 ## Revocation, in order
 
@@ -53,9 +61,13 @@ A public endpoint to a plaintext copy of the staging budget; the shared sync-ser
 4. **Stop and remove the container, and delete its data directory** (the plaintext budget copy).
 5. **If a compromise is possible:** change the staging sync-server password (the stored credential), rotate the pre-registered client's secret (and tell Claude), and revoke the identity provider's client secret.
 
+## Production revocation
+
+The five steps above apply to the production instance unchanged and in the same order, plus: revoke the assistant's session token on the production sync server (changing the role or removing the user in the tenant also cuts it), and remove the assistant user at the production tenant or disable its passkey. Disconnect the connector in Claude first when only the connector is to stop.
+
 ## What the deployment slice must add to LOCKDOWN
 
-New inventory rows for: the MCP container; its exposure node identity; the signing key; the token state file; the pre-registered client and its secret; the identity provider's client id and secret; and the Actual credential it holds. The persistence check covers the container and the exposure state. Revocation follows the five steps above. The container's network isolation (threat 16) is part of the review. Deploying is a production-host change under Ken's gate (shared VPS and Docker daemon).
+New inventory rows for: the MCP container; its exposure node identity; the signing key; the token state file; the pre-registered client and its secret; the identity provider's client id and secret; and the Actual credential it holds. The persistence check covers the container and the exposure state. Revocation follows the five steps above. The container's network isolation (threats 16 and 19) is part of the review. For production the rows are repeated for the production container, node, signing key, state file, client secret, tenant client secret and session token, plus the egress rule. Deploying is a production-host change under Ken's gate (shared VPS and Docker daemon).
 
 ## To be settled by staging verification
 

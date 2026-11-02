@@ -13,10 +13,10 @@ Each group ends with the story that ships it. Until the slice stories are filed,
 
 - [x] 2.1 Add the acting identity (sync-server user id, OAuth subject or `local`) to every audit line and to the hosted entry's read record, with tests named after "An audit line names its identity". Edit the `mcp-server` "Write audit log" requirement in this slice. No production touch.
 
-## 3. Slice B: sync-server access log (sc-2004)
+## 3. Slice B: sync-server access log (sc-2033)
 
-- [ ] 3.1 Add the fork log line (user id, file id, route, time; never content or a token) where `requireFileAccess` decides, with tests named after "The access log holds no content". Fork-only server work.
-- [ ] 3.2 Document the daily off-host copy (Mac mini pull, 90 days) as a runbook for slice D.
+- [x] 3.1 Add the fork log line (user id, file id, route, time; never content or a token) where file access is decided, with tests named after "The access log holds no content". Fork-only server work.
+- [x] 3.2 Document the daily off-host copy (Mac mini pull, 90 days) as a runbook for slice D.
 
 ## 4. Slice C: staging rehearsal of OpenID (sc-2004)
 

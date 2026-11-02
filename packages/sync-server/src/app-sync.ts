@@ -29,6 +29,7 @@ import { config } from './load-config';
 import { SecretName, secretsService } from './services/secrets-service';
 import * as UserService from './services/user-service';
 import * as simpleSync from './sync-simple';
+import { accessLogMiddleware, noteFileAccess } from './util/access-log';
 import { atomicWriteFile } from './util/atomic-write';
 import {
   errorMiddleware,
@@ -45,6 +46,7 @@ import type { GroupId } from './util/paths';
 
 const app = express();
 app.use(validateSessionMiddleware);
+app.use(accessLogMiddleware); // fork-only access log (see util/access-log.ts)
 app.use(errorMiddleware);
 app.use(requestLoggerMiddleware);
 app.use(
@@ -119,6 +121,7 @@ const verifyFileExists = (
 };
 
 function requireFileOwner(file: File, userId: string) {
+  noteFileAccess(file.id); // fork-only access log
   const isOwner = file.owner === userId;
   const isServerAdmin = isAdmin(userId);
   if (isOwner || isServerAdmin) {
@@ -375,6 +378,7 @@ app.post('/upload-user-file', async (req, res) => {
 
   if (!currentFile) {
     // it's new
+    noteFileAccess(fileId); // fork-only access log
     const newGroupId = generateGroupId();
     groupId = newGroupId;
     filesService.set(

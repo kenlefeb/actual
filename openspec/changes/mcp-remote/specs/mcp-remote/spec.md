@@ -25,13 +25,82 @@ The hosted entry SHALL open the budget with `readOnly: true` unconditionally, SH
 - **WHEN** the hosted entry syncs
 - **THEN** no transaction is created in its copy and nothing is pushed or uploaded
 
-### Requirement: Staging only in v1
-The hosted entry SHALL serve only an environment labelled `staging` or `local`, and SHALL refuse to start for a `production` host, including when the stdio entry's production override is set.
+### Requirement: Production only under an explicit guard
+The hosted entry SHALL serve a `production` host only when the dedicated flag `ACTUAL_MCP_REMOTE_PRODUCTION=1` is set, the credential is a session token file, the allowed account is a provider subject identifier (no `@`) and the data directory is `production-remote`; otherwise it SHALL exit with a fixed error before it signs in or listens. The stdio entry's `ACTUAL_MCP_ALLOW_PRODUCTION` SHALL NOT satisfy the flag, and production SHALL stay read-only in code.
 
-#### Scenario: Production is refused
-- **GIVEN** `ACTUAL_SERVER_URL` names a host labelled `production` and `ACTUAL_MCP_ALLOW_PRODUCTION=1` is set
+#### Scenario: Production without the flag
+- **GIVEN** `ACTUAL_SERVER_URL` names a host labelled `production` and only `ACTUAL_MCP_ALLOW_PRODUCTION=1` is set
 - **WHEN** the hosted entry starts
 - **THEN** it exits with a fixed error before it signs in or listens
+
+#### Scenario: Production with a password
+- **GIVEN** the production flag is set and `ACTUAL_PASSWORD_FILE` is set instead of a session token
+- **WHEN** the hosted entry starts
+- **THEN** it exits with a fixed error that does not name the secret
+
+#### Scenario: Production with an email as the account
+- **GIVEN** the production flag and a session token are set and the allowed account is an email address
+- **WHEN** the hosted entry starts
+- **THEN** it exits with a fixed error
+
+#### Scenario: Production with the guard met
+- **GIVEN** the flag, a 0400 session token file, a subject identifier as the account and every other required setting
+- **WHEN** the hosted entry starts
+- **THEN** it serves the production budget through the read tools only, with `readOnly: true` and no write tool
+
+#### Scenario: Production writes stay impossible
+- **GIVEN** the production guard is met
+- **WHEN** the hosted entry is started with `--writes`
+- **THEN** it exits with the usage error and serves nothing
+
+### Requirement: Production identity
+A production instance SHALL sign users in only through an identity-provider tenant that is separate from staging's, SHALL accept exactly one account, the assistant's provider subject identifier (for Auth0, its `auth0|...` `sub`), and SHALL NOT be configured with the staging tenant, client or account. The administrator's account, which holds the budget's ADMIN role, SHALL NOT be the allowed account, and no credential of the allowed account SHALL be held by any agent.
+
+#### Scenario: The administrator signs in
+- **GIVEN** a production instance whose allowed account is the assistant's subject
+- **WHEN** the administrator's account signs in at the production tenant
+- **THEN** no code or token is issued
+
+#### Scenario: A staging tenant on production
+- **GIVEN** the production flag and an issuer, client id or account that equals the staging instance's
+- **WHEN** the deployment review compares the two configurations
+- **THEN** the review fails and the instance is not deployed
+
+### Requirement: Production network and exposure
+A production instance SHALL run on its own Docker network that reaches only the production sync server and the production identity tenant, with its own exposure node and hostname, never `network_mode: host`, `docker.sock`, a network shared with staging, or production's loopback address. It SHALL run non-root with `cap_drop: ALL`, `no-new-privileges` and a read-only root, and a host firewall rule (in LOCKDOWN, surviving a reboot) SHALL restrict its outbound traffic to those two upstreams.
+
+#### Scenario: The network check
+- **WHEN** the deployment review runs `docker inspect` on the production container
+- **THEN** its network mode is not `host`, it is on only its dedicated network, it publishes no port on the host, it mounts no `docker.sock`, and it runs as a non-root uid
+
+#### Scenario: Egress to anything else
+- **WHEN**, from inside the production container, a connection is opened to the internet at large, a private address, a tailnet address other than the production sync server, or the Docker bridge gateway
+- **THEN** it fails, while the production sync server and the identity provider's tenant still work
+
+### Requirement: Production prerequisites before go-live
+A production instance SHALL NOT be deployed or connected until each is recorded as done: the per-source rate limit proven through the exposure layer (task 6.2, sc-2090); the aggregate ceiling (sc-2265); the egress rule (sc-2203); secret files owned by the container's uid; the production OpenID backstop and roles (`production-identities`); and the account split (sc-2069).
+
+#### Scenario: A prerequisite is missing
+- **GIVEN** the egress restriction is not in place
+- **WHEN** the production deployment is reviewed
+- **THEN** the review does not approve it
+
+#### Scenario: The data copy stays in the container
+- **WHEN** the production container is removed
+- **THEN** its data directory, readable only by the container's uid, is removed with it
+
+#### Scenario: A secret file owned by root
+- **GIVEN** the production session token is owned by root and the container runs as another uid
+- **WHEN** the container starts
+- **THEN** it exits with a fixed error, and the runbook does not proceed
+
+### Requirement: The production lockdown precondition is Ken's decision
+The change SHALL state the dependency on the production lockdown (sc-563) both ways and SHALL NOT choose: if Ken keeps it as a precondition, deployment waits for it; if Ken waives it, the threat model records that agents with VPS root can read the production secrets and copy, accepted by Ken. Until Ken answers, the production deployment is not approved.
+
+#### Scenario: Ken has not answered
+- **GIVEN** Ken has not decided whether the lockdown is a precondition
+- **WHEN** the production deployment is proposed
+- **THEN** it is not approved and the open decision is named
 
 ### Requirement: One budget per instance
 A hosted instance SHALL serve exactly one budget of one environment, with its own credentials and data directory (`<env>-remote`, created with mode 0700 by the same checks as the stdio entry), because the engine holds one loaded budget per process.

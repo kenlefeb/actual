@@ -33,7 +33,7 @@ Needs Ken's answers on Funnel, the hostname and the plaintext staging copy.
 ## 6. Per-source rate limit (sc-2090)
 
 - [x] 6.1 Key the endpoint rate limit per source address (the last `X-Forwarded-For` entry, trusted only from a loopback peer) with a bounded table, with tests named after the "A flood from one source spares another", "A forged forwarded address" and "Many sources" scenarios.
-- [ ] 6.2 On staging, confirm through the Funnel that the access log shows real client addresses and no `source-unresolved` record: one flooded source and one clean sign-in from a second network. Do not claim the per-source protection until this is recorded (the connection checklist, 5.1, records the same).
+- [ ] 6.2 (now story sc-2278) On staging, confirm through the Funnel that the access log shows real client addresses and no `source-unresolved` record: one flooded source and one clean sign-in from a second network. Do not claim the per-source protection until this is recorded (the connection checklist, 5.1, records the same).
 
 ## 7. Production slice: spec and design (sc-2215)
 
@@ -42,13 +42,13 @@ Needs Ken's answers on Funnel, the hostname and the plaintext staging copy.
 
 ## 8. Lift the code refusal (sc-2277)
 
-- [ ] 8.1 Write failing tests, then change `loadRemoteConfig` so a production host is served only under the guard (flag, session-token file, subject-identifier account, `production-remote` directory), read-only unchanged, with tests named after the "Production only under an explicit guard" scenarios.
+- [ ] 8.1 Write failing tests (run them failing first), then change `loadRemoteConfig` so a production host is served only under the guard (flag, session-token file, subject-identifier account, `production-remote` directory), read-only unchanged, with tests named after the "Production only under an explicit guard" scenarios. Also: refuse a `local`-labelled server together with a non-loopback listener; and in production validate the session token against the sync server at start and exit if its user is ADMIN, with tests named after "A production token is never an administrator's". First confirm in a test against the real sync server that its validate endpoint returns the user's permission; if it does not, the entry instead reads the permission from the sync server's user listing for that token, and if neither is available it exits (fail closed) and the Architect decides the alternative before code continues.
 
 ## 9. Production container, exposure and deployment, Ken's gate (sc-2218)
 
-Blocked on sc-2277, the go-live prerequisites (design Decision 14: sc-2090 task 6.2, sc-2265, sc-2203) and Ken's answer on the lockdown.
+Blocked on sc-2277, the go-live prerequisites (design Decision 14: sc-2278 for task 6.2, sc-2265, sc-2203, sc-2069) and Ken's answer on the lockdown.
 
-- [ ] 9.1 Add the production compose file, runbook and LOCKDOWN rows (container, node, signing key, state file, client secret, tenant client secret, session token, egress rule) with the production revocation order; the review checks the "Production network and exposure" and "Production prerequisites before go-live" scenarios with `docker inspect` and from-inside connection tests; Security Analyst approves and Ken approves before anything is deployed.
+- [ ] 9.1 Add the production compose file, runbook and LOCKDOWN rows (container, node, signing key, state file, client secret, tenant client secret, session token, egress rule) with the production revocation order; the egress control follows design Decision 14 (the sidecar by named destinations, the MCP process by a hostname allow-list, the node's own tailnet tag); the review checks the "Production network and exposure" and "Production prerequisites before go-live" scenarios with `docker inspect` and from-inside connection tests; the data-directory name is paired with a `docker inspect` mount check; the checklist states whether VPS snapshots include the data directory, records the image's source commit, tag and digest, and a revocation drill is rehearsed once on staging first. Security Analyst approves and Ken approves before anything is deployed.
 
 ## 10. Production connection checklist (sc-2219)
 

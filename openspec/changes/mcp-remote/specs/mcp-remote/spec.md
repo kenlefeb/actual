@@ -66,19 +66,46 @@ A production instance SHALL sign users in only through an identity-provider tena
 - **WHEN** the deployment review compares the two configurations
 - **THEN** the review fails and the instance is not deployed
 
+### Requirement: A production token is never an administrator's
+In production the hosted entry SHALL validate the session token against the sync server at start and SHALL exit with a fixed error, before it listens, if the token's user holds the ADMIN permission or cannot be validated. The guard's other conditions SHALL NOT be treated as proof of the token's privilege.
+
+#### Scenario: An administrator's token
+- **GIVEN** the production guard is met and the token file holds Ken's ADMIN token
+- **WHEN** the hosted entry starts
+- **THEN** it exits with a fixed error that does not name the token, and serves nothing
+
+#### Scenario: A token that cannot be validated
+- **GIVEN** the sync server rejects or does not answer the validation
+- **WHEN** the hosted entry starts in production
+- **THEN** it exits with a fixed error
+
+#### Scenario: A loopback label with a public listener
+- **GIVEN** `ACTUAL_SERVER_URL` is a loopback host (labelled `local`) and the listener is not loopback
+- **WHEN** the hosted entry starts
+- **THEN** it exits with a fixed error, so a loopback forward to a production server cannot skip the production checks
+
 ### Requirement: Production network and exposure
-A production instance SHALL run on its own Docker network that reaches only the production sync server and the production identity tenant, with its own exposure node and hostname, never `network_mode: host`, `docker.sock`, a network shared with staging, or production's loopback address. It SHALL run non-root with `cap_drop: ALL`, `no-new-privileges` and a read-only root, and a host firewall rule (in LOCKDOWN, surviving a reboot) SHALL restrict its outbound traffic to those two upstreams.
+A production instance SHALL run on its own Docker network reaching only the production sync server and the production identity tenant, with its own node, hostname and tailnet tag (reaching only the sync server, no inbound but Funnel), hardened as staging is, never on the host network or with `docker.sock`, a shared network or production's loopback. Its egress SHALL be limited by an enforced, reboot-proof rule using hostnames, not IP rules for the CDN-fronted tenant.
 
 #### Scenario: The network check
 - **WHEN** the deployment review runs `docker inspect` on the production container
 - **THEN** its network mode is not `host`, it is on only its dedicated network, it publishes no port on the host, it mounts no `docker.sock`, and it runs as a non-root uid
+
+#### Scenario: A tailnet host other than the sync server
+- **WHEN**, from inside the production container, a connection is opened to a tailnet host other than the production sync server
+- **THEN** it is refused, while Funnel still serves inbound requests
 
 #### Scenario: Egress to anything else
 - **WHEN**, from inside the production container, a connection is opened to the internet at large, a private address, a tailnet address other than the production sync server, or the Docker bridge gateway
 - **THEN** it fails, while the production sync server and the identity provider's tenant still work
 
 ### Requirement: Production prerequisites before go-live
-A production instance SHALL NOT be deployed or connected until each is recorded as done: the per-source rate limit proven through the exposure layer (task 6.2, sc-2090); the aggregate ceiling (sc-2265); the egress rule (sc-2203); secret files owned by the container's uid; the production OpenID backstop and roles (`production-identities`); and the account split (sc-2069).
+A production instance SHALL NOT be deployed or connected until each is recorded as done: the per-source limit proven through the exposure layer (sc-2278); the aggregate ceiling (sc-2265); the egress rule (sc-2203); uid-owned secret files; the OpenID backstop and roles (`production-identities`); the account split (sc-2069); a revocation drill on staging; and the image's source commit and digest.
+
+#### Scenario: The ceiling must not lock Ken out
+- **GIVEN** a flood from many sources
+- **WHEN** the signed-in user signs in
+- **THEN** the aggregate ceiling does not refuse the sign-in; if no global number can meet this, the /48 (IPv6) or /24 (IPv4) tier is used instead
 
 #### Scenario: A prerequisite is missing
 - **GIVEN** the egress restriction is not in place
@@ -89,13 +116,26 @@ A production instance SHALL NOT be deployed or connected until each is recorded 
 - **WHEN** the production container is removed
 - **THEN** its data directory, readable only by the container's uid, is removed with it
 
+#### Scenario: Snapshots and the data directory
+- **WHEN** the deployment is reviewed
+- **THEN** it states whether VPS snapshots or backups include the container's data directory, and a plaintext production copy in an offsite snapshot fails the review
+
+#### Scenario: The data-directory name is not proof
+- **WHEN** the deployment review runs `docker inspect`
+- **THEN** the data mount is checked to be the container's own volume, in addition to the `production-remote` name
+
 #### Scenario: A secret file owned by root
 - **GIVEN** the production session token is owned by root and the container runs as another uid
 - **WHEN** the container starts
 - **THEN** it exits with a fixed error, and the runbook does not proceed
 
 ### Requirement: The production lockdown precondition is Ken's decision
-The change SHALL state the dependency on the production lockdown (sc-563) both ways and SHALL NOT choose: if Ken keeps it as a precondition, deployment waits for it; if Ken waives it, the threat model records that agents with VPS root can read the production secrets and copy, accepted by Ken. Until Ken answers, the production deployment is not approved.
+The change SHALL state the dependency on the production lockdown (sc-563) both ways and SHALL NOT choose. If Ken keeps it, deployment waits. If he waives it, `production-identities` ("LOCKDOWN comes first") SHALL also change, and threat row 18 names the session token, signing key, client secret and plaintext copy. Until he answers, deployment is not approved.
+
+#### Scenario: Waiving the lockdown
+- **GIVEN** Ken chooses to waive the lockdown
+- **WHEN** the production deployment is proposed
+- **THEN** it is not approved until `production-identities` no longer requires the lockdown first and threat row 18 names those four assets
 
 #### Scenario: Ken has not answered
 - **GIVEN** Ken has not decided whether the lockdown is a precondition

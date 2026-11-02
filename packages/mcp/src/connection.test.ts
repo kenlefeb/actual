@@ -5,7 +5,7 @@ import { join } from 'path';
 import * as api from '@actual-app/api';
 
 import { loadConfig } from './config';
-import { closeBudget, openBudget } from './connection';
+import { closeBudget, lookupUserId, openBudget } from './connection';
 
 afterEach(async () => {
   await closeBudget();
@@ -48,5 +48,27 @@ describe('openBudget', () => {
       env.ACTUAL_DATA_DIR,
       `${env.ACTUAL_DATA_DIR}-writes`,
     ]);
+  });
+});
+
+describe('lookupUserId', () => {
+  it('An audit line names its identity', async () => {
+    const send = vi.fn().mockResolvedValue({ userId: 'user-7' });
+    expect(await lookupUserId({ send })).toBe('user-7');
+    expect(send).toHaveBeenCalledWith('subscribe-get-user');
+  });
+
+  it('A missing user id is unknown, never an error', async () => {
+    expect(await lookupUserId(null)).toBe('unknown');
+    expect(await lookupUserId({ send: async () => ({ offline: true }) })).toBe(
+      'unknown',
+    );
+    expect(
+      await lookupUserId({
+        send: async () => {
+          throw new Error('boom');
+        },
+      }),
+    ).toBe('unknown');
   });
 });

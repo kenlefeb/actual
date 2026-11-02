@@ -5,6 +5,8 @@ import type { z } from 'zod';
 
 import type { RegisterTool } from '#tools/read/shared';
 
+import type { Identity } from './audit';
+import { actingUserId } from './connection';
 import { Refusal } from './refusal';
 import { DATA_NOTE, scrubSecrets } from './sanitize';
 import { registerAccountTools } from './tools/read/accounts';
@@ -20,6 +22,8 @@ const WRITE_NOTE = ` Changes the budget; ids only, at most 50 rows, every write 
 export type ServerOptions = {
   /** Registers the `write_` tools, logging each write here first. */
   auditLog?: string;
+  /** Written on every audit line; defaults to the connection's user id and subject `local` (stdio). */
+  identity?: Identity;
   /** Called with a tool's name and outcome, never its arguments or result (the hosted entry's access record). */
   onToolCall?: (tool: string, status: 'ok' | 'error') => void;
   /** Extra read tools, for an entry that adds its own (the hosted entry's `get_sync_status`). */
@@ -28,7 +32,7 @@ export type ServerOptions = {
 
 export function createServer(
   secrets: string[] = [],
-  { auditLog, onToolCall, registerExtra }: ServerOptions = {},
+  { auditLog, identity, onToolCall, registerExtra }: ServerOptions = {},
 ) {
   const server = new McpServer({ name: 'actual-budget', version });
 
@@ -97,8 +101,11 @@ export function createServer(
 
   // Write tools exist only on the `--writes` entry (tools/write/*)
   if (auditLog) {
-    registerWriteTools(register(WRITE_NOTE), auditLog, m =>
-      scrubSecrets(m, secrets),
+    registerWriteTools(
+      register(WRITE_NOTE),
+      auditLog,
+      m => scrubSecrets(m, secrets),
+      identity ?? { user_id: actingUserId(), subject: 'local' },
     );
   }
 

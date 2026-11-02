@@ -50,7 +50,7 @@ The production sync server SHALL run in OpenID multi-user mode with password log
 - **THEN** the check fails
 
 ### Requirement: The first sign-in is Ken's
-The identity provider's client SHALL accept only Ken's account and the assistant's account. The first OpenID sign-in on a server with no OpenID user SHALL be Ken's, made before the server is reachable by anyone else or while `ACTUAL_OPENID_ENFORCE` is off, because with it on the server asks for no password and gives ADMIN and ownership to the first identity the provider accepts.
+The identity provider SHALL be an Auth0 tenant that holds only Ken's account and the assistant's account, with sign-ups off and no social or enterprise connection enabled, so that it accepts no other identity. The first OpenID sign-in on a server with no OpenID user SHALL be Ken's, made before the server is reachable by anyone else or while `ACTUAL_OPENID_ENFORCE` is off, because with it on the server asks for no password and gives ADMIN and ownership to the first identity the provider accepts.
 
 #### Scenario: An unrelated identity cannot claim the server
 - **GIVEN** OpenID is enabled and no OpenID user exists
@@ -58,7 +58,7 @@ The identity provider's client SHALL accept only Ken's account and the assistant
 - **THEN** the provider refuses it
 
 ### Requirement: The assistant has its own sign-in identity
-The assistant's BASIC user SHALL be a dedicated account at the configured identity provider, not Ken's, protected by a passkey or authenticator-app two-factor sign-in, with no account recovery through any mailbox agents can read. Its credentials SHALL be kept in the "Ken Assistant" vault and listed in the LOCKDOWN inventory.
+The assistant's BASIC user SHALL be a dedicated account in the Auth0 tenant, not Ken's, protected by a passkey or authenticator-app two-factor sign-in, with no account recovery through any mailbox agents can read. Its credentials SHALL be kept in the "Ken Assistant" vault and listed in the LOCKDOWN inventory. Ken's account in the same tenant SHALL meet the same two-factor and recovery rules, because the first OpenID sign-in on the server becomes ADMIN.
 
 #### Scenario: Recovery does not reach agent-readable mail
 - **WHEN** the assistant's account recovery options are reviewed

@@ -57,6 +57,19 @@ The identity provider SHALL be an Auth0 tenant that holds only Ken's account and
 - **WHEN** an identity that is not Ken's finishes the provider's sign-in
 - **THEN** the provider refuses it
 
+### Requirement: The server refuses a first sign-in that is not Ken's
+When `ACTUAL_OPENID_ADMIN_SUBJECT` is set, the sync server SHALL accept the first OpenID sign-in on a server with no OpenID user only if the provider's `sub` equals it, and SHALL otherwise refuse it and create no user. The `sub` is matched, not the e-mail, because the provider can change or reassign an e-mail. Production SHALL set it to Ken's `sub`. When it is unset the server SHALL keep upstream's rule (the first identity becomes ADMIN) and log a warning when OpenID is enabled. Later sign-ins are not affected.
+
+#### Scenario: A first sign-in from another identity is refused
+- **GIVEN** OpenID is enabled, `ACTUAL_OPENID_ADMIN_SUBJECT` is Ken's `sub` and no OpenID user exists
+- **WHEN** an identity with another `sub` finishes the provider's sign-in
+- **THEN** the server refuses it, creates no user and issues no session
+
+#### Scenario: Ken's first sign-in still works
+- **GIVEN** the same setting
+- **WHEN** Ken's identity finishes the provider's sign-in
+- **THEN** he becomes ADMIN and owner
+
 ### Requirement: The assistant has its own sign-in identity
 The assistant's BASIC user SHALL be a dedicated account in the Auth0 tenant, not Ken's, protected by a passkey or authenticator-app two-factor sign-in, with no account recovery through any mailbox agents can read. Its credentials SHALL be kept in the "Ken Assistant" vault and listed in the LOCKDOWN inventory.
 

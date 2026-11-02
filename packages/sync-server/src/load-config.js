@@ -271,6 +271,13 @@ const configSchema = convict({
       default: '',
       env: 'ACTUAL_OPENID_SERVER_HOSTNAME',
     },
+    // fork: sc-2163, see openspec/changes/production-identities
+    adminSubject: {
+      doc: "Provider subject (`sub`) that the first OpenID sign-in must have. Unset keeps upstream's first-user-is-admin rule.",
+      format: String,
+      default: '',
+      env: 'ACTUAL_OPENID_ADMIN_SUBJECT',
+    },
     authMethod: {
       doc: 'OpenID authentication method.',
       format: ['openid', 'oauth2'],

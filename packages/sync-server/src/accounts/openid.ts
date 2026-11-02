@@ -54,6 +54,12 @@ export async function bootstrapOpenId(configParameter: ConfigParameter) {
     }
 
     await setupOpenIdClient(configParameter);
+    // fork: sc-2163
+    if (!config.get('openId.adminSubject')) {
+      console.warn(
+        'OpenID is enabled without ACTUAL_OPENID_ADMIN_SUBJECT: the first identity the provider accepts becomes the administrator.',
+      );
+    }
   } catch (error) {
     console.error('Error setting up OpenID client');
     debugSensitive('Error setting up OpenID client: %O', error);
@@ -266,6 +272,17 @@ export async function loginWithOpenIdFinalize(body) {
           'SELECT id FROM users WHERE user_name = ?',
           [identity],
         );
+
+        // fork: sc-2163, the first sign-in must be the configured admin
+        const adminSubject = config.get('openId.adminSubject');
+        if (
+          !existingUser &&
+          countUsersWithUserName === 0 &&
+          adminSubject &&
+          userInfo.sub !== adminSubject
+        ) {
+          throw new Error('openid-grant-failed');
+        }
 
         if (
           !existingUser &&

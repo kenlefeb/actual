@@ -175,7 +175,7 @@ cannot start without it. It is not deployed by this change.
   client secret in the token request body (`client_secret_post`). For Auth0 (one tenant per environment) the provider values are issuer
   `https://<tenant-domain>/` (with the trailing slash), authorization URL `https://<tenant-domain>/authorize` and
   token URL `https://<tenant-domain>/oauth/token`; `ACTUAL_MCP_ALLOWED_ACCOUNT` is the user's `auth0|…` user_id (the ID
-  token's `sub`); and the application's allowed callback URL is `<public url>/oauth/callback`.
+  token's `sub`); and the application's allowed callback URL is `<public url>/oauth/callback`. The tenant may hold a second user (Ken, for the sync server's own OpenID application in the same tenant): the connector still admits only the configured `sub` and refuses every other account, so a second user does not widen it. Use a separate Auth0 application for the connector; the sync server has its own.
 - **Host, Origin and rate checks.** `ACTUAL_MCP_ALLOWED_HOSTS` (the public hostname goes here; once
   the listener is not on loopback it may name only that hostname, no loopback name or wildcard),
   `ACTUAL_MCP_ALLOWED_ORIGINS` (default none: server-to-server traffic sends no `Origin`) and

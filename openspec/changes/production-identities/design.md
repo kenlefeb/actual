@@ -18,7 +18,7 @@ Facts the design rests on (read from `packages/sync-server` and `packages/mcp`; 
 ## Decisions
 
 ### 1. Identities
-Three kinds, no more. Ken is ADMIN through his own identity at the identity provider, protected by a passkey or second factor and never by an emailed link (agents can read his mail). The assistant is one BASIC user. Development agents have none on production. The identity provider, its client registration and callback are configuration (like `mcp-remote`); Ken's choice is open and is needed before slice C.
+Three kinds, no more. Ken is ADMIN through his own identity at the identity provider, protected by a passkey or second factor and never by an emailed link (agents can read his mail). The assistant is one BASIC user. Development agents have none on production. The identity provider is Auth0 (decision 13); its tenant, applications and callbacks are configuration.
 
 ### 2. One rule for the credential
 The record is a 1Password item in a new vault, "Ken Assistant", that only Ken's interactive 1Password opens: no service account (its token would sit in a keychain any process running as Ken can ask for), no CLI integration (it stays off, see sc-696), no file on the Mac. Never grant computer-use to 1Password: the vault is protected only by Ken's unlocked desktop app (the rule from the sc-1460 checklist). The only deployed copy is the connector's root-owned 0400 file on the host, drawn from the item by Ken at install time. Rotation replaces both. "Ken & Agents" keeps staging credentials only: the staging promote token, the staging SSH key, staging passwords and age identity. Ken's Private vault keeps his own production admin items ("Actual (Production) login", the backup recovery key).
@@ -73,15 +73,46 @@ Slice A adds the user id (and OAuth subject, or `local` for stdio) to every audi
 4. D, E, F are Ken-gated and each ships with a checklist for Ken that says why each step needs him.
 
 ### 11. The first sign-in must be Ken's
-The first OpenID sign-in on an instance with no OpenID user becomes ADMIN and owner. With `ACTUAL_OPENID_ENFORCE=true` there is no password check at that moment, so any identity the provider accepts can take the server (rehearsed with an unrelated provider user). Two controls, both required: the provider's client accepts only the two named accounts (for Google, the app limited to named test users or an organisation, so no other Google account can finish a sign-in), and Ken signs in first, before the server is reachable by anyone else or while enforcement is still off so that the old password is asked for. This applies to the production switch (slice E) and to every pre-switch restore (decision 8).
+The first OpenID sign-in on an instance with no OpenID user becomes ADMIN and owner. With `ACTUAL_OPENID_ENFORCE=true` there is no password check at that moment, so any identity the provider accepts can take the server (rehearsed with an unrelated provider user). Two controls, both required: the provider accepts only the two named accounts, and Ken signs in first, before the server is reachable by anyone else or while enforcement is still off so that the old password is asked for. In the Auth0 tenant (decision 13) the first control is that the tenant holds exactly two users, sign-ups are off and no social or enterprise connection is enabled, so no third identity can finish a sign-in; the checklist reads the user list and tries the sign-up path instead of signing in with a stranger's account. This applies to the production switch (slice E) and to every pre-switch restore (decision 8).
 
 ### 12. Identity provider lost
+The provider is Auth0, so this is an Auth0 outage or a lost tenant. It affects new sign-ins to the sync server and to the hosted connector, nothing else: the assistant's minted token and every browser session are local to the sync server. The break-glass password stays loopback-only (decision 8), so the recovery below does not depend on Auth0.
+
 Existing sessions keep working (they are local), new sign-ins fail with `openid-setup-failed`. Recovery, rehearsed: stop the server, `reset-password.js` (needs a terminal), remove the two settings from the compose template and restart, sign in with `loginMethod: "password"` (the password user is an ADMIN and sees every budget), fix the provider, `POST /openid/enable` with the new settings (this deletes every session: Ken signs in again and the assistant is re-minted), restore the two settings. `disable-openid.js` is the full revert and deletes the OpenID users; it was read, not run.
+
+### 13. Identity provider: one Auth0 tenant per environment, two users, two applications
+Decided by the Architect for sc-2216, following Ken's choice of Auth0 for the hosted connector (sc-1950 comment 2205, sc-1973 comment 2204). Production has one Auth0 tenant for Actual. It holds exactly two users and two applications:
+
+| | Users | Applications |
+|---|---|---|
+| Production tenant | Ken (becomes ADMIN on the sync server) and the assistant (BASIC) | "Actual sync server" (Regular Web Application, callback `<sync server URL>/openid/callback`) and "Actual MCP connector" (callback `<MCP public URL>/oauth/callback`) |
+
+Both users are required to use a passkey or authenticator app. Sign-ups are off, no social or enterprise connection is enabled, and no agent has tenant admin (Ken's own Auth0 team seat is the only admin). Staging has its own tenant with the same shape.
+
+- **Why not a tenant for the connector only (Ken's earlier wording: "one assistant user").** The sync server's first OpenID sign-in must be Ken's and becomes ADMIN. Ken needs an identity somewhere. Putting it in the same tenant adds one user, not a place to administer.
+- **Why two applications, not one.** The sync server and the MCP are different OAuth clients. The sync server is a confidential web client that discovers the issuer and sends the client secret with HTTP Basic (openid-client's default); its user name is the `email` claim (`preferred_username`, `login` and `id` are absent in Auth0, and `email` comes before `sub`). The MCP takes `ACTUAL_MCP_IDP_*` values, `client_secret_post`, and identifies the user by `sub`. Separate applications keep separate secrets, callbacks and revocation: rotating or deleting one does not touch the other.
+- **The MCP's allow-list still holds.** `ACTUAL_MCP_ALLOWED_ACCOUNT` is one `sub`. Ken's user can finish an Auth0 sign-in on the connector application, and the MCP then refuses him because his `sub` is not the allowed one (the check is in `packages/mcp/src/oauth.ts`, tested in sc-1972). The assistant's user can sign in to the sync server application, which is intended (it is how its token is minted). Nothing else relies on the tenant holding only one user.
+- **Sync-server settings.** `issuer` `https://<tenant-domain>/` (with the trailing slash, as for the MCP), `client_id`, `client_secret`, `server_hostname`; scope is fixed at `openid email profile`. The application's "Token Endpoint Authentication Method" must be Basic, not Auth0's default Post; the rehearsal of task 9.1 proves it.
+- **The assistant's Actual user.** The sync server does not create users at sign-in (`userCreationMode` is not `login`), so Ken creates the assistant as an admin with `userName` equal to the assistant's Auth0 email, then patches its role to BASIC and shares the named budgets. The `userName` is the email, not the `sub`; the connector's allowed account is the `sub`. The checklist records both for the assistant.
+- **Recovery mail.** Neither user's account recovery may reach a mailbox agents read (spec: "Recovery does not reach agent-readable mail"). Ken's ADMIN identity is as exposed as the assistant's: a password-reset mail an agent can read takes the server. Both users use an address on a mailbox no agent can read and have the reset path off or pointed there; the production Auth0 checklist (sc-2217) holds the steps.
+- **Ken's credentials.** His ADMIN password, recovery codes and second factor live only where no agent can read (his Private vault or his own devices), never in "Ken & Agents" or any other agent-readable vault. The tenant admin seat is the single control point for both identities, so it uses a passkey or authenticator, has no agent-readable recovery mailbox, and leaves no machine-to-machine application or Management API token behind.
+- **Allowed account.** Configure `ACTUAL_MCP_ALLOWED_ACCOUNT` as the `auth0|…` id, never an email (the connector also accepts a verified email). A lost or recreated tenant gives the assistant a new `sub`: update the connector's allowed account then. Auth0 stores emails lowercased, so create the Actual user lowercased.
+- **Sign-ups off in three places.** The database connection's "Disable Sign Ups" (the public signup API stays callable unless it is set), the social connections (a new tenant may ship a Google dev-key connection; disable them), and the connections enabled per application (check both applications). Delete the tenant's Default App. Probe the signup API rather than only reading the user list, and read the user list immediately before enforcement is turned on.
+- **The window reopens** after `disable-openid.js`, a pre-switch restore or a recreated tenant, and then both tenant users are candidate claimants. Block the assistant's account in Auth0 until Ken's first sign-in is done and verified.
+- **Break-glass is time-boxed.** While recovery runs with password login on, limit the time; the closing step is to re-apply `ACTUAL_ALLOWED_LOGIN_METHODS=openid` and `ACTUAL_OPENID_ENFORCE=true` and re-mint the assistant's token.
+- **Cost.** The two extra pieces are one user and one application inside a tenant Ken already pays for; a second tenant for the sync server (alternative b) would need a second tenant per environment, and a second admin place. Whether Ken's plan includes the required MFA and passkeys is unchecked and belongs to sc-2217's checklist.
+
+Options weighed, and why they lost:
+- **(b) a separate tenant for the sync server.** Better only in that the connector tenant stays "one user". It doubles the tenants, secrets and admin places for no change in what an agent can reach (no agent has admin in either), and the `sub` allow-list already makes the shared tenant safe. Rejected.
+- **(c) a different provider for the sync server (Google or another).** Two providers, two sets of recovery and 2FA to keep agent-safe, and a personal Google account in the loop. Rejected.
+- **One application for both.** The two clients need different callbacks, authentication methods and revocation; a shared secret would tie the connector's rotation to the sync server's. Rejected.
+
+Auth0 behaviour not yet proven (task 9.1, sc-2274): discovery, the Basic or Post setting, `email` as the stored user name, refusal of an unlisted user, and that no sign-up path exists.
 
 ## Risks / Trade-offs
 
 - **No server read-only.** Mitigations: the encryption key held only by Ken and the connector, short revocation, the access log.
-- **Identity provider outage locks Ken out.** Recovery is decision 12, rehearsed in sc-2042; it needs a template change, so it is a production change.
+- **Auth0 outage or a lost tenant locks Ken out of new sign-ins.** Recovery is decision 12, rehearsed in sc-2042; it needs a template change, so it is a production change.
 - **Whoever can start a container without the two settings has password login.** The drill container does, by design; the password row stays for as long as the database does.
 - **A BASIC user can read the user list** (`GET /admin/users` has no admin check). It holds two e-mail addresses; accepted.
 - **Long-lived token on the host.** Same exposure class as `mcp-remote`'s refresh tokens: 0400 file, revocable, rotated on schedule.
@@ -96,11 +127,11 @@ Existing sessions keep working (they are local), new sign-ins fail with `openid-
 - Deleting the password sessions ends a password-issued token. Proven.
 - A post-switch restore keeps the password refused and the sessions intact; a pre-switch restore keeps the password **accepted** until the switch is re-applied offline. The drill signs in with the password row. Proven.
 - The promote health check signs in to nothing. Proven by reading `health.py` and answering its URLs without a token.
-- Not proven: the web UI, real Google, `reset-password.js` on a running server (see the findings note).
+- Not proven: the web UI, Auth0 (decision 13; task 9.1), `reset-password.js` on a running server (see the findings note). The rehearsal used Dex as a stand-in, so Auth0 is still to be rehearsed before the real tenant is used.
 
 ## Decisions for Ken
 
-- The identity provider and the minted token's lifetime (configuration until then; the lifetime defaults to 30 days).
+- The minted token's lifetime (configuration; it defaults to 30 days). The identity provider is decided: Auth0 (decision 13).
 - Whether to file the optional server-enforced read-only grant.
-- Whether production sets a finite `ACTUAL_TOKEN_EXPIRATION` for everyone (decision 4; the default stays `never`; seconds for OpenID sessions, minutes for password sessions), and that the Google OAuth app stays in testing mode with only Ken and the assistant as named test users, since publishing it reopens the claim window (decision 11).
+- Whether production sets a finite `ACTUAL_TOKEN_EXPIRATION` for everyone (decision 4; the default stays `never`; seconds for OpenID sessions, minutes for password sessions), and that the production Auth0 tenant keeps exactly two users with sign-ups off, since a third user or open sign-ups reopens the claim window (decision 11).
 - The production switch and the account split (slices E and F are his).

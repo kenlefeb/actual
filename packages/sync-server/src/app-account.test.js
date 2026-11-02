@@ -490,3 +490,35 @@ describe('logout', () => {
     }
   });
 });
+
+describe('/validate', () => {
+  // The hosted MCP entry relies on this: it reads `data.permission` to refuse
+  // an ADMIN session token in production (mcp-remote, task 8.1).
+  it.each([ADMIN_ROLE, BASIC_ROLE])(
+    "returns the %s permission of the token's user",
+    async role => {
+      const userId = uuidv4();
+      const token = generateSessionToken();
+      createUser(userId, `validate-${role}-${userId}`, role);
+      createSession(userId, token);
+
+      const res = await request(app)
+        .get('/validate')
+        .set('x-actual-token', token);
+
+      expect(res.statusCode).toEqual(200);
+      expect(res.body.data.validated).toBe(true);
+      expect(res.body.data.permission).toBe(role);
+
+      getAccountDb().mutate('DELETE FROM sessions WHERE token = ?', [token]);
+      deleteUser(userId);
+    },
+  );
+
+  it('rejects an unknown token', async () => {
+    const res = await request(app)
+      .get('/validate')
+      .set('x-actual-token', 'nope');
+    expect(res.statusCode).toEqual(401);
+  });
+});

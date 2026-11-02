@@ -41,17 +41,6 @@ describe('hosted entry configuration', () => {
     expect(() => loadRemoteConfig(env(), ['--anything'])).toThrow(/Usage/);
   });
 
-  it('Production is refused', () => {
-    expect(() =>
-      loadRemoteConfig(
-        env({
-          ACTUAL_SERVER_URL: 'https://actual.example.com',
-          ACTUAL_MCP_ALLOW_PRODUCTION: '1',
-        }),
-      ),
-    ).toThrow(/staging/);
-  });
-
   it('A second budget is a second instance', () => {
     const a = loadRemoteConfig(env());
     const b = loadRemoteConfig(env({ ACTUAL_DATA_DIR: '/tmp/x/other' }));
@@ -252,5 +241,94 @@ describe('the OAuth settings', () => {
     expect(loadRemoteConfig(env()).allowedHosts).toContain(
       'mcp-staging.example.test',
     );
+  });
+});
+
+describe('Production only under an explicit guard', () => {
+  const prod = (extra: Record<string, string | undefined> = {}) =>
+    env({
+      ACTUAL_SERVER_URL: 'https://actual.example.com',
+      ACTUAL_MCP_REMOTE_PRODUCTION: '1',
+      ACTUAL_PASSWORD_FILE: undefined,
+      ACTUAL_SESSION_TOKEN_FILE: secretFile('minted-token-0123456789', 0o400),
+      ACTUAL_MCP_ALLOWED_ACCOUNT: 'auth0|65f0c0ffee',
+      ACTUAL_DATA_DIR: '/tmp/actual-mcp/production',
+      ...extra,
+    });
+
+  it('Production without the flag', () => {
+    for (const flags of [{}, { ACTUAL_MCP_ALLOW_PRODUCTION: '1' }]) {
+      expect(() =>
+        loadRemoteConfig(
+          prod({ ACTUAL_MCP_REMOTE_PRODUCTION: undefined, ...flags }),
+        ),
+      ).toThrow(/production.*ACTUAL_MCP_REMOTE_PRODUCTION=1/);
+    }
+    expect(() =>
+      loadRemoteConfig(prod({ ACTUAL_MCP_REMOTE_PRODUCTION: 'true' })),
+    ).toThrow(/ACTUAL_MCP_REMOTE_PRODUCTION=1/);
+  });
+
+  it('Production with a password', () => {
+    const password = secretFile('hunter2-secret');
+    let message = '';
+    try {
+      loadRemoteConfig(
+        prod({
+          ACTUAL_SESSION_TOKEN_FILE: undefined,
+          ACTUAL_PASSWORD_FILE: password,
+        }),
+      );
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toMatch(/session token/);
+    expect(message).not.toContain('hunter2-secret');
+    expect(message).not.toContain(password);
+  });
+
+  it('Production with an email as the account', () => {
+    expect(() =>
+      loadRemoteConfig(
+        prod({ ACTUAL_MCP_ALLOWED_ACCOUNT: 'agent@example.test' }),
+      ),
+    ).toThrow(/subject identifier/);
+  });
+
+  it('Production with another data directory', () => {
+    expect(() =>
+      loadRemoteConfig(prod({ ACTUAL_DATA_DIR: '/tmp/actual-mcp/other' })),
+    ).toThrow(/production-remote/);
+  });
+
+  it('Production with the guard met', () => {
+    const config = loadRemoteConfig(prod());
+    expect(config.env).toBe('production');
+    expect(config.production).toBe(true);
+    expect(config.writes).toBe(false);
+    expect(config.dataDir).toBe('/tmp/actual-mcp/production-remote');
+    expect(config.sessionToken).toBe('minted-token-0123456789');
+    expect(config.password).toBeUndefined();
+  });
+
+  it('Production writes stay impossible', () => {
+    expect(() => loadRemoteConfig(prod(), ['--writes'])).toThrow(
+      /read-only.*--writes/,
+    );
+  });
+
+  it('Staging is not production', () => {
+    expect(loadRemoteConfig(env()).production).toBe(false);
+  });
+
+  it('A loopback label with a public listener', () => {
+    const local = {
+      ACTUAL_SERVER_URL: 'http://127.0.0.1:5006',
+      ACTUAL_MCP_PUBLIC_URL: 'https://mcp.example.test',
+    };
+    expect(() =>
+      loadRemoteConfig(env({ ...local, ACTUAL_MCP_LISTEN_HOST: '0.0.0.0' })),
+    ).toThrow(/loopback/);
+    expect(loadRemoteConfig(env(local)).listen.host).toBe('127.0.0.1');
   });
 });

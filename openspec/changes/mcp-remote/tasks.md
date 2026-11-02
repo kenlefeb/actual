@@ -53,3 +53,7 @@ Blocked on sc-2277, the go-live prerequisites (design Decision 14: sc-2278 for t
 ## 10. Production connection checklist (sc-2219)
 
 - [ ] 10.1 Write the checklist for Ken, reviewed by the Checklist Reviewer: confirm sc-2069, connect the assistant with the pre-registered client on a client already proven on staging, prove real client addresses in the access log, and record the revocation steps.
+
+## 11. Aggregate ceiling (sc-2265)
+
+- [x] 11.1 (sc-2265) Add the per-prefix aggregate ceiling (IPv4 /24, IPv6 /48; `ACTUAL_MCP_RATE_PER_PREFIX`, default 600) with tests named after "A prefix flooding from many sources", "A many-prefix flood spares a fresh source" and "One noisy source does not use up its prefix".

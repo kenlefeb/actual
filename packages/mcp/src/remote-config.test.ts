@@ -34,6 +34,17 @@ const env = (extra: Record<string, string | undefined> = {}) => ({
 });
 
 describe('hosted entry configuration', () => {
+  it('The prefix ceiling is configurable with a default', () => {
+    expect(loadRemoteConfig(env(), []).rate.perPrefix).toBe(600);
+    expect(
+      loadRemoteConfig(env({ ACTUAL_MCP_RATE_PER_PREFIX: '900' }), []).rate
+        .perPrefix,
+    ).toBe(900);
+    expect(() =>
+      loadRemoteConfig(env({ ACTUAL_MCP_RATE_PER_PREFIX: '0' }), []),
+    ).toThrow(/ACTUAL_MCP_RATE_PER_PREFIX/);
+  });
+
   it('A writes flag is refused', () => {
     expect(() => loadRemoteConfig(env(), ['--writes'])).toThrow(
       /read-only.*--writes/,

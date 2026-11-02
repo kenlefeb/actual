@@ -14,7 +14,12 @@ export type RemoteConfig = McpConfig & {
   /** Browser origins accepted when a request carries `Origin`. */
   allowedOrigins: string[];
   syncIntervalMs: number;
-  rate: { perEndpoint: number; perClient: number; windowMs: number };
+  rate: {
+    perEndpoint: number;
+    perPrefix: number;
+    perClient: number;
+    windowMs: number;
+  };
   /** Required: the hosted entry never serves without its authorization server. */
   oauth: OAuthConfig;
 };
@@ -221,6 +226,13 @@ export function loadRemoteConfig(env: Env, argv: string[] = []): RemoteConfig {
         env.ACTUAL_MCP_RATE_PER_ENDPOINT,
         120,
         'ACTUAL_MCP_RATE_PER_ENDPOINT',
+      ),
+      // Over every source in one /24 (IPv4) or /48 (IPv6), five times the
+      // per-source limit: one person's sign-in is a handful of requests.
+      perPrefix: positiveInt(
+        env.ACTUAL_MCP_RATE_PER_PREFIX,
+        600,
+        'ACTUAL_MCP_RATE_PER_PREFIX',
       ),
       perClient: positiveInt(
         env.ACTUAL_MCP_RATE_PER_CLIENT,

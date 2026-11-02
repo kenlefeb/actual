@@ -121,6 +121,17 @@ export function sourceOf(
   return normalizeAddress(last ?? '') ?? 'loopback';
 }
 
+/**
+ * The coarse group a source belongs to, for the aggregate ceiling: the /24 of
+ * an IPv4 address, the /48 of an IPv6 one (sources are already cut to a /64).
+ * Other keys (`loopback`, `unknown`) are their own group.
+ */
+export function prefixOf(source: string): string {
+  if (source.includes(':')) return source.split(':').slice(0, 3).join(':');
+  if (net.isIPv4(source)) return source.split('.').slice(0, 3).join('.');
+  return source;
+}
+
 function hostName(header: string | undefined) {
   if (!header) return '';
   // "[::1]:8787" keeps its brackets; "host:8787" loses the port.
@@ -219,6 +230,13 @@ export function createRemoteHttpServer(
     config.rate.windowMs,
     MAX_SOURCES,
   );
+  // Over all sources in one /24 or /48, per endpoint. Never a global cap: a
+  // flood from many prefixes then cannot refuse the signed-in user's sign-in.
+  const perPrefix = createLimiter(
+    config.rate.perPrefix,
+    config.rate.windowMs,
+    MAX_SOURCES,
+  );
   const perClient = createLimiter(
     config.rate.perClient,
     config.rate.windowMs,
@@ -268,6 +286,14 @@ export function createRemoteHttpServer(
     }
     if (!perEndpoint(`${rateKey}|${source}`)) {
       return refuse(res, 429, 'rate-endpoint', undefined, {
+        'retry-after': '60',
+      });
+    }
+
+    // Only requests the source limit let through count here, so one noisy
+    // source cannot use up its neighbours' share.
+    if (!perPrefix(`${rateKey}|${prefixOf(source)}`)) {
+      return refuse(res, 429, 'rate-prefix', undefined, {
         'retry-after': '60',
       });
     }

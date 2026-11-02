@@ -151,6 +151,68 @@ describe('sync-server access log', () => {
     }
   });
 
+  it('logs exactly one line when an owner deletes a file', async () => {
+    const fileId = addFile('genericAdmin');
+
+    await request(app)
+      .post('/delete-user-file')
+      .set('x-actual-token', 'valid-token')
+      .send({ fileId })
+      .expect(200);
+
+    expect(accessLines()).toEqual([
+      expect.objectContaining({
+        userId: 'genericAdmin',
+        fileId,
+        method: 'POST',
+        route: '/delete-user-file',
+        status: 200,
+      }),
+    ]);
+  });
+
+  it('logs exactly one line when a delete is denied', async () => {
+    const fileId = addFile(OTHER_USER_ID);
+
+    await request(app)
+      .post('/delete-user-file')
+      .set('x-actual-token', 'valid-token-user')
+      .send({ fileId })
+      .expect(403);
+
+    expect(accessLines()).toEqual([
+      expect.objectContaining({
+        userId: 'genericUser',
+        fileId,
+        route: '/delete-user-file',
+        status: 403,
+      }),
+    ]);
+  });
+
+  it('logs exactly one line when an upload creates a new budget', async () => {
+    const fileId = crypto.randomBytes(16).toString('hex');
+
+    await request(app)
+      .post('/upload-user-file')
+      .set('x-actual-token', 'valid-token')
+      .set('x-actual-name', 'new-budget')
+      .set('x-actual-file-id', fileId)
+      .set('x-actual-format', '2')
+      .set('Content-Type', 'application/encrypted-file')
+      .send(Buffer.from('file-body'))
+      .expect(200);
+
+    expect(accessLines()).toEqual([
+      expect.objectContaining({
+        userId: 'genericAdmin',
+        fileId,
+        route: '/upload-user-file',
+        status: 200,
+      }),
+    ]);
+  });
+
   it('writes no access line for a request that touches no budget', async () => {
     await request(app)
       .get('/list-user-files')

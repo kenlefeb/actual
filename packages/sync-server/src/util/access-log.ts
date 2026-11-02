@@ -1,6 +1,6 @@
 // Fork-only: one JSON line on stdout per request that touches a budget file.
 // Holds who, which file, which route and when; never a token, a body or
-// budget content. Registered once in app-sync.ts, fed by requireFileAccess.
+// budget content. Registered once in app-sync.ts, fed by requireFileOwner.
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 import type { NextFunction, Request, Response } from 'express';

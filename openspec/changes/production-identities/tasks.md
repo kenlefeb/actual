@@ -15,7 +15,7 @@ Each group ends with the story that ships it. Until the slice stories are filed,
 
 ## 3. Slice B: sync-server access log (sc-2033)
 
-- [x] 3.1 Add the fork log line (user id, file id, route, time; never content or a token) where `requireFileAccess` decides, with tests named after "The access log holds no content". Fork-only server work.
+- [x] 3.1 Add the fork log line (user id, file id, route, time; never content or a token) where file access is decided, with tests named after "The access log holds no content". Fork-only server work.
 - [x] 3.2 Document the daily off-host copy (Mac mini pull, 90 days) as a runbook for slice D.
 
 ## 4. Slice C: staging rehearsal of OpenID (sc-2004)

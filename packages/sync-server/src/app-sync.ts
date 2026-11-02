@@ -121,6 +121,7 @@ const verifyFileExists = (
 };
 
 function requireFileOwner(file: File, userId: string) {
+  noteFileAccess(file.id); // fork-only access log
   const isOwner = file.owner === userId;
   const isServerAdmin = isAdmin(userId);
   if (isOwner || isServerAdmin) {
@@ -130,7 +131,6 @@ function requireFileOwner(file: File, userId: string) {
 }
 
 function requireFileAccess(file: File, userId: string) {
-  noteFileAccess(file.id); // fork-only access log
   if (requireFileOwner(file, userId) === null) {
     return null;
   }
@@ -378,6 +378,7 @@ app.post('/upload-user-file', async (req, res) => {
 
   if (!currentFile) {
     // it's new
+    noteFileAccess(fileId); // fork-only access log
     const newGroupId = generateGroupId();
     groupId = newGroupId;
     filesService.set(

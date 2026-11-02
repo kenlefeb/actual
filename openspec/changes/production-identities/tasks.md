@@ -18,14 +18,14 @@ Each group ends with the story that ships it. Until the slice stories are filed,
 - [x] 3.1 Add the fork log line (user id, file id, route, time; never content or a token) where file access is decided, with tests named after "The access log holds no content". Fork-only server work.
 - [x] 3.2 Document the daily off-host copy (Mac mini pull, 90 days) as a runbook for slice D.
 
-## 4. Slice C: staging rehearsal of OpenID (sc-2004)
+## 4. Slice C: staging rehearsal of OpenID (sc-2042)
 
-Needs Ken's identity-provider choice. The staging half of sc-1555.
+Needs Ken's identity-provider choice. The staging half of sc-1555. Run on a throwaway local instance with Dex standing in for Google; the record is `rehearsal-findings.md`. The real Google client is still Ken's step.
 
-- [ ] 4.1 On a throwaway staging instance: OpenID on, `ACTUAL_ALLOWED_LOGIN_METHODS=openid`, `ACTUAL_OPENID_ENFORCE=true`; an ADMIN and a BASIC user; one budget shared. Record that the old password is refused ("The shared password no longer works") and that the BASIC user sees only the shared budget ("An unshared budget is invisible").
-- [ ] 4.2 Prove headless sign-in with `@actual-app/api` `sessionToken` as the BASIC user, the token's lifetime, whether `token_expiration` is server-wide (if so, the raise-mint-restore procedure leaves a new ADMIN session at the default: "Minting does not lengthen Ken's sessions"), and that `enabled = 0` ends it ("Staging proves the sign-in first", "Disabling the user ends the token").
-- [ ] 4.3 Rehearse the restore drill and a snapshot restore (post-switch and pre-switch) onto an OpenID instance, and list every other use of the production password found (promote health check included) in the design's table ("A restore under OpenID", "A pre-switch snapshot is restored").
-- [ ] 4.4 Rehearse the identity-provider-lost recovery (console `reset-password.js`, re-enable password login).
+- [x] 4.1 On a throwaway staging instance: OpenID on, `ACTUAL_ALLOWED_LOGIN_METHODS=openid`, `ACTUAL_OPENID_ENFORCE=true`; an ADMIN and a BASIC user; one budget shared. Record that the old password is refused ("The shared password no longer works") and that the BASIC user sees only the shared budget ("An unshared budget is invisible").
+- [x] 4.2 Prove headless sign-in with `@actual-app/api` `sessionToken` as the BASIC user, the token's lifetime, whether `token_expiration` is server-wide (if so, the raise-mint-restore procedure leaves a new ADMIN session at the default: "Minting does not lengthen Ken's sessions"), and that `enabled = 0` ends it ("Staging proves the sign-in first", "Disabling the user ends the token").
+- [x] 4.3 Rehearse the restore drill and a snapshot restore (post-switch and pre-switch) onto an OpenID instance, and list every other use of the production password found (promote health check included) in the design's table ("A restore under OpenID", "A pre-switch snapshot is restored").
+- [x] 4.4 Rehearse the identity-provider-lost recovery (console `reset-password.js`, re-enable password login).
 
 ## 5. Slice D: vault separation and the Desktop entry, Ken's gate (sc-2004)
 
@@ -37,8 +37,14 @@ Needs LOCKDOWN (sc-563) done first.
 
 ## 6. Slice E: the production switch, Ken's gate (sc-2004)
 
-- [ ] 6.1 Write the checklist for Ken: confirm LOCKDOWN is done; back up and verify a restore; sign in as Ken (ADMIN); enable OpenID with the two login settings; create the assistant (BASIC), share only the named budgets; mint the token into the connector's 0400 file; disable password login and verify it is refused; set `ACTUAL_ALLOWED_LOGIN_METHODS=openid` and `ACTUAL_OPENID_ENFORCE=true` in the root-owned compose template (not as one-off settings) and add both to the LOCKDOWN inventory and persistence check ("A template change is caught"); delete the sessions with `auth_method = 'password'` and verify none remain ("A password session from before the switch is refused"); raise `token_expiration` only for the minting and restore it before signing in as ADMIN; update `README.md`, `RESTORE.md` and `LOCKDOWN.md` for OpenID; then the production slice of `mcp-remote` may start ("LOCKDOWN comes first", "Production signs in only through OpenID", "The assistant is not an administrator").
+- [ ] 6.1 Write the checklist for Ken: confirm LOCKDOWN is done; back up and verify a restore; sign in as Ken (ADMIN); enable OpenID with the two login settings; create the assistant (BASIC), share only the named budgets; mint the token into the connector's 0400 file; disable password login and verify it is refused; set `ACTUAL_ALLOWED_LOGIN_METHODS=openid` and `ACTUAL_OPENID_ENFORCE=true` in the root-owned compose template (not as one-off settings) and add both to the LOCKDOWN inventory and persistence check ("A template change is caught"); delete the sessions with `auth_method = 'password'` and verify none remain ("A password session from before the switch is refused"); raise `token_expiration` only for the minting and restore it before signing in as ADMIN; update `README.md`, `RESTORE.md` and `LOCKDOWN.md` for OpenID; then the production slice of `mcp-remote` may start ("LOCKDOWN comes first", "Production signs in only through OpenID", "The assistant is not an administrator"). From the rehearsal (`rehearsal-findings.md`): the provider client is limited to the two accounts and Ken signs in first ("An unrelated identity cannot claim the server"); patch the assistant's role to BASIC after creating it; revoke through the admin route; after any restore delete all sessions and mint again ("A restore under OpenID"); the connector needs slice G first.
 
 ## 7. Slice F: the account split, Ken's gate (sc-2004)
 
 - [ ] 7.1 Set `ENABLE_CLAUDEAI_MCP_SERVERS=false` for agent sessions and list a fresh session's tools ("A fresh agent session lists no production tools"). If any connector or production entry still shows, write the checklist to move development agents to a separate Anthropic account or seat, with what each step needs from Ken.
+
+## 8. Slice G: the MCP server signs in with a session token (sc-2004)
+
+Found by the slice C rehearsal: `packages/mcp` (stdio and hosted entries) can only sign in with `ACTUAL_PASSWORD` or `ACTUAL_PASSWORD_FILE`. Needs its own story under epic 1550 from the Product Owner.
+
+- [ ] 8.1 Let both MCP entries read a session token from `ACTUAL_SESSION_TOKEN_FILE` (0400, never an environment value) and pass it to `api.init({ sessionToken })`, refusing a password and a token together; edit the `mcp-server` credentials requirement and the `mcp-remote` credential requirement in this slice; add the `packages/mcp/coverage.json` line if a handler changes. Tests first.

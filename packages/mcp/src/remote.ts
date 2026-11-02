@@ -4,12 +4,14 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 
 import { actingUserId } from './connection';
+import { OAUTH_ENDPOINTS } from './oauth';
+import type { OAuthServer } from './oauth';
 import type { RemoteConfig } from './remote-config';
 import { scrubSecrets } from './sanitize';
 import { createServer } from './server';
 import { registerSyncStatusTool } from './sync';
 
-/** Who is calling. `subject` is the OAuth subject (an id, never a token); the OAuth slice (sc-1972) supplies this hook. */
+/** Who is calling. `subject` is the OAuth subject (an id, never a token); the OAuth server supplies it. */
 export type Caller = { clientId: string; subject?: string };
 export type Authenticate = (
   req: IncomingMessage,
@@ -17,6 +19,8 @@ export type Authenticate = (
 
 export type RemoteOptions = {
   authenticate?: Authenticate;
+  /** The authorization server: its endpoints are served here and its tokens required. */
+  oauth?: OAuthServer;
   /** Receives each access record; the default writes scrubbed JSON lines to stderr. */
   log?: (record: Record<string, unknown>) => void;
 };
@@ -24,8 +28,13 @@ export type RemoteOptions = {
 const MAX_BODY_BYTES = 1_000_000;
 const LOOPBACK = ['127.0.0.1', '::1', 'localhost'];
 
-/** Endpoints with their own rate-limit counter; every other path shares "other". */
-const RATE_ENDPOINTS = ['/mcp'];
+/**
+ * Endpoints with their own rate-limit counter; every other path shares
+ * "other". Each OAuth endpoint (authorize, token, revoke, register, the
+ * sign-in callback and the two metadata documents) is listed so a flood on one
+ * cannot starve, or hide behind, another.
+ */
+const RATE_ENDPOINTS = ['/mcp', ...OAUTH_ENDPOINTS];
 
 /**
  * A fixed-window counter per key. Keys must come from a bounded set (never a
@@ -93,24 +102,12 @@ function send(
   res.end(JSON.stringify({ error: http.STATUS_CODES[status] ?? 'Error' }));
 }
 
-/**
- * The hosted entry's HTTP listener: stateless streamable HTTP on `/mcp`, with
- * Host, Origin and rate checks ahead of everything else. Read-only by
- * construction: it only ever builds the stdio entry's read tools plus
- * `get_sync_status`. Without an `authenticate` hook it refuses a non-loopback
- * address. Returns the unstarted server; the caller listens.
- */
-export function createRemoteHttpServer(
-  config: RemoteConfig,
-  { authenticate, log }: RemoteOptions = {},
+/** Builds the access recorder: scrubbed JSON lines to stderr unless `log` is set. */
+export function createRecorder(
+  config: Pick<RemoteConfig, 'secrets'>,
+  log?: RemoteOptions['log'],
 ) {
-  if (!authenticate && !LOOPBACK.includes(config.listen.host)) {
-    throw new Error(
-      'Without authentication the hosted entry listens on loopback only.',
-    );
-  }
-
-  const record = (entry: Record<string, unknown>) => {
+  return (entry: Record<string, unknown>) => {
     const full = { time: new Date().toISOString(), ...entry };
     if (log) {
       log(full);
@@ -120,6 +117,41 @@ export function createRemoteHttpServer(
       );
     }
   };
+}
+
+/**
+ * The hosted entry's HTTP listener: stateless streamable HTTP on `/mcp`, with
+ * Host, Origin and rate checks ahead of everything else. Read-only by
+ * construction: it only ever builds the stdio entry's read tools plus
+ * `get_sync_status`. Without an `authenticate` hook it refuses a non-loopback
+ * address. Returns the unstarted server; the caller listens.
+ */
+export function createRemoteHttpServer(
+  config: RemoteConfig,
+  { authenticate: customAuthenticate, oauth, log }: RemoteOptions = {},
+) {
+  const authenticate = oauth ? oauth.authenticate : customAuthenticate;
+  if (!LOOPBACK.includes(config.listen.host)) {
+    if (!authenticate) {
+      throw new Error(
+        'Without authentication the hosted entry listens on loopback only.',
+      );
+    }
+    // Beyond loopback the Host check is the DNS-rebinding defence: only the
+    // public hostname, never a loopback name or a pattern.
+    const onlyPublic = oauth
+      ? config.allowedHosts.every(h => h === oauth.publicHost)
+      : config.allowedHosts.every(
+          h => !LOOPBACK.includes(h) && h !== '[::1]' && !h.includes('*'),
+        );
+    if (config.allowedHosts.length === 0 || !onlyPublic) {
+      throw new Error(
+        'Beyond loopback the allowed hosts may name only the public hostname.',
+      );
+    }
+  }
+
+  const record = createRecorder(config, log);
   const perEndpoint = createLimiter(
     config.rate.perEndpoint,
     config.rate.windowMs,
@@ -158,11 +190,28 @@ export function createRemoteHttpServer(
       });
     }
 
+    // The authorization server's own endpoints need no token to reach.
+    if (oauth && OAUTH_ENDPOINTS.includes(endpoint)) {
+      return oauth.handle(req, res);
+    }
+
     let client = 'anonymous';
     let subject = 'anonymous';
     if (authenticate) {
       const who = await authenticate(req);
-      if (!who) return refuse(res, 401, 'unauthenticated');
+      if (!who) {
+        return refuse(
+          res,
+          401,
+          'unauthenticated',
+          undefined,
+          oauth
+            ? {
+                'www-authenticate': `Bearer resource_metadata="${oauth.resourceMetadataUrl}"`,
+              }
+            : {},
+        );
+      }
       client = who.clientId;
       subject = who.subject ?? 'unknown';
     }

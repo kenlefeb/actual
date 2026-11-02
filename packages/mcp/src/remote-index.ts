@@ -2,7 +2,8 @@ import { EventEmitter } from 'events';
 
 import { ensurePrivateDir } from './config';
 import { closeBudget, openBudget } from './connection';
-import { createRemoteHttpServer } from './remote';
+import { createOAuthServer } from './oauth';
+import { createRecorder, createRemoteHttpServer } from './remote';
 import { loadRemoteConfig } from './remote-config';
 import { registerShutdown } from './shutdown';
 import { redirectConsoleToStderr } from './stdio';
@@ -13,8 +14,14 @@ async function main() {
 
   const config = loadRemoteConfig(process.env, process.argv.slice(2));
   ensurePrivateDir(config.dataDir);
-  // Throws before anything is opened if the address is public without authentication.
-  const server = createRemoteHttpServer(config);
+  // The authorization server is always on: there is no way to serve without it.
+  // Throws before anything is opened if the address is public with loose host names.
+  const record = createRecorder(config);
+  const oauth = createOAuthServer(config.oauth, {
+    record,
+    allowedHosts: config.allowedHosts,
+  });
+  const server = createRemoteHttpServer(config, { oauth });
   await openBudget(config);
   recordSync(true); // the download is the sync at start
   const stopSync = startSyncSchedule(config.syncIntervalMs);

@@ -41,6 +41,8 @@ Scope: the hosted, read-only entry of the fork's MCP server on staging (`mcp-rem
 
 ## Residual risks accepted for staging
 
+Also accepted from the OAuth slice: the SDK compares the pre-registered client secret with `!==` (not constant time), which the per-endpoint rate limit and a 256-bit-class secret make impractical to exploit; and the upstream ID token's signature is not re-verified because it arrives directly from the provider's token endpoint over TLS (OIDC Core 3.1.3.7). A sign-in started by an attacker cannot deliver a code anywhere but the allowlisted redirect URI, where the client's own `state` check rejects it.
+
 A public endpoint to a plaintext copy of the staging budget; the shared sync-server password stored on the server; availability depending on one process. Each is acceptable for staging data and not for production.
 
 ## Revocation, in order

@@ -142,8 +142,8 @@ service-account helper). Don't write them into `.mcp.json` or `~/.claude.json`.
 
 A separate, read-only entry that serves the same read tools plus `get_sync_status` over stateless
 streamable HTTP on `POST /mcp`. The stdio entry above is unchanged and still opens no listener.
-Authentication arrives with the OAuth slice (sc-1972); until then the entry refuses to listen on
-anything but loopback. It is not deployed by this change.
+Every request needs a token from the entry's own OAuth 2.1 authorization server (below); the entry
+cannot start without it. It is not deployed by this change.
 
 - **Read-only in code.** The engine always starts read-only, no `write_` tool is registered, and
   `--writes` is a usage error. It serves staging or local only: a production host is refused, even
@@ -153,9 +153,30 @@ anything but loopback. It is not deployed by this change.
 - **Secrets in files.** `ACTUAL_PASSWORD_FILE`, optional `ACTUAL_ENCRYPTION_PASSWORD_FILE` and
   `ACTUAL_MCP_SIGNING_KEY_FILE` name files only their owner can read (mode 0600 or tighter); the
   entry refuses to start otherwise and never reads a secret from an environment value or argument.
-- **Host, Origin and rate checks.** `ACTUAL_MCP_ALLOWED_HOSTS` (the public hostname goes here),
+- **OAuth, one identity.** The entry runs the SDK's authorization router around its own provider:
+  `/authorize`, `/token`, `/revoke`, the two metadata documents and `/oauth/callback`. Sign-in goes
+  through one configured upstream provider and accepts exactly one account. Tokens: PKCE (S256)
+  only; access tokens are signed, bound to `<public url>/mcp`, scope `budget:read`, and last 15
+  minutes; refresh tokens rotate on every use (a replayed one ends its family), are revocable at
+  `/revoke`, are kept as keyed hashes in `oauth-state.json` (mode 0600) in the data directory, and the
+  family ends 30 days after the sign-in. A token is read only from `Authorization: Bearer`, never a
+  URL. Rotating the signing key (or deleting the state file) and restarting ends every token.
+  Settings, all required (no default provider is built in):
+  `ACTUAL_MCP_PUBLIC_URL` (https origin), `ACTUAL_MCP_SIGNING_KEY_FILE` (32+ characters),
+  `ACTUAL_MCP_CLIENT_ID` and `ACTUAL_MCP_CLIENT_SECRET_FILE` (the one pre-registered client; 32+ characters),
+  `ACTUAL_MCP_IDP_ISSUER`, `ACTUAL_MCP_IDP_AUTHORIZATION_URL`, `ACTUAL_MCP_IDP_TOKEN_URL`,
+  `ACTUAL_MCP_IDP_CLIENT_ID`, `ACTUAL_MCP_IDP_CLIENT_SECRET_FILE` and `ACTUAL_MCP_ALLOWED_ACCOUNT`
+  (a verified email, or the provider's stable subject). Optional: `ACTUAL_MCP_REDIRECT_URIS`
+  (comma-separated, https, exact match, never a loopback address; default `https://claude.ai/api/mcp/auth_callback`) and
+  `ACTUAL_MCP_ALLOW_DYNAMIC_REGISTRATION=1` (off by default; when on, limited to those redirects).
+  For Google the provider values are issuer `https://accounts.google.com`, authorization URL
+  `https://accounts.google.com/o/oauth2/v2/auth` and token URL `https://oauth2.googleapis.com/token`;
+  the Google client's authorized redirect URI is `<public url>/oauth/callback`.
+- **Host, Origin and rate checks.** `ACTUAL_MCP_ALLOWED_HOSTS` (the public hostname goes here; once
+  the listener is not on loopback it may name only that hostname, no loopback name or wildcard),
   `ACTUAL_MCP_ALLOWED_ORIGINS` (default none: server-to-server traffic sends no `Origin`) and
-  per-minute limits `ACTUAL_MCP_RATE_PER_ENDPOINT` and `ACTUAL_MCP_RATE_PER_CLIENT`.
+  per-minute limits `ACTUAL_MCP_RATE_PER_ENDPOINT` (a separate counter for `/mcp` and for each OAuth
+  endpoint) and `ACTUAL_MCP_RATE_PER_CLIENT`.
 - **Fresh copy.** It syncs at start and every `ACTUAL_MCP_SYNC_INTERVAL_SECONDS` (default 300),
   one sync at a time (the schedule and `sync_budget` share a lock), keeps serving the last copy when
   a sync fails, and `get_sync_status` shows the last success and whether the latest attempt failed.

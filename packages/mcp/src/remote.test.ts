@@ -265,6 +265,20 @@ describe('access is recorded without data', () => {
     expect(logged).not.toContain('Landlord');
   });
 
+  it('An audit line names its identity', async () => {
+    await start(
+      {},
+      { authenticate: () => ({ clientId: 'c1', subject: 'oauth-sub-1' }) },
+    );
+    await connect();
+    await callTool('list_payees');
+    expect(records.find(r => r.event === 'tool_call')).toMatchObject({
+      client: 'c1',
+      subject: 'oauth-sub-1',
+      user_id: 'unknown',
+    });
+  });
+
   it('Errors carry no secrets', async () => {
     await start();
     await connect();

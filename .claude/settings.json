@@ -1,4 +1,9 @@
 {
+  "deniedMcpServers": [
+    { "serverUrl": "https://*actual-mcp*" },
+    { "serverUrl": "https://*.owl-becrux.ts.net/*" },
+    { "serverName": "actual-production" }
+  ],
   "hooks": {
     "SessionStart": [
       {

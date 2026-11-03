@@ -1,5 +1,8 @@
 {
-  "disableClaudeAiConnectors": true,
+  "deniedMcpServers": [
+    { "serverUrl": "https://*actual-mcp*" },
+    { "serverUrl": "https://*.owl-becrux.ts.net/*" }
+  ],
   "hooks": {
     "SessionStart": [
       {

@@ -41,7 +41,8 @@ Needs LOCKDOWN (sc-563) done first.
 
 ## 7. Slice F: the account split, Ken's gate (sc-2004)
 
-- [x] 7.1 Deny the hosted Actual connectors by URL, and the local `actual-production` entry by name, with `deniedMcpServers` in the committed `.claude/settings.json` (not `ENABLE_CLAUDEAI_MCP_SERVERS` or `disableClaudeAiConnectors`: the first is ignored from settings `env`, the second also removes Shortcut and the other connectors agents need) and list a fresh session's tools ("A fresh agent session lists no production tools"). If any connector or production entry still shows, write the checklist to move development agents to a separate Anthropic account or seat, with what each step needs from Ken.
+- [x] 7.1 CLI sessions verified: `deniedMcpServers` in the committed `.claude/settings.json` denies the hosted Actual connectors by URL and the local `actual-production` entry by name. A fresh `claude -p` (2.1.316) lists 0 Actual connector tools while Shortcut and the other claude.ai connectors stay connected (28 of 29 remain). `ENABLE_CLAUDEAI_MCP_SERVERS` is ignored under settings `env`, and `disableClaudeAiConnectors` also removes Shortcut and the rest, so neither is used. If any connector or production entry still shows, write the checklist to move development agents to a separate Anthropic account or seat, with what each step needs from Ken.
+- [ ] 7.2 Verify from a fresh desktop-app Code session, and from a cloud session if one is available, that no Actual connector or `actual-production` tools are listed; record the result on sc-2069.
 
 ## 8. Slice G: the MCP server signs in with a session token (sc-2136)
 

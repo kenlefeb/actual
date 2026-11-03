@@ -164,7 +164,7 @@ Development agents SHALL work against staging and synthetic data only. Productio
 - **THEN** the checklist's last step destroys the restored copy and Ken checks it off
 
 ### Requirement: Agent sessions do not carry the assistant's tools
-Development agent sessions SHALL run without Ken's claude.ai connectors and without his local Claude Desktop MCP entries for production. Where Claude Code supports it, agent sessions SHALL deny the Actual connectors by URL pattern with `deniedMcpServers` in the committed project settings, leaving other connectors available; whether that is enough SHALL be verified by listing a fresh agent session's tools. If it is not enough, agents SHALL run under a separate Anthropic account or seat.
+Development agent sessions SHALL run without Ken's claude.ai connectors and without his local Claude Desktop MCP entries for production. Where Claude Code supports it, agent sessions SHALL deny the Actual connectors by URL pattern, and the local `actual-production` entry by name, with `deniedMcpServers` in the committed project settings, leaving other connectors available; whether that is enough SHALL be verified by listing a fresh agent session's tools. If it is not enough, agents SHALL run under a separate Anthropic account or seat.
 
 #### Scenario: A fresh agent session lists no production tools
 - **WHEN** a development agent session starts and lists its tools

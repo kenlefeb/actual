@@ -99,7 +99,7 @@ Both users are required to use a passkey or authenticator app. Sign-ups are off,
 - **Why not a tenant for the connector only (Ken's earlier wording: "one assistant user").** The sync server's first OpenID sign-in must be Ken's and becomes ADMIN. Ken needs an identity somewhere. Putting it in the same tenant adds one user, not a place to administer.
 - **Why two applications, not one.** The sync server and the MCP are different OAuth clients. The sync server is a confidential web client that discovers the issuer and sends the client secret with HTTP Basic (openid-client's default); its user name is the `email` claim (`preferred_username`, `login` and `id` are absent in Auth0, and `email` comes before `sub`). The MCP takes `ACTUAL_MCP_IDP_*` values, `client_secret_post`, and identifies the user by `sub`. Separate applications keep separate secrets, callbacks and revocation: rotating or deleting one does not touch the other.
 - **The MCP's allow-list still holds.** `ACTUAL_MCP_ALLOWED_ACCOUNT` is one `sub`. Ken's user can finish an Auth0 sign-in on the connector application, and the MCP then refuses him because his `sub` is not the allowed one (the check is in `packages/mcp/src/oauth.ts`, tested in sc-1972). The assistant's user can sign in to the sync server application, which is intended (it is how its token is minted). Nothing else relies on the tenant holding only one user.
-- **Sync-server settings.** `issuer` `https://<tenant-domain>/` (with the trailing slash, as for the MCP), `client_id`, `client_secret`, `server_hostname`; scope is fixed at `openid email profile`. The application's "Token Endpoint Authentication Method" must be Basic, not Auth0's default Post; the rehearsal of task 9.1 proves it.
+- **Sync-server settings.** `issuer` `https://<tenant-domain>/` (with the trailing slash, as for the MCP), `client_id`, `client_secret`, `server_hostname`; scope is fixed at `openid email profile`. The application's "Token Endpoint Authentication Method" must be Basic, not Auth0's default Post; if login fails with a token-endpoint error, switch to Post.
 - **The assistant's Actual user.** The sync server does not create users at sign-in (`userCreationMode` is not `login`), so Ken creates the assistant as an admin with `userName` equal to the assistant's Auth0 email, then patches its role to BASIC and shares the named budgets. The `userName` is the email, not the `sub`; the connector's allowed account is the `sub`. The checklist records both for the assistant.
 - **Recovery mail.** Neither user's account recovery may reach a mailbox agents read (spec: "Recovery does not reach agent-readable mail"). Ken's ADMIN identity is as exposed as the assistant's: a password-reset mail an agent can read takes the server. Both users use an address on a mailbox no agent can read and have the reset path off or pointed there; the production Auth0 checklist (sc-2217) holds the steps.
 - **Ken's credentials.** His ADMIN password, recovery codes and second factor live only where no agent can read (his Private vault or his own devices), never in "Ken & Agents" or any other agent-readable vault. The tenant admin seat is the single control point for both identities, so it uses a passkey or authenticator, has no agent-readable recovery mailbox, and leaves no machine-to-machine application or Management API token behind.
@@ -114,7 +114,7 @@ Options weighed, and why they lost:
 - **(c) a different provider for the sync server (Google or another).** Two providers, two sets of recovery and 2FA to keep agent-safe, and a personal Google account in the loop. Rejected.
 - **One application for both.** The two clients need different callbacks, authentication methods and revocation; a shared secret would tie the connector's rotation to the sync server's. Rejected.
 
-Auth0 behaviour not yet proven (task 9.1, sc-2274): discovery, the Basic or Post setting, `email` as the stored user name, refusal of an unlisted user, and that no sign-up path exists.
+Auth0 behaviour checked during the real setup, not in a rehearsal (sc-2274 cancelled): discovery, the Basic or Post setting, `email` as the stored user name, refusal of an unlisted user, and that no sign-up path exists.
 
 ## Risks / Trade-offs
 
@@ -137,7 +137,7 @@ Auth0 behaviour not yet proven (task 9.1, sc-2274): discovery, the Basic or Post
 - Deleting the password sessions ends a password-issued token. Proven.
 - A post-switch restore keeps the password refused and the sessions intact; a pre-switch restore keeps the password **accepted** until the switch is re-applied offline. The drill signs in with the password row. Proven.
 - The promote health check signs in to nothing. Proven by reading `health.py` and answering its URLs without a token.
-- Not proven: the web UI, Auth0 (decision 13; task 9.1), `reset-password.js` on a running server (see the findings note). The rehearsal used Dex as a stand-in, so Auth0 is still to be rehearsed before the real tenant is used.
+- Not proven: the web UI, Auth0 (decision 13; checked during the real setup), `reset-password.js` on a running server (see the findings note). The rehearsal used Dex as a stand-in, so Auth0 is checked on the real tenant and fixed forward (Ken, 2026-11-04); hardening is sc-2426.
 
 ## Decisions for Ken
 

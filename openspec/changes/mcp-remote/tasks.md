@@ -15,7 +15,7 @@
 
 ## 3. OAuth provider and token store (sc-1972)
 
-Ken chose Auth0 as the identity provider on 2026-11-02, superseding the Google choice (sc-1972 comment 2022), with a separate tenant per environment; the provider stays configuration.
+Ken chose Auth0 as the identity provider on 2026-11-02, superseding the Google choice (sc-1972 comment 2022), with one shared tenant for staging and production since 2026-11-04 (separate applications and users); the provider stays configuration.
 
 - [x] 3.1 Add the authorization server on the SDK router: the one identity through the configured provider, the pre-registered client, the redirect allowlist, PKCE, audience-bound short-lived tokens, hashed revocable refresh tokens and the signing key, with tests named after "Authenticated with OAuth", "Short-lived, revocable tokens", "Exactly one identity" and "Clients are registered, not open".
 
@@ -48,7 +48,7 @@ Needs Ken's answers on Funnel, the hostname and the plaintext staging copy.
 
 Blocked on sc-2277, the go-live prerequisites (design Decision 14: sc-2278 for task 6.2, sc-2265, sc-2203, sc-2069) and Ken's answer on the lockdown.
 
-- [ ] 9.1 Add the production compose file, runbook and LOCKDOWN rows (container, node, signing key, state file, client secret, tenant client secret, session token, egress rule) with the production revocation order; the egress control follows design Decision 14 (the sidecar by named destinations, the MCP process by a hostname allow-list, the node's own tailnet tag); the review checks the "Production network and exposure" and "Production prerequisites before go-live" scenarios with `docker inspect` and from-inside connection tests; the data-directory name is paired with a `docker inspect` mount check; the checklist states whether VPS snapshots include the data directory, records the image's source commit, tag and digest, and a revocation drill is rehearsed once on staging first. Security Analyst approves and Ken approves before anything is deployed.
+- [ ] 9.1 Add the production compose file, runbook and LOCKDOWN rows (container, node, signing key, state file, client secret, connector client secret, session token, egress rule) with the production revocation order; the egress control follows design Decision 14 (the sidecar by named destinations, the MCP process by a hostname allow-list, the node's own tailnet tag); the review checks the "Production network and exposure" and "Production prerequisites before go-live" scenarios with `docker inspect` and from-inside connection tests; the data-directory name is paired with a `docker inspect` mount check; the checklist states whether VPS snapshots include the data directory, records the image's source commit, tag and digest, and a revocation drill is rehearsed once on staging first. Security Analyst approves and Ken approves before anything is deployed.
 
 ## 10. Production connection checklist (sc-2219)
 

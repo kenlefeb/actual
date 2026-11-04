@@ -50,12 +50,12 @@ The production sync server SHALL run in OpenID multi-user mode with password log
 - **THEN** the check fails
 
 ### Requirement: The first sign-in is Ken's
-The identity provider SHALL be an Auth0 tenant that holds only Ken's account and the assistant's account, with sign-ups off and no social or enterprise connection enabled, so that it accepts no other identity. The first OpenID sign-in on a server with no OpenID user SHALL be Ken's, made before the server is reachable by anyone else or while `ACTUAL_OPENID_ENFORCE` is off, because with it on the server asks for no password and gives ADMIN and ownership to the first identity the provider accepts.
+The identity provider SHALL be the Auth0 tenant shared with staging, with sign-ups off and no social or enterprise connection enabled, so that no new identity can register. Staging's test users exist in the same tenant, so the production sync server SHALL admit only users in its own user list and SHALL refuse a first sign-in whose subject is not the configured administrator's. The first OpenID sign-in on a server with no OpenID user SHALL be Ken's, made before the server is reachable by anyone else or while `ACTUAL_OPENID_ENFORCE` is off, because with it on the server asks for no password and gives ADMIN and ownership to the first identity the provider accepts.
 
 #### Scenario: An unrelated identity cannot claim the server
 - **GIVEN** OpenID is enabled and no OpenID user exists
 - **WHEN** an identity that is not Ken's finishes the provider's sign-in
-- **THEN** the provider refuses it
+- **THEN** the sync server refuses it and creates no user
 
 ### Requirement: The server refuses a first sign-in that is not Ken's
 When `ACTUAL_OPENID_ADMIN_SUBJECT` is set, the sync server SHALL accept the first OpenID sign-in on a server with no OpenID user only if the provider's `sub` equals it, and SHALL otherwise refuse it and create no user. Production SHALL set it to Ken's `sub`. It needs a provider that returns a `sub`; a plain OAuth2 provider without one cannot use the backstop and is refused.

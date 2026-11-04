@@ -54,17 +54,22 @@ The hosted entry SHALL serve a `production` host only when the dedicated flag `A
 - **THEN** it exits with the usage error and serves nothing
 
 ### Requirement: Production identity
-A production instance SHALL sign users in only through an identity-provider tenant that is separate from staging's, SHALL accept exactly one account, the assistant's provider subject identifier (for Auth0, its `auth0|...` `sub`), and SHALL NOT be configured with the staging tenant, client or account. The administrator's account, which holds the budget's ADMIN role, SHALL NOT be the allowed account, and no credential of the allowed account SHALL be held by any agent.
+A production instance SHALL sign users in only through its own application (client id, secret and callbacks) in the shared Auth0 tenant (Ken's decision of 2026-11-04: one tenant for staging and production), SHALL accept exactly one account, the assistant's provider subject identifier (for Auth0, its `auth0|...` `sub`), and SHALL NOT be configured with the staging client or account. Because staging users can reach the production application at the provider, the allowed `sub` is what keeps them out. The administrator's account, which holds the budget's ADMIN role, SHALL NOT be the allowed account, and no credential of the allowed account SHALL be held by any agent.
 
 #### Scenario: The administrator signs in
 - **GIVEN** a production instance whose allowed account is the assistant's subject
-- **WHEN** the administrator's account signs in at the production tenant
+- **WHEN** the administrator's account signs in at the production application
 - **THEN** no code or token is issued
 
-#### Scenario: A staging tenant on production
-- **GIVEN** the production flag and an issuer, client id or account that equals the staging instance's
+#### Scenario: A staging client on production
+- **GIVEN** the production flag and a client id or account that equals the staging instance's
 - **WHEN** the deployment review compares the two configurations
 - **THEN** the review fails and the instance is not deployed
+
+#### Scenario: A staging user on production
+- **GIVEN** a staging test user in the shared tenant
+- **WHEN** that user finishes a sign-in at the production connector application
+- **THEN** the connector refuses it because the user's subject is not the allowed account
 
 ### Requirement: A production token is never an administrator's
 In production the hosted entry SHALL validate the session token against the sync server at start and SHALL exit with a fixed error, before it listens, unless the token's user holds exactly the BASIC permission (so ADMIN, any other permission, a missing permission, and a token that cannot be validated all exit). The guard's other conditions SHALL NOT be treated as proof of the token's privilege.
@@ -90,7 +95,7 @@ In production the hosted entry SHALL validate the session token against the sync
 - **THEN** it exits with a fixed error, so a loopback forward to a production server cannot skip the production checks
 
 ### Requirement: Production network and exposure
-A production instance SHALL run on its own Docker network reaching only the production sync server and the production identity tenant, with its own node, hostname and tailnet tag (reaching only the sync server, no inbound but Funnel), hardened as staging is, never on the host network or with `docker.sock`, a shared network or production's loopback. Its egress SHALL be limited by an enforced, reboot-proof rule using hostnames, not IP rules for the CDN-fronted tenant.
+A production instance SHALL run on its own Docker network reaching only the production sync server and the identity provider (the shared Auth0 tenant), with its own node, hostname and tailnet tag (reaching only the sync server, no inbound but Funnel), hardened as staging is, never on the host network or with `docker.sock`, a shared network or production's loopback. Its egress SHALL be limited by an enforced, reboot-proof rule using hostnames, not IP rules for the CDN-fronted tenant.
 
 #### Scenario: The network check
 - **WHEN** the deployment review runs `docker inspect` on the production container
@@ -102,7 +107,7 @@ A production instance SHALL run on its own Docker network reaching only the prod
 
 #### Scenario: Egress to anything else
 - **WHEN**, from inside the production container, a connection is opened to the internet at large, a private address, a tailnet address other than the production sync server, or the Docker bridge gateway
-- **THEN** it fails, while the production sync server and the identity provider's tenant still work
+- **THEN** it fails, while the production sync server and the identity provider still work
 
 ### Requirement: Production prerequisites before go-live
 A production instance SHALL NOT be deployed or connected until each is recorded as done: the per-source limit proven through the exposure layer (sc-2278); the aggregate ceiling (sc-2265); the egress rule (sc-2203); uid-owned secret files; the OpenID backstop and roles (`production-identities`); the account split (sc-2069); a revocation drill on staging; and the image's source commit and digest.

@@ -180,6 +180,16 @@ describe('amazon-orders-apply', () => {
     }
   });
 
+  test('Undo restores the split parent category', async () => {
+    const id = await txn({ category: 'shopping' });
+
+    await apply([{ charge: lampAndBulbs(), transactionId: id }]);
+    expect((await row(id))?.category).toBeNull();
+    await undo();
+
+    expect((await row(id))?.category).toBe('shopping');
+  });
+
   test('Rule sets the category from the note', async () => {
     await bulbRule();
     const id = await txn();

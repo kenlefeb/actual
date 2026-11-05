@@ -61,6 +61,7 @@ function review(
       totalDifference: 0,
     },
     status,
+    reason: null,
     transaction: null,
     candidates: [],
     ...fields,
@@ -82,10 +83,10 @@ const reviews: AmazonChargeReview[] = [
   review('111-0000005', 'unmatched'),
 ];
 
-function renderModal(onApplied = vi.fn()) {
+function renderModal(onApplied = vi.fn(), shown = reviews) {
   render(
     <TestProviders>
-      <ImportAmazonOrdersModal reviews={reviews} onApplied={onApplied} />
+      <ImportAmazonOrdersModal reviews={shown} onApplied={onApplied} />
     </TestProviders>,
   );
   return onApplied;
@@ -163,5 +164,60 @@ describe('ImportAmazonOrdersModal', () => {
         { charge: reviews[2].charge, transactionId: 't4' },
       ],
     });
+  });
+
+  it('shows the matches apply skipped, with their reasons, and stays open', async () => {
+    vi.mocked(send).mockResolvedValueOnce({
+      applied: ['t2'],
+      skipped: [
+        {
+          chargeId: reviews[0].charge.id,
+          transactionId: 't1',
+          reason: 'amount-changed',
+        },
+      ],
+    });
+    const onApplied = renderModal();
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Apply selected' }),
+    );
+
+    await waitFor(() => expect(onApplied).toHaveBeenCalled());
+    const skipped = await screen.findByTestId('amazon-skipped');
+    expect(within(skipped).getByText(/111-0000001/)).toBeInTheDocument();
+    expect(
+      within(skipped).getByText(/amount changed after the review/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+  });
+
+  it('a charge of $0 or less is not matched, with a reason', () => {
+    renderModal(vi.fn(), [
+      review('111-0000010', 'unmatched', { reason: 'not-a-charge' }),
+    ]);
+
+    expect(
+      within(row('111-0000010')).getByText(/\$0 or less/),
+    ).toBeInTheDocument();
+  });
+
+  it("a matched row can't be ticked while another charge holds its transaction", async () => {
+    renderModal(vi.fn(), [
+      review('111-0000001', 'matched', { transaction: transaction('t1') }),
+      review('111-0000003', 'ambiguous', {
+        candidates: [
+          transaction('t1'),
+          transaction('t4', { accountName: 'Other card' }),
+        ],
+      }),
+    ]);
+    const checkbox = within(row('111-0000001')).getByRole('checkbox');
+
+    await userEvent.click(checkbox);
+    await userEvent.click(within(row('111-0000003')).getByRole('button'));
+    await userEvent.click(await screen.findByText(/^Card ·/));
+
+    expect(checkbox).toBeDisabled();
   });
 });

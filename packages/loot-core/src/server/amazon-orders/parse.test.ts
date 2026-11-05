@@ -1,7 +1,8 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-import { parseAmazonOrders } from './parse';
+import { AMAZON_EXPORT, parseAmazonOrders } from './parse';
+import type { ExportAdapter } from './parse';
 import type { AmazonCharge } from './types';
 
 const fixture = readFileSync(
@@ -9,8 +10,11 @@ const fixture = readFileSync(
   'utf8',
 );
 
-function charges(): AmazonCharge[] {
-  const result = parseAmazonOrders(fixture);
+function charges(
+  text = fixture,
+  adapter: ExportAdapter = AMAZON_EXPORT,
+): AmazonCharge[] {
+  const result = parseAmazonOrders(text, adapter);
   if ('missing' in result) {
     throw new Error(`missing ${result.missing.join(', ')}`);
   }
@@ -86,5 +90,64 @@ describe('parseAmazonOrders', () => {
 
   test('rows without a ship date are left out', () => {
     expect(forOrder('111-0000008')).toEqual([]);
+  });
+});
+
+describe('the export adapter', () => {
+  const ALL_FIELDS = Object.values(AMAZON_EXPORT.columns).map(c => c.label);
+
+  test('a column read per unit is multiplied by the quantity', () => {
+    const perUnitTax: ExportAdapter = {
+      ...AMAZON_EXPORT,
+      columns: {
+        ...AMAZON_EXPORT.columns,
+        tax: { ...AMAZON_EXPORT.columns.tax, per: 'unit' },
+      },
+    };
+
+    const [lampAndBulbs] = charges(fixture, perUnitTax).filter(
+      c => c.orderId === '111-0000003',
+    );
+
+    expect(lampAndBulbs.items[1].tax).toBe(160);
+    expect(lampAndBulbs.amount).toBe(3320);
+  });
+
+  const header = fixture.split('\n')[0] + ',"Shipment Total"';
+  const row = (name: string, price: string, total: string) =>
+    `"111-0000020","2026-11-02","${name}","1","${price}","0","0","0","Visa - 0000","${total}"`;
+
+  test('a shipment total repeated on each row wins over the item sum', () => {
+    const text = [
+      header,
+      row('A', '10.00', '16.00'),
+      row('B', '5.00', '16.00'),
+    ];
+
+    const [charge] = charges(text.join('\n'), {
+      ...AMAZON_EXPORT,
+      shipmentTotal: { column: 'Shipment Total', per: 'shipment' },
+    });
+
+    expect(charge.amount).toBe(1600);
+    expect(charge.totalDifference).toBe(100);
+  });
+
+  test('a total given per row is summed over the shipment', () => {
+    const text = [header, row('A', '10.00', '10.50'), row('B', '5.00', '5.50')];
+
+    const [charge] = charges(text.join('\n'), {
+      ...AMAZON_EXPORT,
+      shipmentTotal: { column: 'Shipment Total', per: 'row' },
+    });
+
+    expect(charge.amount).toBe(1600);
+    expect(charge.totalDifference).toBe(100);
+  });
+
+  test('a file that is not readable CSV is refused like any non-export', () => {
+    expect(parseAmazonOrders('"Order ID,"Ship Date\n"broken')).toEqual({
+      missing: ALL_FIELDS,
+    });
   });
 });

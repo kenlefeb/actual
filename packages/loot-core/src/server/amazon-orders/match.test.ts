@@ -221,6 +221,60 @@ describe('matchAmazonCharges', () => {
     expect(reviews.map(r => r.transaction?.id)).toEqual([first, second]);
   });
 
+  test('Only candidate taken by a nearer charge', async () => {
+    const id = await txn({
+      amount: -1500,
+      date: '2026-11-03',
+      payee: await payee('Amazon'),
+    });
+
+    const [later, nearer] = await matchAmazonCharges([
+      charge('111-0000005', '2026-11-01', 1500),
+      charge('111-0000006', '2026-11-02', 1500),
+    ]);
+
+    expect(nearer.status).toBe('matched');
+    expect(nearer.transaction?.id).toBe(id);
+    expect(later.status).toBe('ambiguous');
+    expect(later.candidates.map(c => c.id)).toEqual([id]);
+  });
+
+  test('a charge whose best candidate is another transaction is no rival', async () => {
+    const amazon = await payee('Amazon');
+    const shared = await txn({
+      amount: -1500,
+      date: '2026-11-03',
+      payee: amazon,
+    });
+    const own = await txn({
+      amount: -1500,
+      date: '2026-11-02',
+      payee: amazon,
+    });
+
+    const reviews = await matchAmazonCharges([
+      charge('111-0000005', '2026-11-04', 1500),
+      charge('111-0000006', '2026-11-02', 1500),
+    ]);
+
+    expect(reviews.map(r => r.transaction?.id)).toEqual([shared, own]);
+  });
+
+  test('a charge of $0 or less is not matched, with a reason', async () => {
+    await txn({ amount: 0, date: '2026-11-03' });
+    await txn({ amount: 500, date: '2026-11-03' });
+
+    const reviews = await matchAmazonCharges([
+      charge('111-0000010', '2026-11-02', 0),
+      charge('111-0000011', '2026-11-02', -500),
+    ]);
+
+    for (const review of reviews) {
+      expect(review.status).toBe('unmatched');
+      expect(review.reason).toBe('not-a-charge');
+    }
+  });
+
   test("Paid with a card that isn't in the budget", async () => {
     const [review] = await matchAmazonCharges([
       charge('111-0000007', '2026-11-01', 6000),

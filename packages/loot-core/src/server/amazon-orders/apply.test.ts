@@ -201,6 +201,10 @@ describe('amazon-orders-apply', () => {
       'shopping',
       'shopping',
     ]);
+    // The split parent's category is cleared, as for any split
+    expect(
+      await db.first('SELECT category FROM transactions WHERE id = ?', [id]),
+    ).toEqual({ category: null });
   });
 
   test('a line no rule matches stays uncategorized when the parent was', async () => {
@@ -358,13 +362,15 @@ describe('amazon-orders-apply', () => {
     const annotated = await txn({ notes: orderMarker('111-0000099') });
     const deleted = await txn();
     await db.deleteTransaction({ id: deleted });
+    const zero = await txn({ amount: 0 });
 
-    const result = await apply(
-      [changed, parent, out, annotated, deleted, 'no-such-id'].map(id => ({
+    const result = await apply([
+      ...[changed, parent, out, annotated, deleted, 'no-such-id'].map(id => ({
         charge: lampAndBulbs(),
         transactionId: id,
       })),
-    );
+      { charge: { ...lampAndBulbs(), amount: 0 }, transactionId: zero },
+    ]);
 
     expect(result.applied).toEqual([]);
     expect(result.skipped.map(s => s.reason)).toEqual([
@@ -374,6 +380,7 @@ describe('amazon-orders-apply', () => {
       'already-itemized',
       'missing',
       'missing',
+      'not-a-charge',
     ]);
   });
 

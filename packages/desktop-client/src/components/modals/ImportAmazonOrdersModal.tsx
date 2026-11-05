@@ -8,6 +8,8 @@ import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
 import { send } from '@actual-app/core/platform/client/connection';
 import type {
+  AmazonApplyResult,
+  AmazonApplySkipReason,
   AmazonChargeReview,
   AmazonChargeStatus,
   CandidateTransaction,
@@ -57,6 +59,9 @@ export function ImportAmazonOrdersModal({
     ),
   );
   const [isApplying, setIsApplying] = useState(false);
+  const [skipped, setSkipped] = useState<AmazonApplyResult['skipped'] | null>(
+    null,
+  );
 
   const groupTitles: Record<AmazonChargeStatus, string> = {
     matched: t('Matched'),
@@ -66,6 +71,18 @@ export function ImportAmazonOrdersModal({
     'already-split': t('Already split'),
     'already-itemized': t('Already itemized'),
   };
+  const skipReasons: Record<AmazonApplySkipReason, string> = {
+    missing: t('The transaction was deleted.'),
+    'amount-changed': t('Its amount changed after the review.'),
+    split: t('It was split after the review.'),
+    transfer: t('It became a transfer.'),
+    'already-itemized': t('It was already itemized for an order.'),
+    'not-a-charge': t(
+      "The shipment comes to $0 or less, so it isn't a charge.",
+    ),
+  };
+  const orderIdOf = (chargeId: string) =>
+    reviews.find(r => r.charge.id === chargeId)?.charge.orderId ?? chargeId;
   const usedIds = new Set(Object.values(chosen));
 
   function toggle(chargeId: string, transactionId: string | null) {
@@ -79,13 +96,18 @@ export function ImportAmazonOrdersModal({
   async function onApply(close: () => void) {
     setIsApplying(true);
     try {
-      await send('amazon-orders-apply', {
+      const result = await send('amazon-orders-apply', {
         matches: reviews
           .filter(r => chosen[r.charge.id])
           .map(r => ({ charge: r.charge, transactionId: chosen[r.charge.id] })),
       });
       onApplied?.();
-      close();
+      if (result.skipped.length > 0) {
+        // Stay open so the user sees what wasn't itemized, and why
+        setSkipped(result.skipped);
+      } else {
+        close();
+      }
     } finally {
       setIsApplying(false);
     }
@@ -135,6 +157,7 @@ export function ImportAmazonOrdersModal({
               orderId: charge.orderId,
             })}
             checked={!!chosen[charge.id]}
+            disabled={!chosen[charge.id] && usedIds.has(review.transaction.id)}
             onChange={e =>
               toggle(
                 charge.id,
@@ -151,6 +174,13 @@ export function ImportAmazonOrdersModal({
             <FinancialText>{format(-charge.amount, 'financial')}</FinancialText>
           </View>
           {review.transaction && renderTransaction(review.transaction)}
+          {review.reason === 'not-a-charge' && (
+            <Text style={{ color: theme.pageTextSubdued }}>
+              <Trans>
+                The shipment comes to $0 or less, so it isn't a charge.
+              </Trans>
+            </Text>
+          )}
           {review.status === 'ambiguous' && (
             <Select
               aria-label={t('Choose the transaction for order {{orderId}}', {
@@ -185,41 +215,64 @@ export function ImportAmazonOrdersModal({
             title={<ModalTitle title={t('Import Amazon orders')} />}
             rightContent={<ModalCloseButton onPress={() => state.close()} />}
           />
-          <View style={{ gap: 12, width: 640, maxWidth: '100%' }}>
-            <View style={{ maxHeight: '60vh', overflowY: 'auto', gap: 16 }}>
-              {GROUPS.map(status => {
-                const group = reviews.filter(r => r.status === status);
-                return (
-                  group.length > 0 && (
-                    <View key={status} style={{ flexShrink: 0 }}>
-                      <Text style={{ fontWeight: 700, marginBottom: 4 }}>
-                        {groupTitles[status]}
-                      </Text>
-                      {group.map(renderRow)}
-                    </View>
-                  )
-                );
-              })}
-            </View>
+          {skipped ? (
             <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'flex-end',
-                gap: 10,
-              }}
+              data-testid="amazon-skipped"
+              style={{ gap: 8, width: 640, maxWidth: '100%' }}
             >
-              <Button onPress={() => state.close()}>
-                <Trans>Cancel</Trans>
-              </Button>
-              <Button
-                variant="primary"
-                isDisabled={isApplying || usedIds.size === 0}
-                onPress={() => void onApply(() => state.close())}
+              <Text style={{ fontWeight: 700 }}>
+                <Trans>Not applied</Trans>
+              </Text>
+              {skipped.map(skip => (
+                <Text key={skip.chargeId}>
+                  {orderIdOf(skip.chargeId)}: {skipReasons[skip.reason]}
+                </Text>
+              ))}
+              <View
+                style={{ flexDirection: 'row', justifyContent: 'flex-end' }}
               >
-                <Trans>Apply selected</Trans>
-              </Button>
+                <Button onPress={() => state.close()}>
+                  <Trans>Done</Trans>
+                </Button>
+              </View>
             </View>
-          </View>
+          ) : (
+            <View style={{ gap: 12, width: 640, maxWidth: '100%' }}>
+              <View style={{ maxHeight: '60vh', overflowY: 'auto', gap: 16 }}>
+                {GROUPS.map(status => {
+                  const group = reviews.filter(r => r.status === status);
+                  return (
+                    group.length > 0 && (
+                      <View key={status} style={{ flexShrink: 0 }}>
+                        <Text style={{ fontWeight: 700, marginBottom: 4 }}>
+                          {groupTitles[status]}
+                        </Text>
+                        {group.map(renderRow)}
+                      </View>
+                    )
+                  );
+                })}
+              </View>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'flex-end',
+                  gap: 10,
+                }}
+              >
+                <Button onPress={() => state.close()}>
+                  <Trans>Cancel</Trans>
+                </Button>
+                <Button
+                  variant="primary"
+                  isDisabled={isApplying || usedIds.size === 0}
+                  onPress={() => void onApply(() => state.close())}
+                >
+                  <Trans>Apply selected</Trans>
+                </Button>
+              </View>
+            </View>
+          )}
         </>
       )}
     </Modal>

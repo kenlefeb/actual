@@ -93,6 +93,11 @@ A transaction SHALL be matched to at most one charge in a review. When two charg
 - **WHEN** the export is imported
 - **THEN** the transaction is not matched to both: both charges are shown as ambiguous with that transaction as a candidate
 
+#### Scenario: Only candidate taken by a nearer charge
+- **GIVEN** a $15.00 charge shipped November 1, listed first, a $15.00 charge shipped November 2, and one −$15.00 Amazon transaction on November 3
+- **WHEN** the export is imported
+- **THEN** the November 2 charge is matched to it, and the November 1 charge is shown as ambiguous with that transaction listed, which the user can choose only after unselecting the November 2 charge
+
 ### Requirement: Gift cards and points are not matched
 A charge from an order paid in whole or in part by a gift card, gift certificate or points SHALL be shown in the review as "Not matched: paid partly by gift card or points". It SHALL never be applied, and never left out of the review.
 
@@ -117,10 +122,10 @@ Importing and reviewing SHALL NOT change the budget. Only the user applying a ma
 - **THEN** no transaction in the budget has changed
 
 ### Requirement: Applying itemizes the transaction
-Applying a match of two or more items SHALL turn the transaction into a split with one line per item. Each line's note SHALL be the item name and quantity. The lines SHALL add up exactly to the transaction amount: tax, shipping and discounts are shared out in proportion to item prices, and any rounding remainder goes to the largest line.
+Applying a match of two or more items SHALL turn the transaction into a split with one line per item. Each line's note SHALL be the item name and quantity. The lines SHALL add up exactly to the transaction amount: tax, shipping and discounts are shared out in proportion to item prices, and any rounding remainder goes to the largest line. The split parent's category SHALL be cleared, as for any split; its former category is used only as the lines' fallback (see "Rules can categorize items").
 
 #### Scenario: Apply a two-item charge
-- **GIVEN** a −$32.40 transaction matched to a charge of a $20.00 lamp and a $10.00 bulb pack ×2, with $2.40 tax
+- **GIVEN** a −$32.40 transaction matched to a charge of a $20.00 lamp and two $5.00 bulb packs, with $2.40 tax
 - **WHEN** the user applies the match
 - **THEN** the transaction is a split with "Lamp ×1" −$21.60 and "Bulb pack ×2" −$10.80
 

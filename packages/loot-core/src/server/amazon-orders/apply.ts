@@ -55,6 +55,9 @@ function skipReason(
   if (!trans || trans.tombstone) {
     return 'missing';
   }
+  if (charge.amount <= 0) {
+    return 'not-a-charge';
+  }
   if (trans.amount !== -charge.amount) {
     return 'amount-changed';
   }
@@ -80,6 +83,7 @@ export async function applyAmazonMatches(
   const result: AmazonApplyResult = { applied: [], skipped: [] };
   const added: TransactionEntity[] = [];
   const updated: Array<Partial<TransactionEntity> & { id: string }> = [];
+  const splitParents: string[] = [];
   // A transaction may appear twice when the user picked it for two charges
   const used = new Set<string>();
 
@@ -131,6 +135,7 @@ export async function applyAmazonMatches(
         is_parent: true,
         notes: joinNotes(trans.notes, marker),
       });
+      splitParents.push(trans.id);
       categorized.forEach((line, i) => {
         added.push(
           makeChild(trans, {
@@ -148,6 +153,12 @@ export async function applyAmazonMatches(
 
   if (updated.length > 0) {
     await batchUpdateTransactions({ added, updated });
+    // As for any split, the parent has no category; the former one is only
+    // the lines' fallback. The entity type has no null category, so write it
+    // directly, inside the same undoable step.
+    await Promise.all(
+      splitParents.map(id => db.updateTransaction({ id, category: null })),
+    );
   }
   return result;
 }

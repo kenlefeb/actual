@@ -4,12 +4,16 @@
 import * as db from '#server/db';
 import * as monthUtils from '#shared/months';
 
+// A card charge posts from a day before to five days after the purchase
+// or shipment it belongs to
+export const DEFAULT_WINDOW = { daysBefore: 1, daysAfter: 5 };
+
 export type ChargeToMatch = {
   // The transaction amount to look for, signed like the transaction
   amount: number;
   date: string;
-  daysBefore: number;
-  daysAfter: number;
+  daysBefore?: number;
+  daysAfter?: number;
   // Lowercase text that, found in a payee or imported payee, ranks a
   // candidate higher. A hint never filters.
   hints: string[];
@@ -76,8 +80,14 @@ function toCandidate(row: Row): CandidateTransaction {
 
 function windowOf(charge: ChargeToMatch) {
   return {
-    from: monthUtils.subDays(charge.date, charge.daysBefore),
-    to: monthUtils.addDays(charge.date, charge.daysAfter),
+    from: monthUtils.subDays(
+      charge.date,
+      charge.daysBefore ?? DEFAULT_WINDOW.daysBefore,
+    ),
+    to: monthUtils.addDays(
+      charge.date,
+      charge.daysAfter ?? DEFAULT_WINDOW.daysAfter,
+    ),
   };
 }
 
@@ -151,9 +161,10 @@ function compare(a: RankedCandidate, b: RankedCandidate): number {
 
 /**
  * Ranks each charge's candidates, then gives each charge its best free
- * candidate in charge order. A charge whose two best candidates rank
- * equally, or that has an equal claim to the same best transaction as
- * another charge, is ambiguous, and nothing is assigned among them.
+ * candidate, strongest claim first (payee hint, then nearest date; input
+ * order breaks ties). A charge whose two best candidates rank equally, or
+ * whose best free transaction is equally the best free one of another
+ * charge, is ambiguous, and nothing is assigned among them.
  */
 export async function matchCharges(
   charges: ChargeToMatch[],
@@ -170,8 +181,14 @@ export async function matchCharges(
   }));
   const taken = new Set<string>();
   const decided = new Set<number>();
+  const bestFree = (j: number) =>
+    ranked[j].find(c => !taken.has(c.transaction.id));
+  const order = charges
+    .map((_, i) => i)
+    .filter(i => ranked[i].length > 0)
+    .sort((a, b) => compare(ranked[a][0], ranked[b][0]) || a - b);
 
-  for (let i = 0; i < charges.length; i++) {
+  for (const i of order) {
     if (decided.has(i)) {
       continue;
     }
@@ -184,18 +201,13 @@ export async function matchCharges(
     if (next && compare(best, next) === 0) {
       continue;
     }
-    const rivals = ranked
-      .map((candidates, j) =>
-        j !== i &&
-        !decided.has(j) &&
-        candidates.some(
-          c =>
-            c.transaction.id === best.transaction.id && compare(c, best) === 0,
-        )
-          ? j
-          : -1,
-      )
-      .filter(j => j !== -1);
+    const rivals = order.filter(j => {
+      const theirs = j !== i && !decided.has(j) ? bestFree(j) : undefined;
+      return (
+        theirs?.transaction.id === best.transaction.id &&
+        compare(theirs, best) === 0
+      );
+    });
     if (rivals.length > 0) {
       taken.add(best.transaction.id);
       rivals.forEach(j => decided.add(j));

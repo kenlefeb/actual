@@ -37,6 +37,8 @@ export type AmazonChargeStatus =
 export type AmazonChargeReview = {
   charge: AmazonCharge;
   status: AmazonChargeStatus;
+  // Why an unmatched charge was never searched for
+  reason: 'not-a-charge' | null;
   transaction: CandidateTransaction | null;
   candidates: CandidateTransaction[];
 };
@@ -51,7 +53,8 @@ export type AmazonApplySkipReason =
   | 'amount-changed'
   | 'split'
   | 'transfer'
-  | 'already-itemized';
+  | 'already-itemized'
+  | 'not-a-charge';
 
 export type AmazonApplyResult = {
   applied: string[];

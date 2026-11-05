@@ -96,6 +96,7 @@ import { updateNewTransactions } from '#transactions/transactionsSlice';
 
 import { AccountEmptyMessage } from './AccountEmptyMessage';
 import { AccountHeader } from './Header';
+import { importAmazonOrders } from './importAmazonOrders';
 
 type ConditionEntity = Partial<RuleConditionEntity> | TransactionFilterEntity;
 
@@ -616,40 +617,8 @@ class AccountInternal extends PureComponent<
     this.props.onSyncAndDownload(account ? account.id : accountId);
   };
 
-  onImportAmazonOrders = async () => {
-    const res = await window.Actual.openFileDialog({
-      filters: [{ name: t('Amazon order export'), extensions: ['csv'] }],
-    });
-    if (!res?.length) {
-      return;
-    }
-    const result = await send('amazon-orders-parse', { filepath: res[0] });
-    if ('error' in result) {
-      this.props.dispatch(
-        addNotification({
-          notification: {
-            type: 'error',
-            message: t(
-              "This isn't an Amazon order export. It's missing: {{fields}}.",
-              { fields: result.error.missing.join(', ') },
-            ),
-          },
-        }),
-      );
-      return;
-    }
-    this.props.dispatch(
-      pushModal({
-        modal: {
-          name: 'import-amazon-orders',
-          options: {
-            reviews: result.reviews,
-            onApplied: () => this.fetchTransactions(),
-          },
-        },
-      }),
-    );
-  };
+  onImportAmazonOrders = () =>
+    importAmazonOrders(this.props.dispatch, () => this.fetchTransactions());
 
   onImport = async () => {
     const accountId = this.props.accountId;

@@ -1,4 +1,7 @@
-import { matchCharges } from '#server/charge-matching/match-charges';
+import {
+  DEFAULT_WINDOW,
+  matchCharges,
+} from '#server/charge-matching/match-charges';
 import type { ChargeToMatch } from '#server/charge-matching/match-charges';
 import * as db from '#server/db';
 import * as monthUtils from '#shared/months';
@@ -6,16 +9,13 @@ import * as monthUtils from '#shared/months';
 import { hasAnyOrderMarker, hasOrderMarker } from './marker';
 import type { AmazonCharge, AmazonChargeReview } from './types';
 
-const DAYS_BEFORE = 1;
-const DAYS_AFTER = 5;
+const { daysBefore: DAYS_BEFORE, daysAfter: DAYS_AFTER } = DEFAULT_WINDOW;
 const HINTS = ['amazon', 'amzn'];
 
 function toChargeToMatch(charge: AmazonCharge): ChargeToMatch {
   return {
     amount: -charge.amount,
     date: charge.shipDate,
-    daysBefore: DAYS_BEFORE,
-    daysAfter: DAYS_AFTER,
     hints: HINTS,
   };
 }
@@ -65,6 +65,9 @@ export async function matchAmazonCharges(
     );
 
   const statuses = charges.map(charge => {
+    if (charge.amount <= 0) {
+      return 'not-a-charge' as const;
+    }
     const rows = inWindow(charge);
     if (rows.some(row => hasOrderMarker(row.notes, charge.orderId))) {
       return 'already-itemized' as const;
@@ -86,13 +89,29 @@ export async function matchAmazonCharges(
   let next = 0;
   return charges.map((charge, i) => {
     const status = statuses[i];
+    if (status === 'not-a-charge') {
+      return {
+        charge,
+        status: 'unmatched' as const,
+        reason: status,
+        transaction: null,
+        candidates: [],
+      };
+    }
     if (status !== null) {
-      return { charge, status, transaction: null, candidates: [] };
+      return {
+        charge,
+        status,
+        reason: null,
+        transaction: null,
+        candidates: [],
+      };
     }
     const match = matches[next++];
     return {
       charge,
       status: match.status,
+      reason: null,
       transaction: match.transaction,
       candidates:
         match.status === 'ambiguous'

@@ -10,7 +10,8 @@
 #     --raw-field/--input, which make gh send a POST) to repo settings, branch
 #     protection, rulesets, collaborators, deploy keys, hooks, environments,
 #     transfer, Actions secrets/variables/permissions, Dependabot secrets,
-#     vulnerability-alerts and automated-security-fixes;
+#     vulnerability-alerts, automated-security-fixes and workflow-run deployment
+#     approvals (pending_deployments, deployment_protection_rule, approve);
 #   - `gh api graphql` mentioning a branch-protection, ruleset or
 #     updateRepository mutation;
 #   - `gh repo edit|delete|rename|archive|unarchive`, `gh repo deploy-key
@@ -28,7 +29,7 @@
 require_jq
 
 block() {
-  echo "Blocked: agents must not change repo admin settings (branch protection, rulesets, secrets, deploy keys, hooks, repo settings). $1 Post the exact command on the story for Security Analyst sign-off; Ken runs it himself in his own terminal or the GitHub web UI. (scripts/agent-hooks/no-repo-admin.sh)" >&2
+  echo "Blocked: agents must not change repo admin settings or approve deployments (branch protection, rulesets, secrets, deploy keys, hooks, repo settings, environment approvals). $1 Post the exact command on the story for Security Analyst sign-off; Ken runs it himself in his own terminal or the GitHub web UI. (scripts/agent-hooks/no-repo-admin.sh)" >&2
   exit 2
 }
 
@@ -52,7 +53,10 @@ is_admin_path() {
     branches)
       shift 4
       for c; do [ "$c" = protection ] && return 0; done ;;
-    actions) case "${5:-}" in secrets | variables | permissions) return 0 ;; esac ;;
+    actions)
+      case "${5:-}" in secrets | variables | permissions) return 0 ;; esac
+      # Approving a deployment is Ken's production gate (sc-2437); agents share his identity.
+      [ "${5:-}" = runs ] && case "${7:-}" in pending_deployments | deployment_protection_rule | approve) return 0 ;; esac ;;
     dependabot) [ "${5:-}" = secrets ] && return 0 ;;
   esac
   return 1
@@ -92,6 +96,8 @@ check_api() {
       *createBranchProtectionRule* | *updateBranchProtectionRule* | *deleteBranchProtectionRule* | \
         *createRepositoryRuleset* | *updateRepositoryRuleset* | *deleteRepositoryRuleset* | *updateRepository*)
         block "This GraphQL mutation changes branch protection or repo settings." ;;
+      *approveDeployments* | *rejectDeployments*)
+        block "This GraphQL mutation approves or rejects a deployment (Ken's production gate, sc-2437)." ;;
     esac
     return 0
   fi

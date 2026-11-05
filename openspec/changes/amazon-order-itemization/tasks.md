@@ -2,10 +2,11 @@
 
 ## 1. Export layout and fixture
 
-- [ ] 1.1 Confirm the order export's layout against a real export Ken provides, used only on Ken's machine or a local worktree and never committed.
-  - Record the column that carries each field the spec needs: order id, ship or charge date, item name, quantity, item price, tax, shipping, discounts and payment method.
-  - Record the payment-method words used for gift cards, gift certificates and points, and whether a per-shipment total exists.
-  - Write these into the adapter table in design.md decision 1. Verify that design.md names every needed field, and that no spec scenario names a column.
+- [ ] 1.1 Confirm the order export's layout from the header row and the masked payment-method words that Ken pastes on sc-926. A Developer never reads, asks for or handles the real CSV: Ken keeps it on his Mac and deletes it afterwards.
+  - Ken pastes the output of `head -1` on the order-history CSV (column names only), and the output of the Tester-reviewed command on sc-926 that prints each distinct payment-method value with every digit replaced by `#` and nothing else.
+  - From those, record the column that carries each field the spec needs: order id, ship or charge date, item name, quantity, item price, tax, shipping, discounts and payment method.
+  - Record the payment-method words used for gift cards, gift certificates and points, and whether a per-shipment total column exists.
+  - Write these into the adapter table in design.md decision 1. Verify that design.md names every needed field, and that no spec scenario names a column. If the pasted lines contain anything that looks like an order id, name or address, stop and tell the Director instead of using it.
 - [ ] 1.2 Add a small synthetic fixture under `packages/loot-core/src/server/amazon-orders/__fixtures__/`, in the confirmed layout, with fictional orders.
   - It covers a split shipment, a two-item charge with tax, a rounding case, a gift-card order, two same-amount same-day orders, and a charge with no matching transaction.
   - Verify that it contains no real order ids, names or addresses. The Tester reviews it for that.

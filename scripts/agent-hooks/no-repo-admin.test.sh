@@ -39,6 +39,7 @@ cmd 2 'blocked 16: timeout wrapper' 'timeout 30 gh api -X DELETE repos/kenlefeb/
 cmd 2 'blocked 17: nice wrapper' 'nice gh repo edit kenlefeb/actual --visibility public'
 cmd 2 'blocked 19: approve a pending deployment' 'gh api -X POST repos/kenlefeb/actual-hosting/actions/runs/123/pending_deployments -F "environment_ids[]=1" -f state=approved -f comment=ok'
 cmd 2 'blocked 20: approve via --input' 'gh api repos/kenlefeb/actual-hosting/actions/runs/123/pending_deployments --input body.json'
+cmd 2 'blocked 21: graphql deployment approval' "gh api graphql -f query='mutation{approveDeployments(input:{workflowRunId:\"x\",environmentIds:[\"y\"]}){clientMutationId}}'"
 cmd 0 'allowed: read pending deployments' 'gh api repos/kenlefeb/actual-hosting/actions/runs/123/pending_deployments'
 cmd 2 'blocked 18: absolute path to gh' '/opt/homebrew/bin/gh api -X DELETE repos/kenlefeb/actual/branches/development/protection'
 

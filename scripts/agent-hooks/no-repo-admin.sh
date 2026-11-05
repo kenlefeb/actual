@@ -96,6 +96,8 @@ check_api() {
       *createBranchProtectionRule* | *updateBranchProtectionRule* | *deleteBranchProtectionRule* | \
         *createRepositoryRuleset* | *updateRepositoryRuleset* | *deleteRepositoryRuleset* | *updateRepository*)
         block "This GraphQL mutation changes branch protection or repo settings." ;;
+      *approveDeployments* | *rejectDeployments*)
+        block "This GraphQL mutation approves or rejects a deployment (Ken's production gate, sc-2437)." ;;
     esac
     return 0
   fi

@@ -121,5 +121,11 @@
   },
   "setBudgetAmount": {
     "tool": "write_set_budget_amount"
+  },
+  "amazon-orders-parse": {
+    "skip": "Reads a file the user picked in the app (sc-926); the export stays on the device"
+  },
+  "amazon-orders-apply": {
+    "skip": "Not in the v1 write set (mcp-server \"Write tools\"): Amazon matches are reviewed and applied in the app (sc-926)"
   }
 }

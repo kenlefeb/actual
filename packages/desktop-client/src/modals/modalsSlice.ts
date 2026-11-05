@@ -1,4 +1,5 @@
 import { send } from '@actual-app/core/platform/client/connection';
+import type { AmazonChargeReview } from '@actual-app/core/server/amazon-orders/types';
 import type { IntegerAmount } from '@actual-app/core/shared/util';
 import type { File } from '@actual-app/core/types/file';
 import type {
@@ -49,6 +50,13 @@ export type Modal =
         filename: string;
         categories?: { list: CategoryEntity[]; grouped: CategoryGroupEntity[] };
         onImported: (didChange: boolean) => void;
+      };
+    }
+  | {
+      name: 'import-amazon-orders';
+      options: {
+        reviews: AmazonChargeReview[];
+        onApplied?: () => void;
       };
     }
   | {

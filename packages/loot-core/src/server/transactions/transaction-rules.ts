@@ -459,6 +459,51 @@ export async function runRules(
   return result;
 }
 
+/**
+ * The category the rules would set on a transaction, without running any
+ * action: no payee is created and nothing changes. Schedules' own rules are
+ * skipped. Only a plain "set category" counts; the last matching one wins.
+ * Conditions see the transaction as given, so a rule that depends on another
+ * rule's payee rename won't fire.
+ */
+export async function getRuleCategory(
+  trans: Pick<TransactionEntity, 'account' | 'date' | 'amount' | 'notes'> &
+    Partial<TransactionEntity>,
+): Promise<string | null> {
+  const normalized = { payee: null, category: null, ...trans };
+  const prepared = await prepareTransactionForRules(
+    normalized as TransactionEntity,
+    null,
+    { includeBalance: false },
+  );
+  const scheduleRuleIds = new Set(await getAllRuleIdsFromSchedules(''));
+  const rules = rankRules(
+    fastSetMerge(
+      firstcharIndexer.getApplicableRules(normalized),
+      payeeIndexer.getApplicableRules(normalized),
+    ),
+  );
+
+  let category: string | null = null;
+  for (const rule of rules) {
+    if (scheduleRuleIds.has(rule.id) || !rule.evalConditions(prepared)) {
+      continue;
+    }
+    for (const action of rule.actions) {
+      if (
+        action.op === 'set' &&
+        action.field === 'category' &&
+        !action.options?.splitIndex &&
+        !action.options?.template &&
+        !action.options?.formula
+      ) {
+        category = action.value;
+      }
+    }
+  }
+  return category;
+}
+
 function conditionSpecialCases(cond: Condition | null): Condition | null {
   if (!cond) {
     return cond;

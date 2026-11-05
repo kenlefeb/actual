@@ -616,6 +616,41 @@ class AccountInternal extends PureComponent<
     this.props.onSyncAndDownload(account ? account.id : accountId);
   };
 
+  onImportAmazonOrders = async () => {
+    const res = await window.Actual.openFileDialog({
+      filters: [{ name: t('Amazon order export'), extensions: ['csv'] }],
+    });
+    if (!res?.length) {
+      return;
+    }
+    const result = await send('amazon-orders-parse', { filepath: res[0] });
+    if ('error' in result) {
+      this.props.dispatch(
+        addNotification({
+          notification: {
+            type: 'error',
+            message: t(
+              "This isn't an Amazon order export. It's missing: {{fields}}.",
+              { fields: result.error.missing.join(', ') },
+            ),
+          },
+        }),
+      );
+      return;
+    }
+    this.props.dispatch(
+      pushModal({
+        modal: {
+          name: 'import-amazon-orders',
+          options: {
+            reviews: result.reviews,
+            onApplied: () => this.fetchTransactions(),
+          },
+        },
+      }),
+    );
+  };
+
   onImport = async () => {
     const accountId = this.props.accountId;
     const account = this.props.accounts.find(acct => acct.id === accountId);
@@ -834,7 +869,8 @@ class AccountInternal extends PureComponent<
       | 'manage-columns'
       | 'account-group'
       | 'business-days'
-      | 'move-on-budget',
+      | 'move-on-budget'
+      | 'import-amazon-orders',
   ) => {
     const accountId = this.props.accountId!;
     const account = this.props.accounts.find(
@@ -842,6 +878,9 @@ class AccountInternal extends PureComponent<
     )!;
 
     switch (item) {
+      case 'import-amazon-orders':
+        void this.onImportAmazonOrders();
+        break;
       case 'link':
         this.props.dispatch(
           pushModal({

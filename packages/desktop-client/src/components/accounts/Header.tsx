@@ -52,6 +52,7 @@ import { useSyncedPref } from '#hooks/useSyncedPref';
 import { useSyncServerStatus } from '#hooks/useSyncServerStatus';
 
 import type { TableRef } from './Account';
+import { AllAccountsMenu } from './AllAccountsMenu';
 import { Balances } from './Balance';
 import { BalanceHistoryGraph } from './BalanceHistoryGraph';
 import { ReconcileMenu, ReconcilingMessage } from './Reconcile';
@@ -525,36 +526,11 @@ export function AccountHeader({
 
                 <Popover>
                   <Dialog>
-                    <Menu
-                      slot="close"
+                    <AllAccountsMenu
+                      isSorted={isSorted}
+                      showNetWorthChart={showNetWorthChart}
+                      showReconciled={showReconciled}
                       onMenuSelect={onMenuSelect}
-                      items={[
-                        ...(isSorted
-                          ? [
-                              {
-                                name: 'remove-sorting',
-                                text: t('Remove all sorting'),
-                              } as const,
-                            ]
-                          : []),
-                        { name: 'export', text: t('Export') },
-                        {
-                          name: 'toggle-net-worth-chart',
-                          text: showNetWorthChart
-                            ? t('Hide balance chart')
-                            : t('Show balance chart'),
-                        },
-                        {
-                          name: 'toggle-reconciled',
-                          text: showReconciled
-                            ? t('Hide reconciled transactions')
-                            : t('Show reconciled transactions'),
-                        },
-                        {
-                          name: 'manage-columns',
-                          text: t('Manage table columns'),
-                        },
-                      ]}
                     />
                   </Dialog>
                 </Popover>
@@ -742,7 +718,8 @@ type AccountMenuProps = {
       | 'manage-columns'
       | 'account-group'
       | 'business-days'
-      | 'move-on-budget',
+      | 'move-on-budget'
+      | 'import-amazon-orders',
   ) => void;
 };
 

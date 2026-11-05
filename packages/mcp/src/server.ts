@@ -99,7 +99,7 @@ export function createServer(
   registerAccountTools(tool);
   registerExtra?.(tool);
 
-  // Write tools exist only on the `--writes` entry (tools/write/*)
+  // Write tools: the stdio `--writes` entry and the hosted entry (tools/write/*)
   if (auditLog) {
     registerWriteTools(
       register(WRITE_NOTE),

@@ -211,10 +211,9 @@ export function createRecorder(
 
 /**
  * The hosted entry's HTTP listener: stateless streamable HTTP on `/mcp`, with
- * Host, Origin and rate checks ahead of everything else. Read-only by
- * construction: it only ever builds the stdio entry's read tools plus
- * `get_sync_status`. Without an `authenticate` hook it refuses a non-loopback
- * address. Returns the unstarted server; the caller listens.
+ * Host, Origin and rate checks ahead of everything else. It serves the stdio
+ * `--writes` entry's tools plus `get_sync_status`. Without an `authenticate`
+ * hook it refuses a non-loopback address. Returns the unstarted server; the caller listens.
  */
 export function createRemoteHttpServer(
   config: RemoteConfig,
@@ -366,6 +365,8 @@ export function createRemoteHttpServer(
     // Stateless: a fresh server and transport per request, nothing kept.
     const mcp = createServer(config.secrets, {
       registerExtra: registerSyncStatusTool,
+      auditLog: config.auditLog,
+      identity: { user_id: actingUserId(), subject },
       // Name and outcome only: arguments and results can hold budget data.
       onToolCall: (tool, status) =>
         record({

@@ -17,9 +17,7 @@ async function main() {
   if (config.production) {
     // Before the data directory, sign-in or the listener.
     await assertTokenNotAdmin(config);
-    process.stderr.write(
-      'actual-mcp-http: production mode is on (read-only).\n',
-    );
+    process.stderr.write('actual-mcp-http: production mode is on.\n');
   }
   ensurePrivateDir(config.dataDir);
   // The authorization server is always on: there is no way to serve without it.

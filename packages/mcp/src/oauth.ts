@@ -585,7 +585,7 @@ export function createOAuthServer(
       issuerUrl: publicUrl,
       resourceServerUrl: resource,
       scopesSupported: [SCOPE],
-      resourceName: 'Actual Budget (read-only)',
+      resourceName: 'Actual Budget',
       authorizationOptions: noLimit,
       tokenOptions: noLimit,
       revocationOptions: noLimit,

@@ -42,9 +42,9 @@ Fork read tools (all take ids, never names):
 
 ## Write tools
 
-Write tools exist only on a separate server entry started with `actual-mcp --writes`, against a
-`staging` or `local` host (`--writes` with a production host is a startup error). Their names start
-with `write_`, so a client can auto-allow reads and prompt on every write.
+Write tools exist on a separate server entry started with `actual-mcp --writes`, and on the hosted
+entry (below). Their names start with `write_`, so a client can auto-allow reads and prompt on every
+write.
 
 | Tool                        | Changes                                                                |
 | --------------------------- | ---------------------------------------------------------------------- |
@@ -121,11 +121,11 @@ any argument other than `--writes` is a usage error.
 | `ACTUAL_SYNC_ID`              | yes      | Budget sync ID                                                                                       |
 | `ACTUAL_ENCRYPTION_PASSWORD`  | no       | End-to-end encryption key                                                                            |
 | `ACTUAL_DATA_DIR`             | no       | Default `~/Library/Application Support/actual-mcp/<env>` (`<env>-writes` with `--writes`), mode 0700 |
-| `ACTUAL_MCP_ALLOW_PRODUCTION` | no       | `1` to allow any other host. Still read-only.                                                        |
+| `ACTUAL_MCP_ALLOW_PRODUCTION` | no       | `1` to allow any other host.                                                                         |
 
 The host decides the environment: `actual-staging.owl-becrux.ts.net` is `staging`, `localhost`,
 `127.0.0.1` and `[::1]` are `local`, anything else is `production` and refused unless
-`ACTUAL_MCP_ALLOW_PRODUCTION=1`. `--writes` with a production host is an error.
+`ACTUAL_MCP_ALLOW_PRODUCTION=1`.
 
 The data directory is refused if it is looser than 0700 or under a synced or vault location (Dropbox, iCloud, Obsidian, `Library/CloudStorage`, `~/Documents`, `~/Desktop`), checked after resolving symlinks.
 
@@ -141,7 +141,7 @@ service-account helper). Don't write them into `.mcp.json` or `~/.claude.json`.
 
 ## Hosted entry (`actual-mcp-http`)
 
-A separate, read-only entry that serves the same read tools plus `get_sync_status` over stateless
+A separate, read-write entry that serves the `--writes` entry's tools plus `get_sync_status` over stateless
 streamable HTTP on `POST /mcp`. The stdio entry above is unchanged and still opens no listener.
 Every request needs a token from the entry's own OAuth 2.1 authorization server (below); the entry
 cannot start without it. It is not deployed by this change.
@@ -150,12 +150,13 @@ It serves a production host only with `ACTUAL_MCP_REMOTE_PRODUCTION=1` (the stdi
 `ACTUAL_MCP_ALLOW_PRODUCTION` does not count), a session token file (a password is refused), a
 provider subject identifier (no `@`) as the allowed account and the `production-remote` data
 directory. At start it validates the token against the sync server and exits if its user is an
-administrator or it cannot be validated. It stays read-only, and a loopback server needs a loopback
-listener.
+administrator or it cannot be validated. A loopback server needs a loopback listener.
 
-- **Read-only in code.** The engine always starts read-only, no `write_` tool is registered, and
-  `--writes` is a usage error. A production host is served only under the production guard
-  above; `ACTUAL_MCP_ALLOW_PRODUCTION=1` never lifts it.
+- **Read-write, production included.** The engine runs as the app does and the `write_` tools are
+  registered, with the same limits as the `--writes` entry. Each write is logged first to
+  `<data dir>.audit.jsonl` (`production-remote.audit.jsonl` on production) with the caller's OAuth
+  subject. The entry takes no arguments, so `--writes` is a usage error. A production host is
+  served only under the production guard above; `ACTUAL_MCP_ALLOW_PRODUCTION=1` never lifts it.
 - **One budget per instance.** The data directory is the configured one (or the default
   `actual-mcp/<env>`) with `-remote` added, mode 0700.
 - **Secrets in files.** `ACTUAL_PASSWORD_FILE` (or, instead of it, `ACTUAL_SESSION_TOKEN_FILE`,

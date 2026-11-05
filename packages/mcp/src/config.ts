@@ -53,7 +53,7 @@ export type McpConfig = {
   encryptionPassword?: string;
   dataDir: string;
   env: EnvLabel;
-  /** `--writes`: register the write tools (never for production). */
+  /** Register the write tools: `--writes` on stdio, always on the hosted entry. */
   writes: boolean;
   /** Write audit log, beside the data directory: `<dataDir>.audit.jsonl`. */
   auditLog: string;
@@ -168,11 +168,8 @@ export function loadConfig(env: Env, argv: string[] = []): McpConfig {
   if (label === 'production' && env.ACTUAL_MCP_ALLOW_PRODUCTION !== '1') {
     throw new Error(
       `Refusing to connect to ${host}: it is not localhost or the staging host. ` +
-        'Set ACTUAL_MCP_ALLOW_PRODUCTION=1 to allow it (read-only).',
+        'Set ACTUAL_MCP_ALLOW_PRODUCTION=1 to allow it.',
     );
-  }
-  if (label === 'production' && argv.includes('--writes')) {
-    throw new Error('--writes is not allowed for a production host.');
   }
   // The writes entry has its own copy, so a write that ends before it syncs
   // never sits in the copy a read entry opens and syncs.

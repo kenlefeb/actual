@@ -20,6 +20,38 @@ The server SHALL label the environment from the server URL's host: `actual-stagi
 
 ## MODIFIED Requirements
 
+### Requirement: Read-only unless writes are turned on
+The server SHALL offer read tools only unless it is the stdio entry started with `--writes` or the hosted entry. Write tools SHALL carry the prefix `write_`, and SHALL NOT be registered at all on the stdio entry without the flag.
+
+#### Scenario: Reads only by default
+- **WHEN** a client lists the tools of a server started without `--writes`
+- **THEN** no tool name starts with `write_`
+
+#### Scenario: Writes on a separate entry
+- **WHEN** a client lists the tools of a server started with `--writes` on a `staging` host
+- **THEN** it lists the read tools and the `write_` tools
+
+#### Scenario: The writes entry runs the engine normally
+- **WHEN** the server is started with `--writes` on a `staging` host
+- **THEN** the budget is opened without `readOnly`, so the engine keeps its normal behavior there, while a server started without `--writes` opens it with `readOnly`
+
+### Requirement: Core read tools
+The server SHALL offer read tools for accounts and balances, category groups and categories, payees, transactions, budget months, schedules, rules, a read-only ActualQL query and `sync_budget`, and no write tools unless it is the stdio entry started with `--writes` or the hosted entry. The read entry SHALL open the budget read-only (`api-read-only-mode`), so a sync writes nothing locally and pushes nothing.
+
+#### Scenario: Transactions from a fixture budget
+- **GIVEN** a fixture budget with 120 transactions in "Checking"
+- **WHEN** a client calls `list_transactions` with Checking's `account_id` and no limit
+- **THEN** it receives 50 transactions, `has_more` true and a `next_cursor`
+
+#### Scenario: A read entry writes nothing
+- **GIVEN** a budget with an auto-post schedule that is due today and paycheck edits that arrive by sync
+- **WHEN** the server starts without `--writes` and the client calls `sync_budget`
+- **THEN** no transaction was created in the local copy, the sync server received no messages from this client, and no budget file was uploaded
+
+#### Scenario: A query that is not a select
+- **WHEN** a client calls `run_query` with a query that would change data
+- **THEN** the call fails and the budget is unchanged
+
 ### Requirement: Write tools
 With `--writes`, or on the hosted entry, the server SHALL offer these write tools and no others: `write_create_transactions`, `write_update_transactions` (category, payee, notes), `write_set_budget_amount`, `write_skip_paycheck` and `write_move_on_budget`. It SHALL offer no delete, bulk-edit, import, rule create or edit, account close, or whole-budget reset or transfer.
 

@@ -9,7 +9,7 @@ The hosted server SHALL be its own entry, apart from the stdio entry, that serve
 
 #### Scenario: The hosted entry serves the writes entry tools
 - **WHEN** an authorized client lists the hosted entry's tools
-- **THEN** it lists the read and `write_` tools of the stdio `--writes` entry and no other tool except `get_sync_status`
+- **THEN** it lists the read tools and the `write_` tools of the stdio `--writes` entry and `get_sync_status`, and no others
 
 #### Scenario: A hosted write is audited with its OAuth subject
 - **WHEN** an authorized client calls a write tool
@@ -20,7 +20,7 @@ The hosted server SHALL be its own entry, apart from the stdio entry, that serve
 - **THEN** it opens it without `readOnly`, so writes sync and push like the app's
 
 ### Requirement: Production under an identity guard
-The hosted entry SHALL serve a `production` host only when the dedicated flag `ACTUAL_MCP_REMOTE_PRODUCTION=1` is set, the credential is a session token file, the allowed account is a provider subject identifier (no `@`) and the data directory is `production-remote`; otherwise it SHALL exit with a fixed error before it signs in or listens. The stdio entry's `ACTUAL_MCP_ALLOW_PRODUCTION` SHALL NOT satisfy the flag. The guard checks identity only; production is read-write like staging.
+The hosted entry SHALL serve a `production` host only with `ACTUAL_MCP_REMOTE_PRODUCTION=1` (the stdio `ACTUAL_MCP_ALLOW_PRODUCTION` does not count), a session token file whose user is exactly BASIC (never ADMIN), a provider subject identifier (no `@`) as the account and the `production-remote` data directory; otherwise it SHALL exit with a fixed error before it listens. Production is read-write like staging.
 
 #### Scenario: Production without the flag
 - **GIVEN** `ACTUAL_SERVER_URL` names a host labelled `production` and only `ACTUAL_MCP_ALLOW_PRODUCTION=1` is set
@@ -36,6 +36,11 @@ The hosted entry SHALL serve a `production` host only when the dedicated flag `A
 - **GIVEN** the production flag and a session token are set and the allowed account is an email address
 - **WHEN** the hosted entry starts
 - **THEN** it exits with a fixed error
+
+#### Scenario: Production with an administrator's token
+- **GIVEN** every other guard condition is met and the session token belongs to an ADMIN user
+- **WHEN** the hosted entry starts
+- **THEN** it exits with a fixed error that does not name the token, before it listens
 
 #### Scenario: Production with the guard met
 - **GIVEN** the flag, a 0400 session token file, a subject identifier as the account and every other required setting

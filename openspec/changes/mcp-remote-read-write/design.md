@@ -16,4 +16,4 @@ The stdio `--writes` entry has its own `<env>-writes` copy so a write that has n
 Tokens carry `budget:read`, checked once per request; no tool checks a scope. So the write tools work with the existing grant and Ken does not reconnect claude.ai. A `budget:write` scope is hardening, left to sc-2426.
 
 ### 4. Order of archiving
-`mcp-remote` and `production-identities` are unarchived changes, so their main specs do not exist yet. Archive them before this change, so its MODIFIED and REMOVED deltas apply.
+`mcp-remote` and `production-identities` are unarchived changes, so their main specs do not exist yet. Archive them before this change: its REMOVED deltas for `mcp-remote` and its MODIFIED delta for `production-identities` need their main specs to exist.

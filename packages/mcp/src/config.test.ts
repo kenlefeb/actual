@@ -63,17 +63,17 @@ describe('allowlist', () => {
     );
   });
 
-  it('Production is read-only even when allowed', () => {
-    expect(() =>
-      loadConfig(
-        {
-          ...base,
-          ACTUAL_SERVER_URL: 'https://actual.example.com',
-          ACTUAL_MCP_ALLOW_PRODUCTION: '1',
-        },
-        ['--writes'],
-      ),
-    ).toThrow(/not allowed for a production host/);
+  it('Production allows writes when allowed', () => {
+    const config = loadConfig(
+      {
+        ...base,
+        ACTUAL_SERVER_URL: 'https://actual.example.com',
+        ACTUAL_MCP_ALLOW_PRODUCTION: '1',
+      },
+      ['--writes'],
+    );
+    expect(config.writes).toBe(true);
+    expect(config.dataDir).toMatch(/production-writes$/);
   });
 
   it('never puts a password in the refusal message', () => {

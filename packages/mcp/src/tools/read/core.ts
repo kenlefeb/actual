@@ -288,7 +288,7 @@ export function registerCoreTools(tool: RegisterTool) {
 
   tool(
     'sync_budget',
-    'Syncs the local budget copy with the server: pulls its changes. Sends nothing, and posts no schedules or paycheck changes, on this read-only entry.',
+    "Syncs the local budget copy with the server: pulls its changes. Where write tools are offered it also sends this copy's changes, as the app does; otherwise it sends nothing and posts no schedules or paycheck changes.",
     {},
     async () => {
       await syncNow();

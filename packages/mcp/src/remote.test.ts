@@ -1,6 +1,7 @@
-import { readFileSync } from 'fs';
+import { mkdtempSync, readFileSync } from 'fs';
 import http from 'http';
 import type { AddressInfo } from 'net';
+import { tmpdir } from 'os';
 import { join } from 'path';
 
 import * as api from '@actual-app/api';
@@ -20,6 +21,10 @@ import type { RemoteConfig } from './remote-config';
 import { createServer } from './server';
 
 const SECRET = 'hunter2-secret';
+const AUDIT = join(
+  mkdtempSync(join(tmpdir(), 'actual-mcp-remote-audit-')),
+  'audit.jsonl',
+);
 
 function config(over: Partial<RemoteConfig> = {}): RemoteConfig {
   return {
@@ -29,8 +34,8 @@ function config(over: Partial<RemoteConfig> = {}): RemoteConfig {
     encryptionPassword: undefined,
     dataDir: '/tmp/actual-mcp-remote-test',
     env: 'staging',
-    writes: false,
-    auditLog: '',
+    writes: true,
+    auditLog: AUDIT,
     secrets: [SECRET],
     listen: { host: '127.0.0.1', port: 0 },
     allowedHosts: ['localhost', '127.0.0.1', 'hosted.example.test'],
@@ -152,21 +157,44 @@ describe('a separate hosted entry', () => {
     expect(source).not.toMatch(/remote/);
   });
 
-  it('The hosted entry serves the same read tools', async () => {
+  it('The hosted entry serves the writes entry tools', async () => {
     await start();
     await connect();
     const hosted = (await client!.listTools()).tools.map(t => t.name).sort();
 
-    // The stdio entry's server: the same registration, no extras.
+    // The stdio `--writes` entry's server: the same registration, no extras.
     const [clientT, serverT] = InMemoryTransport.createLinkedPair();
-    await createServer([SECRET]).connect(serverT);
+    await createServer([SECRET], { auditLog: AUDIT }).connect(serverT);
     const stdio = new Client({ name: 'test', version: '0' });
     await stdio.connect(clientT);
     const local = (await stdio.listTools()).tools.map(t => t.name);
     await stdio.close();
 
     expect(hosted).toEqual([...local, 'get_sync_status'].sort());
-    expect(hosted.some(n => n.startsWith('write_'))).toBe(false);
+    expect(hosted).toContain('write_update_transactions');
+  });
+
+  it('A hosted write is audited with its OAuth subject', async () => {
+    await start(
+      {},
+      { authenticate: () => ({ clientId: 'c1', subject: 'oauth-sub-w' }) },
+      { count: 1, overrides: { notes: 'old note' } },
+    );
+    await connect();
+    const { data } = (await api.runQuery(
+      api.q('transactions').select(['id']),
+    )) as { data: Array<{ id: string }> };
+    const res = await callTool('write_update_transactions', {
+      updates: [{ id: data[0].id, notes: 'new note' }],
+    });
+    expect(res.isError).toBe(false);
+    const lines = readFileSync(AUDIT, 'utf8')
+      .trim()
+      .split('\n')
+      .map(l => JSON.parse(l));
+    const mine = lines.filter(l => l.subject === 'oauth-sub-w');
+    expect(mine.map(l => l.phase)).toEqual(['attempt', 'outcome']);
+    expect(mine[0]).toMatchObject({ tool: 'write_update_transactions' });
   });
 
   it('No authentication, no public listener', async () => {

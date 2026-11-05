@@ -17,8 +17,8 @@ const config: RemoteConfig = {
   encryptionPassword: undefined,
   dataDir: '/tmp/actual-mcp-remote-test',
   env: 'staging',
-  writes: false,
-  auditLog: '',
+  writes: true,
+  auditLog: '/tmp/actual-mcp-remote-test.audit.jsonl',
   secrets: ['pw'],
   listen: { host: '127.0.0.1', port: 0 },
   allowedHosts: ['localhost'],
@@ -28,15 +28,14 @@ const config: RemoteConfig = {
   oauth: {} as RemoteConfig['oauth'],
 };
 
-describe('hosted means read-only, in code', () => {
+describe('the hosted entry runs the engine read-write', () => {
   beforeEach(() => vi.mocked(api.init).mockClear());
 
-  it('A hosted sync writes nothing', async () => {
-    // The engine's read-only mode (api-read-only-mode) stops auto-posting,
-    // reconcile and any push; the hosted entry must always ask for it.
+  it('A hosted sync runs the engine as the app does', async () => {
+    // Like the stdio `--writes` entry: writes sync and push (sc-2486).
     await openBudget(config);
     expect(api.init).toHaveBeenCalledWith(
-      expect.objectContaining({ readOnly: true, dataDir: config.dataDir }),
+      expect.objectContaining({ readOnly: false, dataDir: config.dataDir }),
     );
   });
 });

@@ -45,10 +45,8 @@ describe('hosted entry configuration', () => {
     ).toThrow(/ACTUAL_MCP_RATE_PER_PREFIX/);
   });
 
-  it('A writes flag is refused', () => {
-    expect(() => loadRemoteConfig(env(), ['--writes'])).toThrow(
-      /read-only.*--writes/,
-    );
+  it('Arguments are refused; writes need no flag', () => {
+    expect(() => loadRemoteConfig(env(), ['--writes'])).toThrow(/Usage/);
     expect(() => loadRemoteConfig(env(), ['--anything'])).toThrow(/Usage/);
   });
 
@@ -57,8 +55,9 @@ describe('hosted entry configuration', () => {
     const b = loadRemoteConfig(env({ ACTUAL_DATA_DIR: '/tmp/x/other' }));
     expect(a.dataDir).toMatch(/actual-mcp\/staging-remote$/);
     expect(b.dataDir).toBe('/tmp/x/other-remote');
-    expect(a.writes).toBe(false);
-    expect(a.auditLog).toBe('');
+    expect(a.writes).toBe(true);
+    expect(a.auditLog).toMatch(/actual-mcp\/staging-remote\.audit\.jsonl$/);
+    expect(b.auditLog).toBe('/tmp/x/other-remote.audit.jsonl');
   });
 
   it('Secrets are read from files', () => {
@@ -316,16 +315,13 @@ describe('Production only under an explicit guard', () => {
     const config = loadRemoteConfig(prod());
     expect(config.env).toBe('production');
     expect(config.production).toBe(true);
-    expect(config.writes).toBe(false);
+    expect(config.writes).toBe(true);
     expect(config.dataDir).toBe('/tmp/actual-mcp/production-remote');
+    expect(config.auditLog).toBe(
+      '/tmp/actual-mcp/production-remote.audit.jsonl',
+    );
     expect(config.sessionToken).toBe('minted-token-0123456789');
     expect(config.password).toBeUndefined();
-  });
-
-  it('Production writes stay impossible', () => {
-    expect(() => loadRemoteConfig(prod(), ['--writes'])).toThrow(
-      /read-only.*--writes/,
-    );
   });
 
   it('Staging is not production', () => {

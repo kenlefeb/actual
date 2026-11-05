@@ -73,16 +73,11 @@ function positiveInt(
 }
 
 /**
- * Configuration for the hosted, read-only entry. Secrets come from files
- * only (never argv, and never an environment value); there is no way to turn
- * writes on, and a production host needs the explicit production guard.
+ * Configuration for the hosted, read-write entry. Secrets come from files
+ * only (never argv, and never an environment value), and a production host
+ * needs the explicit production guard.
  */
 export function loadRemoteConfig(env: Env, argv: string[] = []): RemoteConfig {
-  if (argv.includes('--writes')) {
-    throw new Error(
-      'actual-mcp-http is read-only: --writes is not supported on the hosted entry.',
-    );
-  }
   if (argv.length > 0) {
     throw new Error(
       'Usage: actual-mcp-http. Settings are read from the environment, never from arguments.',
@@ -194,7 +189,8 @@ export function loadRemoteConfig(env: Env, argv: string[] = []): RemoteConfig {
       ? explicitHosts
       : ['localhost', '127.0.0.1', '[::1]', publicHost];
 
-  // One budget per instance: its own copy, never the stdio entries'.
+  // One budget per instance: its own copy, never the stdio entries', so a write
+  // that has not synced yet never sits in a copy another entry opens.
   const base = resolve(
     env.ACTUAL_DATA_DIR ||
       join(homedir(), 'Library', 'Application Support', 'actual-mcp', label),
@@ -220,9 +216,9 @@ export function loadRemoteConfig(env: Env, argv: string[] = []): RemoteConfig {
     encryptionPassword,
     env: label,
     dataDir,
-    writes: false,
+    writes: true,
     production,
-    auditLog: '',
+    auditLog: `${dataDir}.audit.jsonl`,
     secrets: [
       password,
       sessionToken,

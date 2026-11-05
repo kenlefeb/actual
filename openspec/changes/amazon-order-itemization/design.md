@@ -124,7 +124,7 @@ Before matching, a charge is flagged as:
 ## Risks / Trade-offs
 
 - **[Risk] The export's columns or payment-method words differ from what the explore pass remembered.**
-  → Task 1.1 confirms them on Ken's export before any parser code. The adapter keeps them in one table, and the missing-fields error makes a layout change visible instead of silent.
+  → Task 1.1 confirms them from the header row and masked payment words Ken pastes (no developer reads his export) before any parser code. The adapter keeps them in one table, and the missing-fields error makes a layout change visible instead of silent.
 - **[Risk] Amazon's total differs from the bank amount** (currency conversion, final-charge adjustment, digital or Subscribe & Save batches).
   → The charge isn't matched, and the review lists it as not matched, with its items, so the user sees what was missed.
 - **[Risk] A wrong match is applied** (same amount, nearby date, different purchase).
@@ -148,5 +148,5 @@ Before matching, a charge is flagged as:
 
 ## Open Questions
 
-- The exact column names and payment-method words. Task 1.1 settles them, and they only fill the adapter's table: they don't change the specs or the approach.
+- The exact column names and payment-method words. Task 1.1 settles them from Ken's pasted header row and masked words, and they only fill the adapter's table: they don't change the specs or the approach.
 - Whether the export includes Whole Foods, Fresh or digital orders. If it does, the adapter skips rows with no ship date, and those charges show as not matched.

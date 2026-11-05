@@ -342,6 +342,9 @@ export function ExperimentalFeatures() {
       <FeatureToggle flag="paychecks">
         <Trans>Paychecks</Trans>
       </FeatureToggle>
+      <FeatureToggle flag="amazonOrderItemization">
+        <Trans>Amazon order itemization</Trans>
+      </FeatureToggle>
       {isUsingServer && (
         <FeatureToggle
           flag="enableBanking"

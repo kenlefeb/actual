@@ -14,7 +14,8 @@ export type FeatureFlag =
   | 'mobileCalculator'
   | 'monteCarloReport'
   | 'businessCalendars'
-  | 'paychecks';
+  | 'paychecks'
+  | 'amazonOrderItemization';
 
 /**
  * Cross-device preferences. These sync across devices when they are changed.

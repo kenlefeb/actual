@@ -21,6 +21,7 @@ export const DEFAULT_FEATURE_FLAG_STATE: Record<FeatureFlag, boolean> = {
   businessCalendars: false,
   // On by default, so an unset flag follows the flags it requires
   paychecks: true,
+  amazonOrderItemization: false,
 };
 
 /**

@@ -13,13 +13,13 @@
 
 ## 2. Parse the export into charges
 
-- [ ] 2.1 Write failing tests in `amazon-orders/parse.test.ts`, named after the spec scenarios: "Not an order export", "Split shipment", and gift-card detection for "Order paid partly by a gift card". Verify they fail.
-- [ ] 2.2 Implement the adapter and the charge grouping (design decisions 1 and 2) in `amazon-orders/parse.ts`, in integer cents. Verify that 2.1 passes, and that a missing field's error names it.
-- [ ] 2.3 Make `amazon-orders-parse` delete its `/uploads` copy on the web build after reading it, on success and on failure (design decision 3). Test it with the web platform's fs, and verify that the file is gone in both cases.
+- [x] 2.1 Write failing tests in `amazon-orders/parse.test.ts`, named after the spec scenarios: "Not an order export", "Split shipment", and gift-card detection for "Order paid partly by a gift card". Verify they fail.
+- [x] 2.2 Implement the adapter and the charge grouping (design decisions 1 and 2) in `amazon-orders/parse.ts`, in integer cents. Verify that 2.1 passes, and that a missing field's error names it.
+- [x] 2.3 Make `amazon-orders-parse` delete its `/uploads` copy on the web build after reading it, on success and on failure (design decision 3). Test it with the web platform's fs, and verify that the file is gone in both cases.
 
 ## 3. Match charges to transactions
 
-- [ ] 3.1 Write failing tests in `amazon-orders/match.test.ts` against a real test database, named after the scenarios:
+- [x] 3.1 Write failing tests in `amazon-orders/match.test.ts` against a real test database, named after the scenarios:
   - "Charge posts two days after shipping";
   - "Outside the date window";
   - "Already split by hand";
@@ -31,11 +31,11 @@
   - "Annotated for another order": a transaction annotated for order A is never a candidate for order B.
 
   Add two more tests: an off-budget account's transaction is never a candidate, and a split parent of the exact amount without a marker shows "Already split". Verify they fail.
-- [ ] 3.2 Implement the query and the one-to-one assignment (design decision 4). Verify that 3.1 passes.
+- [x] 3.2 Implement the query and the one-to-one assignment (design decision 4). Verify that 3.1 passes.
 
 ## 4. Apply a match as a split
 
-- [ ] 4.1 Write failing tests in `amazon-orders/apply.test.ts`, named after the scenarios:
+- [x] 4.1 Write failing tests in `amazon-orders/apply.test.ts`, named after the scenarios:
   - "Apply a two-item charge";
   - "Rounding";
   - "Existing note kept";
@@ -56,13 +56,15 @@
   - a schedule's own rule never sets a line's category.
 
   Verify they fail.
-- [ ] 4.2 Add the category-only rules helper next to `runRules` (design decision 8), with unit tests: it returns the category of the last matching `set category` rule, ignores schedule rules, and inserts no payee. Verify that the tests and the existing `transaction-rules` tests pass.
-- [ ] 4.3 Implement `amazon-orders-apply` (design decisions 5 to 7, 10 and 11) as one undoable mutation, and register `amazon-orders-parse` and `amazon-orders-apply` in the app's handlers. Verify that 4.1 passes, along with the existing `server/accounts` and `server/transactions` tests.
+  - Note (sc-926): "a schedule's own rule" is covered by the helper's unit test (4.2), and the payee rename by "Rule that sets a new payee"; neither is repeated in `apply.test.ts`.
+- [x] 4.2 Add the category-only rules helper next to `runRules` (design decision 8), with unit tests: it returns the category of the last matching `set category` rule, ignores schedule rules, and inserts no payee. Verify that the tests and the existing `transaction-rules` tests pass.
+- [x] 4.3 Implement `amazon-orders-apply` (design decisions 5 to 7, 10 and 11) as one undoable mutation, and register `amazon-orders-parse` and `amazon-orders-apply` in the app's handlers. Verify that 4.1 passes, along with the existing `server/accounts` and `server/transactions` tests.
 
 ## 5. Flag, entry point and review
 
-- [ ] 5.1 Add the `amazonOrderItemization` flag (off by default) to the `FeatureFlag` type, `useFeatureFlag` defaults and the Experimental settings page. Write the tests "Hidden when the feature is off" for the accounts menu, and "Turned off after applying": an applied split stays unchanged after the flag is turned off. Verify that the first fails before the menu item exists, and that both pass after.
-- [ ] 5.2 Add the "Import Amazon orders" menu item and the review modal (design decision 9), with tests named after the scenarios:
+- [x] 5.1 Add the `amazonOrderItemization` flag (off by default) to the `FeatureFlag` type, `useFeatureFlag` defaults and the Experimental settings page. Write the tests "Hidden when the feature is off" for the accounts menu, and "Turned off after applying": an applied split stays unchanged after the flag is turned off. Verify that the first fails before the menu item exists, and that both pass after.
+  - Note (sc-926): "Turned off after applying" was written after `amazon-orders-apply` existed and passed on its first run; nothing reads the flag on the server, so it couldn't be made to fail first.
+- [x] 5.2 Add the "Import Amazon orders" menu item and the review modal (design decision 9), with tests named after the scenarios:
   - "Offered when the feature is on";
   - "Import stays on the device", which spies on the network connection and checks that no request leaves the worker;
   - "Close the review";
@@ -71,7 +73,8 @@
   - a gift-card charge has no checkbox.
 
   Verify that the tests and `yarn typecheck` pass. Tell the Director before editing `accounts/Header.tsx`, because other stories touch that file.
-- [ ] 5.3 Add a release note in `upcoming-release-notes/` and a short experimental-feature section in `packages/docs/`. Both must say the export is read on the device and nothing is sent anywhere. Verify that `yarn workspace docs build` succeeds.
+  - Note (sc-926): "Import stays on the device" (in `amazon-orders/app.test.ts`) was written after the parse handler existed and passed on its first run; the other tests failed first.
+- [x] 5.3 Add a release note in `upcoming-release-notes/` and a short experimental-feature section in `packages/docs/`. Both must say the export is read on the device and nothing is sent anywhere. Verify that `yarn workspace docs build` succeeds.
 
 ## 6. Check with a real export
 

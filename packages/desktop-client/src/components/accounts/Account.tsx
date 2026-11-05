@@ -96,6 +96,7 @@ import { updateNewTransactions } from '#transactions/transactionsSlice';
 
 import { AccountEmptyMessage } from './AccountEmptyMessage';
 import { AccountHeader } from './Header';
+import { importAmazonOrders } from './importAmazonOrders';
 
 type ConditionEntity = Partial<RuleConditionEntity> | TransactionFilterEntity;
 
@@ -616,6 +617,9 @@ class AccountInternal extends PureComponent<
     this.props.onSyncAndDownload(account ? account.id : accountId);
   };
 
+  onImportAmazonOrders = () =>
+    importAmazonOrders(this.props.dispatch, () => this.fetchTransactions());
+
   onImport = async () => {
     const accountId = this.props.accountId;
     const account = this.props.accounts.find(acct => acct.id === accountId);
@@ -834,7 +838,8 @@ class AccountInternal extends PureComponent<
       | 'manage-columns'
       | 'account-group'
       | 'business-days'
-      | 'move-on-budget',
+      | 'move-on-budget'
+      | 'import-amazon-orders',
   ) => {
     const accountId = this.props.accountId!;
     const account = this.props.accounts.find(
@@ -842,6 +847,9 @@ class AccountInternal extends PureComponent<
     )!;
 
     switch (item) {
+      case 'import-amazon-orders':
+        void this.onImportAmazonOrders();
+        break;
       case 'link':
         this.props.dispatch(
           pushModal({

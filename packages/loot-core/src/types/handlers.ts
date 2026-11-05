@@ -1,6 +1,7 @@
 import type { AccountGroupsHandlers } from '#server/account-groups/app';
 import type { AccountHandlers } from '#server/accounts/app';
 import type { AdminHandlers } from '#server/admin/app';
+import type { AmazonOrdersHandlers } from '#server/amazon-orders/app';
 import type { AuthHandlers } from '#server/auth/app';
 import type { BudgetHandlers } from '#server/budget/app';
 import type { BudgetFileHandlers } from '#server/budgetfiles/app';
@@ -44,6 +45,7 @@ export type Handlers = {} & ServerHandlers &
   AccountHandlers &
   AccountGroupsHandlers &
   BusinessCalendarsHandlers &
+  AmazonOrdersHandlers &
   PaychecksHandlers &
   PayeesHandlers &
   SpreadsheetHandlers &

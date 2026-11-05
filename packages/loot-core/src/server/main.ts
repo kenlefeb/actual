@@ -11,6 +11,7 @@ import type { Handlers } from '#types/handlers';
 import { app as accountGroupsApp } from './account-groups/app';
 import { app as accountsApp } from './accounts/app';
 import { app as adminApp } from './admin/app';
+import { app as amazonOrdersApp } from './amazon-orders/app';
 import { installAPI } from './api';
 import { aqlQuery } from './aql';
 import { app as authApp } from './auth/app';
@@ -150,6 +151,7 @@ app.combine(
   accountsApp,
   accountGroupsApp,
   businessCalendarsApp,
+  amazonOrdersApp,
   paychecksApp,
   payeesApp,
   spreadsheetApp,

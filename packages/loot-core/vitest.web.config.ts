@@ -9,6 +9,7 @@ export default defineConfig({
       'src/platform/client/browser-preload/worker-bridge.test.ts',
       'src/platform/server/sqlite/index.test.ts',
       'src/platform/server/fs/index.test.ts',
+      'src/server/amazon-orders/app.web.test.ts',
     ],
     maxWorkers: 2,
     reporters: process.env.CI

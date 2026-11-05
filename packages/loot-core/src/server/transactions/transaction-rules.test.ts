@@ -11,6 +11,7 @@ import {
   conditionsToAQL,
   deleteRule,
   getProbableCategory,
+  getRuleCategory,
   getRules,
   insertRule,
   loadRules,
@@ -1753,5 +1754,78 @@ describe('Running balance for rules', () => {
     expect(transaction.notes).toBe('plain');
     expect(transaction).not.toHaveProperty('balance');
     expect(queries()).toBe(0);
+  });
+});
+
+describe('getRuleCategory', () => {
+  async function setup() {
+    await db.insertCategoryGroup({ id: 'group', name: 'group' });
+    await db.insertCategory({
+      id: 'household',
+      name: 'Household',
+      cat_group: 'group',
+    });
+    await db.insertCategory({ id: 'gifts', name: 'Gifts', cat_group: 'group' });
+    await loadRules();
+    const account = await db.insertAccount({ name: 'Card' });
+    return { account, date: '2026-11-05', amount: -1080 };
+  }
+
+  test('returns the category of the last matching set-category rule', async () => {
+    const line = await setup();
+    await insertRule({
+      stage: null,
+      conditionsOp: 'and',
+      conditions: [{ op: 'contains', field: 'notes', value: 'Bulb' }],
+      actions: [{ op: 'set', field: 'category', value: 'gifts' }],
+    });
+    await insertRule({
+      stage: 'post',
+      conditionsOp: 'and',
+      conditions: [{ op: 'contains', field: 'notes', value: 'pack' }],
+      actions: [{ op: 'set', field: 'category', value: 'household' }],
+    });
+
+    expect(await getRuleCategory({ ...line, notes: 'Bulb pack ×2' })).toBe(
+      'household',
+    );
+    expect(await getRuleCategory({ ...line, notes: 'Bulb ×1' })).toBe('gifts');
+    expect(await getRuleCategory({ ...line, notes: 'Lamp ×1' })).toBeNull();
+  });
+
+  test("ignores a schedule's own rule", async () => {
+    const line = await setup();
+    const rule = await insertRule({
+      stage: null,
+      conditionsOp: 'and',
+      conditions: [{ op: 'contains', field: 'notes', value: 'Bulb' }],
+      actions: [{ op: 'set', field: 'category', value: 'household' }],
+    });
+    db.runQuery(
+      `INSERT INTO schedules (id, rule, active, completed, posts_transaction, tombstone)
+       VALUES ('sched', ?, 1, 0, 0, 0)`,
+      [rule],
+    );
+
+    expect(await getRuleCategory({ ...line, notes: 'Bulb ×1' })).toBeNull();
+  });
+
+  test('runs no actions, so a payee-setting rule creates no payee', async () => {
+    const line = await setup();
+    await insertRule({
+      stage: null,
+      conditionsOp: 'and',
+      conditions: [{ op: 'contains', field: 'notes', value: 'Gift' }],
+      actions: [
+        { op: 'set', field: 'payee_name', value: 'Gifts' },
+        { op: 'set', field: 'category', value: 'gifts' },
+      ],
+    });
+    const payeesBefore = await db.all('SELECT id FROM payees');
+
+    expect(await getRuleCategory({ ...line, notes: 'Gift wrap ×1' })).toBe(
+      'gifts',
+    );
+    expect(await db.all('SELECT id FROM payees')).toEqual(payeesBefore);
   });
 });

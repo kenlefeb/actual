@@ -128,6 +128,7 @@ import {
 
 import { AmountInput } from './AmountInput';
 import { SplitAmountInput } from './SplitAmountInput';
+import { TransactionAttachmentsSection } from './TransactionAttachmentsSection';
 
 function getFieldName(transactionId: TransactionEntity['id'], field: string) {
   return `${field}-${transactionId}`;
@@ -1587,6 +1588,10 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
               </View>
             )}
           </View>
+
+          {!isAdding && (
+            <TransactionAttachmentsSection transactionId={transaction.id} />
+          )}
 
           {!isAdding && (
             <View style={{ alignItems: 'center' }}>

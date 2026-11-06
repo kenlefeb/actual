@@ -1,21 +1,32 @@
 import { MemoryRouter, Route, Routes } from 'react-router';
 
-import { act, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resetTestProviders, TestProviders } from '#mocks';
+import { initServer } from '#mocks/connection';
 import * as modalsSlice from '#modals/modalsSlice';
 
 import { TransactionEdit } from './TransactionEdit';
 
-const state = vi.hoisted(() => ({ date: '2016-09-15' }));
+const state = vi.hoisted(() => ({
+  date: '2016-09-15',
+  subtransactions: undefined as unknown[] | undefined,
+}));
 
 vi.mock(
   '@actual-app/core/platform/client/connection',
   () => import('#mocks/connection'),
 );
 vi.mock('#queries/aqlQuery', () => ({
+  // With grouped splits, a line's id returns its parent with every line
   aqlQuery: vi.fn(async () => ({
     data: [
       {
@@ -27,9 +38,17 @@ vi.mock('#queries/aqlQuery', () => ({
         payee: null,
         notes: '',
         cleared: false,
+        is_parent: !!state.subtransactions,
+        subtransactions: state.subtransactions,
       },
     ],
   })),
+}));
+vi.mock('#hooks/useMetadataPref', () => ({
+  useMetadataPref: () => ['cloud-file', vi.fn()],
+}));
+vi.mock('#hooks/useQuery', () => ({
+  useQuery: () => ({ data: [], isLoading: false }),
 }));
 vi.mock('#hooks/useAccounts', () => ({
   useAccounts: () => ({
@@ -100,6 +119,37 @@ async function openCategorySheet() {
   return { pushModal, options: sheet.options };
 }
 
+function renderEdit(path: string) {
+  return render(
+    <TestProviders>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route
+            path="/transactions/:transactionId"
+            element={<TransactionEdit />}
+          />
+        </Routes>
+      </MemoryRouter>
+    </TestProviders>,
+  );
+}
+
+async function pickPdf(container: HTMLElement) {
+  vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(
+    () => undefined,
+  );
+  await userEvent.click(
+    await screen.findByRole('button', { name: 'Attach document' }),
+  );
+  fireEvent.change(container.querySelector('input[type="file"]')!, {
+    target: {
+      files: [
+        new File(['%PDF-1.4'], 'invoice.pdf', { type: 'application/pdf' }),
+      ],
+    },
+  });
+}
+
 const confirmModals = (pushModal: { mock: { calls: unknown[][] } }) =>
   (pushModal.mock.calls as Array<[{ modal: modalsSlice.Modal }]>)
     .map(c => c[0].modal)
@@ -109,6 +159,7 @@ describe('Phone transaction edit page', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     resetTestProviders();
+    state.subtransactions = undefined;
   });
 
   it('asks before categorizing moved history; Cancel leaves it uncategorized', async () => {
@@ -134,6 +185,63 @@ describe('Phone transaction edit page', () => {
     await waitFor(() =>
       expect(screen.getByTestId('category-field')).toHaveTextContent(
         'Groceries',
+      ),
+    );
+  });
+
+  it('New transaction on the phone', async () => {
+    renderEdit('/transactions/new');
+
+    await screen.findByText('New Transaction');
+    expect(
+      screen.queryByRole('button', { name: 'Attach document' }),
+    ).toBeNull();
+  });
+
+  it('Attach without saving on the phone', async () => {
+    const add = vi.fn(() => ({ attachment: {} }));
+    initServer({ 'transaction-attachment-add': add });
+    const { container } = renderEdit('/transactions/t1');
+
+    await pickPdf(container);
+
+    await waitFor(() =>
+      expect(add).toHaveBeenCalledWith(
+        expect.objectContaining({ transactionId: 't1', name: 'invoice.pdf' }),
+      ),
+    );
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeVisible();
+  });
+
+  it('Attach on a split transaction on the phone', async () => {
+    state.subtransactions = [
+      {
+        id: 'line-1',
+        parent_id: 't1',
+        is_child: true,
+        date: state.date,
+        account: 'vanguard',
+        amount: -400,
+      },
+      {
+        id: 'line-2',
+        parent_id: 't1',
+        is_child: true,
+        date: state.date,
+        account: 'vanguard',
+        amount: -600,
+      },
+    ];
+    const add = vi.fn(() => ({ attachment: {} }));
+    initServer({ 'transaction-attachment-add': add });
+    // Opened from a split line in the list
+    const { container } = renderEdit('/transactions/line-2');
+
+    await pickPdf(container);
+
+    await waitFor(() =>
+      expect(add).toHaveBeenCalledWith(
+        expect.objectContaining({ transactionId: 't1' }),
       ),
     );
   });

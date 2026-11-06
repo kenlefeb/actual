@@ -87,6 +87,7 @@ import { TrackingBalanceMenuModal } from './modals/TrackingBalanceMenuModal';
 import { TrackingBudgetMenuModal } from './modals/TrackingBudgetMenuModal';
 import { TrackingBudgetMonthMenuModal } from './modals/TrackingBudgetMonthMenuModal';
 import { TrackingBudgetSummaryModal } from './modals/TrackingBudgetSummaryModal';
+import { TransactionAttachmentViewerModal } from './modals/TransactionAttachmentViewerModal';
 import { TransactionTableColumnsModal } from './modals/TransactionTableColumnsModal';
 import { TransferModal } from './modals/TransferModal';
 import { TransferOwnership } from './modals/TransferOwnership';
@@ -185,6 +186,11 @@ export function Modals() {
 
         case 'mobile-confirm-delete':
           return <MobileConfirmDeleteModal key={key} {...modal.options} />;
+
+        case 'transaction-attachment-viewer':
+          return (
+            <TransactionAttachmentViewerModal key={key} {...modal.options} />
+          );
 
         case 'copy-widget-to-dashboard':
           return <CopyWidgetToDashboardModal key={key} {...modal.options} />;

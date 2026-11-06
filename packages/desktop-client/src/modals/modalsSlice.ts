@@ -632,6 +632,15 @@ export type Modal =
       };
     }
   | {
+      name: 'transaction-attachment-viewer';
+      options: {
+        name: string;
+        mime: string;
+        // An object URL; the modal revokes it when it closes
+        url: string;
+      };
+    }
+  | {
       name: 'mobile-confirm-delete';
       options: {
         title: string;

@@ -1,16 +1,18 @@
 import React from 'react';
 
 import type { TransactionEntity } from '@actual-app/core/types/models';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { SelectedProviderWithItems } from '#hooks/useSelected';
 import { createTestAppStore, TestProviders } from '#mocks';
+import { clearServer, initServer } from '#mocks/connection';
 
 import { SelectedTransactionsButton } from './SelectedTransactionsButton';
 import {
   attachmentsForTransaction,
   AttachmentsIndicator,
+  useAttachDocument,
 } from './TransactionAttachments';
 import type { AttachmentSummary } from './TransactionAttachments';
 
@@ -143,6 +145,49 @@ describe('Paperclip in the register', () => {
     ).toEqual([receipt]);
     expect(attachmentsForTransaction(byTransaction, { id: 'other' })).toEqual(
       [],
+    );
+  });
+});
+
+describe('Accepted types', () => {
+  afterEach(() => clearServer());
+
+  function AttachHarness() {
+    const { attach, fileInput } = useAttachDocument();
+    return (
+      <>
+        <button onClick={() => attach('t1')}>attach</button>
+        {fileInput}
+      </>
+    );
+  }
+
+  it('HEIC from the Files app', async () => {
+    cloudFileId.value = 'cloud-file';
+    initServer({ 'transaction-attachment-add': () => ({ error: 'heic' }) });
+    vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(
+      () => undefined,
+    );
+    const store = createTestAppStore();
+    const { container } = render(
+      <TestProviders store={store}>
+        <AttachHarness />
+      </TestProviders>,
+    );
+
+    await userEvent.click(screen.getByText('attach'));
+    fireEvent.change(container.querySelector('input[type="file"]')!, {
+      target: {
+        files: [new File(['x'], 'IMG_0001.heic', { type: 'image/heic' })],
+      },
+    });
+
+    await waitFor(() =>
+      expect(
+        store.getState().notifications.notifications.map(n => n.message),
+      ).toEqual([
+        "HEIC images aren't supported yet. Choose the photo from your Photos library, or save it as JPEG or PNG, and attach that.",
+      ]),
     );
   });
 });

@@ -165,12 +165,25 @@ Documents SHALL attach to the parent of a split transaction. Attaching from a sp
 - **THEN** the PDF is attached to the parent, and the parent and every line show the paperclip
 
 ### Requirement: Deleting a transaction
-Deleting a transaction SHALL remove its attachments the same way as removing them by hand: they're hidden, undo restores them, and the server keeps the documents.
+Deleting a transaction SHALL remove its attachments in the same change, the same way as removing them by hand: they're marked removed, one undo restores the transaction and its attachments, and the server keeps the documents.
 
 #### Scenario: Delete and undo
 - **GIVEN** a transaction with two attachments
 - **WHEN** the user deletes the transaction and then undoes
 - **THEN** the transaction returns with both documents, and each opens
+
+### Requirement: Changing the encryption key
+When the user creates a new encryption key for a budget, every attachment encrypted with the old key SHALL be re-encrypted with the new key and stored again in place, before the key change completes, so no document becomes unreadable. Attachments marked unencrypted SHALL stay as they are. If any re-encryption fails, the key change SHALL stop with an error, the old key SHALL stay in effect, and every attachment SHALL still open.
+
+#### Scenario: New key keeps documents readable
+- **GIVEN** a budget with an encryption key and an attached PDF
+- **WHEN** the user creates a new encryption key and then opens the attachment, on this device and on another device signed in with the new key
+- **THEN** the PDF opens on both
+
+#### Scenario: Re-encryption fails
+- **GIVEN** a budget with an encryption key and two attached PDFs
+- **WHEN** the user creates a new key and the server refuses the second re-upload
+- **THEN** the key change fails with a message, the old key stays in effect, and both PDFs open
 
 ### Requirement: Merging transactions
 Merging two transactions SHALL move every attachment of the dropped transaction to the kept one.

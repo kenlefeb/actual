@@ -12,13 +12,13 @@ Ken's rule applies: make it work. Production hardening waits for sc-2426, so thi
 
 **Goals:** the slice-1 behavior in the spec, on the desktop register (web build and Electron).
 
-**Non-Goals:** mobile (sc-2523), export inclusion (sc-2524), blob cleanup (sc-2525), MCP or API access (sc-2526), thumbnails, HEIC, an offline upload queue, a quota UI, and per-split-line attachments.
+**Non-Goals:** mobile (sc-2523), export inclusion (sc-2524), blob cleanup, including a deleted budget's attachments folder (sc-2525), MCP or API access (sc-2526), thumbnails, HEIC, an offline upload queue, a quota UI, and per-split-line attachments.
 
 ## Decisions
 
 ### 1. Metadata in the budget, documents on the server
 
-A new synced table, added by an additive migration (`packages/loot-core/migrations/<ts>_add_transaction_attachments.sql`):
+A new synced table, added by an additive migration (`packages/loot-core/migrations/<ts>_add_transaction_attachments.sql`, with an id that sorts above the newest one, `1793400000000`):
 
 ```sql
 CREATE TABLE IF NOT EXISTS transaction_attachments
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS transaction_attachments
    tombstone INTEGER DEFAULT 0);
 ```
 
-- It joins the AQL schema (`server/aql/schema/index.ts`) as `transaction_attachments`, so the UI reads it with a live query and every change syncs as ordinary CRDT messages.
+- It joins the AQL schema (`server/aql/schema/index.ts`) as `transaction_attachments`, including its `tombstone` field so default queries skip removed rows, so the UI reads it with a live query and every change syncs as ordinary CRDT messages.
 - `encrypt_meta` holds the JSON `meta` that `encryption.encrypt` returns (key id, IV, auth tag). `NULL` means the document is stored unencrypted. That is the "marked unencrypted" flag the PO asked for, and it carries what decryption needs without a format of our own.
 - `size` is the plaintext size; `sha256` is of the plaintext, so a later email intake can spot duplicates.
 - The document itself never enters the database, so db.sqlite stays small and phones fetch a document only when it's opened.
@@ -46,14 +46,14 @@ All under the existing `/sync` router, next to the budget-file endpoints, and fo
 
 | Endpoint | Purpose |
 |---|---|
-| `POST /sync/upload-attachment` | Body is the raw bytes (`Content-Type: application/actual-attachment`). Headers `x-actual-file-id`, `x-actual-attachment-id`, `x-actual-attachment-encrypted: true|false`. Checks size, type (only when unencrypted), quota; writes the blob. |
+| `POST /sync/upload-attachment` | Body is the raw bytes (`Content-Type: application/actual-attachment`). Headers `x-actual-file-id`, `x-actual-attachment-id`, `x-actual-attachment-encrypted: true|false`. Checks size, type (only when unencrypted), quota; writes the blob, overwriting an existing one with the same id (needed by the key change, decision 8). |
 | `GET /sync/download-attachment` | Same id headers; streams the blob, 404 when missing. |
 | `POST /sync/delete-attachment` | Same id headers; deletes the blob. Used only by the client to roll back an upload whose metadata row couldn't be written (decision 4). Removal by the user never calls it. |
 
 - Path: `user-files/attachments/<fileId>/<attachmentId>.blob`, built by a helper next to the existing one in `src/util/paths.ts` that keeps its prefix check. The attachment id must pass `isValidFileId`, which rules out traversal.
-- A dedicated `express.raw` parser for `application/actual-attachment` has a limit of the per-file limit plus 1 MB of headroom for encryption overhead; the handler then checks the exact size (plaintext limit plus the 16-byte GCM tag for encrypted bodies) and returns 413 with the limit in the body.
+- A dedicated `express.raw` parser for `application/actual-attachment` has the per-file limit as its limit, and the handler returns 413 with the limit in the body. Encrypted and plain uploads share this one exact limit: `encryption.encrypt` returns ciphertext the same length as the plaintext and puts the GCM auth tag in `meta`.
 - Type check: the first bytes must be `%PDF-` (PDF), `FF D8 FF` (JPEG), `89 50 4E 47 0D 0A 1A 0A` (PNG), or `RIFF....WEBP` (WebP). A HEIC file (`ftyp` box with a `heic`/`heix`/`mif1` brand) gets its own error code so the message can name it. The server can't read an encrypted upload, so it checks only the size of those; the client always checks type (decision 3). This is a consequence of the PO's encryption decision, not a change to it.
-- Quota: the sum of file sizes in the budget's attachment folder plus the new body, compared with the quota. No index; a directory listing is fine at receipt volumes.
+- Quota: the sum of file sizes in the budget's attachment folder plus the new body (minus the existing blob's size when overwriting), compared with the quota. No index; a directory listing is fine at receipt volumes.
 - Config, in `load-config.js` and the config types, under a new `attachments` group: `fileSizeLimitMB` (default 10, env `ACTUAL_ATTACHMENTS_FILE_SIZE_LIMIT_MB`) and `budgetQuotaMB` (default 1024, env `ACTUAL_ATTACHMENTS_BUDGET_QUOTA_MB`).
 - The client learns the per-file limit from the existing `GET /info` response, which gains `attachments: { fileSizeLimitMB }`. This keeps the client's pre-check in step with the server's setting without a fourth endpoint.
 
@@ -76,7 +76,7 @@ The row is written only after the server answers 200. If the row write then fail
 ### 5. Splits, deletes and merges
 
 - **Splits:** the add handler stores the parent's id when given a child. The UI shows a child's paperclip by looking up attachments for `parent_id ?? id`.
-- **Deleting a transaction:** attachment rows are left alone. The UI shows attachments only for live transactions, so they disappear with it and come back on undo, with no second write that undo would have to pair. sc-2525's cleanup must treat attachments of a deleted transaction as orphaned.
+- **Deleting a transaction:** `batchUpdateTransactions` (`transactions/index.ts`) sets `tombstone = 1` on the attachment rows of every deleted id (`deletedIds`, which includes split children) in the same batch that deletes the transactions, so one undo reverts both. A removed attachment and an attachment of a deleted transaction then look the same, a tombstoned row, which is the one data contract sc-2525 (cleanup) and sc-2526 (MCP read tool) build on.
 - **Merge:** `transactions/merge.ts` updates every `transaction_attachments` row whose `transaction_id` is the dropped id to the kept id, in the same batch as the merge, so one undo reverts both.
 
 ### 6. Desktop UI
@@ -90,10 +90,21 @@ The row is written only after the server answers 200. If the row write then fail
 
 `exportBuffer` already leaves documents out, so nothing changes there. The Export section of Settings (`settings/Export.tsx`) gains one sentence: attached documents aren't included in the export. It shows always, not only when attachments exist, which needs no query.
 
+### 8. Changing the encryption key
+
+`keyMake` (`server/encryption/app.ts`) loads the new key and then calls `resetSync`, which re-uploads the budget under the new key. Before `resetSync`, while the old key is still loaded, it re-encrypts the attachments:
+
+- For each row with `encrypt_meta` set, tombstoned or not (a removed attachment can still be restored by undo): get the blob (cache or download), decrypt with the old meta, encrypt with the new key id, upload with the same attachment id (the endpoint overwrites), update the row's `encrypt_meta`, and replace the local cache entry.
+- Rows with `encrypt_meta` `NULL` are left alone.
+- If a step fails, the loop re-encrypts the attachments it already moved back under the old key (both keys are loaded), restores their `encrypt_meta`, and `keyMake` throws before `resetSync`, so the old key stays in effect.
+- The row updates land in the budget before `resetSync` uploads it, so other devices get the new meta with the new key.
+
 ## Risks / Trade-offs
 
 - [Server can't type-check encrypted uploads] → The client always checks; a modified client could store an odd blob in its own budget's folder, bounded by size and quota. Acceptable until sc-2426.
 - [Orphaned blobs grow disk use] → Quota counts them; sc-2525 cleans up after 30 days. The production data-volume backup already captures `user-files/`, so backups grow with use.
+- [Quota check then write can overshoot] → Two concurrent uploads can both pass the check, so a budget can exceed its quota by at most one file. Accepted.
+- [Deleting a budget on the server leaves its attachments folder] → `delete-user-file` doesn't touch `user-files/attachments/<fileId>/`; sc-2525's scope includes removing it.
 - [Electron blob window] → Task 5.4 tests it and falls back to the OS viewer.
 - [Quota by directory listing is O(files)] → Fine at receipt volumes; revisit if a budget holds thousands.
 

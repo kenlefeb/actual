@@ -32,7 +32,13 @@ export type AttachmentAddResult =
 
 export type AttachmentOpenResult =
   | { name: string; mime: string; data: Uint8Array }
-  | { error: 'not-found' | 'download-failed' | 'decrypt-failed' };
+  | {
+      error:
+        | 'not-found'
+        | 'download-failed'
+        | 'decrypt-failed'
+        | 'unsupported-type';
+    };
 
 export type AttachmentsHandlers = {
   'transaction-attachment-add': typeof addAttachment;
@@ -323,16 +329,21 @@ async function openAttachment({
     return { error: 'download-failed' };
   }
 
+  let data: Uint8Array;
   try {
-    return {
-      name: row.name,
-      mime: row.mime,
-      data: await unseal(stored, row.encrypt_meta),
-    };
+    data = await unseal(stored, row.encrypt_meta);
   } catch (e) {
     logger.warn('Could not decrypt attachment', e);
     return { error: 'decrypt-failed' };
   }
+
+  // The synced mime is untrusted: the opened blob gets the app's origin, so
+  // only a type the bytes prove can be opened (never HTML)
+  const mime = detectAttachmentType(data);
+  if (mime === null || mime === 'heic') {
+    return { error: 'unsupported-type' };
+  }
+  return { name: row.name, mime, data };
 }
 
 // The document stays on the server, so undo restores it

@@ -343,6 +343,42 @@ describe('transaction-attachment-open', () => {
 
     expect(await open({ id: 'remote' })).toEqual({ error: 'download-failed' });
   });
+
+  async function insertSyncedRow(id: string, mime: string, data: Uint8Array) {
+    attachmentServer.blobs.set(id, data);
+    await db.insert('transaction_attachments', {
+      id,
+      transaction_id: transactionId,
+      name: 'synced',
+      mime,
+      size: data.length,
+      sha256: '',
+      encrypt_meta: null,
+      created_at: '2026-11-05T00:00:00.000Z',
+    });
+  }
+
+  it('refuses a synced row whose bytes are HTML, whatever its mime says', async () => {
+    const html = new Uint8Array(Buffer.from('<html><script>1</script>'));
+    await insertSyncedRow('html-as-html', 'text/html', html);
+    await insertSyncedRow('html-as-pdf', 'application/pdf', html);
+
+    expect(await open({ id: 'html-as-html' })).toEqual({
+      error: 'unsupported-type',
+    });
+    expect(await open({ id: 'html-as-pdf' })).toEqual({
+      error: 'unsupported-type',
+    });
+  });
+
+  it('opens with the type the bytes show, not the synced mime', async () => {
+    await insertSyncedRow('png-as-html', 'text/html', PNG);
+
+    expect(await open({ id: 'png-as-html' })).toMatchObject({
+      mime: 'image/png',
+      data: PNG,
+    });
+  });
 });
 
 describe('transaction-attachment-remove', () => {

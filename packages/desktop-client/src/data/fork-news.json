@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "id": "fork-release-26.10.1-alpha.25",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.25 — Ken's Actual fork",
+      "date": "2026-11-05",
+      "version": "26.10.1-alpha.25",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.25.md",
+      "body": "**Unofficial fork prerelease.** Based on upstream Actual `master` at `21c2b3f703142f858af4c653a31e675ca5ff85d7` (October 26, 2026), which comes after Actual 26.10.0 and is not itself an upstream release; not an official Actual Budget release.\n\nThis release adds experimental Amazon order itemization, and is the first build whose release also carries the hosted MCP container image, so the read-write hosted MCP from 26.10.1-alpha.24 can be deployed with it.",
+      "details": "#### Features\n\n- Experimental Amazon order itemization. Turn on **Amazon order itemization** under **Settings > Experimental features**, then choose **Import Amazon orders** from the **All accounts** menu and pick Amazon's order-history CSV file. Actual matches each card charge to a transaction of the same amount near the ship date, lets you review the matches, and on **Apply selected** splits each charge into one line per item (or, for a single item, writes the item name into the notes). Lines get their category from your rules where a rule sets one. The file is read on your device and not kept. Desktop only.\n\n#### Enhancements\n\n- None.\n\n#### Bugfixes\n\n- None.\n\n#### Maintenance\n\n- The release build also produces the hosted MCP container image, and the deploy loads and checks it on the server, so the MCP image no longer has to be built and loaded by hand. This takes effect once the updated deploy command is installed on the server.\n- Documentation for Amazon order itemization, and its OpenSpec records.\n- The MCP coverage list records that the Amazon import is used from the app, not through MCP tools.\n\n#### Known limitations\n\n- Experimental.\n- Upstream changes made after 26.10.0 have not yet been through an upstream release.\n- Amazon order itemization does not handle refunds or returns, orders paid partly by a gift card or points, or off-budget accounts.\n- The stdio MCP server still runs on your own computer and needs Node.js 22 or later and the 1Password CLI.\n- No iPhone acceptance test is claimed."
+    },
+    {
       "id": "fork-release-26.10.1-alpha.24",
       "type": "release",
       "title": "Release 26.10.1-alpha.24 — Ken's Actual fork",

@@ -10,7 +10,7 @@ import type { AppDispatch } from '#redux/store';
 // file that isn't an order export without opening one
 export async function importAmazonOrders(
   dispatch: AppDispatch,
-  onApplied: () => void,
+  onApplied?: () => void,
 ) {
   const res = await window.Actual.openFileDialog({
     filters: [{ name: t('Amazon order export'), extensions: ['csv'] }],

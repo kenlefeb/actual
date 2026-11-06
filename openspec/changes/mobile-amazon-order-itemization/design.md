@@ -56,7 +56,7 @@ See proposal.md (Why) and `specs/amazon-order-itemization/spec.md`. Only what th
 
 ## Risks / Trade-offs
 
-- **[Risk] iOS Safari greys out the CSV in the picker.** → `openFileDialog` already maps extensions to `accept`; the Tester checks on a device (task 4.1). If it fails, add a `csv` entry (`text/csv`, `public.comma-separated-values-text`) to `FILE_ACCEPT_OVERRIDES`, as was done for `qfx`.
+- **[Risk] iOS Safari greys out the CSV in the picker.** → `openFileDialog` already maps extensions to `accept`; the Tester checks on a device (task 4.2). If it fails, add a `csv` entry (`text/csv`, `public.comma-separated-values-text`) to `FILE_ACCEPT_OVERRIDES`, as was done for `qfx`.
 - **[Risk] A large export makes a long list on a phone.** → Matched comes first and has "Apply all"; read-only groups are below. No virtualization in step 1.
 - **[Trade-off] Undo after the notification times out** is only the app-wide undo, which the phone has no button for. Same as other phone actions that use the Undo notification.
 - **[Risk] The width swap shows the phone review in a narrow desktop window.** → It's the same data and handlers; acceptable, and how other modals adapt.

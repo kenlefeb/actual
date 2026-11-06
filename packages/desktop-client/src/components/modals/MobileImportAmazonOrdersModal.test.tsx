@@ -1,12 +1,14 @@
 import { send } from '@actual-app/core/platform/client/connection';
+import { getUndoState } from '@actual-app/core/platform/client/undo';
 import type {
   AmazonChargeReview,
   CandidateTransaction,
 } from '@actual-app/core/server/amazon-orders/types';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { Notifications } from '#components/Notifications';
 import { createTestAppStore, TestProviders } from '#mocks';
 import { undo } from '#undo';
 
@@ -107,6 +109,8 @@ const reviews: AmazonChargeReview[] = [
 function renderModal(onApplied = vi.fn()) {
   render(
     <TestProviders store={createTestAppStore()}>
+      {/* The app's own notifications, as FinancesApp mounts them */}
+      <Notifications />
       <MobileImportAmazonOrdersModal reviews={reviews} onApplied={onApplied} />
     </TestProviders>,
   );
@@ -357,5 +361,56 @@ describe('MobileImportAmazonOrdersModal', () => {
         transactionId: r.transaction!.id,
       })),
     });
+  });
+
+  it('shows each notification once while the review is open', async () => {
+    renderModal();
+
+    await userEvent.click(applyOn('111-0000001'));
+
+    expect(await screen.findAllByText('Itemized 1 Amazon charge')).toHaveLength(
+      1,
+    );
+  });
+
+  it("a later apply's Undo stays for its full time", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const user = userEvent.setup({
+        advanceTimers: vi.advanceTimersByTime,
+      });
+      renderModal();
+
+      await user.click(applyOn('111-0000001'));
+      await screen.findAllByText('Itemized 1 Amazon charge');
+      await act(() => vi.advanceTimersByTimeAsync(5000));
+      await user.click(applyOn('111-0000002'));
+      await within(card('111-0000002')).findByText('Applied');
+      // The first notification's 10 s timer fires here
+      await act(() => vi.advanceTimersByTimeAsync(6000));
+
+      expect(
+        screen.queryAllByRole('button', { name: 'Undo' }).length,
+      ).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('Undo keeps the review open on the phone', () => {
+    const { unmount } = render(
+      <TestProviders store={createTestAppStore()}>
+        <MobileImportAmazonOrdersModal reviews={reviews} />
+      </TestProviders>,
+    );
+
+    // Undo reopens the modal recorded with the apply; without one it closes
+    // whatever modal is open
+    expect(getUndoState('openModal')).toEqual({
+      name: 'import-amazon-orders',
+      options: { reviews, onApplied: undefined },
+    });
+    unmount();
+    expect(getUndoState('openModal')).toBeNull();
   });
 });

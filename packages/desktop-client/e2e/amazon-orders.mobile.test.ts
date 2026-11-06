@@ -62,7 +62,7 @@ test.describe('Mobile Amazon order import', () => {
     await review.open();
 
     // Order 111-0000001 shipped twice; the lamp is the $32.40 shipment
-    const lamp = review.card('111-0000001').filter({ hasText: 'Example Lamp' });
+    const lamp = review.card('111-0000001', 'Example Lamp');
     await expect(lamp).toContainText('32.40');
     await expect(lamp).toContainText('AMZN Mktp US');
     await expect(lamp).toContainText('Example Lamp ×1');
@@ -73,12 +73,13 @@ test.describe('Mobile Amazon order import', () => {
     ).toBeVisible();
     await expect(review.card('111-0000002')).not.toContainText('Apply');
 
-    await review.apply('111-0000001');
+    await review.apply(lamp);
     await expect(lamp).toContainText('Applied');
     await expect.poll(() => isItemized(page, id)).toBe(true);
 
     await review.undoButton.click();
-    await expect(lamp.getByRole('button', { name: 'Apply' })).toBeVisible();
     await expect.poll(() => isItemized(page, id)).toBe(false);
+    // Checked after the undo lands, so the review must stay open through it
+    await expect(lamp.getByRole('button', { name: 'Apply' })).toBeVisible();
   });
 });

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
@@ -6,12 +6,14 @@ import { styles } from '@actual-app/components/styles';
 import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
+import * as undoState from '@actual-app/core/platform/client/undo';
 import type {
   AmazonApplySkipReason,
   AmazonChargeReview,
   AmazonChargeStatus,
 } from '@actual-app/core/server/amazon-orders/types';
 import * as monthUtils from '@actual-app/core/shared/months';
+import { v4 as uuidv4 } from 'uuid';
 
 import {
   GROUPS,
@@ -37,9 +39,6 @@ type MobileImportAmazonOrdersModalProps = {
   onApplied?: () => void;
 };
 
-// One Undo at a time: a new apply replaces the previous apply's notification,
-// so an older Undo can never undo a later apply
-const UNDO_NOTIFICATION_ID = 'amazon-orders-undo';
 const FOOTER_HEIGHT = 72;
 
 export function MobileImportAmazonOrdersModal({
@@ -51,6 +50,20 @@ export function MobileImportAmazonOrdersModal({
   const dateFormat = useDateFormat() || 'MM/dd/yyyy';
   const dispatch = useDispatch();
   const { showUndoNotification } = useUndo();
+  // One Undo at a time: a new apply removes the previous apply's notification,
+  // so an older Undo can never undo a later apply. Each apply gets its own id,
+  // so an old notification's timer can't remove a newer one.
+  const undoNotificationId = useRef<string | null>(null);
+
+  // Undo reopens the modal recorded with the apply, and closes any open modal
+  // when none was recorded; record this one so Undo keeps the review open
+  useEffect(() => {
+    undoState.setUndoState('openModal', {
+      name: 'import-amazon-orders',
+      options: { reviews, onApplied },
+    });
+    return () => undoState.setUndoState('openModal', null);
+  }, [reviews, onApplied]);
   const { groupTitles, skipReasons, isApplying, apply } = useAmazonOrderReview({
     reviews,
     onApplied,
@@ -81,7 +94,10 @@ export function MobileImportAmazonOrdersModal({
   };
 
   async function onApply(chargeIds: string[]) {
-    dispatch(removeNotification({ id: UNDO_NOTIFICATION_ID }));
+    if (undoNotificationId.current) {
+      dispatch(removeNotification({ id: undoNotificationId.current }));
+      undoNotificationId.current = null;
+    }
     const result = await apply(chargeIds);
     const appliedTransactions = new Set(result.applied);
     const appliedIds = chargeIds.filter(id => {
@@ -98,8 +114,9 @@ export function MobileImportAmazonOrdersModal({
     }));
 
     if (appliedIds.length > 0) {
+      undoNotificationId.current = uuidv4();
       showUndoNotification({
-        id: UNDO_NOTIFICATION_ID,
+        id: undoNotificationId.current,
         type: 'message',
         message:
           appliedIds.length === 1
@@ -275,7 +292,7 @@ export function MobileImportAmazonOrdersModal({
             </View>
           )}
           {/* App notifications sit below modals; show the Undo above this one */}
-          <Notifications style={{ bottom: FOOTER_HEIGHT + 12 }} />
+          <Notifications isModalHost style={{ bottom: FOOTER_HEIGHT + 12 }} />
         </>
       )}
     </Modal>

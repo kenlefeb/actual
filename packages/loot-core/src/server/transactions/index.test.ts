@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { app as accountsApp } from '#server/accounts/app';
 import * as db from '#server/db';
+import { addSyncListener } from '#server/sync';
 import { undo } from '#server/undo';
 
 import { app as transactionsApp } from './app';
@@ -95,6 +96,44 @@ describe('Delete and undo', () => {
     await accountsApp.handlers['account-close']({ id: 'one', forced: true });
 
     expect(await liveAttachments()).toEqual([]);
+  });
+
+  it('closes an account with its transactions and attachments as one batch and one undo', async () => {
+    await db.insertPayee({ name: '', transfer_acct: 'one' });
+    for (const id of ['t1', 't2', 't3']) {
+      await db.insertTransaction({
+        id,
+        account: 'one',
+        amount: -100,
+        date: '2024-01-01',
+      });
+      await attach(`a-${id}`, id);
+    }
+    const liveTransactions = async () =>
+      (
+        await db.all<{ id: string }>(
+          "SELECT id FROM transactions WHERE tombstone = 0 AND acct = 'one' ORDER BY id",
+        )
+      ).map(row => row.id);
+
+    // Each apply of a message batch reports the tables it touched
+    const applies: string[][] = [];
+    const removeListener = addSyncListener((_old, newData) => {
+      applies.push([...newData.keys()].sort());
+    });
+    await accountsApp.handlers['account-close']({ id: 'one', forced: true });
+    removeListener();
+
+    expect(applies).toEqual([
+      ['accounts', 'payees', 'transaction_attachments', 'transactions'],
+    ]);
+    expect(await liveTransactions()).toEqual([]);
+    expect(await liveAttachments()).toEqual([]);
+
+    await undo();
+
+    expect(await liveTransactions()).toEqual(['t1', 't2', 't3']);
+    expect(await liveAttachments()).toEqual(['a-t1', 'a-t2', 'a-t3']);
   });
 
   it('removes attachments of the other side when a transfer is removed', async () => {

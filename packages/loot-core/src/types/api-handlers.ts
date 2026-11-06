@@ -225,6 +225,21 @@ export type ApiHandlers = {
     transferCategoryId?: APICategoryEntity['id'];
   }) => Promise<void>;
 
+  'api/category-move': (arg: {
+    id: APICategoryEntity['id'];
+    groupId: APICategoryGroupEntity['id'];
+    targetId?: APICategoryEntity['id'] | null;
+  }) => Promise<void>;
+
+  'api/category-group-move': (arg: {
+    id: APICategoryGroupEntity['id'];
+    targetId?: APICategoryGroupEntity['id'] | null;
+  }) => Promise<void>;
+
+  'api/category-usage-get': (arg: {
+    id: APICategoryEntity['id'];
+  }) => Promise<{ transactions: number; months: string[] }>;
+
   'api/note-get': (arg: Pick<NoteEntity, 'id'>) => Promise<NoteEntity | null>;
 
   'api/note-update': (arg: NoteEntity) => Promise<void>;

@@ -3,12 +3,14 @@ import type { RegisterTool } from '#tools/read/shared';
 
 import { registerAccountWriteTools } from './accounts';
 import { registerBudgetWriteTools } from './budget';
+import { registerCategoryWriteTools } from './categories';
 import { registerPaycheckWriteTools } from './paychecks';
 import { registerTransactionWriteTools } from './transactions';
 
 /**
- * The v1 write set and nothing else: no delete, bulk edit, import, rule,
- * account close or budget reset tools (those are a later story). Each tool
+ * The write set and nothing else: no delete (except category and group), bulk
+ * edit, import, rule, account close or budget reset tools (those are a later
+ * story, sc-1556). Each tool
  * appends its audit line to `auditLog` before it writes.
  */
 export function registerWriteTools(
@@ -22,4 +24,5 @@ export function registerWriteTools(
   registerBudgetWriteTools(tool, log);
   registerPaycheckWriteTools(tool, log);
   registerAccountWriteTools(tool, log);
+  registerCategoryWriteTools(tool, log);
 }

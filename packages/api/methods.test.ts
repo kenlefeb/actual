@@ -1841,6 +1841,49 @@ describe('API fork handlers', () => {
     ]);
   });
 
+  test('Categories are moved and their usage is read', async () => {
+    await api.loadBudget(budgetName);
+    const group = await api.createCategoryGroup({ name: 'X' });
+    const other = await api.createCategoryGroup({ name: 'Y' });
+    const a = await api.createCategory({ name: 'A', group_id: group } as never);
+    const b = await api.createCategory({ name: 'B', group_id: group } as never);
+    const c = await api.createCategory({
+      name: 'C',
+      group_id: other,
+    } as never);
+    const order = async (id: string) =>
+      (await api.getCategoryGroups())
+        .find(g => g.id === id)
+        ?.categories?.map(x => x.name);
+
+    await api.moveCategory(b, group, a);
+    expect(await order(group)).toEqual(['B', 'A']);
+    await api.moveCategory(c, group, null);
+    expect(await order(group)).toEqual(['B', 'A', 'C']);
+    expect(await order(other)).toEqual([]);
+
+    await api.moveCategoryGroup(other, group);
+    const ids = (await api.getCategoryGroups()).map(g => g.id);
+    expect(ids.indexOf(other)).toBe(ids.indexOf(group) - 1);
+
+    expect(await api.getCategoryUsage(a)).toEqual({
+      transactions: 0,
+      months: [],
+    });
+    const account = await api.createAccount({ name: 'Checking' }, 0);
+    await api.addTransactions(account, [
+      { date: '2017-01-05', amount: -100, category: a },
+      { date: '2017-01-06', amount: -100, category: a },
+      { date: '2017-01-07', amount: -100, category: a },
+    ]);
+    await api.setBudgetAmount('2017-01', a, 5000);
+    await api.setBudgetAmount('2017-02', a, 6000);
+    expect(await api.getCategoryUsage(a)).toEqual({
+      transactions: 3,
+      months: ['2017-01', '2017-02'],
+    });
+  });
+
   test('An off-budget account is previewed and moved on budget', async () => {
     await api.loadBudget(budgetName);
     const account = await api.createAccount(
@@ -1885,6 +1928,9 @@ const FORK_HANDLER_METHODS = {
   'business-calendar-create': 'createBusinessCalendar',
   'business-calendar-update': 'updateBusinessCalendar',
   'business-calendar-delete': 'deleteBusinessCalendar',
+  'api/category-move': 'moveCategory',
+  'api/category-group-move': 'moveCategoryGroup',
+  'api/category-usage-get': 'getCategoryUsage',
 } as const;
 
 describe('API fork handler coverage', () => {

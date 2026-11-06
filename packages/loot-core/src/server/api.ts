@@ -864,6 +864,42 @@ handlers['api/category-delete'] = withMutation(async function ({
   });
 });
 
+handlers['api/category-move'] = withMutation(async function ({
+  id,
+  groupId,
+  targetId,
+}) {
+  checkFileOpen();
+  return handlers['category-move']({ id, groupId, targetId: targetId ?? null });
+});
+
+handlers['api/category-group-move'] = withMutation(async function ({
+  id,
+  targetId,
+}) {
+  checkFileOpen();
+  return handlers['category-group-move']({ id, targetId: targetId ?? null });
+});
+
+handlers['api/category-usage-get'] = async function ({ id }) {
+  checkFileOpen();
+  const { data } = await aqlQuery(
+    q('transactions')
+      .filter({ category: id })
+      .options({ splits: 'grouped' })
+      .calculate({ $count: '$id' }),
+  );
+  const months = [...(sheet.get().meta().createdMonths as Set<string>)]
+    .filter(month => {
+      const value = sheet
+        .get()
+        .getCellValue(monthUtils.sheetForMonth(month), 'budget-' + id);
+      return value != null && value !== 0;
+    })
+    .sort();
+  return { transactions: data as number, months };
+};
+
 handlers['api/note-get'] = async function ({ id }) {
   checkFileOpen();
   return handlers['notes-get']({ id });

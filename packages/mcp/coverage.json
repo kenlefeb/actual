@@ -136,5 +136,23 @@
   },
   "amazon-orders-apply": {
     "skip": "Not in the v1 write set (mcp-server \"Write tools\"): Amazon matches are reviewed and applied in the app (sc-926)"
+  },
+  "api/category-move": {
+    "tool": "write_move_category"
+  },
+  "moveCategory": {
+    "tool": "write_move_category"
+  },
+  "api/category-group-move": {
+    "tool": "write_move_category_group"
+  },
+  "moveCategoryGroup": {
+    "tool": "write_move_category_group"
+  },
+  "api/category-usage-get": {
+    "tool": "write_delete_category"
+  },
+  "getCategoryUsage": {
+    "tool": "write_delete_category"
   }
 }

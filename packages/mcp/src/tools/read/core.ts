@@ -87,7 +87,10 @@ export function registerCoreTools(tool: RegisterTool) {
             { name: g.name },
           ),
           categories: (g.categories ?? []).map(c =>
-            withText({ id: c.id, hidden: c.hidden }, { name: c.name }),
+            withText(
+              { id: c.id, is_income: c.is_income, hidden: c.hidden },
+              { name: c.name },
+            ),
           ),
         })),
         p,

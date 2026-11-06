@@ -337,6 +337,28 @@ export function deleteCategory(
   return send('api/category-delete', { id, transferCategoryId });
 }
 
+/** Moves a category into `groupId`, before `targetId` (last when omitted). */
+export function moveCategory(
+  id: APICategoryEntity['id'],
+  groupId: APICategoryGroupEntity['id'],
+  targetId?: APICategoryEntity['id'] | null,
+) {
+  return send('api/category-move', { id, groupId, targetId });
+}
+
+/** Moves a category group before `targetId` (last when omitted). */
+export function moveCategoryGroup(
+  id: APICategoryGroupEntity['id'],
+  targetId?: APICategoryGroupEntity['id'] | null,
+) {
+  return send('api/category-group-move', { id, targetId });
+}
+
+/** The transactions and the budgeted months (YYYY-MM, non-zero) of a category. */
+export function getCategoryUsage(id: APICategoryEntity['id']) {
+  return send('api/category-usage-get', { id });
+}
+
 export function getNote(id: NoteEntity['id']) {
   return send('api/note-get', { id });
 }

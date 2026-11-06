@@ -46,16 +46,26 @@ Write tools exist on a separate server entry started with `actual-mcp --writes`,
 entry (below). Their names start with `write_`, so a client can auto-allow reads and prompt on every
 write.
 
-| Tool                        | Changes                                                                |
-| --------------------------- | ---------------------------------------------------------------------- |
-| `write_create_transactions` | Adds transactions to one account (date, cents, payee, category, notes) |
-| `write_update_transactions` | Sets the category, payee or notes of transactions                      |
-| `write_set_budget_amount`   | Sets one category's budgeted amount for a month                        |
-| `write_skip_paycheck`       | Skips a paycheck's next pay date                                       |
-| `write_move_on_budget`      | Moves an off-budget account on budget; needs a `confirm` (below)       |
+| Tool                          | Changes                                                                       |
+| ----------------------------- | ----------------------------------------------------------------------------- |
+| `write_create_transactions`   | Adds transactions to one account (date, cents, payee, category, notes)        |
+| `write_update_transactions`   | Sets the category, payee or notes of transactions                             |
+| `write_set_budget_amount`     | Sets one category's budgeted amount for a month                               |
+| `write_skip_paycheck`         | Skips a paycheck's next pay date                                              |
+| `write_move_on_budget`        | Moves an off-budget account on budget; needs a `confirm` (below)              |
+| `write_create_category_group` | Creates an expense category group                                             |
+| `write_create_category`       | Creates a category in a group (income or expense as the group is)             |
+| `write_update_category_group` | Renames, hides or unhides a group                                             |
+| `write_update_category`       | Renames, hides or unhides a category                                          |
+| `write_move_category`         | Moves a category to a group and place (reorders within a group)               |
+| `write_move_category_group`   | Moves a group to a place among the groups                                     |
+| `write_delete_category`       | Deletes a category; `transfer_category_id` is required when it is in use      |
+| `write_delete_category_group` | Deletes a group and its categories; one `transfer_category_id` for all in use |
 
-That is the whole v1 set: there are no delete, bulk-edit, import, rule, account-close or
-budget-reset tools.
+Category delete and category group delete are the only deletes: there are no bulk-edit, import,
+rule, account-close or budget-reset tools. Neither delete has a dry run or an undo; the transfer
+category is the guard. A category never moves between an income and an expense group, and only
+expense groups can be created.
 
 - **Ids only.** Accounts, transactions, payees, categories and paychecks are named by the ids the
   read tools return. A name where an id belongs is refused, never looked up.

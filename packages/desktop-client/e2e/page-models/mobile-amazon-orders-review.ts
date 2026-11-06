@@ -37,11 +37,13 @@ export class MobileAmazonOrdersReview {
     await this.dialog.waitFor();
   }
 
-  card(orderId: string) {
-    return this.dialog.getByTestId(`amazon-charge-${orderId}`);
+  // An order can ship more than once, so name an item to pick one shipment
+  card(orderId: string, item?: string) {
+    const cards = this.dialog.getByTestId(`amazon-charge-${orderId}`);
+    return item ? cards.filter({ hasText: item }) : cards;
   }
 
-  async apply(orderId: string) {
-    await this.card(orderId).getByRole('button', { name: 'Apply' }).click();
+  async apply(card: Locator) {
+    await card.getByRole('button', { name: 'Apply' }).click();
   }
 }

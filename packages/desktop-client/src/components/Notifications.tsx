@@ -1,4 +1,10 @@
-import React, { useEffect, useEffectEvent, useMemo, useState } from 'react';
+import React, {
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import type { CSSProperties, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 import { animated, to, useSpring } from 'react-spring';
@@ -367,8 +373,43 @@ function Notification({
   );
 }
 
-export function Notifications({ style }: { style?: CSSProperties }) {
+// Notifications sit below modals, so a modal that needs them shows its own
+// (isModalHost); while one is mounted, the app's copy steps aside so each
+// notification is mounted once
+let modalHostCount = 0;
+const modalHostListeners = new Set<() => void>();
+
+function setModalHostCount(change: number) {
+  modalHostCount += change;
+  modalHostListeners.forEach(listener => listener());
+}
+
+function subscribeToModalHosts(listener: () => void) {
+  modalHostListeners.add(listener);
+  return () => {
+    modalHostListeners.delete(listener);
+  };
+}
+
+export function Notifications({
+  style,
+  isModalHost = false,
+}: {
+  style?: CSSProperties;
+  isModalHost?: boolean;
+}) {
   const dispatch = useDispatch();
+  const isHostedByModal = useSyncExternalStore(
+    subscribeToModalHosts,
+    () => modalHostCount > 0,
+  );
+  useEffect(() => {
+    if (!isModalHost) {
+      return;
+    }
+    setModalHostCount(1);
+    return () => setModalHostCount(-1);
+  }, [isModalHost]);
   const { isNarrowWidth } = useResponsive();
   const notifications = useSelector(state => state.notifications.notifications);
   const notificationInset = useSelector(state => state.notifications.inset);
@@ -378,6 +419,10 @@ export function Notifications({ style }: { style?: CSSProperties }) {
   const visibleNotifications = notifications
     .slice(-MAX_VISIBLE_NOTIFICATIONS)
     .reverse();
+
+  if (isHostedByModal && !isModalHost) {
+    return null;
+  }
 
   return (
     <View

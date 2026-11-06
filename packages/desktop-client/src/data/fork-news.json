@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "id": "fork-release-26.10.1-alpha.26",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.26 — Ken's Actual fork",
+      "date": "2026-11-06",
+      "version": "26.10.1-alpha.26",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.26.md",
+      "body": "**Unofficial fork prerelease.** Based on upstream Actual `master` at `21c2b3f703142f858af4c653a31e675ca5ff85d7` (October 26, 2026), which comes after Actual 26.10.0 and is not itself an upstream release; not an official Actual Budget release.\n\nThis release lets you attach documents such as receipts to transactions, on desktop and on the phone, and brings the experimental Amazon order import to the phone.",
+      "details": "#### Features\n\n- Attach documents to transactions on desktop. A PDF, JPEG, PNG or WebP file can be attached to a saved transaction, then opened or removed (with Undo); a paperclip marks transactions that have documents. Documents are stored on the sync server, encrypted with the budget's key when the budget is encrypted, up to 10 MB each and 1 GB per budget by default. Attaching needs a sync server.\n- Attach documents on the phone. The transaction screen has a Documents section: attach from Files, the camera or the Photos library, open a document inside the app and share or save it, or remove it with Undo. Rows with documents show a paperclip.\n- Experimental Amazon order itemization on the phone. With **Amazon order itemization** turned on under **Settings > Experimental features**, the **All accounts** menu offers **Import Amazon orders**; review the matched charges and apply them one at a time or all at once, with Undo.\n\n#### Enhancements\n\n- Merging two transactions keeps the documents attached to either one, and deleting a transaction removes its documents from the budget.\n- Changing the encryption key re-encrypts attached documents with the new key.\n\n#### Bugfixes\n\n- None.\n\n#### Maintenance\n\n- The sync server has new settings `ACTUAL_ATTACHMENTS_FILE_SIZE_LIMIT_MB` (default 10) and `ACTUAL_ATTACHMENTS_BUDGET_QUOTA_MB` (default 1024), and `/info` reports the per-document limit.\n- OpenSpec records for transaction attachments on desktop and phone and for the phone Amazon import; agent docs record that every user-facing feature ships on desktop and on the phone.\n- The MCP coverage list records that attachments are not MCP tools yet.\n- The mobile Settings screenshots used by the visual tests are updated for the new export notice.\n\n#### Known limitations\n\n- Experimental.\n- Upstream changes made after 26.10.0 have not yet been through an upstream release.\n- Attached documents aren't included in a budget export, and removed documents stay on the sync server.\n- HEIC pictures are refused; use the Photos library or a JPEG or PNG copy.\n- Attaching a document needs a connection; there is no offline upload queue.\n- No iPhone acceptance test is claimed."
+    },
+    {
       "id": "fork-release-26.10.1-alpha.25",
       "type": "release",
       "title": "Release 26.10.1-alpha.25 — Ken's Actual fork",

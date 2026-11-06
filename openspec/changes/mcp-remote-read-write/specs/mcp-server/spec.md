@@ -53,11 +53,11 @@ The server SHALL offer read tools for accounts and balances, category groups and
 - **THEN** the call fails and the budget is unchanged
 
 ### Requirement: Write tools
-With `--writes`, or on the hosted entry, the server SHALL offer these write tools and no others: `write_create_transactions`, `write_update_transactions` (category, payee, notes), `write_set_budget_amount`, `write_skip_paycheck` and `write_move_on_budget`. It SHALL offer no delete, bulk-edit, import, rule create or edit, account close, or whole-budget reset or transfer.
+With `--writes`, or on the hosted entry, the server SHALL offer these write tools and no others: `write_create_transactions`, `write_update_transactions` (category, payee, notes), `write_set_budget_amount`, `write_skip_paycheck`, `write_move_on_budget` and the category maintenance tools of "Category maintenance tools". It SHALL offer no delete other than those, and no bulk-edit, import, rule create or edit, account close, or whole-budget reset or transfer.
 
 #### Scenario: No destructive tools
 - **WHEN** a client lists the tools of a server started with `--writes`
-- **THEN** none deletes, imports, bulk-edits, edits rules, closes an account or resets a budget
+- **THEN** the only deleting tools are `write_delete_category` and `write_delete_category_group`, and none imports, bulk-edits, edits rules, closes an account or resets a budget
 
 ### Requirement: Write audit log
 The server SHALL append one JSON line per write to `~/Library/Application Support/actual-mcp/<env>.audit.jsonl` (`<env>-writes.audit.jsonl` for the `--writes` entry, `<env>-remote.audit.jsonl` for the hosted entry), mode 0600, with the time, the acting identity (`user_id` and `subject`), tool, ids and the fields changed with their before and after values, and never a secret or token. A write SHALL NOT run when its audit line cannot be appended.

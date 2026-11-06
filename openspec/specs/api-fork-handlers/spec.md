@@ -6,7 +6,7 @@ Gives scripts typed `@actual-app/api` methods for the fork's own handlers (paych
 ## Requirements
 
 ### Requirement: Typed API methods for the fork's handlers
-`@actual-app/api` SHALL export a typed method for each of the 14 handlers the fork adds beyond upstream's (paychecks, account business days, move on budget and its preview, and business calendars), so a script needs no untyped `internal.send` call. Each SHALL call its handler with the arguments unchanged and return its result with the same errors, and its argument and result types SHALL be written by hand and checked against the handlers by the compiler through `send`.
+`@actual-app/api` SHALL export a typed method for each of the 17 handlers the fork adds beyond upstream's (paychecks, account business days, move on budget and its preview, business calendars, and category move, category group move and category usage), so a script needs no untyped `internal.send` call. Each SHALL call its handler with the arguments unchanged and return its result with the same errors, and its argument and result types SHALL be written by hand and checked against the handlers by the compiler through `send`.
 
 #### Scenario: A script edits a paycheck
 - **GIVEN** a budget with the paycheck "Acme", whose schedules the API refuses to edit
@@ -22,8 +22,18 @@ Gives scripts typed `@actual-app/api` methods for the fork's own handlers (paych
 - **WHEN** a script calls `moveAccountOnBudget` for an account that is already on budget
 - **THEN** the call rejects with the handler's error, not a wrapper's
 
+#### Scenario: A script moves a category
+- **GIVEN** categories "A" and "B" in group "X"
+- **WHEN** a script calls `moveCategory` for "B" with group "X" and target "A"
+- **THEN** "B" is listed before "A", as when the app drags it there
+
+#### Scenario: Category usage
+- **GIVEN** a category with 3 transactions and a budgeted amount in 2 months
+- **WHEN** a script calls `getCategoryUsage` for it
+- **THEN** the result is 3 transactions and those 2 months, and nothing changed
+
 ### Requirement: Every fork handler has a method
-The API tests SHALL fail, naming the handler, when any of the 14 listed handlers has no typed method or `methods.ts` does not call it. The list is fixed in the test; a new fork handler is found by `mcp-server` "Coverage check", which also requires its call in `methods.ts`.
+The API tests SHALL fail, naming the handler, when any of the 17 listed handlers has no typed method or `methods.ts` does not call it. The list is fixed in the test; a new fork handler is found by `mcp-server` "Coverage check", which also requires its call in `methods.ts`.
 
 #### Scenario: A handler without a method
 - **GIVEN** a listed fork handler `paycheck-skip-next` whose method is removed from `methods.ts`

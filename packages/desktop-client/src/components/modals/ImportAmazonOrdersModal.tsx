@@ -6,16 +6,17 @@ import { Select } from '@actual-app/components/select';
 import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
-import { send } from '@actual-app/core/platform/client/connection';
 import type {
   AmazonApplyResult,
-  AmazonApplySkipReason,
   AmazonChargeReview,
-  AmazonChargeStatus,
   CandidateTransaction,
 } from '@actual-app/core/server/amazon-orders/types';
 import * as monthUtils from '@actual-app/core/shared/months';
 
+import {
+  GROUPS,
+  useAmazonOrderReview,
+} from '#components/accounts/useAmazonOrderReview';
 import {
   Modal,
   ModalCloseButton,
@@ -32,17 +33,6 @@ type ImportAmazonOrdersModalProps = {
   onApplied?: () => void;
 };
 
-// Review order; the import itself stays on the device and nothing is written
-// until "Apply selected"
-const GROUPS: AmazonChargeStatus[] = [
-  'matched',
-  'ambiguous',
-  'unmatched',
-  'gift-card-or-points',
-  'already-split',
-  'already-itemized',
-];
-
 export function ImportAmazonOrdersModal({
   reviews,
   onApplied,
@@ -50,66 +40,29 @@ export function ImportAmazonOrdersModal({
   const { t } = useTranslation();
   const format = useFormat();
   const dateFormat = useDateFormat() || 'MM/dd/yyyy';
-  // Charge id to the chosen transaction id. Matched rows start checked.
-  const [chosen, setChosen] = useState<Record<string, string>>(() =>
-    Object.fromEntries(
-      reviews
-        .filter(r => r.status === 'matched' && r.transaction)
-        .map(r => [r.charge.id, r.transaction!.id]),
-    ),
-  );
-  const [isApplying, setIsApplying] = useState(false);
+  const {
+    groupTitles,
+    skipReasons,
+    chosen,
+    toggle,
+    usedIds,
+    isApplying,
+    apply,
+  } = useAmazonOrderReview({ reviews, onApplied });
   const [skipped, setSkipped] = useState<AmazonApplyResult['skipped'] | null>(
     null,
   );
 
-  const groupTitles: Record<AmazonChargeStatus, string> = {
-    matched: t('Matched'),
-    ambiguous: t('Ambiguous'),
-    unmatched: t('Not matched'),
-    'gift-card-or-points': t('Not matched: paid partly by gift card or points'),
-    'already-split': t('Already split'),
-    'already-itemized': t('Already itemized'),
-  };
-  const skipReasons: Record<AmazonApplySkipReason, string> = {
-    missing: t('The transaction was deleted.'),
-    'amount-changed': t('Its amount changed after the review.'),
-    split: t('It was split after the review.'),
-    transfer: t('It became a transfer.'),
-    'already-itemized': t('It was already itemized for an order.'),
-    'not-a-charge': t(
-      "The shipment comes to $0 or less, so it isn't a charge.",
-    ),
-  };
   const orderIdOf = (chargeId: string) =>
     reviews.find(r => r.charge.id === chargeId)?.charge.orderId ?? chargeId;
-  const usedIds = new Set(Object.values(chosen));
-
-  function toggle(chargeId: string, transactionId: string | null) {
-    setChosen(previous => {
-      const next = { ...previous };
-      delete next[chargeId];
-      return transactionId ? { ...next, [chargeId]: transactionId } : next;
-    });
-  }
 
   async function onApply(close: () => void) {
-    setIsApplying(true);
-    try {
-      const result = await send('amazon-orders-apply', {
-        matches: reviews
-          .filter(r => chosen[r.charge.id])
-          .map(r => ({ charge: r.charge, transactionId: chosen[r.charge.id] })),
-      });
-      onApplied?.();
-      if (result.skipped.length > 0) {
-        // Stay open so the user sees what wasn't itemized, and why
-        setSkipped(result.skipped);
-      } else {
-        close();
-      }
-    } finally {
-      setIsApplying(false);
+    const result = await apply(Object.keys(chosen));
+    if (result.skipped.length > 0) {
+      // Stay open so the user sees what wasn't itemized, and why
+      setSkipped(result.skipped);
+    } else {
+      close();
     }
   }
 

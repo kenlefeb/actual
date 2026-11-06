@@ -2,6 +2,7 @@
 import React, { Fragment, useEffect, useEffectEvent } from 'react';
 import { useLocation } from 'react-router';
 
+import { useResponsive } from '@actual-app/components/hooks/useResponsive';
 import { send } from '@actual-app/core/platform/client/connection';
 import * as monthUtils from '@actual-app/core/shared/months';
 
@@ -70,6 +71,7 @@ import { ImportYNAB5Modal } from './modals/manager/ImportYNAB5Modal';
 import { ManageRulesModal } from './modals/ManageRulesModal';
 import { MergeUnusedPayeesModal } from './modals/MergeUnusedPayeesModal';
 import { MobileConfirmDeleteModal } from './modals/MobileConfirmDeleteModal';
+import { MobileImportAmazonOrdersModal } from './modals/MobileImportAmazonOrdersModal';
 import { MoveOnBudgetModal } from './modals/MoveOnBudgetModal';
 import { NewCategoryGroupModal } from './modals/NewCategoryGroupModal';
 import { NewCategoryModal } from './modals/NewCategoryModal';
@@ -101,6 +103,7 @@ import { UpcomingLength } from './schedules/UpcomingLength';
 export function Modals() {
   const location = useLocation();
   const dispatch = useDispatch();
+  const { isNarrowWidth } = useResponsive();
   const { modalStack } = useModalState();
   const [budgetId] = useMetadataPref('id');
 
@@ -140,7 +143,11 @@ export function Modals() {
           return <ImportTransactionsModal key={key} {...modal.options} />;
 
         case 'import-amazon-orders':
-          return <ImportAmazonOrdersModal key={key} {...modal.options} />;
+          return isNarrowWidth ? (
+            <MobileImportAmazonOrdersModal key={key} {...modal.options} />
+          ) : (
+            <ImportAmazonOrdersModal key={key} {...modal.options} />
+          );
 
         case 'add-account':
           return <CreateAccountModal key={key} {...modal.options} />;

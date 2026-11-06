@@ -51,6 +51,15 @@ On the phone, each Matched charge SHALL offer "Apply" for that charge alone, and
 - **WHEN** the user taps "Apply all" for three Matched charges and then taps Undo in the notification
 - **THEN** all three transactions are back to how they were, and their cards can be applied again
 
+#### Scenario: Only the latest apply offers Undo on the phone
+- **WHEN** the user applies one charge, then applies another
+- **THEN** only the second apply offers Undo, and Undo restores only the second charge
+
+#### Scenario: Apply all after a skip on the phone
+- **GIVEN** a Matched charge that an earlier apply skipped
+- **WHEN** the user taps "Apply all"
+- **THEN** that charge is not sent again, and it keeps showing why it wasn't applied
+
 #### Scenario: Close without applying on the phone
 - **WHEN** the user imports an export with Matched charges on the phone and closes the review without applying
 - **THEN** no transaction in the budget has changed

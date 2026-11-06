@@ -39,7 +39,7 @@ With writes on, the server SHALL offer `write_create_category_group`, `write_cre
 - **THEN** the call is refused and the category stays where it was
 
 ### Requirement: Category delete needs a transfer when in use
-`write_delete_category` SHALL delete a category. When the category has transactions or non-zero budgeted amounts it SHALL require `transfer_category_id`, refusing without one and saying how many transactions and which months are affected; with one it SHALL move the transactions and budgeted amounts to that category before deleting. The transfer category SHALL exist, differ from the deleted one and be income or expense as it is. A category in use SHALL be deleted without a dry-run or confirm step. `write_delete_category_group` SHALL refuse a group that still has categories, hidden ones included, saying how many, and SHALL refuse the income group.
+`write_delete_category` SHALL delete a category. When the category has transactions or non-zero budgeted amounts it SHALL require `transfer_category_id`, refusing without one and saying how many transactions and which months are affected; with one it SHALL move the transactions and budgeted amounts to that category before deleting. The transfer category SHALL exist, differ from the deleted one and be income or expense as it is. A category in use SHALL be deleted without a dry-run or confirm step. `write_delete_category_group` SHALL delete a group and its categories, hidden ones included. If any category is in use it SHALL require `transfer_category_id`, refusing without one and naming the in-use categories with their transaction counts and months; with one it SHALL move each in-use category's transactions and budgeted amounts there before deleting. The transfer category SHALL exist, SHALL NOT be in the group being deleted, and SHALL be an expense category. The income group SHALL be refused, and so SHALL a group of more than 50 categories. A group with no category in use SHALL be deleted with no transfer. A group delete SHALL write one attempt and one outcome audit line naming the group, its categories and the transfer id.
 
 #### Scenario: In use, no transfer
 - **GIVEN** category "Dining" with 12 transactions
@@ -59,10 +59,28 @@ With writes on, the server SHALL offer `write_create_category_group`, `write_cre
 - **WHEN** a client deletes an expense category with the id of an income category as the transfer
 - **THEN** the call is refused and nothing changed
 
-#### Scenario: A group that is not empty
-- **GIVEN** group "Food" holding two categories
-- **WHEN** a client calls `write_delete_category_group` for "Food"
-- **THEN** the call is refused saying the group has 2 categories, and "Food" still exists
+#### Scenario: A group in use, no transfer
+- **GIVEN** group "Food" with "Dining" (12 transactions) and "Snacks" (none)
+- **WHEN** a client calls `write_delete_category_group` for "Food" without a transfer
+- **THEN** the call is refused naming "Dining" and its 12 transactions, and nothing changed
+
+#### Scenario: A group in use, with a transfer
+- **GIVEN** the same "Food" and "Groceries" in another group
+- **WHEN** a client calls `write_delete_category_group` for "Food" with the id of "Groceries"
+- **THEN** "Food", "Dining" and "Snacks" are gone, and the 12 transactions and budgeted amounts are now in "Groceries"
+
+#### Scenario: A transfer inside the group
+- **WHEN** a client calls `write_delete_category_group` for "Food" with the id of "Snacks"
+- **THEN** the call is refused and nothing changed
+
+#### Scenario: Too many categories
+- **GIVEN** a group of 51 categories
+- **WHEN** a client calls `write_delete_category_group` for it
+- **THEN** the call is refused and nothing changed
+
+#### Scenario: A group of unused categories
+- **WHEN** a client deletes a group whose categories have no transactions and no budgeted amounts, without a transfer
+- **THEN** the group and its categories are deleted
 
 #### Scenario: An empty group
 - **WHEN** a client calls `write_delete_category_group` for a group with no categories

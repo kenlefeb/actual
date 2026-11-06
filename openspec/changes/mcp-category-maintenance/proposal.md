@@ -8,7 +8,7 @@ The MCP can read categories and set budget amounts, but Ken must open the app to
 
 - Eight new `write_` tools: `write_create_category_group`, `write_create_category`, `write_update_category_group`, `write_update_category` (rename, hide, unhide), `write_move_category`, `write_move_category_group`, `write_delete_category` and `write_delete_category_group`. Each takes ids, never names, and goes through the write audit log with before and after values.
 - `write_delete_category` requires a `transfer_category_id` whenever the category has transactions or budget amounts, and moves them there. It has no dry-run or confirm step (Director decision, 2026-11-05; a later dry-run belongs to sc-2426 or sc-1556).
-- `write_delete_category_group` refuses a group that still holds categories; each is deleted (with its own transfer) or moved first.
+- `write_delete_category_group` deletes a group and its categories, with one optional `transfer_category_id` for every in-use category in it. It refuses only when a transfer is needed and missing, naming each in-use category with its transaction count and months.
 - Three fork API handlers with typed `@actual-app/api` methods: `api/category-move`, `api/category-group-move` and `api/category-usage-get` (transaction count and budgeted months of one category, for the delete refusal).
 - `list_category_groups` also returns each category's `is_income`. Groups and categories already come with ids, `hidden` and the app's order.
 - **BREAKING (spec only)**: the `mcp-server` "Write tools" requirement said "no delete tools". Category and category-group delete are now allowed; every other destructive tool stays out (sc-1556).

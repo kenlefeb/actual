@@ -645,7 +645,8 @@ async function storedSize(dir: string, except: string) {
   for (const name of names) {
     const path = resolve(dir, name);
     if (path !== except) {
-      total += (await fs.stat(path)).size;
+      // A temp file can be renamed away between readdir and stat
+      total += (await fs.stat(path).catch(() => null))?.size ?? 0;
     }
   }
   return total;

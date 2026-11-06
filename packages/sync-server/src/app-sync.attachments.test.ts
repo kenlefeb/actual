@@ -194,6 +194,18 @@ describe('attachments', () => {
       expect(stored(fileId, id)).toBe(false);
     });
 
+    it('still answers when a file vanishes while the folder is read', async () => {
+      const fileId = addBudget();
+      const dir = getPathForAttachmentsDir(fileId);
+      fs.mkdirSync(dir, { recursive: true });
+      // Listed by readdir, gone by stat, like a temp file renamed away
+      fs.symlinkSync(`${dir}/missing-target`, `${dir}/vanished.blob`);
+
+      const res = await upload(fileId, newId(), PDF);
+
+      expect(res.statusCode).toBe(200);
+    });
+
     it('counts an overwritten document only once', async () => {
       const quota = config.get('attachments.budgetQuotaMB');
       config.set('attachments.budgetQuotaMB', 3);

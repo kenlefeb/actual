@@ -11,7 +11,7 @@ const pdf = {
   name: 'synthetic-invoice.pdf',
   mimeType: 'application/pdf',
   buffer: Buffer.from(
-    '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[]/Count 0>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n',
+    '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n',
   ),
 };
 
@@ -91,7 +91,12 @@ test.describe('Transaction documents on the phone', () => {
       await entry.openDocument(pdf.name);
       const viewer = page.getByTestId('transaction-attachment-viewer-modal');
       await expect(viewer.locator(`iframe[title="${pdf.name}"]`)).toBeVisible();
-      await expect(viewer.getByText('Share or save')).toBeVisible();
+      await expect(
+        viewer.getByText('Share or save', { exact: true }),
+      ).toBeVisible();
+      await expect(
+        viewer.getByText('Use Share or save to see every page.'),
+      ).toBeVisible();
       await viewer.getByRole('button', { name: 'Close' }).click();
       await expect(viewer).toBeHidden();
 

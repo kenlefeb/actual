@@ -33,6 +33,9 @@ describe('Open a document on the phone', () => {
 
     expect(screen.getByTitle('invoice.pdf')).toHaveAttribute('src', url);
     expect(screen.getByText('Share or save')).toBeInTheDocument();
+    expect(
+      screen.getByText('Use Share or save to see every page.'),
+    ).toBeInTheDocument();
   });
 
   it('Open a photo on the phone', () => {
@@ -42,6 +45,9 @@ describe('Open a document on the phone', () => {
       'src',
       url,
     );
+    expect(
+      screen.queryByText('Use Share or save to see every page.'),
+    ).toBeNull();
   });
 
   it('shares the file when the phone can share files', async () => {

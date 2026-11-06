@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Trans } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
+import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
 
@@ -75,11 +76,17 @@ export function TransactionAttachmentViewerModal({
           />
           <View style={{ flex: 1, minHeight: 0, gap: 10 }}>
             {mime === 'application/pdf' ? (
-              <iframe
-                title={name}
-                src={url}
-                style={{ flex: 1, width: '100%', border: 0 }}
-              />
+              <>
+                <iframe
+                  title={name}
+                  src={url}
+                  style={{ flex: 1, width: '100%', border: 0 }}
+                />
+                {/* iOS iframes show only page 1 and Android shows none */}
+                <Text style={{ textAlign: 'center' }}>
+                  <Trans>Use Share or save to see every page.</Trans>
+                </Text>
+              </>
             ) : (
               <View style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
                 <img

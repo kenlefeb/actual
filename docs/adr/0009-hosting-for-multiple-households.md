@@ -79,32 +79,33 @@ echo "--- memory and CPU pressure"
 cat /proc/pressure/memory /proc/pressure/cpu 2>/dev/null
 ```
 
-   The `du` lines print only a size and a path (Docker volume names, backup
-   directories and `/docker/money`, which holds Lunch Money MCP and Traefik);
-   they open no files.
-3. Check the output. It is about 60 lines and must show `paste-ok-1` first and
-   these four headings, each followed by lines like these (values are
-   examples):
+The `du` lines print only a size and a path (Docker volume names, backup
+directories and `/docker/money`, which holds Lunch Money MCP and Traefik);
+they open no files. 3. Check the output. It is about 60 lines and must show `paste-ok-1` first and
+these four headings, each followed by lines like these (values are
+examples):
 
-   ```text
-   --- docker stats (name, cpu, mem, limit)
-   actual-production-actual-1 cpu=0.40% mem=210MiB / 768MiB 27.34%
-   --- peak memory since container start, restarts, OOM kills
-   /actual-production-actual-1 restarts=0 oom=false started=2026-11-01T03:10:00Z peak_bytes=268435456
-   --- disk by Docker volume and backup directory (sizes only)
-   1.2G	/var/lib/docker/volumes/actual-production_data/_data
-   --- memory and CPU pressure
-   some avg10=0.00 avg60=0.00 avg300=0.00 total=123456
-   ```
+```text
+--- docker stats (name, cpu, mem, limit)
+actual-production-actual-1 cpu=0.40% mem=210MiB / 768MiB 27.34%
+--- peak memory since container start, restarts, OOM kills
+/actual-production-actual-1 restarts=0 oom=false started=2026-11-01T03:10:00Z peak_bytes=268435456
+--- disk by Docker volume and backup directory (sizes only)
+1.2G	/var/lib/docker/volumes/actual-production_data/_data
+--- memory and CPU pressure
+some avg10=0.00 avg60=0.00 avg300=0.00 total=123456
+```
 
-   If the output differs:
-   - `peak_bytes=n/a`: the host uses cgroup v1 or an older kernel. Fine; paste
-     it anyway and say so. Do not try to fix it.
-   - `command not found` or `permission denied`: you are not in the root
-     console, or Docker is not running. Stop, do not run anything else, and
-     comment what the line said.
-   - A heading with nothing under it (for example no pressure lines on an old
-     kernel): paste it as is and say which section was empty.
+If the output differs:
+
+- `peak_bytes=n/a`: the host uses cgroup v1 or an older kernel. Fine; paste
+  it anyway and say so. Do not try to fix it.
+- `command not found` or `permission denied`: you are not in the root
+  console, or Docker is not running. Stop, do not run anything else, and
+  comment what the line said.
+- A heading with nothing under it (for example no pressure lines on an old
+  kernel): paste it as is and say which section was empty.
+
 4. Copy the whole output and paste it into a comment on
    https://app.shortcut.com/blacksmith-press/story/2715.
    Never paste anything else from the console; if any line shows a password,
@@ -126,18 +127,18 @@ Prices are public list prices read on 2026-11-06 from search results (several
 secondary sources). They move, and the ones marked verify need checking on the
 provider's page before Ken commits. USD unless marked.
 
-| Offer                                        | Cost (2026-11-06)                                                                                                                                                        |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Hostinger KVM 1 (today): 1 vCPU, 4 GB        | $11.99/mo renewal ($6.49 on a 24-month intro)                                                                                                                            |
-| Hostinger KVM 2: 2 vCPU, 8 GB                | $14.99/mo renewal ($8.99 intro)                                                                                                                                          |
-| Hostinger KVM 4: 4 vCPU, 16 GB               | $28.99/mo renewal ($12.99 intro)                                                                                                                                         |
-| Hostinger KVM 8: 8 vCPU, 32 GB               | about $50/mo renewal (sources differ: $47.99 to $59.99)                                                                                                                  |
-| Hetzner CX23: 2 vCPU, 4 GB                   | about EUR 6/mo; CX33 (4 vCPU, 8 GB) about EUR 6.5 to 10. Prices rose in April and June 2026 and orders were restricted for a time: verify                                |
-| AWS Lightsail 4 GB / 8 GB                    | $24 / $44 per month                                                                                                                                                      |
-| AWS EC2 t3.medium (2 vCPU, 4 GiB) / t3.large (2 vCPU, 8 GiB), x86 | about $0.0416/h (about $30/mo) / $0.0832/h (about $61/mo), us-east-1 (verify); plus EBS (gp3 about $0.08 per GB-month) and public IPv4 at $0.005/h. Graviton t4g.medium is $0.0336/h (about $24.5/mo) but needs an arm64 build, which the fork does not make |
-| AWS Fargate                                  | $0.04048 per vCPU-hour, $0.004445 per GB-hour (x86, us-east-1)                                                                                                           |
-| Amazon EKS                                   | $0.10 per cluster-hour, about $73/mo, plus nodes; $0.60 per hour in extended support, about $438/mo (from month 15 of a Kubernetes version)                              |
-| Other managed Kubernetes (GKE, DigitalOcean) | search was inconclusive; verify. DigitalOcean's control plane has been free and GKE has had a monthly credit for one cluster, which would remove the EKS-style fixed fee |
+| Offer                                                             | Cost (2026-11-06)                                                                                                                                                                                                                                   |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hostinger KVM 1 (today): 1 vCPU, 4 GB                             | $11.99/mo renewal ($6.49 on a 24-month intro)                                                                                                                                                                                                       |
+| Hostinger KVM 2: 2 vCPU, 8 GB                                     | $14.99/mo renewal ($8.99 intro)                                                                                                                                                                                                                     |
+| Hostinger KVM 4: 4 vCPU, 16 GB                                    | $28.99/mo renewal ($12.99 intro)                                                                                                                                                                                                                    |
+| Hostinger KVM 8: 8 vCPU, 32 GB                                    | about $50/mo renewal (sources differ: $47.99 to $59.99)                                                                                                                                                                                             |
+| Hetzner CX23: 2 vCPU, 4 GB                                        | about EUR 6/mo; CX33 (4 vCPU, 8 GB) about EUR 6.5 to 10. Prices rose in April and June 2026 and orders were restricted for a time: verify                                                                                                           |
+| AWS Lightsail 4 GB / 8 GB                                         | $24 / $44 per month                                                                                                                                                                                                                                 |
+| AWS EC2 t3.medium (2 vCPU, 4 GiB) / t3.large (2 vCPU, 8 GiB), x86 | about $0.0416/h (about $30/mo) / $0.0832/h (about $61/mo), us-east-1; plus EBS (gp3 about $0.08 per GB-month) and public IPv4 at $0.005/h. Graviton t4g.medium is $0.0336/h (about $24.5/mo) but needs an arm64 build, which the fork does not make |
+| AWS Fargate                                                       | $0.04048 per vCPU-hour, $0.004445 per GB-hour (x86, us-east-1)                                                                                                                                                                                      |
+| Amazon EKS                                                        | $0.10 per cluster-hour, about $73/mo, plus nodes; $0.60 per hour in extended support, about $438/mo (from month 15 of a Kubernetes version)                                                                                                         |
+| Other managed Kubernetes (GKE, DigitalOcean)                      | search was inconclusive; verify. DigitalOcean's control plane has been free and GKE has had a monthly credit for one cluster, which would remove the EKS-style fixed fee                                                                            |
 
 ### A. Upgrade the single VPS
 
@@ -291,5 +292,5 @@ EBS snapshots, or two VPSes with restore drills).
 Hostinger VPS pricing: hostinger.com/vps-hosting (search snippet) and
 hostadvice.com's Hostinger VPS pricing. Hetzner 2026 repricing: northflank.com
 and betterstack.com reviews. EKS and Fargate rates: AWS pricing as quoted by
-komodor.com and cloudburn.io. EC2 t3 (x86) rates: AWS on-demand list prices recalled, verify. Lightsail bundles: AWS Lightsail documentation. All are secondary
+komodor.com and cloudburn.io. EC2 t3 (x86) rates: $0.0416/h and $0.0832/h, us-east-1, verified by web search 2026-11-06. Lightsail bundles: AWS Lightsail documentation. All are secondary
 readings of provider prices.

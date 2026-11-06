@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { app as accountsApp } from '#server/accounts/app';
 import * as db from '#server/db';
 import { undo } from '#server/undo';
 
 import { app as transactionsApp } from './app';
+import { removeTransfer } from './transfer';
 
 import { batchUpdateTransactions } from './index';
 
@@ -78,6 +80,44 @@ describe('Delete and undo', () => {
 
     await undo();
     expect(await liveAttachments()).toEqual(['a1']);
+  });
+
+  it('removes attachments when closing an account deletes its transactions', async () => {
+    await db.insertPayee({ name: '', transfer_acct: 'one' });
+    await db.insertTransaction({
+      id: 't1',
+      account: 'one',
+      amount: -100,
+      date: '2024-01-01',
+    });
+    await attach('a1', 't1');
+
+    await accountsApp.handlers['account-close']({ id: 'one', forced: true });
+
+    expect(await liveAttachments()).toEqual([]);
+  });
+
+  it('removes attachments of the other side when a transfer is removed', async () => {
+    await db.insertAccount({ id: 'two', name: 'two' });
+    await db.insertTransaction({
+      id: 'out',
+      account: 'one',
+      amount: -100,
+      date: '2024-01-01',
+      transfer_id: 'in',
+    });
+    await db.insertTransaction({
+      id: 'in',
+      account: 'two',
+      amount: 100,
+      date: '2024-01-01',
+      transfer_id: 'out',
+    });
+    await attach('a-in', 'in');
+
+    await removeTransfer({ id: 'out', transfer_id: 'in' });
+
+    expect(await liveAttachments()).toEqual([]);
   });
 });
 

@@ -52,6 +52,7 @@ import type {
   DbPayeeMapping,
   DbTag,
   DbTransaction,
+  DbTransactionAttachment,
   DbViewTransaction,
   DbViewTransactionInternalAlive,
 } from './types';
@@ -915,6 +916,15 @@ export function updateTransaction(transaction) {
 }
 
 export async function deleteTransaction(transaction) {
+  // Its attachments go with it (in the caller's batch, so one undo restores
+  // both); the documents stay on the server
+  const attachments = await all<Pick<DbTransactionAttachment, 'id'>>(
+    'SELECT id FROM transaction_attachments WHERE tombstone = 0 AND transaction_id = ?',
+    [transaction.id],
+  );
+  await Promise.all(
+    attachments.map(({ id }) => delete_('transaction_attachments', id)),
+  );
   return delete_('transactions', transaction.id);
 }
 

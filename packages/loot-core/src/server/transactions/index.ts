@@ -107,20 +107,6 @@ export async function batchUpdateTransactions({
           await db.deleteTransaction({ id });
         }),
       );
-
-      // In the same batch, so one undo restores the transactions and their
-      // attachments; the documents stay on the server
-      const attachments =
-        deletedIds.length > 0
-          ? await db.all<Pick<db.DbTransactionAttachment, 'id'>>(
-              `SELECT id FROM transaction_attachments WHERE tombstone = 0
-               AND transaction_id IN (${deletedIds.map(() => '?').join(', ')})`,
-              deletedIds,
-            )
-          : [];
-      await Promise.all(
-        attachments.map(({ id }) => db.delete_('transaction_attachments', id)),
-      );
     }
 
     if (updated) {

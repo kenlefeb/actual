@@ -76,6 +76,19 @@ export type DbPaycheckSchedule = {
   tombstone: 1 | 0;
 };
 
+export type DbTransactionAttachment = {
+  id: string;
+  transaction_id: string;
+  name: string;
+  mime: string;
+  size: number;
+  sha256: string;
+  // JSON meta from encryption.encrypt; null when stored unencrypted
+  encrypt_meta: string | null;
+  created_at: string;
+  tombstone: 1 | 0;
+};
+
 export type DbBank = {
   id: string;
   bank_id: string;

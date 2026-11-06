@@ -161,6 +161,11 @@ export function getDownloadError({
 }
 
 export function getCreateKeyError(error: ErrorWithMeta) {
+  if (error.reason === 'attachment-reencrypt-failed') {
+    return t(
+      'Your attached documents couldn\'t be moved to the new key, so your old key is still in use. Check your connection to the server and try again.',
+    );
+  }
   return getUploadError(error);
 }
 

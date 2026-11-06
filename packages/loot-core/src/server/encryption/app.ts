@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import * as asyncStorage from '#platform/server/asyncStorage';
 import { logger } from '#platform/server/log';
 import { createApp } from '#server/app';
+import { reencryptAttachments } from '#server/attachments/app';
 import { post } from '#server/post';
 import * as prefs from '#server/prefs';
 import { getServer } from '#server/server-config';
@@ -38,6 +39,15 @@ async function keyMake({ password }: { password: string }) {
 
   // Make some test data to use if the key is valid or not
   const testContent = await makeTestMessage(key.getId());
+
+  // Attachments are stored outside the budget, so move them to the new key
+  // while the old one is still loaded. On failure the old key stays in effect.
+  try {
+    await reencryptAttachments(key.getId());
+  } catch (e) {
+    logger.log(e);
+    return { error: { reason: 'attachment-reencrypt-failed' } };
+  }
 
   // Changing your key necessitates a sync reset as well. This will
   // clear all existing encrypted data from the server so you won't

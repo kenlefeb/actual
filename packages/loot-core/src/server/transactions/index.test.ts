@@ -1,8 +1,85 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import * as db from '#server/db';
+import { undo } from '#server/undo';
+
+import { app as transactionsApp } from './app';
 
 import { batchUpdateTransactions } from './index';
+
+describe('Delete and undo', () => {
+  async function attach(id: string, transaction_id: string) {
+    await db.insert('transaction_attachments', {
+      id,
+      transaction_id,
+      name: `${id}.pdf`,
+      mime: 'application/pdf',
+      size: 1,
+      sha256: '',
+      encrypt_meta: null,
+      created_at: '2026-11-05T00:00:00.000Z',
+    });
+  }
+
+  async function liveAttachments() {
+    const rows = await db.all<{ id: string }>(
+      'SELECT id FROM transaction_attachments WHERE tombstone = 0 ORDER BY id',
+    );
+    return rows.map(row => row.id);
+  }
+
+  const deleteTransaction = (id: string) =>
+    transactionsApp.handlers['transactions-batch-update']({
+      deleted: [{ id }],
+    });
+
+  beforeEach(async () => {
+    await db.insertAccount({ id: 'one', name: 'one' });
+  });
+
+  it('removes a deleted transaction\'s attachments, and one undo restores both', async () => {
+    await db.insertTransaction({
+      id: 't1',
+      account: 'one',
+      amount: -100,
+      date: '2024-01-01',
+    });
+    await attach('a1', 't1');
+    await attach('a2', 't1');
+
+    await deleteTransaction('t1');
+    expect(await liveAttachments()).toEqual([]);
+
+    await undo();
+    expect(await db.getTransaction('t1')).toBeTruthy();
+    expect(await liveAttachments()).toEqual(['a1', 'a2']);
+  });
+
+  it('removes the attachments of a deleted split parent', async () => {
+    await db.insertTransaction({
+      id: 'parent',
+      account: 'one',
+      amount: -100,
+      date: '2024-01-01',
+      is_parent: true,
+    });
+    await db.insertTransaction({
+      id: 'child',
+      account: 'one',
+      amount: -100,
+      date: '2024-01-01',
+      is_child: true,
+      parent_id: 'parent',
+    });
+    await attach('a1', 'parent');
+
+    await deleteTransaction('parent');
+    expect(await liveAttachments()).toEqual([]);
+
+    await undo();
+    expect(await liveAttachments()).toEqual(['a1']);
+  });
+});
 
 beforeEach(global.emptyDatabase());
 

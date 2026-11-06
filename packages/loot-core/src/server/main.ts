@@ -17,6 +17,7 @@ import { aqlQuery } from './aql';
 import { app as authApp } from './auth/app';
 import { app as budgetApp } from './budget/app';
 import { app as budgetFilesApp } from './budgetfiles/app';
+import { app as attachmentsApp } from './attachments/app';
 import { app as businessCalendarsApp } from './business-calendars/app';
 import { app as dashboardApp } from './dashboard/app';
 import * as db from './db';
@@ -150,6 +151,7 @@ app.combine(
   transactionsApp,
   accountsApp,
   accountGroupsApp,
+  attachmentsApp,
   businessCalendarsApp,
   amazonOrdersApp,
   paychecksApp,

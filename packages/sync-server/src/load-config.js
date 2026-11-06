@@ -216,6 +216,24 @@ const configSchema = convict({
     },
   },
 
+  attachments: {
+    doc: 'Documents attached to transactions.',
+
+    fileSizeLimitMB: {
+      doc: 'Per-document size limit (in MB)',
+      format: 'nat',
+      default: 10,
+      env: 'ACTUAL_ATTACHMENTS_FILE_SIZE_LIMIT_MB',
+    },
+
+    budgetQuotaMB: {
+      doc: 'Total size of the documents stored for one budget (in MB)',
+      format: 'nat',
+      default: 1024,
+      env: 'ACTUAL_ATTACHMENTS_BUDGET_QUOTA_MB',
+    },
+  },
+
   openId: {
     doc: 'OpenID authentication settings.',
 

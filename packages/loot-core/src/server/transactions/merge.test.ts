@@ -1,7 +1,9 @@
 import * as db from '#server/db';
+import { undo } from '#server/undo';
 // @ts-strict-ignore
 import type { TransactionEntity } from '#types/models';
 
+import { app as transactionsApp } from './app';
 import { mergeTransactions } from './merge';
 
 describe('Merging fails for invalid quantity', () => {
@@ -506,5 +508,71 @@ describe('Merging success', () => {
 
     expect(transactions[0].transfer_id).toBe(a);
     expect(transactions[1].transfer_id).toBe(d);
+  });
+});
+
+describe('Merging keeps attachments', () => {
+  beforeEach(global.emptyDatabase());
+  beforeEach(prepareDatabase);
+  afterEach(global.emptyDatabase());
+
+  async function attach(id: string, transaction_id: string, name: string) {
+    await db.insert('transaction_attachments', {
+      id,
+      transaction_id,
+      name,
+      mime: 'application/pdf',
+      size: 1,
+      sha256: '',
+      encrypt_meta: null,
+      created_at: '2026-11-05T00:00:00.000Z',
+    });
+  }
+
+  async function attachmentsOf(transaction_id: string) {
+    const rows = await db.all<db.DbTransactionAttachment>(
+      'SELECT name FROM transaction_attachments WHERE transaction_id = ? AND tombstone = 0 ORDER BY name',
+      [transaction_id],
+    );
+    return rows.map(row => row.name);
+  }
+
+  async function twoTransactions() {
+    const a = await db.insertTransaction({
+      account: 'one',
+      date: '2025-01-01',
+      amount: 10,
+    });
+    const b = await db.insertTransaction({
+      account: 'one',
+      date: '2025-01-02',
+      amount: 10,
+    });
+    await attach('att-a', a, 'receipt.pdf');
+    await attach('att-b', b, 'invoice.pdf');
+    return { a, b };
+  }
+
+  it('Merge keeps both documents', async () => {
+    const { a, b } = await twoTransactions();
+
+    const kept = await mergeTransactions([{ id: a }, { id: b }]);
+
+    expect(kept).toBe(a);
+    expect(await attachmentsOf(a)).toEqual(['invoice.pdf', 'receipt.pdf']);
+  });
+
+  it('one undo restores both transactions and their attachments', async () => {
+    const { a, b } = await twoTransactions();
+
+    await transactionsApp.handlers['transactions-merge']([
+      { id: a },
+      { id: b },
+    ]);
+    await undo();
+
+    expect(await db.getTransaction(b)).toBeTruthy();
+    expect(await attachmentsOf(a)).toEqual(['receipt.pdf']);
+    expect(await attachmentsOf(b)).toEqual(['invoice.pdf']);
   });
 });

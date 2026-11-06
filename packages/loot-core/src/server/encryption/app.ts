@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import * as asyncStorage from '#platform/server/asyncStorage';
 import { logger } from '#platform/server/log';
 import { createApp } from '#server/app';
+import { reencryptAttachments } from '#server/attachments/app';
 import { post } from '#server/post';
 import * as prefs from '#server/prefs';
 import { getServer } from '#server/server-config';
@@ -39,10 +40,24 @@ async function keyMake({ password }: { password: string }) {
   // Make some test data to use if the key is valid or not
   const testContent = await makeTestMessage(key.getId());
 
+  // Attachments are stored outside the budget, so move them to the new key
+  // while the old one is still loaded. On failure the old key stays in effect.
+  let attachments: Awaited<ReturnType<typeof reencryptAttachments>>;
+  try {
+    attachments = await reencryptAttachments(key.getId());
+  } catch (e) {
+    logger.log(e);
+    const reason =
+      e instanceof Error && e.message === 'attachment-restore-failed'
+        ? 'attachment-restore-failed'
+        : 'attachment-reencrypt-failed';
+    return { error: { reason } };
+  }
+
   // Changing your key necessitates a sync reset as well. This will
   // clear all existing encrypted data from the server so you won't
   // have a mix of data encrypted with different keys.
-  return await resetSync({
+  const result = await resetSync({
     key,
     salt,
     testContent: JSON.stringify({
@@ -50,6 +65,15 @@ async function keyMake({ password }: { password: string }) {
       value: testContent.value.toString('base64'),
     }),
   });
+
+  // A reset that failed before saving the new key leaves the old one in
+  // effect, so the attachments go back to it too
+  if (result.error && prefs.getPrefs().encryptKeyId !== key.getId()) {
+    if (!(await attachments.restore())) {
+      return { error: { reason: 'attachment-restore-failed' } };
+    }
+  }
+  return result;
 }
 
 // This can be called both while a file is already loaded or not. This

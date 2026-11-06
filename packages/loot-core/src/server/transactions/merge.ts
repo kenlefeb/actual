@@ -177,6 +177,15 @@ export async function mergeTransactionsNoTransfer(
     } as TransactionEntity);
   }
 
+  // Move attachments first: deleting the dropped transaction removes its own
+  const dropAttachments = await db.all<Pick<db.DbTransactionAttachment, 'id'>>(
+    'SELECT id FROM transaction_attachments WHERE transaction_id = ?',
+    [drop.id],
+  );
+  for (const { id } of dropAttachments) {
+    await db.update('transaction_attachments', { id, transaction_id: keep.id });
+  }
+
   // Delete the dropped transaction using shared deleteTransaction to
   // intelligently handle possible parent/child cascading logic
   const { data: transactionsToDelete } = await aqlQuery(

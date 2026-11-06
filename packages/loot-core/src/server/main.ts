@@ -14,6 +14,7 @@ import { app as adminApp } from './admin/app';
 import { app as amazonOrdersApp } from './amazon-orders/app';
 import { installAPI } from './api';
 import { aqlQuery } from './aql';
+import { app as attachmentsApp } from './attachments/app';
 import { app as authApp } from './auth/app';
 import { app as budgetApp } from './budget/app';
 import { app as budgetFilesApp } from './budgetfiles/app';
@@ -150,6 +151,7 @@ app.combine(
   transactionsApp,
   accountsApp,
   accountGroupsApp,
+  attachmentsApp,
   businessCalendarsApp,
   amazonOrdersApp,
   paychecksApp,

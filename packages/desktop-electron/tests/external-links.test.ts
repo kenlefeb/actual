@@ -3,7 +3,11 @@ import { resolve, win32 } from 'node:path';
 
 import { test } from 'vitest';
 
-import { openExternalUrl, revealLocalFile } from '../external-links';
+import {
+  attachmentFileName,
+  openExternalUrl,
+  revealLocalFile,
+} from '../external-links';
 
 test('does not invoke OS handlers for unsupported links', async () => {
   for (const url of [
@@ -93,4 +97,22 @@ test('uses Windows path semantics to reject network paths and reveal drive paths
     true,
   );
   assert.deepEqual(revealed, [local]);
+});
+
+test('names an attachment for the OS viewer by its type, never its path', () => {
+  assert.equal(
+    attachmentFileName('receipt.pdf', 'application/pdf'),
+    'receipt.pdf',
+  );
+  assert.equal(attachmentFileName('photo', 'image/jpeg'), 'photo.jpg');
+  // A name can't pick the extension, so it can't make the OS run the file
+  assert.equal(attachmentFileName('run.exe', 'image/png'), 'run.exe.png');
+  assert.equal(
+    attachmentFileName('../../etc/passwd', 'image/webp'),
+    'passwd.webp',
+  );
+  assert.equal(attachmentFileName('a\\b\\c.pdf', 'application/pdf'), 'c.pdf');
+  assert.equal(attachmentFileName('', 'application/pdf'), 'document.pdf');
+  assert.equal(attachmentFileName('x.html', 'text/html'), null);
+  assert.equal(attachmentFileName(null, 'application/pdf'), null);
 });

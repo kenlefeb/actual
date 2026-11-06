@@ -18,8 +18,24 @@ export function isValidGroupId(id: string): id is GroupId {
 }
 
 export function getPathForUserFile(fileId: FileId) {
+  return userFilePath(`file-${fileId}.blob`);
+}
+
+export function getPathForAttachmentsDir(fileId: FileId) {
+  return userFilePath('attachments', fileId);
+}
+
+export function getPathForAttachment(fileId: FileId, attachmentId: FileId) {
+  // The prefix check alone would let `../x` climb out of the budget's folder
+  if (!isValidFileId(fileId) || !isValidFileId(attachmentId)) {
+    throw new Error('Invalid file id');
+  }
+  return userFilePath('attachments', fileId, `${attachmentId}.blob`);
+}
+
+function userFilePath(...parts: string[]) {
   const userFilesDir = resolve(config.get('userFiles'));
-  const filePath = resolve(userFilesDir, `file-${fileId}.blob`);
+  const filePath = resolve(userFilesDir, ...parts);
   // isValidFileId already rules out traversal; this keeps the check where the
   // path is built. Filesystem roots already end in sep.
   const prefix = userFilesDir.endsWith(sep) ? userFilesDir : userFilesDir + sep;

@@ -65,6 +65,15 @@
   "moveAccountOnBudget": {
     "tool": "write_move_on_budget"
   },
+  "transaction-attachment-add": {
+    "skip": "No MCP tool yet; the read tool is sc-2526"
+  },
+  "transaction-attachment-open": {
+    "skip": "No MCP tool yet; the read tool is sc-2526"
+  },
+  "transaction-attachment-remove": {
+    "skip": "No MCP tool yet; the read tool is sc-2526"
+  },
   "business-calendar-create": {
     "skip": "Not in the v1 write set (mcp-server \"Write tools\"): business calendars are created and edited in the app"
   },

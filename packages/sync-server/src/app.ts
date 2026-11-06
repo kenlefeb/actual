@@ -121,6 +121,9 @@ app.get('/info', (_req, res) => {
       description: packageJson?.description,
       version: packageJson?.version,
     },
+    attachments: {
+      fileSizeLimitMB: config.get('attachments.fileSizeLimitMB'),
+    },
   });
 });
 

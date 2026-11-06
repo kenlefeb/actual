@@ -172,6 +172,11 @@ import type {
   TransactionEditFunction,
   TransactionUpdateFunction,
 } from './table/utils';
+import {
+  AttachmentsIndicator,
+  AttachmentsProvider,
+  useTransactionAttachments,
+} from './TransactionAttachments';
 import { useTransactionRowContextActions } from './useTransactionRowContextActions';
 
 type AmountColumnWidths = {
@@ -917,6 +922,7 @@ function PayeeIcons({
 
   const scheduleId = transaction.schedule;
   const { isLoading, schedules = [] } = useCachedSchedules();
+  const attachments = useTransactionAttachments(transaction);
 
   if (isLoading) {
     return null;
@@ -924,8 +930,8 @@ function PayeeIcons({
 
   const schedule = scheduleId ? schedules.find(s => s.id === scheduleId) : null;
 
-  if (schedule == null && transferAccount == null) {
-    // Neither a valid scheduled transaction nor a transfer.
+  if (schedule == null && transferAccount == null && attachments.length === 0) {
+    // Not a scheduled transaction or a transfer, and no documents
     return null;
   }
 
@@ -971,6 +977,10 @@ function PayeeIcons({
           />
         </Button>
       )}
+      <AttachmentsIndicator
+        attachments={attachments}
+        style={payeeIconButtonStyle}
+      />
     </>
   );
 }
@@ -4046,49 +4056,51 @@ export const TransactionTable = forwardRef(
     return (
       <DisplayPayeeProvider transactions={displayPayeeTransactions}>
         <SchedulesProvider query={allSchedulesQuery}>
-          <TransactionTableInner
-            tableRef={mergedRef}
-            listContainerRef={listContainerRef}
-            {...props}
-            columns={visibleColumns}
-            transactions={transactionsWithExpandedSplits}
-            transactionMap={transactionMap}
-            transactionsByParent={transactionsByParent}
-            transferAccountsByTransaction={transferAccountsByTransaction}
-            selectedItems={selectedItems}
-            isExpanded={splitsExpanded.isExpanded}
-            onSave={onSave}
-            onDelete={onDelete}
-            onBatchDelete={onBatchDelete}
-            onBatchDuplicate={onBatchDuplicate}
-            onBatchLinkSchedule={onBatchLinkSchedule}
-            onBatchUnlinkSchedule={onBatchUnlinkSchedule}
-            onCreateRule={onCreateRule}
-            onScheduleAction={onScheduleAction}
-            onMakeAsNonSplitTransactions={onMakeAsNonSplitTransactions}
-            onSplit={onSplit}
-            onCheckNewEnter={onCheckNewEnter}
-            onCheckEnter={onCheckEnter}
-            onScheduleTemporary={onScheduleTemporary}
-            onAddTemporary={onAddTemporary}
-            onAddAndCloseTemporary={onAddAndCloseTemporary}
-            onAddSplit={onAddSplit}
-            onDistributeRemainder={onDistributeRemainder}
-            onCloseAddTransaction={onCloseAddTransaction}
-            onToggleSplit={onToggleSplit}
-            newTransactions={newTransactions ?? []}
-            tableNavigator={tableNavigator}
-            newNavigator={newNavigator}
-            showSelection={props.showSelection}
-            allowSplitTransaction={props.allowSplitTransaction}
-            showHiddenCategories={showHiddenCategories}
-            canDrag={canDrag}
-            draggedId={draggedId}
-            draggedParentId={draggedParentId}
-            draggedDate={draggedDate}
-            onDragChange={onDragChange}
-            onDrop={onDrop}
-          />
+          <AttachmentsProvider>
+            <TransactionTableInner
+              tableRef={mergedRef}
+              listContainerRef={listContainerRef}
+              {...props}
+              columns={visibleColumns}
+              transactions={transactionsWithExpandedSplits}
+              transactionMap={transactionMap}
+              transactionsByParent={transactionsByParent}
+              transferAccountsByTransaction={transferAccountsByTransaction}
+              selectedItems={selectedItems}
+              isExpanded={splitsExpanded.isExpanded}
+              onSave={onSave}
+              onDelete={onDelete}
+              onBatchDelete={onBatchDelete}
+              onBatchDuplicate={onBatchDuplicate}
+              onBatchLinkSchedule={onBatchLinkSchedule}
+              onBatchUnlinkSchedule={onBatchUnlinkSchedule}
+              onCreateRule={onCreateRule}
+              onScheduleAction={onScheduleAction}
+              onMakeAsNonSplitTransactions={onMakeAsNonSplitTransactions}
+              onSplit={onSplit}
+              onCheckNewEnter={onCheckNewEnter}
+              onCheckEnter={onCheckEnter}
+              onScheduleTemporary={onScheduleTemporary}
+              onAddTemporary={onAddTemporary}
+              onAddAndCloseTemporary={onAddAndCloseTemporary}
+              onAddSplit={onAddSplit}
+              onDistributeRemainder={onDistributeRemainder}
+              onCloseAddTransaction={onCloseAddTransaction}
+              onToggleSplit={onToggleSplit}
+              newTransactions={newTransactions ?? []}
+              tableNavigator={tableNavigator}
+              newNavigator={newNavigator}
+              showSelection={props.showSelection}
+              allowSplitTransaction={props.allowSplitTransaction}
+              showHiddenCategories={showHiddenCategories}
+              canDrag={canDrag}
+              draggedId={draggedId}
+              draggedParentId={draggedParentId}
+              draggedDate={draggedDate}
+              onDragChange={onDragChange}
+              onDrop={onDrop}
+            />
+          </AttachmentsProvider>
         </SchedulesProvider>
       </DisplayPayeeProvider>
     );

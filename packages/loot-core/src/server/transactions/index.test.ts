@@ -1,8 +1,164 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { app as accountsApp } from '#server/accounts/app';
 import * as db from '#server/db';
+import { addSyncListener } from '#server/sync';
+import { undo } from '#server/undo';
+
+import { app as transactionsApp } from './app';
+import { removeTransfer } from './transfer';
 
 import { batchUpdateTransactions } from './index';
+
+describe('Delete and undo', () => {
+  async function attach(id: string, transaction_id: string) {
+    await db.insert('transaction_attachments', {
+      id,
+      transaction_id,
+      name: `${id}.pdf`,
+      mime: 'application/pdf',
+      size: 1,
+      sha256: '',
+      encrypt_meta: null,
+      created_at: '2026-11-05T00:00:00.000Z',
+    });
+  }
+
+  async function liveAttachments() {
+    const rows = await db.all<{ id: string }>(
+      'SELECT id FROM transaction_attachments WHERE tombstone = 0 ORDER BY id',
+    );
+    return rows.map(row => row.id);
+  }
+
+  const deleteTransaction = (id: string) =>
+    transactionsApp.handlers['transactions-batch-update']({
+      deleted: [{ id }],
+    });
+
+  beforeEach(async () => {
+    await db.insertAccount({ id: 'one', name: 'one' });
+  });
+
+  it("removes a deleted transaction's attachments, and one undo restores both", async () => {
+    await db.insertTransaction({
+      id: 't1',
+      account: 'one',
+      amount: -100,
+      date: '2024-01-01',
+    });
+    await attach('a1', 't1');
+    await attach('a2', 't1');
+
+    await deleteTransaction('t1');
+    expect(await liveAttachments()).toEqual([]);
+
+    await undo();
+    expect(await db.getTransaction('t1')).toBeTruthy();
+    expect(await liveAttachments()).toEqual(['a1', 'a2']);
+  });
+
+  it('removes the attachments of a deleted split parent', async () => {
+    await db.insertTransaction({
+      id: 'parent',
+      account: 'one',
+      amount: -100,
+      date: '2024-01-01',
+      is_parent: true,
+    });
+    await db.insertTransaction({
+      id: 'child',
+      account: 'one',
+      amount: -100,
+      date: '2024-01-01',
+      is_child: true,
+      parent_id: 'parent',
+    });
+    await attach('a1', 'parent');
+
+    await deleteTransaction('parent');
+    expect(await liveAttachments()).toEqual([]);
+
+    await undo();
+    expect(await liveAttachments()).toEqual(['a1']);
+  });
+
+  it('removes attachments when closing an account deletes its transactions', async () => {
+    await db.insertPayee({ name: '', transfer_acct: 'one' });
+    await db.insertTransaction({
+      id: 't1',
+      account: 'one',
+      amount: -100,
+      date: '2024-01-01',
+    });
+    await attach('a1', 't1');
+
+    await accountsApp.handlers['account-close']({ id: 'one', forced: true });
+
+    expect(await liveAttachments()).toEqual([]);
+  });
+
+  it('closes an account with its transactions and attachments as one batch and one undo', async () => {
+    await db.insertPayee({ name: '', transfer_acct: 'one' });
+    for (const id of ['t1', 't2', 't3']) {
+      await db.insertTransaction({
+        id,
+        account: 'one',
+        amount: -100,
+        date: '2024-01-01',
+      });
+      await attach(`a-${id}`, id);
+    }
+    const liveTransactions = async () =>
+      (
+        await db.all<{ id: string }>(
+          "SELECT id FROM transactions WHERE tombstone = 0 AND acct = 'one' ORDER BY id",
+        )
+      ).map(row => row.id);
+
+    // Each apply of a message batch reports the tables it touched
+    const applies: string[][] = [];
+    const removeListener = addSyncListener((_old, newData) => {
+      applies.push([...newData.keys()].sort());
+    });
+    await accountsApp.handlers['account-close']({ id: 'one', forced: true });
+    removeListener();
+
+    expect(applies).toEqual([
+      ['accounts', 'payees', 'transaction_attachments', 'transactions'],
+    ]);
+    expect(await liveTransactions()).toEqual([]);
+    expect(await liveAttachments()).toEqual([]);
+
+    await undo();
+
+    expect(await liveTransactions()).toEqual(['t1', 't2', 't3']);
+    expect(await liveAttachments()).toEqual(['a-t1', 'a-t2', 'a-t3']);
+  });
+
+  it('removes attachments of the other side when a transfer is removed', async () => {
+    await db.insertAccount({ id: 'two', name: 'two' });
+    await db.insertTransaction({
+      id: 'out',
+      account: 'one',
+      amount: -100,
+      date: '2024-01-01',
+      transfer_id: 'in',
+    });
+    await db.insertTransaction({
+      id: 'in',
+      account: 'two',
+      amount: 100,
+      date: '2024-01-01',
+      transfer_id: 'out',
+    });
+    await attach('a-in', 'in');
+
+    await removeTransfer({ id: 'out', transfer_id: 'in' });
+
+    expect(await liveAttachments()).toEqual([]);
+  });
+});
 
 beforeEach(global.emptyDatabase());
 

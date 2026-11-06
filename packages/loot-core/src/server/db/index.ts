@@ -52,6 +52,7 @@ import type {
   DbPayeeMapping,
   DbTag,
   DbTransaction,
+  DbTransactionAttachment,
   DbViewTransaction,
   DbViewTransactionInternalAlive,
 } from './types';
@@ -914,8 +915,19 @@ export function updateTransaction(transaction) {
   return updateWithSchema('transactions', transaction);
 }
 
-export async function deleteTransaction(transaction) {
-  return delete_('transactions', transaction.id);
+export function deleteTransaction(transaction) {
+  // Its attachments go with it; the documents stay on the server. Nothing is
+  // awaited before the sends, so callers that don't await (account close)
+  // still put every tombstone in their batch, and one undo restores them.
+  const attachments = runQuery<Pick<DbTransactionAttachment, 'id'>>(
+    'SELECT id FROM transaction_attachments WHERE tombstone = 0 AND transaction_id = ?',
+    [transaction.id],
+    true,
+  );
+  return Promise.all([
+    ...attachments.map(({ id }) => delete_('transaction_attachments', id)),
+    delete_('transactions', transaction.id),
+  ]);
 }
 
 /**

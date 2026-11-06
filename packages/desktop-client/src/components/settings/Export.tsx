@@ -59,7 +59,8 @@ export function ExportBudget() {
             be imported into another Actual instance by closing an open file (if
             any), then clicking the "Import file" button, then choosing
             "Actual."
-          </Trans>
+          </Trans>{' '}
+          <Trans>Attached documents aren't included in the export.</Trans>
           {encryptKeyId ? (
             <>
               {' '}

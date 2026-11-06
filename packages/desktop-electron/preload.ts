@@ -67,6 +67,10 @@ contextBridge.exposeInMainWorld('Actual', {
     void ipcRenderer.invoke('open-external-url', url);
   },
 
+  openAttachment: async (name: string, mime: string, data: Uint8Array) => {
+    await ipcRenderer.invoke('open-attachment', { name, mime, data });
+  },
+
   openInFileManager: (filepath: string) => {
     void ipcRenderer.invoke('open-in-file-manager', filepath);
   },

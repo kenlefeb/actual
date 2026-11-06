@@ -31,12 +31,15 @@ import * as UserService from './services/user-service';
 import * as simpleSync from './sync-simple';
 import { accessLogMiddleware, noteFileAccess } from './util/access-log';
 import { atomicWriteFile } from './util/atomic-write';
+import { detectAttachmentType } from './util/attachments';
 import {
   errorMiddleware,
   requestLoggerMiddleware,
   validateSessionMiddleware,
 } from './util/middlewares';
 import {
+  getPathForAttachment,
+  getPathForAttachmentsDir,
   getPathForGroupFile,
   getPathForUserFile,
   isValidFileId,
@@ -584,5 +587,145 @@ app.post('/delete-user-file', (req, res) => {
     }
   });
 
+  res.send(OK_RESPONSE);
+});
+
+// Fork-only: documents attached to transactions (transaction-attachments spec).
+// One blob per attachment under user-files/attachments/<fileId>/.
+const MB = 1024 * 1024;
+const attachmentLimitMB = config.get('attachments.fileSizeLimitMB');
+// One byte over the limit so the handler, not the parser, refuses an
+// oversize body and can name the limit
+const attachmentParser = express.raw({
+  type: 'application/actual-attachment',
+  limit: attachmentLimitMB * MB + 1,
+});
+
+function attachmentTooLarge(res: Response) {
+  res
+    .status(413)
+    .send({ status: 'error', reason: 'too-large', limitMB: attachmentLimitMB });
+}
+
+// Checks the ids and the session's access to the budget; on failure it has
+// already answered and returns null
+function attachmentTarget(req: Request, res: Response) {
+  const fileId = extractSingleHeader(req, res, 'x-actual-file-id');
+  if (res.headersSent) return null;
+  const attachmentId = extractSingleHeader(req, res, 'x-actual-attachment-id');
+  if (res.headersSent) return null;
+  if (!attachmentId || !isValidFileId(attachmentId)) {
+    res.status(400).send('invalid attachmentId');
+    return null;
+  }
+
+  const file = verifyFileExists(
+    fileId,
+    new FilesService(getAccountDb()),
+    res,
+    'file-not-found',
+  );
+  if (!file) {
+    return null;
+  }
+  const fileAccessError = requireFileAccess(file, res.locals.user_id);
+  if (fileAccessError) {
+    res.status(403).send(fileAccessError);
+    return null;
+  }
+  return {
+    dir: getPathForAttachmentsDir(file.id),
+    path: getPathForAttachment(file.id, attachmentId),
+  };
+}
+
+async function storedSize(dir: string, except: string) {
+  const names = await fs.readdir(dir).catch(() => []);
+  let total = 0;
+  for (const name of names) {
+    const path = resolve(dir, name);
+    if (path !== except) {
+      // A temp file can be renamed away between readdir and stat
+      total += (await fs.stat(path).catch(() => null))?.size ?? 0;
+    }
+  }
+  return total;
+}
+
+app.post(
+  '/upload-attachment',
+  (req, res, next) =>
+    attachmentParser(req, res, err => {
+      if (err?.type === 'entity.too.large') {
+        attachmentTooLarge(res);
+        return;
+      }
+      next(err);
+    }),
+  async (req, res) => {
+    const target = attachmentTarget(req, res);
+    if (!target) {
+      return;
+    }
+    const body: unknown = req.body;
+    if (!Buffer.isBuffer(body) || body.length === 0) {
+      res.status(400).send('attachment body is required');
+      return;
+    }
+    if (body.length > attachmentLimitMB * MB) {
+      attachmentTooLarge(res);
+      return;
+    }
+    // The server can't read an encrypted document, so it checks only its size
+    if (req.headers['x-actual-attachment-encrypted'] !== 'true') {
+      const type = detectAttachmentType(body);
+      if (type === null || type === 'heic') {
+        res.status(415).send({
+          status: 'error',
+          reason: type === 'heic' ? 'heic' : 'unsupported-type',
+        });
+        return;
+      }
+    }
+
+    // shortcut: two concurrent uploads can both pass, overshooting by one file
+    const used = await storedSize(target.dir, target.path);
+    if (used + body.length > config.get('attachments.budgetQuotaMB') * MB) {
+      res.status(413).send({ status: 'error', reason: 'quota' });
+      return;
+    }
+
+    try {
+      await fs.mkdir(target.dir, { recursive: true });
+      await atomicWriteFile(target.path, body);
+    } catch (err) {
+      console.log('Error writing attachment', err);
+      res.status(500).send({ status: 'error' });
+      return;
+    }
+    res.send(OK_RESPONSE);
+  },
+);
+
+app.get('/download-attachment', (req, res) => {
+  const target = attachmentTarget(req, res);
+  if (!target) {
+    return;
+  }
+  res.sendFile(target.path, { dotfiles: 'allow' }, err => {
+    if (err && !res.headersSent) {
+      res.status(404).send('attachment-not-found');
+    }
+  });
+});
+
+// Only for rolling back an upload whose metadata row couldn't be written;
+// removing an attachment in the app keeps its document.
+app.post('/delete-attachment', async (req, res) => {
+  const target = attachmentTarget(req, res);
+  if (!target) {
+    return;
+  }
+  await fs.rm(target.path, { force: true });
   res.send(OK_RESPONSE);
 });

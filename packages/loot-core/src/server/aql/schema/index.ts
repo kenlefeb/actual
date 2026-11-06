@@ -110,6 +110,17 @@ export const schema = {
     paycheck: f('id', { ref: 'paychecks' }),
     tombstone: f('boolean'),
   },
+  transaction_attachments: {
+    id: f('id'),
+    transaction_id: f('id'),
+    name: f('string'),
+    mime: f('string'),
+    size: f('integer'),
+    sha256: f('string'),
+    encrypt_meta: f('string'),
+    created_at: f('string'),
+    tombstone: f('boolean'),
+  },
   categories: {
     id: f('id'),
     name: f('string'),

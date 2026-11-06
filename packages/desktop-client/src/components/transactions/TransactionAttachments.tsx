@@ -82,7 +82,7 @@ function attachErrorMessage(
       return t('Only PDF, JPEG, PNG and WebP documents can be attached.');
     case 'heic':
       return t(
-        "HEIC images aren't supported yet. Save the photo as JPEG or PNG and attach that.",
+        "HEIC images aren't supported yet. Choose the photo from your Photos library, or save it as JPEG or PNG, and attach that.",
       );
     case 'quota':
       return t(
@@ -148,6 +148,10 @@ export function useAttachDocument() {
   return { attach, fileInput };
 }
 
+export function openFailedMessage(t: TFunction) {
+  return t("This document can't be loaded right now.");
+}
+
 async function openDocument(
   attachment: AttachmentSummary,
   onError: () => void,
@@ -200,10 +204,7 @@ export function AttachmentsIndicator({
   function onOpenFailed() {
     dispatch(
       addNotification({
-        notification: {
-          type: 'error',
-          message: t("This document can't be loaded right now."),
-        },
+        notification: { type: 'error', message: openFailedMessage(t) },
       }),
     );
   }

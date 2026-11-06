@@ -1,8 +1,10 @@
 import type { ListBoxItemRenderProps } from 'react-aria-components';
 
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { AttachmentsProvider } from '#components/transactions/TransactionAttachments';
 import { TestProviders } from '#mocks';
 
 import { TransactionListItem } from './TransactionListItem';
@@ -20,27 +22,83 @@ vi.mock('#hooks/useDisplayPayee', () => ({ useDisplayPayee: () => 'Payee' }));
 vi.mock('#hooks/useCachedSchedules', () => ({
   useCachedSchedules: () => ({ schedules: [] }),
 }));
+const attachmentRows = vi.hoisted(() => ({ value: [] as unknown[] }));
+vi.mock('#hooks/useQuery', () => ({
+  useQuery: () => ({ data: attachmentRows.value, isLoading: false }),
+}));
 
-function renderRow(id: string, date: string) {
+function renderRow(
+  id: string,
+  date: string,
+  extra: Record<string, unknown> = {},
+  onPress = vi.fn(),
+) {
   render(
     <TestProviders>
-      <TransactionListItem
-        transaction={
-          {
-            id,
-            date,
-            account: 'vanguard',
-            amount: 100,
-            category: null,
-          } as never
-        }
-        onPress={vi.fn()}
-        onLongPress={vi.fn()}
-        {...({} as ListBoxItemRenderProps)}
-      />
+      <AttachmentsProvider>
+        <TransactionListItem
+          transaction={
+            {
+              id,
+              date,
+              account: 'vanguard',
+              amount: 100,
+              category: null,
+              ...extra,
+            } as never
+          }
+          onPress={onPress}
+          onLongPress={vi.fn()}
+          {...({} as ListBoxItemRenderProps)}
+        />
+      </AttachmentsProvider>
     </TestProviders>,
   );
 }
+
+describe('Paperclip on phone transaction rows', () => {
+  afterEach(() => {
+    attachmentRows.value = [];
+  });
+
+  it('Paperclip on a phone row', async () => {
+    attachmentRows.value = [
+      {
+        id: 'a1',
+        transaction_id: 't1',
+        name: 'r.pdf',
+        mime: 'application/pdf',
+      },
+    ];
+    const onPress = vi.fn();
+    renderRow('t1', '2026-11-05', {}, onPress);
+
+    expect(screen.getByLabelText('Has attached documents')).toBeInTheDocument();
+    // The row is still the press target that opens the edit screen
+    await userEvent.click(screen.getByText('Payee'));
+    expect(onPress).toHaveBeenCalled();
+  });
+
+  it('No paperclip on a phone row', () => {
+    renderRow('t1', '2026-11-05');
+
+    expect(screen.queryByLabelText('Has attached documents')).toBeNull();
+  });
+
+  it("Split line shows the parent's paperclip", () => {
+    attachmentRows.value = [
+      {
+        id: 'a1',
+        transaction_id: 'parent',
+        name: 'r.pdf',
+        mime: 'application/pdf',
+      },
+    ];
+    renderRow('child', '2026-11-05', { parent_id: 'parent', is_child: true });
+
+    expect(screen.getByLabelText('Has attached documents')).toBeInTheDocument();
+  });
+});
 
 describe('TransactionListItem category line', () => {
   it('says "Moved history" before the start date and for the offset line', () => {

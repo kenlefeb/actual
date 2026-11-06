@@ -52,6 +52,30 @@ export class MobileTransactionEntryPage {
     await fieldLocator.filter({ hasText: content }).waitFor();
   }
 
+  // The Documents section of a saved transaction
+  async attachDocument(file: {
+    name: string;
+    mimeType: string;
+    buffer: Buffer;
+  }) {
+    const fileChooser = this.page.waitForEvent('filechooser');
+    await this.page.getByRole('button', { name: 'Attach document' }).click();
+    await (await fileChooser).setFiles(file);
+    await this.documentName(file.name).waitFor();
+  }
+
+  documentName(name: string) {
+    return this.transactionForm.getByText(name, { exact: true });
+  }
+
+  async openDocument(name: string) {
+    await this.page.getByRole('button', { name: `Open ${name}` }).click();
+  }
+
+  async removeDocument(name: string) {
+    await this.page.getByRole('button', { name: `Remove ${name}` }).click();
+  }
+
   async createTransaction() {
     await this.addTransactionButton.click();
 

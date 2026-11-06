@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
 import { SvgSplit } from '@actual-app/components/icons/v0';
+import { SvgAttachment } from '@actual-app/components/icons/v1';
 import {
   SvgArrowsSynchronize,
   SvgCalendar3,
@@ -34,6 +35,7 @@ import {
 
 import { makeAmountFullStyle } from '#components/budget/util';
 import { TransferDirectionIcon } from '#components/common/TransferDirectionIcon';
+import { useTransactionAttachments } from '#components/transactions/TransactionAttachments';
 import { useAccount } from '#hooks/useAccount';
 import { useCachedSchedules } from '#hooks/useCachedSchedules';
 import { useCategories } from '#hooks/useCategories';
@@ -98,6 +100,7 @@ export function TransactionListItem({
   const transferAccount = useAccount(payee?.transfer_acct || '');
   const isPreview = isPreviewId(transaction?.id || '');
   const { schedules = [] } = useCachedSchedules();
+  const attachments = useTransactionAttachments(transaction ?? { id: '' });
 
   const newTransactions = useSelector(
     state => state.transactions.newTransactions,
@@ -272,6 +275,18 @@ export function TransactionListItem({
                         width: 12,
                         height: 12,
                         marginRight: 5,
+                      }}
+                    />
+                  )}
+                  {attachments.length > 0 && (
+                    <SvgAttachment
+                      role="img"
+                      aria-label={t('Has attached documents')}
+                      style={{
+                        width: 12,
+                        height: 12,
+                        marginRight: 5,
+                        color: theme.pageTextSubdued,
                       }}
                     />
                   )}

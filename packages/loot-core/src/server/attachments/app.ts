@@ -348,16 +348,18 @@ async function sha256(data: Uint8Array) {
 // Re-encrypts every encrypted attachment, removed ones included (undo can
 // restore them), under `newKeyId` while the old key is still loaded. On any
 // failure it puts back the documents it already moved and throws, so the
-// caller can keep the old key.
-export async function reencryptAttachments(newKeyId: string) {
+// caller can keep the old key: `attachment-reencrypt-failed` when everything
+// was put back, `attachment-restore-failed` when some document couldn't be.
+// On success it returns `restore`, which the caller runs if the key change
+// fails later; it resolves false when some document couldn't be put back.
+export async function reencryptAttachments(
+  newKeyId: string,
+): Promise<{ restore: () => Promise<boolean> }> {
   const rows = await db.all<db.DbTransactionAttachment>(
     'SELECT * FROM transaction_attachments WHERE encrypt_meta IS NOT NULL',
   );
-  if (rows.length === 0) {
-    return;
-  }
-  const remote = await getRemote();
-  if (!remote) {
+  const remote = rows.length > 0 ? await getRemote() : null;
+  if (rows.length > 0 && !remote) {
     throw new Error('attachment-reencrypt-failed');
   }
 
@@ -367,6 +369,26 @@ export async function reencryptAttachments(newKeyId: string) {
       db.update('transaction_attachments', { id, encrypt_meta }),
     );
 
+  // Puts the old ciphertext back first and only then the old meta, so a row
+  // never names the old key over bytes the server may still hold under the
+  // new one. A row whose restore upload fails keeps the meta it has. That
+  // matches the server unless the forward upload was stored but never
+  // acknowledged, which can't be told apart while the server is unreachable;
+  // the failure is reported either way.
+  async function restore() {
+    let allRestored = true;
+    for (const { row, old } of moved) {
+      if (remote && (await uploadAttachmentBlob(remote, row.id, old, true))) {
+        allRestored = false;
+        logger.warn(`Could not restore attachment ${row.id}`);
+        continue;
+      }
+      await setMeta(row.id, row.encrypt_meta);
+      await writeCache(row.id, old).catch(() => undefined);
+    }
+    return allRestored;
+  }
+
   try {
     for (const row of rows) {
       const old = await getStored(remote, row.id);
@@ -374,23 +396,24 @@ export async function reencryptAttachments(newKeyId: string) {
         await unseal(old, row.encrypt_meta),
         newKeyId,
       );
-      const refused = await uploadAttachmentBlob(remote, row.id, stored, true);
+      // Before the upload: one stored but never acknowledged is restored too
+      moved.push({ row, old });
+      const refused = remote
+        ? await uploadAttachmentBlob(remote, row.id, stored, true)
+        : { error: 'upload-failed' };
       if (refused) {
         throw new Error(`Re-upload refused: ${refused.error}`);
       }
-      moved.push({ row, old });
       await setMeta(row.id, encryptMeta);
       await writeCache(row.id, stored);
     }
   } catch (e) {
     logger.warn('Attachment re-encryption failed; restoring', e);
-    // The old ciphertext still decrypts with the old meta, so putting both
-    // back is the same as re-encrypting under the old key
-    for (const { row, old } of moved) {
-      await uploadAttachmentBlob(remote, row.id, old, true);
-      await setMeta(row.id, row.encrypt_meta);
-      await writeCache(row.id, old).catch(() => undefined);
-    }
-    throw new Error('attachment-reencrypt-failed');
+    throw new Error(
+      (await restore())
+        ? 'attachment-reencrypt-failed'
+        : 'attachment-restore-failed',
+    );
   }
+  return { restore };
 }

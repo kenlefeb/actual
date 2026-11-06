@@ -161,6 +161,11 @@ export function getDownloadError({
 }
 
 export function getCreateKeyError(error: ErrorWithMeta) {
+  if (error.reason === 'attachment-restore-failed') {
+    return t(
+      "Your key wasn't changed, and your old key is still in use. Some attached documents couldn't be put back on the old key and may not open.",
+    );
+  }
   if (error.reason === 'attachment-reencrypt-failed') {
     return t(
       "Your attached documents couldn't be moved to the new key, so your old key is still in use. Check your connection to the server and try again.",

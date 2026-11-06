@@ -161,4 +161,89 @@ describe('key-make with attachments', () => {
     expect(await openAttachment({ id: first })).toMatchObject({ data: PDF });
     expect(await openAttachment({ id: second })).toMatchObject({ data: PDF });
   });
+
+  it('rolls attachments back when the sync reset fails before the new key is saved', async () => {
+    const first = await attach('a-receipt.pdf', PDF);
+    const second = await attach('b-receipt.pdf', PDF);
+    vi.mocked(resetSync).mockResolvedValueOnce({
+      error: { reason: 'network-failure' },
+    });
+
+    const result = await app.handlers['key-make']({ password: 'new' });
+
+    expect(result).toEqual({ error: { reason: 'network-failure' } });
+    expect(prefs.getPrefs().encryptKeyId).toBe(OLD_KEY);
+    for (const row of await attachmentRows()) {
+      expect(JSON.parse(row.encrypt_meta ?? '').keyId).toBe(OLD_KEY);
+    }
+    // Readable with the old key alone, from the server
+    const newKeyId = vi.mocked(resetSync).mock.calls[0][0].key.getId();
+    encryption.unloadKey(encryption.getKey(newKeyId));
+    clearAttachmentCache();
+    expect(await openAttachment({ id: first })).toMatchObject({ data: PDF });
+    expect(await openAttachment({ id: second })).toMatchObject({ data: PDF });
+  });
+
+  it('keeps attachments on the new key when the reset fails after saving it', async () => {
+    const id = await attach('receipt.pdf', PDF);
+    vi.mocked(resetSync).mockImplementationOnce(async keyState => {
+      await prefs.savePrefs({ encryptKeyId: keyState?.key.getId() });
+      return { error: { reason: 'upload-failure' } };
+    });
+
+    await app.handlers['key-make']({ password: 'new' });
+
+    const newKeyId = vi.mocked(resetSync).mock.calls[0][0].key.getId();
+    const [row] = await attachmentRows();
+    expect(JSON.parse(row.encrypt_meta ?? '').keyId).toBe(newKeyId);
+    encryption.unloadKey(encryption.getKey(OLD_KEY));
+    clearAttachmentCache();
+    expect(await openAttachment({ id })).toMatchObject({ data: PDF });
+  });
+
+  it('restores an upload the server stored but never acknowledged', async () => {
+    const first = await attach('a-receipt.pdf', PDF);
+    const second = await attach('b-receipt.pdf', PDF);
+    attachmentServer.uploads = [];
+    // The second re-upload is stored, then its response is lost
+    attachmentServer.onStored = () => {
+      if (attachmentServer.uploads.length === 2) {
+        throw new TypeError('Connection reset');
+      }
+    };
+
+    const result = await app.handlers['key-make']({ password: 'new' });
+
+    expect(result).toEqual({
+      error: { reason: 'attachment-reencrypt-failed' },
+    });
+    for (const row of await attachmentRows()) {
+      expect(JSON.parse(row.encrypt_meta ?? '').keyId).toBe(OLD_KEY);
+    }
+    // The old meta decrypts what the server holds
+    clearAttachmentCache();
+    expect(await openAttachment({ id: first })).toMatchObject({ data: PDF });
+    expect(await openAttachment({ id: second })).toMatchObject({ data: PDF });
+  });
+
+  it('reports a failed restore and never leaves meta that mismatches the server', async () => {
+    const first = await attach('a-receipt.pdf', PDF);
+    const second = await attach('b-receipt.pdf', PDF);
+    attachmentServer.uploads = [];
+    // The first re-upload works; the server then refuses everything,
+    // including the restore of the first
+    attachmentServer.refuseUploadsFrom = 2;
+
+    const result = await app.handlers['key-make']({ password: 'new' });
+
+    expect(result).toEqual({
+      error: { reason: 'attachment-restore-failed' },
+    });
+    expect(resetSync).not.toHaveBeenCalled();
+    expect(prefs.getPrefs().encryptKeyId).toBe(OLD_KEY);
+    // Each row's meta decrypts what the server holds
+    clearAttachmentCache();
+    expect(await openAttachment({ id: first })).toMatchObject({ data: PDF });
+    expect(await openAttachment({ id: second })).toMatchObject({ data: PDF });
+  });
 });

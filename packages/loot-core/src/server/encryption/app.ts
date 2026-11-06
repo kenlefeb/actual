@@ -42,17 +42,22 @@ async function keyMake({ password }: { password: string }) {
 
   // Attachments are stored outside the budget, so move them to the new key
   // while the old one is still loaded. On failure the old key stays in effect.
+  let attachments: Awaited<ReturnType<typeof reencryptAttachments>>;
   try {
-    await reencryptAttachments(key.getId());
+    attachments = await reencryptAttachments(key.getId());
   } catch (e) {
     logger.log(e);
-    return { error: { reason: 'attachment-reencrypt-failed' } };
+    const reason =
+      e instanceof Error && e.message === 'attachment-restore-failed'
+        ? 'attachment-restore-failed'
+        : 'attachment-reencrypt-failed';
+    return { error: { reason } };
   }
 
   // Changing your key necessitates a sync reset as well. This will
   // clear all existing encrypted data from the server so you won't
   // have a mix of data encrypted with different keys.
-  return await resetSync({
+  const result = await resetSync({
     key,
     salt,
     testContent: JSON.stringify({
@@ -60,6 +65,15 @@ async function keyMake({ password }: { password: string }) {
       value: testContent.value.toString('base64'),
     }),
   });
+
+  // A reset that failed before saving the new key leaves the old one in
+  // effect, so the attachments go back to it too
+  if (result.error && prefs.getPrefs().encryptKeyId !== key.getId()) {
+    if (!(await attachments.restore())) {
+      return { error: { reason: 'attachment-restore-failed' } };
+    }
+  }
+  return result;
 }
 
 // This can be called both while a file is already loaded or not. This

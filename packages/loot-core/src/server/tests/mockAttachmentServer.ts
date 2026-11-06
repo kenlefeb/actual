@@ -10,6 +10,8 @@ export const attachmentServer = {
   offline: false,
   // Refuses the nth upload from now (1-based), once
   refuseUploadNumber: null as number | null,
+  // Refuses every upload from the nth from now (1-based) on
+  refuseUploadsFrom: null as number | null,
   refusal: null as Refusal | null,
   // Runs after a document is stored, before the response
   onStored: null as (() => void) | null,
@@ -21,6 +23,7 @@ export const attachmentServer = {
     this.fileSizeLimitMB = 10;
     this.offline = false;
     this.refuseUploadNumber = null;
+    this.refuseUploadsFrom = null;
     this.refusal = null;
     this.onStored = null;
   },
@@ -49,7 +52,11 @@ export const attachmentServer = {
           const { status, body } = attachmentServer.refusal;
           return Response.json(body, { status });
         }
-        if (attachmentServer.refuseUploadNumber === uploadNumber) {
+        const { refuseUploadsFrom } = attachmentServer;
+        if (
+          attachmentServer.refuseUploadNumber === uploadNumber ||
+          (refuseUploadsFrom != null && uploadNumber >= refuseUploadsFrom)
+        ) {
           return Response.json({ status: 'error' }, { status: 500 });
         }
         attachmentServer.blobs.set(id, new Uint8Array(init.body as Uint8Array));

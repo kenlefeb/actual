@@ -11,6 +11,7 @@ import * as encryption from '#server/encryption';
 import { app } from '#server/encryption/app';
 import * as prefs from '#server/prefs';
 import { resetSync } from '#server/sync';
+import type * as SyncModule from '#server/sync';
 import { attachmentServer } from '#server/tests/mockAttachmentServer';
 
 vi.mock('#platform/server/fetch', () => ({
@@ -18,7 +19,7 @@ vi.mock('#platform/server/fetch', () => ({
 }));
 
 vi.mock('#server/sync', async importOriginal => ({
-  ...(await importOriginal<typeof import('#server/sync')>()),
+  ...(await importOriginal<typeof SyncModule>()),
   resetSync: vi.fn(async () => ({})),
 }));
 
@@ -121,7 +122,7 @@ describe('key-make with attachments', () => {
     expect(await openAttachment({ id: pdfId })).toMatchObject({ data: PDF });
 
     // Another device, signed in with the new key only and no cached copy
-    await encryption.unloadKey(encryption.getKey(OLD_KEY));
+    encryption.unloadKey(encryption.getKey(OLD_KEY));
     clearAttachmentCache();
     expect(await openAttachment({ id: pdfId })).toMatchObject({ data: PDF });
     expect(await openAttachment({ id: 'plain' })).toMatchObject({ data: PNG });

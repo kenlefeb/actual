@@ -33,7 +33,11 @@ import type {
   UtilityProcess,
 } from 'electron';
 
-import { openExternalUrl, revealLocalFile } from './external-links';
+import {
+  attachmentFileName,
+  openExternalUrl,
+  revealLocalFile,
+} from './external-links';
 import { getMenu } from './menu';
 import { retry as promiseRetry } from './retry';
 import type { AppInitFailurePayload } from './server';
@@ -832,6 +836,22 @@ ipcMain.handle(
 
 ipcMain.handle('open-external-url', (event, url) => {
   void openExternalUrl(url, target => shell.openExternal(target));
+});
+
+// New windows are always denied, so an attached document opens in the OS
+// viewer from a private temp folder.
+// shortcut: the copy stays until the OS clears its temp folder; delete on quit if that matters
+ipcMain.handle('open-attachment', async (_event, { name, mime, data }) => {
+  const fileName = attachmentFileName(name, mime);
+  if (!fileName || !(data instanceof Uint8Array)) {
+    return;
+  }
+  const dir = await mkdtemp(
+    path.join(app.getPath('temp'), 'actual-attachment-'),
+  );
+  const filePath = path.join(dir, fileName);
+  await writeFile(filePath, data);
+  await shell.openPath(filePath);
 });
 
 ipcMain.handle('open-in-file-manager', (event, filepath) => {

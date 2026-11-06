@@ -37,7 +37,7 @@ describe('Delete and undo', () => {
     await db.insertAccount({ id: 'one', name: 'one' });
   });
 
-  it('removes a deleted transaction\'s attachments, and one undo restores both', async () => {
+  it("removes a deleted transaction's attachments, and one undo restores both", async () => {
     await db.insertTransaction({
       id: 't1',
       account: 'one',

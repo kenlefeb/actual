@@ -18,6 +18,12 @@ type Actual = {
   ACTUAL_VERSION: string;
   openURLInBrowser: (url: string) => void;
   openInFileManager: (filepath: string) => void;
+  // Desktop app only: opens a document in the OS viewer
+  openAttachment?: (
+    name: string,
+    mime: string,
+    data: Uint8Array,
+  ) => Promise<void>;
   saveFile: (
     contents: string | Buffer,
     filename: string,

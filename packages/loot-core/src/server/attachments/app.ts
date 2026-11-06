@@ -112,7 +112,7 @@ async function getFileSizeLimitMB(remote: Remote): Promise<number> {
 }
 
 // Stores `body` under `id`, overwriting any document already there
-export async function uploadAttachmentBlob(
+async function uploadAttachmentBlob(
   remote: Remote,
   id: string,
   body: Uint8Array,

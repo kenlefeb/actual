@@ -138,7 +138,7 @@ requirement text into a story or status into OpenSpec.
 | #469 Business calendars & schedule dates | `business-calendars`, `schedule-business-days`, `schedule-relative-dates`                                                                     |
 | #28 Paychecks                            | `paychecks`, `account-business-days`, `paycheck-planning`                                                                                     |
 | #470 Baseline fork behavior              | `transaction-notes`, `split-transaction-editing`, `mobile-note-links`, `mobile-sync-status`, `api-transaction-mutations`, `fork-release-news` |
-| #543 Accounts & budgeting                | none yet                                                                                                                                      |
+| #543 Accounts & budgeting                | `transaction-attachments`                                                                                                                     |
 | #27 Upstream relationship                | none                                                                                                                                          |
 | #1550 Integrations                       | `mcp-server`, `api-fork-handlers`, `api-read-only-mode`, `production-identities`                                                              |
 

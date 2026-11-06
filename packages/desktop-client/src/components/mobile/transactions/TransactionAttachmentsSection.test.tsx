@@ -260,7 +260,7 @@ describe('Documents on the phone edit screen', () => {
     await waitFor(() =>
       expect(store.getState().notifications.notifications).toHaveLength(1),
     );
-    store.getState().notifications.notifications[0].button!.action();
+    await store.getState().notifications.notifications[0].button!.action();
 
     expect(undoMock).toHaveBeenCalled();
   });

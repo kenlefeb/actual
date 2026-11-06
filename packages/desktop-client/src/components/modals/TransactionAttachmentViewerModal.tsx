@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Trans, useTranslation } from 'react-i18next';
+import { Trans } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
 import { theme } from '@actual-app/components/theme';
@@ -32,7 +32,6 @@ export function TransactionAttachmentViewerModal({
   mime,
   url,
 }: TransactionAttachmentViewerModalProps) {
-  const { t } = useTranslation();
   const [file, setFile] = useState<File | null>(null);
 
   // Built ahead of the tap: iOS only shares from a tap with no await before it
@@ -100,8 +99,10 @@ export function TransactionAttachmentViewerModal({
                 <Trans>Share or save</Trans>
               </Button>
             ) : (
+              // Link has no download attribute, which saves the blob by name
+              // oxlint-disable-next-line actual/no-anchor-tag
               <a href={url} download={name} style={shareStyle}>
-                {<Trans>Share or save</Trans>}
+                <Trans>Share or save</Trans>
               </a>
             )}
           </View>

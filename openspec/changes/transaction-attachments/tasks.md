@@ -43,7 +43,7 @@ Write each test first and see it fail before implementing. Name tests after the 
 
 ## 6. Cross-device check (sc-2346)
 
-- [ ] 6.1 Test "Attached on one device, opened on another" against a local sync server (`yarn start:server-dev`) with two separate browser profiles signed in to the same budget: profile A attaches a PDF, profile B syncs, shows the paperclip and opens the same PDF. The web e2e suite has no sync server today, so this is a Tester-run check unless the Developer adds one; record the steps and result (screenshots of both profiles) on the PR. Verify the Tester's comment shows it passing.
+- [x] 6.1 Test "Attached on one device, opened on another" against a local sync server (`yarn start:server-dev`) with two separate browser profiles signed in to the same budget: profile A attaches a PDF, profile B syncs, shows the paperclip and opens the same PDF. The web e2e suite has no sync server today, so this is a Tester-run check unless the Developer adds one; record the steps and result (screenshots of both profiles) on the PR. Verify the Tester's comment shows it passing.
   - Tester's steps:
     1. From the repo root, with Node 24.22.1, run `yarn start:server-dev` and wait for the web app on http://localhost:3001 and the sync server on http://localhost:5006.
     2. Profile A (a Chrome profile with no Actual data for localhost:3001): open http://localhost:3001, choose a server at `http://localhost:5006`, set a test password, sign in, then "Create test file". The test file starts with sync disabled; upload it from the browser console with `await window.$send('upload-budget', {})` and reload.
@@ -52,6 +52,10 @@ Write each test first and see it fail before implementing. Name tests after the 
     5. In Profile B, open Bank of America and find the same transaction. Check the paperclip is there, click it, click Open, and check the same PDF opens in a new tab. Screenshot.
     6. Electron: run `yarn start:desktop`, sign in to the same server, open the same budget, click the paperclip and Open. Check the PDF opens in the OS viewer (Preview on macOS). Screenshot.
     7. Post the result and the screenshots as a PR comment.
+  - Result: passed, per the Tester's comment https://github.com/kenlefeb/actual/pull/219#issuecomment-6675534545 (checked at `0a46de984` and again at `223e1b485`). A PDF attached on device A showed its paperclip on device B, and Open showed the same PDF there. Deviations from the steps above:
+    - The two devices were two origins (`localhost:3001` and `127.0.0.1:3001`) in one Chrome profile, not two Chrome profiles. Each origin has its own browser storage.
+    - Chrome's file picker can't be automated, so after "Attach document…" the file was set on the hidden file input directly.
+    - The Electron step (6) wasn't run. Opening in Electron is covered only by the `external-links` unit test.
 
 ## Workflow follow-up
 

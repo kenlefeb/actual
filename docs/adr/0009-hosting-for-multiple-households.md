@@ -47,17 +47,20 @@ and `production RUN ...`. A read-only job would need a new verb in
 console session either way. Agents may not read production, so Ken runs this
 once, read-only, and pastes the output on sc-2715.
 
-Ken's steps (sc-2715 carries the same text):
+Ken's steps (sc-2715 carries the same text). The block only reads: it restarts
+nothing, writes no file, and prints no budget data or secrets (container
+names, percentages and sizes only). It is safe to re-run.
 
 1. Open the Hostinger Web console: hPanel, VPS, money.kenlefeb.cloud, Overview,
    VPS information, Web console. It opens a root shell on the VPS.
    _Why you, not an agent:_ it is root on the production host under your
    Hostinger login, and agents must not connect to production.
-2. Paste this whole block as one paste. It only reads: no restart, no file
-   written, no budget data, no secrets.
+2. Click the copy button on the block below (do not retype it) and paste it
+   into the console as one paste. It starts with `echo paste-ok-1`. Wait for
+   the prompt to come back before doing anything else (about 10 seconds).
 
 ```sh
-date -u; uptime; nproc; free -m; df -h /
+echo paste-ok-1; date -u; uptime; nproc; free -m; df -h /
 echo "--- docker stats (name, cpu, mem, limit)"
 docker stats --no-stream --format '{{.Name}} cpu={{.CPUPerc}} mem={{.MemUsage}} {{.MemPerc}}'
 echo "--- peak memory since container start, restarts, OOM kills"
@@ -70,14 +73,40 @@ done
 echo "--- disk by Docker volume and backup directory (sizes only)"
 du -sh /var/lib/docker/volumes/*/_data 2>/dev/null
 du -sh /opt/actual-*/backups 2>/dev/null
+du -sh /docker/money 2>/dev/null
 docker system df
 echo "--- memory and CPU pressure"
 cat /proc/pressure/memory /proc/pressure/cpu 2>/dev/null
 ```
 
-3. Copy the whole output and paste it into a comment on
+   The `du` lines print only a size and a path (Docker volume names, backup
+   directories and `/docker/money`, which holds Lunch Money MCP and Traefik);
+   they open no files.
+3. Check the output. It is about 60 lines and must show `paste-ok-1` first and
+   these four headings, each followed by lines like these (values are
+   examples):
+
+   ```text
+   --- docker stats (name, cpu, mem, limit)
+   actual-production-actual-1 cpu=0.40% mem=210MiB / 768MiB 27.34%
+   --- peak memory since container start, restarts, OOM kills
+   /actual-production-actual-1 restarts=0 oom=false started=2026-11-01T03:10:00Z peak_bytes=268435456
+   --- disk by Docker volume and backup directory (sizes only)
+   1.2G	/var/lib/docker/volumes/actual-production_data/_data
+   --- memory and CPU pressure
+   some avg10=0.00 avg60=0.00 avg300=0.00 total=123456
+   ```
+
+   If the output differs:
+   - `peak_bytes=n/a`: the host uses cgroup v1 or an older kernel. Fine; paste
+     it anyway and say so. Do not try to fix it.
+   - `command not found` or `permission denied`: you are not in the root
+     console, or Docker is not running. Stop, do not run anything else, and
+     comment what the line said.
+   - A heading with nothing under it (for example no pressure lines on an old
+     kernel): paste it as is and say which section was empty.
+4. Copy the whole output and paste it into a comment on
    https://app.shortcut.com/blacksmith-press/story/2715.
-   Expect: about 30 lines of container names, percentages and sizes.
    Never paste anything else from the console; if any line shows a password,
    key or token, stop and do not paste (none is expected).
 
@@ -105,7 +134,7 @@ provider's page before Ken commits. USD unless marked.
 | Hostinger KVM 8: 8 vCPU, 32 GB               | about $50/mo renewal (sources differ: $47.99 to $59.99)                                                                                                                  |
 | Hetzner CX23: 2 vCPU, 4 GB                   | about EUR 6/mo; CX33 (4 vCPU, 8 GB) about EUR 6.5 to 10. Prices rose in April and June 2026 and orders were restricted for a time: verify                                |
 | AWS Lightsail 4 GB / 8 GB                    | $24 / $44 per month                                                                                                                                                      |
-| AWS EC2 t4g.medium (2 vCPU, 4 GiB)           | $0.0336/h, about $24.5/mo, us-east-1; t4g.large about twice that (verify); plus EBS (gp3 about $0.08 per GB-month) and public IPv4 at $0.005/h                           |
+| AWS EC2 t3.medium (2 vCPU, 4 GiB) / t3.large (2 vCPU, 8 GiB), x86 | about $0.0416/h (about $30/mo) / $0.0832/h (about $61/mo), us-east-1 (verify); plus EBS (gp3 about $0.08 per GB-month) and public IPv4 at $0.005/h. Graviton t4g.medium is $0.0336/h (about $24.5/mo) but needs an arm64 build, which the fork does not make |
 | AWS Fargate                                  | $0.04048 per vCPU-hour, $0.004445 per GB-hour (x86, us-east-1)                                                                                                           |
 | Amazon EKS                                   | $0.10 per cluster-hour, about $73/mo, plus nodes; $0.60 per hour in extended support, about $438/mo (from month 15 of a Kubernetes version)                              |
 | Other managed Kubernetes (GKE, DigitalOcean) | search was inconclusive; verify. DigitalOcean's control plane has been free and GKE has had a monthly credit for one cluster, which would remove the EKS-style fixed fee |
@@ -129,12 +158,13 @@ Compose project from the template.
 - **Backups and restore.** The existing snapshot timer and age encryption, per
   household volume. A host failure loses every household until restored from
   the off-site copy (RESTORE.md already covers it).
-- **One-button deploys.** Fits as is: one host, one forced command, one
-  signature. The loop must stop on the first failing household and report each.
+- **One-button deploys.** Fits as is: Ken runs `scripts/deploy_prod.py` on his
+  Mac, which signs the approval (Touch ID) and starts the workflow; the VPS
+  forced command verifies that signature. One host, one verification. The loop must stop on the first failing household and report each.
 - **Custom domains and optional Tailscale.** Traefik already runs on the host
   and can route a hostname per household with ACME certificates; the Tailscale
   sidecar becomes optional per household. Needs the pre-release hardening
-  first (no public ports and no `ufw` today).
+  first (today port 22 is open to the internet and `ufw` is inactive, per LOCKDOWN.md; no public HTTP route exists).
 
 ### B. Several VPSes
 
@@ -158,12 +188,13 @@ B2: a few households per VPS, which is option A repeated.
 
 ### C. Containers on AWS (EC2, or ECS)
 
-C1: EC2 (t4g.large or similar) running the same Compose projects.
+C1: EC2 (t3.large or similar x86) running the same Compose projects.
 C2: ECS on Fargate, one service per container, an EBS volume per task.
 
-- **Cost per household.** C1: one t4g.large with EBS and IPv4 is about $56/mo
-  and holds 2 to 3 households by caps, so about $19 to $28 each, notably more
-  than option A. C2: a sync task (0.5 vCPU, 1 GB) plus an MCP task is about
+- **Cost per household.** C1: one t3.large (x86; the fork builds amd64 only,
+  so Graviton t4g would need an arm64 build) at about $61/mo plus EBS and IPv4
+  is about $69/mo and holds 2 to 3 households by caps, so about $23 to $35
+  each, notably more than option A. C2: a sync task (0.5 vCPU, 1 GB) plus an MCP task is about
   $18 + $18 = $36, plus EBS and IPv4, so about $45 per household. PENDING:
   smaller measured use lowers Fargate task sizes and cost proportionally.
 - **Isolation.** C2 gives per-household IAM roles, security groups and task
@@ -174,17 +205,18 @@ C2: ECS on Fargate, one service per container, an EBS volume per task.
   no privileged containers). EFS is not an option for SQLite (see Context).
 - **Backups and restore.** EBS snapshots (native, schedulable, cross-region)
   plus the existing age-encrypted export. Better than a single VPS disk.
-- **One-button deploys.** C1 reuses the forced command over SSH or SSM. C2
-  replaces it with `ecs update-service` from Actions using OIDC; the Touch ID
+- **One-button deploys.** C1 reuses the same flow: Ken's `deploy_prod.py` signs and
+  dispatches the workflow, and the forced command on the instance verifies it. C2
+  replaces the host-side check with `ecs update-service` from Actions using OIDC; the Touch ID
   signature check would have to be rebuilt as an approval step, a security
   design task of its own.
 - **Custom domains.** Natural: ALB or Route 53 plus ACME or ACM.
 
 ### D. Kubernetes (EKS, or GKE or DigitalOcean)
 
-- **Cost per household.** EKS: $73 control plane plus at least two t4g.large
-  nodes (about $100) is about $170/mo fixed. Per household: about $85 at 2,
-  $34 at 5, $17 at 10. A provider with a free control plane lowers the fixed
+- **Cost per household.** EKS: $73 control plane plus at least two x86 t3.large
+  nodes (about $122) is about $195/mo fixed. Per household: about $98 at 2,
+  $49 at 4, $39 at 5, $20 at 10. A provider with a free control plane lowers the fixed
   part; verify.
 - **Isolation.** A namespace, NetworkPolicy and PodSecurity per household is
   good isolation by configuration, but pods share nodes and one control
@@ -204,11 +236,11 @@ C2: ECS on Fargate, one service per container, an EBS volume per task.
 
 ## Comparison
 
-Cost per household at 4 households, caps-based (PENDING).
+Cost per household at 4 households, caps-based (PENDING), except C1, which holds only 2 to 3 households per instance by the same caps (its figure is at that capacity).
 
 | Criterion                          | A. Bigger VPS            | B1. VPS per household     | C1. EC2                | C2. ECS Fargate  | D. Kubernetes (EKS)  |
 | ---------------------------------- | ------------------------ | ------------------------- | ---------------------- | ---------------- | -------------------- |
-| Monthly cost per household         | about $7 (KVM 4)         | $7 to $15                 | $19 to $28             | about $45        | about $42            |
+| Monthly cost per household         | about $7 (KVM 4)         | $7 to $15                 | $23 to $35             | about $45        | about $49            |
 | Isolation between households       | containers on one host   | separate VMs              | containers on one host | tasks, IAM       | pods on shared nodes |
 | Operating effort for Ken           | lowest                   | grows with N              | like A plus AWS        | high             | highest              |
 | Backups and restore                | existing timer, one disk | existing, per host        | EBS snapshots          | EBS snapshots    | CSI snapshots, new   |
@@ -259,6 +291,5 @@ EBS snapshots, or two VPSes with restore drills).
 Hostinger VPS pricing: hostinger.com/vps-hosting (search snippet) and
 hostadvice.com's Hostinger VPS pricing. Hetzner 2026 repricing: northflank.com
 and betterstack.com reviews. EKS and Fargate rates: AWS pricing as quoted by
-komodor.com and cloudburn.io. EC2 t4g.medium: holori.com and runs-on.com (22
-Oct 2026). Lightsail bundles: AWS Lightsail documentation. All are secondary
+komodor.com and cloudburn.io. EC2 t3 (x86) rates: AWS on-demand list prices recalled, verify. Lightsail bundles: AWS Lightsail documentation. All are secondary
 readings of provider prices.

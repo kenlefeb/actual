@@ -34,12 +34,24 @@ schema: spec-driven
 # Fork-only: link every change to its Shortcut stories (see the "Shortcut
 # stories" section of AGENTS.md and docs/agents/issue-tracker.md). The check
 # `yarn check:openspec-shortcut` enforces the parts a machine can see.
+context: |
+  Fork rule (Ken, 2026-11-05): every user-facing feature ships on both desktop
+  and mobile. The phone UI is a separate set of screens in
+  packages/desktop-client/src/components/mobile/, so specs and tasks cover
+  those screens too. If mobile would add significant time, do not drop it:
+  record the estimate and ask Ken through the Director. Features with no UI
+  (MCP, API, hosting, CI, docs) are exempt.
+
 rules:
+  specs:
+    - A user-facing requirement states its scenarios for desktop and for mobile, or names the mobile screen it applies to. Do not write desktop-only scenarios without a Ken-approved exception recorded in the design.
   proposal:
+    - State the mobile scope (which mobile screens change) or the Ken-approved exception. A change that is desktop-only without that approval is incomplete.
     - Every change belongs to a Shortcut story in workspace `blacksmith-press`. Name it as `sc-<id>` in the Why section. If there is no story yet, stop and ask; do not invent an id.
     - Add the story ids to the change's `.openspec.yaml` under `x-shortcut` (`epic:` the story's epic id, `stories:` a list of story ids). Keep the `x-` prefix; OpenSpec ignores unprefixed unknown keys with a warning.
     - Copy no requirement text into Shortcut. The story links the change folder on GitHub and the specs it touches, and carries a `spec:<capability>` label for each.
   tasks:
+    - Include tasks, with tests, for the mobile screens in packages/desktop-client/src/components/mobile/ alongside the desktop ones.
     - When the change has more than one story, end each numbered group heading with the story that ships it, for example `## 2. Paychecks section (sc-57)`, and give each group its own PR.
 operations:
   apply:

@@ -78,11 +78,14 @@ The problem or need, in a sentence or two.
 
 ## What to build
 
-The scope, and what is out of scope when that helps.
+The scope, and what is out of scope when that helps. A user-facing feature
+covers desktop and mobile (see "Desktop and mobile" below): name the mobile
+screens it needs, or the Ken-approved exception.
 
 ## Acceptance
 
 - Each scenario, or a link to the spec requirement it meets.
+- The same scenarios hold on desktop and on mobile.
 
 ## Specs
 
@@ -95,9 +98,9 @@ actual) and names the spec and requirement it breaks.
 Right after creating the story, add the checklist as Shortcut tasks
 (`stories-add-task`), in this order:
 
-1. Spec: OpenSpec change proposed or updated
+1. Spec: OpenSpec change proposed or updated (covers the mobile screens)
 2. Tests: failing tests written first
-3. Build: implementation done
+3. Build: implementation done (desktop and mobile)
 4. Checks: lint, typecheck and tests pass (`yarn check:mcp-coverage` too, and
    a story that adds or renames a server handler or API method adds its
    `packages/mcp/coverage.json` line, a tool or a skip with a reason)
@@ -125,6 +128,21 @@ description changed to start with `n/a:` and the reason, for example
   author's, agent or person.
 - Before moving a story to Done, every task is complete; an unfinished one
   stays open with a comment saying why.
+
+## Desktop and mobile
+
+Ken's rule (2026-11-05): every user-facing feature ships on both desktop and
+mobile. Actual's phone UI is a separate set of screens in
+`packages/desktop-client/src/components/mobile/`, so the mobile version needs
+its own screens, tests and spec scenarios; a desktop-only change is not done.
+
+- A story's scope and acceptance cover both. If the work is split, file the
+  mobile half as its own story (label `mobile`, related to the desktop one)
+  when the desktop story is filed, not afterwards.
+- If you think mobile adds significant time, don't defer it and don't decide
+  alone: write the estimate and a recommendation in a comment and ask Ken
+  through the Director. Until he answers, the story keeps mobile in scope.
+- Features with no UI (MCP, API, hosting, CI, docs) are exempt.
 
 ## OpenSpec changes and specs
 

@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "id": "fork-release-26.10.1-alpha.27",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.27 — Ken's Actual fork",
+      "date": "2026-11-06",
+      "version": "26.10.1-alpha.27",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.27.md",
+      "body": "**Unofficial fork prerelease.** Based on upstream Actual v26.11.0 (`1766241e3f4b3c578e424c4fa15f1eb83c0da17d`, October 29, 2026); not an official Actual Budget release.\n\nThis release brings in upstream Actual 26.11.0, including its fix for SimpleFIN connection failures, and lets AI assistants using the MCP server create and maintain categories and category groups.",
+      "details": "#### Features\n\n- None.\n\n#### Enhancements\n\n- AI assistants using the MCP server can create, rename, hide, move and delete categories and category groups.\n\n#### Bugfixes\n\n- Fixed SimpleFIN connection failures. The sync server now makes its bank-provider requests (SimpleFIN, GoCardless, Enable Banking and the CORS proxy health check) with the same HTTP client throughout.\n- Fixed Tab skipping to the cleared column after picking a transaction date with the mouse.\n\n#### Maintenance\n\n- Upstream Actual 26.11.0 is merged into the fork.\n- The sync server now requires Node 22.19.0 or newer.\n- OpenSpec records for the MCP category maintenance tools.\n\n#### Known limitations\n\n- Experimental.\n- Attached documents aren't included in a budget export, and removed documents stay on the sync server.\n- HEIC pictures are refused; use the Photos library or a JPEG or PNG copy.\n- Attaching a document needs a connection; there is no offline upload queue.\n- No iPhone acceptance test is claimed."
+    },
+    {
       "id": "fork-release-26.10.1-alpha.26",
       "type": "release",
       "title": "Release 26.10.1-alpha.26 — Ken's Actual fork",

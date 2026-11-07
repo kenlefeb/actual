@@ -189,12 +189,20 @@ type CategoryAutocompleteProps = ComponentProps<
   ) => ReactElement<typeof CategoryItem>;
   showHiddenCategories?: boolean;
   // Offer "Create category" when the typed text matches no category.
+  // Single-select pickers only.
   allowCreate?: boolean;
 };
 
 // Group of the last category picked or created (this session), so a new
 // category defaults to the group the user is working in.
 let lastUsedGroupId: string | undefined;
+
+// The rest props, as the single-select variant (the multi-select one never
+// reaches `allowCreate`).
+type SingleSelectProps = Omit<
+  Extract<CategoryAutocompleteProps, { type?: 'single' }>,
+  'onSelect'
+>;
 
 export function CategoryAutocomplete({
   categoryGroups,
@@ -245,10 +253,14 @@ export function CategoryAutocomplete({
     showHiddenCategories,
   ]);
 
-  // The multi-select variant of `onSelect` never applies to this picker.
+  // `allowCreate` pickers are single-select, so `onSelect` takes (id, value).
   const selectItem = onSelect as
     | ((id: string, value: string) => void)
     | undefined;
+  // Hidden categories count too: a duplicate name must not be offered.
+  const allCategories = (categoryGroups || defaultCategoryGroups).flatMap(
+    group => group.categories || [],
+  );
   const createCategory = useCreateCategoryMutation();
   const [rawName, setRawName] = useState('');
   const [newName, setNewName] = useState<string | null>(null);
@@ -302,9 +314,13 @@ export function CategoryAutocomplete({
               isHidden: false,
             });
             lastUsedGroupId = group.id;
-            setNewName(null);
             selectItem?.(id, newName);
             props.onClose?.();
+            // A normal pick ends in a blur that closes the register cell's
+            // editor; the chooser keeps focus, so blur it the same way.
+            if (document.activeElement instanceof HTMLElement) {
+              document.activeElement.blur();
+            }
           }}
         />
       </View>
@@ -332,7 +348,7 @@ export function CategoryAutocomplete({
       filterSuggestions={(suggestions, value) => {
         const filtered = filterCategorySuggestions(suggestions, value);
         return allowCreate
-          ? addCreateSuggestion(filtered, suggestions, value)
+          ? addCreateSuggestion(filtered, allCategories, value)
           : filtered;
       }}
       suggestions={categorySuggestions}
@@ -345,7 +361,7 @@ export function CategoryAutocomplete({
           inputProps?.onChangeValue?.(value, e);
         },
       }}
-      onSelect={handleSelect as never}
+      onSelect={handleSelect}
       renderItems={(items, getItemProps, highlightedIndex, inputValue) => (
         <CategoryList
           items={items}
@@ -360,7 +376,7 @@ export function CategoryAutocomplete({
           createName={inputValue?.trim()}
         />
       )}
-      {...props}
+      {...(props as SingleSelectProps)}
     />
   );
 }

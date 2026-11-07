@@ -114,6 +114,16 @@ describe('addCreateSuggestion', () => {
     expect(filtered('  groceries ').some(s => s.id === 'new')).toBe(false);
   });
 
+  it('does not offer create for the exact name of a hidden category', () => {
+    const allWithHidden = [...suggestions, { id: '9', name: 'Old Stuff' }];
+    const result = addCreateSuggestion(
+      filterCategorySuggestions(suggestions, 'old stuff'),
+      allWithHidden,
+      'old stuff',
+    );
+    expect(result.some(s => s.id === 'new')).toBe(false);
+  });
+
   it('does not offer create for empty input', () => {
     expect(filtered('  ').some(s => s.id === 'new')).toBe(false);
   });

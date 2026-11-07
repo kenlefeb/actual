@@ -28,7 +28,10 @@ const categoryGroups = [
   {
     id: 'bills',
     name: 'Bills',
-    categories: [{ id: 'elec', name: 'Electric', group: 'bills' }],
+    categories: [
+      { id: 'elec', name: 'Electric', group: 'bills' },
+      { id: 'old', name: 'Old Stuff', group: 'bills', hidden: true },
+    ],
   },
   {
     id: 'fun',
@@ -82,6 +85,12 @@ describe('CategoryAutocomplete create option', () => {
     expect(screen.queryByTestId('create-category-button')).toBeNull();
   });
 
+  it('does not offer create for the exact name of a hidden category', async () => {
+    const { input } = renderPicker();
+    await userEvent.type(input, 'old stuff');
+    expect(screen.queryByTestId('create-category-button')).toBeNull();
+  });
+
   it('does not offer create unless allowCreate is set', async () => {
     const { input } = renderPicker({ allowCreate: false });
     await userEvent.type(input, 'Allowance');
@@ -109,6 +118,22 @@ describe('CategoryAutocomplete create option', () => {
     await waitFor(() =>
       expect(onSelect).toHaveBeenCalledWith('new-id', 'Allowance'),
     );
+  });
+
+  it('leaves the field the way a normal pick does, so the register cell stops editing', async () => {
+    const onBlur = vi.fn();
+    const onClose = vi.fn();
+    const { input } = renderPicker({ inputProps: { onBlur }, onClose });
+    await userEvent.type(input, 'Allowance');
+    await userEvent.click(await screen.findByTestId('create-category-button'));
+    await userEvent.click(
+      await screen.findByTestId('Food-category-group-item'),
+    );
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    // the register cell closes its editor from the input's blur
+    expect(onBlur).toHaveBeenCalled();
+    expect(document.activeElement).toBe(document.body);
   });
 
   it('defaults to the group of the most recently chosen category', async () => {

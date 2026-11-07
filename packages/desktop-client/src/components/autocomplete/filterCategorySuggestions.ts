@@ -60,7 +60,8 @@ export function filterCategorySuggestions<T extends CategorySuggestion>(
 // text is not already a category name, like the payee picker does.
 export function addCreateSuggestion<T extends CategorySuggestion>(
   filtered: T[],
-  all: T[],
+  // every existing category, including ones hidden from the picker
+  all: Array<{ name: string }>,
   rawValue: string,
 ): T[] {
   const value = rawValue.trim().toLowerCase();

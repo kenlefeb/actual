@@ -289,12 +289,24 @@ async function signIn(
   return {};
 }
 
-async function signOut() {
+// fork: sc-2684. Only an explicit sign-out asks for the provider logout URL.
+async function signOut({
+  endProviderSession = false,
+}: { endProviderSession?: boolean } = {}): Promise<{
+  providerLogoutUrl?: string;
+}> {
   const token = await asyncStorage.getItem('user-token');
   const server = getServer();
+  let providerLogoutUrl: unknown;
   if (token && server) {
     try {
-      await post(server.SIGNUP_SERVER + '/logout', { token }, {}, 5000);
+      const data = await post(
+        server.SIGNUP_SERVER + '/logout',
+        { token },
+        {},
+        5000,
+      );
+      providerLogoutUrl = data?.providerLogoutUrl;
     } catch {
       // Local sign-out must still work offline or with an older server.
       logger.log('Could not revoke the server session; signing out locally.');
@@ -308,7 +320,9 @@ async function signOut() {
     'lastBudget',
     'readOnly',
   ]);
-  return 'ok';
+  return endProviderSession && typeof providerLogoutUrl === 'string'
+    ? { providerLogoutUrl }
+    : {};
 }
 
 async function setToken({ token }: { token: string }) {

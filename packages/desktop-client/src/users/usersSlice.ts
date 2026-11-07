@@ -44,14 +44,20 @@ export const loggedIn = createAppAsyncThunk(
 
 export const signOut = createAppAsyncThunk(
   `${sliceName}/signOut`,
-  async (_, { dispatch }) => {
-    await send('subscribe-sign-out');
+  // fork: sc-2684. Only the user menu passes endProviderSession.
+  async (options: { endProviderSession?: boolean } | void, { dispatch }) => {
+    const { endProviderSession = false }: { endProviderSession?: boolean } =
+      options || {};
+    const { providerLogoutUrl } = await send('subscribe-sign-out', {
+      endProviderSession,
+    });
 
     void dispatch(getUserData());
     void dispatch(loadGlobalPrefs());
     void dispatch(closeBudget());
     // Handled in budgetSlice
     // dispatch({ type: constants.SIGN_OUT });
+    return providerLogoutUrl;
   },
 );
 

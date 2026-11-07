@@ -5,6 +5,24 @@ import { getAccountDb, getLoginMethod, getServerPrefs } from './account-db';
 import { bootstrapPassword, checkPassword } from './accounts/password';
 import { handlers as app, authRateLimiter } from './app-account';
 
+const provider = vi.hoisted(() => ({ discoveryFails: false }));
+
+vi.mock('openid-client', async importOriginal => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    Issuer: {
+      discover: async () => {
+        if (provider.discoveryFails) throw new Error('discovery down');
+        return new actual.Issuer({
+          issuer: 'https://identity.example',
+          end_session_endpoint: 'https://identity.example/oidc/logout',
+        });
+      },
+    },
+  };
+});
+
 const ADMIN_ROLE = 'ADMIN';
 const BASIC_ROLE = 'BASIC';
 
@@ -487,6 +505,79 @@ describe('logout', () => {
     } finally {
       getAccountDb().mutate('DELETE FROM sessions WHERE user_id = ?', [userId]);
       deleteUser(userId);
+    }
+  });
+});
+
+describe('logout from an OpenID session', () => {
+  let userId;
+  beforeEach(() => {
+    provider.discoveryFails = false;
+    userId = uuidv4();
+    createUser(userId, userId, BASIC_ROLE);
+    clearAuth();
+    insertAuthRow(
+      'openid',
+      1,
+      JSON.stringify({
+        issuer: 'https://identity.example/.well-known/openid-configuration',
+        client_id: 'client',
+        client_secret: 'secret',
+        server_hostname: 'https://actual.example',
+      }),
+    );
+  });
+  afterEach(() => {
+    getAccountDb().mutate('DELETE FROM sessions WHERE user_id = ?', [userId]);
+    deleteUser(userId);
+    clearAuth();
+  });
+  const sessionRow = token =>
+    getAccountDb().first('SELECT token FROM sessions WHERE token = ?', [token]);
+
+  it('deletes the session and returns the provider logout URL', async () => {
+    const token = generateSessionToken();
+    createSession(userId, token, 'openid');
+    const res = await request(app).post('/logout').send({
+      token,
+      returnTo: 'https://evil.example/',
+      post_logout_redirect_uri: 'https://evil.example/',
+    });
+    expect(res.status).toBe(200);
+    expect(sessionRow(token)).toBeNull();
+    const url = new URL(res.body.data.providerLogoutUrl);
+    expect(url.origin + url.pathname).toBe(
+      'https://identity.example/oidc/logout',
+    );
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      client_id: 'client',
+      post_logout_redirect_uri: 'https://actual.example/',
+    });
+  });
+
+  it('returns no URL for a password session or an unknown token', async () => {
+    const token = generateSessionToken();
+    createSession(userId, token, 'password');
+    for (const t of [token, generateSessionToken()]) {
+      const res = await request(app).post('/logout').send({ token: t });
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ status: 'ok', data: {} });
+    }
+    expect(sessionRow(token)).toBeNull();
+  });
+
+  it('still deletes the session when discovery fails', async () => {
+    provider.discoveryFails = true;
+    const token = generateSessionToken();
+    createSession(userId, token, 'openid');
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const res = await request(app).post('/logout').send({ token });
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ status: 'ok', data: {} });
+      expect(sessionRow(token)).toBeNull();
+    } finally {
+      log.mockRestore();
     }
   });
 });

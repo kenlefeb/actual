@@ -8,6 +8,7 @@ import { config } from '#load-config';
 
 import {
   bootstrapOpenId,
+  getProviderLogoutUrl,
   loginWithOpenIdFinalize,
   loginWithOpenIdSetup,
 } from './openid';
@@ -15,22 +16,38 @@ import {
 const provider = vi.hoisted(() => ({
   callback: vi.fn(),
   userinfo: vi.fn(),
+  metadata: {} as Record<string, string>,
+  discoveryFails: false,
 }));
 
 vi.mock('openid-client', async importOriginal => {
   const actual = await importOriginal<typeof OpenIdClient>();
-  class Client {
-    redirect_uris = ['https://actual.example/openid/callback'];
-    callback = provider.callback;
-    userinfo = provider.userinfo;
-    authorizationUrl(params: Record<string, string>) {
-      return `https://identity.example/authorize?${new URLSearchParams(params).toString()}`;
-    }
-  }
-  return { ...actual, Issuer: { discover: async () => ({ Client }) } };
+  return {
+    ...actual,
+    Issuer: {
+      discover: async () => {
+        if (provider.discoveryFails) throw new Error('discovery down');
+        // A real issuer, so endSessionUrl is openid-client's own.
+        const issuer = new actual.Issuer({
+          issuer: 'https://identity.example',
+          ...provider.metadata,
+        });
+        class Client extends issuer.Client {
+          callback = provider.callback;
+          userinfo = provider.userinfo;
+          authorizationUrl(params: Record<string, string>) {
+            return `https://identity.example/authorize?${new URLSearchParams(params).toString()}`;
+          }
+        }
+        return { Client };
+      },
+    },
+  };
 });
 
 beforeEach(() => {
+  provider.metadata = {};
+  provider.discoveryFails = false;
   getAccountDb().mutate("DELETE FROM sessions WHERE auth_method = 'openid'");
   getAccountDb().mutate(
     'INSERT INTO auth (method, active, extra_data) VALUES (?, 1, ?)',
@@ -231,6 +248,72 @@ describe('first sign-in must match the configured admin subject', () => {
       expect(warn).not.toHaveBeenCalled();
     } finally {
       warn.mockRestore();
+    }
+  });
+});
+
+describe('getProviderLogoutUrl', () => {
+  function useIssuer(issuer: string) {
+    getAccountDb().mutate(
+      "UPDATE auth SET extra_data = ? WHERE method = 'openid'",
+      [
+        JSON.stringify({
+          issuer,
+          client_id: 'client',
+          client_secret: 'secret',
+          server_hostname: 'https://actual.example',
+        }),
+      ],
+    );
+  }
+
+  it('uses the discovery end_session_endpoint with the server base URL', async () => {
+    provider.metadata = {
+      end_session_endpoint: 'https://identity.example/oidc/logout',
+    };
+    const url = new URL((await getProviderLogoutUrl()) ?? '');
+    expect(url.origin + url.pathname).toBe(
+      'https://identity.example/oidc/logout',
+    );
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      client_id: 'client',
+      post_logout_redirect_uri: 'https://actual.example/',
+    });
+  });
+
+  it.each(['tenant.us.auth0.com', 'auth0.com'])(
+    'falls back to /v2/logout for the Auth0 host %s',
+    async host => {
+      useIssuer(`https://${host}/.well-known/openid-configuration`);
+      expect(await getProviderLogoutUrl()).toBe(
+        `https://${host}/v2/logout?client_id=client&returnTo=https%3A%2F%2Factual.example%2F`,
+      );
+    },
+  );
+
+  it.each([
+    'https://evil-auth0.com/.well-known/openid-configuration',
+    'https://auth0.com.evil.example/.well-known/openid-configuration',
+    'https://identity.example/.well-known/openid-configuration',
+  ])('returns nothing and warns for %s without an endpoint', async issuer => {
+    useIssuer(issuer);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      expect(await getProviderLogoutUrl()).toBeNull();
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('returns nothing when discovery fails', async () => {
+    provider.discoveryFails = true;
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      expect(await getProviderLogoutUrl()).toBeNull();
+      expect(log).toHaveBeenCalled();
+    } finally {
+      log.mockRestore();
     }
   });
 });

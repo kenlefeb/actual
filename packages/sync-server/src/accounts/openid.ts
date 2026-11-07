@@ -109,6 +109,42 @@ async function setupOpenIdClient(configParameter) {
   return client;
 }
 
+// fork: sc-2684. Built from the server's own config only: never from the request.
+export async function getProviderLogoutUrl(): Promise<string | null> {
+  try {
+    const row = getAccountDb().first(
+      'SELECT extra_data FROM auth WHERE method = ?',
+      ['openid'],
+    );
+    if (!row) return null;
+    const configParameter = JSON.parse(row['extra_data']);
+    const returnUrl = new URL('/', configParameter.server_hostname).toString();
+    const client = await setupOpenIdClient(configParameter);
+    if (client.issuer?.end_session_endpoint) {
+      return client.endSessionUrl({ post_logout_redirect_uri: returnUrl });
+    }
+    const issuerUrl =
+      typeof configParameter.issuer === 'string'
+        ? configParameter.issuer
+        : configParameter.issuer?.name;
+    const host = new URL(issuerUrl).hostname;
+    if (host === 'auth0.com' || host.endsWith('.auth0.com')) {
+      const url = new URL(`https://${host}/v2/logout`);
+      url.searchParams.set('client_id', configParameter.client_id);
+      url.searchParams.set('returnTo', returnUrl);
+      return url.toString();
+    }
+    console.warn(
+      'OpenID provider has no end_session_endpoint: sign-out left the provider session open.',
+    );
+    return null;
+  } catch (error) {
+    console.error('Error building the OpenID provider logout URL');
+    debugSensitive('Error building the OpenID provider logout URL: %O', error);
+    return null;
+  }
+}
+
 export async function loginWithOpenIdSetup(
   returnUrl,
   firstTimeLoginPassword = '',

@@ -56,7 +56,11 @@ export function MobileLinkedNotes({
   return (
     <>
       {isFilePath ? (
-        <Text className={linkStyles} onClick={handleClick}>
+        <Text
+          className={linkStyles}
+          onClick={handleClick}
+          data-note-interactive
+        >
           {displayText}
         </Text>
       ) : (

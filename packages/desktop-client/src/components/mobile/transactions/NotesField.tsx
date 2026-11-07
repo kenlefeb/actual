@@ -82,7 +82,8 @@ export function NotesField({
       }}
       onClick={(event: MouseEvent) => {
         // A tap on a link or tag is not a request to edit
-        if ((event.target as HTMLElement).closest('a')) return;
+        if ((event.target as HTMLElement).closest('a, [data-note-interactive]'))
+          {return;}
         startEditing();
       }}
       onKeyDown={(event: KeyboardEvent) => {

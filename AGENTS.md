@@ -645,7 +645,7 @@ and commit the regenerated `packages/desktop-client/src/data/fork-news.json`
 with the version bump. `src/news/forkNews.test.ts` fails when the feed is stale or
 has no entry for the current package version. Fork production builds read this
 bundled feed (`packages/desktop-client/.env.browser` for the served web app,
-`.env.production` for desktop builds); do not edit upstream's
+`.env.desktop` for Electron builds); do not edit upstream's
 generated `news.json`.
 
 ## Shortcut stories (fork-only)

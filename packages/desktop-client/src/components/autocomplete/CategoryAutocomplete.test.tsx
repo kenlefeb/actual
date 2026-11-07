@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 import type { CategoryGroupEntity } from '@actual-app/core/types/models';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { CustomCell } from '#components/table';
 import { SpreadsheetProvider } from '#hooks/useSpreadsheet';
 import { TestProviders } from '#mocks';
 
@@ -120,22 +121,6 @@ describe('CategoryAutocomplete create option', () => {
     );
   });
 
-  it('leaves the field the way a normal pick does, so the register cell stops editing', async () => {
-    const onBlur = vi.fn();
-    const onClose = vi.fn();
-    const { input } = renderPicker({ inputProps: { onBlur }, onClose });
-    await userEvent.type(input, 'Allowance');
-    await userEvent.click(await screen.findByTestId('create-category-button'));
-    await userEvent.click(
-      await screen.findByTestId('Food-category-group-item'),
-    );
-
-    await waitFor(() => expect(onClose).toHaveBeenCalled());
-    // the register cell closes its editor from the input's blur
-    expect(onBlur).toHaveBeenCalled();
-    expect(document.activeElement).toBe(document.body);
-  });
-
   it('defaults to the group of the most recently chosen category', async () => {
     const { input } = renderPicker();
     await userEvent.type(input, 'Movi');
@@ -157,5 +142,123 @@ describe('CategoryAutocomplete create option', () => {
         expect.objectContaining({ groupId: 'inc', isIncome: true }),
       ),
     );
+  });
+});
+
+// The register's category cell: CustomCell wraps the picker exactly like
+// TransactionsTable does, and the groups/value refresh like the live data.
+function RegisterCell({ onCellUpdate }: { onCellUpdate: (v: string) => void }) {
+  const [groups, setGroups] = useState(categoryGroups);
+  const [categoryId, setCategoryId] = useState<string | null>(null);
+  createCategory.mockImplementation(async ({ name, groupId }) => {
+    // like the live app, the category list refreshes after the new id has
+    // already reached the cell
+    setTimeout(
+      () =>
+        setGroups(current =>
+          current.map(g =>
+            g.id === groupId
+              ? ({
+                  ...g,
+                  categories: [
+                    ...(g.categories ?? []),
+                    { id: 'new-id', name, group: groupId },
+                  ],
+                } as CategoryGroupEntity)
+              : g,
+          ),
+        ),
+      30,
+    );
+    return 'new-id';
+  });
+
+  return (
+    <CustomCell
+      name="category"
+      width="flex"
+      value={categoryId ?? undefined}
+      exposed
+      onUpdate={value => {
+        onCellUpdate(value);
+        setCategoryId(value);
+      }}
+    >
+      {({ onBlur, onKeyDown, onUpdate, onSave, shouldSaveFromKey }) => (
+        <CategoryAutocomplete
+          categoryGroups={groups}
+          value={categoryId}
+          focused
+          clearOnBlur={false}
+          showBalances={false}
+          allowCreate
+          shouldSaveFromKey={shouldSaveFromKey}
+          inputProps={{ onBlur, onKeyDown }}
+          onUpdate={onUpdate}
+          onSelect={onSave}
+        />
+      )}
+    </CustomCell>
+  );
+}
+
+describe('creating a category in the register cell', () => {
+  beforeEach(() => {
+    createCategory.mockReset();
+  });
+
+  function renderCell() {
+    const onCellUpdate = vi.fn();
+    render(
+      <TestProviders>
+        <SpreadsheetProvider>
+          <RegisterCell onCellUpdate={onCellUpdate} />
+        </SpreadsheetProvider>
+      </TestProviders>,
+    );
+    return { onCellUpdate, input: screen.getByRole('textbox') };
+  }
+
+  it('commits the new category id, and leaving the cell does not overwrite it (mouse)', async () => {
+    const { onCellUpdate, input } = renderCell();
+    await userEvent.type(input, 'Allowance');
+    await userEvent.click(await screen.findByTestId('create-category-button'));
+    await userEvent.click(
+      await screen.findByTestId('Food-category-group-item'),
+    );
+
+    await waitFor(() => expect(onCellUpdate).toHaveBeenCalledWith('new-id'));
+    // back on the plain picker, showing the new category's name
+    expect(await screen.findByDisplayValue('Allowance')).toBeTruthy();
+
+    await userEvent.click(document.body); // leave the cell
+    expect(onCellUpdate).not.toHaveBeenCalledWith('new');
+    expect(onCellUpdate).toHaveBeenLastCalledWith('new-id');
+    expect(onCellUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it('creates in the default group with Enter, Enter (keyboard)', async () => {
+    const { onCellUpdate, input } = renderCell();
+    await userEvent.type(input, 'Allowance');
+    await userEvent.keyboard('{Enter}'); // the Create row
+    // the preselected group (module state remembers earlier tests' picks)
+    const preselected = (
+      (
+        await screen.findByText(/Group for new category/)
+      ).parentElement!.querySelector('input') as HTMLInputElement
+    ).value;
+    await userEvent.keyboard('{Enter}'); // accept the default group
+
+    await waitFor(() =>
+      expect(createCategory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Allowance',
+          groupId: preselected.toLowerCase(),
+        }),
+      ),
+    );
+    await waitFor(() => expect(onCellUpdate).toHaveBeenCalledWith('new-id'));
+    expect(onCellUpdate).not.toHaveBeenCalledWith('new');
+    expect(await screen.findByDisplayValue('Allowance')).toBeTruthy();
   });
 });

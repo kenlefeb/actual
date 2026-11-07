@@ -1,4 +1,4 @@
-import React, { Fragment, useMemo, useState } from 'react';
+import React, { Fragment, useMemo, useRef, useState } from 'react';
 import type {
   ComponentProps,
   ComponentPropsWithoutRef,
@@ -216,6 +216,7 @@ export function CategoryAutocomplete({
   showHiddenCategories,
   allowCreate,
   onSelect,
+  onUpdate,
   inputProps,
   ...props
 }: CategoryAutocompleteProps) {
@@ -263,14 +264,32 @@ export function CategoryAutocomplete({
   );
   const createCategory = useCreateCategoryMutation();
   const [rawName, setRawName] = useState('');
-  const [newName, setNewName] = useState<string | null>(null);
+  const single = props as SingleSelectProps;
+  // Set once a Create row is chosen; `createdId` once the category exists.
+  const [creating, setCreating] = useState<{
+    name: string;
+    createdId?: string;
+  } | null>(null);
+  // Becomes true when the user types or arrows in the group chooser, which
+  // hands Enter to the list instead of accepting the default group.
+  const chooserTouched = useRef(false);
   const chooserGroups = (categoryGroups || defaultCategoryGroups).filter(
     group => !group.hidden || showHiddenCategories,
   );
 
+  // Back to the plain picker once the transaction carries the new category.
+  const createdVisible =
+    !!creating?.createdId &&
+    categorySuggestions.some(s => s.id === creating.createdId);
+  if (createdVisible && single.value === creating?.createdId) {
+    setCreating(null);
+  }
+  const createdId = creating?.createdId;
+
   function handleSelect(id: string, value: string) {
     if (id === 'new') {
-      setNewName(rawName.trim() || value.trim());
+      chooserTouched.current = false;
+      setCreating({ name: rawName.trim() || value.trim() });
       return;
     }
     const picked = categorySuggestions.find(s => s.id === id);
@@ -280,10 +299,44 @@ export function CategoryAutocomplete({
     selectItem?.(id, value);
   }
 
-  if (newName !== null) {
+  async function createIn(groupId: string, name: string) {
+    const group = chooserGroups.find(g => g.id === groupId);
+    if (!group) {
+      return;
+    }
+    const id = await createCategory.mutateAsync({
+      name,
+      groupId: group.id,
+      isIncome: !!group.is_income,
+      isHidden: false,
+    });
+    lastUsedGroupId = group.id;
+    // Commit the new id like a normal pick; the cell keeps editing with the
+    // category shown until the user leaves it. The chooser stays up until the
+    // category list refreshes, so the field never shows blank.
+    setCreating({ name, createdId: id });
+    selectItem?.(id, name);
+    props.onClose?.();
+  }
+
+  const showChooser = creating !== null && !createdVisible;
+  if (creating && showChooser) {
+    const { name } = creating;
     const defaultGroup = pickDefaultGroup(chooserGroups, lastUsedGroupId);
     return (
-      <View>
+      <View
+        onKeyDownCapture={e => {
+          if (e.key !== 'Enter') {
+            chooserTouched.current = true;
+          } else if (!chooserTouched.current && defaultGroup && !createdId) {
+            // Enter accepts the preselected group; the list never highlights
+            // anything until the user types or arrows.
+            e.preventDefault();
+            e.stopPropagation();
+            void createIn(defaultGroup.id, name);
+          }
+        }}
+      >
         <Text
           style={{
             color: theme.menuAutoCompleteText,
@@ -291,35 +344,21 @@ export function CategoryAutocomplete({
             padding: '0 8px 5px',
           }}
         >
-          <Trans>Group for new category "{{ newName }}"</Trans>
+          <Trans>Group for new category "{{ name }}"</Trans>
         </Text>
         <CategoryGroupAutocomplete
           focused
+          openOnFocus
           embedded={embedded}
           closeOnBlur={closeOnBlur}
           containerProps={props.containerProps}
-          inputProps={inputProps}
+          inputProps={{ ...inputProps, onKeyDown: undefined }}
           onClose={props.onClose}
           categoryGroups={chooserGroups}
           value={defaultGroup?.id ?? null}
-          onSelect={async groupId => {
-            const group = chooserGroups.find(g => g.id === groupId);
-            if (!group) {
-              return;
-            }
-            const id = await createCategory.mutateAsync({
-              name: newName,
-              groupId: group.id,
-              isIncome: !!group.is_income,
-              isHidden: false,
-            });
-            lastUsedGroupId = group.id;
-            selectItem?.(id, newName);
-            props.onClose?.();
-            // A normal pick ends in a blur that closes the register cell's
-            // editor; the chooser keeps focus, so blur it the same way.
-            if (document.activeElement instanceof HTMLElement) {
-              document.activeElement.blur();
+          onSelect={groupId => {
+            if (!createdId && groupId) {
+              void createIn(groupId, name);
             }
           }}
         />
@@ -354,6 +393,10 @@ export function CategoryAutocomplete({
       suggestions={categorySuggestions}
       itemToString={item => (item?.id === 'new' ? rawName : (item?.name ?? ''))}
       shouldCloseOnSelect={item => item.id !== 'new'}
+      onUpdate={(id, value) =>
+        // the Create row isn't a category: keep the cell's current value
+        onUpdate?.(id === 'new' ? (single.value as string) : id, value)
+      }
       inputProps={{
         ...inputProps,
         onChangeValue: (value, e) => {
@@ -376,7 +419,8 @@ export function CategoryAutocomplete({
           createName={inputValue?.trim()}
         />
       )}
-      {...(props as SingleSelectProps)}
+      {...single}
+      value={createdId ?? single.value}
     />
   );
 }

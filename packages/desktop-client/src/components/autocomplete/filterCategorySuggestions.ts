@@ -24,8 +24,9 @@ function rankMatches<T extends CategorySuggestion>(
 
 export function filterCategorySuggestions<T extends CategorySuggestion>(
   suggestions: T[],
-  value: string,
+  rawValue: string,
 ): T[] {
+  const value = rawValue.trim();
   const splitItem = suggestions.find(s => s.id === 'split');
   const realSuggestions = suggestions.filter(s => s.id !== 'split');
 

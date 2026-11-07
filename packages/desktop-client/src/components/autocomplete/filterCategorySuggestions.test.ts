@@ -71,6 +71,10 @@ describe('filterCategorySuggestions', () => {
     expect(result).toEqual([]);
   });
 
+  it('treats a whitespace-only query like an empty query', () => {
+    expect(filterCategorySuggestions(suggestions, '   ')).toEqual(suggestions);
+  });
+
   it('returns no suggestions when nothing matches', () => {
     expect(filterCategorySuggestions(suggestions, 'zzz')).toEqual([]);
   });

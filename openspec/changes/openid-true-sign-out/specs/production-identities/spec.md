@@ -34,12 +34,17 @@ When a user chooses "Sign out" and their session came from OpenID, Actual SHALL 
 - **WHEN** user B presses "Sign in with OpenID" and enters their own username
 - **THEN** user B is signed in as user B and sees only user B's budgets
 
+#### Scenario: A provider address that is not a web address is ignored
+- **GIVEN** the server answers sign-out with a provider logout address whose scheme is not `https:` (or `http:` on `localhost` for development), such as `javascript:` or `file:`
+- **WHEN** the client finishes signing out
+- **THEN** it does not open that address, and shows Actual's sign-in page
+
 #### Scenario: Sign-out lands on Actual's sign-in page
 - **WHEN** the provider finishes its logout
 - **THEN** the browser returns to Actual and shows the sign-in page, not a provider page
 
 ### Requirement: The provider logout address comes from discovery, with an Auth0 fallback
-The server SHALL build the provider logout address from the discovery document's `end_session_endpoint`. When discovery has none and the issuer is an Auth0 domain, it SHALL use that domain's `/v2/logout` with the server's client id and return URL. When neither applies, sign-out SHALL end Actual's session only and the server SHALL log a warning.
+The server SHALL build the provider logout address from the discovery document's `end_session_endpoint`. When discovery has none and the issuer's hostname is `auth0.com` or ends in `.auth0.com`, it SHALL use that domain's `/v2/logout` with the server's client id and return URL. When neither applies, sign-out SHALL end Actual's session only and the server SHALL log a warning.
 
 #### Scenario: Discovery names an end-session endpoint
 - **GIVEN** the provider's discovery document has `end_session_endpoint`
@@ -50,6 +55,11 @@ The server SHALL build the provider logout address from the discovery document's
 - **GIVEN** the issuer is an Auth0 domain and its discovery document has no `end_session_endpoint`
 - **WHEN** an OpenID user signs out
 - **THEN** the browser is sent to that domain's `/v2/logout` with the server's client id and the return URL as `returnTo`
+
+#### Scenario: A look-alike host is not Auth0
+- **GIVEN** the issuer's hostname is `evil-auth0.com` or `auth0.com.evil.example`, and its discovery document has no `end_session_endpoint`
+- **WHEN** an OpenID user signs out
+- **THEN** no provider logout address is returned and the server logs a warning
 
 #### Scenario: A provider with no logout
 - **GIVEN** the provider is not Auth0 and its discovery document has no `end_session_endpoint`

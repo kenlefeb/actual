@@ -1,11 +1,19 @@
 import request from 'supertest';
 import { v4 as uuidv4 } from 'uuid';
 
-import { getAccountDb, getLoginMethod, getServerPrefs } from './account-db';
+import {
+  getAccountDb,
+  getLoginMethod,
+  getServerPrefs,
+  getSession,
+} from './account-db';
 import { bootstrapPassword, checkPassword } from './accounts/password';
 import { handlers as app, authRateLimiter } from './app-account';
 
-const provider = vi.hoisted(() => ({ discoveryFails: false }));
+const provider = vi.hoisted(() => ({
+  discoveryFails: false,
+  endSession: true,
+}));
 
 vi.mock('openid-client', async importOriginal => {
   const actual = await importOriginal();
@@ -16,7 +24,9 @@ vi.mock('openid-client', async importOriginal => {
         if (provider.discoveryFails) throw new Error('discovery down');
         return new actual.Issuer({
           issuer: 'https://identity.example',
-          end_session_endpoint: 'https://identity.example/oidc/logout',
+          ...(provider.endSession && {
+            end_session_endpoint: 'https://identity.example/oidc/logout',
+          }),
         });
       },
     },
@@ -513,6 +523,7 @@ describe('logout from an OpenID session', () => {
   let userId;
   beforeEach(() => {
     provider.discoveryFails = false;
+    provider.endSession = true;
     userId = uuidv4();
     createUser(userId, userId, BASIC_ROLE);
     clearAuth();
@@ -553,6 +564,91 @@ describe('logout from an OpenID session', () => {
       client_id: 'client',
       post_logout_redirect_uri: 'https://actual.example/',
     });
+  });
+
+  // fork: sc-2970
+  const ID_TOKEN = 'stored.id.token';
+  const setIdToken = token =>
+    getAccountDb().mutate('UPDATE sessions SET id_token = ? WHERE token = ?', [
+      ID_TOKEN,
+      token,
+    ]);
+
+  it('sends the stored ID token as id_token_hint, without logging it', async () => {
+    const token = generateSessionToken();
+    createSession(userId, token, 'openid');
+    setIdToken(token);
+    const logs = ['log', 'info', 'warn', 'error', 'debug'].map(m =>
+      vi.spyOn(console, m),
+    );
+    try {
+      const res = await request(app).post('/logout').send({ token });
+      expect(res.status).toBe(200);
+      expect(sessionRow(token)).toBeNull();
+      const url = new URL(res.body.data.providerLogoutUrl);
+      expect(Object.fromEntries(url.searchParams)).toEqual({
+        client_id: 'client',
+        post_logout_redirect_uri: 'https://actual.example/',
+        id_token_hint: ID_TOKEN,
+      });
+      for (const log of logs) {
+        expect(JSON.stringify(log.mock.calls)).not.toContain(ID_TOKEN);
+      }
+    } finally {
+      for (const log of logs) log.mockRestore();
+    }
+  });
+
+  it('still answers with no URL when discovery fails for a session with an ID token', async () => {
+    provider.discoveryFails = true;
+    const token = generateSessionToken();
+    createSession(userId, token, 'openid');
+    setIdToken(token);
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const res = await request(app).post('/logout').send({ token });
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ status: 'ok', data: {} });
+      expect(sessionRow(token)).toBeNull();
+      expect(JSON.stringify(log.mock.calls)).not.toContain(ID_TOKEN);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('never adds the hint to the Auth0 /v2/logout fallback', async () => {
+    provider.endSession = false;
+    getAccountDb().mutate(
+      "UPDATE auth SET extra_data = ? WHERE method = 'openid'",
+      [
+        JSON.stringify({
+          issuer:
+            'https://tenant.us.auth0.com/.well-known/openid-configuration',
+          client_id: 'client',
+          client_secret: 'secret',
+          server_hostname: 'https://actual.example',
+        }),
+      ],
+    );
+    const token = generateSessionToken();
+    createSession(userId, token, 'openid');
+    setIdToken(token);
+    const res = await request(app).post('/logout').send({ token });
+    expect(res.body.data.providerLogoutUrl).toBe(
+      'https://tenant.us.auth0.com/v2/logout?client_id=client&returnTo=https%3A%2F%2Factual.example%2F',
+    );
+  });
+
+  it('keeps the ID token out of getSession and authenticated responses', async () => {
+    const token = generateSessionToken();
+    createSession(userId, token, 'openid');
+    setIdToken(token);
+    expect(getSession(token)).not.toHaveProperty('id_token');
+    const res = await request(app)
+      .get('/validate')
+      .set('x-actual-token', token);
+    expect(res.statusCode).toBe(200);
+    expect(JSON.stringify(res.body)).not.toContain(ID_TOKEN);
   });
 
   it('returns no URL for a password session or an unknown token', async () => {

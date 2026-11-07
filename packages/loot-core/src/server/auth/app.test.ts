@@ -47,3 +47,16 @@ it('ignores a non-string URL from the server', async () => {
   vi.mocked(post).mockResolvedValue({ providerLogoutUrl: 42 });
   expect(await signOut({ endProviderSession: true })).toEqual({});
 });
+
+// fork: sc-2970, the URL carries the ID token as id_token_hint
+it('never logs the provider logout URL', async () => {
+  const logs = (['log', 'info', 'warn', 'error', 'debug'] as const).map(m =>
+    vi.spyOn(console, m).mockImplementation(() => undefined),
+  );
+  expect(await signOut({ endProviderSession: true })).toEqual({
+    providerLogoutUrl,
+  });
+  for (const log of logs) {
+    expect(JSON.stringify(log.mock.calls)).not.toContain('client_id=c');
+  }
+});

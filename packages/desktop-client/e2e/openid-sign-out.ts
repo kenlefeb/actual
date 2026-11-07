@@ -25,6 +25,9 @@ async function signInWithOpenId(page: Page, provider: OpenIdProvider) {
 
 // openid-true-sign-out tasks 4.1 and 4.2: the user menu's "Sign out" ends the
 // provider session too, then returns to Actual's sign-in page.
+// openid-logout-id-token-hint (sc-2970): it sends the ID token as
+// id_token_hint, so the provider skips its confirmation page, and the client
+// never logs the address that carries it.
 export function describeOpenIdSignOut(viewport: {
   width: number;
   height: number;
@@ -56,6 +59,8 @@ export function describeOpenIdSignOut(viewport: {
       baseURL,
     }) => {
       const page = await browser.newPage({ viewport });
+      const consoleMessages: string[] = [];
+      page.on('console', message => consoleMessages.push(message.text()));
       // In production the sync server serves the app, so the provider's return
       // URL (the server's root) is the app. Here the app runs on the e2e web
       // server, so send the server's root there, as that shared origin would.
@@ -88,6 +93,12 @@ export function describeOpenIdSignOut(viewport: {
         expect(logouts[0].searchParams.get('client_id')).toBe(
           provider.clientId,
         );
+        const issued = provider.idTokens.get(provider.user.sub);
+        expect(issued).toBeTruthy();
+        expect(logouts[0].searchParams.get('id_token_hint')).toBe(issued);
+        expect(
+          consoleMessages.filter(text => issued && text.includes(issued)),
+        ).toEqual([]);
 
         // The next sign-in goes back through the provider's authorize page
         await signInWithOpenId(page, provider);

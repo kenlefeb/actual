@@ -13,7 +13,11 @@ import {
   needsBootstrap,
   setServerPrefs,
 } from './account-db';
-import { isValidRedirectUrl, loginWithOpenIdSetup } from './accounts/openid';
+import {
+  getProviderLogoutUrl,
+  isValidRedirectUrl,
+  loginWithOpenIdSetup,
+} from './accounts/openid';
 import {
   changePassword,
   isValidPassword,
@@ -136,14 +140,25 @@ app.post('/login', authRateLimiter, async (req, res) => {
   res.send({ status: 'ok', data: { token } });
 });
 
-app.post('/logout', (req, res) => {
+app.post('/logout', async (req, res) => {
   const token = req.body?.token;
   if (typeof token !== 'string' || !token) {
     res.status(400).send({ status: 'error', reason: 'invalid-token' });
     return;
   }
-  getAccountDb().mutate('DELETE FROM sessions WHERE token = ?', [token]);
-  res.send({ status: 'ok', data: {} });
+  const accountDb = getAccountDb();
+  const session = accountDb.first(
+    'SELECT auth_method FROM sessions WHERE token = ?',
+    [token],
+  );
+  accountDb.mutate('DELETE FROM sessions WHERE token = ?', [token]);
+  // fork: sc-2684. Only after the row is gone; failures yield no URL.
+  const providerLogoutUrl =
+    session?.auth_method === 'openid' ? await getProviderLogoutUrl() : null;
+  res.send({
+    status: 'ok',
+    data: providerLogoutUrl ? { providerLogoutUrl } : {},
+  });
 });
 
 app.post('/change-password', authRateLimiter, async (req, res) => {

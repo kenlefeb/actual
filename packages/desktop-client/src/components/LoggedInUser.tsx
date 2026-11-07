@@ -12,6 +12,7 @@ import { theme } from '@actual-app/components/theme';
 import { Tooltip } from '@actual-app/components/tooltip';
 import { View } from '@actual-app/components/view';
 import { listen } from '@actual-app/core/platform/client/connection';
+import { isElectron } from '@actual-app/core/shared/environment';
 import type { RemoteFile, SyncedLocalFile } from '@actual-app/core/types/file';
 import type { TransObjectLiteral } from '@actual-app/core/types/util';
 
@@ -116,9 +117,13 @@ export function LoggedInUser({ hideIfNoServer, style }: LoggedInUserProps) {
       case 'index':
         void navigate('/');
         break;
-      case 'sign-out':
-        void dispatch(signOut());
+      case 'sign-out': {
+        const result = await dispatch(signOut({ endProviderSession: true }));
+        if (signOut.fulfilled.match(result)) {
+          followProviderLogout(result.payload);
+        }
         break;
+      }
       case 'config-server':
         await onCloseBudget();
         void navigate('/config-server');
@@ -305,4 +310,18 @@ export function LoggedInUser({ hideIfNoServer, style }: LoggedInUserProps) {
       </Popover>
     </View>
   );
+}
+
+// fork: sc-2684. Leave Actual only for a web address, so a bad server cannot
+// run script or open a local file through sign-out.
+function followProviderLogout(url: string | undefined) {
+  if (!url || !URL.canParse(url)) return;
+  const { protocol, hostname, href } = new URL(url);
+  const isLocalhost = ['localhost', '127.0.0.1', '[::1]'].includes(hostname);
+  if (protocol !== 'https:' && !(protocol === 'http:' && isLocalhost)) return;
+  if (isElectron()) {
+    window.Actual.openURLInBrowser(href);
+  } else {
+    window.location.assign(href);
+  }
 }

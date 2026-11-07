@@ -2,7 +2,7 @@
 
 Fork-only; never upstream. **Status: Accepted** (2026-11-06, decided by Ken,
 sc-2715). Usage was measured on 2026-11-07 (see "Measuring real usage"). This
-ADR changes no production system; resizing the plan is a separate story.
+ADR changes no production system; resizing the plan is sc-2756.
 
 ## Context
 
@@ -11,10 +11,10 @@ server, hosted MCP, two Tailscale sidecars, backups and an Auth0 app pair per
 household, all provisioned from one template). Decided on sc-2702: households
 reach their server over Tailscale node sharing now and by custom domain later;
 each household's lead administers that household's server; Ken runs the shared
-plumbing (host, Auth0 tenant, deploys). The host is undecided.
+plumbing (host, Auth0 tenant, deploys). The host decision is below.
 
-Today's host is one Hostinger VPS: 1 vCPU, about 4 GiB RAM, 41 GiB free disk
-(`actual-hosting/README.md`). It runs staging, production, both MCPs, Traefik
+Today's host is one Hostinger VPS: 1 vCPU, 3,915 MiB (3.8 GiB) RAM, 48 GB
+disk with 36 GB available (measured 2026-11-07; see "Measuring real usage"). It runs staging, production, both MCPs, Traefik
 and Lunch Money MCP. Memory caps in the compose files, per household stack:
 
 | Container                | Cap                                                 |
@@ -117,29 +117,33 @@ A single snapshot shows load now and the peak since each container started
 A recurring read-only `usage` verb is a possible follow-up, not part of this
 decision.
 
-### Result (measured on 2026-11-07, see sc-2715)
+### Result (measured 2026-11-06 19:28 EST, 2026-11-07 00:28 UTC; see sc-2715)
 
-Ken ran the block above on 2026-11-07 at 00:28 UTC (comment 2754 on sc-2715).
-The host had been up 20 days. Findings:
+Ken ran the block above (comment 2754 on sc-2715). The host had been up 20
+days. Findings:
 
-- **Host:** 1 vCPU, 3.9 GB RAM, no swap, 48 GB disk (25 percent used). About
-  2.7 GB of RAM was available.
+- **Host:** 1 vCPU, 3,915 MiB (3.8 GiB) RAM, no swap, 48 GB disk (25 percent
+  used, 36 GB available). 2,696 MiB (2.6 GiB) of RAM was available.
 - **One household stack (production), peak memory since start:** Actual
   196 MiB, Tailscale 40 MiB, MCP 221 MiB, MCP Tailscale 19 MiB: about
   **0.47 GiB** in total (idle about 0.28 GiB), against 1.75 GiB of caps.
-- **Shared overhead:** about 1.5 GB for the staging stack, Traefik and Lunch
-  Money MCP, which are not households.
+- **Shared overhead (planning allowance, not a measurement):** `free` showed
+  1,218 MiB used. Take away the production household stack (about 290 MiB
+  now) and about 0.93 GiB of non-household use remains (OS, staging,
+  Traefik, Lunch Money). Rounded up to 1.5 GB to leave room for page cache
+  and staging peaks.
 - **Stability:** no restarts and no OOM kills. Memory pressure was 0.
 - **CPU is the constraint:** with one vCPU, CPU "some" pressure was 3.85
   percent over 5 minutes (12.85 percent over 10 seconds, partly the
   measurement itself).
-- **Disk per household:** about 40 MB of data and about 105 MB of backups;
+- **Disk per household:** about 40 MB of data and about 107 MB of backups;
   not a constraint.
 
-Capacity on the current KVM 1 (3.9 GB, 1 vCPU) is therefore 2 to 3 households
-(memory alone would allow about 5; the single vCPU is the limit). A single
-snapshot is not a month of history; re-run the block above before each plan
-upgrade.
+Capacity with 25 percent memory headroom: KVM 1 (3.8 GiB):
+(3.8 x 0.75 - 1.5) / 0.47 = about 2.9, so **2 to 3 households**. KVM 2
+(7.6 GiB): (7.6 x 0.75 - 1.5) / 0.47 = about 9 on memory, but its 2 vCPUs
+are the limit, so **6 to 8 households**. A single snapshot is not a month of
+history.
 
 ## Options
 
@@ -152,7 +156,7 @@ purchase. USD unless marked.
 | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Hostinger KVM 1 (today): 1 vCPU, 4 GB                             | $11.99/mo renewal ($6.49 on a 24-month intro)                                                                                                                                                                                                       |
 | Hostinger KVM 2: 2 vCPU, 8 GB                                     | $14.99/mo renewal ($8.99 intro)                                                                                                                                                                                                                     |
-| Hostinger KVM 4: 4 vCPU, 16 GB                                    | about $24.99 to $28.99/mo renewal (sources differ; $12.99 intro)                                                                                                                                                                                    |
+| Hostinger KVM 4: 4 vCPU, 16 GB                                    | $28.99/mo renewal ($12.99 intro; one competitor page quotes $24.99)                                                                                                                                                                                 |
 | Hostinger KVM 8: 8 vCPU, 32 GB                                    | about $50/mo renewal (sources differ: $47.99 to $59.99)                                                                                                                                                                                             |
 | Hetzner CX23: 2 vCPU, 4 GB                                        | about EUR 6/mo; CX33 (4 vCPU, 8 GB) about EUR 6.5 to 10. Prices rose in April and June 2026 and orders were restricted for a time: verify                                                                                                           |
 | AWS Lightsail 4 GB / 8 GB                                         | $24 / $44 per month                                                                                                                                                                                                                                 |
@@ -166,11 +170,11 @@ purchase. USD unless marked.
 One bigger VPS (KVM 2 or KVM 4, same provider and console), every household a
 Compose project from the template.
 
-- **Cost per household.** On KVM 2 ($14.99/mo renewal), 6 to 8 households fit
-  (memory allows more; 2 vCPUs are the limit): $14.99 / 8 = $1.87 to
-  $14.99 / 4 = $3.75, so about $2 to $4. On today's KVM 1 ($11.99) with 3
-  households: $11.99 / 3 = $4.00. On KVM 4 ($24.99 to $28.99) with 8:
-  $3.12 to $3.62.
+- **Cost per household.** KVM 2 ($14.99/mo renewal) holds 6 to 8 households
+  (memory allows about 9; the 2 vCPUs are the limit). $14.99 / 8 = $1.87 when
+  full; $14.99 / 4 = $3.75 at 4 households, the first household after the
+  upgrade; so about $2 to $4. On today's KVM 1 ($11.99) with 3 households:
+  $11.99 / 3 = $4.00. On KVM 4 ($28.99) with 8: $28.99 / 8 = $3.62.
 - **Isolation.** Separate containers, volumes, networks and Tailscale nodes per
   household. Root on the VPS (Ken) can read every household, and so can
   anything that compromises the host. A noisy household can slow the others
@@ -215,10 +219,11 @@ C1: EC2 (t3.large or similar x86) running the same Compose projects.
 C2: ECS on Fargate, one service per container, an EBS volume per task.
 
 - **Cost per household.** C1: one t3.large (2 vCPU, 8 GiB; x86, because the
-  fork builds amd64 only) holds the same 4 to 8 households as KVM 2.
+  fork builds amd64 only) holds the same 6 to 8 households as KVM 2 (t3.large is burstable, so it has less sustained CPU than KVM 2's two vCPUs, and CPU is the limit).
   Per month: $0.0832 x 730 h = $60.74, plus 40 GB gp3 at $0.08 = $3.20, plus
   one public IPv4 at $0.005 x 730 h = $3.65, total $67.59. Per household:
-  $67.59 / 8 = $8.45 to $67.59 / 4 = $16.90, so about $8 to $17.
+  $67.59 / 8 = $8.45 when full; $67.59 / 4 = $16.90 at 4 households; so
+  about $8 to $17.
   C2: Fargate bills per task. A household is two tasks (sync plus Tailscale,
   MCP plus Tailscale); measured peaks of 0.24 GiB each fit the smallest size
   (0.25 vCPU, 0.5 GB): (0.25 x $0.04048 + 0.5 x $0.004445) x 730 h = $9.01
@@ -266,15 +271,16 @@ C2: ECS on Fargate, one service per container, an EBS volume per task.
 ## Comparison
 
 Monthly cost per household from the measurement (peak about 0.47 GiB per
-household, 1.5 GB shared overhead). Arithmetic is in each option above.
+household, 1.5 GB shared-overhead planning allowance). Arithmetic is in each
+option above.
 
 | Option                               | Monthly cost per household | Basis                        |
 | ------------------------------------ | -------------------------- | ---------------------------- |
 | A. Current KVM 1, up to 3 households | $4.00 at 3                 | $11.99 / 3                   |
-| A. KVM 2, 4 to 8 households          | about $2 to $4             | $14.99 / 8 to $14.99 / 4     |
-| A. KVM 4, 8 households               | $3.12 to $3.62             | $24.99 to $28.99 / 8         |
+| A. KVM 2, 6 to 8 households          | $1.87 full, $3.75 at 4     | $14.99 / 8; $14.99 / 4       |
+| A. KVM 4, 8 households               | $3.62                      | $28.99 / 8                   |
 | B1. VPS per household                | $12 to $15                 | KVM 1 $11.99 to KVM 2 $14.99 |
-| C1. EC2 t3.large (4 to 8 households) | about $8 to $17            | $67.59 / 8 to $67.59 / 4     |
+| C1. EC2 t3.large (6 to 8 households) | $8.45 full, $16.90 at 4    | $67.59 / 8; $67.59 / 4       |
 | C2. ECS Fargate                      | about $15 to $25           | two small tasks, EBS, IPv4   |
 | D. EKS (2 to 10 households)          | about $20 to $98           | about $195 / 10 to $195 / 2  |
 
@@ -296,13 +302,14 @@ Hostinger VPS sized in steps.**
   limit.
 - **Trigger:** before the 4th household goes live, upgrade the plan in place
   in hPanel to KVM 2 (2 vCPU, 8 GB, $14.99/mo at renewal). Capacity is about
-  6 to 8 households, about $2 to $4 each.
+  6 to 8 households: $1.87 each when full, $3.75 at 4 households.
 - **Bigger step:** go to KVM 4 (4 vCPU, 16 GB) only if more than 8 households
   are expected within a year.
 - **Escape hatch:** B1 (a VPS per household) stays available for a household
   that needs isolation from Ken's root. Keep the household template
-  host-agnostic (sc-2716) so the move is a copy of one directory and its
-  volume.
+  host-agnostic (sc-2716) so a move does not require redesigning it. A move
+  still needs the household's Tailscale share, Auth0 URLs and the multi-host
+  deploy loop that sc-2717 defers.
 - **Rejected:** B1 as the default ($12 to $15 each), C1 EC2 ($8 to $17), C2
   Fargate ($15 to $25; SQLite does not suit shared network storage such as
   EFS) and EKS ($20 to $98), on cost and migration work.
@@ -312,25 +319,26 @@ no new trust model (signed deploy, forced command, backups and LOCKDOWN
 checklist all exist), and it is the lowest operating load for one person.
 Isolation stays container-level, as staging next to production is today.
 
-Revisit when: peak memory reaches 70 percent of the host; CPU pressure stays
-high on the current plan; more than 8 households; a household needs
-separation from Ken's root; or an outage of the single VPS becomes
-unacceptable (then C1 with EBS snapshots, or two VPSes with restore drills).
+Triggers are household counts only: upgrade to KVM 2 before the 4th household
+goes live, and to KVM 4 only if more than 8 households are expected within a
+year. Also revisit if a household needs separation from Ken's root, or an
+outage of the single VPS becomes unacceptable (then C1 with EBS snapshots, or
+two VPSes with restore drills). An OOM kill or restart is a reason to
+re-measure.
 
 ## Consequences
 
-- sc-2716 to sc-2722 stay host-agnostic; sc-2717 loops over a household list
-  on one host and reports per household.
-- LOCKDOWN.md must cover root on one host reading every household; before a
-  real second household, its text for that risk is rewritten for it.
-- Plan upgrades follow the decision above. Resizing KVM 1 to KVM 2 is Ken's
-  production change (separate story); re-run the measurement block first and
-  after.
+- The household template (sc-2716) stays host-agnostic; the single-VPS
+  stories are written for one host by design. sc-2717 loops over a household
+  list on one host and reports per household.
+- LOCKDOWN.md must cover root on one host reading every household. Its
+  rewrite is sc-2765, which blocks sc-2722.
+- The KVM 1 to KVM 2 upgrade is sc-2756, Ken's production change; its
+  acceptance covers healthy stacks and the next backup pull.
 - Provider prices moved several times in 2026 (Hetzner in April and June;
   Hostinger renewal is about double the intro rate). Re-check list prices
   before purchase.
-- Follow-up for the Product Owner: an optional recurring read-only usage
-  verb, and the plan-upgrade story that triggers before the 4th household.
+- The optional recurring read-only usage verb is sc-2774.
 
 ## Sources (read 2026-11-06; Hostinger reviews late October 2026)
 

@@ -77,8 +77,30 @@ test.describe('Mobile Transactions', () => {
 - text: Cleared
 - checkbox [checked]
 - text: Notes
-- textbox "Notes" [disabled]: just a note
-- text: just a note`);
+- group "Notes" [disabled]: just a note`);
+  });
+
+  test('shows notes once and edits them on tap', async () => {
+    const transactionEntryPage = await navigation.goToTransactionEntryPage();
+    await page.goto(
+      transactionEntryPage.page.url() + '?amount=23.42&notes=just+a+note',
+    );
+    // Click anywhere to cancel the active amount edit.
+    await transactionEntryPage.header.click();
+
+    const notes = page.getByRole('group', { name: 'Notes' });
+    await expect(notes).toHaveText('just a note');
+    await expect(page.getByRole('textbox', { name: 'Notes' })).toHaveCount(0);
+
+    await notes.click();
+    const notesBox = page.getByRole('textbox', { name: 'Notes' });
+    await expect(notesBox).toBeFocused();
+    await expect(notesBox).toHaveValue('just a note');
+    await expect(notes).toHaveCount(0);
+
+    await transactionEntryPage.header.click();
+    await expect(notes).toHaveText('just a note');
+    await expect(notesBox).toHaveCount(0);
   });
 
   test('removes the payee from a new transaction', async () => {

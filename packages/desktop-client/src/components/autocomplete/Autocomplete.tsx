@@ -48,6 +48,8 @@ type CommonAutocompleteProps<T extends AutocompleteItem> = {
   clearOnSelect?: boolean;
   closeOnBlur?: boolean;
   closeOnSelect?: boolean;
+  // Lets an item (e.g. a "create" row) keep the list open when selected.
+  shouldCloseOnSelect?: (item: T) => boolean;
   updateOnValueChange?: boolean;
   onClose?: () => void;
 };
@@ -233,6 +235,7 @@ function SingleAutocomplete<T extends AutocompleteItem>({
   clearOnSelect = false,
   closeOnBlur = true,
   closeOnSelect = !clearOnSelect,
+  shouldCloseOnSelect = () => true,
   updateOnValueChange = false,
   onClose,
   value: initialValue,
@@ -353,7 +356,7 @@ function SingleAutocomplete<T extends AutocompleteItem>({
           setValue('');
         }
 
-        if (closeOnSelect) {
+        if (closeOnSelect && (!item || shouldCloseOnSelect(item))) {
           close();
         }
 

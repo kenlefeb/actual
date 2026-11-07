@@ -55,3 +55,34 @@ export function filterCategorySuggestions<T extends CategorySuggestion>(
 
   return splitItem ? [splitItem, ...filtered] : filtered;
 }
+
+// Prepends a "create" sentinel (id `new`, after the split item) when the typed
+// text is not already a category name, like the payee picker does.
+export function addCreateSuggestion<T extends CategorySuggestion>(
+  filtered: T[],
+  // every existing category, including ones hidden from the picker
+  all: Array<{ name: string }>,
+  rawValue: string,
+): T[] {
+  const value = rawValue.trim().toLowerCase();
+  if (!value || all.some(item => item.name.trim().toLowerCase() === value)) {
+    return filtered;
+  }
+  const createItem = { id: 'new', name: '' } as T;
+  return filtered[0]?.id === 'split'
+    ? [filtered[0], createItem, ...filtered.slice(1)]
+    : [createItem, ...filtered];
+}
+
+// The group to preselect for a new category: the one used last, else the
+// first expense group.
+export function pickDefaultGroup<G extends { id: string; is_income?: boolean }>(
+  groups: G[],
+  lastUsedGroupId: string | undefined,
+): G | undefined {
+  return (
+    groups.find(g => g.id === lastUsedGroupId) ??
+    groups.find(g => !g.is_income) ??
+    groups[0]
+  );
+}

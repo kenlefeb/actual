@@ -95,6 +95,7 @@ export function CategoryAutocompleteModal({
                   closeOnSelect={closeOnSelect}
                   clearOnSelect={clearOnSelect}
                   showSplitOption={false}
+                  allowCreate
                   onClose={() => state.close()}
                   {...defaultAutocompleteProps}
                   onSelect={onSelect}

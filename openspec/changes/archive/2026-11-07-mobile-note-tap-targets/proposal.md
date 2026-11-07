@@ -38,5 +38,4 @@ exception from Ken is needed.
 ## Impact
 
 Code: `NotesField.tsx`, `MobileTaggedNotes.tsx`, `MobileLinkedNotes.tsx` and
-their tests. No API, data or dependency changes. User-facing bug fix, so it
-needs a release note or fork news entry.
+their tests. No API, data or dependency changes. User-facing bug fix, shipped with a release note.

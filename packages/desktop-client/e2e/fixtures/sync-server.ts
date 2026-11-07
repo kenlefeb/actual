@@ -27,7 +27,6 @@ function freePort() {
 function kill(child: ChildProcess) {
   if (child.pid && child.exitCode === null) {
     try {
-      // The whole group: yarn, the build and node
       process.kill(-child.pid, 'SIGTERM');
     } catch {
       // Already gone
@@ -53,16 +52,13 @@ export async function startSyncServer(
   };
   // Development mode would proxy page requests to the web dev server
   delete env.NODE_ENV;
-  const child = spawn(
-    'yarn',
-    ['workspace', '@actual-app/sync-server', 'start'],
-    {
-      cwd: repoRoot,
-      env,
-      detached: true,
-      stdio: 'ignore',
-    },
-  );
+  // The build comes from global-setup.ts, once per run
+  const child = spawn('node', ['build/app.js'], {
+    cwd: path.join(repoRoot, 'packages', 'sync-server'),
+    env,
+    detached: true,
+    stdio: 'ignore',
+  });
 
   let isStopped = false;
   const stop = () => {
@@ -76,7 +72,6 @@ export async function startSyncServer(
   };
   process.on('exit', stop);
 
-  // `start` runs a vite build first, which is slow in CI's Docker job
   const deadline = Date.now() + 240_000;
   while (Date.now() < deadline) {
     if (child.exitCode !== null) {

@@ -56,6 +56,25 @@ describe('filterCategorySuggestions', () => {
     expect(filterCategorySuggestions(suggestions, '')).toEqual(suggestions);
   });
 
+  it('does not fuzzy-match a query scattered across group and name', () => {
+    const result = filterCategorySuggestions(
+      [
+        {
+          id: '9',
+          name: 'Local Income Tax Withholding',
+          group: { name: 'Taxes & Fees' },
+        },
+      ],
+      'Allow',
+    );
+
+    expect(result).toEqual([]);
+  });
+
+  it('treats a whitespace-only query like an empty query', () => {
+    expect(filterCategorySuggestions(suggestions, '   ')).toEqual(suggestions);
+  });
+
   it('returns no suggestions when nothing matches', () => {
     expect(filterCategorySuggestions(suggestions, 'zzz')).toEqual([]);
   });

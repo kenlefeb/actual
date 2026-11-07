@@ -15,7 +15,7 @@ Each group ends with the story that ships it. Until the slice stories are filed,
 
 ## 3. Slice B: sync-server access log (sc-2033)
 
-- [x] 3.1 Add the fork log line (user id, file id, route, time; never content or a token) where file access is decided, with tests named after "The access log holds no content". Fork-only server work.
+- [x] 3.1 Add the fork log line (user id, file id, method, route, status, time; never content or a token) where file access is decided, with tests named after "The access log holds no content". Fork-only server work.
 - [x] 3.2 Document the daily off-host copy (Mac mini pull, 90 days) as a runbook for slice D.
 
 ## 4. Slice C: staging rehearsal of OpenID (sc-2042)
@@ -54,3 +54,10 @@ Found by the slice C rehearsal: `packages/mcp` (stdio and hosted entries) can on
 
 - [x] 9.1 Add `ACTUAL_OPENID_ADMIN_SUBJECT` and refuse a first OpenID sign-in whose `sub` differs, creating no user; unset keeps upstream behaviour and warns ("A first sign-in from another identity is refused", "Ken's first sign-in still works").
 - [ ] 9.2 Slice E's checklist (6.1) records Ken's Auth0 `sub` and sets `ACTUAL_OPENID_ADMIN_SUBJECT` to it in the release's `compose.yaml` before OpenID is enabled. The LOCKDOWN inventory and persistence-check rows move to sc-2426.
+
+## 10. Slice B follow-up: log a request for an unknown file id (sc-2093)
+
+The server answers 400, not 404, for an unknown file id (`FileNotFound` handler in `app-sync.ts`, upstream FIXME); this slice keeps that status, since changing it needs a frontend check, and only adds the log line. The path does not call `noteFileAccess` today, so the access middleware has no file id to log.
+
+- [ ] 10.1 Write the failing test first, named after "An unknown file id is logged": a request naming an unknown file id gets 400 and writes one access line (user id, file id, method, route, status 400, time) with no content; run it failing before the fix.
+- [ ] 10.2 Call `noteFileAccess(fileId)` in the `FileNotFound` branch before the 400 is sent, so the line is written. Fork-only server work.

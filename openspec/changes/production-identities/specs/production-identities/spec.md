@@ -171,7 +171,7 @@ Development agent sessions SHALL run without Ken's claude.ai connectors and with
 - **THEN** it lists no production connector and no `actual-production` entry
 
 ### Requirement: Every request is attributable to an identity
-Every MCP audit line (attempt and outcome) and every read of a budget SHALL record the acting identity: the authenticated sync-server user id and, for the hosted entry, the OAuth subject. The sync server SHALL log, per request that touches a budget, the user id, the file id, the HTTP method, the route, the response status and the time, and never budget content or a token. Both logs SHALL be copied off the host to a place agents and the VPS cannot rewrite, kept at least 90 days.
+Every MCP audit line (attempt and outcome) and every read of a budget SHALL record the acting identity: the authenticated sync-server user id and, for the hosted entry, the OAuth subject. The sync server SHALL log, per request that touches a budget (including one that names an unknown file id and gets a 404), the user id, the file id, the HTTP method, the route, the response status and the time, and never budget content or a token. Both logs SHALL be copied off the host to a place agents and the VPS cannot rewrite, kept at least 90 days.
 
 #### Scenario: An audit line names its identity
 - **WHEN** a write tool records an attempt
@@ -180,6 +180,10 @@ Every MCP audit line (attempt and outcome) and every read of a budget SHALL reco
 #### Scenario: The access log holds no content
 - **WHEN** the sync server serves a sync request
 - **THEN** its log line has the user id, file id, method, route, status and time and nothing from the budget or the token
+
+#### Scenario: An unknown file id is logged
+- **WHEN** a request names a file id the server does not know and receives a 404
+- **THEN** the server writes one access line with the user id, the file id, the method, the route, status 404 and the time, and nothing else
 
 ### Requirement: LOCKDOWN comes first
 No vault separation SHALL be counted as real separation, and no production credential SHALL be minted or installed, until the LOCKDOWN checklist has removed agents' root on the VPS (sc-563), because root can read the host's 0400 file and the sync server's volume.

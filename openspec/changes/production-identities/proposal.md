@@ -8,7 +8,7 @@ That is acceptable only while production is disposable. This change makes the se
 
 ## What Changes
 
-- **New capability `production-identities`:** production runs Actual in OpenID multi-user mode with password login off; the assistant is one BASIC user with access to only the budgets Ken shares with it; development agents have no production user; a long-lived session token that Ken mints is the assistant's headless credential; every MCP audit line and the sync server's requests carry the acting identity; the order is LOCKDOWN first.
+- **New capability `production-identities`:** production runs Actual in OpenID multi-user mode with password login off; on household `ken`'s server, Ken is the only ADMIN, the assistant is one BASIC user with access to only the budgets Ken shares with it, and development agents have no production user (other households' servers are administered by their leads, see `household-auth0-apps`); a long-lived session token that Ken mints is the assistant's headless credential; every MCP audit line and the sync server's requests carry the acting identity; the order is LOCKDOWN first.
 - **`design.md`:** the facts about the sync server this rests on, the credential rule, what each existing password user (browser sign-in, `RESTORE.md`, the LOCKDOWN password steps, the backup tooling) becomes, the account split, and the migration order.
 - **Slices A to F** in `tasks.md`, each a future story filed when this merges.
 

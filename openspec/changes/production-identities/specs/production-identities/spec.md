@@ -3,7 +3,7 @@
 ## ADDED Requirements
 
 ### Requirement: Production signs in only through OpenID
-The production sync server SHALL run in OpenID multi-user mode with password login disabled, so that no shared password opens a budget. Ken SHALL be its only ADMIN. The assistant SHALL be a BASIC user. No other person, agent or service SHALL have a production user, and no account the assistant uses SHALL be an ADMIN. The production password is the one carve-out (see the scenario on the drill).
+The production sync server SHALL run in OpenID multi-user mode with password login disabled, so that no shared password opens a budget. On household `ken`'s server, Ken SHALL be the only ADMIN and the assistant SHALL be a BASIC user. On that server no other person, agent or service SHALL have a production user, and no account the assistant uses SHALL be an ADMIN. The production password is the one carve-out (see the scenario on the drill).
 
 #### Scenario: The shared password no longer works
 - **GIVEN** production is switched to OpenID with password login off
@@ -19,7 +19,7 @@ The production sync server SHALL run in OpenID multi-user mode with password log
 - **THEN** it sees only the budgets Ken shared with it, and the admin write routes (creating users, disabling OpenID) refuse it
 
 #### Scenario: Development agents have no production user
-- **WHEN** the production user list is reviewed
+- **WHEN** household `ken`'s production user list is reviewed
 - **THEN** it holds Ken and the assistant and nobody else
 
 ### Requirement: Turning the password off survives reinstalls and ends old sessions
@@ -49,19 +49,19 @@ The production sync server SHALL run in OpenID multi-user mode with password log
 - **WHEN** the persistence check runs and the template lacks either variable
 - **THEN** the check fails
 
-### Requirement: The first sign-in is Ken's
-The identity provider SHALL be the Auth0 tenant shared with staging, with sign-ups off and no social or enterprise connection enabled, so that no new identity can register. Staging's test users exist in the same tenant, so the production sync server SHALL admit only users in its own user list and SHALL refuse a first sign-in whose subject is not the configured administrator's. The first OpenID sign-in on a server with no OpenID user SHALL be Ken's, made before the server is reachable by anyone else or while `ACTUAL_OPENID_ENFORCE` is off, because with it on the server asks for no password and gives ADMIN and ownership to the first identity the provider accepts.
+### Requirement: The first sign-in on household `ken`'s server is Ken's
+The identity provider SHALL be the Auth0 tenant shared with staging, with sign-ups off and no social or enterprise connection enabled, so that no new identity can register. Staging's test users exist in the same tenant, so the production sync server SHALL admit only users in its own user list and SHALL refuse a first sign-in whose subject is not the configured administrator's. On household `ken`'s server, the first OpenID sign-in on a server with no OpenID user SHALL be Ken's, made before the server is reachable by anyone else or while `ACTUAL_OPENID_ENFORCE` is off, because with it on the server asks for no password and gives ADMIN and ownership to the first identity the provider accepts.
 
 #### Scenario: An unrelated identity cannot claim the server
-- **GIVEN** OpenID is enabled and no OpenID user exists
+- **GIVEN** household `ken`'s server has OpenID enabled and no OpenID user
 - **WHEN** an identity that is not Ken's finishes the provider's sign-in
 - **THEN** the sync server refuses it and creates no user
 
-### Requirement: The server refuses a first sign-in that is not Ken's
-When `ACTUAL_OPENID_ADMIN_SUBJECT` is set, the sync server SHALL accept the first OpenID sign-in on a server with no OpenID user only if the provider's `sub` equals it, and SHALL otherwise refuse it and create no user. Production SHALL set it to Ken's `sub`. It needs a provider that returns a `sub`; a plain OAuth2 provider without one cannot use the backstop and is refused.
+### Requirement: Household `ken`'s server refuses a first sign-in that is not Ken's
+When `ACTUAL_OPENID_ADMIN_SUBJECT` is set, the sync server SHALL accept the first OpenID sign-in on a server with no OpenID user only if the provider's `sub` equals it, and SHALL otherwise refuse it and create no user. Household `ken`'s production server SHALL set it to Ken's `sub`; another household's server sets it to that household's lead's `sub` (`household-auth0-apps`). It needs a provider that returns a `sub`; a plain OAuth2 provider without one cannot use the backstop and is refused.
 
 #### Scenario: The match is on the subject, not the e-mail
-- **GIVEN** the setting is Ken's `sub` and Ken's e-mail later changes
+- **GIVEN** household `ken`'s setting is Ken's `sub` and Ken's e-mail later changes
 - **WHEN** Ken signs in for the first time
 - **THEN** he is accepted, because the `sub` is matched and the e-mail is not
 
@@ -86,12 +86,12 @@ When `ACTUAL_OPENID_ADMIN_SUBJECT` is set, the sync server SHALL accept the firs
 - **THEN** the server refuses it
 
 #### Scenario: A first sign-in from another identity is refused
-- **GIVEN** OpenID is enabled, `ACTUAL_OPENID_ADMIN_SUBJECT` is Ken's `sub` and no OpenID user exists
+- **GIVEN** household `ken`'s server has OpenID enabled, `ACTUAL_OPENID_ADMIN_SUBJECT` is Ken's `sub` and no OpenID user exists
 - **WHEN** an identity with another `sub` finishes the provider's sign-in
 - **THEN** the server refuses it, creates no user and issues no session
 
 #### Scenario: Ken's first sign-in still works
-- **GIVEN** the same setting
+- **GIVEN** the same setting on household `ken`'s server
 - **WHEN** Ken's identity finishes the provider's sign-in
 - **THEN** he becomes ADMIN and owner
 
@@ -103,7 +103,7 @@ The assistant's BASIC user SHALL be a dedicated account in the Auth0 tenant, not
 - **THEN** none sends a link or code to Ken's mailbox
 
 ### Requirement: Ken's ADMIN identity is as protected as the assistant's
-Ken's account in the same tenant SHALL meet the same two-factor and recovery rules, because the first OpenID sign-in on the server becomes ADMIN. Ken's ADMIN credentials, recovery codes and second factor SHALL NOT be stored in "Ken & Agents" or in any other vault an agent can read.
+Ken's account in the same tenant SHALL meet the same two-factor and recovery rules, because the first OpenID sign-in on household `ken`'s server becomes ADMIN. Ken's ADMIN credentials, recovery codes and second factor SHALL NOT be stored in "Ken & Agents" or in any other vault an agent can read.
 
 #### Scenario: Ken's credentials are not in an agent-readable vault
 - **WHEN** every vault an agent can read is searched for Ken's ADMIN credentials, recovery codes and second factor

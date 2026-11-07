@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "id": "fork-release-26.10.1-alpha.28",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.28 — Ken's Actual fork",
+      "date": "2026-11-07",
+      "version": "26.10.1-alpha.28",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.28.md",
+      "body": "**Unofficial fork prerelease.** Based on upstream Actual v26.11.0 (`1766241e3f4b3c578e424c4fa15f1eb83c0da17d`, October 29, 2026); not an official Actual Budget release.\n\nThis release lets you create a category straight from the category picker, makes the picker list only categories that match what you type, and makes Sign out end your identity provider session too.",
+      "details": "#### Features\n\n- None.\n\n#### Enhancements\n\n- Create a category from the category picker when nothing matches what you typed, choosing its group, on desktop and phone.\n- The desktop app now shows the fork's release notes on the notifications page.\n\n#### Bugfixes\n\n- The category picker no longer lists unrelated categories for loose letter matches.\n- Fork builds no longer show upstream's \"New version available\" notice.\n- On the phone transaction editor, notes no longer appear twice.\n- On servers using OpenID, Sign out now also signs you out of the identity provider, so the next sign-in asks who you are.\n\n#### Maintenance\n\n- OpenSpec records for the mobile notes view, OpenID sign-out and per-household Auth0 apps.\n- Architecture decision record 0009: hosting options for more than one household.\n- On servers using OpenID, the sync server now accepts only sign-ins issued for its own app. Nothing changes for users.\n- No upstream changes in this release; the fork stays on upstream Actual 26.11.0.\n\n#### Known limitations\n\n- Experimental.\n- OpenID sign-out needs the server's address in the identity provider's allowed sign-out addresses; without it the provider shows an error page, though you are already signed out of Actual.\n- Attached documents aren't included in a budget export, and removed documents stay on the sync server.\n- HEIC pictures are refused; use the Photos library or a JPEG or PNG copy.\n- Attaching a document needs a connection; there is no offline upload queue.\n- No iPhone acceptance test is claimed."
+    },
+    {
       "id": "fork-release-26.10.1-alpha.27",
       "type": "release",
       "title": "Release 26.10.1-alpha.27 — Ken's Actual fork",

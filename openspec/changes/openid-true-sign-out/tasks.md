@@ -21,8 +21,8 @@ Test-first: in each group, write the tests, run them and see them fail before wr
 
 ## 4. Mobile: the phone UI and the mobile app
 
-- [ ] 4.1 Add a Playwright mobile test (`packages/desktop-client/e2e/sign-out.mobile.test.ts`) against a sync server configured with a mocked OpenID provider (a local stub serving discovery and an end-session page that redirects to `post_logout_redirect_uri`): sign in, sign out from the budget-list user menu, assert the stub's end-session page was requested with the server's return URL, and that the app lands on the sign-in page. Verify: `yarn workspace @actual-app/web run playwright test sign-out.mobile.test.ts --browser=chromium` passes. The mobile app (Capacitor) runs this same web build in a WebView, so this test covers its code path; record that in the test's header comment.
-- [ ] 4.2 Add the desktop twin (`e2e/sign-out.test.ts`) using the same stub. Verify: the same command with `sign-out.test.ts` passes.
+- [x] 4.1 Add a Playwright mobile test (`packages/desktop-client/e2e/sign-out.mobile.test.ts`) against a sync server configured with a mocked OpenID provider (a local stub serving discovery and an end-session page that redirects to `post_logout_redirect_uri`): sign in, sign out from the budget-list user menu, assert the stub's end-session page was requested with the server's return URL, and that the app lands on the sign-in page. Verify: `yarn workspace @actual-app/web run playwright test sign-out.mobile.test.ts --browser=chromium` passes. The mobile app (Capacitor) runs this same web build in a WebView, so this test covers its code path; record that in the test's header comment.
+- [x] 4.2 Add the desktop twin (`e2e/sign-out.test.ts`) using the same stub. Verify: the same command with `sign-out.test.ts` passes.
 
 ## 5. Staging and production (Auth0 tenant)
 

@@ -35,12 +35,17 @@ function kill(child: ChildProcess) {
   }
 }
 
-// A sync server of its own for one test file, with a throwaway data directory
-export async function startSyncServer(): Promise<SyncServer> {
+// A sync server of its own for one test file, with a throwaway data directory.
+// `extraEnv` gets the server's URL, for settings that name it.
+export async function startSyncServer(
+  extraEnv: (url: string) => NodeJS.ProcessEnv = () => ({}),
+): Promise<SyncServer> {
   const port = await freePort();
+  const url = `http://localhost:${port}`;
   const dataDir = mkdtempSync(path.join(tmpdir(), 'actual-e2e-sync-'));
   const env: NodeJS.ProcessEnv = {
     ...process.env,
+    ...extraEnv(url),
     ACTUAL_PORT: String(port),
     ACTUAL_DATA_DIR: dataDir,
     ACTUAL_SERVER_FILES: path.join(dataDir, 'server-files'),
@@ -71,7 +76,6 @@ export async function startSyncServer(): Promise<SyncServer> {
   };
   process.on('exit', stop);
 
-  const url = `http://localhost:${port}`;
   // `start` runs a vite build first, which is slow in CI's Docker job
   const deadline = Date.now() + 240_000;
   while (Date.now() < deadline) {

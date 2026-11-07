@@ -19,15 +19,20 @@ See proposal.md for why. What exists:
 
 ### 1. Distinct client ids are checked across all household files
 
-Add `check_distinct_apps(households)` next to `check_distinct_backups`, run wherever the household files are loaded together (`pack-secrets`, the deploy job's household loop, `scripts/test_household.py` over `production/households/*.json`). It fails when an id repeats across households or when a household's two ids are equal. Alternative: rely on review. Rejected: a copied household file is the likeliest mistake, and it would silently let two households share sessions.
+Add `check_distinct_apps(households)` next to `check_distinct_backups`. It runs at two real entry points that see every household together:
+
+- `household.py pack-secrets`, which already loads all of `production/households/*.json` in one call (`deploy.yml`, the "pack secrets" step, line 108), so a deploy with a shared id fails before anything ships;
+- a test in `scripts/test_household.py` that loads the committed `production/households/*.json` and runs the check, the way `scripts/test_backup.py` checks the committed backup files. Fork CI's "Verify deployment tooling" job (`tooling.yml`) already runs `python3 scripts/test_household.py`, so every PR that adds a household file is checked.
+
+`deploy-command.py`'s `load_households()` on the VPS also sees every household, but changing it needs Ken's next bootstrap paste of the installed script; the two checks above already stop a bad file before it reaches the VPS, so it is left alone. The check fails when an id repeats across households or when a household's two ids are equal. Alternative: rely on review. Rejected: a copied household file is the likeliest mistake, and it would silently let two households share sessions.
 
 ### 2. Pin the audience check in the sync server
 
-Add an explicit check in `loginWithOpenIdFinalize` that the ID token's `aud` includes the configured `client_id`, next to the existing `sub` comparison. openid-client already does this inside `callback`; the explicit check makes the requirement testable with the mocked provider and survives a future switch of library or `validate_id_token`. Alternative: test openid-client with a signed token and a stub token endpoint; heavier and tests the library, not our configuration.
+Add an explicit check in `loginWithOpenIdFinalize` (`accounts/openid.ts`, beside the existing ID-token `sub` comparison, around line 270) that the ID token's `aud` includes the configured `client_id` and, when `aud` is an array, that `azp` equals it (OpenID Connect Core 3.1.3.7). It runs before any user lookup or creation. openid-client already does this inside `callback`; the explicit check makes the requirement testable with the mocked provider and survives a future switch of library or `validate_id_token`. Alternative: test openid-client with a signed token and a stub token endpoint; heavier and tests the library, not our configuration.
 
 ### 3. The lead is the backstop subject; Ken is not on household servers
 
-`admin_subject` is the lead's `sub`. Ken creates the lead's tenant user (sign-ups are off) but does not sign in to the household's server. The requirements in the `production-identities` change that name Ken as the only ADMIN ("Production signs in only through OpenID") describe household `ken`'s server; see Decisions for Ken.
+`admin_subject` is the lead's `sub`. Ken creates the lead's tenant user (sign-ups are off) but does not sign in to the household's server. On another household's server a stranger is refused two ways: by `admin_subject` while that server has no OpenID user, and by `userCreationMode` `manual` once it has users.
 
 ### 4. Plan limits are a report, not a gate
 
@@ -40,9 +45,10 @@ An agent drafts the limits from public plan pages and states the household count
 - [A plan limit below 8 households] → Reported to Ken; upgrading is his decision and a separate story.
 - [Ken mistypes a client id or URL in a checklist] → The household check catches reused ids; the staging-style verification step catches a wrong callback or logout URL.
 
-## Decisions for Ken
+## Decided
 
-- Wording of the `production-identities` change: "Ken SHALL be its only ADMIN" and "No other person ... SHALL have a production user" read as household `ken`'s server. Recommendation: when that change is next edited or archived, scope those requirements to household `ken`, and let this change's per-household admin requirement govern other households. Not blocking this change.
+- Ken, 2026-11-06: each household's lead administers that household's server. Ken runs the shared tenant, host and deploys, but does not administer households' servers or budgets.
+- Product Owner, 2026-11-07 (review of PR #241): the four `production-identities` requirements that name Ken ("Production signs in only through OpenID", whose text says Ken is the only ADMIN and no other person has a production user; "The first sign-in is Ken's"; and "The server refuses a first sign-in that is not Ken's") are scoped to household `ken`'s server. This change's "The household lead administers only that household's server" governs every other household. The wording edit in `openspec/changes/production-identities/specs/production-identities/spec.md` is sc-2912 (https://app.shortcut.com/blacksmith-press/story/2912), and it lands before this change or `production-identities` archives, so the archived spec never holds both readings.
 
 ## Migration Plan
 

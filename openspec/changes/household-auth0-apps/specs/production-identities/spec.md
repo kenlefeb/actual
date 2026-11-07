@@ -15,12 +15,17 @@ Every household SHALL have one sync application and one MCP connector applicatio
 - **THEN** the household check fails
 
 ### Requirement: A household's server accepts only its own application's sign-ins
-A household's sync server SHALL accept an OpenID sign-in only when the ID token's audience includes that server's own sync client id. A household's MCP connector SHALL accept only ID tokens issued to its own connector application.
+A household's sync server SHALL accept an OpenID sign-in only when the ID token's audience includes that server's own sync client id, and, when the audience lists more than one party, its `azp` equals that client id. A household's MCP connector SHALL accept only ID tokens issued to its own connector application.
 
 #### Scenario: A token from another household's sync app
 - **GIVEN** household B's server is configured with its own sync client id
 - **WHEN** a sign-in finishes with an ID token whose audience is household A's sync client id
 - **THEN** B's server refuses it, creates no user and issues no session
+
+#### Scenario: A multi-audience token authorized for another app
+- **GIVEN** household B's server is configured with its own sync client id
+- **WHEN** a sign-in finishes with an ID token whose audience is a list that includes B's client id but whose `azp` is another client id
+- **THEN** B's server refuses it and creates no user
 
 #### Scenario: A token from another household's connector app
 - **GIVEN** household B's MCP connector is configured with its own connector client id
@@ -35,8 +40,13 @@ Each household's `admin_subject` SHALL be its lead's Auth0 `sub`, so the first s
 - **WHEN** the lead signs in through the household's sync app
 - **THEN** the lead becomes ADMIN and owner of that server
 
+#### Scenario: A lead signs in to another household's server before its lead has
+- **GIVEN** household B's server has no OpenID user yet and its `admin_subject` is B's lead
+- **WHEN** household A's lead finishes a sign-in on B's server
+- **THEN** B's server refuses it by `admin_subject`, creates no user and issues no session
+
 #### Scenario: A lead signs in to another household's server
-- **GIVEN** household A's lead is not in household B's user list
+- **GIVEN** household B's server already has users and A's lead is not in its user list
 - **WHEN** A's lead finishes a sign-in on B's server
 - **THEN** B's server refuses it and creates no user
 

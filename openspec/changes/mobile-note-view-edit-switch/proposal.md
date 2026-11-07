@@ -9,7 +9,7 @@ sc-2631: on the phone's transaction editor, a transaction with notes shows the n
 - When a transaction has notes and they are not being edited, the phone editor shows only the formatted notes, with tags and links tappable.
 - Tapping the formatted text (not a link) swaps it for the Notes textbox with focus. Leaving the textbox returns to the formatted view.
 - Empty notes keep showing the "Add a note (optional)" textbox.
-- The formatted view is a keyboard- and screen-reader-operable control (role, label, Enter or Space starts editing).
+- The formatted view (the "Note preview" today, called "formatted notes" in the spec) sits in a labeled group with a key handler, so Enter or Space starts editing, and links inside it stay real links.
 - Out of scope: desktop (its notes cell has no preview), and any change to how notes are saved.
 
 Mobile scope: `mobile/transactions/TransactionEdit.tsx`, both places that render the Notes field and "Note preview": the parent transaction (`TransactionEditInner`) and each split row (`ChildTransactionEdit`). Desktop is unaffected, with no new desktop requirement: the duplication does not exist there.

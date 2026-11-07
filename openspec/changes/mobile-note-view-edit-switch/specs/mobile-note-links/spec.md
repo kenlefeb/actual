@@ -11,7 +11,7 @@ On the mobile transaction editor, a transaction's notes SHALL appear once. While
 #### Scenario: Tag and link in the formatted notes
 - **WHEN** the notes contain a tag and a web address
 - **THEN** both are shown as tappable in the formatted view
-- **AND** tapping the web address opens it in a new tab without starting an edit
+- **AND** the web address is a link with `target="_blank"`, and activating it does not start an edit
 
 #### Scenario: Notes on a split row
 - **WHEN** a split row has notes
@@ -34,12 +34,21 @@ Tapping the formatted notes outside a link or tag SHALL replace them with the No
 - **THEN** the formatted notes are shown again, reflecting the edit
 - **AND** the saved value equals what the user typed, including every line break
 
+#### Scenario: Type into an empty note
+- **WHEN** a user focuses the empty Notes textbox and types
+- **THEN** the textbox stays shown and focused while they type, and the formatted notes appear only after they leave it
+
+#### Scenario: Another field is being edited
+- **WHEN** a different field of the transaction is being edited, so the Notes textbox would be disabled
+- **THEN** tapping the formatted notes does nothing
+- **AND** the formatted notes are exposed as disabled
+
 #### Scenario: Clear the note
 - **WHEN** a user deletes all the text and leaves the textbox
 - **THEN** the "Add a note (optional)" textbox is shown
 
-### Requirement: Formatted notes are an accessible edit control
-The formatted notes SHALL be reachable by keyboard and screen reader, labeled as the notes, and exposed as a control that starts editing on Enter or Space.
+### Requirement: Formatted notes can be edited by keyboard and screen reader
+The formatted notes SHALL be a group labeled as the notes, reachable by keyboard, that starts editing on Enter or Space, and SHALL keep links inside it as real links.
 
 #### Scenario: Keyboard activation
 - **WHEN** the formatted notes have focus and the user presses Enter or Space
@@ -47,4 +56,5 @@ The formatted notes SHALL be reachable by keyboard and screen reader, labeled as
 
 #### Scenario: Screen reader
 - **WHEN** a screen reader reaches the formatted notes
-- **THEN** it announces them as a button labeled with the notes' name, and a link inside them is still announced as a link
+- **THEN** it announces a group labeled with the notes' name that can be activated to edit
+- **AND** a link inside it is still announced as a link

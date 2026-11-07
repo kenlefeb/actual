@@ -264,7 +264,7 @@ The server SHALL append one JSON line per write to `~/Library/Application Suppor
 - **THEN** the server's reported version equals its package version
 
 ### Requirement: Registration forms
-The coverage check SHALL find a handler registered as `app.method('name', ...)` or as `handlers['name'] = ...`, and SHALL treat both forms the same: the name needs a manifest entry unless it is in the upstream baseline. It SHALL read whole files, so a registration that spans lines is found. A call such as `handlers['name'](args)`, a comparison or a reference SHALL NOT count as a registration. The baseline SHALL record both forms from the upstream ref it is built from.
+The coverage check SHALL find a handler registered as `app.method('name', ...)` or as `handlers['name'] = ...`, and SHALL treat both forms the same: the name needs a manifest entry unless it is in the upstream baseline. It SHALL read whole files, so a registration that spans lines is found, and SHALL skip files under `server/tests/` and `__mocks__/`, whose routes are mocks and not handlers. A call such as `handlers['name'](args)`, a comparison or a reference SHALL NOT count as a registration. The baseline SHALL record both forms from the upstream ref it is built from.
 
 #### Scenario: A registration across lines
 - **GIVEN** a handler registered as `app.method(\n  'account-set-business-days',\n  ...)`
@@ -294,6 +294,11 @@ The coverage check SHALL find a handler registered as `app.method('name', ...)` 
 #### Scenario: The baseline holds assigned handlers
 - **WHEN** the baseline is rebuilt with `--baseline-from upstream/master`
 - **THEN** it lists upstream's `handlers['name'] = ...` registrations (82 at the time of writing) beside its `app.method` registrations, so none of them needs an entry
+
+#### Scenario: A mock route is not a handler
+- **GIVEN** a route registered as `app.post('/zz-mock', ...)` in a file under `server/tests/` or `__mocks__/`, and a real handler registered elsewhere
+- **WHEN** the check runs
+- **THEN** it finds the real handler and not `/zz-mock`
 
 ### Requirement: Paycheck definition text is data
 Every string the server takes from a paycheck's stored definition SHALL be treated as untrusted. A deposit's `kind` SHALL be returned only as `fixed`, `percent` or `remainder`, and as `unknown` for any other value. Every id field (the clearing account, payee, income category and pay schedule, and each deposit's id, account and schedule) SHALL go through the text hygiene and be returned under `text` unless it is a plain identifier of at most 64 characters (letters, digits, underscore and hyphen).

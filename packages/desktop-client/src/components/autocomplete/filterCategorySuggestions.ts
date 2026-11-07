@@ -38,10 +38,16 @@ export function filterCategorySuggestions<T extends CategorySuggestion>(
   const nameMatches = rankMatches(realSuggestions, value, item => item.name);
 
   const nameMatchIds = new Set(nameMatches.map(item => item.id));
-  const groupMatches = rankMatches(
-    realSuggestions.filter(item => !nameMatchIds.has(item.id)),
-    value,
-    item => (item.group ? item.group.name + ' ' + item.name : item.name),
+  // group-aware searches must match contiguously: fuzzy matching across
+  // "group + name" lists unrelated categories (e.g. "allow" vs "Taxes & Fees
+  // Local Income Tax Withholding")
+  const needle = value.toLowerCase();
+  const groupMatches = realSuggestions.filter(
+    item =>
+      !nameMatchIds.has(item.id) &&
+      (item.group ? item.group.name + ' ' + item.name : item.name)
+        .toLowerCase()
+        .includes(needle),
   );
 
   const filtered = [...nameMatches, ...groupMatches].slice(0, 100);

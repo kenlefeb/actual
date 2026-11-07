@@ -15,7 +15,7 @@ file-path links and tags are `Text` spans, so the guard misses them.
   exists as the web-link workaround.
 - **Tag tap is a no-op.** `MobileTaggedNotes` has no handler. The story says
   "whatever tags do in the formatted view"; on mobile that is nothing. Filtering
-  by tag is out of scope and would be a separate story.
+  by tag is out of scope and would be a separate story (not planned).
 - **File-path action is unchanged.** Only the tap no longer also starts an
   edit.
 - The "another field is being edited" case is unchanged: tapping does nothing.

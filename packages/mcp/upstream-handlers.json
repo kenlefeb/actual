@@ -1,10 +1,7 @@
 {
   "ref": "upstream/master",
-  "commit": "f2cc89778255755faaa8c7b239e20a47640543b5",
+  "commit": "693973bb3b0c63615856de2b7ff71da44adb47de",
   "handlers": [
-    "/",
-    "/gocardless/accounts",
-    "/sync/sync",
     "access-add",
     "access-delete-all",
     "access-get-available-users",

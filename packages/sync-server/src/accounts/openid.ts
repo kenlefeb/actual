@@ -300,6 +300,20 @@ export async function loginWithOpenIdFinalize(body) {
     if (String(identity).trim() === '') {
       return { error: 'openid-grant-failed' };
     }
+    // fork: sc-2719, only this server's own app (OIDC Core 3.1.3.7); openid-client
+    // checks this too, but this keeps it pinned whatever the library does
+    if (tokenSet.id_token) {
+      const { aud, azp } = tokenSet.claims();
+      const audiences = Array.isArray(aud) ? aud : [aud];
+      const clientId = configFromDb.client_id;
+      if (
+        !audiences.includes(clientId) ||
+        (audiences.length > 1 && azp === undefined) ||
+        (azp !== undefined && azp !== clientId)
+      ) {
+        return { error: 'openid-grant-failed' };
+      }
+    }
     if (
       config.get('openId.adminSubject') &&
       tokenSet.id_token &&

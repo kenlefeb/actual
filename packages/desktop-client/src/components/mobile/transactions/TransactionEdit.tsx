@@ -25,10 +25,7 @@ import {
   SvgUser,
   SvgWallet,
 } from '@actual-app/components/icons/v1';
-import {
-  SvgNotesPaper,
-  SvgPencilWriteAlternate,
-} from '@actual-app/components/icons/v2';
+import { SvgPencilWriteAlternate } from '@actual-app/components/icons/v2';
 import { styles } from '@actual-app/components/styles';
 import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
@@ -71,14 +68,11 @@ import {
   parseISO,
 } from 'date-fns';
 
-import { NoteInsertHashButton } from '#components/autocomplete/NoteInsertHashButton';
-import { NoteTagAutocomplete } from '#components/autocomplete/NoteTagAutocomplete';
 import { MobileBackButton } from '#components/mobile/MobileBackButton';
 import {
   FieldLabel,
   InputField,
   TapField,
-  TextareaField,
   ToggleField,
 } from '#components/mobile/MobileForms';
 import { StickyFormFooter } from '#components/mobile/StickyFormFooter';
@@ -112,7 +106,6 @@ import {
 import { useSyncedPref } from '#hooks/useSyncedPref';
 import { useTouchTargetStyle } from '#hooks/useTouchTargetStyle';
 import { pushModal } from '#modals/modalsSlice';
-import { NotesTagFormatter } from '#notes/NotesTagFormatter';
 import { addNotification } from '#notifications/notificationsSlice';
 import { useSavePayeeLocationMutation } from '#payees';
 import { locationService } from '#payees/location';
@@ -127,6 +120,7 @@ import {
 } from '#util/schedule-actions';
 
 import { AmountInput } from './AmountInput';
+import { NotesField } from './NotesField';
 import { SplitAmountInput } from './SplitAmountInput';
 import { TransactionAttachmentsSection } from './TransactionAttachmentsSection';
 
@@ -453,7 +447,6 @@ const ChildTransactionEdit = forwardRef<
     const { t } = useTranslation();
     const { editingField, onRequestActiveEdit, onClearActiveEdit } =
       useSingleActiveEditForm()!;
-    const noteRef = useRef<HTMLTextAreaElement | null>(null);
 
     const prettyPayee = getPrettyPayee({
       t,
@@ -552,35 +545,17 @@ const ChildTransactionEdit = forwardRef<
 
         <View>
           <FieldLabel title={t('Notes')} />
-          <TextareaField
-            aria-label={t('Notes')}
-            ref={noteRef}
-            iconStart={<SvgNotesPaper width={17} height={17} />}
-            iconEnd={<NoteInsertHashButton inputRef={noteRef} />}
-            placeholder={t('Add a note (optional)')}
+          <NotesField
+            notes={transaction.notes}
             disabled={
               !!editingField &&
               editingField !== getFieldName(transaction.id, 'notes')
             }
-            defaultValue={transaction.notes}
             onFocus={() =>
               onRequestActiveEdit(getFieldName(transaction.id, 'notes'))
             }
             onUpdate={value => onUpdate(transaction, 'notes', value)}
           />
-          <NoteTagAutocomplete inputRef={noteRef} />
-          {transaction.notes && (
-            <View
-              aria-label={t('Note preview')}
-              style={{
-                padding: `8px ${styles.mobileEditingPadding}px`,
-                whiteSpace: 'pre-wrap',
-                overflowWrap: 'anywhere',
-              }}
-            >
-              <NotesTagFormatter notes={transaction.notes} />
-            </View>
-          )}
         </View>
 
         <View style={{ alignItems: 'center' }}>
@@ -678,7 +653,6 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
     );
     const { data: { grouped: categoryGroups } = { grouped: [] } } =
       useCategories();
-    const noteRef = useRef<HTMLTextAreaElement | null>(null);
 
     useEffect(() => {
       if (window.history.length === 1) {
@@ -1555,17 +1529,12 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
 
           <View>
             <FieldLabel title={t('Notes')} />
-            <TextareaField
-              aria-label={t('Notes')}
-              ref={noteRef}
-              iconStart={<SvgNotesPaper width={17} height={17} />}
-              iconEnd={<NoteInsertHashButton inputRef={noteRef} />}
-              placeholder={t('Add a note (optional)')}
+            <NotesField
+              notes={transaction.notes}
               disabled={
                 !!editingField &&
                 editingField !== getFieldName(transaction.id, 'notes')
               }
-              defaultValue={transaction.notes}
               onFocus={() => {
                 onRequestActiveEdit(getFieldName(transaction.id, 'notes'));
               }}
@@ -1574,19 +1543,6 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
                 onUpdateInner(transaction, 'notes', event.target.value)
               }
             />
-            <NoteTagAutocomplete inputRef={noteRef} />
-            {transaction.notes && (
-              <View
-                aria-label={t('Note preview')}
-                style={{
-                  padding: `8px ${styles.mobileEditingPadding}px`,
-                  whiteSpace: 'pre-wrap',
-                  overflowWrap: 'anywhere',
-                }}
-              >
-                <NotesTagFormatter notes={transaction.notes} />
-              </View>
-            )}
           </View>
 
           {!isAdding && (

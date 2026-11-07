@@ -28,11 +28,25 @@ test('mobile note retains document boundaries and opens a receipt without enteri
     await item.click();
     const note =
       'MOBILE RECEIPT CHECK\nPAPERWORK:synthetic-id\nhttps://example.com/receipt.pdf';
-    const notes = page
-      .getByRole('textbox', { name: 'Notes', exact: true })
-      .last();
-    await notes.fill(note);
-    await page.getByRole('heading', { name: 'Split', exact: true }).click();
+    // Each Notes slot is the formatted group, or the textbox while editing
+    const noteFields = page.locator(
+      'textarea[aria-label="Notes"], [role="group"][aria-label="Notes"]',
+    );
+    const notes = noteFields.last();
+    const leaveField = () =>
+      page.getByRole('heading', { name: 'Split', exact: true }).click();
+    const editNote = async (field: typeof notes, value: string) => {
+      if ((await field.getAttribute('role')) === 'group') await field.click();
+      await field.fill(value);
+      await leaveField();
+    };
+    const expectNoteValue = async (field: typeof notes, value: string) => {
+      if ((await field.getAttribute('role')) === 'group') await field.click();
+      await expect(field).toHaveValue(value);
+      await expect(field).toHaveJSProperty('tagName', 'TEXTAREA');
+      await leaveField();
+    };
+    await editNote(notes, note);
     const preview = page.getByRole('link', {
       name: 'https://example.com/receipt.pdf',
       exact: true,
@@ -45,33 +59,18 @@ test('mobile note retains document boundaries and opens a receipt without enteri
       .getByRole('button', { name: 'Save changes', exact: true })
       .click();
     await item.click();
-    await expect(notes).toHaveValue(note);
-    await expect(
-      page.getByRole('textbox', { name: 'Notes', exact: true }).nth(0),
-    ).toHaveValue('Groceries #Alex #Sam');
-    await expect(
-      page.getByRole('textbox', { name: 'Notes', exact: true }).nth(1),
-    ).toHaveValue('Software #Alex #Jordan');
+    await expectNoteValue(notes, note);
+    await expect(noteFields.nth(0)).toHaveText('Groceries #Alex #Sam');
+    await expect(noteFields.nth(1)).toHaveText('Software #Alex #Jordan');
     const softwareNote = 'Software #Alex #Jordan\nSPLIT PHONE CHECK';
-    await page
-      .getByRole('textbox', { name: 'Notes', exact: true })
-      .nth(1)
-      .fill(softwareNote);
-    await page.getByRole('heading', { name: 'Split', exact: true }).click();
+    await editNote(noteFields.nth(1), softwareNote);
     await page
       .getByRole('button', { name: 'Save changes', exact: true })
       .click();
     await item.click();
-    await expect(notes).toHaveValue(note);
-    await expect(
-      page.getByRole('textbox', { name: 'Notes', exact: true }).nth(0),
-    ).toHaveValue('Groceries #Alex #Sam');
-    await expect(
-      page.getByRole('textbox', { name: 'Notes', exact: true }).nth(1),
-    ).toHaveValue(softwareNote);
-    await expect(
-      page.getByRole('textbox', { name: 'Notes', exact: true }).nth(1),
-    ).toHaveJSProperty('tagName', 'TEXTAREA');
+    await expectNoteValue(notes, note);
+    await expect(noteFields.nth(0)).toHaveText('Groceries #Alex #Sam');
+    await expectNoteValue(noteFields.nth(1), softwareNote);
     await page.getByRole('button', { name: 'Back', exact: true }).click();
     const listURL = page.url();
     const receipt = page.getByRole('link', {
@@ -85,7 +84,7 @@ test('mobile note retains document boundaries and opens a receipt without enteri
     expect(page.url()).toBe(listURL);
     await opened.close();
     await item.click();
-    await expect(notes).toHaveValue(note);
+    await expectNoteValue(notes, note);
     await page.getByRole('button', { name: 'Back', exact: true }).click();
     await page.setViewportSize({ width: 1280, height: 900 });
     const parentNote = page

@@ -6,6 +6,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -19,6 +20,7 @@ import { TransactionEdit } from './TransactionEdit';
 const state = vi.hoisted(() => ({
   date: '2016-09-15',
   subtransactions: undefined as unknown[] | undefined,
+  notes: '',
 }));
 
 vi.mock(
@@ -36,7 +38,7 @@ vi.mock('#queries/aqlQuery', () => ({
         amount: -1000,
         category: null,
         payee: null,
-        notes: '',
+        notes: state.notes,
         cleared: false,
         is_parent: !!state.subtransactions,
         subtransactions: state.subtransactions,
@@ -160,6 +162,8 @@ describe('Phone transaction edit page', () => {
     vi.restoreAllMocks();
     resetTestProviders();
     state.subtransactions = undefined;
+    state.notes = '';
+    window.innerWidth = 1024;
   });
 
   it('asks before categorizing moved history; Cancel leaves it uncategorized', async () => {
@@ -259,5 +263,182 @@ describe('Phone transaction edit page', () => {
         'Groceries',
       ),
     );
+  });
+
+  describe('Notes show once', () => {
+    const notesGroup = () => screen.queryByRole('group', { name: 'Notes' });
+    const notesBox = () => screen.queryByRole('textbox', { name: 'Notes' });
+    const splitRows = (notes: string) => [
+      {
+        id: 'line-1',
+        parent_id: 't1',
+        is_child: true,
+        date: state.date,
+        account: 'vanguard',
+        amount: -400,
+        notes,
+      },
+      {
+        id: 'line-2',
+        parent_id: 't1',
+        is_child: true,
+        date: state.date,
+        account: 'vanguard',
+        amount: -600,
+        notes: '',
+      },
+    ];
+
+    it('Open a transaction that has notes', async () => {
+      state.notes = 'TEST';
+      renderEdit('/transactions/t1');
+
+      const group = await screen.findByRole('group', { name: 'Notes' });
+      expect(group).toHaveTextContent('TEST');
+      expect(notesBox()).toBeNull();
+      expect(screen.getAllByText('TEST')).toHaveLength(1);
+    });
+
+    it('Empty notes', async () => {
+      renderEdit('/transactions/t1');
+
+      expect(
+        await screen.findByPlaceholderText('Add a note (optional)'),
+      ).toBeVisible();
+      expect(notesGroup()).toBeNull();
+    });
+
+    it('Type into an empty note', async () => {
+      renderEdit('/transactions/t1');
+
+      await userEvent.click(
+        await screen.findByRole('textbox', { name: 'Notes' }),
+      );
+      await userEvent.keyboard('a');
+
+      const box = screen.getByRole('textbox', { name: 'Notes' });
+      expect(box).toHaveFocus();
+      expect(box).toHaveValue('a');
+      expect(notesGroup()).toBeNull();
+    });
+
+    it('Tap to edit', async () => {
+      state.notes = 'TEST';
+      renderEdit('/transactions/t1');
+
+      await userEvent.click(
+        await screen.findByRole('group', { name: 'Notes' }),
+      );
+
+      const box = screen.getByRole('textbox', { name: 'Notes' });
+      expect(box).toHaveFocus();
+      expect(box).toHaveValue('TEST');
+      expect(notesGroup()).toBeNull();
+    });
+
+    it('Blur returns to the formatted view', async () => {
+      state.notes = 'one';
+      renderEdit('/transactions/t1');
+
+      await userEvent.click(
+        await screen.findByRole('group', { name: 'Notes' }),
+      );
+      await userEvent.clear(screen.getByRole('textbox', { name: 'Notes' }));
+      await userEvent.type(
+        screen.getByRole('textbox', { name: 'Notes' }),
+        'line a{Enter}line b{Enter}{Enter}line d',
+      );
+      await userEvent.tab();
+
+      expect(notesBox()).toBeNull();
+      const group = screen.getByRole('group', { name: 'Notes' });
+      expect(group.textContent).toBe('line a\nline b\n\nline d');
+      // Editing again shows the saved value with every line break
+      await userEvent.click(group);
+      expect(screen.getByRole('textbox', { name: 'Notes' })).toHaveValue(
+        'line a\nline b\n\nline d',
+      );
+    });
+
+    it('Clear the note', async () => {
+      state.notes = 'TEST';
+      renderEdit('/transactions/t1');
+
+      await userEvent.click(
+        await screen.findByRole('group', { name: 'Notes' }),
+      );
+      await userEvent.clear(screen.getByRole('textbox', { name: 'Notes' }));
+      await userEvent.tab();
+
+      expect(
+        screen.getByPlaceholderText('Add a note (optional)'),
+      ).toBeVisible();
+      expect(notesGroup()).toBeNull();
+    });
+
+    it('Tag and link in the formatted notes', async () => {
+      window.innerWidth = 400;
+      state.notes = 'see #receipt https://example.com/r.pdf';
+      renderEdit('/transactions/t1');
+
+      const group = await screen.findByRole('group', { name: 'Notes' });
+      const link = within(group).getByRole('link');
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(within(group).getByText('#receipt')).toBeVisible();
+
+      await userEvent.click(link);
+      expect(notesBox()).toBeNull();
+      expect(screen.getByRole('group', { name: 'Notes' })).toBeVisible();
+    });
+
+    it('Another field is being edited', async () => {
+      state.notes = 'TEST';
+      renderEdit('/transactions/t1');
+      const group = await screen.findByRole('group', { name: 'Notes' });
+
+      // Opening the category sheet makes category the active edit
+      await userEvent.click(screen.getByTestId('category-field'));
+      await userEvent.click(group);
+
+      expect(group).toHaveAttribute('aria-disabled', 'true');
+      expect(notesBox()).toBeNull();
+    });
+
+    it('Keyboard activation', async () => {
+      state.notes = 'TEST';
+      renderEdit('/transactions/t1');
+
+      const group = await screen.findByRole('group', { name: 'Notes' });
+      expect(group).toHaveAttribute('tabindex', '0');
+      act(() => group.focus());
+      await userEvent.keyboard('{Enter}');
+      expect(screen.getByRole('textbox', { name: 'Notes' })).toHaveFocus();
+      await userEvent.tab();
+      expect(notesBox()).toBeNull();
+
+      act(() => screen.getByRole('group', { name: 'Notes' }).focus());
+      await userEvent.keyboard(' ');
+      expect(screen.getByRole('textbox', { name: 'Notes' })).toHaveFocus();
+    });
+
+    it('Notes on a split row', async () => {
+      state.subtransactions = splitRows('row note');
+      renderEdit('/transactions/line-1');
+
+      const group = await screen.findByRole('group', { name: 'Notes' });
+      expect(group).toHaveTextContent('row note');
+      expect(screen.getAllByText('row note')).toHaveLength(1);
+
+      await userEvent.click(group);
+      const box = screen.getAllByRole('textbox', { name: 'Notes' })[0];
+      expect(box).toHaveFocus();
+      expect(box).toHaveValue('row note');
+
+      // The split row has no onBlur handler of its own
+      await userEvent.tab();
+      expect(screen.getByRole('group', { name: 'Notes' })).toHaveTextContent(
+        'row note',
+      );
+    });
   });
 });

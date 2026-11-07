@@ -27,7 +27,9 @@ Alternatives: a separate `GET /openid/logout-url` (two round trips and a window 
 
 ### 2. Discovery first, Auth0 fallback by issuer host
 
-Use `client.endSessionUrl({ post_logout_redirect_uri })` when `issuer.end_session_endpoint` is set; openid-client adds `client_id`. Otherwise, if the issuer's host ends in `.auth0.com`, build `https://<host>/v2/logout?client_id=…&returnTo=…`. Otherwise return nothing and log a warning. No `id_token_hint`: the server does not keep the ID token, and adding a column for it is not needed to end the session (see Risks).
+Use `client.endSessionUrl({ post_logout_redirect_uri })` when `issuer.end_session_endpoint` is set; openid-client adds `client_id`. Otherwise, if the issuer URL's parsed hostname equals `auth0.com` or ends in `.auth0.com` (a suffix match at a dot boundary, so `evil-auth0.com` and `auth0.com.evil.example` do not match), build `https://<host>/v2/logout?client_id=…&returnTo=…`. Otherwise return nothing and log a warning. No `id_token_hint`: the server does not keep the ID token, and adding a column for it is not needed to end the session (see Risks).
+
+Checked 2026-11-07: the staging tenant's public discovery document (`https://actual-staging.us.auth0.com/.well-known/openid-configuration`, the issuer in actual-hosting `production/households/ken.json`, `auth0.domain`) has `end_session_endpoint: https://actual-staging.us.auth0.com/oidc/logout`. Staging and production share that tenant, so both use the discovery path; the `/v2/logout` fallback covers other Auth0 tenants.
 
 ### 3. Return URL is `new URL('/', server_hostname)`
 
@@ -35,7 +37,7 @@ Use `client.endSessionUrl({ post_logout_redirect_uri })` when `issuer.end_sessio
 
 ### 4. The client follows the URL only on explicit sign-out
 
-`subscribe-sign-out` gains an optional `{ endProviderSession: boolean }` and returns `{ providerLogoutUrl? }`, still clearing the token and keys before returning even if the post fails. Only the user menu passes `true`; the automatic callers keep calling it as today and ignore the URL. After the thunk finishes, the menu handler sends the browser away: Electron through `window.Actual.openURLInBrowser(url)` (the provider session is in the system browser; the app window stays on Actual's sign-in page), everything else through `window.location.assign(url)`.
+`subscribe-sign-out` gains an optional `{ endProviderSession: boolean }` and returns `{ providerLogoutUrl? }`, still clearing the token and keys before returning even if the post fails. Only the user menu passes `true`; the automatic callers keep calling it as today and ignore the URL. After the thunk finishes, the menu handler sends the browser away: Electron through `window.Actual.openURLInBrowser(url)` (the provider session is in the system browser; the app window stays on Actual's sign-in page), everything else through `window.location.assign(url)`. Before either, the client parses the URL and follows it only if its protocol is `https:`, or `http:` with hostname `localhost`, `127.0.0.1` or `[::1]` (development). Anything else (`javascript:`, `file:`, `data:`, an unparseable string) is ignored and the sign-in page shows, so a bad or compromised server cannot run script or open a local file through sign-out.
 
 ### 5. Same capability, separate change
 
@@ -46,7 +48,7 @@ See proposal.md, Capabilities. The delta carries a `## Purpose` for `production-
 - [Auth0 may show a "log out?" confirmation without `id_token_hint`] → Accept one extra click; if staging shows it and Ken objects, a follow-up stores the ID token per session.
 - [The return URL is not in the app's Allowed Logout URLs] → Auth0 shows an error page; the user is already signed out of Actual (spec: a failed provider logout). Ken adds the URLs before staging verification (tasks, group 5).
 - [Electron: the system browser lands on the server's web app] → It shows the sign-in page, since that browser holds no Actual token unless the user also uses the web app there; accepted.
-- [Auth0 custom domain] → the host check misses it; discovery's `end_session_endpoint` covers it when the tenant exposes it.
+- [Auth0 custom domain] → the host check misses it; discovery's `end_session_endpoint` covers it (the shared tenant exposes it).
 - [Ending the provider session signs the user out of other apps on the same tenant (staging and production share it)] → Intended: that is what "sign out" means here.
 
 ## Migration Plan

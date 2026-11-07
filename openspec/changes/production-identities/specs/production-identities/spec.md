@@ -3,7 +3,7 @@
 ## ADDED Requirements
 
 ### Requirement: Production signs in only through OpenID
-The production sync server SHALL run in OpenID multi-user mode with password login disabled, so that no shared password opens a budget. Ken SHALL be its only ADMIN. The assistant SHALL be a BASIC user. No other person, agent or service SHALL have a production user, and no account the assistant uses SHALL be an ADMIN. The production password is the one carve-out (see the scenario on the drill).
+The production sync server SHALL run in OpenID multi-user mode with password login disabled, so that no shared password opens a budget. On household `ken`'s server, Ken SHALL be the only ADMIN and the assistant SHALL be a BASIC user. On that server no other person, agent or service SHALL have a production user, and no account the assistant uses SHALL be an ADMIN. The production password is the one carve-out (see the scenario on the drill).
 
 #### Scenario: The shared password no longer works
 - **GIVEN** production is switched to OpenID with password login off
@@ -19,7 +19,7 @@ The production sync server SHALL run in OpenID multi-user mode with password log
 - **THEN** it sees only the budgets Ken shared with it, and the admin write routes (creating users, disabling OpenID) refuse it
 
 #### Scenario: Development agents have no production user
-- **WHEN** the production user list is reviewed
+- **WHEN** household `ken`'s production user list is reviewed
 - **THEN** it holds Ken and the assistant and nobody else
 
 ### Requirement: Turning the password off survives reinstalls and ends old sessions

@@ -6,4 +6,4 @@
 - [ ] 1.4 Add a test that the tag span has no tap handler of its own (no `onClick`/`onPress`), so a tag tap does nothing but is not an edit
 - [ ] 1.5 E2E/VRT: none needed, because the change is a click guard with no layout or visual change and the component tests cover every tap path; record this in the PR
 - [ ] 1.6 Run lint, typecheck and tests, including the existing `MobileLinkedNotes` tests
-- [ ] 1.7 Add `upcoming-release-notes/mobile-note-tap-targets.md` (Bugfixes) and the fork news entry
+- [ ] 1.7 Add `upcoming-release-notes/mobile-note-tap-targets.md` (Bugfixes)

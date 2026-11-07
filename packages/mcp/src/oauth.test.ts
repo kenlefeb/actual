@@ -678,6 +678,21 @@ describe('exactly one identity', () => {
     );
   });
 
+  // fork: sc-2719, pins that a household's connector refuses another's sign-ins
+  it("Another household's connector app or account is refused", async () => {
+    await stop();
+    await start({ idp: { ...oauthConfig().idp, account: 'lead-b' } });
+    const other = { email: 'other@example.test' };
+    expect((await login({ ...other, sub: 'lead-b' })).code).toBeTruthy();
+    expect(
+      (await login({ ...other, sub: 'lead-b', aud: 'household-a-connector' }))
+        .code,
+    ).toBeUndefined();
+    expect(
+      (await login({ ...other, sub: 'lead-a', aud: 'idp-client' })).code,
+    ).toBeUndefined();
+  });
+
   it('A sign-in state is single use and unknown states are refused', async () => {
     const { res } = await authorize();
     const state = new URL(String(res.headers.location)).searchParams.get(

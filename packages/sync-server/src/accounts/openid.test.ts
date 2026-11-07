@@ -213,7 +213,11 @@ describe('first sign-in must match the configured admin subject', () => {
     provider.callback.mockResolvedValue({
       access_token: 'provider-token',
       id_token: 'x',
-      claims: () => ({ iss: 'https://identity.example', sub: 'other' }),
+      claims: () => ({
+        iss: 'https://identity.example',
+        sub: 'other',
+        aud: 'client',
+      }),
     });
     expect((await signIn()).error).toBe('openid-grant-failed');
     expect(users()).toEqual([]);
@@ -224,9 +228,98 @@ describe('first sign-in must match the configured admin subject', () => {
     provider.callback.mockResolvedValue({
       access_token: 'provider-token',
       id_token: 'x',
-      claims: () => ({ iss: 'https://identity.example', sub: 'fixed-id' }),
+      claims: () => ({
+        iss: 'https://identity.example',
+        sub: 'fixed-id',
+        aud: 'client',
+      }),
     });
     expect((await signIn()).error).toBeUndefined();
+  });
+
+  // fork: sc-2719, a household's server accepts only its own sync app's tokens
+  describe('ID token audience', () => {
+    const sessions = () =>
+      getAccountDb().first(
+        "SELECT count(*) as n FROM sessions WHERE auth_method = 'openid'",
+      ).n;
+    function idToken(claims: Record<string, unknown>) {
+      provider.callback.mockResolvedValue({
+        access_token: 'provider-token',
+        id_token: 'x',
+        claims: () => ({
+          iss: 'https://identity.example',
+          sub: 'fixed-id',
+          ...claims,
+        }),
+      });
+    }
+
+    it.each([
+      ['another app', { aud: 'other-household-client' }],
+      ['a list without this app', { aud: ['other-household-client'] }],
+      ['no audience', {}],
+      [
+        'a list with this app but no azp',
+        { aud: ['client', 'other-household-client'] },
+      ],
+      [
+        'a list with this app authorized for another',
+        { aud: ['client', 'other-household-client'], azp: 'other' },
+      ],
+      ['a single audience authorized for another', { aud: 'client', azp: 'x' }],
+    ])('refuses %s, creating no user and no session', async (_, claims) => {
+      idToken(claims);
+      expect((await signIn()).error).toBe('openid-grant-failed');
+      expect(users()).toEqual([]);
+      expect(sessions()).toBe(0);
+    });
+
+    it.each([
+      ['its own app', { aud: 'client' }],
+      ['a one-item list of its own app', { aud: ['client'] }],
+      [
+        'a list authorized for its own app',
+        { aud: ['client', 'other-household-client'], azp: 'client' },
+      ],
+    ])('accepts %s', async (_, claims) => {
+      idToken(claims);
+      expect((await signIn()).error).toBeUndefined();
+      expect(sessions()).toBe(1);
+    });
+  });
+
+  // fork: sc-2719, pins existing refusals of other households' leads and Ken
+  describe('another household on this server', () => {
+    const leadB = { sub: 'lead-b', preferred_username: 'lead-b@example' };
+    const others = [
+      ['lead-a', 'lead-a@example'],
+      ['ken', 'ken@example'],
+    ];
+
+    it.each(others)(
+      '%s is refused by admin_subject before this lead signs in',
+      async (sub, name) => {
+        config.set('openId.adminSubject', leadB.sub);
+        provider.userinfo.mockResolvedValue({ sub, preferred_username: name });
+        expect((await signIn()).error).toBe('openid-grant-failed');
+        expect(users()).toEqual([]);
+      },
+    );
+
+    it.each(others)(
+      '%s is refused by manual creation once this server has users',
+      async (sub, name) => {
+        config.set('openId.adminSubject', leadB.sub);
+        provider.userinfo.mockResolvedValue(leadB);
+        expect((await signIn()).error).toBeUndefined();
+        provider.userinfo.mockResolvedValue({ sub, preferred_username: name });
+        expect((await signIn()).error).toBe('openid-grant-failed');
+        expect(users()).toEqual([
+          { user_name: 'lead-b@example', role: 'ADMIN', owner: 1 },
+        ]);
+      },
+    );
   });
 
   it('warns at startup when the setting is unset, and not when set', async () => {

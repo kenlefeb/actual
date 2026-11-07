@@ -68,6 +68,10 @@ export async function getLatestVersion(): Promise<string | 'unknown'> {
 }
 
 export function getIsOutdated(latestVersion: string): boolean {
+  // Fork builds (bundled news feed) can't install upstream's releases.
+  if (import.meta.env.REACT_APP_NEWS_FEED_BUNDLED === 'true') {
+    return false;
+  }
   const clientVersion = window.Actual.ACTUAL_VERSION;
   if (latestVersion === 'unknown') {
     return false;

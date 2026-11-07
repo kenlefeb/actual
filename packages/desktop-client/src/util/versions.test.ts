@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { cmpSemanticVersion, computeClientVersion } from './versions';
+import {
+  cmpSemanticVersion,
+  computeClientVersion,
+  getIsOutdated,
+} from './versions';
 
 describe('cmpSemanticVersion', () => {
   it('compares major, minor and patch numerically', () => {
@@ -69,5 +73,28 @@ describe('computeClientVersion', () => {
     });
     expect(cmpSemanticVersion(withCommit, '26.9.0')).toBe(0);
     expect(cmpSemanticVersion(withCommit, '26.10.0')).toBeLessThan(0);
+  });
+});
+
+describe('getIsOutdated', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  function stubClient(version: string) {
+    vi.stubGlobal('window', { Actual: { ACTUAL_VERSION: version } });
+  }
+
+  it('reports an older client as outdated on upstream builds', () => {
+    vi.stubEnv('REACT_APP_NEWS_FEED_BUNDLED', '');
+    stubClient('26.10.1-alpha.23');
+    expect(getIsOutdated('v26.11.0')).toBe(true);
+  });
+
+  it('never reports an update on fork builds', () => {
+    vi.stubEnv('REACT_APP_NEWS_FEED_BUNDLED', 'true');
+    stubClient('26.10.1-alpha.23');
+    expect(getIsOutdated('v26.11.0')).toBe(false);
   });
 });

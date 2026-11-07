@@ -22,7 +22,7 @@ const REPO_NEWS_FEED_URL =
  *    file in `packages/desktop-client`.
  *
  * Without an override, `REACT_APP_NEWS_FEED_BUNDLED=true` (set for fork
- * builds in `.env.browser` and `.env.production`) skips fetching entirely and
+ * builds in `.env.browser`, `.env.desktop` and `.env.production`) skips fetching entirely and
  * `fetchNewsFeed` reads the bundled upstream and fork feeds instead.
  * 2. Netlify PR previews (`REACT_APP_REVIEW_ID` is set) serve the copy in
  *    their own build, i.e. exactly the file committed on the PR branch. This

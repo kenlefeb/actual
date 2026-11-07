@@ -43,7 +43,9 @@ async function newGroup(name: string) {
 }
 
 async function newCategory(name: string, groupId: string) {
-  return api.createCategory({ name, group_id: groupId } as never);
+  return api.createCategory({ name, group_id: groupId } satisfies Parameters<
+    typeof api.createCategory
+  >[0]);
 }
 
 async function refused(

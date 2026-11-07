@@ -476,7 +476,7 @@ With writes on, the server SHALL offer `write_create_category_group`, `write_cre
 #### Scenario: In use, no transfer
 - **GIVEN** category "Dining" with 12 transactions
 - **WHEN** a client calls `write_delete_category` without `transfer_category_id`
-- **THEN** the call is refused naming 12 transactions and the budgeted months, and "Dining" still exists with its transactions
+- **THEN** the call is refused saying how many transactions (12) and which budgeted months, and "Dining" still exists with its transactions
 
 #### Scenario: In use, with a transfer
 - **GIVEN** "Dining" with transactions and budgeted amounts, and "Groceries"
@@ -494,7 +494,7 @@ With writes on, the server SHALL offer `write_create_category_group`, `write_cre
 #### Scenario: A group in use, no transfer
 - **GIVEN** group "Food" with "Dining" (12 transactions) and "Snacks" (none)
 - **WHEN** a client calls `write_delete_category_group` for "Food" without a transfer
-- **THEN** the call is refused naming "Dining" and its 12 transactions, and nothing changed
+- **THEN** the call is refused naming "Dining" by its id with its 12 transactions, and nothing changed
 
 #### Scenario: A group in use, with a transfer
 - **GIVEN** the same "Food" and "Groceries" in another group

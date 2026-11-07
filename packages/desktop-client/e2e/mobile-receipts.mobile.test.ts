@@ -36,12 +36,16 @@ test('mobile note retains document boundaries and opens a receipt without enteri
     const leaveField = () =>
       page.getByRole('heading', { name: 'Split', exact: true }).click();
     const editNote = async (field: typeof notes, value: string) => {
-      if ((await field.getAttribute('role')) === 'group') await field.click();
+      if ((await field.getAttribute('role')) === 'group') {
+        await field.click({ position: { x: 2, y: 2 } });
+      }
       await field.fill(value);
       await leaveField();
     };
     const expectNoteValue = async (field: typeof notes, value: string) => {
-      if ((await field.getAttribute('role')) === 'group') await field.click();
+      if ((await field.getAttribute('role')) === 'group') {
+        await field.click({ position: { x: 2, y: 2 } });
+      }
       await expect(field).toHaveValue(value);
       await expect(field).toHaveJSProperty('tagName', 'TEXTAREA');
       await leaveField();

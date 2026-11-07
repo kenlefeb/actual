@@ -18,7 +18,9 @@ export function MobileTaggedNotes({
   const getTagCSS = useTagCSS();
   return (
     <>
-      <Text className={getTagCSS(tag, { compact: true })}>{content}</Text>
+      <Text className={getTagCSS(tag, { compact: true })} data-note-interactive>
+        {content}
+      </Text>
       {separator}
     </>
   );

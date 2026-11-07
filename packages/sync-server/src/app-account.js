@@ -148,13 +148,15 @@ app.post('/logout', async (req, res) => {
   }
   const accountDb = getAccountDb();
   const session = accountDb.first(
-    'SELECT auth_method FROM sessions WHERE token = ?',
+    'SELECT auth_method, id_token FROM sessions WHERE token = ?',
     [token],
   );
   accountDb.mutate('DELETE FROM sessions WHERE token = ?', [token]);
   // fork: sc-2684. Only after the row is gone; failures yield no URL.
   const providerLogoutUrl =
-    session?.auth_method === 'openid' ? await getProviderLogoutUrl() : null;
+    session?.auth_method === 'openid'
+      ? await getProviderLogoutUrl(session.id_token)
+      : null;
   res.send({
     status: 'ok',
     data: providerLogoutUrl ? { providerLogoutUrl } : {},

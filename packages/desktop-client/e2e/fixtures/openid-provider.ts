@@ -12,6 +12,8 @@ export type OpenIdProvider = {
   user: OpenIdUser;
   // Every request the browser or the sync server made, in order
   requests: URL[];
+  // The last ID token issued to each user, by sub
+  idTokens: Map<string, string>;
   stop: () => Promise<void>;
 };
 
@@ -43,6 +45,7 @@ export async function startOpenIdProvider(): Promise<OpenIdProvider> {
     clientSecret: 'e2e-secret',
     user: { sub: 'e2e|alice', email: 'alice@example.test', name: 'E2E Alice' },
     requests: [],
+    idTokens: new Map(),
     stop: () =>
       new Promise(resolve => {
         server.closeAllConnections();
@@ -122,11 +125,13 @@ export async function startOpenIdProvider(): Promise<OpenIdProvider> {
         codes.delete(form.get('code') ?? '');
         const accessToken = randomUUID();
         tokens.set(accessToken, user);
+        const issued = idToken(user, accessToken);
+        provider.idTokens.set(user.sub, issued);
         return json(200, {
           access_token: accessToken,
           token_type: 'Bearer',
           expires_in: 600,
-          id_token: idToken(user, accessToken),
+          id_token: issued,
         });
       }
       case '/userinfo': {

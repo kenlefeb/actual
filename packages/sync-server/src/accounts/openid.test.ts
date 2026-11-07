@@ -289,6 +289,42 @@ describe('first sign-in must match the configured admin subject', () => {
     });
   });
 
+  // fork: sc-2970, the ID token is kept with its session for the logout hint
+  describe('stored ID token', () => {
+    const storedIdTokens = () =>
+      getAccountDb()
+        .all("SELECT id_token FROM sessions WHERE auth_method = 'openid'")
+        .map((row: { id_token: string | null }) => row.id_token);
+    function withIdToken(aud: string) {
+      provider.callback.mockResolvedValue({
+        access_token: 'provider-token',
+        id_token: 'issued.id.token',
+        claims: () => ({
+          iss: 'https://identity.example',
+          sub: 'fixed-id',
+          aud,
+        }),
+      });
+    }
+
+    it('stores the ID token with the new session', async () => {
+      withIdToken('client');
+      expect((await signIn()).error).toBeUndefined();
+      expect(storedIdTokens()).toEqual(['issued.id.token']);
+    });
+
+    it('stores NULL when the provider sent no ID token', async () => {
+      expect((await signIn()).error).toBeUndefined();
+      expect(storedIdTokens()).toEqual([null]);
+    });
+
+    it('stores nothing when the ID token fails its checks', async () => {
+      withIdToken('other-household-client');
+      expect((await signIn()).error).toBe('openid-grant-failed');
+      expect(storedIdTokens()).toEqual([]);
+    });
+  });
+
   // fork: sc-2719, pins existing refusals of other households' leads and Ken
   describe('another household on this server', () => {
     const leadB = { sub: 'lead-b', preferred_username: 'lead-b@example' };
@@ -372,6 +408,26 @@ describe('getProviderLogoutUrl', () => {
       client_id: 'client',
       post_logout_redirect_uri: 'https://actual.example/',
     });
+  });
+
+  // fork: sc-2970
+  it('adds the ID token as id_token_hint when given one', async () => {
+    provider.metadata = {
+      end_session_endpoint: 'https://identity.example/oidc/logout',
+    };
+    const url = new URL((await getProviderLogoutUrl('stored.id.token')) ?? '');
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      client_id: 'client',
+      post_logout_redirect_uri: 'https://actual.example/',
+      id_token_hint: 'stored.id.token',
+    });
+  });
+
+  it('never adds the hint to the Auth0 /v2/logout fallback', async () => {
+    useIssuer('https://tenant.us.auth0.com/.well-known/openid-configuration');
+    expect(await getProviderLogoutUrl('stored.id.token')).toBe(
+      'https://tenant.us.auth0.com/v2/logout?client_id=client&returnTo=https%3A%2F%2Factual.example%2F',
+    );
   });
 
   it.each(['tenant.us.auth0.com', 'auth0.com'])(

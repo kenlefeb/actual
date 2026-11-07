@@ -221,7 +221,8 @@ export async function disableOpenID(loginSettings) {
 export function getSession(token) {
   const accountDb = getAccountDb();
   return accountDb.first(
-    `SELECT sessions.*
+    // fork: sc-2970. Listed so the stored ID token never reaches a handler.
+    `SELECT sessions.token, sessions.expires_at, sessions.user_id, sessions.auth_method
      FROM sessions
      JOIN users ON users.id = sessions.user_id
      WHERE sessions.token = ? AND users.enabled = 1`,

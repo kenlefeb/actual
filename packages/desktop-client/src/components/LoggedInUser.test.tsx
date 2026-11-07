@@ -101,6 +101,20 @@ it('sends the browser to the provider logout on web', async () => {
   expect(openURLInBrowser).not.toHaveBeenCalled();
 });
 
+// fork: sc-2970, the URL carries the ID token as id_token_hint
+it('never logs the provider logout URL', async () => {
+  env.providerLogoutUrl =
+    'https://identity.example/oidc/logout?id_token_hint=secret.id.token';
+  const logs = (['log', 'info', 'warn', 'error', 'debug'] as const).map(m =>
+    vi.spyOn(console, m),
+  );
+  await signOutFromMenu();
+  await waitFor(() => expect(assign).toHaveBeenCalled());
+  for (const log of logs) {
+    expect(JSON.stringify(log.mock.calls)).not.toContain('secret.id.token');
+  }
+});
+
 it('opens the provider logout in the system browser on Electron', async () => {
   env.electron = true;
   env.providerLogoutUrl = 'https://identity.example/oidc/logout';

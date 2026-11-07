@@ -110,7 +110,9 @@ async function setupOpenIdClient(configParameter) {
 }
 
 // fork: sc-2684. Built from the server's own config only: never from the request.
-export async function getProviderLogoutUrl(): Promise<string | null> {
+export async function getProviderLogoutUrl(
+  idToken?: string | null,
+): Promise<string | null> {
   try {
     const row = getAccountDb().first(
       'SELECT extra_data FROM auth WHERE method = ?',
@@ -121,7 +123,11 @@ export async function getProviderLogoutUrl(): Promise<string | null> {
     const returnUrl = new URL('/', configParameter.server_hostname).toString();
     const client = await setupOpenIdClient(configParameter);
     if (client.issuer?.end_session_endpoint) {
-      return client.endSessionUrl({ post_logout_redirect_uri: returnUrl });
+      // fork: sc-2970. The hint lets the provider skip its confirmation page.
+      return client.endSessionUrl({
+        post_logout_redirect_uri: returnUrl,
+        ...(idToken && { id_token_hint: idToken }),
+      });
     }
     const issuerUrl =
       typeof configParameter.issuer === 'string'
@@ -416,8 +422,8 @@ export async function loginWithOpenIdFinalize(body) {
     }
 
     accountDb.mutate(
-      'INSERT INTO sessions (token, expires_at, user_id, auth_method) VALUES (?, ?, ?, ?)',
-      [token, expiration, userId, 'openid'],
+      'INSERT INTO sessions (token, expires_at, user_id, auth_method, id_token) VALUES (?, ?, ?, ?, ?)',
+      [token, expiration, userId, 'openid', tokenSet.id_token ?? null],
     );
 
     clearExpiredSessions();

@@ -1,6 +1,7 @@
 // Run from the repo root: `node --test fork/scripts/*.test.mjs`.
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 // oxlint-disable-next-line actual/no-extraneous-dependencies -- node:test is a builtin that exists only with the node: prefix, so Module.builtinModules omits it
 import { test } from 'node:test';
 
@@ -9,6 +10,7 @@ import {
   findHandlers,
   findTools,
   problems,
+  walk,
 } from './check-mcp-coverage.mjs';
 
 // A world that fails only for the fork handler `paycheck-foo` having no entry
@@ -193,4 +195,17 @@ void test('A commented registration or send does not count', () => {
     }),
   );
   assert.match(out[0], /paycheck-foo.*methods\.ts/);
+});
+
+void test('A mock route is not a handler', () => {
+  const root = mkdtempSync(`${tmpdir()}/mcp-walk-`);
+  for (const f of [
+    'server/tests/mock.ts',
+    'server/a/__mocks__/m.ts',
+    'server/main.ts',
+  ]) {
+    mkdirSync(`${root}/${f.replace(/\/[^/]+$/, '')}`, { recursive: true });
+    writeFileSync(`${root}/${f}`, "app.post('/zz-mock', x)");
+  }
+  assert.deepEqual(walk('server', root), ['server/main.ts']);
 });

@@ -13,6 +13,7 @@ const SERVER_DIR = 'packages/loot-core/src/server';
 const METHODS = 'packages/api/methods.ts';
 const BASELINE = 'packages/mcp/upstream-handlers.json';
 const isSource = f => /\.(ts|tsx|js)$/.test(f) && !/\.test\./.test(f);
+const isMock = f => /(^|\/)(server\/tests|__mocks__)\//.test(f);
 const captures = (text, re) => [...text.matchAll(re)].map(m => m[1] ?? m[2]);
 
 // shortcut: regex, not a parser; a `//` inside a string (not after `:`, so
@@ -107,11 +108,11 @@ export function problems({
   return out;
 }
 
-const walk = (dir, root) =>
+export const walk = (dir, root) =>
   readdirSync(join(root, dir), { withFileTypes: true }).flatMap(e => {
     const rel = `${dir}/${e.name}`;
     if (e.isDirectory()) return walk(rel, root);
-    return /\.(ts|tsx|js)$/.test(e.name) ? [rel] : [];
+    return /\.(ts|tsx|js)$/.test(e.name) && !isMock(rel) ? [rel] : [];
   });
 
 const scanHandlers = (read, files) =>
@@ -134,7 +135,7 @@ function main() {
     const ref = process.argv[refIdx + 1];
     const files = git('ls-tree', '-r', '--name-only', ref, '--', SERVER_DIR)
       .split('\n')
-      .filter(isSource);
+      .filter(f => isSource(f) && !isMock(f));
     const baseline = {
       ref,
       commit: git('rev-parse', ref).trim(),

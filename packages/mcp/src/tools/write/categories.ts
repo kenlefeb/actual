@@ -118,7 +118,7 @@ export function registerCategoryWriteTools(
           changes: [{ id: 'new', field: 'name', before: null, after: name }],
         },
         async () => {
-          created = await api.createCategoryGroup({ name } as never);
+          created = await api.createCategoryGroup({ name });
           return { applied: [created], created: [created] };
         },
         async () => withText({ group_id: created }, { name }),
@@ -150,7 +150,7 @@ export function registerCategoryWriteTools(
             name,
             group_id,
             is_income: group.is_income,
-          } as never);
+          } satisfies Parameters<typeof api.createCategory>[0]);
           return { applied: [created], created: [created] };
         },
         async () =>

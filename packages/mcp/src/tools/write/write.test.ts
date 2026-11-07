@@ -53,7 +53,9 @@ async function categoryId(name: string) {
   const group = groups.find(g => g.name === 'Bills')!;
   const found = (await api.getCategories()).find(c => c.name === name);
   if (found) return found.id;
-  return api.createCategory({ name, group_id: group.id } as never);
+  return api.createCategory({ name, group_id: group.id } satisfies Parameters<
+    typeof api.createCategory
+  >[0]);
 }
 
 function auditLines() {

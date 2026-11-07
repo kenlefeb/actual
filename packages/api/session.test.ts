@@ -89,6 +89,6 @@ it('revokes the current token on explicit sign-out', async () => {
 it('clears local credentials when the server is offline', async () => {
   const instance = await api.init({ dataDir, serverURL, password: 'password' });
   await new Promise<void>(resolve => server.close(() => resolve()));
-  await expect(instance.send('subscribe-sign-out')).resolves.toBe('ok');
+  await expect(instance.send('subscribe-sign-out')).resolves.toEqual({});
   expect(await instance.send('subscribe-get-user')).toBeNull();
 });

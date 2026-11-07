@@ -113,6 +113,7 @@ const verifyFileExists = (
     return filesService.get(fileId);
   } catch (e) {
     if (e instanceof FileNotFound) {
+      noteFileAccess(fileId); // fork-only access log
       //FIXME: error code should be 404. Need to make sure frontend is ok with it.
       //TODO: put this into a middleware that checks if FileNotFound is thrown and returns 404 and same error message
       // for every FileNotFound error

@@ -213,6 +213,36 @@ describe('sync-server access log', () => {
     ]);
   });
 
+  it('An unknown file id is logged: the 400 stays and one line holds no content', async () => {
+    const fileId = crypto.randomBytes(16).toString('hex');
+
+    await request(app)
+      .post('/delete-user-file')
+      .set('x-actual-token', 'valid-token')
+      .send({ fileId })
+      .expect(400);
+
+    const lines = accessLines();
+    expect(lines).toEqual([
+      expect.objectContaining({
+        userId: 'genericAdmin',
+        fileId,
+        method: 'POST',
+        route: '/delete-user-file',
+        status: 400,
+      }),
+    ]);
+    expect(Object.keys(lines[0]).sort()).toEqual([
+      'event',
+      'fileId',
+      'method',
+      'route',
+      'status',
+      'time',
+      'userId',
+    ]);
+  });
+
   it('writes no access line for a request that touches no budget', async () => {
     await request(app)
       .get('/list-user-files')

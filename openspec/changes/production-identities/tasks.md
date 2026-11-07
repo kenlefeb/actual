@@ -59,5 +59,5 @@ Found by the slice C rehearsal: `packages/mcp` (stdio and hosted entries) can on
 
 The server answers 400, not 404, for an unknown file id (`FileNotFound` handler in `app-sync.ts`, upstream FIXME); this slice keeps that status, since changing it needs a frontend check, and only adds the log line. The path does not call `noteFileAccess` today, so the access middleware has no file id to log.
 
-- [ ] 10.1 Write the failing test first, named after "An unknown file id is logged": a request naming an unknown file id gets 400 and writes one access line (user id, file id, method, route, status 400, time) with no content; run it failing before the fix.
-- [ ] 10.2 Call `noteFileAccess(fileId)` in the `FileNotFound` branch before the 400 is sent, so the line is written. Fork-only server work.
+- [x] 10.1 Write the failing test first, named after "An unknown file id is logged": a request naming an unknown file id gets 400 and writes one access line (user id, file id, method, route, status 400, time) with no content; run it failing before the fix.
+- [x] 10.2 Call `noteFileAccess(fileId)` in the `FileNotFound` branch before the 400 is sent, so the line is written. Fork-only server work.

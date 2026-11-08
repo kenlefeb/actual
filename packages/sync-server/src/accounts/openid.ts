@@ -230,6 +230,12 @@ export async function loginWithOpenIdSetup(
   return { url };
 }
 
+// fork: sc-2453, say why a sign-in was refused; reasons name the subject only,
+// never tokens, codes or secrets
+function logRefusal(reason: string) {
+  console.warn(`OpenID sign-in refused: ${reason}`);
+}
+
 export async function loginWithOpenIdFinalize(body) {
   if (!body.code) {
     return { error: 'missing-authorization-code' };
@@ -304,6 +310,7 @@ export async function loginWithOpenIdFinalize(body) {
     // fork: sc-2163, an empty identity would resolve to the password-method
     // user (user_name ''), and the ID token's sub must agree with userinfo's
     if (String(identity).trim() === '') {
+      logRefusal(`empty identity from the provider (subject ${userInfo.sub})`);
       return { error: 'openid-grant-failed' };
     }
     // fork: sc-2719, only this server's own app (OIDC Core 3.1.3.7); openid-client
@@ -317,6 +324,9 @@ export async function loginWithOpenIdFinalize(body) {
         (audiences.length > 1 && azp === undefined) ||
         (azp !== undefined && azp !== clientId)
       ) {
+        logRefusal(
+          `ID token audience is not this server's client (subject ${userInfo.sub})`,
+        );
         return { error: 'openid-grant-failed' };
       }
     }
@@ -325,6 +335,9 @@ export async function loginWithOpenIdFinalize(body) {
       tokenSet.id_token &&
       tokenSet.claims().sub !== userInfo.sub
     ) {
+      logRefusal(
+        `ID token subject ${tokenSet.claims().sub} differs from userinfo subject ${userInfo.sub}`,
+      );
       return { error: 'openid-grant-failed' };
     }
 
@@ -350,7 +363,7 @@ export async function loginWithOpenIdFinalize(body) {
           adminSubject &&
           userInfo.sub !== adminSubject
         ) {
-          throw new Error('openid-grant-failed');
+          throw new Error('admin-subject-mismatch');
         }
 
         if (
@@ -384,7 +397,7 @@ export async function loginWithOpenIdFinalize(body) {
             ) || {};
 
           if (userIdFromDb == null) {
-            throw new Error('openid-grant-failed');
+            throw new Error('no-enabled-user');
           }
 
           if (!displayName && userInfo.name) {
@@ -400,7 +413,15 @@ export async function loginWithOpenIdFinalize(body) {
     } catch (error) {
       if (error.message === 'user-already-exists') {
         return { error: 'user-already-exists' };
-      } else if (error.message === 'openid-grant-failed') {
+      } else if (error.message === 'admin-subject-mismatch') {
+        logRefusal(
+          `first sign-in subject ${userInfo.sub} doesn't match ACTUAL_OPENID_ADMIN_SUBJECT ${config.get('openId.adminSubject')}`,
+        );
+        return { error: 'openid-grant-failed' };
+      } else if (error.message === 'no-enabled-user') {
+        logRefusal(
+          `no enabled user matches the provider identity (subject ${userInfo.sub})`,
+        );
         return { error: 'openid-grant-failed' };
       } else {
         throw error; // Re-throw other unexpected errors

@@ -2,6 +2,7 @@ import { format } from 'node:util';
 
 import createDebug from 'debug';
 import type * as OpenIdClient from 'openid-client';
+import type { MockInstance } from 'vitest';
 
 import { getAccountDb } from '#account-db';
 import { config } from '#load-config';
@@ -159,6 +160,54 @@ describe('first sign-in must match the configured admin subject', () => {
         "SELECT count(*) as n FROM sessions WHERE auth_method = 'openid'",
       ).n,
     ).toBe(0);
+  });
+
+  // fork: sc-2453, every refusal says why in the server log (subject only)
+  describe('logs why a sign-in is refused', () => {
+    let warn: MockInstance<typeof console.warn>;
+    beforeEach(() => {
+      warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    });
+    afterEach(() => warn.mockRestore());
+    const logged = () => warn.mock.calls.map(args => format(...args));
+
+    it('a first sign-in whose subject is not the admin subject', async () => {
+      config.set('openId.adminSubject', 'someone-else');
+      expect((await signIn()).error).toBe('openid-grant-failed');
+      const lines = logged().filter(l =>
+        l.includes('ACTUAL_OPENID_ADMIN_SUBJECT'),
+      );
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toContain('fixed-id');
+      expect(lines[0]).toContain('someone-else');
+      expect(logged().join('\n')).not.toContain('provider-token');
+    });
+
+    it('an ID token sub that differs from the userinfo sub', async () => {
+      config.set('openId.adminSubject', 'fixed-id');
+      provider.callback.mockResolvedValue({
+        access_token: 'provider-token',
+        id_token: 'x',
+        claims: () => ({ sub: 'other', aud: 'client' }),
+      });
+      await signIn();
+      expect(logged().join('\n')).toMatch(/ID token.*subject/i);
+      expect(logged().join('\n')).not.toContain('provider-token');
+    });
+
+    it('an unknown or disabled user', async () => {
+      getAccountDb().mutate(
+        "INSERT INTO users (id, user_name, display_name, enabled, owner, role) VALUES ('u3', 'someone', 'x', 1, 1, 'ADMIN')",
+      );
+      expect((await signIn()).error).toBe('openid-grant-failed');
+      expect(logged().join('\n')).toMatch(/no enabled user/i);
+    });
+
+    it('an empty identity', async () => {
+      provider.userinfo.mockResolvedValue({ sub: 'a', preferred_username: '' });
+      await signIn();
+      expect(logged().join('\n')).toMatch(/empty identity/i);
+    });
   });
 
   it('a non-matching first sign-in is refused even when users are created at login', async () => {

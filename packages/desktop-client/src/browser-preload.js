@@ -5,6 +5,7 @@ import { registerSW } from 'virtual:pwa-register';
 // oxlint-disable-next-line typescript-paths/absolute-parent-import
 import packageJson from '../package.json';
 
+import { consumeProviderSignOut } from './auth/providerSignOut';
 import SharedBrowserServerWorker from './shared-browser-server.ts?sharedworker';
 import { computeClientVersion } from './util/versions';
 
@@ -36,6 +37,10 @@ const isOpenIdCallback = window.location.pathname
   .replace(/\/+$/, '')
   .endsWith('/openid-cb');
 
+// fork: sc-3103. Same for the page the provider returns to after sign-out.
+// Read it before the backend starts so the flag never outlives this load.
+const isProviderSignOutReturn = consumeProviderSignOut();
+
 // *** Start the backend ***
 //
 // The multi-tab coordinator (leader/follower over SharedWorker), the direct
@@ -57,7 +62,8 @@ const worker = startBrowserBackend({
     Platform.isPlaywright ||
     Platform.isIOS ||
     Platform.isAndroid ||
-    isOpenIdCallback,
+    isOpenIdCallback ||
+    isProviderSignOutReturn,
 });
 
 // Ask the browser to exclude this origin's storage (the local budget database

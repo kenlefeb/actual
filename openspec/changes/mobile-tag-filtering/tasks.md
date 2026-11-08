@@ -4,18 +4,18 @@ Test-first: write each test, run it and see it fail before the code (record the 
 
 ## 1. Desktop: pin the existing tag filter (sc-2989)
 
-- [ ] 1.1 Add tests in `packages/desktop-client/src/components/transactions/` (and `Account` where it fits) that clicking a tag adds `notes hasTags '#tag'` to the register's filters, in a single-account and the all-accounts register, and that the same tag twice is not duplicated. These pin existing behavior; record that they passed on first run. Verify: `yarn workspace @actual-app/web test <file>`.
+- [ ] 1.1 Add tests to `packages/desktop-client/src/components/transactions/TransactionsTable.test.tsx` that clicking a tag calls the tag handler with the tag. There is no `Account.test`, so add a render-level test of the register (new `components/accounts/Account.test.tsx`) that clicking a tag adds `notes hasTags '#tag'` as a pill in a single-account and the all-accounts register, that the same tag twice is not duplicated, and that a second tag adds a second pill (stacking). These pin existing behavior; record that they passed on first run. Verify: `yarn workspace @actual-app/web test TransactionsTable Account`.
 
 ## 2. Mobile: filter conditions on single-account lists (sc-2989)
 
-- [ ] 2.1 Add failing tests to `components/mobile/accounts/AccountTransactions.test.tsx`: `location.state.filterConditions` filters the single-account query via `make-filters-from-conditions`; the filtered empty state shows when nothing matches. Run them and see them fail.
-- [ ] 2.2 Implement `filterConditions` handling in `AccountTransactions.tsx`, mirroring `AllAccountTransactions.tsx`; share logic in a hook only if it removes duplication. Verify: 2.1 passes and the On/OffBudget pages still work.
+- [ ] 2.1 Add failing tests to `components/mobile/accounts/AccountTransactions.test.tsx`: `location.state.filterConditions` filters the single-account query via `make-filters-from-conditions`; the filtered empty state shows when nothing matches; a tag condition plus typed search text returns only the intersection (AND), and clearing either leaves the other. Run them and see them fail.
+- [ ] 2.2 Implement `filterConditions` handling in `AccountTransactions.tsx`: copy `location.state.filterConditions` into local state and apply it to `baseTransactionsQuery` so search composes on top. In `AllAccountTransactions.tsx` move the condition from direct reads of `location.state` into the same local state (this changes existing code; report drill-down behavior must not change). Share logic in a hook only if it removes duplication. Verify: 2.1 passes and the On/OffBudget pages still work.
 
 ## 3. Mobile: tap a tag, chip, replace (sc-2989)
 
-- [ ] 3.1 Add failing tests (run them, see them fail): tapping a tag in the list item applies the filter and does not open the editor; the chip shows "#tag x"; its x clears the filter; a second tag replaces the first; a tag in the editor (`TransactionEdit`) does nothing and does not start editing. Cover All accounts and a single account.
-- [ ] 3.2 Add an optional tap handler to `notes/MobileTaggedNotes.tsx` (button role, pressed state, name "Filter by #tag", stops propagation), pass it from `TransactionListItem.tsx` through both lists, and pass none from the editor.
-- [ ] 3.3 Add the removable tag chip above both lists (translated strings). Verify: 3.1 passes.
+- [ ] 3.1 Add failing tests (run them, see them fail). In `components/mobile/transactions/TransactionListItem.test.tsx`: tapping a tag calls the new handler with the tag and does not open the editor. In `components/mobile/transactions/NotesField.test.tsx`: a tag tap does nothing and does not start editing. In `components/mobile/accounts/AccountTransactions.test.tsx` (single account) and a new `components/mobile/accounts/AllAccountTransactions.test.tsx` (All accounts): tapping a tag shows the "#tag x" chip and filters, its x clears the filter, a second tag replaces the first, and "Filters applied" still shows for drill-down conditions.
+- [ ] 3.2 Add an optional tap handler to `packages/desktop-client/src/notes/MobileTaggedNotes.tsx` (button role, pressed state, name "Filter by #tag", stops propagation). Make `packages/desktop-client/src/notes/NotesTagFormatter.tsx` forward `onNotesTagClick` to `MobileTaggedNotes` in its `isNarrowWidth` branch. Add the optional prop to `components/mobile/transactions/TransactionListItem.tsx` and pass it from both lists. `NotesField.tsx` passes none.
+- [ ] 3.3 In `components/mobile/transactions/TransactionListWithBalances.tsx` add a `TagFilterChip` beside the existing `AppliedFiltersChip` (props `tagFilter`, `onClearTagFilter`; translated strings), and have `AllAccountTransactions.tsx` and `AccountTransactions.tsx` set and clear the tag in their local state. Verify: 3.1 passes.
 
 ## 4. Checks and release (sc-2989)
 

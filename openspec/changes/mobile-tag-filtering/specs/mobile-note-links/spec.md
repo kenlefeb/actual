@@ -49,7 +49,7 @@ Tapping the formatted notes outside a link or tag SHALL replace them with the No
 ## ADDED Requirements
 
 ### Requirement: Tapping a tag filters the list
-Tapping a tag in a transaction's notes in a transaction list SHALL filter the list the user is in, whether all accounts or a single account, to transactions whose notes have that tag (`notes hasTags '#tag'`, as on desktop). The active tag SHALL show as a removable "#tag x" chip above the list, and a second tag SHALL replace it. Desktop SHALL behave the same, with a removable filter.
+Tapping a tag in a transaction's notes in a transaction list SHALL filter the list the user is in, whether all accounts or a single account, to transactions whose notes have that tag (`notes hasTags '#tag'`, as on desktop). The active tag SHALL show as a removable "#tag x" chip above the list, On mobile, removing the chip SHALL clear the tag filter and a second tag SHALL replace the first. On desktop (wide layout) each clicked tag SHALL be added to the register as its own removable filter pill.
 
 #### Scenario: Filter the all-accounts list
 - **WHEN** a user taps `#vacation` in a note in the mobile All accounts list
@@ -72,6 +72,13 @@ Tapping a tag in a transaction's notes in a transaction list SHALL filter the li
 - **WHEN** the tag filter leaves no transactions
 - **THEN** the list shows the filtered empty state, with the chip still available to clear it
 
+#### Scenario: Tag filter and search together (mobile)
+- **WHEN** a list is filtered by `#vacation` and the user types search text
+- **THEN** the list shows only transactions that have the tag and match the text
+- **AND** clearing the text keeps the tag filter, and removing the chip keeps the text
+
 #### Scenario: Desktop parity
 - **WHEN** a user clicks a tag in a note in the desktop register (all accounts or one account)
 - **THEN** the register adds the `notes hasTags '#tag'` filter as a removable filter pill, and clicking the same tag again does not duplicate it
+- **AND** clicking a second tag adds a second pill, so both conditions apply (desktop stacks tags; only mobile replaces)
+- **AND** a narrow desktop window uses the mobile behavior above

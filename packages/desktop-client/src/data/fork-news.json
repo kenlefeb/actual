@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "id": "fork-release-26.10.1-alpha.30",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.30 — Ken's Actual fork",
+      "date": "2026-11-08",
+      "version": "26.10.1-alpha.30",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.30.md",
+      "body": "**Unofficial fork prerelease.** Based on upstream Actual v26.11.0 (`1766241e3f4b3c578e424c4fa15f1eb83c0da17d`, October 29, 2026); not an official Actual Budget release.\n\nThis release lets you tap a tag in a transaction's notes on the phone to see only the transactions with that tag, and makes the server log why a first OpenID sign-in was refused.",
+      "details": "#### Features\n\n- None.\n\n#### Enhancements\n\n- On the phone, tapping a tag in a transaction's notes now shows only the transactions with that tag, in both a single account and the all-accounts list.\n\n#### Bugfixes\n\n- None.\n\n#### Maintenance\n\n- The sync server now logs why a first OpenID sign-in was refused, which makes sign-in problems easier to trace.\n- Specification for phone tag filtering added and archived.\n- No upstream changes in this release; the fork stays on upstream Actual 26.11.0.\n\n#### Known limitations\n\n- Experimental.\n- OpenID sign-out needs the server's address in the identity provider's allowed sign-out addresses; without it the provider shows an error page, though you are already signed out of Actual.\n- Attached documents aren't included in a budget export, and removed documents stay on the sync server.\n- HEIC pictures are refused; use the Photos library or a JPEG or PNG copy.\n- Attaching a document needs a connection; there is no offline upload queue.\n- No iPhone acceptance test is claimed."
+    },
+    {
       "id": "fork-release-26.10.1-alpha.29",
       "type": "release",
       "title": "Release 26.10.1-alpha.29 — Ken's Actual fork",

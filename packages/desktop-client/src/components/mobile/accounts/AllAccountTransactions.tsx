@@ -67,6 +67,12 @@ function TransactionListWithPreviews() {
   const [transactionsQuery, setTransactionsQuery] = useState<Query | undefined>(
     currentQuery,
   );
+  // The conditions the query was last built for. While a filter is being
+  // resolved, show nothing rather than the previous (unfiltered) list.
+  const [queryConditions, setQueryConditions] = useState<
+    typeof filterConditions | null
+  >(isFiltered ? null : filterConditions);
+  const isFilterPending = isFiltered && queryConditions !== filterConditions;
 
   const { isSearching, search } = useTransactionsSearch({
     updateQuery: updateFn =>
@@ -118,6 +124,7 @@ function TransactionListWithPreviews() {
       if (!isStale) {
         const text = searchTextRef.current;
         setCurrentQuery(query);
+        setQueryConditions(filterConditions);
         setTransactionsQuery(
           text !== ''
             ? queries.transactionsSearch(query, text, dateFormat)
@@ -144,7 +151,7 @@ function TransactionListWithPreviews() {
     isFetchingNextPage: isLoadingMoreTransactions,
     fetchNextPage: fetchMoreTransactions,
   } = useTransactions({
-    query: transactionsQuery,
+    query: isFilterPending ? undefined : transactionsQuery,
   });
   const { previewTransactions, isLoading: isPreviewTransactionsLoading } =
     usePreviewTransactions();

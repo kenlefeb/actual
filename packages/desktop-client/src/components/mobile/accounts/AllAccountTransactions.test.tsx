@@ -1,5 +1,6 @@
 import { MemoryRouter } from 'react-router';
 
+import { send } from '@actual-app/core/platform/client/connection';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -143,5 +144,20 @@ describe('AllAccountTransactions tag and filter conditions', () => {
     await userEvent.type(screen.getByLabelText('search'), 'hotel');
     await waitFor(() => expect(queryText()).toContain('%hotel%'));
     expect(queryText()).toContain('"marker":"#vacation"');
+  });
+
+  it('holds back the list while the new filter is being resolved', async () => {
+    renderAll();
+    await waitFor(() => expect(state.query).toBeDefined());
+    const pending: { resolve?: (value: { filters: unknown[] }) => void } = {};
+    vi.mocked(send).mockImplementationOnce(
+      () => new Promise(r => (pending.resolve = r)) as never,
+    );
+
+    await userEvent.click(screen.getByText('tap #vacation'));
+    expect(state.query).toBeUndefined();
+
+    pending.resolve?.({ filters: [{ marker: '#vacation' }] });
+    await waitFor(() => expect(queryText()).toContain('"marker":"#vacation"'));
   });
 });

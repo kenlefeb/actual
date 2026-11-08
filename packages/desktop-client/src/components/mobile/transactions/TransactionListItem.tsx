@@ -78,6 +78,7 @@ type TransactionListItemProps = ListBoxItemRenderProps & {
   onPress: (transaction: TransactionEntity) => void;
   onLongPress: (transaction: TransactionEntity) => void;
   onToggleCleared?: (transaction: TransactionEntity) => void;
+  onNotesTagClick?: (tag: string) => void;
 };
 
 export function TransactionListItem({
@@ -87,6 +88,7 @@ export function TransactionListItem({
   onPress,
   onLongPress,
   onToggleCleared,
+  onNotesTagClick,
   transaction,
   ...itemProps
 }: TransactionListItemProps) {
@@ -323,7 +325,10 @@ export function TransactionListItem({
                     opacity: 0.85,
                   }}
                 >
-                  <NotesTagFormatter notes={displayedNotes} />
+                  <NotesTagFormatter
+                    notes={displayedNotes}
+                    onNotesTagClick={onNotesTagClick}
+                  />
                 </TextOneLine>
               )}
             </View>

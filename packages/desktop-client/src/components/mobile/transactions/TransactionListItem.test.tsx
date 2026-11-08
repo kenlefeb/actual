@@ -9,6 +9,10 @@ import { TestProviders } from '#mocks';
 
 import { TransactionListItem } from './TransactionListItem';
 
+vi.mock('@actual-app/components/hooks/useResponsive', () => ({
+  useResponsive: () => ({ isNarrowWidth: true, isNarrowWidthLoaded: true }),
+}));
+
 const state = vi.hoisted(() => ({ account: {} as Record<string, unknown> }));
 
 vi.mock('#hooks/useAccount', () => ({
@@ -32,6 +36,7 @@ function renderRow(
   date: string,
   extra: Record<string, unknown> = {},
   onPress = vi.fn(),
+  props: Record<string, unknown> = {},
 ) {
   render(
     <TestProviders>
@@ -49,6 +54,7 @@ function renderRow(
           }
           onPress={onPress}
           onLongPress={vi.fn()}
+          {...props}
           {...({} as ListBoxItemRenderProps)}
         />
       </AttachmentsProvider>
@@ -125,5 +131,39 @@ describe('TransactionListItem category line', () => {
     state.account = { offbudget: 0 };
     renderRow('t3', '2000-01-01');
     expect(screen.getByText('Uncategorized')).toBeInTheDocument();
+  });
+});
+
+describe('Tapping a tag in a phone row', () => {
+  it('reports the tag and does not open the transaction', async () => {
+    const onPress = vi.fn();
+    const onNotesTagClick = vi.fn();
+    renderRow('t1', '2026-11-05', { notes: 'Hotel #vacation' }, onPress, {
+      onNotesTagClick,
+    });
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Filter by #vacation' }),
+    );
+
+    expect(onNotesTagClick).toHaveBeenCalledWith('#vacation');
+    expect(onPress).not.toHaveBeenCalled();
+  });
+
+  it('still opens the transaction when the plain text is tapped', async () => {
+    const onPress = vi.fn();
+    renderRow('t1', '2026-11-05', { notes: 'Hotel #vacation' }, onPress, {
+      onNotesTagClick: vi.fn(),
+    });
+
+    await userEvent.click(screen.getByText(/Hotel/));
+
+    expect(onPress).toHaveBeenCalled();
+  });
+
+  it('offers no tag button when the list passes no handler', () => {
+    renderRow('t1', '2026-11-05', { notes: 'Hotel #vacation' });
+
+    expect(screen.queryByRole('button', { name: /Filter by/ })).toBeNull();
   });
 });

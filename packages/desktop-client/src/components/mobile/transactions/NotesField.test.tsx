@@ -56,6 +56,11 @@ describe('NotesField tap targets', () => {
     expect(store.getState().notifications.notifications).toHaveLength(0);
   });
 
+  it('offers no filter button for a tag in the editor', () => {
+    renderNotes('lunch with #work');
+    expect(screen.queryByRole('button', { name: /Filter by/ })).toBeNull();
+  });
+
   it('opens the file manager, not the editor, when a file path is tapped in the app', async () => {
     env.isElectron = true;
     renderNotes('see [receipt](/Users/ken/receipt.pdf)');

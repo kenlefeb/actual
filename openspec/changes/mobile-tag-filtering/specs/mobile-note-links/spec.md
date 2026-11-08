@@ -49,7 +49,7 @@ Tapping the formatted notes outside a link or tag SHALL replace them with the No
 ## ADDED Requirements
 
 ### Requirement: Tapping a tag filters the list
-Tapping a tag in a transaction's notes in a transaction list SHALL filter the list the user is in, whether all accounts or a single account, to transactions whose notes have that tag (`notes hasTags '#tag'`, as on desktop). The active tag SHALL show as a removable "#tag x" chip above the list, On mobile, removing the chip SHALL clear the tag filter and a second tag SHALL replace the first. On desktop (wide layout) each clicked tag SHALL be added to the register as its own removable filter pill.
+Tapping a tag in a transaction's notes in a transaction list SHALL filter the list the user is in, whether all accounts or a single account, to transactions whose notes have that tag (`notes hasTags '#tag'`, as on desktop). The active tag SHALL show as a removable "#tag x" chip above the list. On mobile, removing the chip SHALL clear the tag filter and a second tag SHALL replace the first; on desktop each clicked tag SHALL be added to the register as its own removable filter pill.
 
 #### Scenario: Filter the all-accounts list
 - **WHEN** a user taps `#vacation` in a note in the mobile All accounts list
@@ -70,12 +70,16 @@ Tapping a tag in a transaction's notes in a transaction list SHALL filter the li
 
 #### Scenario: Nothing matches
 - **WHEN** the tag filter leaves no transactions
-- **THEN** the list shows the filtered empty state, with the chip still available to clear it
+- **THEN** the list is empty and the chip is still available to clear the filter
 
 #### Scenario: Tag filter and search together (mobile)
 - **WHEN** a list is filtered by `#vacation` and the user types search text
 - **THEN** the list shows only transactions that have the tag and match the text
 - **AND** clearing the text keeps the tag filter, and removing the chip keeps the text
+
+#### Scenario: A single account with a condition active
+- **WHEN** a single-account mobile list has any filter condition active (a tag, or a report drill-down, which single-account lists now also accept)
+- **THEN** it behaves like the All accounts list: split child transactions are listed, and scheduled previews and running balances are not shown
 
 #### Scenario: Desktop parity
 - **WHEN** a user clicks a tag in a note in the desktop register (all accounts or one account)

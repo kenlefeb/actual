@@ -91,6 +91,7 @@ type TransactionListProps = {
   showMakeTransfer?: boolean;
   isReconciling?: boolean;
   onToggleTransactionCleared?: (transaction: TransactionEntity) => void;
+  onNotesTagClick?: (tag: string) => void;
 };
 
 export function TransactionList({
@@ -104,6 +105,7 @@ export function TransactionList({
   showMakeTransfer = false,
   isReconciling = false,
   onToggleTransactionCleared,
+  onNotesTagClick,
 }: TransactionListProps) {
   const locale = useLocale();
   const { t } = useTranslation();
@@ -254,6 +256,7 @@ export function TransactionList({
                               onTransactionPress(trans, true)
                             }
                             onToggleCleared={onToggleTransactionCleared}
+                            onNotesTagClick={onNotesTagClick}
                           />
                         )}
                       </ListBoxItem>

@@ -1,14 +1,16 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router';
 
 import { send } from '@actual-app/core/platform/client/connection';
 import type { Query } from '@actual-app/core/shared/query';
 import { isPreviewId } from '@actual-app/core/shared/transactions';
-import type {
-  RuleConditionEntity,
-  TransactionEntity,
-} from '@actual-app/core/types/models';
+import type { TransactionEntity } from '@actual-app/core/types/models';
 
 import { TransactionListWithBalances } from '#components/mobile/transactions/TransactionListWithBalances';
 import { SchedulesProvider } from '#hooks/useCachedSchedules';
@@ -24,6 +26,8 @@ import * as queries from '#queries';
 import { useDispatch } from '#redux';
 import * as bindings from '#spreadsheet/bindings';
 
+import { useListFilterConditions } from './useListFilterConditions';
+
 export function AllAccountTransactions() {
   const schedulesQuery = useMemo(() => getSchedulesQuery(), []);
 
@@ -36,9 +40,14 @@ export function AllAccountTransactions() {
 
 function TransactionListWithPreviews() {
   const { t } = useTranslation();
-  const location = useLocation();
-  // Filter conditions passed by drill-downs (e.g. report activity)
-  const filterConditions = location?.state?.filterConditions || [];
+  // Conditions from drill-downs (e.g. report activity) plus a tapped tag
+  const {
+    conditions: filterConditions,
+    tagFilter,
+    hasOtherConditions,
+    onNotesTagClick,
+    onClearTagFilter,
+  } = useListFilterConditions();
   const isFiltered = filterConditions.length > 0;
 
   const [hideReconciled] = useSyncedPref('hide-reconciled-all');
@@ -58,6 +67,12 @@ function TransactionListWithPreviews() {
   const [transactionsQuery, setTransactionsQuery] = useState<Query | undefined>(
     currentQuery,
   );
+  // The conditions the query was last built for. While a filter is being
+  // resolved, show nothing rather than the previous (unfiltered) list.
+  const [queryConditions, setQueryConditions] = useState<
+    typeof filterConditions | null
+  >(isFiltered ? null : filterConditions);
+  const isFilterPending = isFiltered && queryConditions !== filterConditions;
 
   const { isSearching, search } = useTransactionsSearch({
     updateQuery: updateFn =>
@@ -89,31 +104,46 @@ function TransactionListWithPreviews() {
     }
   }
 
+  const searchTextRef = useRef(searchText);
+  searchTextRef.current = searchText;
+  const wasFilteredRef = useRef(isFiltered);
+
   useEffect(() => {
     let isStale = false;
 
-    const applyFilters = async (conditions: RuleConditionEntity[]) => {
-      const { filters: queryFilters } = await send(
-        'make-filters-from-conditions',
-        { conditions },
-      );
+    const applyFilters = async () => {
       const rootQuery = makeRootTransactionsQuery();
-      const query = rootQuery.filter({ $and: queryFilters });
+      let query = rootQuery;
+      if (filterConditions.length > 0) {
+        const { filters: queryFilters } = await send(
+          'make-filters-from-conditions',
+          { conditions: filterConditions },
+        );
+        query = rootQuery.filter({ $and: queryFilters });
+      }
       if (!isStale) {
+        const text = searchTextRef.current;
         setCurrentQuery(query);
-        setTransactionsQuery(query);
+        setQueryConditions(filterConditions);
+        setTransactionsQuery(
+          text !== ''
+            ? queries.transactionsSearch(query, text, dateFormat)
+            : query,
+        );
       }
     };
 
-    const conditions = location?.state?.filterConditions;
-    if (conditions?.length) {
-      void applyFilters(conditions);
+    // The unfiltered list is set up by the initial state; only (re)build the
+    // query when conditions are present or have just been cleared
+    if (filterConditions.length > 0 || wasFilteredRef.current) {
+      void applyFilters();
     }
+    wasFilteredRef.current = filterConditions.length > 0;
 
     return () => {
       isStale = true;
     };
-  }, [location.state, makeRootTransactionsQuery]);
+  }, [filterConditions, makeRootTransactionsQuery, dateFormat]);
 
   const {
     transactions,
@@ -121,7 +151,7 @@ function TransactionListWithPreviews() {
     isFetchingNextPage: isLoadingMoreTransactions,
     fetchNextPage: fetchMoreTransactions,
   } = useTransactions({
-    query: transactionsQuery,
+    query: isFilterPending ? undefined : transactionsQuery,
   });
   const { previewTransactions, isLoading: isPreviewTransactionsLoading } =
     usePreviewTransactions();
@@ -209,7 +239,10 @@ function TransactionListWithPreviews() {
       onSearch={onSearch}
       onOpenTransaction={onOpenTransaction}
       showMakeTransfer
-      filtered={isFiltered}
+      filtered={hasOtherConditions}
+      onNotesTagClick={onNotesTagClick}
+      tagFilter={tagFilter}
+      onClearTagFilter={onClearTagFilter}
     />
   );
 }

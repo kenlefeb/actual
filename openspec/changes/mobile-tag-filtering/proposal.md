@@ -12,7 +12,7 @@ Shortcut sc-2989 (epic 470, Baseline fork behavior). Deferred from sc-2913: tags
 - Desktop: no behavior change. It already adds a `hasTags` condition to the register the user is in, shown as a removable pill, and tags stack: clicking a second tag adds a second pill. This change adds tests that pin it and cites it in the spec. A narrow desktop window takes the mobile branch of `NotesTagFormatter` (`isNarrowWidth`) and so behaves as mobile.
 - Known gap, by Product Owner decision (sc-2989, activity-3059): a tag tapped inside the mobile transaction editor still does nothing (and does not start editing). Leaving the editor risks losing unsaved edits.
 
-Out of scope: stacking several tags, tag filtering from the editor, saved filters, server or loot-core changes.
+Out of scope: stacking several tags on mobile, tag filtering from the editor, saved filters, server or loot-core changes.
 
 ## Capabilities
 

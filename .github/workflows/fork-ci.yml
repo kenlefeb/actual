@@ -49,6 +49,9 @@ jobs:
           persist-credentials: false
           # A pull request checks out its merge commit; HEAD^1 is the base.
           fetch-depth: 2
+      # Strict mode fails on warnings such as requirement text over 500 characters (sc-3071).
+      - name: Validate OpenSpec specs
+        run: npx --yes @fission-ai/openspec@1.15.0 validate --specs --strict
       - name: Test the check
         run: node --test fork/scripts/*.test.mjs
       - name: Check OpenSpec and Shortcut links

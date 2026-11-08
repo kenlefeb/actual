@@ -264,7 +264,7 @@ The server SHALL append one JSON line per write to `~/Library/Application Suppor
 - **THEN** the server's reported version equals its package version
 
 ### Requirement: Registration forms
-The coverage check SHALL find a handler registered as `app.method('name', ...)` or as `handlers['name'] = ...`, and SHALL treat both forms the same: the name needs a manifest entry unless it is in the upstream baseline. It SHALL read whole files, so a registration that spans lines is found, and SHALL skip files under `server/tests/` and `__mocks__/`, whose routes are mocks and not handlers. A call such as `handlers['name'](args)`, a comparison or a reference SHALL NOT count as a registration. The baseline SHALL record both forms from the upstream ref it is built from.
+The coverage check SHALL find a handler registered as `app.method('name', ...)` or as `handlers['name'] = ...`, and SHALL treat both forms the same: the name needs a manifest entry unless it is in the upstream baseline. It SHALL read whole files, so a registration that spans lines is found. The baseline SHALL record both forms from the upstream ref it is built from.
 
 #### Scenario: A registration across lines
 - **GIVEN** a handler registered as `app.method(\n  'account-set-business-days',\n  ...)`
@@ -286,14 +286,17 @@ The coverage check SHALL find a handler registered as `app.method('name', ...)` 
 - **WHEN** the check runs
 - **THEN** it finds `zz-new-handler`
 
+#### Scenario: The baseline holds assigned handlers
+- **WHEN** the baseline is rebuilt with `--baseline-from upstream/master`
+- **THEN** it lists upstream's `handlers['name'] = ...` registrations (82 at the time of writing) beside its `app.method` registrations, so none of them needs an entry
+
+### Requirement: Non-registrations
+The coverage check SHALL skip files under `server/tests/` and `__mocks__/`, whose routes are mocks and not handlers. A call such as `handlers['name'](args)`, a comparison or a reference SHALL NOT count as a registration.
+
 #### Scenario: A call is not a registration
 - **GIVEN** code that reads `await handlers['load-budget']({ id })`, compares `handlers['x'] === y` or passes `handlers['x']` as an argument, and `load-budget` is not in the baseline
 - **WHEN** the check runs
 - **THEN** none of these is found as a registration
-
-#### Scenario: The baseline holds assigned handlers
-- **WHEN** the baseline is rebuilt with `--baseline-from upstream/master`
-- **THEN** it lists upstream's `handlers['name'] = ...` registrations (82 at the time of writing) beside its `app.method` registrations, so none of them needs an entry
 
 #### Scenario: A mock route is not a handler
 - **GIVEN** a route registered as `app.post('/zz-mock', ...)` in a file under `server/tests/` or `__mocks__/`, and a real handler registered elsewhere
@@ -447,11 +450,14 @@ The `--writes` entry SHALL keep its budget copy and its audit log in `<env>-writ
 - **THEN** the sync pushes nothing, because the read entry's copy never held that change
 
 ### Requirement: Category maintenance tools
-With writes on, the server SHALL offer `write_create_category_group`, `write_create_category`, `write_update_category_group`, `write_update_category`, `write_move_category`, `write_move_category_group`, `write_delete_category` and `write_delete_category_group`. Each SHALL take ids (never a name) for what it changes, write one audit attempt line and one outcome line, and return the before and after of every field it changed. `write_update_category` and `write_update_category_group` SHALL rename and hide or unhide (`hidden`). `write_move_category` SHALL change a category's group and its place (before a given category, or last); `write_move_category_group` SHALL change a group's place. A category SHALL stay income or expense as its group is: a new category takes its kind from its group, only expense groups can be created, and a move between an income and an expense group SHALL be refused. A refusal SHALL use fixed text, write no audit line and change nothing.
+With writes on, the server SHALL offer `write_create_category_group`, `write_create_category`, `write_update_category_group`, `write_update_category`, `write_move_category`, `write_move_category_group`, `write_delete_category` and `write_delete_category_group`. Each SHALL take ids (never a name) for what it changes, write one audit attempt line and one outcome line, and return the before and after of every field it changed.
 
 #### Scenario: Create a group and a category
 - **WHEN** a client calls `write_create_category_group` with the name "Pets" and then `write_create_category` with the name "Vet" and that group's id
 - **THEN** both are listed by `list_category_groups`, "Vet" under "Pets" and as an expense category, and each call left audit lines
+
+### Requirement: Category update and move tools
+`write_update_category` and `write_update_category_group` SHALL rename and hide or unhide (`hidden`). `write_move_category` SHALL change a category's group and its place (before a given category, or last); `write_move_category_group` SHALL change a group's place.
 
 #### Scenario: Rename, hide and unhide
 - **WHEN** a client calls `write_update_category` to rename "Vet" to "Veterinarian" and to hide it, and later to unhide it
@@ -461,6 +467,9 @@ With writes on, the server SHALL offer `write_create_category_group`, `write_cre
 - **GIVEN** categories "A", "B" in group "X" and "C" in group "Y"
 - **WHEN** a client moves "C" into "X" before "A", and then moves group "Y" before group "X"
 - **THEN** `list_category_groups` lists "Y" before "X" and "X" holds "C", "A", "B" in that order
+
+### Requirement: Category kind and refusals
+A category SHALL stay income or expense as its group is: a new category takes its kind from its group, only expense groups can be created, and a move between an income and an expense group SHALL be refused. A refusal SHALL use fixed text, write no audit line and change nothing.
 
 #### Scenario: A duplicate name
 - **GIVEN** a category "Dining" in group "Food"
@@ -476,7 +485,7 @@ With writes on, the server SHALL offer `write_create_category_group`, `write_cre
 - **THEN** the call is refused and the category stays where it was
 
 ### Requirement: Category delete needs a transfer when in use
-`write_delete_category` SHALL delete a category. When the category has transactions or non-zero budgeted amounts it SHALL require `transfer_category_id`, refusing without one and saying how many transactions and which months are affected; with one it SHALL move the transactions and budgeted amounts to that category before deleting. The transfer category SHALL exist, differ from the deleted one and be income or expense as it is. A category in use SHALL be deleted without a dry-run or confirm step. `write_delete_category_group` SHALL delete a group and its categories, hidden ones included. If any category is in use it SHALL require `transfer_category_id`, refusing without one and naming the in-use categories with their transaction counts and months; with one it SHALL move each in-use category's transactions and budgeted amounts there before deleting. The transfer category SHALL exist, SHALL NOT be in the group being deleted, and SHALL be an expense category. The income group SHALL be refused, and so SHALL a group of more than 50 categories. A group with no category in use SHALL be deleted with no transfer. A group delete SHALL write one attempt and one outcome audit line naming the group, its categories and the transfer id.
+`write_delete_category` SHALL delete a category. When the category has transactions or non-zero budgeted amounts it SHALL require `transfer_category_id`, refusing without one and saying how many transactions and which months are affected; with one it SHALL move the transactions and budgeted amounts to that category before deleting. A category in use SHALL be deleted without a dry-run or confirm step.
 
 #### Scenario: In use, no transfer
 - **GIVEN** category "Dining" with 12 transactions
@@ -492,9 +501,15 @@ With writes on, the server SHALL offer `write_create_category_group`, `write_cre
 - **WHEN** a client deletes a category with no transactions and no budgeted amounts, without a transfer
 - **THEN** the category is deleted
 
+### Requirement: Category delete transfer target
+The transfer category for `write_delete_category` SHALL exist, differ from the deleted one and be income or expense as it is.
+
 #### Scenario: A transfer of the other kind
 - **WHEN** a client deletes an expense category with the id of an income category as the transfer
 - **THEN** the call is refused and nothing changed
+
+### Requirement: Category group delete needs a transfer when in use
+`write_delete_category_group` SHALL delete a group and its categories, hidden ones included. If any category is in use it SHALL require `transfer_category_id`, refusing without one and naming the in-use categories with their transaction counts and months; with one it SHALL move each in-use category's transactions and budgeted amounts there before deleting. A group with no category in use SHALL be deleted with no transfer.
 
 #### Scenario: A group in use, no transfer
 - **GIVEN** group "Food" with "Dining" (12 transactions) and "Snacks" (none)
@@ -506,6 +521,17 @@ With writes on, the server SHALL offer `write_create_category_group`, `write_cre
 - **WHEN** a client calls `write_delete_category_group` for "Food" with the id of "Groceries"
 - **THEN** "Food", "Dining" and "Snacks" are gone, and the 12 transactions and budgeted amounts are now in "Groceries"
 
+#### Scenario: A group of unused categories
+- **WHEN** a client deletes a group whose categories have no transactions and no budgeted amounts, without a transfer
+- **THEN** the group and its categories are deleted
+
+#### Scenario: An empty group
+- **WHEN** a client calls `write_delete_category_group` for a group with no categories
+- **THEN** the group is deleted and an audit line names it
+
+### Requirement: Category group delete transfer target and limits
+The transfer category for `write_delete_category_group` SHALL exist, SHALL NOT be in the group being deleted, and SHALL be an expense category. The income group SHALL be refused, and so SHALL a group of more than 50 categories. A group delete SHALL write one attempt and one outcome audit line naming the group, its categories and the transfer id.
+
 #### Scenario: A transfer inside the group
 - **WHEN** a client calls `write_delete_category_group` for "Food" with the id of "Snacks"
 - **THEN** the call is refused and nothing changed
@@ -514,14 +540,6 @@ With writes on, the server SHALL offer `write_create_category_group`, `write_cre
 - **GIVEN** a group of 51 categories
 - **WHEN** a client calls `write_delete_category_group` for it
 - **THEN** the call is refused and nothing changed
-
-#### Scenario: A group of unused categories
-- **WHEN** a client deletes a group whose categories have no transactions and no budgeted amounts, without a transfer
-- **THEN** the group and its categories are deleted
-
-#### Scenario: An empty group
-- **WHEN** a client calls `write_delete_category_group` for a group with no categories
-- **THEN** the group is deleted and an audit line names it
 
 ### Requirement: The category list shows kind and visibility
 `list_category_groups` SHALL return every group, hidden ones included, in the budget's order, each with its `id`, `is_income` and `hidden`, and its categories in the budget's order each with `id`, `is_income` and `hidden`.

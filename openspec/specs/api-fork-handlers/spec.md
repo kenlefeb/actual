@@ -6,7 +6,7 @@ Gives scripts typed `@actual-app/api` methods for the fork's own handlers (paych
 ## Requirements
 
 ### Requirement: Typed API methods for the fork's handlers
-`@actual-app/api` SHALL export a typed method for each of the 17 handlers the fork adds beyond upstream's (paychecks, account business days, move on budget and its preview, business calendars, and category move, category group move and category usage), so a script needs no untyped `internal.send` call. Each SHALL call its handler with the arguments unchanged and return its result with the same errors, and its argument and result types SHALL be written by hand and checked against the handlers by the compiler through `send`.
+`@actual-app/api` SHALL export a typed method for each of the 17 handlers the fork adds beyond upstream's, so a script needs no untyped `internal.send` call. Each SHALL call its handler with the arguments unchanged and return its result with the same errors, and its argument and result types SHALL be written by hand and checked against the handlers by the compiler through `send`.
 
 #### Scenario: A script edits a paycheck
 - **GIVEN** a budget with the paycheck "Acme", whose schedules the API refuses to edit
@@ -31,6 +31,10 @@ Gives scripts typed `@actual-app/api` methods for the fork's own handlers (paych
 - **GIVEN** a category with 3 transactions and a budgeted amount in 2 months
 - **WHEN** a script calls `getCategoryUsage` for it
 - **THEN** the result is 3 transactions and those 2 months, and nothing changed
+
+#### Scenario: The covered handlers
+- **WHEN** the API's exported methods are listed
+- **THEN** they include a typed method for each of the fork's added handlers for paychecks, account business days, move on budget and its preview, business calendars, and category move, category group move and category usage
 
 ### Requirement: Every fork handler has a method
 The API tests SHALL fail, naming the handler, when any of the 17 listed handlers has no typed method or `methods.ts` does not call it. The list is fixed in the test; a new fork handler is found by `mcp-server` "Coverage check", which also requires its call in `methods.ts`.

@@ -17,6 +17,7 @@ import type { RemoteFile, SyncedLocalFile } from '@actual-app/core/types/file';
 import type { TransObjectLiteral } from '@actual-app/core/types/util';
 
 import { useAuth } from '#auth/AuthProvider';
+import { markProviderSignOut } from '#auth/providerSignOut';
 import { Permissions } from '#auth/types';
 import { closeBudget } from '#budgetfiles/budgetfilesSlice';
 import { useMetadataPref } from '#hooks/useMetadataPref';
@@ -322,6 +323,7 @@ function followProviderLogout(url: string | undefined) {
   if (isElectron()) {
     window.Actual.openURLInBrowser(href);
   } else {
+    markProviderSignOut();
     window.location.assign(href);
   }
 }

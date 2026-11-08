@@ -45,6 +45,7 @@ async function load() {
 beforeEach(() => {
   env.electron = false;
   env.providerLogoutUrl = undefined;
+  sessionStorage.clear();
   assign.mockReset();
   openURLInBrowser.mockReset();
   env.send.mockReset().mockImplementation(async (name: string) => {
@@ -99,6 +100,28 @@ it('sends the browser to the provider logout on web', async () => {
     ),
   );
   expect(openURLInBrowser).not.toHaveBeenCalled();
+});
+
+// fork: sc-3103. The page the provider sends back must not join the
+// SharedWorker coordinator, or it can hang on "Loading global preferences...".
+it('tells the page coming back from the provider to start its own backend', async () => {
+  env.providerLogoutUrl = 'https://identity.example/oidc/logout';
+  await signOutFromMenu();
+  await waitFor(() => expect(assign).toHaveBeenCalled());
+  const { consumeProviderSignOut } = await import('#auth/providerSignOut');
+  expect(consumeProviderSignOut()).toBe(true);
+  expect(consumeProviderSignOut()).toBe(false);
+});
+
+it.each([
+  ['Electron', 'https://identity.example/oidc/logout'],
+  ['no provider logout', undefined],
+])('leaves the next page load alone on %s', async (name, url) => {
+  env.electron = name === 'Electron';
+  env.providerLogoutUrl = url;
+  await signOutFromMenu();
+  const { consumeProviderSignOut } = await import('#auth/providerSignOut');
+  expect(consumeProviderSignOut()).toBe(false);
 });
 
 // fork: sc-2970, the URL carries the ID token as id_token_hint

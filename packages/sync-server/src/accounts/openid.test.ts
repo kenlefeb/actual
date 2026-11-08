@@ -208,6 +208,28 @@ describe('first sign-in must match the configured admin subject', () => {
       await signIn();
       expect(logged().join('\n')).toMatch(/empty identity/i);
     });
+
+    // fork: sc-3068
+    it('no identification at all', async () => {
+      provider.userinfo.mockResolvedValue({});
+      expect((await signIn()).error).toBe(
+        'openid-grant-failed: no identification was found',
+      );
+      expect(logged().join('\n')).toMatch(/no identification/i);
+      expect(logged().join('\n')).not.toContain('provider-token');
+    });
+
+    it('a subject with line breaks is logged on one line', async () => {
+      provider.userinfo.mockResolvedValue({
+        sub: 'a\r\nOpenID sign-in refused: forged',
+        preferred_username: '',
+      });
+      await signIn();
+      const lines = logged();
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).not.toMatch(/[\r\n]/);
+      expect(lines[0]).toContain('forged');
+    });
   });
 
   it('a non-matching first sign-in is refused even when users are created at login', async () => {

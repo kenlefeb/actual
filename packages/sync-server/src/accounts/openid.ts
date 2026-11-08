@@ -232,8 +232,14 @@ export async function loginWithOpenIdSetup(
 
 // fork: sc-2453, say why a sign-in was refused; reasons name the subject only,
 // never tokens, codes or secrets
+// fork: sc-3068, provider strings (the subject) are escaped so a CR/LF in them
+// can't forge log lines
 function logRefusal(reason: string) {
-  console.warn(`OpenID sign-in refused: ${reason}`);
+  const safe = reason.replace(
+    /[\p{Cc}\u2028\u2029]/gu,
+    c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`,
+  );
+  console.warn(`OpenID sign-in refused: ${safe}`);
 }
 
 export async function loginWithOpenIdFinalize(body) {
@@ -304,6 +310,7 @@ export async function loginWithOpenIdFinalize(body) {
       userInfo.sub;
 
     if (identity == null) {
+      logRefusal('no identification was found in the provider user info');
       return { error: 'openid-grant-failed: no identification was found' };
     }
 

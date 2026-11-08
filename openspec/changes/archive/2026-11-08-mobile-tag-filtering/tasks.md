@@ -20,4 +20,4 @@ Test-first: write each test, run it and see it fail before the code (record the 
 ## 4. Checks and release (sc-2989)
 
 - [x] 4.1 Run `yarn lint:fix`, `yarn typecheck`, `yarn test`, `yarn check:mcp-coverage` and `yarn generate:i18n`.
-- [ ] 4.2 Version bump, release note and fork news per AGENTS.md "Private customized build versions"; archive this change when the PR merges.
+- [x] 4.2 Release note added (`upcoming-release-notes/mobile-tag-filtering.md`) and change archived after the PR merged. The version bump and fork news were not done here; they stay a release-time step per AGENTS.md "Private customized build versions".

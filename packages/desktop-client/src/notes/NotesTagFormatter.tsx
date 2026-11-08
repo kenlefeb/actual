@@ -45,6 +45,7 @@ export function NotesTagFormatter({
                   content={segment.content}
                   tag={segment.tag}
                   separator={separator}
+                  onPress={onNotesTagClick}
                 />
               );
             }

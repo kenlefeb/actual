@@ -44,6 +44,8 @@ import * as queries from '#queries';
 import { useDispatch } from '#redux';
 import * as bindings from '#spreadsheet/bindings';
 
+import { useListFilterConditions } from './useListFilterConditions';
+
 export function AccountTransactions({
   account,
 }: {
@@ -84,6 +86,40 @@ function TransactionListWithPreviews({
     : parsedReconcileAmount;
   const isReconciling = reconcileAmount != null;
 
+  // Conditions from drill-downs plus a tapped tag, turned into query filters
+  // by the server. `resolved` is the pair they were last resolved for.
+  const {
+    conditions: filterConditions,
+    tagFilter,
+    hasOtherConditions,
+    onNotesTagClick,
+    onClearTagFilter,
+  } = useListFilterConditions();
+  const [resolved, setResolved] = useState<{
+    conditions: typeof filterConditions;
+    filters: unknown[];
+  } | null>(null);
+  useEffect(() => {
+    let isStale = false;
+    if (filterConditions.length === 0) {
+      setResolved(null);
+    } else {
+      void send('make-filters-from-conditions', {
+        conditions: filterConditions,
+      }).then(({ filters }) => {
+        if (!isStale) setResolved({ conditions: filterConditions, filters });
+      });
+    }
+    return () => {
+      isStale = true;
+    };
+  }, [filterConditions]);
+  const isFiltered = filterConditions.length > 0;
+  // Conditions whose filters are not back yet: show nothing rather than
+  // the unfiltered list
+  const isFilterPending =
+    isFiltered && resolved?.conditions !== filterConditions;
+
   const baseTransactionsQuery = useCallback(() => {
     let query = queries
       .transactions(account.id)
@@ -92,8 +128,11 @@ function TransactionListWithPreviews({
     if (hideReconciled === 'true' && !isReconciling) {
       query = query.filter({ reconciled: { $eq: false } });
     }
+    if (resolved && resolved.filters.length > 0) {
+      query = query.filter({ $and: resolved.filters });
+    }
     return query;
-  }, [account.id, hideReconciled, isReconciling]);
+  }, [account.id, hideReconciled, isReconciling, resolved]);
   const [transactionsQuery, setTransactionsQuery] = useState<Query>(
     baseTransactionsQuery(),
   );
@@ -122,7 +161,10 @@ function TransactionListWithPreviews({
   }, [baseTransactionsQuery, search]);
 
   const shouldCalculateRunningBalances =
-    showRunningBalances === 'true' && !!account?.id && !isSearching;
+    showRunningBalances === 'true' &&
+    !!account?.id &&
+    !isSearching &&
+    !isFiltered;
 
   const accountBalanceValue = useSheetValue<
     'account',
@@ -140,7 +182,7 @@ function TransactionListWithPreviews({
     isFetchingNextPage: isLoadingMoreTransactions,
     fetchNextPage: fetchMoreTransactions,
   } = useTransactions({
-    query: transactionsQuery,
+    query: isFilterPending ? undefined : transactionsQuery,
     options: {
       calculateRunningBalances: shouldCalculateRunningBalances
         ? calculateRunningBalancesTopDown
@@ -301,10 +343,13 @@ function TransactionListWithPreviews({
 
   const previewTransactionsToDisplay = isReconciling ? [] : previewTransactions;
 
-  const transactionsToDisplay = !isSearching
-    ? // Do not render child transactions in the list, unless searching
-      previewTransactionsToDisplay.concat(transactions.filter(t => !t.is_child))
-    : transactions;
+  const transactionsToDisplay =
+    !isSearching && !isFiltered
+      ? // Do not render child transactions in the list, unless searching or filtering
+        previewTransactionsToDisplay.concat(
+          transactions.filter(t => !t.is_child),
+        )
+      : transactions;
 
   return (
     <>
@@ -323,7 +368,7 @@ function TransactionListWithPreviews({
       />
       <TransactionListWithBalances
         isLoading={
-          isSearching || isReconciling
+          isSearching || isReconciling || isFiltered
             ? isTransactionsLoading
             : isTransactionsLoading || isPreviewTransactionsLoading
         }
@@ -343,6 +388,10 @@ function TransactionListWithPreviews({
         onRefresh={onRefresh}
         isReconciling={isReconciling}
         onToggleTransactionCleared={onToggleTransactionCleared}
+        filtered={hasOtherConditions}
+        onNotesTagClick={onNotesTagClick}
+        tagFilter={tagFilter}
+        onClearTagFilter={onClearTagFilter}
       />
     </>
   );

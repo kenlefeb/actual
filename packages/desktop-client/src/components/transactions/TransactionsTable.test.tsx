@@ -170,6 +170,7 @@ type LiveTransactionTableProps = {
   isAdding: boolean;
   onTransactionsChange?: (newTrans: TransactionEntity[]) => void;
   onCloseAddTransaction?: () => void;
+  onNotesTagClick?: (tag: string) => void;
   onApplyRules?: (
     transaction: TransactionEntity,
     updatedFieldName?: string | null,
@@ -1987,6 +1988,24 @@ describe('Transactions', () => {
     await userEvent.keyboard('{End}{Shift>}{Enter}{/Shift}Second{Enter}');
     expect(getTransactions()[0].notes).toBe('First\nSecond');
     expectToBeEditingField(container, 'notes', 1);
+  });
+
+  test('clicking a tag in the notes reports that tag without editing the note', async () => {
+    const transactions = generateTransactions(2);
+    transactions[0].notes = 'Hotel #vacation';
+    const onNotesTagClick = vi.fn();
+    const { container } = renderTransactions({
+      transactions,
+      onNotesTagClick,
+      onCloseAddTransaction: vi.fn(),
+    });
+    await userEvent.click(
+      within(queryField(container, 'notes', '', 0) as HTMLElement).getByRole(
+        'button',
+        { name: '#vacation' },
+      ),
+    );
+    expect(onNotesTagClick).toHaveBeenCalledWith('#vacation');
   });
 
   describe('Tag Autocomplete', () => {

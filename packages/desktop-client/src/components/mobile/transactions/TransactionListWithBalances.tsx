@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import type { ComponentProps } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
-import { SvgFilter } from '@actual-app/components/icons/v1';
+import { Button } from '@actual-app/components/button';
+import { SvgClose, SvgFilter } from '@actual-app/components/icons/v1';
 import { Label } from '@actual-app/components/label';
 import { styles } from '@actual-app/components/styles';
 import { Text } from '@actual-app/components/text';
@@ -89,6 +90,9 @@ type TransactionListWithBalancesProps = {
   isReconciling?: boolean;
   onToggleTransactionCleared?: (transaction: TransactionEntity) => void;
   filtered?: boolean;
+  onNotesTagClick?: (tag: string) => void;
+  tagFilter?: string;
+  onClearTagFilter?: () => void;
 };
 
 export function TransactionListWithBalances({
@@ -109,6 +113,9 @@ export function TransactionListWithBalances({
   isReconciling = false,
   onToggleTransactionCleared,
   filtered = false,
+  onNotesTagClick,
+  tagFilter,
+  onClearTagFilter,
 }: TransactionListWithBalancesProps) {
   const selectedInst = useSelected('transactions', [...transactions], []);
 
@@ -150,6 +157,9 @@ export function TransactionListWithBalances({
               </>
             )}
           </View>
+          {tagFilter && (
+            <TagFilterChip tag={tagFilter} onClear={onClearTagFilter} />
+          )}
           <TransactionSearchInput
             placeholder={searchPlaceholder}
             onSearch={onSearch}
@@ -175,10 +185,49 @@ export function TransactionListWithBalances({
             showMakeTransfer={showMakeTransfer}
             isReconciling={isReconciling}
             onToggleTransactionCleared={onToggleTransactionCleared}
+            onNotesTagClick={onNotesTagClick}
           />
         </PullToRefresh>
       </SelectedProvider>
     </DisplayPayeeProvider>
+  );
+}
+
+// Its own row, so it also fits the reconcile layout, which has no spare column
+function TagFilterChip({
+  tag,
+  onClear,
+}: {
+  tag: string;
+  onClear?: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <View style={{ alignItems: 'center', marginTop: 6 }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 4,
+          backgroundColor: theme.pillBackgroundSelected,
+          color: theme.pillTextSelected,
+          borderRadius: 15,
+          padding: '2px 4px 2px 10px',
+        }}
+      >
+        <Text size="small" style={{ fontWeight: 500 }}>
+          {tag}
+        </Text>
+        <Button
+          variant="bare"
+          aria-label={t('Remove filter {{tag}}', { tag })}
+          onPress={onClear}
+          style={{ padding: 4, color: 'inherit' }}
+        >
+          <SvgClose width={8} height={8} />
+        </Button>
+      </View>
+    </View>
   );
 }
 

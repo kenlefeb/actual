@@ -1372,4 +1372,131 @@ describe('SharedWorker coordinator', () => {
       expect(coordinator.getState().budgetGroups.has('budget-1')).toBe(false);
     });
   });
+  // ── Dead tabs (sc-3116) ─────────────────────────────────────────────
+  // A tab can leave without sending `tab-closing`. Its group stays
+  // "connected" until the heartbeat removes it, and requests routed to it
+  // in the meantime must not be lost.
+
+  describe('requests routed to a dead tab', () => {
+    /** Two heartbeats: ports that don't answer (the dead ones) are removed. */
+    function expireDeadTabs(...livePorts: MockPort[]) {
+      vi.advanceTimersByTime(10_000);
+      for (const p of livePorts) sendMsg(p, { type: '__heartbeat-pong' });
+      vi.advanceTimersByTime(10_000);
+    }
+
+    it('re-sends a quick reload\'s request to the reloaded tab once it leads', () => {
+      const dead = setupBudgetGroup(coordinator, 'budget-1');
+
+      // The reloaded page arrives while the dead tab's backend looks alive
+      const reloaded = connectTab(coordinator);
+      sendInit(reloaded);
+      expect(reloaded.postMessage).toHaveBeenCalledWith({ type: 'connect' });
+      const request = { id: 'gp-1', name: 'load-global-prefs' };
+      sendMsg(reloaded, request);
+      expect(dead.postMessage).toHaveBeenCalledWith({
+        type: '__to-worker',
+        msg: request,
+      });
+      reloaded.postMessage.mockClear();
+
+      expireDeadTabs(reloaded);
+
+      expect(coordinator.getState().portToBudget.get(reloaded)).toBe('__lobby');
+      expect(reloaded.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ type: '__become-leader' }),
+      );
+      expect(reloaded.postMessage).toHaveBeenCalledWith({
+        type: '__to-worker',
+        msg: request,
+      });
+
+      // The new backend's reply reaches the page
+      simulateWorkerConnect(reloaded);
+      sendMsg(reloaded, {
+        type: '__from-worker',
+        msg: { type: 'reply', id: 'gp-1', result: {} },
+      });
+      expect(reloaded.postMessage).toHaveBeenCalledWith({
+        type: 'reply',
+        id: 'gp-1',
+        result: {},
+      });
+    });
+
+    it('re-sends a follower\'s request to the follower promoted in its place', () => {
+      const dead = setupBudgetGroup(coordinator, 'budget-1');
+      const follower = connectTab(coordinator);
+      sendInit(follower);
+      sendMsg(follower, {
+        id: 'lb-2',
+        name: 'load-budget',
+        args: { id: 'budget-1' },
+      });
+      const request = { id: 'q-1', name: 'query' };
+      sendMsg(follower, request);
+      follower.postMessage.mockClear();
+
+      expireDeadTabs(follower);
+
+      expect(
+        coordinator.getState().budgetGroups.get('budget-1').leaderPort,
+      ).toBe(follower);
+      expect(follower.postMessage).toHaveBeenCalledWith({
+        type: '__to-worker',
+        msg: request,
+      });
+      expect(dead.postMessage).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: '__become-leader' }),
+      );
+    });
+
+    it('re-sends an unassigned tab\'s request to another running budget', () => {
+      const dead = setupBudgetGroup(coordinator, 'budget-1');
+      const other = connectTab(coordinator);
+      sendInit(other);
+      sendMsg(other, { id: 'lb-3', name: 'load-budget', args: { id: 'b-2' } });
+      simulateWorkerConnect(other);
+
+      const waiting = connectTab(coordinator);
+      sendInit(waiting);
+      const request = { id: 'gp-2', name: 'load-global-prefs' };
+      sendMsg(waiting, request);
+      expect(dead.postMessage).toHaveBeenCalledWith({
+        type: '__to-worker',
+        msg: request,
+      });
+      other.postMessage.mockClear();
+
+      expireDeadTabs(other, waiting);
+
+      expect(other.postMessage).toHaveBeenCalledWith({
+        type: '__to-worker',
+        msg: request,
+      });
+    });
+
+    it('fails a request fast when no backend can take it over', () => {
+      setupBudgetGroup(coordinator, 'budget-1');
+      // Another budget is still starting, so no tab takes over the lobby
+      const booting = connectTab(coordinator);
+      sendInit(booting);
+      sendMsg(booting, {
+        id: 'lb-4',
+        name: 'load-budget',
+        args: { id: 'b-2' },
+      });
+
+      const waiting = connectTab(coordinator);
+      sendInit(waiting);
+      sendMsg(waiting, { id: 'gp-3', name: 'load-global-prefs' });
+      waiting.postMessage.mockClear();
+
+      expireDeadTabs(booting, waiting);
+
+      expect(waiting.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'error', id: 'gp-3' }),
+      );
+    });
+  });
 });

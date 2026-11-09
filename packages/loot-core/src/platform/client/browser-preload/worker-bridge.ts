@@ -34,8 +34,8 @@ export class WorkerBridge {
   _currentBudgetId: string | null;
   _wasHidden: boolean;
   _onVisibilityChange: () => void;
-  // Requests forwarded while a new leader is still restoring its budget;
-  // they would otherwise run against a backend with no database open
+  // Requests forwarded before the new backend is ready: it ignores them
+  // until it connects, and while restoring it has no database open yet
   _heldRequests: unknown[] | null;
   localBackendWorker: Worker | null;
   backendWorkerUrl: URL;
@@ -234,11 +234,22 @@ export class WorkerBridge {
     const localWorker = new Worker(this.backendWorkerUrl);
     this.localBackendWorker = localWorker;
     initSQLBackend(localWorker);
-    // Followers keep sending requests during a takeover; hold them until
-    // the restored budget is open (the restore reply releases them)
-    this._heldRequests = budgetToRestore ? [] : null;
+    // Other tabs keep sending requests during a takeover; hold them until
+    // the backend connects, or until the restored budget is open
+    this._heldRequests = [];
+
+    const isRestoring = budgetToRestore !== null;
 
     const sharedPort = this._sharedPort;
+    const releaseHeldRequests = () => {
+      if (this._heldRequests && this.localBackendWorker === localWorker) {
+        const held = this._heldRequests;
+        this._heldRequests = null;
+        for (const request of held) {
+          localWorker.postMessage(request);
+        }
+      }
+    };
     localWorker.onmessage = workerEvent => {
       const workerMsg = workerEvent.data as BridgeMessage;
       // absurd-sql internal messages are handled by initSQLBackend
@@ -272,22 +283,17 @@ export class WorkerBridge {
             requestId: RESTORE_REQUEST_ID,
             budgetId: id,
           });
-        } else if (pendingMsg) {
-          const toSend = pendingMsg;
-          pendingMsg = null;
-          localWorker.postMessage(toSend);
+        } else if (!isRestoring) {
+          if (pendingMsg) {
+            const toSend = pendingMsg;
+            pendingMsg = null;
+            localWorker.postMessage(toSend);
+          }
+          releaseHeldRequests();
         }
       }
-      if (
-        workerMsg.id === RESTORE_REQUEST_ID &&
-        this._heldRequests &&
-        this.localBackendWorker === localWorker
-      ) {
-        const held = this._heldRequests;
-        this._heldRequests = null;
-        for (const request of held) {
-          localWorker.postMessage(request);
-        }
+      if (workerMsg.id === RESTORE_REQUEST_ID) {
+        releaseHeldRequests();
       }
       sharedPort.postMessage({ type: '__from-worker', msg: workerMsg });
     };

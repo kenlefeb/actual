@@ -65,6 +65,9 @@ describe('WorkerBridge takeover', () => {
       expect.objectContaining({ id: '__restore-budget', name: 'load-budget' }),
     );
     expect(worker.posted).toHaveLength(2);
+    // The backend repeats `connect` until the client answers
+    worker.onmessage?.({ data: { type: 'connect' } } as MessageEvent);
+    expect(worker.posted).toHaveLength(2);
 
     worker.onmessage?.({
       data: { type: 'reply', id: '__restore-budget', result: {} },
@@ -76,19 +79,30 @@ describe('WorkerBridge takeover', () => {
     expect(worker.posted[3]).toEqual({ id: 'q2', name: 'query' });
   });
 
-  it('forwards requests at once when there is nothing to restore', () => {
+  // The backend listens for requests only once it has connected, so a
+  // request re-sent to a new leader before then would be lost (sc-3116)
+  it('holds forwarded requests until the backend connects when there is nothing to restore', () => {
     const { fromCoordinator } = createBridge();
     fromCoordinator({
       type: '__become-leader',
       initMsg: { type: 'init' },
       budgetToRestore: null,
-      pendingMsg: null,
+      pendingMsg: { id: 'p1', name: 'load-budget' },
     });
     const worker = FakeBackendWorker.created[0];
     fromCoordinator({ type: '__to-worker', msg: { id: 'q1', name: 'query' } });
+    expect(worker.posted).toEqual([{ type: 'init' }]);
+
+    worker.onmessage?.({ data: { type: 'connect' } } as MessageEvent);
+    // The backend repeats `connect` until the client answers
+    worker.onmessage?.({ data: { type: 'connect' } } as MessageEvent);
     expect(worker.posted).toEqual([
       { type: 'init' },
+      { id: 'p1', name: 'load-budget' },
       { id: 'q1', name: 'query' },
     ]);
+
+    fromCoordinator({ type: '__to-worker', msg: { id: 'q2', name: 'query' } });
+    expect(worker.posted[3]).toEqual({ id: 'q2', name: 'query' });
   });
 });

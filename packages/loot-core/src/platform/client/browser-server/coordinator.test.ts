@@ -1385,7 +1385,7 @@ describe('SharedWorker coordinator', () => {
       vi.advanceTimersByTime(10_000);
     }
 
-    it('re-sends a quick reload\'s request to the reloaded tab once it leads', () => {
+    it("re-sends a quick reload's request to the reloaded tab once it leads", () => {
       const dead = setupBudgetGroup(coordinator, 'budget-1');
 
       // The reloaded page arrives while the dead tab's backend looks alive
@@ -1424,7 +1424,7 @@ describe('SharedWorker coordinator', () => {
       });
     });
 
-    it('re-sends a follower\'s request to the follower promoted in its place', () => {
+    it("re-sends a follower's request to the follower promoted in its place", () => {
       const dead = setupBudgetGroup(coordinator, 'budget-1');
       const follower = connectTab(coordinator);
       sendInit(follower);
@@ -1451,7 +1451,7 @@ describe('SharedWorker coordinator', () => {
       );
     });
 
-    it('re-sends an unassigned tab\'s request to another running budget', () => {
+    it("re-sends an unassigned tab's request to another running budget", () => {
       const dead = setupBudgetGroup(coordinator, 'budget-1');
       const other = connectTab(coordinator);
       sendInit(other);
@@ -1473,6 +1473,72 @@ describe('SharedWorker coordinator', () => {
       expect(other.postMessage).toHaveBeenCalledWith({
         type: '__to-worker',
         msg: request,
+      });
+    });
+
+    it('fails a stranded write instead of running it twice', () => {
+      setupBudgetGroup(coordinator, 'budget-1');
+      const follower = connectTab(coordinator);
+      sendInit(follower);
+      sendMsg(follower, {
+        id: 'lb-5',
+        name: 'load-budget',
+        args: { id: 'budget-1' },
+      });
+      // The dead backend may already have applied this before it froze
+      const write = {
+        id: 't-1',
+        name: 'budget/transfer-category',
+        args: { month: '2026-11', amount: 5000 },
+      };
+      sendMsg(follower, write);
+      follower.postMessage.mockClear();
+
+      expireDeadTabs(follower);
+
+      expect(follower.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'error', id: 't-1' }),
+      );
+      expect(follower.postMessage).not.toHaveBeenCalledWith({
+        type: '__to-worker',
+        msg: write,
+      });
+    });
+
+    it("sends a second waiting tab's request to the new leader while it boots", () => {
+      setupBudgetGroup(coordinator, 'budget-1');
+      const first = connectTab(coordinator);
+      sendInit(first);
+      const second = connectTab(coordinator);
+      sendInit(second);
+      const firstRequest = { id: 'gp-a', name: 'load-global-prefs' };
+      const secondRequest = { id: 'gp-b', name: 'load-global-prefs' };
+      sendMsg(first, firstRequest);
+      sendMsg(second, secondRequest);
+      first.postMessage.mockClear();
+      second.postMessage.mockClear();
+
+      expireDeadTabs(first, second);
+
+      expect(coordinator.getState().portToBudget.get(first)).toBe('__lobby');
+      expect(first.postMessage).toHaveBeenCalledWith({
+        type: '__to-worker',
+        msg: secondRequest,
+      });
+      expect(second.postMessage).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'error' }),
+      );
+
+      // The new backend's reply reaches the second tab
+      simulateWorkerConnect(first);
+      sendMsg(first, {
+        type: '__from-worker',
+        msg: { type: 'reply', id: 'gp-b', result: {} },
+      });
+      expect(second.postMessage).toHaveBeenCalledWith({
+        type: 'reply',
+        id: 'gp-b',
+        result: {},
       });
     });
 

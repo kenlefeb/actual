@@ -32,6 +32,14 @@ type BudgetGroup = {
 
 type Request = { port: CoordinatorPort; msg: Record<string, unknown> };
 
+const RESENDABLE_REQUESTS = new Set([
+  'load-global-prefs',
+  'load-prefs',
+  'get-budgets',
+  'load-budget',
+  'query',
+]);
+
 type CoordinatorOptions = {
   enableConsoleForwarding?: boolean;
 };
@@ -169,13 +177,24 @@ export function createCoordinator({
     return orphaned;
   }
 
-  // Re-sends each request to whichever leader now serves its tab, or fails
-  // it at once when none does, so the tab never waits for a reply forever.
-  // shortcut: a request the old backend ran just before its tab died runs
-  // again; add a per-request acknowledgement if duplicate writes show up.
+  // Reads the waiting tabs need to start up. The dead backend may already
+  // have run any other request, so running it again could apply a change
+  // twice; those fail instead.
+  function isSafeToResend(name: unknown) {
+    return (
+      typeof name === 'string' &&
+      (RESENDABLE_REQUESTS.has(name) || name.startsWith('get-'))
+    );
+  }
+
+  // Re-sends each safe request to whichever leader now serves its tab, or
+  // fails it at once, so the tab never waits for a reply forever. A lobby
+  // still booting can take it: its tab's bridge holds it until connected.
   function resendRequests(requests: Request[]) {
     for (const { port, msg } of requests) {
-      const target = findTargetGroup(port);
+      const target = isSafeToResend(msg.name)
+        ? (findTargetGroup(port) ?? budgetGroups.get('__lobby'))
+        : null;
       if (target) {
         trackRequest(target, port, msg);
         target.leaderPort.postMessage({ type: '__to-worker', msg });

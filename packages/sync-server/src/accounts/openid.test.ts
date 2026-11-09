@@ -230,6 +230,27 @@ describe('first sign-in must match the configured admin subject', () => {
       expect(lines[0]).not.toMatch(/[\r\n]/);
       expect(lines[0]).toContain('forged');
     });
+
+    // fork: sc-3102
+    it('escapes backslashes so a subject cannot forge an escape sequence', async () => {
+      provider.userinfo.mockResolvedValue({
+        sub: 'a\\u000a|b\n',
+        preferred_username: '',
+      });
+      await signIn();
+      expect(logged()[0]).toContain('a\\\\u000a|b\\u000a');
+    });
+
+    it('escapes format characters such as right-to-left override', async () => {
+      provider.userinfo.mockResolvedValue({
+        sub: 'a‮b​c',
+        preferred_username: '',
+      });
+      await signIn();
+      const line = logged()[0];
+      expect(line).toContain('a\\u202eb\\u200bc');
+      expect(line).not.toMatch(/[‮​]/);
+    });
   });
 
   it('a non-matching first sign-in is refused even when users are created at login', async () => {

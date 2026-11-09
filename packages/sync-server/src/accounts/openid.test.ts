@@ -241,6 +241,15 @@ describe('first sign-in must match the configured admin subject', () => {
       expect(logged()[0]).toContain('a\\\\u000a|b\\u000a');
     });
 
+    it('escapes format characters outside the BMP as a surrogate pair', async () => {
+      provider.userinfo.mockResolvedValue({
+        sub: 'a\u{E0001}b',
+        preferred_username: '',
+      });
+      await signIn();
+      expect(logged()[0]).toContain('a\\udb40\\udc01b');
+    });
+
     it('escapes format characters such as right-to-left override', async () => {
       provider.userinfo.mockResolvedValue({
         sub: 'a‮b​c',

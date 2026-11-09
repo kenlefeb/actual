@@ -235,10 +235,15 @@ export async function loginWithOpenIdSetup(
 // fork: sc-3068, provider strings (the subject) are escaped so a CR/LF in them
 // can't forge log lines
 function logRefusal(reason: string) {
-  const safe = reason.replace(
-    /[\p{Cc}\u2028\u2029]/gu,
-    c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`,
-  );
+  // fork: sc-3102, backslashes first so an escape in the output is always ours
+  const safe = reason
+    .replace(/\\/g, '\\\\')
+    .replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, c =>
+      // one \uXXXX per UTF-16 unit, so every escape is exactly 4 hex digits
+      Array.from({ length: c.length }, (_, i) => c.charCodeAt(i))
+        .map(u => `\\u${u.toString(16).padStart(4, '0')}`)
+        .join(''),
+    );
   console.warn(`OpenID sign-in refused: ${safe}`);
 }
 

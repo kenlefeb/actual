@@ -68,6 +68,12 @@
   "transaction-attachment-add": {
     "skip": "No MCP tool yet; the read tool is sc-2526"
   },
+  "transaction-attachment-check": {
+    "skip": "Validate-only helper for the add form's pick; no MCP tool (sc-2622)"
+  },
+  "transaction-attachments-add-batch": {
+    "skip": "Attaches the documents held by the add form; no MCP tool yet, the read tool is sc-2526"
+  },
   "transaction-attachment-open": {
     "skip": "No MCP tool yet; the read tool is sc-2526"
   },

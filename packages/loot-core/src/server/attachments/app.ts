@@ -30,6 +30,15 @@ export type AttachmentAddResult =
   | { attachment: db.DbTransactionAttachment }
   | { error: AttachmentAddError; limitMB?: number };
 
+export type AttachmentCheckResult =
+  | { ok: true }
+  | { error: AttachmentAddError; limitMB?: number };
+
+export type AttachmentBatchResult = {
+  attachments: db.DbTransactionAttachment[];
+  failed: Array<{ name: string; error: AttachmentAddError; limitMB?: number }>;
+};
+
 export type AttachmentOpenResult =
   | { name: string; mime: string; data: Uint8Array }
   | {
@@ -42,6 +51,8 @@ export type AttachmentOpenResult =
 
 export type AttachmentsHandlers = {
   'transaction-attachment-add': typeof addAttachment;
+  'transaction-attachment-check': typeof checkAttachment;
+  'transaction-attachments-add-batch': typeof addAttachmentsBatch;
   'transaction-attachment-open': typeof openAttachment;
   'transaction-attachment-remove': typeof removeAttachment;
 };
@@ -50,6 +61,8 @@ export const app = createApp<AttachmentsHandlers>();
 // Not a mutator: the upload can take a while, so only the row write below
 // holds the mutation lock
 app.method('transaction-attachment-add', addAttachment);
+app.method('transaction-attachment-check', checkAttachment);
+app.method('transaction-attachments-add-batch', addAttachmentsBatch);
 app.method('transaction-attachment-open', openAttachment);
 app.method(
   'transaction-attachment-remove',
@@ -225,16 +238,16 @@ async function getStored(remote: Remote | null, id: string) {
   return stored;
 }
 
-async function addAttachment({
-  transactionId,
-  name,
-  data,
-}: {
-  transactionId: string;
-  name: string;
-  data: Uint8Array;
-}): Promise<AttachmentAddResult> {
-  const remote = await getRemote();
+// The checks every document passes before it is stored: sync server, type
+// by bytes, then the server's size limit (which needs /info, so offline this
+// reports 'upload-failed'). Shared by the check and both add handlers.
+async function validateAttachment(
+  remote: Remote | null,
+  data: Uint8Array,
+): Promise<
+  | { remote: Remote; mime: string }
+  | { error: AttachmentAddError; limitMB?: number }
+> {
   if (!remote) {
     return { error: 'needs-sync-server' };
   }
@@ -257,10 +270,35 @@ async function addAttachment({
   if (data.length > limitMB * MB) {
     return { error: 'too-large', limitMB };
   }
+  return { remote, mime };
+}
 
-  // A split's documents belong to its parent
-  const transaction = await db.getTransaction(transactionId);
-  const ownerId = transaction?.parent_id ?? transactionId;
+// Validate only: encrypts and uploads nothing, writes no row
+async function checkAttachment({
+  data,
+}: {
+  data: Uint8Array;
+}): Promise<AttachmentCheckResult> {
+  const checked = await validateAttachment(await getRemote(), data);
+  return 'error' in checked ? checked : { ok: true };
+}
+
+type StoredAttachment = {
+  row: db.DbTransactionAttachment;
+  stored: Uint8Array;
+};
+
+// Validates, encrypts and uploads one document. The row is not written yet.
+async function uploadAttachment(
+  remote: Remote | null,
+  ownerId: string,
+  name: string,
+  data: Uint8Array,
+): Promise<StoredAttachment | { error: AttachmentAddError; limitMB?: number }> {
+  const checked = await validateAttachment(remote, data);
+  if ('error' in checked) {
+    return checked;
+  }
 
   const { stored, encryptMeta } = await seal(
     data,
@@ -269,7 +307,7 @@ async function addAttachment({
   const id = uuidv4();
 
   const refused = await uploadAttachmentBlob(
-    remote,
+    checked.remote,
     id,
     stored,
     encryptMeta != null,
@@ -278,34 +316,128 @@ async function addAttachment({
     return refused;
   }
 
-  const row: db.DbTransactionAttachment = {
-    id,
-    transaction_id: ownerId,
-    name,
-    mime,
-    size: data.length,
-    sha256: await sha256(data),
-    encrypt_meta: encryptMeta,
-    created_at: new Date().toISOString(),
-    tombstone: 0,
+  return {
+    stored,
+    row: {
+      id,
+      transaction_id: ownerId,
+      name,
+      mime: checked.mime,
+      size: data.length,
+      sha256: await sha256(data),
+      encrypt_meta: encryptMeta,
+      created_at: new Date().toISOString(),
+      tombstone: 0,
+    },
   };
+}
+
+// A split's documents belong to its parent
+async function getOwnerId(transactionId: string) {
+  const transaction = await db.getTransaction(transactionId);
+  return transaction?.parent_id ?? transactionId;
+}
+
+// Inserts the rows in one undo step. If that fails the uploads are removed
+// and false is returned.
+async function insertAttachmentRows(
+  remote: Remote,
+  uploaded: StoredAttachment[],
+): Promise<boolean> {
   try {
     await runMutator(() =>
-      withUndo(() => db.insert('transaction_attachments', row)),
+      withUndo(async () => {
+        for (const { row } of uploaded) {
+          await db.insert('transaction_attachments', row);
+        }
+      }),
     );
   } catch (e) {
     logger.warn('Could not record the attachment; removing its upload', e);
     // If this fails too the blob is orphaned; server cleanup (sc-2525) removes it
-    await attachmentRequest(remote, 'delete-attachment', id, {
-      method: 'POST',
-    }).catch(() => undefined);
-    return { error: 'upload-failed' };
+    await Promise.all(
+      uploaded.map(({ row }) =>
+        attachmentRequest(remote, 'delete-attachment', row.id, {
+          method: 'POST',
+        }).catch(() => undefined),
+      ),
+    );
+    return false;
   }
 
-  await writeCache(id, stored).catch(e =>
-    logger.warn('Could not cache attachment', e),
+  await Promise.all(
+    uploaded.map(({ row, stored }) =>
+      writeCache(row.id, stored).catch(e =>
+        logger.warn('Could not cache attachment', e),
+      ),
+    ),
   );
-  return { attachment: row };
+  return true;
+}
+
+async function addAttachment({
+  transactionId,
+  name,
+  data,
+}: {
+  transactionId: string;
+  name: string;
+  data: Uint8Array;
+}): Promise<AttachmentAddResult> {
+  const remote = await getRemote();
+  const uploaded = await uploadAttachment(
+    remote,
+    await getOwnerId(transactionId),
+    name,
+    data,
+  );
+  if ('error' in uploaded) {
+    return uploaded;
+  }
+  if (!remote || !(await insertAttachmentRows(remote, [uploaded]))) {
+    return { error: 'upload-failed' };
+  }
+  return { attachment: uploaded.row };
+}
+
+// Uploads each document in turn and records all the rows in one undo step. A
+// document that fails is left out and reported; the others are still added.
+async function addAttachmentsBatch({
+  transactionId,
+  files,
+}: {
+  transactionId: string;
+  files: Array<{ name: string; data: Uint8Array }>;
+}): Promise<AttachmentBatchResult> {
+  const result: AttachmentBatchResult = { attachments: [], failed: [] };
+  const remote = await getRemote();
+  const ownerId = await getOwnerId(transactionId);
+  const uploaded: StoredAttachment[] = [];
+  const uploadedNames: string[] = [];
+
+  for (const { name, data } of files) {
+    const one = await uploadAttachment(remote, ownerId, name, data);
+    if ('error' in one) {
+      result.failed.push({ name, ...one });
+    } else {
+      uploaded.push(one);
+      uploadedNames.push(name);
+    }
+  }
+
+  if (remote && uploaded.length > 0) {
+    if (await insertAttachmentRows(remote, uploaded)) {
+      result.attachments = uploaded.map(({ row }) => row);
+    } else {
+      result.failed.push(
+        ...uploadedNames.map(name => ({
+          name,
+          error: 'upload-failed' as const,
+        })),
+      );
+    }
+  }
+  return result;
 }
 
 async function openAttachment({

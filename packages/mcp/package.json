@@ -1,6 +1,6 @@
 {
   "name": "@actual-app/mcp",
-  "version": "26.10.1-alpha.31",
+  "version": "26.10.1-alpha.32",
   "private": true,
   "description": "MCP server for Actual Budget (fork): reads by default, opt-in writes",
   "license": "MIT",

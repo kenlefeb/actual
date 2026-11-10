@@ -1,6 +1,6 @@
 import type { ListBoxItemRenderProps } from 'react-aria-components';
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -268,5 +268,113 @@ describe('Notes line of a phone row', () => {
     expect(
       screen.getByRole('link', { name: 'https://example.com' }),
     ).toHaveAttribute('href', 'https://example.com');
+  });
+});
+
+describe('Pressed feedback and name of a row with notes', () => {
+  const notes = 'Hotel #vacation https://example.com';
+  const rowButton = () => screen.getByText('Payee').closest('button')!;
+  const tint = { transform: 'translateY(1px)' };
+  const user = userEvent.setup();
+
+  it.each([
+    ['a normal row', {}],
+    ['a reconciling row', { isReconciling: true }],
+  ])(
+    'tints the row while the notes line is pressed in %s',
+    async (_, props) => {
+      renderRow('t1', '2026-11-05', { notes }, vi.fn(), {
+        onNotesTagClick: vi.fn(),
+        ...props,
+      });
+      const line = screen.getByText(/Hotel/);
+
+      expect(rowButton()).not.toHaveStyle(tint);
+      await user.pointer({ keys: '[MouseLeft>]', target: line });
+      expect(rowButton()).toHaveStyle(tint);
+      await user.pointer({ keys: '[/MouseLeft]', target: line });
+      expect(rowButton()).not.toHaveStyle(tint);
+    },
+  );
+
+  it('clears the tint when the press is cancelled', async () => {
+    renderRow('t1', '2026-11-05', { notes }, vi.fn(), {
+      onNotesTagClick: vi.fn(),
+    });
+    const line = screen.getByText(/Hotel/);
+
+    await userEvent.pointer({ keys: '[MouseLeft>]', target: line });
+    expect(rowButton()).toHaveStyle(tint);
+    fireEvent.pointerCancel(line);
+    expect(rowButton()).not.toHaveStyle(tint);
+  });
+
+  it('clears the tint when the window loses focus', async () => {
+    renderRow('t1', '2026-11-05', { notes }, vi.fn(), {
+      onNotesTagClick: vi.fn(),
+    });
+
+    await userEvent.pointer({
+      keys: '[MouseLeft>]',
+      target: screen.getByText(/Hotel/),
+    });
+    expect(rowButton()).toHaveStyle(tint);
+    fireEvent.blur(window);
+    expect(rowButton()).not.toHaveStyle(tint);
+  });
+
+  it('shows no row tint while a tag is pressed', async () => {
+    renderRow('t1', '2026-11-05', { notes }, vi.fn(), {
+      onNotesTagClick: vi.fn(),
+    });
+
+    await userEvent.pointer({
+      keys: '[MouseLeft>]',
+      target: screen.getByRole('button', { name: 'Filter by #vacation' }),
+    });
+
+    expect(rowButton()).not.toHaveStyle(tint);
+  });
+
+  it.each([
+    ['a link', () => screen.getByRole('link', { name: 'https://example.com' })],
+    [
+      'a tag',
+      () => screen.getByRole('button', { name: 'Filter by #vacation' }),
+    ],
+  ])('does not hold the tint when a press on %s never ends', async (_, get) => {
+    const onPress = vi.fn();
+    renderRow('t1', '2026-11-05', { notes }, onPress, {
+      onNotesTagClick: vi.fn(),
+    });
+
+    await userEvent.pointer({ keys: '[MouseLeft>]', target: get() });
+    expect(rowButton()).not.toHaveStyle(tint);
+
+    await userEvent.click(screen.getByText('Payee'));
+    expect(onPress).toHaveBeenCalledTimes(1);
+    expect(rowButton()).not.toHaveStyle(tint);
+  });
+
+  it('includes the notes in the name of the row button', () => {
+    renderRow('t1', '2026-11-05', { notes }, vi.fn(), {
+      onNotesTagClick: vi.fn(),
+    });
+
+    const button = screen.getByRole('button', {
+      name: /Payee.*Hotel #vacation/,
+    });
+    expect(button).toBe(rowButton());
+    expect(button.querySelector('a, [role="button"]')).toBeNull();
+    expect(
+      screen.getByRole('link', { name: 'https://example.com' }),
+    ).toBeVisible();
+  });
+
+  it('leaves the name of a row without notes unchanged', () => {
+    renderRow('t1', '2026-11-05');
+
+    expect(rowButton()).not.toHaveAttribute('aria-labelledby');
+    expect(rowButton()).toHaveAccessibleName(/Payee/);
   });
 });

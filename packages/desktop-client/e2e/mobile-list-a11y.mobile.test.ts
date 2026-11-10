@@ -73,6 +73,10 @@ test.describe('Mobile transaction list accessibility', () => {
     await expect(
       list.getByRole('button', { name: 'Filter by #vacation', exact: true }),
     ).toBeVisible();
+    // The row's button is named with its notes, which sit outside it
+    await expect(
+      list.getByRole('button', { name: /Kroger.*Hotel.*vacation/ }),
+    ).toBeVisible();
     expect(await checkList(page)).toEqual({
       flaggedButtons: [],
       nestedControls: [],
@@ -85,6 +89,10 @@ test.describe('Mobile transaction list accessibility', () => {
     const list = page.getByLabel('Transaction list');
     await expect(
       list.getByRole('button', { name: 'Filter by #vacation', exact: true }),
+    ).toBeVisible();
+    // The row's button is named with its notes, which sit outside it
+    await expect(
+      list.getByRole('button', { name: /Kroger.*Hotel.*vacation/ }),
     ).toBeVisible();
     expect(await checkList(page)).toEqual({
       flaggedButtons: [],

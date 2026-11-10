@@ -1,4 +1,10 @@
-import React, { useLayoutEffect, useRef, useState } from 'react';
+import React, {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import type { CSSProperties, SyntheticEvent } from 'react';
 import { mergeProps } from 'react-aria';
 import type { ListBoxItemRenderProps } from 'react-aria-components';
@@ -152,6 +158,20 @@ export function TransactionListItem({
   // The notes line lives outside the row's button (a tag or link inside a
   // button is a nested interactive control). The button keeps an invisible
   // spacer of the same size, and the real line is laid over it.
+  const buttonId = useId();
+  const notesId = useId();
+  // The notes line is a press target of its own, so the row's pressed look is
+  // driven from here while it is held. Presses that start on a tag or link
+  // never reach it (ignoreInteractiveTargets).
+  const [isNotesPressed, setIsNotesPressed] = useState(false);
+  useEffect(() => {
+    if (!isNotesPressed) {
+      return;
+    }
+    const clear = () => setIsNotesPressed(false);
+    window.addEventListener('blur', clear);
+    return () => window.removeEventListener('blur', clear);
+  }, [isNotesPressed]);
   const rowRef = useRef<HTMLDivElement>(null);
   const spacerRef = useRef<HTMLDivElement>(null);
   const [notesBox, setNotesBox] = useState<{
@@ -275,8 +295,20 @@ export function TransactionListItem({
       <PressResponder {...mergeProps(pressProps, longPressProps)}>
         <Button
           {...itemProps}
+          id={buttonId}
+          // Names the button with its own content and the notes line, which
+          // sits outside it. Only when there are notes.
+          aria-labelledby={
+            displayedNotes ? `${buttonId} ${notesId}` : undefined
+          }
           style={{
             userSelect: 'none',
+            // The button's own pressed look, for a press on the notes line
+            ...(isNotesPressed && {
+              transform: 'translateY(1px)',
+              boxShadow: `0 1px 4px 0 ${theme.buttonNormalShadow}`,
+              transition: 'none',
+            }),
             height: '100%',
             flex: 1,
             borderRadius: 0,
@@ -442,7 +474,14 @@ export function TransactionListItem({
       </PressResponder>
       {displayedNotes && (
         <div
-          {...ignoreInteractiveTargets(mergeProps(pressProps, longPressProps))}
+          {...ignoreInteractiveTargets(
+            mergeProps(pressProps, longPressProps, {
+              onPointerDown: () => setIsNotesPressed(true),
+              onPointerUp: () => setIsNotesPressed(false),
+              onPointerCancel: () => setIsNotesPressed(false),
+              onPointerLeave: () => setIsNotesPressed(false),
+            }),
+          )}
           style={{
             position: 'absolute',
             top: notesBox?.top,
@@ -452,7 +491,7 @@ export function TransactionListItem({
             userSelect: 'none',
           }}
         >
-          <TextOneLine style={notesStyle}>
+          <TextOneLine id={notesId} style={notesStyle}>
             <NotesTagFormatter
               notes={displayedNotes}
               onNotesTagClick={onNotesTagClick}

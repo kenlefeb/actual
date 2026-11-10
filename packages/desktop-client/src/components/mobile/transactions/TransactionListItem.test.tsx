@@ -167,3 +167,88 @@ describe('Tapping a tag in a phone row', () => {
     expect(screen.queryByRole('button', { name: /Filter by/ })).toBeNull();
   });
 });
+
+describe('Notes line of a phone row', () => {
+  const notes = 'Hotel #vacation https://example.com';
+
+  it.each([
+    ['a normal row', {}],
+    ['a reconciling row', { isReconciling: true }],
+  ])('keeps the tag and the link out of the row button in %s', (_, props) => {
+    renderRow('t1', '2026-11-05', { notes }, vi.fn(), {
+      onNotesTagClick: vi.fn(),
+      ...props,
+    });
+
+    const tag = screen.getByRole('button', { name: 'Filter by #vacation' });
+    const link = screen.getByRole('link', { name: 'https://example.com' });
+
+    expect(tag.closest('button')).toBeNull();
+    expect(link.closest('button')).toBeNull();
+  });
+
+  it('keeps the payee and the amount in the row button', () => {
+    renderRow('t1', '2026-11-05', { notes }, vi.fn(), {
+      onNotesTagClick: vi.fn(),
+    });
+
+    const rowButton = screen.getByText('Payee').closest('button');
+    expect(rowButton).not.toBeNull();
+    expect(rowButton).toHaveTextContent('1.00');
+  });
+
+  it('opens the transaction when the notes line is tapped away from a tag', async () => {
+    const onPress = vi.fn();
+    renderRow('t1', '2026-11-05', { notes }, onPress, {
+      onNotesTagClick: vi.fn(),
+    });
+
+    await userEvent.click(screen.getByText(/Hotel/));
+
+    expect(onPress).toHaveBeenCalledTimes(1);
+  });
+
+  it('selects the transaction when the notes line is long-pressed', async () => {
+    const onLongPress = vi.fn();
+    renderRow('t1', '2026-11-05', { notes }, vi.fn(), {
+      onNotesTagClick: vi.fn(),
+      onLongPress,
+    });
+
+    await userEvent.pointer({
+      keys: '[MouseLeft>]',
+      target: screen.getByText(/Hotel/),
+    });
+    await new Promise(resolve => setTimeout(resolve, 700));
+
+    expect(onLongPress).toHaveBeenCalledTimes(1);
+  });
+
+  it('does nothing when a tag is long-pressed', async () => {
+    const onPress = vi.fn();
+    const onLongPress = vi.fn();
+    const onNotesTagClick = vi.fn();
+    renderRow('t1', '2026-11-05', { notes }, onPress, {
+      onNotesTagClick,
+      onLongPress,
+    });
+
+    const tag = screen.getByRole('button', { name: 'Filter by #vacation' });
+    await userEvent.pointer({ keys: '[MouseLeft>]', target: tag });
+    await new Promise(resolve => setTimeout(resolve, 700));
+    await userEvent.pointer({ keys: '[/MouseLeft]', target: tag });
+
+    expect(onLongPress).not.toHaveBeenCalled();
+    expect(onPress).not.toHaveBeenCalled();
+  });
+
+  it('keeps the link a link', () => {
+    renderRow('t1', '2026-11-05', { notes }, vi.fn(), {
+      onNotesTagClick: vi.fn(),
+    });
+
+    expect(
+      screen.getByRole('link', { name: 'https://example.com' }),
+    ).toHaveAttribute('href', 'https://example.com');
+  });
+});

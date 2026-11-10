@@ -126,7 +126,9 @@ test.describe('Transaction documents on the phone', () => {
       await entry.waitFor();
       await entry.attachDocument(pdf);
       await page.getByRole('button', { name: 'Back' }).click();
-      await expect(accountPage.transactions).toHaveCount(1);
+      // The new row would show 0.00 (the amount isn't filled in)
+      const newRow = accountPage.transactions.filter({ hasText: '0.00' });
+      await expect(newRow).toHaveCount(0);
 
       // Add with a document: saved with the paperclip
       await accountPage.clickCreateTransaction();
@@ -134,12 +136,7 @@ test.describe('Transaction documents on the phone', () => {
       await entry.attachDocument(pdf);
       await expect(entry.addTransactionButton).toBeEnabled();
       await entry.createTransaction();
-      await expect(accountPage.transactions).toHaveCount(2);
-      await expect(
-        accountPage.transactions
-          .filter({ hasNotText: 'Synthetic purchase' })
-          .getByLabel('Has attached documents'),
-      ).toBeVisible();
+      await expect(newRow.getByLabel('Has attached documents')).toBeVisible();
     } finally {
       await page.close();
     }

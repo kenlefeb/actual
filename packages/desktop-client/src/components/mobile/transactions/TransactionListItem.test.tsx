@@ -242,6 +242,19 @@ describe('Notes line of a phone row', () => {
     expect(onPress).not.toHaveBeenCalled();
   });
 
+  it('does not open the transaction when a link in the notes is tapped', async () => {
+    const onPress = vi.fn();
+    renderRow('t1', '2026-11-05', { notes }, onPress, {
+      onNotesTagClick: vi.fn(),
+    });
+
+    await userEvent.click(
+      screen.getByRole('link', { name: 'https://example.com' }),
+    );
+
+    expect(onPress).not.toHaveBeenCalled();
+  });
+
   it('keeps the link a link', () => {
     renderRow('t1', '2026-11-05', { notes }, vi.fn(), {
       onNotesTagClick: vi.fn(),

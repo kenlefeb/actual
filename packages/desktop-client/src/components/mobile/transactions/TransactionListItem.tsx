@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
+import type { SyntheticEvent,CSSProperties } from 'react';
 import { mergeProps } from 'react-aria';
 import type { ListBoxItemRenderProps } from 'react-aria-components';
 import { useTranslation } from 'react-i18next';
@@ -47,6 +47,30 @@ import { useSelector } from '#redux';
 import { lookupName, Status } from './TransactionEdit';
 
 export const ROW_HEIGHT = 60;
+
+// A press that starts on a tag or a link belongs to that control. If it
+// reached the shared press state, a link that opens a new window would leave
+// the press unfinished and swallow the next tap on the row.
+function ignoreInteractiveTargets<T extends object>(props: T): T {
+  return Object.fromEntries(
+    Object.entries(props).map(([key, value]) =>
+      typeof value === 'function'
+        ? [
+            key,
+            (event: SyntheticEvent, ...rest: unknown[]) => {
+              if (
+                event.target instanceof Element &&
+                event.target.closest('a, [data-note-interactive]')
+              ) {
+                return;
+              }
+              return (value as (...args: unknown[]) => unknown)(event, ...rest);
+            },
+          ]
+        : [key, value],
+    ),
+  ) as T;
+}
 
 const getTextStyle = ({
   isPreview,
@@ -418,7 +442,7 @@ export function TransactionListItem({
       </PressResponder>
       {displayedNotes && (
         <div
-          {...mergeProps(pressProps, longPressProps)}
+          {...ignoreInteractiveTargets(mergeProps(pressProps, longPressProps))}
           style={{
             position: 'absolute',
             top: notesBox?.top,

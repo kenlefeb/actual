@@ -536,4 +536,93 @@ describe('transaction-attachments-add-batch', () => {
     ]);
     expect(attachmentServer.blobs.size).toBe(0);
   });
+
+  it('leaves no rows and no blobs when the second row write fails', async () => {
+    const bad = [
+      { name: 'a-receipt.pdf', data: PDF },
+      { name: undefined as unknown as string, data: JPEG },
+    ];
+
+    const result = await addBatch({ transactionId, files: bad });
+
+    expect(result.attachments).toEqual([]);
+    expect(await rows(transactionId)).toEqual([]);
+    expect(attachmentServer.blobs.size).toBe(0);
+  });
+
+  it('deletes every blob already uploaded when a later step throws', async () => {
+    const digest = crypto.subtle.digest.bind(crypto.subtle);
+    let calls = 0;
+    vi.spyOn(crypto.subtle, 'digest').mockImplementation((alg, data) => {
+      calls++;
+      return calls === 2
+        ? Promise.reject(new Error('boom'))
+        : digest(alg, data);
+    });
+    onTestFinished(() => vi.restoreAllMocks());
+
+    const result = await addBatch({ transactionId, files });
+
+    expect(result.attachments).toEqual([]);
+    expect(result.failed.map(f => f.name)).toEqual([
+      'a-receipt.pdf',
+      'b-photo.jpg',
+    ]);
+    expect(await rows(transactionId)).toEqual([]);
+    expect(attachmentServer.blobs.size).toBe(0);
+  });
+
+  it('refuses more than 5 files without uploading anything', async () => {
+    const six = Array.from({ length: 6 }, (_, i) => ({
+      name: `r${i}.pdf`,
+      data: PDF,
+    }));
+
+    expect(await addBatch({ transactionId, files: six })).toEqual({
+      attachments: [],
+      failed: [],
+      error: 'too-many-files',
+    });
+    expect(attachmentServer.uploads).toEqual([]);
+    expect(await rows(transactionId)).toEqual([]);
+  });
+
+  it('reads the size limit once per batch', async () => {
+    const spy = vi.spyOn(attachmentServer, 'fetch');
+    onTestFinished(() => spy.mockRestore());
+
+    await addBatch({ transactionId, files });
+
+    const infoCalls = spy.mock.calls.filter(([url]) =>
+      url.endsWith('/info'),
+    );
+    expect(infoCalls).toHaveLength(1);
+  });
+
+  it('reports a wrong-type file and still adds the others', async () => {
+    const docx = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x14, 0, 6, 0]);
+
+    const result = await addBatch({
+      transactionId,
+      files: [{ name: 'invoice.docx', data: docx }, files[0]],
+    });
+
+    expect(result.failed).toEqual([
+      { name: 'invoice.docx', error: 'unsupported-type' },
+    ]);
+    expect(result.attachments).toHaveLength(1);
+  });
+
+  it('reports an oversize file and still adds the others', async () => {
+    const result = await addBatch({
+      transactionId,
+      files: [{ name: 'big.pdf', data: pdfOfSize(11 * MB) }, files[0]],
+    });
+
+    expect(result.failed).toEqual([
+      { name: 'big.pdf', error: 'too-large', limitMB: 10 },
+    ]);
+    expect(result.attachments).toHaveLength(1);
+  });
 });
+

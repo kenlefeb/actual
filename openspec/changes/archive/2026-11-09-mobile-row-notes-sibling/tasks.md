@@ -19,4 +19,4 @@ Test-first: write each test, run it and see it fail before the code (record the 
 ## 4. Checks and release (sc-3070)
 
 - [x] 4.1 Run `yarn lint:fix`, `yarn typecheck`, `yarn test` and `yarn generate:i18n`.
-- [ ] 4.2 Add a release note in `upcoming-release-notes/`; archive the change after the PR merges. The version bump and fork news stay a release-time step per AGENTS.md "Private customized build versions".
+- [x] 4.2 Add a release note in `upcoming-release-notes/`; archive the change after the PR merges. The version bump and fork news stay a release-time step per AGENTS.md "Private customized build versions".

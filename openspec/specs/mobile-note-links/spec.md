@@ -42,7 +42,7 @@ On the mobile transaction editor, a transaction's notes SHALL appear once. While
 - **THEN** the "Add a note (optional)" textbox is shown
 
 ### Requirement: Tap the formatted notes to edit
-Tapping the formatted notes outside a link or tag SHALL replace them with the Notes textbox, focused, holding the unchanged note. Tapping a web link, a file-path link or a tag SHALL run that element's own action, if it has one, and SHALL NOT start editing. In a transaction list a tag's own action is to filter that list (see "Tapping a tag filters the list"); in the transaction editor a tag has no action. Leaving the textbox SHALL show the formatted notes again with the saved value.
+Tapping the formatted notes outside a link or tag SHALL replace them with the Notes textbox, focused, holding the unchanged note. Tapping a web link, a file-path link or a tag SHALL run that element's own action, if it has one, and SHALL NOT start editing. Leaving the textbox SHALL show the formatted notes again with the saved value.
 
 #### Scenario: Tap to edit
 - **WHEN** a user taps the formatted notes away from any link or tag
@@ -57,7 +57,7 @@ Tapping the formatted notes outside a link or tag SHALL replace them with the No
 #### Scenario: Tap a tag in the transaction editor
 - **WHEN** the notes contain a tag and a user taps it in the formatted view in the mobile transaction editor
 - **THEN** the Notes textbox is not shown and the notes stay formatted
-- **AND** nothing else happens (a known gap: the editor does not filter, so unsaved edits are never lost)
+- **AND** nothing else happens (a decision: the editor tag is inert, because editing is unsaved state and filtering would leave the editor)
 
 #### Scenario: Tap a file-path link in the app
 - **WHEN** the notes contain a file path and a user taps it in the desktop app (Electron) on a narrow screen
@@ -100,7 +100,12 @@ The formatted notes SHALL be a group labeled as the notes, reachable by keyboard
 - **AND** a link inside it is still announced as a link
 
 ### Requirement: Tapping a tag filters the list
-Tapping a tag in a transaction's notes in a transaction list SHALL filter the list the user is in, whether all accounts or a single account, to transactions whose notes have that tag (`notes hasTags '#tag'`, as on desktop). The active tag SHALL show as a removable "#tag x" chip above the list. On mobile, removing the chip SHALL clear the tag filter and a second tag SHALL replace the first; on desktop each clicked tag SHALL be added to the register as its own removable filter pill.
+Tapping a tag in a transaction's notes in a transaction list SHALL filter the list the user is in to transactions whose notes have that tag (`notes hasTags '#tag'`, as on desktop), shown as a removable "#tag x" chip. In a mobile list row the notes line SHALL sit outside the row's button, so a tag or link is never nested inside another interactive control. A long press on a tag SHALL do nothing, by decision: the tag is its own tap target.
+
+#### Scenario: Chip, replace and desktop pills
+- **WHEN** a mobile list is filtered by a tag
+- **THEN** a removable "#tag x" chip shows above the list, removing it clears the filter and a second tag replaces the first
+- **AND** on desktop each clicked tag is added to the register as its own removable filter pill
 
 #### Scenario: Filter the all-accounts list
 - **WHEN** a user taps `#vacation` in a note in the mobile All accounts list
@@ -132,8 +137,31 @@ Tapping a tag in a transaction's notes in a transaction list SHALL filter the li
 - **WHEN** a single-account mobile list has any filter condition active (a tag, or a report drill-down, which single-account lists now also accept)
 - **THEN** it behaves like the All accounts list: split child transactions are listed, and scheduled previews and running balances are not shown
 
+#### Scenario: No nested interactive control in a list row
+- **WHEN** a mobile list row has notes containing a tag and a link
+- **THEN** the tag and the link are not descendants of the row's button
+- **AND** an axe check of the mobile list (All accounts and a single account) reports no `nested-interactive` node that contains a tag or a link
+- **AND** the row's own option wrapper around its button is upstream's structure and is not part of this requirement
+
+#### Scenario: Press the notes line
+- **WHEN** a user taps the notes line of a mobile list row away from any tag or link
+- **THEN** the transaction opens
+
+#### Scenario: Long press the row
+- **WHEN** a user long-presses a mobile list row, including its notes line, away from any tag
+- **THEN** multi-select starts with that transaction selected
+
+#### Scenario: Long press a tag
+- **WHEN** a user long-presses a tag in a mobile list row
+- **THEN** nothing is selected, no filter is applied and the transaction does not open
+
+#### Scenario: Tag stays keyboard and screen-reader reachable
+- **WHEN** a keyboard or screen-reader user reaches a tag in a mobile list row
+- **THEN** it is exposed as a button named "Filter by #tag" and activating it filters the list
+
 #### Scenario: Desktop parity
 - **WHEN** a user clicks a tag in a note in the desktop register (all accounts or one account)
 - **THEN** the register adds the `notes hasTags '#tag'` filter as a removable filter pill, and clicking the same tag again does not duplicate it
 - **AND** clicking a second tag adds a second pill, so both conditions apply (desktop stacks tags; only mobile replaces)
+- **AND** the tag is a separate control, not nested inside another button
 - **AND** a narrow desktop window uses the mobile behavior above

@@ -4,6 +4,7 @@ import { Button } from '@actual-app/components/button';
 import { SvgAttachment } from '@actual-app/components/icons/v1';
 import { styles } from '@actual-app/components/styles';
 import { Text } from '@actual-app/components/text';
+import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
 import { send } from '@actual-app/core/platform/client/connection';
 
@@ -15,6 +16,8 @@ import {
   useTransactionAttachments,
 } from '#components/transactions/TransactionAttachments';
 import type { AttachmentSummary } from '#components/transactions/TransactionAttachments';
+import { MAX_PENDING_ATTACHMENTS } from '#hooks/usePendingAttachments';
+import type { PendingAttachments } from '#hooks/usePendingAttachments';
 import { useUndo } from '#hooks/useUndo';
 import { pushModal } from '#modals/modalsSlice';
 import { addNotification } from '#notifications/notificationsSlice';
@@ -130,6 +133,86 @@ function AttachmentsSectionInner({
           <SvgAttachment style={{ width: 13, height: 13 }} />
           <Trans>Attach document</Trans>
         </Button>
+        {fileInput}
+      </View>
+    </View>
+  );
+}
+
+type PendingAttachmentsSectionProps = {
+  // Owned by TransactionEdit, since this section unmounts when the screen closes
+  pending: PendingAttachments;
+};
+
+// The Documents section of a transaction being added: documents are held on
+// the device until the transaction is saved, so there is nothing to open
+export function PendingAttachmentsSection({
+  pending,
+}: PendingAttachmentsSectionProps) {
+  const { t } = useTranslation();
+  const { attach, fileInput } = useAttachDocument(file => {
+    void pending.add(file);
+  });
+
+  return (
+    <View>
+      <FieldLabel title={t('Documents')} />
+      <View
+        style={{
+          gap: 6,
+          paddingLeft: styles.mobileEditingPadding,
+          paddingRight: styles.mobileEditingPadding,
+        }}
+      >
+        {pending.files.map((file, index) => (
+          <View
+            // Names can repeat, and the list only ever removes by position
+            key={`${index}-${file.name}`}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+          >
+            <Text
+              style={{
+                flex: 1,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {file.name}
+            </Text>
+            <Button
+              aria-label={t('Remove {{name}}', { name: file.name })}
+              style={touchButtonStyle}
+              onPress={() => pending.remove(index)}
+            >
+              <Trans>Remove</Trans>
+            </Button>
+          </View>
+        ))}
+        {pending.checking.map((name, index) => (
+          <Text
+            key={`${index}-${name}`}
+            style={{ color: theme.pageTextSubdued }}
+          >
+            <Trans>Checking {{ name }}…</Trans>
+          </Text>
+        ))}
+        <Button
+          style={{ ...touchButtonStyle, alignSelf: 'flex-start', gap: 6 }}
+          isDisabled={pending.isFull}
+          onPress={() => attach()}
+        >
+          <SvgAttachment style={{ width: 13, height: 13 }} />
+          <Trans>Attach document</Trans>
+        </Button>
+        {pending.isFull && (
+          <Text style={{ color: theme.pageTextSubdued }}>
+            <Trans>
+              The limit of {{ max: MAX_PENDING_ATTACHMENTS }} documents has been
+              reached.
+            </Trans>
+          </Text>
+        )}
         {fileInput}
       </View>
     </View>

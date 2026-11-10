@@ -99,6 +99,8 @@ import { useLocationPermission } from '#hooks/useLocationPermission';
 import { useNavigate } from '#hooks/useNavigate';
 import { useNearbyPayees } from '#hooks/useNearbyPayees';
 import { usePayees } from '#hooks/usePayees';
+import { usePendingAttachments } from '#hooks/usePendingAttachments';
+import type { PendingAttachments } from '#hooks/usePendingAttachments';
 import {
   SingleActiveEditFormProvider,
   useSingleActiveEditForm,
@@ -122,7 +124,10 @@ import {
 import { AmountInput } from './AmountInput';
 import { NotesField } from './NotesField';
 import { SplitAmountInput } from './SplitAmountInput';
-import { TransactionAttachmentsSection } from './TransactionAttachmentsSection';
+import {
+  PendingAttachmentsSection,
+  TransactionAttachmentsSection,
+} from './TransactionAttachmentsSection';
 
 function getFieldName(transactionId: TransactionEntity['id'], field: string) {
   return `${field}-${transactionId}`;
@@ -596,6 +601,7 @@ ChildTransactionEdit.displayName = 'ChildTransactionEdit';
 
 type TransactionEditInnerProps = {
   isAdding: boolean;
+  pendingAttachments: PendingAttachments;
   accounts: AccountEntity[];
   categories: CategoryEntity[];
   payees: PayeeEntity[];
@@ -620,6 +626,7 @@ type TransactionEditInnerProps = {
 const TransactionEditInner = memo<TransactionEditInnerProps>(
   function TransactionEditInner({
     isAdding,
+    pendingAttachments,
     accounts,
     categories,
     payees,
@@ -1545,7 +1552,9 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
             />
           </View>
 
-          {!isAdding && (
+          {isAdding ? (
+            <PendingAttachmentsSection pending={pendingAttachments} />
+          ) : (
             <TransactionAttachmentsSection transactionId={transaction.id} />
           )}
 
@@ -1622,6 +1631,8 @@ function TransactionEditUnconnected({
   }, [transactions]);
   const isAdding = useRef(false);
   const isDeleted = useRef(false);
+  // Held here, not in the Documents section, which unmounts when the screen closes
+  const pendingAttachments = usePendingAttachments();
   const [learnCategories = 'true'] = useSyncedPref('learn-categories');
   const isLearnCategoriesEnabled = String(learnCategories) === 'true';
 
@@ -1930,9 +1941,16 @@ function TransactionEditUnconnected({
         // The first one is always the "parent" and the only one we care
         // about
         dispatch(setLastTransaction({ transaction: newTransactions[0] }));
+        // After the save, on the realized parent id; a failure keeps the save
+        await pendingAttachments.attachTo(newTransactions[0].id);
       }
     },
-    [dispatch, fetchedTransactions, isLearnCategoriesEnabled],
+    [
+      dispatch,
+      fetchedTransactions,
+      isLearnCategoriesEnabled,
+      pendingAttachments,
+    ],
   );
 
   const onDelete = useCallback(
@@ -2127,6 +2145,7 @@ function TransactionEditUnconnected({
       <TransactionEditInner
         transactions={transactions}
         isAdding={isAdding.current}
+        pendingAttachments={pendingAttachments}
         categories={categories}
         accounts={accounts}
         payees={payees}

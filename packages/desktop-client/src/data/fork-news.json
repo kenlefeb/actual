@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "id": "fork-release-26.10.1-alpha.33",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.33 — Ken's Actual fork",
+      "date": "2026-11-10",
+      "version": "26.10.1-alpha.33",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.33.md",
+      "body": "**Unofficial fork prerelease.** Based on upstream Actual v26.11.0 (`1766241e3f4b3c578e424c4fa15f1eb83c0da17d`, October 29, 2026); not an official Actual Budget release.\n\nThis release improves how screen readers handle the notes on the phone's transaction list. The look should be unchanged. It has not been tested with a screen reader on a real phone.",
+      "details": "#### Features\n\n- None.\n\n#### Enhancements\n\n- None.\n\n#### Bugfixes\n\n- On the phone's transaction list, tags and links in a transaction's notes are no longer nested inside the row's button, so screen readers can reach them. The row looks the same.\n- Pressing the notes line of a transaction now shows the row's pressed look, and screen readers read the notes as part of the row.\n\n#### Maintenance\n\n- No upstream changes in this release; the fork stays on upstream Actual 26.11.0.\n\n#### Known limitations\n\n- Experimental.\n- Tapping a tag in the transaction editor does nothing.\n- Tags are not yet fully accessible on the phone.\n- OpenID sign-out needs the server's address in the identity provider's allowed sign-out addresses; without it the provider shows an error page, though you are already signed out of Actual.\n- Attached documents aren't included in a budget export, and removed documents stay on the sync server.\n- HEIC pictures are refused; use the Photos library or a JPEG or PNG copy.\n- Attaching a document needs a connection; there is no offline upload queue.\n- No iPhone acceptance test is claimed."
+    },
+    {
       "id": "fork-release-26.10.1-alpha.32",
       "type": "release",
       "title": "Release 26.10.1-alpha.32 — Ken's Actual fork",

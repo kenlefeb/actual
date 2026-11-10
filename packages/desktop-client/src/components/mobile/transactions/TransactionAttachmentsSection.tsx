@@ -4,6 +4,7 @@ import { Button } from '@actual-app/components/button';
 import { SvgAttachment } from '@actual-app/components/icons/v1';
 import { styles } from '@actual-app/components/styles';
 import { Text } from '@actual-app/components/text';
+import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
 import { send } from '@actual-app/core/platform/client/connection';
 
@@ -187,8 +188,17 @@ export function PendingAttachmentsSection({
             </Button>
           </View>
         ))}
+        {pending.checking.map((name, index) => (
+          <Text
+            key={`${index}-${name}`}
+            style={{ color: theme.pageTextSubdued }}
+          >
+            <Trans>Checking {{ name }}…</Trans>
+          </Text>
+        ))}
         <Button
           style={{ ...touchButtonStyle, alignSelf: 'flex-start', gap: 6 }}
+          isDisabled={pending.isFull}
           onPress={() => attach()}
         >
           <SvgAttachment style={{ width: 13, height: 13 }} />

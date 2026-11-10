@@ -301,6 +301,47 @@ describe('Phone transaction edit page', () => {
       expect(screen.queryByText('invoice.pdf')).toBeNull();
     });
 
+    it('Checking a document shows a pending row, and Save waits for it', async () => {
+      let finish!: (r: unknown) => void;
+      const batch = vi.fn(() => ({ attachments: [{}], failed: [] }));
+      serve({
+        'transaction-attachment-check': () =>
+          new Promise(resolve => {
+            finish = resolve;
+          }),
+        'transaction-attachments-add-batch': batch,
+      });
+      const { container } = renderEdit(addPath);
+      await pickPdf(container);
+
+      expect(await screen.findByText('Checking invoice.pdf…')).toBeVisible();
+      await addAndWait();
+      expect(batch).not.toHaveBeenCalled();
+      await act(async () => finish({ ok: true }));
+
+      await waitFor(() => expect(batch).toHaveBeenCalledOnce());
+      expect(batch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          files: [expect.objectContaining({ name: 'invoice.pdf' })],
+        }),
+      );
+    });
+
+    it('Attach document is disabled once five are held', async () => {
+      const { container } = renderEdit(addPath);
+      serve();
+      for (let i = 0; i < 5; i++) {
+        await pickPdf(container);
+        await waitFor(() =>
+          expect(screen.getAllByText('invoice.pdf')).toHaveLength(i + 1),
+        );
+      }
+
+      expect(
+        screen.getByRole('button', { name: 'Attach document' }),
+      ).toBeDisabled();
+    });
+
     it('Sixth document', async () => {
       const { container } = renderEdit(addPath);
       serve();
@@ -354,6 +395,60 @@ describe('Phone transaction edit page', () => {
         files: [expect.objectContaining({ name: 'invoice.pdf' })],
       });
       expect(calls).toEqual(['save', 'attach']);
+    });
+
+    it('Undo after adding with two documents: one batch, so one undo step', async () => {
+      const calls: string[] = [];
+      const update = vi.fn(() => {
+        calls.push('add');
+        return { added: [], updated: [] };
+      });
+      const batch = vi.fn(() => {
+        calls.push('attach');
+        return { attachments: [{}, {}], failed: [] };
+      });
+      serve({
+        'transactions-batch-update': update,
+        'transaction-attachments-add-batch': batch,
+      });
+      const { container } = renderEdit(addPath);
+      await pickPdf(container);
+      await waitFor(() =>
+        expect(screen.getAllByText('invoice.pdf')).toHaveLength(1),
+      );
+      await pickPdf(container);
+      await waitFor(() =>
+        expect(screen.getAllByText('invoice.pdf')).toHaveLength(2),
+      );
+
+      await addAndWait();
+
+      await waitFor(() => expect(batch).toHaveBeenCalledOnce());
+      // The add is undo step one, the single batch is step two
+      expect(calls).toEqual(['add', 'attach']);
+      expect(batch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          files: [
+            expect.objectContaining({ name: 'invoice.pdf' }),
+            expect.objectContaining({ name: 'invoice.pdf' }),
+          ],
+        }),
+      );
+    });
+
+    it('Split while adding: the Documents section stays on the parent form', async () => {
+      serve();
+      renderEdit('/transactions/new?account=Vanguard&amount=10');
+
+      await userEvent.click(
+        await screen.findByRole('button', { name: 'Split' }),
+      );
+
+      // One section for the whole add, not one per split line
+      expect(await screen.findAllByText('Documents')).toHaveLength(1);
+      expect(
+        screen.getAllByRole('button', { name: 'Attach document' }),
+      ).toHaveLength(1);
     });
 
     it('Add without documents sends no batch', async () => {

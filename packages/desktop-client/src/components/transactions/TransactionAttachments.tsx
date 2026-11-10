@@ -8,7 +8,6 @@ import { Popover } from '@actual-app/components/popover';
 import { Text } from '@actual-app/components/text';
 import { View } from '@actual-app/components/view';
 import { send } from '@actual-app/core/platform/client/connection';
-import type { AttachmentAddResult } from '@actual-app/core/server/attachments/app';
 import { q } from '@actual-app/core/shared/query';
 import type { TransactionEntity } from '@actual-app/core/types/models';
 import type { TFunction } from 'i18next';
@@ -17,6 +16,7 @@ import { useMetadataPref } from '#hooks/useMetadataPref';
 import { useQuery } from '#hooks/useQuery';
 import { addNotification } from '#notifications/notificationsSlice';
 import { useDispatch } from '#redux';
+import { attachErrorMessage } from '#util/attachmentMessages';
 
 export type AttachmentSummary = {
   id: string;
@@ -66,35 +66,6 @@ export function useTransactionAttachments(
   transaction: Pick<TransactionEntity, 'id' | 'parent_id'>,
 ) {
   return attachmentsForTransaction(useContext(AttachmentsContext), transaction);
-}
-
-export function attachErrorMessage(
-  result: Extract<AttachmentAddResult, { error: unknown }>,
-  t: TFunction,
-) {
-  switch (result.error) {
-    case 'too-large':
-      return t(
-        "This document is larger than the {{limit}} MB limit, so it wasn't attached.",
-        { limit: result.limitMB },
-      );
-    case 'unsupported-type':
-      return t('Only PDF, JPEG, PNG and WebP documents can be attached.');
-    case 'heic':
-      return t(
-        "HEIC images aren't supported yet. Choose the photo from your Photos library, or save it as JPEG or PNG, and attach that.",
-      );
-    case 'quota':
-      return t(
-        "This budget's document storage is full, so the document wasn't attached.",
-      );
-    case 'needs-sync-server':
-      return t('Attaching documents needs a sync server.');
-    default:
-      return t(
-        "The document wasn't attached. Check your connection to the server and try again.",
-      );
-  }
 }
 
 // A hidden file picker and the action that opens it for one transaction. With

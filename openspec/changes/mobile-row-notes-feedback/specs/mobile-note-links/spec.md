@@ -60,6 +60,11 @@ In a mobile transaction list row, pressing the notes line away from a tag or lin
 - **WHEN** a user presses a tag in a mobile list row
 - **THEN** the row does not show the row pressed tint, because the tag is its own tap target
 
+#### Scenario: A press on a link or tag that never ends
+- **WHEN** a press starts on a link or tag in a mobile list row and never ends in the row, for example a receipt link that opens a new window
+- **THEN** the row does not set or hold the pressed tint
+- **AND** the next tap on the row opens the transaction as usual
+
 #### Scenario: Screen reader reaches the row
 - **WHEN** a screen reader reaches the row's button in a mobile list row that has notes
 - **THEN** its accessible name includes the payee, category and amount and the notes text

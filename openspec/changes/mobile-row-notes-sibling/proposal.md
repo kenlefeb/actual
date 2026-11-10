@@ -10,7 +10,7 @@ Shortcut sc-3070 (epic 470, Baseline fork behavior). Follow-up of sc-2989 (desig
 - Pressing the notes line away from a tag or link opens the transaction; long-pressing it starts multi-select, exactly as the rest of the row does. Look and pressed feedback are unchanged (visual parity, not a new design).
 - Decision recorded: a long press on a tag does nothing (no selection, no filter). The tag is its own tap target.
 - Decision recorded (from sc-3069, which called it a "known gap"): a tag in the mobile transaction editor stays inert. Editing is unsaved state, and filtering would leave the editor.
-- Axe reports no `nested-interactive` on the mobile list, checked by a Playwright test with axe-core on a mobile viewport.
+- A Playwright test with axe-core on a mobile viewport checks that no tag or link sits inside a `<button>`, and that no `nested-interactive` node contains one. Scope, by Architect decision: the live run also flags every `role="option"` row (react-aria `ListBoxItem` wrapping the row's button). That structure is upstream's (actualbudget/actual#6755), so it is not this change's to fix and is not asserted. Colour-contrast and landmark-unique findings on the all-accounts list are likewise not asserted here.
 - Desktop: no behavior change. The register's `DesktopTaggedNotes` is a bare button in a table cell, not inside another button. A narrow desktop window (`isNarrowWidth`) shows the mobile list and gets the fix. Tests pin the desktop tag as a separate control.
 
 Out of scope: letting a long press through a tag, tag behavior in the editor, row selection semantics (grid or list roles), any new visual design.

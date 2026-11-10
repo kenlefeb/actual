@@ -7,7 +7,7 @@ import { MobileNavigation } from './page-models/mobile-navigation';
 
 // Every role=option row wraps its row button (upstream), so axe still reports
 // nested-interactive on the options. The fork's part is that no tag or link sits
-// inside a <button>, and that no flagged node is a button.
+// inside a <button>, and that no flagged node is a button (design decision 8).
 // Other findings (color-contrast, landmark-unique) are tracked as bug stories.
 async function checkList(page: Page) {
   await page.evaluate(axe.source);

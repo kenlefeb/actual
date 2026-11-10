@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
-import type { SyntheticEvent,CSSProperties } from 'react';
+import type { CSSProperties, SyntheticEvent } from 'react';
 import { mergeProps } from 'react-aria';
 import type { ListBoxItemRenderProps } from 'react-aria-components';
 import { useTranslation } from 'react-i18next';

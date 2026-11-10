@@ -242,17 +242,22 @@ describe('Notes line of a phone row', () => {
     expect(onPress).not.toHaveBeenCalled();
   });
 
-  it('does not open the transaction when a link in the notes is tapped', async () => {
+  it('still opens the transaction on a row tap after a link tap that opened a new window', async () => {
     const onPress = vi.fn();
     renderRow('t1', '2026-11-05', { notes }, onPress, {
       onNotesTagClick: vi.fn(),
     });
 
-    await userEvent.click(
-      screen.getByRole('link', { name: 'https://example.com' }),
-    );
-
+    // The link opens a new window, so the page never sees the press end
+    await userEvent.pointer({
+      keys: '[MouseLeft>]',
+      target: screen.getByRole('link', { name: 'https://example.com' }),
+    });
     expect(onPress).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByText('Payee'));
+
+    expect(onPress).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the link a link', () => {

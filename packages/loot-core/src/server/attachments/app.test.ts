@@ -27,6 +27,8 @@ const MB = 1024 * 1024;
 const add = app.handlers['transaction-attachment-add'];
 const open = app.handlers['transaction-attachment-open'];
 const remove = app.handlers['transaction-attachment-remove'];
+const check = app.handlers['transaction-attachment-check'];
+const addBatch = app.handlers['transaction-attachments-add-batch'];
 
 function pdfOfSize(size: number) {
   const data = new Uint8Array(size);
@@ -404,5 +406,235 @@ describe('transaction-attachment-remove', () => {
     expect(await open({ id: result.attachment.id })).toMatchObject({
       data: PDF,
     });
+  });
+});
+
+describe('transaction-attachment-check', () => {
+  async function expectNothingStored() {
+    expect(attachmentServer.uploads).toEqual([]);
+    expect(attachmentServer.blobs.size).toBe(0);
+    expect(await rows(transactionId)).toEqual([]);
+  }
+
+  it('passes a PDF without uploading it or writing a row', async () => {
+    expect(await check({ data: pdfOfSize(200 * 1024) })).toEqual({ ok: true });
+    await expectNothingStored();
+  });
+
+  it('Wrong type', async () => {
+    const docx = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x14, 0, 6, 0]);
+    expect(await check({ data: docx })).toEqual({ error: 'unsupported-type' });
+    await expectNothingStored();
+  });
+
+  it('Renamed file', async () => {
+    const text = new Uint8Array(Buffer.from('Thanks for shopping'));
+    expect(await check({ data: text })).toEqual({ error: 'unsupported-type' });
+  });
+
+  it('Oversize file', async () => {
+    expect(await check({ data: pdfOfSize(11 * MB) })).toEqual({
+      error: 'too-large',
+      limitMB: 10,
+    });
+    await expectNothingStored();
+  });
+
+  it('Limit set by the server', async () => {
+    attachmentServer.fileSizeLimitMB = 5;
+    const data = new Uint8Array(6 * MB);
+    data.set(PNG);
+    expect(await check({ data })).toEqual({ error: 'too-large', limitMB: 5 });
+  });
+
+  it('HEIC photo', async () => {
+    expect(await check({ data: HEIC })).toEqual({ error: 'heic' });
+  });
+
+  it('Local-only budget while adding', async () => {
+    await prefs.savePrefs({ cloudFileId: undefined, groupId: undefined });
+    expect(await check({ data: PDF })).toEqual({ error: 'needs-sync-server' });
+  });
+
+  it('Offline pick', async () => {
+    attachmentServer.offline = true;
+    expect(await check({ data: PDF })).toEqual({ error: 'upload-failed' });
+  });
+});
+
+describe('transaction-attachments-add-batch', () => {
+  const files = [
+    { name: 'a-receipt.pdf', data: PDF },
+    { name: 'b-photo.jpg', data: JPEG },
+  ];
+
+  it('Undo after adding with two documents', async () => {
+    const result = await addBatch({ transactionId, files });
+
+    expect(result.attachments).toHaveLength(2);
+    expect(result.failed).toEqual([]);
+    expect(await rows(transactionId)).toHaveLength(2);
+
+    await undo();
+
+    expect(await rows(transactionId)).toEqual([]);
+  });
+
+  it('One document fails', async () => {
+    attachmentServer.refuseUploadNumber = 1;
+
+    const result = await addBatch({ transactionId, files });
+
+    expect(result.failed).toEqual([
+      { name: 'a-receipt.pdf', error: 'upload-failed' },
+    ]);
+    expect((await rows(transactionId)).map(row => row.name)).toEqual([
+      'b-photo.jpg',
+    ]);
+  });
+
+  it('attaches to the parent when given a split line', async () => {
+    const parent = await db.insertTransaction({
+      account: 'acct',
+      date: '2026-11-05',
+      amount: -3000,
+      is_parent: true,
+    });
+    const child = await db.insertTransaction({
+      account: 'acct',
+      date: '2026-11-05',
+      amount: -3000,
+      is_child: true,
+      parent_id: parent,
+    });
+
+    await addBatch({ transactionId: child, files });
+
+    expect(await rows(parent)).toHaveLength(2);
+    expect(await rows(child)).toEqual([]);
+  });
+
+  it('inserts nothing for an empty batch', async () => {
+    expect(await addBatch({ transactionId, files: [] })).toEqual({
+      attachments: [],
+      failed: [],
+    });
+    expect(attachmentServer.uploads).toEqual([]);
+  });
+
+  it('removes the uploads and reports every file when the row write fails', async () => {
+    attachmentServer.onStored = () => {
+      db.execQuery('DROP TABLE IF EXISTS transaction_attachments');
+    };
+
+    const result = await addBatch({ transactionId, files });
+
+    expect(result.attachments).toEqual([]);
+    expect(result.failed.map(f => f.name)).toEqual([
+      'a-receipt.pdf',
+      'b-photo.jpg',
+    ]);
+    expect(attachmentServer.blobs.size).toBe(0);
+  });
+
+  it('leaves no rows and no blobs when the second row write fails', async () => {
+    const bad = [
+      { name: 'a-receipt.pdf', data: PDF },
+      { name: undefined as unknown as string, data: JPEG },
+    ];
+
+    const result = await addBatch({ transactionId, files: bad });
+
+    expect(result.attachments).toEqual([]);
+    expect(await rows(transactionId)).toEqual([]);
+    expect(attachmentServer.blobs.size).toBe(0);
+  });
+
+  it('deletes every blob already uploaded when a later step throws', async () => {
+    const digest = crypto.subtle.digest.bind(crypto.subtle);
+    let calls = 0;
+    vi.spyOn(crypto.subtle, 'digest').mockImplementation((alg, data) => {
+      calls++;
+      return calls === 2
+        ? Promise.reject(new Error('boom'))
+        : digest(alg, data);
+    });
+    onTestFinished(() => {
+      vi.restoreAllMocks();
+    });
+
+    const result = await addBatch({ transactionId, files });
+
+    expect(result.attachments).toEqual([]);
+    expect(result.failed.map(f => f.name)).toEqual([
+      'a-receipt.pdf',
+      'b-photo.jpg',
+    ]);
+    expect(await rows(transactionId)).toEqual([]);
+    expect(attachmentServer.blobs.size).toBe(0);
+  });
+
+  it('reports every file when the server is offline', async () => {
+    attachmentServer.offline = true;
+
+    const result = await addBatch({ transactionId, files });
+
+    expect(result.attachments).toEqual([]);
+    expect(result.failed).toEqual([
+      { name: 'a-receipt.pdf', error: 'upload-failed' },
+      { name: 'b-photo.jpg', error: 'upload-failed' },
+    ]);
+    expect(await rows(transactionId)).toEqual([]);
+  });
+
+  it('refuses more than 5 files without uploading anything', async () => {
+    const six = Array.from({ length: 6 }, (_, i) => ({
+      name: `r${i}.pdf`,
+      data: PDF,
+    }));
+
+    expect(await addBatch({ transactionId, files: six })).toEqual({
+      attachments: [],
+      failed: [],
+      error: 'too-many-files',
+    });
+    expect(attachmentServer.uploads).toEqual([]);
+    expect(await rows(transactionId)).toEqual([]);
+  });
+
+  it('reads the size limit once per batch', async () => {
+    const spy = vi.spyOn(attachmentServer, 'fetch');
+    onTestFinished(() => spy.mockRestore());
+
+    await addBatch({ transactionId, files });
+
+    const infoCalls = spy.mock.calls.filter(([url]) => url.endsWith('/info'));
+    expect(infoCalls).toHaveLength(1);
+  });
+
+  it('reports a wrong-type file and still adds the others', async () => {
+    const docx = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x14, 0, 6, 0]);
+
+    const result = await addBatch({
+      transactionId,
+      files: [{ name: 'invoice.docx', data: docx }, files[0]],
+    });
+
+    expect(result.failed).toEqual([
+      { name: 'invoice.docx', error: 'unsupported-type' },
+    ]);
+    expect(result.attachments).toHaveLength(1);
+  });
+
+  it('reports an oversize file and still adds the others', async () => {
+    const result = await addBatch({
+      transactionId,
+      files: [{ name: 'big.pdf', data: pdfOfSize(11 * MB) }, files[0]],
+    });
+
+    expect(result.failed).toEqual([
+      { name: 'big.pdf', error: 'too-large', limitMB: 10 },
+    ]);
+    expect(result.attachments).toHaveLength(1);
   });
 });

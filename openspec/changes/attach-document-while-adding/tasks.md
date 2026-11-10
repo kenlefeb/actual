@@ -8,10 +8,10 @@ Write each test first, run it and see it fail before implementing. Name tests af
 
 ## 2. loot-core validate-only check (sc-3234)
 
-- [ ] 2.1 In `loot-core/src/server/attachments/`, with `mockAttachmentServer.ts`, write failing tests for the new check handler: "Wrong type" and "Renamed file" (by bytes), "Oversize file" and "Limit set by the server", "HEIC photo", "Local-only budget while adding", "Offline pick" (unreachable `/info` returns the connection error), and that a passing file uploads nothing and writes no row. Run them and see them fail. Verify the existing `addAttachment` tests still pass.
-- [ ] 2.2 Write failing tests for the batch handler `transaction-attachments-add-batch`: "Undo after adding with two documents" (two documents inserted, one undo removes both), "One document fails" (the others are inserted, the failure is returned), and an empty batch inserts nothing. See them fail.
-- [ ] 2.3 Implement the check handler `transaction-attachment-check` (design decision 2), sharing the checks with `addAttachment`, and the batch handler `transaction-attachments-add-batch` (design decision 6, one `withUndo`). Verify the new and existing attachment tests pass.
-- [ ] 2.4 Add `transaction-attachment-check` and `transaction-attachments-add-batch` to `mcp/coverage.json` (tool or skip with a reason), named exactly as the handlers are registered. Verify `yarn check:mcp-coverage` passes.
+- [x] 2.1 In `loot-core/src/server/attachments/`, with `mockAttachmentServer.ts`, write failing tests for the new check handler: "Wrong type" and "Renamed file" (by bytes), "Oversize file" and "Limit set by the server", "HEIC photo", "Local-only budget while adding", "Offline pick" (unreachable `/info` returns the connection error), and that a passing file uploads nothing and writes no row. Run them and see them fail. Verify the existing `addAttachment` tests still pass.
+- [x] 2.2 Write failing tests for the batch handler `transaction-attachments-add-batch`: "Undo after adding with two documents" (two documents inserted, one undo removes both), "One document fails" (the others are inserted, the failure is returned), and an empty batch inserts nothing. See them fail.
+- [x] 2.3 Implement the check handler `transaction-attachment-check` (design decision 2), sharing the checks with `addAttachment`, and the batch handler `transaction-attachments-add-batch` (design decision 6, one `withUndo`). Verify the new and existing attachment tests pass.
+- [x] 2.4 Add `transaction-attachment-check` and `transaction-attachments-add-batch` to `mcp/coverage.json` (tool or skip with a reason), named exactly as the handlers are registered. Verify `yarn check:mcp-coverage` passes.
 
 ## 3. Phone add screen (sc-3235)
 

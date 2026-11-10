@@ -54,12 +54,7 @@ The hosted entry SHALL serve a `production` host only when the dedicated flag `A
 - **THEN** it exits with the usage error and serves nothing
 
 ### Requirement: Production identity
-A production instance SHALL sign users in only through its own application (client id, secret and callbacks) in the shared Auth0 tenant (Ken's decision of 2026-11-04: one tenant for staging and production), SHALL accept exactly one account, the assistant's provider subject identifier (for Auth0, its `auth0|...` `sub`), and SHALL NOT be configured with the staging client or account. Because staging users can reach the production application at the provider, the allowed `sub` is what keeps them out. The administrator's account, which holds the budget's ADMIN role, SHALL NOT be the allowed account, and no credential of the allowed account SHALL be held by any agent.
-
-#### Scenario: The administrator signs in
-- **GIVEN** a production instance whose allowed account is the assistant's subject
-- **WHEN** the administrator's account signs in at the production application
-- **THEN** no code or token is issued
+A production instance SHALL sign users in only through its own application (client id, secret and callbacks) in the shared Auth0 tenant (Ken's decision of 2026-11-04: one tenant for staging and production), SHALL accept exactly one account, the assistant's provider subject identifier (for Auth0, its `auth0|...` `sub`), and SHALL NOT be configured with the staging client or account.
 
 #### Scenario: A staging client on production
 - **GIVEN** the production flag and a client id or account that equals the staging instance's
@@ -67,9 +62,17 @@ A production instance SHALL sign users in only through its own application (clie
 - **THEN** the review fails and the instance is not deployed
 
 #### Scenario: A staging user on production
-- **GIVEN** a staging test user in the shared tenant
+- **GIVEN** a staging test user in the shared tenant, who can reach the production application at the provider, so the allowed `sub` is what keeps them out
 - **WHEN** that user finishes a sign-in at the production connector application
 - **THEN** the connector refuses it because the user's subject is not the allowed account
+
+### Requirement: The allowed production account is not the administrator's
+The administrator's account, which holds the budget's ADMIN role, SHALL NOT be the allowed account, and no credential of the allowed account SHALL be held by any agent.
+
+#### Scenario: The administrator signs in
+- **GIVEN** a production instance whose allowed account is the assistant's subject
+- **WHEN** the administrator's account signs in at the production application
+- **THEN** no code or token is issued
 
 ### Requirement: A production token is never an administrator's
 In production the hosted entry SHALL validate the session token against the sync server at start and SHALL exit with a fixed error, before it listens, unless the token's user holds exactly the BASIC permission (so ADMIN, any other permission, a missing permission, and a token that cannot be validated all exit). The guard's other conditions SHALL NOT be treated as proof of the token's privilege.
@@ -218,7 +221,7 @@ The server SHALL serve one pre-registered confidential client, SHALL NOT expose 
 - **THEN** the endpoint does not exist
 
 ### Requirement: Host, origin and rate checks
-The hosted entry SHALL refuse a request whose `Host` is not on the configured public hostname list, SHALL refuse a request carrying a browser `Origin` that is not on a configured allowlist, and SHALL rate-limit the authorization, token, revocation and MCP endpoints, per endpoint and per client id. The per-endpoint limit SHALL be kept per endpoint and per source address, on every endpoint and with no shared counter, so one source cannot use up the limit for the signed-in user. The source is the client address that the local proxy sets in `X-Forwarded-For` (the last entry is read), trusted only from a loopback peer; the table of sources SHALL stay bounded. On top of that, an aggregate ceiling SHALL be kept per endpoint and per source prefix (the IPv4 /24 or IPv6 /48), counting only requests the per-source limit let through, with a default several times the per-source limit and set by configuration. It is a tier by prefix, never a global cap across all sources, so a flood from many prefixes cannot refuse the signed-in user's sign-in; the ceiling bounds one prefix, not the whole internet. A `/mcp` request that carries a valid access token SHALL count only against the per-client limit and skip the source and prefix counters, because the connector arrives from shared egress ranges that other people's unauthenticated calls also use; unauthenticated `/mcp` attempts and every OAuth endpoint keep both tiers. Several sources inside the signed-in user's own prefix, or other callers on the connector's shared egress, can still exhaust the tier for the OAuth endpoints (a `/token` refresh may be refused for a window), which costs availability, not data. The per-client limit is what protects the engine. Where a loopback peer supplies no usable address the source SHALL be one shared `loopback` key, which brings back a shared limit, and the hosted entry SHALL record that (once per process, without the header value). The protection is not claimed to work until staging confirms the proxy supplies real client addresses.
+The hosted entry SHALL refuse a request whose `Host` is not on the configured public hostname list, SHALL refuse a request carrying a browser `Origin` that is not on a configured allowlist, and SHALL rate-limit the authorization, token, revocation and MCP endpoints, per endpoint and per client id. The per-endpoint limit SHALL be kept per endpoint and per source address, on every endpoint and with no shared counter, so one source cannot use up the limit for the signed-in user.
 
 #### Scenario: A rebinding host
 - **WHEN** a request arrives with a `Host` that is not configured
@@ -242,13 +245,26 @@ The hosted entry SHALL refuse a request whose `Host` is not on the configured pu
 - **WHEN** a second source calls the same endpoint
 - **THEN** the second source is served and only the first is refused with 429
 
+### Requirement: The request source is the proxy's client address
+The source SHALL be the client address that the local proxy sets in `X-Forwarded-For` (the last entry is read), trusted only from a loopback peer; the table of sources SHALL stay bounded. The protection is not claimed to work until staging confirms the proxy supplies real client addresses.
+
 #### Scenario: A forged forwarded address
 - **WHEN** a caller adds its own earlier `X-Forwarded-For` entries, or sends the header from a non-loopback peer
 - **THEN** the limit is still keyed by the address the proxy appended, or by the peer address, so the caller cannot choose its own key
 
+#### Scenario: Many sources
+- **WHEN** more distinct sources call than the table holds
+- **THEN** the table keeps its bound by dropping the oldest source, and memory does not grow
+
+### Requirement: A loopback peer without a usable address shares one source key
+Where a loopback peer supplies no usable address the source SHALL be one shared `loopback` key, which brings back a shared limit, and the hosted entry SHALL record that (once per process, without the header value).
+
 #### Scenario: No usable forwarded address
 - **WHEN** a loopback peer calls an OAuth endpoint with a missing, empty or unparseable `X-Forwarded-For`
 - **THEN** the request is keyed `loopback` and a `source-unresolved` record is written once, without the header value
+
+### Requirement: An aggregate ceiling bounds each source prefix
+On top of the per-source limit, an aggregate ceiling SHALL be kept per endpoint and per source prefix (the IPv4 /24 or IPv6 /48), counting only requests the per-source limit let through, with a default several times the per-source limit and set by configuration. It is a tier by prefix, never a global cap across all sources, so a flood from many prefixes cannot refuse the signed-in user's sign-in; the ceiling bounds one prefix, not the whole internet.
 
 #### Scenario: A prefix flooding from many sources
 - **GIVEN** the per-endpoint source limit and a lower prefix ceiling
@@ -265,14 +281,18 @@ The hosted entry SHALL refuse a request whose `Host` is not on the configured pu
 - **WHEN** a neighbour in the same prefix calls the endpoint
 - **THEN** the neighbour is served, because refused requests do not count toward the prefix
 
+### Requirement: A valid access token skips the source and prefix counters
+A `/mcp` request that carries a valid access token SHALL count only against the per-client limit and skip the source and prefix counters, because the connector arrives from shared egress ranges that other people's unauthenticated calls also use; unauthenticated `/mcp` attempts and every OAuth endpoint keep both tiers. The per-client limit is what protects the engine.
+
+#### Scenario: A shared prefix can exhaust the OAuth tier
+- **GIVEN** several sources inside the signed-in user's own prefix, or other callers on the connector's shared egress
+- **WHEN** together they exhaust the tier for the OAuth endpoints
+- **THEN** a `/token` refresh may be refused for a window, which costs availability, not data
+
 #### Scenario: A signed-in call is not refused by a flood
 - **GIVEN** a flood of unauthenticated `/mcp` and `/token` requests from the signed-in user's source and prefix
 - **WHEN** the user's authenticated `/mcp` call arrives
 - **THEN** it is not refused by the source or prefix counters
-
-#### Scenario: Many sources
-- **WHEN** more distinct sources call than the table holds
-- **THEN** the table keeps its bound by dropping the oldest source, and memory does not grow
 
 ### Requirement: Only configured upstreams
 The hosted entry SHALL make outbound requests only to the configured sync server and the configured identity provider, and SHALL fetch no URL named in budget data.

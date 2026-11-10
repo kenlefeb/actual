@@ -559,7 +559,9 @@ describe('transaction-attachments-add-batch', () => {
         ? Promise.reject(new Error('boom'))
         : digest(alg, data);
     });
-    onTestFinished(() => vi.restoreAllMocks());
+    onTestFinished(() => {
+      vi.restoreAllMocks();
+    });
 
     const result = await addBatch({ transactionId, files });
 
@@ -570,6 +572,19 @@ describe('transaction-attachments-add-batch', () => {
     ]);
     expect(await rows(transactionId)).toEqual([]);
     expect(attachmentServer.blobs.size).toBe(0);
+  });
+
+  it('reports every file when the server is offline', async () => {
+    attachmentServer.offline = true;
+
+    const result = await addBatch({ transactionId, files });
+
+    expect(result.attachments).toEqual([]);
+    expect(result.failed).toEqual([
+      { name: 'a-receipt.pdf', error: 'upload-failed' },
+      { name: 'b-photo.jpg', error: 'upload-failed' },
+    ]);
+    expect(await rows(transactionId)).toEqual([]);
   });
 
   it('refuses more than 5 files without uploading anything', async () => {
@@ -593,9 +608,7 @@ describe('transaction-attachments-add-batch', () => {
 
     await addBatch({ transactionId, files });
 
-    const infoCalls = spy.mock.calls.filter(([url]) =>
-      url.endsWith('/info'),
-    );
+    const infoCalls = spy.mock.calls.filter(([url]) => url.endsWith('/info'));
     expect(infoCalls).toHaveLength(1);
   });
 
@@ -625,4 +638,3 @@ describe('transaction-attachments-add-batch', () => {
     expect(result.attachments).toHaveLength(1);
   });
 });
-

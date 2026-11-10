@@ -10,6 +10,7 @@ import * as encryption from '#server/encryption';
 import { mutator, runMutator } from '#server/mutators';
 import * as prefs from '#server/prefs';
 import { getServer } from '#server/server-config';
+import { batchMessages } from '#server/sync';
 import { undoable, withUndo } from '#server/undo';
 import { detectAttachmentType } from '#shared/attachments';
 
@@ -37,7 +38,11 @@ export type AttachmentCheckResult =
 export type AttachmentBatchResult = {
   attachments: db.DbTransactionAttachment[];
   failed: Array<{ name: string; error: AttachmentAddError; limitMB?: number }>;
+  error?: 'too-many-files';
 };
+
+// Most documents one batch may hold (the add form's cap)
+const MAX_BATCH_FILES = 5;
 
 export type AttachmentOpenResult =
   | { name: string; mime: string; data: Uint8Array }
@@ -244,6 +249,8 @@ async function getStored(remote: Remote | null, id: string) {
 async function validateAttachment(
   remote: Remote | null,
   data: Uint8Array,
+  getLimitMB: () => Promise<number> = () =>
+    remote ? getFileSizeLimitMB(remote) : Promise.resolve(0),
 ): Promise<
   | { remote: Remote; mime: string }
   | { error: AttachmentAddError; limitMB?: number }
@@ -262,7 +269,7 @@ async function validateAttachment(
 
   let limitMB: number;
   try {
-    limitMB = await getFileSizeLimitMB(remote);
+    limitMB = await getLimitMB();
   } catch (e) {
     logger.warn('Could not read the attachment limit', e);
     return { error: 'upload-failed' };
@@ -294,8 +301,9 @@ async function uploadAttachment(
   ownerId: string,
   name: string,
   data: Uint8Array,
+  getLimitMB?: () => Promise<number>,
 ): Promise<StoredAttachment | { error: AttachmentAddError; limitMB?: number }> {
-  const checked = await validateAttachment(remote, data);
+  const checked = await validateAttachment(remote, data, getLimitMB);
   if ('error' in checked) {
     return checked;
   }
@@ -305,6 +313,7 @@ async function uploadAttachment(
     prefs.getPrefs().encryptKeyId,
   );
   const id = uuidv4();
+  const hash = await sha256(data);
 
   const refused = await uploadAttachmentBlob(
     checked.remote,
@@ -324,7 +333,7 @@ async function uploadAttachment(
       name,
       mime: checked.mime,
       size: data.length,
-      sha256: await sha256(data),
+      sha256: hash,
       encrypt_meta: encryptMeta,
       created_at: new Date().toISOString(),
       tombstone: 0,
@@ -345,34 +354,41 @@ async function insertAttachmentRows(
   uploaded: StoredAttachment[],
 ): Promise<boolean> {
   try {
+    // batchMessages applies every row in one database transaction, so a
+    // failing row leaves none of them behind
     await runMutator(() =>
-      withUndo(async () => {
-        for (const { row } of uploaded) {
-          await db.insert('transaction_attachments', row);
-        }
-      }),
+      withUndo(() =>
+        batchMessages(async () => {
+          for (const { row } of uploaded) {
+            await db.insert('transaction_attachments', row);
+          }
+        }),
+      ),
     );
   } catch (e) {
     logger.warn('Could not record the attachment; removing its upload', e);
-    // If this fails too the blob is orphaned; server cleanup (sc-2525) removes it
-    await Promise.all(
-      uploaded.map(({ row }) =>
-        attachmentRequest(remote, 'delete-attachment', row.id, {
-          method: 'POST',
-        }).catch(() => undefined),
-      ),
-    );
+    await removeUploads(remote, uploaded);
     return false;
   }
 
+  // One at a time: the first write creates the cache directory
+  for (const { row, stored } of uploaded) {
+    await writeCache(row.id, stored).catch(e =>
+      logger.warn('Could not cache attachment', e),
+    );
+  }
+  return true;
+}
+
+// If a delete fails too the blob is orphaned; server cleanup (sc-2525) removes it
+async function removeUploads(remote: Remote, uploaded: StoredAttachment[]) {
   await Promise.all(
-    uploaded.map(({ row, stored }) =>
-      writeCache(row.id, stored).catch(e =>
-        logger.warn('Could not cache attachment', e),
-      ),
+    uploaded.map(({ row }) =>
+      attachmentRequest(remote, 'delete-attachment', row.id, {
+        method: 'POST',
+      }).catch(() => undefined),
     ),
   );
-  return true;
 }
 
 async function addAttachment({
@@ -410,34 +426,54 @@ async function addAttachmentsBatch({
   files: Array<{ name: string; data: Uint8Array }>;
 }): Promise<AttachmentBatchResult> {
   const result: AttachmentBatchResult = { attachments: [], failed: [] };
-  const remote = await getRemote();
-  const ownerId = await getOwnerId(transactionId);
-  const uploaded: StoredAttachment[] = [];
-  const uploadedNames: string[] = [];
-
-  for (const { name, data } of files) {
-    const one = await uploadAttachment(remote, ownerId, name, data);
-    if ('error' in one) {
-      result.failed.push({ name, ...one });
-    } else {
-      uploaded.push(one);
-      uploadedNames.push(name);
-    }
+  if (files.length > MAX_BATCH_FILES) {
+    return { ...result, error: 'too-many-files' };
   }
+  const remote = await getRemote();
+  const uploaded: StoredAttachment[] = [];
 
-  if (remote && uploaded.length > 0) {
+  // One /info read per batch, and only if a file needs it
+  let limit: Promise<number> | undefined;
+  const getLimitMB = () =>
+    (limit ??= remote ? getFileSizeLimitMB(remote) : Promise.resolve(0));
+
+  try {
+    const ownerId = await getOwnerId(transactionId);
+    for (const { name, data } of files) {
+      const one = await uploadAttachment(
+        remote,
+        ownerId,
+        name,
+        data,
+        getLimitMB,
+      );
+      if ('error' in one) {
+        result.failed.push({ name, ...one });
+      } else {
+        uploaded.push(one);
+      }
+    }
+    if (!remote || uploaded.length === 0) {
+      return result;
+    }
     if (await insertAttachmentRows(remote, uploaded)) {
       result.attachments = uploaded.map(({ row }) => row);
-    } else {
-      result.failed.push(
-        ...uploadedNames.map(name => ({
-          name,
-          error: 'upload-failed' as const,
-        })),
-      );
+      return result;
+    }
+  } catch (e) {
+    logger.warn('Attachment batch failed; removing its uploads', e);
+    if (remote) {
+      await removeUploads(remote, uploaded);
     }
   }
-  return result;
+  // Nothing was recorded: every file is reported, none stays on the server
+  return {
+    attachments: [],
+    failed: files.map(({ name }) => ({
+      name,
+      error: 'upload-failed' as const,
+    })),
+  };
 }
 
 async function openAttachment({

@@ -352,6 +352,10 @@ describe('Phone transaction edit page', () => {
         );
       }
 
+      // The picker is disabled, so the reason shows under it
+      expect(
+        screen.getByText('The limit of 5 documents has been reached.'),
+      ).toBeVisible();
       await pickPdf(container);
 
       await waitFor(() => expect(messages()).toContain('limit of 5'));

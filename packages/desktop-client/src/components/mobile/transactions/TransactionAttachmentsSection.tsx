@@ -16,6 +16,7 @@ import {
   useTransactionAttachments,
 } from '#components/transactions/TransactionAttachments';
 import type { AttachmentSummary } from '#components/transactions/TransactionAttachments';
+import { MAX_PENDING_ATTACHMENTS } from '#hooks/usePendingAttachments';
 import type { PendingAttachments } from '#hooks/usePendingAttachments';
 import { useUndo } from '#hooks/useUndo';
 import { pushModal } from '#modals/modalsSlice';
@@ -204,6 +205,14 @@ export function PendingAttachmentsSection({
           <SvgAttachment style={{ width: 13, height: 13 }} />
           <Trans>Attach document</Trans>
         </Button>
+        {pending.isFull && (
+          <Text style={{ color: theme.pageTextSubdued }}>
+            <Trans>
+              The limit of {{ max: MAX_PENDING_ATTACHMENTS }} documents has been
+              reached.
+            </Trans>
+          </Text>
+        )}
         {fileInput}
       </View>
     </View>

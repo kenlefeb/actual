@@ -4,6 +4,7 @@ import { expect, test } from './fixtures';
 import { startSyncServer } from './fixtures/sync-server';
 import type { SyncServer } from './fixtures/sync-server';
 import { ConfigurationPage } from './page-models/configuration-page';
+import { MobileAccountPage } from './page-models/mobile-account-page';
 import { MobileTransactionEntryPage } from './page-models/mobile-transaction-entry-page';
 
 // Synthetic: a PDF header and a minimal body, no real document
@@ -35,6 +36,28 @@ async function addTransaction(page: Page) {
   });
 }
 
+// Connects a fresh browser page to the sync server and opens a new budget
+async function connectToServer(page: Page, server: SyncServer) {
+  await page.goto('/');
+  const configurationPage = new ConfigurationPage(page);
+  await configurationPage.clickOnConnectServer();
+  await page.getByPlaceholder('https://example.com').fill(server.url);
+  await page.getByRole('button', { name: 'Connect' }).click();
+  await page.getByPlaceholder('Password', { exact: true }).fill('e2e-pass');
+  await page.getByPlaceholder('Confirm password').fill('e2e-pass');
+  await page.getByRole('button', { name: 'OK' }).click();
+  await page
+    .getByRole('heading', { name: 'Sign in to this Actual instance' })
+    .waitFor();
+  await page.getByPlaceholder('Password', { exact: true }).fill('e2e-pass');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page.getByRole('button', { name: 'Start budgeting' }).click();
+  await expect(page.getByRole('status')).toBeVisible();
+  await expect(page.getByRole('status')).not.toHaveText(
+    'Local file — not syncing',
+  );
+}
+
 test.describe('Transaction documents on the phone', () => {
   test.describe.configure({ mode: 'serial' });
 
@@ -52,24 +75,7 @@ test.describe('Transaction documents on the phone', () => {
   }) => {
     const page = await browser.newPage({ viewport: phone });
     try {
-      await page.goto('/');
-      const configurationPage = new ConfigurationPage(page);
-      await configurationPage.clickOnConnectServer();
-      await page.getByPlaceholder('https://example.com').fill(server.url);
-      await page.getByRole('button', { name: 'Connect' }).click();
-      await page.getByPlaceholder('Password', { exact: true }).fill('e2e-pass');
-      await page.getByPlaceholder('Confirm password').fill('e2e-pass');
-      await page.getByRole('button', { name: 'OK' }).click();
-      await page
-        .getByRole('heading', { name: 'Sign in to this Actual instance' })
-        .waitFor();
-      await page.getByPlaceholder('Password', { exact: true }).fill('e2e-pass');
-      await page.getByRole('button', { name: 'Sign in' }).click();
-      await page.getByRole('button', { name: 'Start budgeting' }).click();
-      await expect(page.getByRole('status')).toBeVisible();
-      await expect(page.getByRole('status')).not.toHaveText(
-        'Local file — not syncing',
-      );
+      await connectToServer(page, server);
 
       const { account, id } = await addTransaction(page);
       await page.goto(`/transactions/${id}`);
@@ -111,6 +117,29 @@ test.describe('Transaction documents on the phone', () => {
       await expect(entry.documentName(pdf.name)).toBeVisible();
       await page.goto(`/accounts/${account}`);
       await expect(row.getByLabel('Has attached documents')).toBeVisible();
+
+      // Cancel while adding: a held document leaves nothing behind. The add
+      // screen is opened from the account, so leaving it stays in the app.
+      const accountPage = new MobileAccountPage(page);
+      await page.goto(`/accounts/${account}`);
+      await accountPage.clickCreateTransaction();
+      await entry.waitFor();
+      await entry.attachDocument(pdf);
+      await page.getByRole('button', { name: 'Back' }).click();
+      await expect(accountPage.transactions).toHaveCount(1);
+
+      // Add with a document: saved with the paperclip
+      await accountPage.clickCreateTransaction();
+      await entry.waitFor();
+      await entry.attachDocument(pdf);
+      await expect(entry.addTransactionButton).toBeEnabled();
+      await entry.createTransaction();
+      await expect(accountPage.transactions).toHaveCount(2);
+      await expect(
+        accountPage.transactions
+          .filter({ hasNotText: 'Synthetic purchase' })
+          .getByLabel('Has attached documents'),
+      ).toBeVisible();
     } finally {
       await page.close();
     }

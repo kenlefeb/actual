@@ -68,7 +68,7 @@ export function useTransactionAttachments(
   return attachmentsForTransaction(useContext(AttachmentsContext), transaction);
 }
 
-function attachErrorMessage(
+export function attachErrorMessage(
   result: Extract<AttachmentAddResult, { error: unknown }>,
   t: TFunction,
 ) {
@@ -97,8 +97,11 @@ function attachErrorMessage(
   }
 }
 
-// A hidden file picker and the action that opens it for one transaction
-export function useAttachDocument() {
+// A hidden file picker and the action that opens it for one transaction. With
+// `onFile`, the picked file goes there instead (a transaction being added).
+export function useAttachDocument(
+  onFile?: (file: { name: string; data: Uint8Array }) => void,
+) {
   const { t } = useTranslation();
   const dispatch = useDispatch();
   const [cloudFileId] = useMetadataPref('cloudFileId');
@@ -109,7 +112,7 @@ export function useAttachDocument() {
     dispatch(addNotification({ notification: { type, message } }));
   }
 
-  function attach(transactionId: string) {
+  function attach(transactionId = '') {
     if (!cloudFileId) {
       notify('message', t('Attaching documents needs a sync server.'));
       return;
@@ -123,7 +126,17 @@ export function useAttachDocument() {
     // Lets the same file be picked again
     event.target.value = '';
     const transactionId = targetRef.current;
-    if (!file || !transactionId) {
+    if (!file) {
+      return;
+    }
+    if (onFile) {
+      onFile({
+        name: file.name,
+        data: new Uint8Array(await file.arrayBuffer()),
+      });
+      return;
+    }
+    if (!transactionId) {
       return;
     }
     const result = await send('transaction-attachment-add', {

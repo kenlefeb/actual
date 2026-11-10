@@ -11,7 +11,7 @@ import {
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { resetTestProviders, TestProviders } from '#mocks';
+import { createTestAppStore, resetTestProviders, TestProviders } from '#mocks';
 import { initServer } from '#mocks/connection';
 import * as modalsSlice from '#modals/modalsSlice';
 
@@ -21,6 +21,7 @@ const state = vi.hoisted(() => ({
   date: '2016-09-15',
   subtransactions: undefined as unknown[] | undefined,
   notes: '',
+  cloudFileId: 'cloud-file' as string | undefined,
 }));
 
 vi.mock(
@@ -47,7 +48,7 @@ vi.mock('#queries/aqlQuery', () => ({
   })),
 }));
 vi.mock('#hooks/useMetadataPref', () => ({
-  useMetadataPref: () => ['cloud-file', vi.fn()],
+  useMetadataPref: () => [state.cloudFileId, vi.fn()],
 }));
 vi.mock('#hooks/useQuery', () => ({
   useQuery: () => ({ data: [], isLoading: false }),
@@ -121,9 +122,13 @@ async function openCategorySheet() {
   return { pushModal, options: sheet.options };
 }
 
+const store = vi.hoisted(() => ({ current: undefined as unknown }));
+
 function renderEdit(path: string) {
+  const appStore = createTestAppStore();
+  store.current = appStore;
   return render(
-    <TestProviders>
+    <TestProviders store={appStore}>
       <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route
@@ -152,6 +157,12 @@ async function pickPdf(container: HTMLElement) {
   });
 }
 
+const messages = () =>
+  (store.current as ReturnType<typeof createTestAppStore>)
+    .getState()
+    .notifications.notifications.map(n => n.message ?? '')
+    .join('\n');
+
 const confirmModals = (pushModal: { mock: { calls: unknown[][] } }) =>
   (pushModal.mock.calls as Array<[{ modal: modalsSlice.Modal }]>)
     .map(c => c[0].modal)
@@ -163,6 +174,7 @@ describe('Phone transaction edit page', () => {
     resetTestProviders();
     state.subtransactions = undefined;
     state.notes = '';
+    state.cloudFileId = 'cloud-file';
     window.innerWidth = 1024;
   });
 
@@ -193,13 +205,236 @@ describe('Phone transaction edit page', () => {
     );
   });
 
-  it('New transaction on the phone', async () => {
-    renderEdit('/transactions/new');
+  describe('Documents while adding', () => {
+    const addPath = '/transactions/new?account=Vanguard';
+    const checkOk = () => ({ ok: true });
 
-    await screen.findByText('New Transaction');
-    expect(
-      screen.queryByRole('button', { name: 'Attach document' }),
-    ).toBeNull();
+    function serve(handlers: Record<string, (args: never) => unknown> = {}) {
+      const update = vi.fn(() => ({ added: [], updated: [] }));
+      initServer({
+        'transaction-attachment-check': checkOk,
+        'transactions-batch-update': update,
+        ...handlers,
+      } as Parameters<typeof initServer>[0]);
+      return update;
+    }
+
+    const heldName = (name: string) => screen.findByText(name);
+
+    it('New transaction on the phone', async () => {
+      const { container } = renderEdit(addPath);
+      const check = vi.fn(checkOk);
+      const addOne = vi.fn();
+      serve({
+        'transaction-attachment-check': check,
+        'transaction-attachment-add': addOne,
+      });
+
+      await pickPdf(container);
+
+      expect(await heldName('invoice.pdf')).toBeVisible();
+      expect(check).toHaveBeenCalledOnce();
+      // Held on the device: nothing uploaded
+      expect(addOne).not.toHaveBeenCalled();
+    });
+
+    it('Remove a held document', async () => {
+      const { container } = renderEdit(addPath);
+      serve();
+      await pickPdf(container);
+      await heldName('invoice.pdf');
+
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Remove invoice.pdf' }),
+      );
+
+      expect(screen.queryByText('invoice.pdf')).toBeNull();
+    });
+
+    it('Refused when picked', async () => {
+      const { container } = renderEdit(addPath);
+      serve({
+        'transaction-attachment-check': () => ({ error: 'unsupported-type' }),
+      });
+
+      await pickPdf(container);
+
+      await waitFor(() =>
+        expect(messages()).toContain(
+          'Only PDF, JPEG, PNG and WebP documents can be attached.',
+        ),
+      );
+      expect(screen.queryByText('invoice.pdf')).toBeNull();
+    });
+
+    it('Local-only budget while adding', async () => {
+      state.cloudFileId = undefined;
+      const click = vi
+        .spyOn(HTMLInputElement.prototype, 'click')
+        .mockImplementation(() => undefined);
+      serve();
+      renderEdit(addPath);
+
+      await userEvent.click(
+        await screen.findByRole('button', { name: 'Attach document' }),
+      );
+
+      expect(click).not.toHaveBeenCalled();
+      await waitFor(() =>
+        expect(messages()).toContain(
+          'Attaching documents needs a sync server.',
+        ),
+      );
+    });
+
+    it('Offline pick', async () => {
+      const { container } = renderEdit(addPath);
+      serve({
+        'transaction-attachment-check': () => ({ error: 'upload-failed' }),
+      });
+
+      await pickPdf(container);
+
+      await waitFor(() =>
+        expect(messages()).toContain('Check your connection'),
+      );
+      expect(screen.queryByText('invoice.pdf')).toBeNull();
+    });
+
+    it('Sixth document', async () => {
+      const { container } = renderEdit(addPath);
+      serve();
+      for (let i = 0; i < 5; i++) {
+        await pickPdf(container);
+        await waitFor(() =>
+          expect(screen.getAllByText('invoice.pdf')).toHaveLength(i + 1),
+        );
+      }
+
+      await pickPdf(container);
+
+      await waitFor(() => expect(messages()).toContain('limit of 5'));
+      expect(screen.getAllByText('invoice.pdf')).toHaveLength(5);
+    });
+
+    async function addAndWait() {
+      await userEvent.click(
+        await screen.findByRole('button', { name: 'Add transaction' }),
+      );
+    }
+
+    it('Add with a document on the phone', async () => {
+      const calls: string[] = [];
+      const update = vi.fn(() => {
+        calls.push('save');
+        return { added: [], updated: [] };
+      });
+      const batch = vi.fn(() => {
+        calls.push('attach');
+        return { attachments: [{}], failed: [] };
+      });
+      serve({
+        'transactions-batch-update': update,
+        'transaction-attachments-add-batch': batch,
+      });
+      const { container } = renderEdit(addPath);
+      await pickPdf(container);
+      await heldName('invoice.pdf');
+
+      await addAndWait();
+
+      await waitFor(() => expect(batch).toHaveBeenCalledOnce());
+      // The parent id the save minted, not the temp id, and after the save
+      const added = (
+        update.mock.calls[0] as unknown as [{ added: Array<{ id: string }> }]
+      )[0].added;
+      expect(added[0].id).not.toBe('temp');
+      expect(batch).toHaveBeenCalledWith({
+        transactionId: added[0].id,
+        files: [expect.objectContaining({ name: 'invoice.pdf' })],
+      });
+      expect(calls).toEqual(['save', 'attach']);
+    });
+
+    it('Add without documents sends no batch', async () => {
+      const batch = vi.fn();
+      serve({ 'transaction-attachments-add-batch': batch });
+      renderEdit(addPath);
+
+      await addAndWait();
+
+      await waitFor(() =>
+        expect(
+          screen.queryByRole('button', { name: 'Add transaction' }),
+        ).not.toBeNull(),
+      );
+      expect(batch).not.toHaveBeenCalled();
+    });
+
+    it('Cancel while adding', async () => {
+      const batch = vi.fn();
+      const update = serve({ 'transaction-attachments-add-batch': batch });
+      const view = renderEdit(addPath);
+      await pickPdf(view.container);
+      await heldName('invoice.pdf');
+
+      view.unmount();
+
+      expect(update).not.toHaveBeenCalled();
+      expect(batch).not.toHaveBeenCalled();
+    });
+
+    it('Connection lost between pick and save', async () => {
+      const update = serve({
+        'transaction-attachments-add-batch': () => {
+          throw new Error('offline');
+        },
+      });
+      const { container } = renderEdit(addPath);
+      await pickPdf(container);
+      await heldName('invoice.pdf');
+
+      await addAndWait();
+
+      await waitFor(() => expect(messages()).toContain("weren't attached"));
+      expect(update).toHaveBeenCalledOnce();
+    });
+
+    it('One document fails', async () => {
+      serve({
+        'transaction-attachments-add-batch': () => ({
+          attachments: [{}],
+          failed: [{ name: 'invoice.pdf', error: 'upload-failed' }],
+        }),
+      });
+      const { container } = renderEdit(addPath);
+      await pickPdf(container);
+      await heldName('invoice.pdf');
+
+      await addAndWait();
+
+      await waitFor(() =>
+        expect(messages()).toMatch(/weren't attached.*invoice\.pdf/),
+      );
+    });
+
+    it('Schedule path drops held files', async () => {
+      const batch = vi.fn();
+      const update = serve({
+        'transaction-attachments-add-batch': batch,
+        'schedule/create': () => 'schedule-1',
+      });
+      const { container } = renderEdit(`${addPath}&date=2099-01-01`);
+      await pickPdf(container);
+      await heldName('invoice.pdf');
+
+      await userEvent.click(
+        await screen.findByRole('button', { name: 'Schedule' }),
+      );
+
+      expect(update).not.toHaveBeenCalled();
+      expect(batch).not.toHaveBeenCalled();
+    });
   });
 
   it('Attach without saving on the phone', async () => {

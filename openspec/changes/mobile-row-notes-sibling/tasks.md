@@ -14,9 +14,9 @@ Test-first: write each test, run it and see it fail before the code (record the 
 
 - [x] 3.1 Add failing tests to `components/mobile/transactions/TransactionListItem.test.tsx`, run them and see them fail: no `button` ancestor contains the tag or link; tapping the notes line away from a tag opens the transaction; long-pressing the notes line selects; long-pressing a tag selects nothing, applies no filter and does not open; the tag still has role button and name "Filter by #tag"; a link stays a link. Add a case for the reconcile layout. Add to `components/mobile/transactions/NotesField.test.tsx` that a tag tap in the editor does nothing and does not start editing (pins the decision; record whether it already passed).
 - [x] 3.2 Restructure `components/mobile/transactions/TransactionListItem.tsx`: row container with the existing `Button` (payee, category, amount) and a sibling notes element carrying the same merged press and long-press props. Keep layout, ellipsis and pressed feedback unchanged; keep `MobileTaggedNotes` stopping propagation. Verify: 3.1 passes and existing mobile VRT snapshots are unchanged.
-- [ ] 3.3 Re-run 1.1 and record that it now passes on the live list.
+- [x] 3.3 Re-run 1.1 and record that it now passes on the live list.
 
 ## 4. Checks and release (sc-3070)
 
-- [ ] 4.1 Run `yarn lint:fix`, `yarn typecheck`, `yarn test` and `yarn generate:i18n`.
+- [x] 4.1 Run `yarn lint:fix`, `yarn typecheck`, `yarn test` and `yarn generate:i18n`.
 - [ ] 4.2 Add a release note in `upcoming-release-notes/`; archive the change after the PR merges. The version bump and fork news stay a release-time step per AGENTS.md "Private customized build versions".

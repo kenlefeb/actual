@@ -141,6 +141,11 @@ Cancelling or discarding the add, closing the add row, or leaving the add screen
 - **WHEN** the user undoes once, then again
 - **THEN** the first undo removes the attachment and keeps the transaction, and the second removes the transaction
 
+#### Scenario: Undo after adding with two documents
+- **GIVEN** a transaction added with two attached documents
+- **WHEN** the user undoes once, then again
+- **THEN** the first undo removes both attachments and keeps the transaction, and the second removes the transaction
+
 ### Requirement: Limit and offline while adding
 A transaction being added SHALL hold at most 5 documents. At the limit the app SHALL say the limit has been reached and hold no more. While the app is offline, picking a document for a transaction being added SHALL be refused with the same "check your connection" message as a failed upload, and nothing SHALL be held. The user can save the transaction and attach later.
 

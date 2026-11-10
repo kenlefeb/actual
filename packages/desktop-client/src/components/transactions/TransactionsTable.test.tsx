@@ -2008,6 +2008,21 @@ describe('Transactions', () => {
     expect(onNotesTagClick).toHaveBeenCalledWith('#vacation');
   });
 
+  test('the tag in the notes is a button that is not inside another button', () => {
+    const transactions = generateTransactions(2);
+    transactions[0].notes = 'Hotel #vacation';
+    const { container } = renderTransactions({
+      transactions,
+      onNotesTagClick: vi.fn(),
+      onCloseAddTransaction: vi.fn(),
+    });
+    const tag = within(
+      queryField(container, 'notes', '', 0) as HTMLElement,
+    ).getByRole('button', { name: '#vacation' });
+
+    expect(tag.parentElement?.closest('button')).toBeNull();
+  });
+
   describe('Tag Autocomplete', () => {
     test('adding a tag at the end of the note', async () => {
       const { container, getTransactions } = renderTransactions();

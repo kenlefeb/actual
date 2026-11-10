@@ -1,5 +1,5 @@
-import React from 'react';
-import type { CSSProperties } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
+import type { CSSProperties, SyntheticEvent } from 'react';
 import { mergeProps } from 'react-aria';
 import type { ListBoxItemRenderProps } from 'react-aria-components';
 import { useTranslation } from 'react-i18next';
@@ -47,6 +47,30 @@ import { useSelector } from '#redux';
 import { lookupName, Status } from './TransactionEdit';
 
 export const ROW_HEIGHT = 60;
+
+// A press that starts on a tag or a link belongs to that control. If it
+// reached the shared press state, a link that opens a new window would leave
+// the press unfinished and swallow the next tap on the row.
+function ignoreInteractiveTargets<T extends object>(props: T): T {
+  return Object.fromEntries(
+    Object.entries(props).map(([key, value]) =>
+      typeof value === 'function'
+        ? [
+            key,
+            (event: SyntheticEvent, ...rest: unknown[]) => {
+              if (
+                event.target instanceof Element &&
+                event.target.closest('a, [data-note-interactive]')
+              ) {
+                return;
+              }
+              return (value as (...args: unknown[]) => unknown)(event, ...rest);
+            },
+          ]
+        : [key, value],
+    ),
+  ) as T;
+}
 
 const getTextStyle = ({
   isPreview,
@@ -125,6 +149,55 @@ export function TransactionListItem({
     },
   });
 
+  // The notes line lives outside the row's button (a tag or link inside a
+  // button is a nested interactive control). The button keeps an invisible
+  // spacer of the same size, and the real line is laid over it.
+  const rowRef = useRef<HTMLDivElement>(null);
+  const spacerRef = useRef<HTMLDivElement>(null);
+  const [notesBox, setNotesBox] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
+
+  useLayoutEffect(() => {
+    const row = rowRef.current;
+    const spacer = spacerRef.current;
+    if (!row || !spacer) {
+      setNotesBox(null);
+      return;
+    }
+    const measure = () => {
+      const rowRect = row.getBoundingClientRect();
+      const spacerRect = spacer.getBoundingClientRect();
+      const next = {
+        top: spacerRect.top - rowRect.top - row.clientTop,
+        left: spacerRect.left - rowRect.left - row.clientLeft,
+        width: spacerRect.width,
+      };
+      setNotesBox(prev =>
+        prev &&
+        prev.top === next.top &&
+        prev.left === next.left &&
+        prev.width === next.width
+          ? prev
+          : next,
+      );
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+    const observer = new ResizeObserver(measure);
+    // The spacer's column changes size whenever the lines above it do.
+    observer.observe(row);
+    observer.observe(spacer);
+    if (spacer.parentElement) {
+      observer.observe(spacer.parentElement);
+    }
+    return () => observer.disconnect();
+  }, [transaction, schedules]);
+
   if (!transaction) {
     return null;
   }
@@ -162,8 +235,17 @@ export function TransactionListItem({
   const prettyCategory = specialCategory || categoryName;
   const textStyle = getTextStyle({ isPreview });
 
+  const notesStyle = {
+    fontSize: 11,
+    fontWeight: '400',
+    color: theme.tableText,
+    textAlign: 'left',
+    opacity: 0.85,
+  } satisfies CSSProperties;
+
   return (
     <View
+      innerRef={rowRef}
       style={{
         flexDirection: 'row',
         alignItems: 'stretch',
@@ -315,21 +397,13 @@ export function TransactionListItem({
                 </View>
               )}
               {displayedNotes && (
-                <TextOneLine
-                  style={{
-                    fontSize: 11,
-                    marginTop: 4,
-                    fontWeight: '400',
-                    color: theme.tableText,
-                    textAlign: 'left',
-                    opacity: 0.85,
-                  }}
+                <View
+                  innerRef={spacerRef}
+                  aria-hidden
+                  style={{ ...notesStyle, marginTop: 4, visibility: 'hidden' }}
                 >
-                  <NotesTagFormatter
-                    notes={displayedNotes}
-                    onNotesTagClick={onNotesTagClick}
-                  />
-                </TextOneLine>
+                  &nbsp;
+                </View>
               )}
             </View>
             <View style={{ justifyContent: 'center', alignItems: 'flex-end' }}>
@@ -366,6 +440,26 @@ export function TransactionListItem({
           </View>
         </Button>
       </PressResponder>
+      {displayedNotes && (
+        <div
+          {...ignoreInteractiveTargets(mergeProps(pressProps, longPressProps))}
+          style={{
+            position: 'absolute',
+            top: notesBox?.top,
+            left: notesBox?.left,
+            width: notesBox?.width,
+            visibility: notesBox ? 'visible' : 'hidden',
+            userSelect: 'none',
+          }}
+        >
+          <TextOneLine style={notesStyle}>
+            <NotesTagFormatter
+              notes={displayedNotes}
+              onNotesTagClick={onNotesTagClick}
+            />
+          </TextOneLine>
+        </div>
+      )}
       {isReconciling &&
         !isPreview &&
         (isChild ? (

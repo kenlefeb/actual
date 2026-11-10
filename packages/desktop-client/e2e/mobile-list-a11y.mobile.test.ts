@@ -14,12 +14,14 @@ async function checkList(page: Page) {
   return page.evaluate(async () => {
     const list = document.querySelector('[aria-label="Transaction list"]')!;
     // @ts-expect-error axe is injected by the evaluate call above
-    const results = await window.axe.run(list);
+    const results = await window.axe.run(list, { elementRef: true });
     const nested = results.violations.find(
       (v: { id: string }) => v.id === 'nested-interactive',
     );
     const flaggedButtons: string[] = (nested?.nodes ?? [])
-      .map((n: { target: string[] }) => document.querySelector(n.target[0])!)
+      // elementRef gives the node itself; a selector lookup can miss a row that
+      // the virtualized list recycled after axe ran.
+      .map((n: { element: Element }) => n.element)
       .filter((el: Element) => el.closest('button'))
       .map((el: Element) => el.outerHTML.slice(0, 120));
     const nestedControls = [

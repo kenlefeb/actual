@@ -82,7 +82,8 @@ Tapping a tag in a transaction's notes in a transaction list SHALL filter the li
 #### Scenario: No nested interactive control in a list row
 - **WHEN** a mobile list row has notes containing a tag and a link
 - **THEN** the tag and the link are not descendants of the row's button
-- **AND** an axe check of the mobile list (All accounts and a single account) reports no `nested-interactive` violation
+- **AND** an axe check of the mobile list (All accounts and a single account) reports no `nested-interactive` node that contains a tag or a link
+- **AND** the row's own option wrapper around its button is upstream's structure and is not part of this requirement
 
 #### Scenario: Press the notes line
 - **WHEN** a user taps the notes line of a mobile list row away from any tag or link

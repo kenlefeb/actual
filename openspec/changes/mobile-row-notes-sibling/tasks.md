@@ -4,7 +4,7 @@ Test-first: write each test, run it and see it fail before the code (record the 
 
 ## 1. Tester: axe on the live list, failing first (sc-3070)
 
-- [ ] 1.1 Add `packages/desktop-client/e2e/mobile-list-a11y.mobile.test.ts` (Playwright, mobile viewport, axe-core added as an explicit dev dependency of `@actual-app/web`): open the All accounts list and one account's list with a transaction whose notes have a tag and a link, run axe, assert no `nested-interactive` violation. Run it against the current code on the live list and record the failure (rule, node, impact). Include colour-contrast; file any other finding as a Shortcut `bug` story rather than folding it in. Verify: `yarn workspace @actual-app/web run playwright test mobile-list-a11y.mobile.test.ts`.
+- [ ] 1.1 Add `packages/desktop-client/e2e/mobile-list-a11y.mobile.test.ts` (Playwright, mobile viewport, axe-core added as an explicit dev dependency of `@actual-app/web`): open the All accounts list and one account's list with a transaction whose notes have a tag and a link, run axe, assert that no tag or link is a descendant of a `<button>` and that no `nested-interactive` node contains one (option rows flagged only for the upstream `ListBoxItem` wrapper are excluded; say so in a test comment, design decision 8). Run it against the current code on the live list and record the failure (rule, node, impact). Record every other axe finding with its selector; file a Shortcut `bug` story only for nodes in fork-added UI, not for upstream's. Verify: `yarn workspace @actual-app/web run playwright test mobile-list-a11y.mobile.test.ts`.
 
 ## 2. Desktop: pin the separate tag control (sc-3070)
 

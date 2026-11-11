@@ -1,7 +1,10 @@
 # 10. Native UI approach for the iOS and Mac apps
 
-Fork-only; never upstream. **Status: Proposed** (2026-11-11, Solution
-Architect, sc-3579). It builds on the UX Designer's exploration on sc-3483
+Fork-only; never upstream. **Status: Superseded** by
+[ADR 11](0011-native-ui-without-upstream-parity.md) (2026-11-11: Ken dropped
+upstream UI parity for the native apps and made "one loot-core, never ported"
+a hard rule). Originally proposed 2026-11-11 by the Solution Architect,
+sc-3579. It builds on the UX Designer's exploration on sc-3483
 (comment 3492), [`DESIGN.native.md`](../../DESIGN.native.md) and the
 `native-appearance` spec in `openspec/changes/add-native-design-system/`.
 

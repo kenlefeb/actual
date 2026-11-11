@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "id": "fork-release-26.10.1-alpha.34",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.34 — Ken's Actual fork",
+      "date": "2026-11-10",
+      "version": "26.10.1-alpha.34",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.34.md",
+      "body": "**Unofficial fork prerelease.** Based on upstream Actual v26.11.0 (`1766241e3f4b3c578e424c4fa15f1eb83c0da17d`, October 29, 2026); not an official Actual Budget release.\n\nThis release lets you attach documents (receipts, invoices) to a transaction while you are adding it. Camera and Photos on a real iPhone have not been tested yet.",
+      "details": "#### Features\n\n- Attach documents (receipts, invoices) while adding a transaction. On desktop, use the paperclip in the register's add row; on the phone, use the Documents section on the add screen. You can attach up to 5 documents per transaction. They are attached when you save the transaction, and attaching is refused while you are offline.\n\n#### Enhancements\n\n- None.\n\n#### Bugfixes\n\n- None.\n\n#### Maintenance\n\n- No upstream changes in this release; the fork stays on upstream Actual 26.11.0.\n- OpenSpec strict-validation fixes, and Fork CI now validates OpenSpec changes.\n- End-to-end test and OpenSpec archive work for attaching documents while adding a transaction.\n\n#### Known limitations\n\n- Experimental.\n- Tapping a tag in the transaction editor does nothing.\n- Tags are not yet fully accessible on the phone.\n- OpenID sign-out needs the server's address in the identity provider's allowed sign-out addresses; without it the provider shows an error page, though you are already signed out of Actual.\n- Attached documents aren't included in a budget export, and removed documents stay on the sync server.\n- HEIC pictures are refused; use the Photos library or a JPEG or PNG copy.\n- Attaching a document needs a connection; there is no offline upload queue.\n- Camera and Photos on a real iPhone have not been tested yet; no iPhone acceptance test is claimed."
+    },
+    {
       "id": "fork-release-26.10.1-alpha.33",
       "type": "release",
       "title": "Release 26.10.1-alpha.33 — Ken's Actual fork",

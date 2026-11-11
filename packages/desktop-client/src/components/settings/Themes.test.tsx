@@ -16,6 +16,7 @@ let mockTheme: string = 'light';
 let mockInstalledLight: string | undefined = undefined;
 let mockInstalledDark: string | undefined = undefined;
 let mockCustomCssOverride: string | undefined = undefined;
+let mockIsNativeShell = false;
 
 vi.mock('#hooks/useGlobalPref', () => ({
   useGlobalPref: (key: string) => {
@@ -38,6 +39,7 @@ vi.mock('#style', async () => {
     ...actual,
     useTheme: () => [mockTheme, mockSwitchTheme],
     usePreferredDarkTheme: () => ['dark', mockSwitchDarkTheme],
+    isNativeShell: () => mockIsNativeShell,
   };
 });
 
@@ -56,6 +58,23 @@ describe('ThemeSettings', () => {
     mockInstalledLight = undefined;
     mockInstalledDark = undefined;
     mockCustomCssOverride = undefined;
+    mockIsNativeShell = false;
+  });
+
+  // fork: sc-3505. The desktop Settings page and the mobile Settings screen
+  // both render ThemeSettings from GeneralSettings.
+  describe('in the native apps', () => {
+    it('shows the theme setting in a browser', () => {
+      render(<ThemeSettings />);
+      expect(screen.getByText('Theme')).toBeVisible();
+    });
+
+    it('hides the theme setting in the iOS and Mac apps', () => {
+      mockIsNativeShell = true;
+      const { container } = render(<ThemeSettings />);
+      expect(screen.queryByText('Theme')).toBeNull();
+      expect(container).toBeEmptyDOMElement();
+    });
   });
 
   describe('custom CSS override indicator', () => {

@@ -14,6 +14,7 @@ import { css } from '@emotion/css';
 import { useGlobalPref } from '#hooks/useGlobalPref';
 import {
   darkThemeOptions,
+  isNativeShell,
   themeOptions,
   usePreferredDarkTheme,
   useTheme,
@@ -39,6 +40,12 @@ type InstallerState = {
 } | null;
 
 export function ThemeSettings() {
+  // fork: sc-3505. The native apps follow the system appearance instead.
+  if (isNativeShell()) return null;
+  return <BrowserThemeSettings />;
+}
+
+function BrowserThemeSettings() {
   const { t } = useTranslation();
   const [theme, switchTheme] = useTheme();
   const [darkTheme, switchDarkTheme] = usePreferredDarkTheme();

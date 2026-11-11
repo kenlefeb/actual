@@ -124,6 +124,48 @@ describe('Paperclip in the register', () => {
     expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument();
   });
 
+  // The iOS app's WebView opens no new windows, so window.open does nothing
+  it('opens a document inside the iOS app', async () => {
+    initServer({
+      'transaction-attachment-open': () => ({
+        name: 'receipt.pdf',
+        mime: 'application/pdf',
+        data: new Uint8Array([37, 80, 68, 70]),
+      }),
+    });
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    URL.createObjectURL = vi.fn(() => 'blob:receipt');
+    Object.assign(window, { Capacitor: {} });
+    const store = createTestAppStore();
+    try {
+      render(
+        <TestProviders store={store}>
+          <AttachmentsIndicator attachments={[receipt]} />
+        </TestProviders>,
+      );
+
+      await userEvent.click(screen.getByLabelText('Attached documents'));
+      await userEvent.click(screen.getByRole('button', { name: 'Open' }));
+
+      await waitFor(() =>
+        expect(store.getState().modals.modalStack).toEqual([
+          {
+            name: 'transaction-attachment-viewer',
+            options: {
+              name: 'receipt.pdf',
+              mime: 'application/pdf',
+              url: 'blob:receipt',
+            },
+          },
+        ]),
+      );
+      expect(open).not.toHaveBeenCalled();
+    } finally {
+      delete (window as { Capacitor?: unknown }).Capacitor;
+      void clearServer();
+    }
+  });
+
   it('No indicator', () => {
     render(
       <TestProviders>

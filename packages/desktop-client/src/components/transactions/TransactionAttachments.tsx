@@ -14,6 +14,7 @@ import type { TFunction } from 'i18next';
 
 import { useMetadataPref } from '#hooks/useMetadataPref';
 import { useQuery } from '#hooks/useQuery';
+import { pushModal } from '#modals/modalsSlice';
 import { addNotification } from '#notifications/notificationsSlice';
 import { useDispatch } from '#redux';
 import { attachErrorMessage } from '#util/attachmentMessages';
@@ -139,10 +140,13 @@ export function openFailedMessage(t: TFunction) {
 async function openDocument(
   attachment: AttachmentSummary,
   onError: () => void,
+  showInApp: (document: { name: string; mime: string; url: string }) => void,
 ) {
   const openInViewer = window.Actual?.openAttachment;
+  // fork: sc-3398. The iOS app's WebView opens no new windows
+  const isNativeApp = 'Capacitor' in window;
   // Opened before the await so the browser doesn't block it as a pop-up
-  const tab = openInViewer ? null : window.open('', '_blank');
+  const tab = openInViewer || isNativeApp ? null : window.open('', '_blank');
   const result = await send('transaction-attachment-open', {
     id: attachment.id,
   });
@@ -160,7 +164,9 @@ async function openDocument(
   const url = URL.createObjectURL(
     new Blob([new Uint8Array(result.data)], { type: result.mime }),
   );
-  if (tab) {
+  if (isNativeApp) {
+    showInApp({ name: result.name, mime: result.mime, url });
+  } else if (tab) {
     tab.location.href = url;
   } else {
     window.open(url, '_blank');
@@ -190,6 +196,13 @@ export function AttachmentsIndicator({
       addNotification({
         notification: { type: 'error', message: openFailedMessage(t) },
       }),
+    );
+  }
+
+  function showInApp(options: { name: string; mime: string; url: string }) {
+    setIsOpen(false);
+    dispatch(
+      pushModal({ modal: { name: 'transaction-attachment-viewer', options } }),
     );
   }
 
@@ -227,7 +240,11 @@ export function AttachmentsIndicator({
             >
               {attachment.name}
             </Text>
-            <Button onPress={() => void openDocument(attachment, onOpenFailed)}>
+            <Button
+              onPress={() =>
+                void openDocument(attachment, onOpenFailed, showInApp)
+              }
+            >
               <Trans>Open</Trans>
             </Button>
             <Button

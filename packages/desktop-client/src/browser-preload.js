@@ -5,6 +5,7 @@ import { registerSW } from 'virtual:pwa-register';
 // oxlint-disable-next-line typescript-paths/absolute-parent-import
 import packageJson from '../package.json';
 
+import { nativeAppHomeUrl } from './auth/nativeAppHome';
 import { consumeProviderSignOut } from './auth/providerSignOut';
 import SharedBrowserServerWorker from './shared-browser-server.ts?sharedworker';
 import { computeClientVersion } from './util/versions';
@@ -15,6 +16,11 @@ const backendWorkerUrl = new URL('./browser-server.js', import.meta.url);
 // Normally these are already provided by electron, but in a real
 // browser environment this is where we initialize the backend and
 // everything else.
+
+const appHome = nativeAppHomeUrl(window);
+if (appHome) {
+  window.location.replace(appHome);
+}
 
 const IS_DEV = import.meta.env.DEV;
 const ACTUAL_VERSION = computeClientVersion({

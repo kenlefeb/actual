@@ -65,6 +65,10 @@ export function TransactionAttachmentViewerModal({
           height: 'var(--visual-viewport-height)',
           maxHeight: 'var(--visual-viewport-height)',
           borderRadius: 0,
+          // fork: sc-3398. The iOS app draws under the status bar, which hid
+          // the close button
+          paddingTop: 'env(safe-area-inset-top)',
+          paddingBottom: 'env(safe-area-inset-bottom)',
         },
       }}
     >

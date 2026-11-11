@@ -121,7 +121,7 @@ A transaction with at least one attachment SHALL show a paperclip in the desktop
 - **THEN** its register row shows no paperclip
 
 ### Requirement: Open a document
-Opening an attachment SHALL fetch its document from the server, decrypt it if it's encrypted, and show it in the browser's own viewer in a new tab. A document once fetched SHALL be kept on the device, so it opens again without the server.
+Opening an attachment SHALL fetch its document from the server, decrypt it if it's encrypted, and show it in the browser's own viewer in a new tab. A document once fetched SHALL be kept on the device, so it opens again without the server. A kept copy that no longer decrypts (another device changed the key) SHALL be dropped and the document fetched from the server once more.
 
 #### Scenario: Open a PDF
 - **WHEN** the user opens an attached PDF
@@ -136,6 +136,11 @@ Opening an attachment SHALL fetch its document from the server, decrypt it if it
 - **GIVEN** an attachment not yet opened on this device
 - **WHEN** the server is unreachable and the user opens it
 - **THEN** the user sees that the document can't be loaded right now
+
+#### Scenario: Key changed on another device
+- **GIVEN** the user opened an encrypted attachment on this device, and then another device changed the encryption key and this device synced
+- **WHEN** the user opens the attachment again
+- **THEN** it opens with the same bytes that were attached
 
 ### Requirement: Available on every device
 An attachment SHALL sync to every device that has the budget. Its document SHALL be fetched only when opened.
@@ -172,7 +177,7 @@ Deleting a transaction SHALL remove its attachments in the same change, the same
 - **THEN** the transaction returns with both documents, and each opens
 
 ### Requirement: Changing the encryption key
-When the user creates a new encryption key for a budget, every attachment encrypted with the old key SHALL be re-encrypted with the new key and stored again in place, before the key change completes, so no document becomes unreadable. Attachments marked unencrypted SHALL stay as they are. If any re-encryption fails, the key change SHALL stop with an error, the old key SHALL stay in effect, and every attachment SHALL still open.
+When the user creates a new encryption key, every attachment encrypted with the old key SHALL be re-encrypted with the new key before the key change completes, so no document becomes unreadable. Attachments whose document the server no longer holds (404 `attachment-not-found`) SHALL be skipped and logged. Any other failure SHALL stop the key change, keep the old key in effect, and leave every attachment openable.
 
 #### Scenario: New key keeps documents readable
 - **GIVEN** a budget with an encryption key and an attached PDF
@@ -183,6 +188,31 @@ When the user creates a new encryption key for a budget, every attachment encryp
 - **GIVEN** a budget with an encryption key and two attached PDFs
 - **WHEN** the user creates a new key and the server refuses the second re-upload
 - **THEN** the key change fails with a message, the old key stays in effect, and both PDFs open
+
+#### Scenario: A document is gone from the server
+- **GIVEN** a budget with an encryption key and two attached PDFs, and the server no longer holds the first PDF's document
+- **WHEN** the user creates a new key
+- **THEN** the key change succeeds, the first attachment's id is logged as skipped, and the second PDF opens with the new key
+
+#### Scenario: A download fails for another reason
+- **GIVEN** a budget with an encryption key and two attached PDFs, and the download of the second answers 500, or 404 with anything other than `attachment-not-found`
+- **WHEN** the user creates a new key
+- **THEN** the key change fails with a message, the old key stays in effect, and both PDFs open
+
+#### Scenario: Stale cached copy during a key change
+- **GIVEN** this device cached an attachment under the old key, another device then changed the key, and this device synced
+- **WHEN** the user creates a new key
+- **THEN** the key change succeeds, the cached copy is dropped, and the attachment opens with the new key
+
+#### Scenario: Unencrypted attachments are left alone
+- **GIVEN** a budget with an encryption key and an attachment marked unencrypted
+- **WHEN** the user creates a new key
+- **THEN** that attachment is not re-encrypted and still opens
+
+#### Scenario: The server's disk fails
+- **GIVEN** the sync server cannot read a stored document (not a missing file)
+- **WHEN** a client downloads it
+- **THEN** the server answers 500, not 404 `attachment-not-found`
 
 ### Requirement: Merging transactions
 Merging two transactions SHALL move every attachment of the dropped transaction to the kept one.
@@ -420,3 +450,20 @@ A transaction being added SHALL hold at most 5 documents. At the limit the app S
 #### Scenario: Offline pick
 - **WHEN** the app is offline and the user tries to attach a document while adding
 - **THEN** it is refused with the message to check the connection, and nothing is held
+
+### Requirement: Temporary copies are removed
+On desktop, opening a document hands the OS viewer a plain copy in the system temp folder. The app SHALL remove every such copy when it quits, and at its next start for any a crashed run left behind. It SHALL NOT remove a copy right after opening it, because the viewer may still be reading it. The copies are removed whether or not the budget is encrypted.
+
+#### Scenario: Quit removes the copies
+- **GIVEN** the user opened two attachments of an encrypted budget on desktop
+- **WHEN** the user quits the app
+- **THEN** no copy of either document remains in the temp folder
+
+#### Scenario: Crash leaves copies, next start removes them
+- **GIVEN** the app crashed after the user opened an attachment, leaving a copy in the temp folder
+- **WHEN** the app starts again
+- **THEN** that copy is removed
+
+#### Scenario: Copy kept while the viewer may read it
+- **WHEN** the user opens an attachment
+- **THEN** its copy stays in place, and the viewer opens it, until the app quits or restarts

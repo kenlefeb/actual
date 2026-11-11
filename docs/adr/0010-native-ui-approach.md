@@ -24,18 +24,23 @@ plan (sc-3483) keeps the web UI and adds a native theme and native chrome.
 
 Non-test TypeScript, counted with `wc -l`:
 
-| Code                                                   | Lines   | Notes                                                               |
-| ------------------------------------------------------ | ------- | ------------------------------------------------------------------- |
-| `desktop-client/src` (941 files)                       | 173,130 | The React UI                                                        |
-| of which `components/`                                 | 151,417 |                                                                     |
-| of which `components/mobile/` (80 files)               | 16,827  | Phone-only screens and sheets                                       |
-| of which `components/modals/`                          | 19,502  | Mostly shared by phone and desktop                                  |
-| `component-library/src`                                | 14,236  | Its `View` and `Text` render `<div>` and `<span>`                   |
-| `loot-core/src`                                        | 53,202  | The budget engine; `server/` alone is 38,692                        |
-| `crdt/src`                                             | 737     | Sync messages and the Merkle trie                                   |
-| `mobile-client` and `desktop-electron` (native shells) | 2,065   | Shell code only                                                     |
-| loot-core handlers (`app.method(...)`)                 | 210     | The API surface any non-web UI would have to call                   |
-| Files that branch on width (`useResponsive` etc.)      | 117     | Phone and desktop layouts are mostly the same components, not forks |
+| Code                                                   | Lines   | Notes                                                                   |
+| ------------------------------------------------------ | ------- | ----------------------------------------------------------------------- |
+| `desktop-client/src` (941 files)                       | 173,130 | The React UI                                                            |
+| of which `components/`                                 | 151,417 |                                                                         |
+| of which `components/mobile/` (80 files)               | 16,827  | Phone-only screens and sheets                                           |
+| of which `components/modals/`                          | 19,502  | Mostly shared by phone and desktop                                      |
+| `component-library/src`                                | 14,236  | Its `View` and `Text` render `<div>` and `<span>`                       |
+| `loot-core/src`                                        | 53,202  | The budget engine; `server/` alone is 38,692                            |
+| `crdt/src`                                             | 737     | Sync messages and the Merkle trie                                       |
+| `mobile-client` and `desktop-electron` (native shells) | 2,065   | Shell code only                                                         |
+| loot-core handler registrations (`app.method(...)`)    | 240     | The API surface any non-web UI would have to call (1)                   |
+| Files that branch on width (`useResponsive` etc.)      | 96      | Phone and desktop layouts are mostly the same components, not forks (2) |
+
+(1) `grep -rE "app\.method\(" packages/loot-core/src --include='*.ts'`,
+excluding `*.test.*` files: 240 calls, 210 distinct method names.
+(2) `grep -rlE 'useResponsive|isNarrowWidth' packages/desktop-client/src`
+over `*.ts` and `*.tsx`, excluding `*.test.*` files.
 
 Tests: 35 Playwright e2e files (18 of them `*.mobile.test.ts`), 474 visual
 regression (VRT) snapshots, and 195 unit test files in `desktop-client`.
@@ -106,14 +111,16 @@ extras. Each extra ships on its own.
 
 Every screen is rewritten in Swift. The engine has three variants:
 
-- **3a. loot-core in a hidden WKWebView.** Native views call the 210 handlers
+- **3a. loot-core in a hidden WKWebView.** Native views call the 240 handlers
   over a message bridge. The engine stays the same and keeps JIT and
   sql.js.
 - **3b. loot-core in JavaScriptCore (`JSContext`).** iOS gives in-app
   JavaScriptCore no JIT and so no WebAssembly. sql.js won't run, so loot-core
   needs a new platform layer that binds to iOS's native SQLite, and all the
   engine code runs interpreted (one benchmark showed a 7.5× slowdown with the
-  JIT off).
+  JIT off). The sources for this limit are several years old: re-verify the
+  JavaScriptCore WebAssembly and JIT limit against the current iOS before
+  choosing 3b.
 - **3c. Port loot-core and the CRDT to Swift.** A second engine.
 
 **Effort:**
@@ -172,7 +179,8 @@ time. Do not rewrite the UI (options 3 and 4).**
 - Option 2's extras are worth doing because the web can't do them at all.
   Each is a small, separate native target. None of them puts a second engine
   near production data.
-- A rewrite costs 20–30 times as much. It then costs again for every upstream
+- A rewrite (93–230 pw with its engine) costs about 18–50 times option 1
+  alone, or 6–15 times options 1 and 2 together. It then costs again for every upstream
   and fork feature, gives up Android, Windows and Linux or doubles the UIs,
   and throws away the e2e and VRT suites.
 - The one rewrite variant that keeps data safe (3a, loot-core in a hidden

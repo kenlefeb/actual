@@ -51,11 +51,8 @@ export function usePendingAttachments(initialFiles: PendingAttachment[] = []) {
     }
     if (generation !== generationRef.current) {
       // clear() already reset the slots and the pending rows
-      if ('error' in result) {
-        notify('error', attachErrorMessage(result, t));
-        return null;
-      }
-      return file;
+      // Silent on purpose: the user has moved on from this pick
+      return 'error' in result ? null : file;
     }
     setChecking(names => {
       const at = names.indexOf(file.name);
@@ -144,15 +141,37 @@ export function usePendingAttachments(initialFiles: PendingAttachment[] = []) {
   }
 
   // For a form that stays open after Save (the register's add row): hands the
-  // held files to the returned function and clears now, so the next entry
-  // starts empty while the attach is still running.
+  // held files to `attach` and clears now, so the next entry starts empty while
+  // the attach is still running. `restore` puts the files back if the save
+  // failed before `attach` began, so nothing is lost.
   function take() {
     const held = filesRef.current;
     const running = [...checksRef.current];
+    let started = false;
     clear();
-    return async (transactionId: string) => {
-      const late = (await Promise.all(running)).filter(f => f != null);
-      await sendBatch(transactionId, [...held, ...late]);
+    return {
+      async attach(transactionId: string) {
+        started = true;
+        const late = (await Promise.all(running)).filter(
+          // A check that finished just before this call is in both lists
+          (f): f is PendingAttachment => f != null && !held.includes(f),
+        );
+        await sendBatch(transactionId, [...held, ...late]);
+      },
+      async restore() {
+        if (started) {
+          return;
+        }
+        const late = (await Promise.all(running)).filter(
+          (f): f is PendingAttachment => f != null && !held.includes(f),
+        );
+        const back = [...held, ...late, ...filesRef.current].slice(
+          0,
+          MAX_PENDING_ATTACHMENTS,
+        );
+        slotsRef.current = back.length;
+        setHeld(back);
+      },
     };
   }
 
@@ -162,3 +181,4 @@ export function usePendingAttachments(initialFiles: PendingAttachment[] = []) {
 }
 
 export type PendingAttachments = ReturnType<typeof usePendingAttachments>;
+export type TakenAttachments = ReturnType<PendingAttachments['take']>;

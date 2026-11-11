@@ -229,7 +229,10 @@ describe('usePendingAttachments', () => {
   });
 
   it('Save drops a file whose check is refused while waiting', async () => {
-    const batch = vi.fn(() => ({ attachments: [], failed: [] }));
+    const batch = vi.fn((_args?: unknown) => ({
+      attachments: [],
+      failed: [],
+    }));
     const resolvers: Array<(r: unknown) => void> = [];
     initServer({
       'transaction-attachment-check': () =>
@@ -317,5 +320,85 @@ describe('usePendingAttachments', () => {
 
     expect(result.current.files).toHaveLength(5);
     expect(result.current.files.map(f => f.name)).not.toContain('stale.pdf');
+  });
+
+  it('a check that fails after a clear shows no message', async () => {
+    let release!: (r: unknown) => void;
+    initServer({
+      'transaction-attachment-check': () =>
+        new Promise(resolve => (release = resolve)),
+    });
+    const { result, messages } = setup();
+    let pending!: Promise<void>;
+    act(() => {
+      pending = result.current.add(pdf('a.pdf'));
+    });
+    act(() => result.current.clear());
+
+    await waitFor(() => expect(release).toBeTypeOf('function'));
+    await act(async () => {
+      release({ error: 'unsupported-type' });
+      await pending;
+    });
+
+    expect(messages()).toEqual([]);
+  });
+
+  it.each([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])(
+    'take() sends a file once even as its check finishes (tick %i)',
+    async ticks => {
+      const batch = vi.fn((_args?: unknown) => ({
+        attachments: [],
+        failed: [],
+      }));
+      initServer({
+        'transaction-attachment-check': () => ({ ok: true }),
+        'transaction-attachments-add-batch': batch,
+      });
+      const { result } = setup();
+      let taken!: ReturnType<typeof result.current.take>;
+      await act(async () => {
+        const adding = result.current.add(pdf('a.pdf'));
+        for (let i = 0; i < ticks; i++) {
+          await Promise.resolve();
+        }
+        taken = result.current.take();
+        await adding;
+      });
+
+      await act(() => taken.attach('t1'));
+
+      const sent = batch.mock.calls.flatMap(
+        call => (call[0] as { files: unknown[] }).files,
+      );
+      expect(sent).toHaveLength(1);
+    },
+  );
+
+  it('take().restore() holds the files again, and does nothing once attaching began', async () => {
+    initServer({
+      'transaction-attachment-check': () => ({ ok: true }),
+      'transaction-attachments-add-batch': () => ({
+        attachments: [{}],
+        failed: [],
+      }),
+    });
+    const { result } = setup();
+    await act(() => result.current.add(pdf('a.pdf')));
+
+    let taken!: ReturnType<typeof result.current.take>;
+    act(() => {
+      taken = result.current.take();
+    });
+    expect(result.current.files).toEqual([]);
+    await act(() => taken.restore());
+    expect(result.current.files.map(f => f.name)).toEqual(['a.pdf']);
+
+    act(() => {
+      taken = result.current.take();
+    });
+    await act(() => taken.attach('t1'));
+    await act(() => taken.restore());
+    expect(result.current.files).toEqual([]);
   });
 });

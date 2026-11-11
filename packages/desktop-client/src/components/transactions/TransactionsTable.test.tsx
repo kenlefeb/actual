@@ -183,6 +183,7 @@ type LiveTransactionTableProps = {
   balances?: Record<TransactionEntity['id'], number>;
   onReorder?: () => void;
   isAdding: boolean;
+  failAdd?: boolean;
   onTransactionsChange?: (newTrans: TransactionEntity[]) => void;
   onCloseAddTransaction?: () => void;
   onNotesTagClick?: (tag: string) => void;
@@ -216,11 +217,14 @@ function LiveTransactionTable(props: LiveTransactionTableProps) {
   // Mirrors TransactionList.onAdd: mint the real ids, save, then attach
   const onAdd = async (
     newTransactions: TransactionEntity[],
-    attach?: (transactionId: string) => Promise<void>,
+    documents?: { attach: (transactionId: string) => Promise<void> },
   ) => {
+    if (props.failAdd) {
+      throw new Error('could not save');
+    }
     newTransactions = realizeTempTransactions(newTransactions);
     setTransactions(trans => [...newTransactions, ...trans]);
-    await attach?.(newTransactions[0].id);
+    await documents?.attach(newTransactions[0].id);
   };
 
   const onAddSplit = (id: string) => {
@@ -2389,6 +2393,55 @@ describe('Documents while adding', () => {
     );
   });
 
+  test('Schedule with held documents: the row says they are not kept', async () => {
+    const batch = vi.fn();
+    serve({
+      'transaction-attachments-add-batch': batch,
+      'schedule/create': createScheduleMock,
+    });
+    const { container } = renderAdding();
+    await pick(container);
+    await screen.findByText('invoice.pdf');
+    const note =
+      'Documents are attached when you choose Add. Schedule does not keep them.';
+    expect(screen.queryByText(note)).toBeNull();
+
+    const dateInput = queryNewField(container, 'date', 'input');
+    await userEvent.clear(dateInput);
+    await userEvent.type(dateInput, '01/02/2017[Tab]');
+
+    expect(screen.getByTestId('schedule-button')).toBeVisible();
+    expect(screen.getByText(note)).toBeVisible();
+    // Held files stay listed, with Remove, while Schedule is offered
+    expect(
+      screen.getByRole('button', { name: 'Remove invoice.pdf' }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Attach document' }),
+    ).toBeNull();
+
+    // Schedule never attaches them
+    await userEvent.click(screen.getByTestId('schedule-button'));
+    await waitFor(() => expect(createScheduleMock).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText('invoice.pdf')).toBeNull());
+    expect(batch).not.toHaveBeenCalled();
+  });
+
+  test('Removing the last held document moves focus to the paperclip', async () => {
+    serve();
+    const { container } = renderAdding();
+    await pick(container);
+    await screen.findByText('invoice.pdf');
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Remove invoice.pdf' }),
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'Attach document' }),
+    ).toHaveFocus();
+  });
+
   test('Schedule has no paperclip', async () => {
     serve();
     const { container } = renderAdding();
@@ -2507,6 +2560,20 @@ describe('Documents while adding', () => {
       expect(batch).toHaveBeenCalledWith(
         expect.objectContaining({ transactionId: getTransactions()[0].id }),
       );
+    });
+
+    test('The transaction fails to save: the documents stay held', async () => {
+      const batch = vi.fn();
+      serve({ 'transaction-attachments-add-batch': batch });
+      const { container } = renderAdding({ failAdd: true });
+      await pick(container);
+      await screen.findByText('invoice.pdf');
+
+      await userEvent.click(screen.getByTestId('add-button'));
+
+      await waitFor(() => expect(messages()).toContain("wasn't saved"));
+      expect(await screen.findByText('invoice.pdf')).toBeVisible();
+      expect(batch).not.toHaveBeenCalled();
     });
 
     test('Connection lost between pick and save', async () => {

@@ -95,6 +95,7 @@ test.describe('Transaction documents on the phone', () => {
       await page.getByRole('button', { name: 'Undo' }).click();
       await expect(entry.documentName(pdf.name)).toBeVisible();
       await page.goto(`/accounts/${account}`);
+      await expect(row).toBeVisible();
       await expect(row.getByLabel('Has attached documents')).toBeVisible();
 
       // Cancel while adding: a held document leaves nothing behind. The add
@@ -115,6 +116,9 @@ test.describe('Transaction documents on the phone', () => {
       await entry.attachDocument(pdf);
       await expect(entry.addTransactionButton).toBeEnabled();
       await entry.createTransaction();
+      // The add screen closes and the new row is listed before its paperclip
+      await expect(entry.addTransactionButton).toBeHidden();
+      await expect(newRow).toHaveCount(1);
       await expect(newRow.getByLabel('Has attached documents')).toBeVisible();
     } finally {
       await page.close();

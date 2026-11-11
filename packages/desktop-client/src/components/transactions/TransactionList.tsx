@@ -31,6 +31,7 @@ import type { TableHandleRef } from '#components/table';
 import { isValidBoundaryDrop } from '#hooks/useDragDrop';
 import type { DropPosition } from '#hooks/useDragDrop';
 import { useNavigate } from '#hooks/useNavigate';
+import type { TakenAttachments } from '#hooks/usePendingAttachments';
 import { useSyncedPref } from '#hooks/useSyncedPref';
 import { pushModal } from '#modals/modalsSlice';
 import { addNotification } from '#notifications/notificationsSlice';
@@ -190,14 +191,12 @@ export function TransactionList({
   const onAdd = useCallback(
     async (
       newTransactions: TransactionEntity[],
-      attachDocuments?: (
-        transactionId: TransactionEntity['id'],
-      ) => Promise<void>,
+      documents?: TakenAttachments,
     ) => {
       newTransactions = realizeTempTransactions(newTransactions);
       await saveDiff({ added: newTransactions }, isLearnCategoriesEnabled);
       // The real ids exist now; documents attach to the parent, as one undo step
-      await attachDocuments?.(newTransactions[0].id);
+      await documents?.attach(newTransactions[0].id);
       onRefetch();
     },
     [isLearnCategoriesEnabled, onRefetch],

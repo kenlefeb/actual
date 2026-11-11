@@ -283,7 +283,9 @@ export function Titlebar({ style }: TitlebarProps) {
         flexDirection: 'row',
         alignItems: 'center',
         padding: '0 10px 0 15px',
-        height: 36,
+        // fork: sc-3554. Grows when its buttons wrap at narrow widths, instead
+        // of overflowing above and below a fixed 36px row
+        minHeight: 36,
         pointerEvents: 'none',
         '& *': {
           pointerEvents: 'auto',
@@ -339,7 +341,7 @@ export function Titlebar({ style }: TitlebarProps) {
         <Route path="/budget" element={<BudgetTitlebar />} />
       </Routes>
       <View style={{ flex: 1 }} />
-      <SpaceBetween gap={10}>
+      <SpaceBetween gap={10} style={{ justifyContent: 'flex-end' }}>
         <UncategorizedButton />
         {isDevelopmentEnvironment() && !isTestEnv && <ThemeSelector />}
         <PrivacyButton />

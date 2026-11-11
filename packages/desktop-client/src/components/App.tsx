@@ -226,7 +226,8 @@ export function App() {
                       display: 'flex',
                       flexDirection: 'column',
                       ...appSafeAreaPadding({
-                        hasMobilePageHeader: !!budgetId && isNarrowWidth,
+                        isBudgetOpen: !!budgetId,
+                        isNarrowWidth,
                       }),
                     }}
                   >

@@ -163,8 +163,7 @@ export function ManagementApp() {
               <View
                 style={{
                   position: 'absolute',
-                  // fork: sc-3398. Below the status bar in the iOS app
-                  top: 'env(safe-area-inset-top)',
+                  top: 0,
                   right: 0,
                   padding: '6px 10px',
                   zIndex: 4000,

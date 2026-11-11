@@ -1,6 +1,8 @@
 import { useEffect, useMemo } from 'react';
 
 import darkThemeCss from '@actual-app/components/themes/dark.css?inline';
+import homeEconomicsDarkCss from '@actual-app/components/themes/home-economics-dark.css?inline';
+import homeEconomicsLightCss from '@actual-app/components/themes/home-economics-light.css?inline';
 import lightThemeCss from '@actual-app/components/themes/light.css?inline';
 import midnightThemeCss from '@actual-app/components/themes/midnight.css?inline';
 import paletteCss from '@actual-app/components/themes/palette.css?inline';
@@ -16,6 +18,7 @@ import {
   usesRedesignSidebarPalette,
   validateThemeCssSafely,
 } from './customThemes';
+import { isNativeShell } from './nativeShell';
 
 const themes = {
   light: { name: 'Light', colors: lightThemeCss },
@@ -106,6 +109,22 @@ export function ThemeStyle() {
   );
 
   const [customCssOverride] = useGlobalPref('customCssOverride');
+
+  // fork: sc-3505. The native apps always use the Home Economics theme and
+  // follow the system appearance; theme prefs synced from a browser are ignored.
+  if (isNativeShell()) {
+    return (
+      <>
+        <style>{paletteCss}</style>
+        <style media="(prefers-color-scheme: light)">
+          {homeEconomicsLightCss}
+        </style>
+        <style media="(prefers-color-scheme: dark)">
+          {homeEconomicsDarkCss}
+        </style>
+      </>
+    );
+  }
 
   // Rendered rather than injected from an effect so the CSS variables exist
   // in the same commit as any consumer effect that reads them.
@@ -219,7 +238,9 @@ export function CustomThemeStyle() {
     customCssOverride,
   ]);
 
-  if (!validatedCss) {
+  // fork: sc-3505. A custom theme synced from a browser must not restyle the
+  // native apps.
+  if (!validatedCss || isNativeShell()) {
     return null;
   }
 

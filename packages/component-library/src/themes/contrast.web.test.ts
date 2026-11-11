@@ -45,34 +45,40 @@ function contrast(a: string, b: string) {
   return (light + 0.05) / (dark + 0.05);
 }
 
+// fork: sc-3505, the Home Economics themes of the native apps
+const themeNames = [
+  'light',
+  'dark',
+  'midnight',
+  'home-economics-light',
+  'home-economics-dark',
+];
+
 describe('paycheck note and warning contrast', () => {
   // The desktop register sits on pageBackground, the phone account page on
   // mobilePageBackground
-  it.each(['light', 'dark', 'midnight'])(
-    'meets WCAG AA in the %s theme',
-    themeName => {
-      const css = read(`${themeName}.css`);
-      const pairs = [
-        ['paycheckNoteText', 'pageBackground'],
-        ['paycheckNoteText', 'mobilePageBackground'],
-        // Field labels in the phone paycheck editor's section cards
-        ['paycheckNoteText', 'tableBackground'],
-        // The paycheck note in the desktop schedule dialog (sc-1116)
-        ['paycheckNoteText', 'modalBackground'],
-        ['paycheckWarningText', 'pageBackground'],
-        ['paycheckWarningText', 'mobilePageBackground'],
-        // The Paychecks card on the Schedules page ("Skipped: …" and the
-        // clearing warning)
-        ['paycheckWarningText', 'tableBackground'],
-      ];
-      for (const [text, background] of pairs) {
-        expect(
-          contrast(color(css, text), color(css, background)),
-          `${text} on ${background}`,
-        ).toBeGreaterThanOrEqual(4.5);
-      }
-    },
-  );
+  it.each(themeNames)('meets WCAG AA in the %s theme', themeName => {
+    const css = read(`${themeName}.css`);
+    const pairs = [
+      ['paycheckNoteText', 'pageBackground'],
+      ['paycheckNoteText', 'mobilePageBackground'],
+      // Field labels in the phone paycheck editor's section cards
+      ['paycheckNoteText', 'tableBackground'],
+      // The paycheck note in the desktop schedule dialog (sc-1116)
+      ['paycheckNoteText', 'modalBackground'],
+      ['paycheckWarningText', 'pageBackground'],
+      ['paycheckWarningText', 'mobilePageBackground'],
+      // The Paychecks card on the Schedules page ("Skipped: …" and the
+      // clearing warning)
+      ['paycheckWarningText', 'tableBackground'],
+    ];
+    for (const [text, background] of pairs) {
+      expect(
+        contrast(color(css, text), color(css, background)),
+        `${text} on ${background}`,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
 });
 
 // The backgrounds secondary and warning text sit on across the app, as
@@ -87,7 +93,7 @@ const backgrounds = [
 ];
 
 describe('subdued and warning text contrast (sc-1212)', () => {
-  it.each(['light', 'dark', 'midnight'])(
+  it.each(themeNames)(
     'pageTextSubdued meets WCAG AA on every background in the %s theme',
     themeName => {
       const css = read(`${themeName}.css`);
@@ -100,19 +106,22 @@ describe('subdued and warning text contrast (sc-1212)', () => {
     },
   );
 
-  it('warningText meets WCAG AA on every background in the light theme', () => {
-    const css = read('light.css');
-    for (const background of backgrounds) {
-      expect(
-        contrast(color(css, 'warningText'), color(css, background)),
-        `warningText on ${background}`,
-      ).toBeGreaterThanOrEqual(4.5);
-    }
-  });
+  it.each(['light', 'home-economics-light', 'home-economics-dark'])(
+    'warningText meets WCAG AA on every background in the %s theme',
+    themeName => {
+      const css = read(`${themeName}.css`);
+      for (const background of backgrounds) {
+        expect(
+          contrast(color(css, 'warningText'), color(css, background)),
+          `warningText on ${background}`,
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    },
+  );
 });
 
 describe('Notifications row count pill contrast (sc-1848)', () => {
-  it.each(['light', 'dark', 'midnight'])(
+  it.each(themeNames)(
     'pillTextSelected on pillBackgroundSelected meets WCAG AA in the %s theme',
     themeName => {
       const css = read(`${themeName}.css`);
@@ -122,6 +131,69 @@ describe('Notifications row count pill contrast (sc-1848)', () => {
           color(css, 'pillBackgroundSelected'),
         ),
       ).toBeGreaterThanOrEqual(4.5);
+    },
+  );
+});
+
+describe('Home Economics text and amount contrast (sc-3505)', () => {
+  const texts = [
+    'pageText',
+    'pageTextSubdued',
+    'pageTextLink',
+    'tableText',
+    'tableTextLight',
+    'tableHeaderText',
+    'numberPositive',
+    'numberNegative',
+    'budgetNumberZero',
+    'templateNumberUnderFunded',
+    'errorText',
+    'noticeText',
+  ];
+
+  it.each(['home-economics-light', 'home-economics-dark'])(
+    'every text and amount colour meets WCAG AA on every background in the %s theme',
+    themeName => {
+      const css = read(`${themeName}.css`);
+      for (const text of texts) {
+        for (const background of backgrounds) {
+          expect(
+            contrast(color(css, text), color(css, background)),
+            `${text} on ${background}`,
+          ).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+      for (const [text, background] of [
+        ['buttonPrimaryText', 'buttonPrimaryBackground'],
+        ['mobileHeaderText', 'mobileHeaderBackground'],
+        ['mobileNavItemSelected', 'mobileNavBackground'],
+        ['sidebarItemText', 'sidebarBackground'],
+        ['sidebarItemTextSelected', 'sidebarBackground'],
+        ['menuItemText', 'menuBackground'],
+        ['menuAutoCompleteText', 'menuAutoCompleteBackground'],
+        ['formInputText', 'formInputBackground'],
+        ['tooltipText', 'tooltipBackground'],
+      ]) {
+        expect(
+          contrast(color(css, text), color(css, background)),
+          `${text} on ${background}`,
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    },
+  );
+});
+
+describe('Home Economics token parity (sc-3505)', () => {
+  // A token upstream adds to light.css must be added here too, or the native
+  // apps would fall through to no value for it
+  function tokens(file: string) {
+    return [...new Set(read(file).match(/--color-[\w-]+(?=:)/g))].sort();
+  }
+
+  it.each(['home-economics-light.css', 'home-economics-dark.css'])(
+    '%s defines exactly the --color-* tokens of light.css',
+    file => {
+      expect(tokens(file)).toEqual(tokens('light.css'));
     },
   );
 });

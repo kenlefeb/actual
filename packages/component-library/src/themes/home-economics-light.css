@@ -1,0 +1,299 @@
+/* Fork-only (sc-3505): the Home Economics light theme of the native apps
+   (DESIGN.native.md §3). ThemeStyle uses it in the iOS app and the macOS app
+   only; browsers keep upstream's themes. Tokens not set from DESIGN.native.md
+   keep upstream's light.css values. Text and amount colours are opaque so that
+   contrast.web.test.ts can measure them. */
+:root {
+  --font-family: -apple-system, system-ui, sans-serif;
+
+  --color-pageBackground: #f2f2f7;
+  --color-pageBackgroundModalActive: #e5e5ea;
+  --color-pageBackgroundTopLeft: #f2f2f7;
+  --color-pageBackgroundBottomRight: #f2f2f7;
+  --color-pageBackgroundLineTop: #ffffff;
+  --color-pageBackgroundLineMid: #f2f2f7;
+  --color-pageBackgroundLineBottom: #f2f2f7;
+  --color-pageText: #000000;
+  --color-pageTextLight: #636366;
+  --color-pageTextSubdued: #636366;
+  --color-pageTextDark: #000000;
+  --color-pageTextPositive: #0e7c74;
+  --color-pageTextLink: #0e7c74;
+  --color-pageTextLinkLight: #0e7c74;
+
+  --color-cardBackground: #ffffff;
+  --color-cardBorder: #c6c6c8;
+  --color-cardShadow: rgba(0, 0, 0, 0.1);
+
+  --color-tableBackground: #ffffff;
+  --color-tableRowBackgroundAlternate: var(--color-tableBackground);
+  --color-tableRowBackgroundHover: #f2f2f7;
+  --color-tableText: var(--color-pageText);
+  --color-tableTextItemAdded: var(--color-tableText);
+  --color-tableTextLight: #636366;
+  --color-tableTextSubdued: #636366;
+  --color-tableTextSelected: #000000;
+  --color-tableTextHover: #000000;
+  --color-tableTextInactive: #8e8e93;
+  --color-tableHeaderText: #636366;
+  --color-tableHeaderBackground: #ffffff;
+  --color-tableBorder: #c6c6c8;
+  --color-tableBorderSelected: #0e7c74;
+  --color-tableBorderHover: #0e7c74;
+  --color-tableBorderSeparator: #c6c6c8;
+  --color-tableRowBackgroundHighlight: #d9efed;
+  --color-tableRowBackgroundHighlightText: #000000;
+  --color-tableRowHeaderBackground: #f2f2f7;
+  --color-tableRowHeaderText: #000000;
+
+  --color-numberPositive: #1f7a35;
+  --color-numberNegative: #c00013;
+  --color-numberNeutral: #636366;
+  --color-budgetNumberNegative: var(--color-numberNegative);
+  --color-budgetNumberZero: var(--color-tableTextSubdued);
+  --color-budgetNumberNeutral: var(--color-tableText);
+  --color-budgetNumberPositive: var(--color-budgetNumberNeutral);
+  --color-templateNumberFunded: var(--color-numberPositive);
+  --color-templateNumberUnderFunded: #c93400;
+  --color-toBudgetPositive: var(--color-numberPositive);
+  --color-toBudgetZero: var(--color-numberPositive);
+  --color-toBudgetNegative: var(--color-budgetNumberNegative);
+
+  --color-sidebarBackground: #f2f2f7;
+  --color-sidebarItemBackgroundPending: #ffe0b2;
+  --color-sidebarItemBackgroundPositive: #1f7a35;
+  --color-sidebarItemBackgroundFailed: #c00013;
+  --color-sidebarItemBackgroundHover: #e5e5ea;
+  --color-sidebarItemAccentSelected: #0e7c74;
+  --color-sidebarItemBackgroundSelected: color-mix(
+    in srgb,
+    var(--color-sidebarItemAccentSelected) 22%,
+    transparent
+  );
+  --color-sidebarItemText: #000000;
+  --color-sidebarItemTextUpdated: var(--color-sidebarItemText);
+  --color-sidebarItemTextSelected: #0b6a63;
+  --color-sidebarBudgetName: #000000;
+  --color-sidebarHeaderText: #000000;
+  --color-sidebarTextSubdued: #636366;
+  --color-sidebarTextMuted: #8e8e93;
+  --color-sidebarTextPositive: var(--color-sidebarItemBackgroundPositive);
+  --color-sidebarTextFailed: var(--color-sidebarItemBackgroundFailed);
+  --color-sidebarBackgroundFailedSubtle: color-mix(
+    in srgb,
+    var(--color-sidebarItemBackgroundFailed) 16%,
+    transparent
+  );
+  --color-sidebarBorder: var(--color-sidebarItemBackgroundHover);
+  --color-sidebarControlBackground: var(--color-sidebarItemBackgroundHover);
+  --color-sidebarBrand: var(--color-sidebarItemAccentSelected);
+
+  --color-settingsCardBackground: var(--color-tableBackground);
+  --color-settingsCardBorder: var(--color-tableBorder);
+  --color-settingsCardText: var(--color-tableText);
+  --color-settingsCardTextSubdued: #636366;
+  --color-settingsNavItemText: var(--color-pageText);
+  --color-settingsNavItemBackgroundHover: color-mix(
+    in srgb,
+    var(--color-settingsNavItemText) 8%,
+    transparent
+  );
+  --color-settingsNavItemAccentSelected: #0e7c74;
+  --color-settingsNavItemTextSelected: #0e7c74;
+  --color-settingsNavItemBackgroundSelected: color-mix(
+    in srgb,
+    var(--color-settingsNavItemAccentSelected) 10%,
+    transparent
+  );
+
+  --color-menuBackground: #ffffff;
+  --color-menuItemBackground: #f2f2f7;
+  --color-menuItemBackgroundHover: #e5e5ea;
+  --color-menuItemText: #000000;
+  --color-menuItemTextHover: var(--color-menuItemText);
+  --color-menuItemTextSelected: #0e7c74;
+  --color-menuItemTextHeader: #636366;
+  --color-menuBorder: #c6c6c8;
+  --color-menuBorderHover: #0e7c74;
+  --color-menuKeybindingText: #636366;
+  --color-menuAutoCompleteBackground: #ffffff;
+  --color-menuAutoCompleteBackgroundHover: #e5e5ea;
+  --color-menuAutoCompleteText: #000000;
+  --color-menuAutoCompleteTextHover: #000000;
+  --color-menuAutoCompleteTextHeader: #636366;
+  --color-menuAutoCompleteItemTextHover: var(--color-menuAutoCompleteText);
+  --color-menuAutoCompleteItemText: var(--color-menuAutoCompleteText);
+
+  --color-modalBackground: #f2f2f7;
+  --color-modalBorder: #f2f2f7;
+  --color-mobileHeaderBackground: #f2f2f7;
+  --color-mobileHeaderText: #000000;
+  --color-mobileHeaderTextSubdued: #636366;
+  --color-mobileHeaderTextHover: rgba(118, 118, 128, 0.12);
+  --color-mobilePageBackground: #f2f2f7;
+  --color-mobileNavBackground: #f9f9f9;
+  --color-mobileNavItem: #636366;
+  --color-mobileNavItemSelected: #0b6a63;
+  --color-mobileAccountShadow: #c6c6c8;
+  --color-mobileAccountText: #000000;
+  --color-mobileTransactionSelected: #0e7c74;
+
+  --color-mobileViewTheme: var(--color-mobileHeaderBackground);
+  --color-mobileConfigServerViewTheme: #0e7c74;
+
+  --color-markdownNormal: var(--palette-purple150);
+  --color-markdownDark: var(--palette-purple400);
+  --color-markdownLight: var(--palette-purple100);
+
+  --color-buttonMenuText: var(--palette-navy100);
+  --color-buttonMenuTextHover: var(--palette-navy50);
+  --color-buttonMenuBackground: transparent;
+  --color-buttonMenuBackgroundHover: rgba(200, 200, 200, 0.25);
+  --color-buttonMenuBorder: var(--palette-navy500);
+  --color-buttonMenuSelectedText: var(--palette-green800);
+  --color-buttonMenuSelectedTextHover: var(--palette-orange800);
+  --color-buttonMenuSelectedBackground: var(--palette-orange200);
+  --color-buttonMenuSelectedBackgroundHover: var(--palette-orange300);
+  --color-buttonMenuSelectedBorder: var(--color-buttonMenuSelectedBackground);
+
+  --color-buttonPrimaryText: #ffffff;
+  --color-buttonPrimaryTextHover: var(--color-buttonPrimaryText);
+  --color-buttonPrimaryBackground: #0e7c74;
+  --color-buttonPrimaryBackgroundHover: #0b6a63;
+  --color-buttonPrimaryBorder: var(--color-buttonPrimaryBackground);
+  --color-buttonPrimaryShadow: rgba(0, 0, 0, 0.3);
+  --color-buttonPrimaryDisabledText: #ffffff;
+  --color-buttonPrimaryDisabledBackground: #aeaeb2;
+  --color-buttonPrimaryDisabledBorder: var(
+    --color-buttonPrimaryDisabledBackground
+  );
+
+  --color-buttonNormalText: #000000;
+  --color-buttonNormalTextHover: var(--color-buttonNormalText);
+  --color-buttonNormalBackground: #ffffff;
+  --color-buttonNormalBackgroundHover: var(--color-buttonNormalBackground);
+  --color-buttonNormalBorder: #c6c6c8;
+  --color-buttonNormalShadow: rgba(0, 0, 0, 0.2);
+  --color-buttonNormalSelectedText: #ffffff;
+  --color-buttonNormalSelectedBackground: #0e7c74;
+  --color-buttonNormalDisabledText: #aeaeb2;
+  --color-buttonNormalDisabledBackground: var(--color-buttonNormalBackground);
+  --color-buttonNormalDisabledBorder: var(--color-buttonNormalBorder);
+
+  --color-calendarText: #000000;
+  --color-calendarBackground: #ffffff;
+  --color-calendarItemText: #000000;
+  --color-calendarItemBackground: #f2f2f7;
+  --color-calendarSelectedBackground: #d9efed;
+  --color-datePickerRangeBackground: #d9efed;
+
+  --color-buttonBareText: var(--color-pageText);
+  --color-buttonBareTextHover: var(--color-pageText);
+  --color-buttonBareDisabledText: var(--color-pageTextSubdued);
+  --color-buttonBareBackground: transparent;
+  --color-buttonBareDisabledBackground: var(--color-buttonBareBackground);
+  --color-buttonBareBackgroundHover: rgba(118, 118, 128, 0.12);
+  --color-buttonBareBackgroundActive: rgba(118, 118, 128, 0.2);
+
+  --color-noticeBackground: var(--palette-green150);
+  --color-noticeBackgroundLight: var(--palette-green100);
+  --color-noticeBackgroundDark: var(--palette-green500);
+  --color-noticeText: #1f7a35;
+  --color-noticeTextLight: var(--palette-green500);
+  --color-noticeTextDark: var(--palette-green900);
+  --color-noticeTextMenu: var(--palette-green200);
+  --color-noticeBorder: var(--palette-green500);
+  --color-warningBackground: var(--palette-orange200);
+  --color-warningText: #c93400;
+  --color-warningTextLight: var(--palette-orange500);
+  --color-warningTextDark: var(--palette-orange900);
+  --color-warningBorder: var(--palette-orange500);
+  --color-paycheckNoteText: var(--color-pageTextSubdued);
+  --color-paycheckWarningText: var(--color-warningText);
+  --color-errorBackground: var(--palette-red100);
+  --color-errorText: #c00013;
+  --color-errorTextDark: var(--palette-red700);
+  --color-errorTextDarker: var(--palette-red900);
+  --color-errorTextMenu: var(--palette-red200);
+  --color-errorBorder: var(--palette-red500);
+  --color-upcomingBackground: #d9efed;
+  --color-upcomingText: #0b6a63;
+  --color-upcomingBorder: #0e7c74;
+
+  --color-formLabelText: #636366;
+  --color-formLabelBackground: #e5e5ea;
+  --color-formInputBackground: #ffffff;
+  --color-formInputBackgroundSelected: #ffffff;
+  --color-formInputBackgroundSelection: #0e7c74;
+  --color-formInputBorder: #c6c6c8;
+  --color-formInputTextReadOnlySelection: var(--palette-navy50);
+  --color-formInputBorderSelected: #0e7c74;
+  --color-formInputText: #000000;
+  --color-formInputTextSelected: #ffffff;
+  --color-formInputTextPlaceholder: #6c6c70;
+  --color-formInputTextPlaceholderSelected: #6c6c70;
+  --color-formInputTextSelection: var(--palette-navy100);
+  --color-formInputShadowSelected: #7adcd3;
+  --color-formInputTextHighlight: #d9efed;
+  --color-checkboxText: var(--color-tableBackground);
+  --color-checkboxBackgroundSelected: #0e7c74;
+  --color-checkboxBorderSelected: #0e7c74;
+  --color-checkboxShadowSelected: #7adcd3;
+  --color-checkboxToggleBackground: var(--palette-gray400);
+  --color-checkboxToggleBackgroundSelected: #0e7c74;
+  --color-checkboxToggleDisabled: var(--palette-gray200);
+
+  --color-pillBackground: #e5e5ea;
+  --color-pillBackgroundLight: #f2f2f7;
+  --color-pillText: #000000;
+  --color-pillTextHighlighted: #0e7c74;
+  --color-pillBorder: #e5e5ea;
+  --color-pillBorderDark: var(--palette-navy300);
+  --color-pillBackgroundSelected: #d9efed;
+  --color-pillTextSelected: #000000;
+  --color-pillBorderSelected: #0e7c74;
+  --color-pillTextSubdued: #636366;
+
+  --color-reportsRed: var(--palette-red300);
+  --color-reportsBlue: var(--palette-blue400);
+  --color-reportsGreen: var(--palette-green400);
+  --color-reportsGray: var(--palette-gray400);
+  --color-reportsLabel: var(--palette-navy900);
+  --color-reportsInnerLabel: var(--palette-navy800);
+  --color-reportsNumberPositive: var(--color-numberPositive);
+  --color-reportsNumberNegative: var(--color-numberNegative);
+  --color-reportsNumberNeutral: var(--color-numberNeutral);
+  --color-reportsChartFill: var(--color-reportsNumberPositive);
+
+  --color-noteTagBackground: var(--palette-purple125);
+  --color-noteTagBackgroundHover: var(--palette-purple150);
+  --color-noteTagDefault: var(--palette-purple125);
+  --color-noteTagText: var(--palette-black);
+
+  --color-budgetCurrentMonth: var(--color-tableBackground);
+  --color-budgetOtherMonth: #f7f7fa;
+  --color-budgetHeaderCurrentMonth: var(--color-budgetOtherMonth);
+  --color-budgetHeaderOtherMonth: var(--palette-gray80);
+
+  --color-floatingActionBarBackground: #0e7c74;
+  --color-floatingActionBarBorder: var(--color-floatingActionBarBackground);
+  --color-floatingActionBarText: #ffffff;
+
+  --color-tooltipText: #000000;
+  --color-tooltipBackground: #ffffff;
+  --color-tooltipBorder: #c6c6c8;
+
+  --color-calendarCellBackground: var(--palette-navy100);
+
+  --color-overlayBackground: rgba(0, 0, 0, 0.3);
+
+  --color-chartQual1: var(--palette-chartQual1);
+  --color-chartQual2: var(--palette-chartQual2);
+  --color-chartQual3: var(--palette-chartQual3);
+  --color-chartQual4: var(--palette-chartQual4);
+  --color-chartQual5: var(--palette-chartQual5);
+  --color-chartQual6: var(--palette-chartQual6);
+  --color-chartQual7: var(--palette-chartQual7);
+  --color-chartQual8: var(--palette-chartQual8);
+  --color-chartQual9: var(--palette-chartQual9);
+}

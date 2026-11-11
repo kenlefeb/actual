@@ -4,11 +4,11 @@ Test-first: write the tests, run them and see them fail before writing the code.
 
 ## 1. Native theme (sc-3505)
 
-- [ ] 1.1 Add a failing unit test for a native-shell check (`isNativeShell()` in `packages/desktop-client`): true in Capacitor's native platform and in Electron, false in a browser. Verify: the test fails.
-- [ ] 1.2 Implement the check, then add `home-economics-light.css` and `home-economics-dark.css` in `packages/component-library/src/themes/`. They set every `--color-*` that `theme.ts` reads, plus `--font-family` (system font), using the values in `DESIGN.native.md` §3. Verify: 1.1 passes.
-- [ ] 1.3 Extend `contrast.web.test.ts` to both new files. Run it first against placeholder values and see it fail, then with the final values. Verify: it passes at 4.5:1 for text and amount pairs.
-- [ ] 1.4 Add a failing test for `ThemeStyle` covering three cases: in a native shell it renders the Home Economics sheets with a `prefers-color-scheme` switch; in a browser it renders upstream's sheets; and in a native shell the theme pref is ignored. Then implement the guarded branch in `packages/desktop-client/src/style/theme.tsx`. Verify: the test passes, and existing theme tests are unchanged.
-- [ ] 1.5 Hide the theme setting in Settings when in a native shell, with a test for the desktop Settings page and the mobile Settings screen. Verify: tests pass, and the browser's Settings still shows the setting.
+- [x] 1.1 Add a failing unit test for a native-shell check (`isNativeShell()` in `packages/desktop-client`): true in Capacitor's native platform and in Electron, false in a browser. Verify: the test fails.
+- [x] 1.2 Implement the check, then add `home-economics-light.css` and `home-economics-dark.css` in `packages/component-library/src/themes/`. They set every `--color-*` that `theme.ts` reads, plus `--font-family` (system font), using the values in `DESIGN.native.md` §3. Verify: 1.1 passes.
+- [x] 1.3 Extend `contrast.web.test.ts` to both new files. Run it first against placeholder values and see it fail, then with the final values. Verify: it passes at 4.5:1 for text and amount pairs.
+- [x] 1.4 Add a failing test for `ThemeStyle` covering three cases: in a native shell it renders the Home Economics sheets with a `prefers-color-scheme` switch; in a browser it renders upstream's sheets; and in a native shell the theme pref is ignored. Then implement the guarded branch in `packages/desktop-client/src/style/theme.tsx`. Verify: the test passes, and existing theme tests are unchanged.
+- [x] 1.5 Hide the theme setting in Settings when in a native shell, with a test for the desktop Settings page and the mobile Settings screen. Verify: tests pass, and the browser's Settings still shows the setting.
 - [ ] 1.6 On iPhone, map body text to the `-apple-system-*` keywords so Dynamic Type applies, and stop amounts from truncating in the mobile budget rows (`packages/desktop-client/src/components/mobile/budget/`). Verify, in the iOS Simulator at the default size and at the largest accessibility size, in light and dark: the screenshots are attached to the story.
 - [ ] 1.7 Mac app: launch an Electron dev build in light and dark. Verify: the screenshots of the budget page are attached to the story, and `yarn vrt` for the browser is unchanged.
 

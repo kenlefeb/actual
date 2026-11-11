@@ -26,6 +26,7 @@ import { useGlobalPref } from '#hooks/useGlobalPref';
 import { useMetadataPref } from '#hooks/useMetadataPref';
 import { loadPrefs, saveSyncedPrefs } from '#prefs/prefsSlice';
 import { useDispatch, useSelector } from '#redux';
+import { isNativeShell } from '#style';
 
 import { AuthSettings } from './AuthSettings';
 import { Backups } from './Backups';
@@ -108,7 +109,14 @@ function About() {
               <Trans>Release Notes</Trans>
             </Link>
             {isNewsFeedEnabled && (
-              <Link variant="internal" to="/notifications">
+              <Link
+                variant="internal"
+                to="/notifications"
+                // fork: sc-3505. Match the Release Notes link in the native apps
+                style={
+                  isNativeShell() ? { color: theme.pageTextLink } : undefined
+                }
+              >
                 <Trans>Notifications</Trans>
               </Link>
             )}

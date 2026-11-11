@@ -173,6 +173,11 @@ describe('Home Economics text and amount contrast (sc-3505)', () => {
         ['menuAutoCompleteText', 'menuAutoCompleteBackground'],
         ['formInputText', 'formInputBackground'],
         ['tooltipText', 'tooltipBackground'],
+        // The phone budget page's banners inherit pageText (UX, sc-3505)
+        ['pageText', 'warningBackground'],
+        ['pageText', 'noticeBackground'],
+        ['pageText', 'errorBackground'],
+        ['warningTextDark', 'warningBackground'],
       ]) {
         expect(
           contrast(color(css, text), color(css, background)),

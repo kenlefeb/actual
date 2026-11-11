@@ -193,7 +193,7 @@
   --color-buttonBareBackgroundHover: rgba(118, 118, 128, 0.24);
   --color-buttonBareBackgroundActive: rgba(118, 118, 128, 0.32);
 
-  --color-noticeBackground: var(--palette-green800);
+  --color-noticeBackground: #20402a;
   --color-noticeBackgroundLight: var(--palette-green900);
   --color-noticeBackgroundDark: var(--palette-green500);
   --color-noticeText: #30d158;
@@ -201,14 +201,14 @@
   --color-noticeTextDark: var(--palette-green150);
   --color-noticeTextMenu: var(--palette-green500);
   --color-noticeBorder: var(--palette-green800);
-  --color-warningBackground: var(--palette-orange800);
+  --color-warningBackground: #49361a;
   --color-warningText: #ff9f0a;
   --color-warningTextLight: var(--palette-orange500);
-  --color-warningTextDark: var(--palette-orange100);
-  --color-warningBorder: var(--palette-orange500);
+  --color-warningTextDark: #ffffff;
+  --color-warningBorder: #ff9f0a;
   --color-paycheckNoteText: var(--color-pageTextSubdued);
   --color-paycheckWarningText: var(--color-warningText);
-  --color-errorBackground: var(--palette-red800);
+  --color-errorBackground: #492f2f;
   --color-errorText: #ff7b73;
   --color-errorTextDark: var(--palette-red150);
   --color-errorTextDarker: var(--color-errorTextDark);

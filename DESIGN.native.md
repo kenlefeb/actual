@@ -40,13 +40,13 @@ The accent is the only brand colour. Everything else is Apple's semantic colour,
 | `bg/grouped-secondary` | #FFFFFF     | #1C1C1E     | `secondarySystemGroupedBackground`: cards, rows, sheets      |
 | `bg/grouped-tertiary`  | #F2F2F7     | #2C2C2E     | `tertiarySystemGroupedBackground`                            |
 | `label/primary`        | #000000     | #FFFFFF     | `label`                                                      |
-| `label/secondary`      | #3C3C43 60% | #EBEBF5 60% | `secondaryLabel`                                             |
+| `label/secondary`      | #636366     | #AEAEB2     | `secondaryLabel`, made opaque and darker for contrast        |
 | `label/tertiary`       | #3C3C43 30% | #EBEBF5 30% | `tertiaryLabel`: placeholders                                |
 | `separator`            | #3C3C43 29% | #545458 60% | `separator`                                                  |
 | `fill/control`         | #767680 12% | #767680 24% | `tertiarySystemFill`: segmented controls, neutral pills      |
 | `money/positive`       | #1F7A35     | #30D158     | Positive amounts, funded balances                            |
 | `money/negative`       | #C00013     | #FF7B73     | Negative amounts, overspending                               |
-| `money/zero`           | #3C3C43 60% | #EBEBF5 60% | Zero balances                                                |
+| `money/zero`           | #636366     | #AEAEB2     | Zero balances                                                |
 | `money/*-tint`         | 12% / 20%   |             | Balance pill backgrounds                                     |
 | `status/warning`       | #C93400     | #FF9F0A     | Underfunded, pending                                         |
 
@@ -56,6 +56,7 @@ The accent is the only brand colour. Everything else is Apple's semantic colour,
 
 - The accent is 5.06:1 on white and 4.53:1 on `bg/grouped`.
 - The money colours reach at least 4.5:1 on their own tinted pills in both modes.
+- Secondary text and zero balances use opaque #636366 (light) and #AEAEB2 (dark) instead of Apple's 60% `secondaryLabel`, which measures only 3.1:1 on `bg/grouped` in light and 4.2:1 on `bg/grouped-tertiary` in dark.
 
 `contrast.web.test.ts` covers both files.
 

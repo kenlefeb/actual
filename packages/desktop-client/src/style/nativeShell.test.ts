@@ -22,16 +22,16 @@ function win(userAgent: string, platform?: string) {
 
 describe('nativeShell', () => {
   it.each([
-    ['the iOS Capacitor app', win(IPHONE, 'ios'), 'ios'],
-    ['the macOS Electron app', win(MAC_ELECTRON), 'mac'],
-    ['Safari on a Mac', win(MAC_SAFARI), null],
-    ['Safari on an iPhone', win(IPHONE), null],
+    ['the iOS Capacitor app', 'ios', win(IPHONE, 'ios')],
+    ['the macOS Electron app', 'mac', win(MAC_ELECTRON)],
+    ['Safari on a Mac', null, win(MAC_SAFARI)],
+    ['Safari on an iPhone', null, win(IPHONE)],
     // The web build can load Capacitor's JS without being the app
-    ['a browser with Capacitor on the web platform', win(IPHONE, 'web'), null],
-    ['the Android Capacitor app', win(IPHONE, 'android'), null],
-    ['the Windows Electron app', win(WINDOWS_ELECTRON), null],
-    ['the Linux Electron app', win(LINUX_ELECTRON), null],
-  ])('in %s is %s', (_, w, expected) => {
+    ['a browser with Capacitor on the web platform', null, win(IPHONE, 'web')],
+    ['the Android Capacitor app', null, win(IPHONE, 'android')],
+    ['the Windows Electron app', null, win(WINDOWS_ELECTRON)],
+    ['the Linux Electron app', null, win(LINUX_ELECTRON)],
+  ])('in %s is %s', (_, expected, w) => {
     expect(nativeShell(w)).toBe(expected);
     expect(isNativeShell(w)).toBe(expected !== null);
   });

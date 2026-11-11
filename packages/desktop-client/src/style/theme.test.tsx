@@ -5,10 +5,10 @@ import heLightCss from '@actual-app/components/themes/home-economics-light.css?i
 import lightCss from '@actual-app/components/themes/light.css?inline';
 import midnightCss from '@actual-app/components/themes/midnight.css?inline';
 import sidebarRedesignLightCss from '@actual-app/components/themes/sidebar-redesign-light.css?inline';
-import { render } from '@testing-library/react';
+import { render, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CustomThemeStyle, ThemeStyle } from './theme';
+import { CustomThemeStyle, ThemeStyle, useTheme } from './theme';
 
 let mockShell: 'ios' | 'mac' | null = null;
 let mockPrefs: Record<string, string | undefined> = {};
@@ -138,6 +138,27 @@ describe('CustomThemeStyle (sc-3505)', () => {
     shell => {
       mockShell = shell;
       expect(sheets(<CustomThemeStyle />)).toEqual([]);
+    },
+  );
+});
+
+describe('useTheme (sc-3505)', () => {
+  beforeEach(() => {
+    mockShell = null;
+    mockPrefs = { theme: 'dark' };
+  });
+
+  it('in a browser reports the theme pref', () => {
+    expect(renderHook(() => useTheme()).result.current[0]).toBe('dark');
+  });
+
+  // App.tsx's data-theme, the formula editor and the meta theme colour read
+  // it, so a pref synced from a browser must not reach them
+  it.each(['ios', 'mac'] as const)(
+    'in the %s app reports auto, whatever the pref says',
+    shell => {
+      mockShell = shell;
+      expect(renderHook(() => useTheme()).result.current[0]).toBe('auto');
     },
   );
 });

@@ -38,7 +38,9 @@ export const darkThemeOptions = Object.entries({
 
 export function useTheme() {
   const [theme = 'auto', setThemePref] = useGlobalPref('theme');
-  return [theme, setThemePref] as const;
+  // fork: sc-3505. The native apps follow the system appearance, so a theme
+  // pref synced from a browser must not reach any reader.
+  return [isNativeShell() ? 'auto' : theme, setThemePref] as const;
 }
 
 export function usePreferredDarkTheme() {

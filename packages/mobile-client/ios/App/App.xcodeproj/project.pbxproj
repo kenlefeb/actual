@@ -11,7 +11,6 @@
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
 		5C3E1A022EBC000100A1B2C3 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C3E1A012EBC000100A1B2C3 /* SceneDelegate.swift */; };
-		504EC30D1FED79650016851F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30B1FED79650016851F /* Main.storyboard */; };
 		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
@@ -24,6 +23,9 @@
 		FB3584000000000000000106 /* ChangeCoalescer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000006 /* ChangeCoalescer.swift */; };
 		FB3584000000000000000110 /* NativeBridgeBenchmarkTrigger.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000010 /* NativeBridgeBenchmarkTrigger.swift */; };
 		FB3584000000000000000111 /* NativeBridgeBenchmark.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000011 /* NativeBridgeBenchmark.swift */; };
+		FB3514000000000000000101 /* NativeChromePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3514000000000000000001 /* NativeChromePlugin.swift */; };
+		FB3514000000000000000102 /* NativeTabBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3514000000000000000002 /* NativeTabBarController.swift */; };
+		FB3514000000000000000103 /* NativeTabRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3514000000000000000003 /* NativeTabRouter.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -32,7 +34,6 @@
 		504EC3041FED79650016851F /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		504EC3071FED79650016851F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		5C3E1A012EBC000100A1B2C3 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
-		504EC30C1FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		504EC30E1FED79650016851F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		504EC3111FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		504EC3131FED79650016851F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -48,6 +49,9 @@
 		FB3584000000000000000006 /* ChangeCoalescer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeCoalescer.swift; sourceTree = "<group>"; };
 		FB3584000000000000000010 /* NativeBridgeBenchmarkTrigger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBridgeBenchmarkTrigger.swift; sourceTree = "<group>"; };
 		FB3584000000000000000011 /* NativeBridgeBenchmark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBridgeBenchmark.swift; sourceTree = "<group>"; };
+		FB3514000000000000000001 /* NativeChromePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeChromePlugin.swift; sourceTree = "<group>"; };
+		FB3514000000000000000002 /* NativeTabBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeTabBarController.swift; sourceTree = "<group>"; };
+		FB3514000000000000000003 /* NativeTabRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeTabRouter.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -98,8 +102,9 @@
 				FB3584000000000000000002 /* AppBridgeViewController.swift */,
 				FB3584000000000000000003 /* NativeBridgeBenchmarkHarness.swift */,
 				FB3584000000000000000010 /* NativeBridgeBenchmarkTrigger.swift */,
+				FB3514000000000000000001 /* NativeChromePlugin.swift */,
+				FB3514000000000000000002 /* NativeTabBarController.swift */,
 				5C3E1A012EBC000100A1B2C3 /* SceneDelegate.swift */,
-				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
 				504EC3131FED79650016851F /* Info.plist */,
@@ -125,6 +130,7 @@
 				FB3584000000000000000005 /* NativeBridgeClient.swift */,
 				FB3584000000000000000006 /* ChangeCoalescer.swift */,
 				FB3584000000000000000011 /* NativeBridgeBenchmark.swift */,
+				FB3514000000000000000003 /* NativeTabRouter.swift */,
 			);
 			name = NativeBridgeCore;
 			path = ../NativeBridge/Sources/NativeBridgeCore;
@@ -197,7 +203,6 @@
 				50B271D11FEDC1A000F3C39B /* public in Resources */,
 				504EC30F1FED79650016851F /* Assets.xcassets in Resources */,
 				50379B232058CBB4000EE86E /* capacitor.config.json in Resources */,
-				504EC30D1FED79650016851F /* Main.storyboard in Resources */,
 				2FAD9763203C412B000D30F8 /* config.xml in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -255,20 +260,15 @@
 				FB3584000000000000000105 /* NativeBridgeClient.swift in Sources */,
 				FB3584000000000000000106 /* ChangeCoalescer.swift in Sources */,
 				5C3E1A022EBC000100A1B2C3 /* SceneDelegate.swift in Sources */,
+				FB3514000000000000000101 /* NativeChromePlugin.swift in Sources */,
+				FB3514000000000000000102 /* NativeTabBarController.swift in Sources */,
+				FB3514000000000000000103 /* NativeTabRouter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXVariantGroup section */
-		504EC30B1FED79650016851F /* Main.storyboard */ = {
-			isa = PBXVariantGroup;
-			children = (
-				504EC30C1FED79650016851F /* Base */,
-			);
-			name = Main.storyboard;
-			sourceTree = "<group>";
-		};
 		504EC3101FED79650016851F /* LaunchScreen.storyboard */ = {
 			isa = PBXVariantGroup;
 			children = (

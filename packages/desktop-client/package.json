@@ -125,6 +125,7 @@
     "#budget/*": "./src/budget/*.ts",
     "#budgetfiles/*": "./src/budgetfiles/*.ts",
     "#modals/*": "./src/modals/*.ts",
+    "#native/*": "./src/native/*.ts",
     "#news/*": "./src/news/*.ts",
     "#notifications/*": "./src/notifications/*.ts",
     "#payees/*": "./src/payees/*.ts",

@@ -119,6 +119,35 @@ describe('SettingsNav', () => {
     );
   });
 
+  // native-appearance: "iPhone uses a native tab bar" (sc-3514). The iOS app
+  // hides the web tab grid, which held Schedules.
+  describe('Schedules row on a phone', () => {
+    beforeEach(() => {
+      phone.isNarrowWidth = true;
+    });
+    afterEach(() => {
+      delete (window as { webkit?: unknown }).webkit;
+    });
+
+    it('shows in the iOS app and opens the schedules list', () => {
+      (window as { webkit?: unknown }).webkit = {
+        messageHandlers: { actualNativeChrome: { postMessage: vi.fn() } },
+      };
+      renderNav('/settings');
+
+      expect(screen.getByRole('link', { name: 'Schedules' })).toHaveAttribute(
+        'href',
+        '/schedules',
+      );
+    });
+
+    it('is not in a phone browser, which keeps the web tab grid', () => {
+      renderNav('/settings');
+
+      expect(screen.queryByRole('link', { name: 'Schedules' })).toBe(null);
+    });
+  });
+
   describe('Notifications row on a phone', () => {
     beforeEach(() => {
       phone.isNarrowWidth = true;

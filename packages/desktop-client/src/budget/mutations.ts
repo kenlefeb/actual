@@ -12,6 +12,7 @@ import type { TFunction } from 'i18next';
 import { v4 as uuidv4 } from 'uuid';
 
 import { pushModal } from '#modals/modalsSlice';
+import { nativeHaptic } from '#native/nativeChrome';
 import { addNotification } from '#notifications/notificationsSlice';
 import type { Notification } from '#notifications/notificationsSlice';
 import { useDispatch } from '#redux';
@@ -771,6 +772,13 @@ type ApplyBudgetActionPayload =
       };
     };
 
+const MOVE_MONEY_ACTIONS: ApplyBudgetActionPayload['type'][] = [
+  'transfer-available',
+  'transfer-category',
+  'cover-overspending',
+  'cover-overbudgeted',
+];
+
 export function useBudgetActions() {
   const dispatch = useDispatch();
   const { t } = useTranslation();
@@ -908,7 +916,9 @@ export function useBudgetActions() {
           throw new Error(`Unknown budget action type: ${String(type)}`);
       }
     },
-    onSuccess: notification => {
+    onSuccess: (notification, { type }) => {
+      // fork: sc-3514. Moving money gives a haptic tap in the iOS app
+      if (MOVE_MONEY_ACTIONS.includes(type)) nativeHaptic();
       if (notification) {
         dispatch(
           addNotification({

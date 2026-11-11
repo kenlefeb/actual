@@ -401,6 +401,29 @@ describe('Phone transaction edit page', () => {
       expect(calls).toEqual(['save', 'attach']);
     });
 
+    // native-appearance: "Adding a transaction on iPhone" (sc-3514)
+    it('Saving gives a haptic tap in the iOS app', async () => {
+      const postMessage = vi.fn();
+      (window as { webkit?: unknown }).webkit = {
+        messageHandlers: { actualNativeChrome: { postMessage } },
+      };
+      try {
+        serve();
+        const { container } = renderEdit(addPath);
+        // Leave the amount field, which the new form focuses first
+        await pickPdf(container);
+        await heldName('invoice.pdf');
+
+        await addAndWait();
+
+        await waitFor(() =>
+          expect(postMessage).toHaveBeenCalledWith({ type: 'haptic' }),
+        );
+      } finally {
+        delete (window as { webkit?: unknown }).webkit;
+      }
+    });
+
     it('Undo after adding with two documents: one batch, so one undo step', async () => {
       const calls: string[] = [];
       const update = vi.fn(() => {

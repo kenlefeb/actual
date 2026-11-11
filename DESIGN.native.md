@@ -57,6 +57,7 @@ The accent is the only brand colour. Everything else is Apple's semantic colour,
 - The accent is 5.06:1 on white and 4.53:1 on `bg/grouped`.
 - The money colours reach at least 4.5:1 on their own tinted pills in both modes.
 - Secondary text and zero balances use opaque #636366 (light) and #AEAEB2 (dark) instead of Apple's 60% `secondaryLabel`, which measures only 3.1:1 on `bg/grouped` in light and 4.2:1 on `bg/grouped-tertiary` in dark.
+- Warning text in light is #A82B00, not `status/warning` #C93400, because #C93400 measures only 4.41:1 on its own 12% tint (#F9E7E0); #A82B00 measures 5.82:1. Dark keeps #FF9F0A (5.59:1 on #49361A).
 
 `contrast.web.test.ts` covers both files.
 

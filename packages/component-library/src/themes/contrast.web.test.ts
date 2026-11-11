@@ -178,6 +178,8 @@ describe('Home Economics text and amount contrast (sc-3505)', () => {
         ['pageText', 'noticeBackground'],
         ['pageText', 'errorBackground'],
         ['warningTextDark', 'warningBackground'],
+        // The desktop warning alert (alerts.tsx)
+        ['warningText', 'warningBackground'],
       ]) {
         expect(
           contrast(color(css, text), color(css, background)),

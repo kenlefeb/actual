@@ -1,0 +1,266 @@
+import UIKit
+
+// Fork-only (sc-3514, ADR 11). The iPhone app's root: a system tab bar with
+// Budget, Accounts, Reports and Settings, plus a separate Add button. There is
+// one AppBridgeViewController, so one WKWebView and one loot-core; it moves
+// into whichever web tab is showing. A tab can host a native screen instead
+// (none ships yet; DEBUG builds can mark one with a stub, see below).
+final class NativeTabBarController: UITabBarController, UITabBarControllerDelegate {
+    let bridgeController = AppBridgeViewController()
+    private var router = NativeTabRouter()
+    private var containers: [NativeTab: TabContainerViewController] = [:]
+    private var foregroundObserver: NSObjectProtocol?
+    private static let addIdentifier = "add"
+
+    // Hearth Teal, DESIGN.native.md §3
+    static let accent = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0x4F / 255, green: 0xD1 / 255, blue: 0xC5 / 255, alpha: 1)
+            : UIColor(red: 0x0E / 255, green: 0x7C / 255, blue: 0x74 / 255, alpha: 1)
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        delegate = self
+        tabBar.tintColor = Self.accent
+
+        for tab in NativeTab.allCases {
+            let container = TabContainerViewController(tab: tab)
+            container.onWillAppear = { [weak self] in self?.tabWillAppear($0) }
+            if let screen = Self.nativeScreen(for: tab) { container.embed(screen) }
+            containers[tab] = container
+        }
+
+        if #available(iOS 18, *) {
+            let sections = NativeTab.allCases.map { tab in
+                UITab(title: tab.title, image: UIImage(systemName: tab.symbol), identifier: tab.rawValue) { [unowned self] _ in
+                    containers[tab]!
+                }
+            }
+            // The search role is the one iOS draws apart from the other tabs;
+            // selecting it is intercepted below, so no search UI ever shows
+            let add = UISearchTab { _ in UIViewController() }
+            add.title = NSLocalizedString("Add", comment: "Tab bar: add a transaction")
+            add.image = UIImage(systemName: "plus")
+            tabs = sections + [add]
+        } else {
+            let add = UIViewController()
+            add.tabBarItem = UITabBarItem(title: NSLocalizedString("Add", comment: "Tab bar: add a transaction"),
+                                          image: UIImage(systemName: "plus.circle"), tag: 0)
+            add.tabBarItem.accessibilityIdentifier = Self.addIdentifier
+            viewControllers = NativeTab.allCases.map { containers[$0]! } + [add]
+        }
+
+        let chrome = bridgeController.nativeChrome
+        chrome.onRoute = { [weak self] in self?.pageDidRoute(to: $0) }
+        chrome.onClosed = { [weak self] in self?.setTabBarVisible(false) }
+        // Hidden until a budget is open (sign-in and the budget list have none)
+        setTabBarVisible(false)
+
+        foregroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in self?.bridgeController.nativeChrome.reportRoute() }
+    }
+
+    // MARK: Tabs
+
+    private func tabWillAppear(_ tab: NativeTab) {
+        let container = containers[tab]!
+        guard !container.hostsNativeScreen else {
+            _ = router.select(tab)
+            return
+        }
+        container.host(bridgeController)
+        // A tab the page already moved to (pageDidRoute) needs no navigation
+        guard router.selected != tab else { return }
+        bridgeController.nativeChrome.navigate(to: router.select(tab))
+    }
+
+    private func pageDidRoute(to path: String) {
+        setTabBarVisible(true)
+        guard let tab = router.pageDidRoute(to: path) else { return }
+        show(tab)
+    }
+
+    private func openAdd() {
+        // shortcut: from a native tab, Add opens in the Budget tab; a native
+        // Add sheet replaces this when that screen ships
+        if containers[router.selected]!.hostsNativeScreen { show(.budget) }
+        bridgeController.nativeChrome.navigate(to: NativeTabRouter.addPath)
+    }
+
+    private func show(_ tab: NativeTab) {
+        if #available(iOS 18, *) {
+            selectedTab = tabs.first { $0.identifier == tab.rawValue }
+        } else {
+            selectedViewController = containers[tab]
+        }
+    }
+
+    private func setTabBarVisible(_ visible: Bool) {
+        if #available(iOS 18, *) {
+            setTabBarHidden(!visible, animated: false)
+        } else {
+            tabBar.isHidden = !visible
+        }
+        containers.values.forEach { $0.tabBarVisible = visible }
+    }
+
+    // MARK: UITabBarControllerDelegate (the Add button never becomes selected)
+
+    @available(iOS 18, *)
+    func tabBarController(_ tabBarController: UITabBarController, shouldSelectTab tab: UITab) -> Bool {
+        guard tab is UISearchTab else { return true }
+        openAdd()
+        return false
+    }
+
+    func tabBarController(_ tabBarController: UITabBarController, shouldSelect viewController: UIViewController) -> Bool {
+        guard viewController.tabBarItem.accessibilityIdentifier == Self.addIdentifier else { return true }
+        openAdd()
+        return false
+    }
+
+    // MARK: Native screens
+
+    // No native screen ships yet (sc-3593 adds the first). DEBUG builds can
+    // mark a tab native with a launch argument, e.g. `-NativeTabStub reports`,
+    // to check that the bar does not change and the web view stays single.
+    private static func nativeScreen(for tab: NativeTab) -> UIViewController? {
+        #if DEBUG
+        if UserDefaults.standard.string(forKey: "NativeTabStub") == tab.rawValue {
+            return StubNativeViewController(tab: tab)
+        }
+        #endif
+        return nil
+    }
+}
+
+extension NativeTab {
+    var title: String {
+        switch self {
+        case .budget: NSLocalizedString("Budget", comment: "Tab bar")
+        case .accounts: NSLocalizedString("Accounts", comment: "Tab bar")
+        case .reports: NSLocalizedString("Reports", comment: "Tab bar")
+        case .settings: NSLocalizedString("Settings", comment: "Tab bar")
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .budget: "chart.pie"
+        case .accounts: "building.columns"
+        case .reports: "chart.bar"
+        case .settings: "gearshape"
+        }
+    }
+}
+
+// One tab's screen: the shared web view while this tab shows it, or a native
+// screen for good
+final class TabContainerViewController: UIViewController {
+    let section: NativeTab
+    var onWillAppear: ((NativeTab) -> Void)?
+    private(set) var hostsNativeScreen = false
+    private var bottomToSafeArea: NSLayoutConstraint?
+    private var bottomToEdge: NSLayoutConstraint?
+
+    // The web view ends above the tab bar; with no tab bar (no budget open) it
+    // runs to the bottom edge, as it did before the tab bar
+    var tabBarVisible = false {
+        didSet { updateBottom() }
+    }
+
+    init(tab: NativeTab) {
+        self.section = tab
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .systemBackground
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        onWillAppear?(section)
+    }
+
+    // The status bar follows the screen in this tab
+    override var childForStatusBarStyle: UIViewController? { children.first }
+    override var childForStatusBarHidden: UIViewController? { children.first }
+
+    func embed(_ screen: UIViewController) {
+        hostsNativeScreen = true
+        attach(screen)
+    }
+
+    // Moves the one bridge view controller (and its web view) into this tab.
+    // It is never copied: there is only ever one web view and one engine.
+    func host(_ bridge: UIViewController) {
+        guard bridge.parent !== self else { return }
+        if let previous = bridge.parent as? TabContainerViewController {
+            bridge.willMove(toParent: nil)
+            bridge.view.removeFromSuperview()
+            bridge.removeFromParent()
+            // Its constraints went with the view; never reactivate them
+            previous.bottomToSafeArea = nil
+            previous.bottomToEdge = nil
+        }
+        attach(bridge)
+    }
+
+    private func attach(_ child: UIViewController) {
+        addChild(child)
+        child.view.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(child.view)
+        bottomToSafeArea = child.view.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
+        bottomToEdge = child.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        NSLayoutConstraint.activate([
+            child.view.topAnchor.constraint(equalTo: view.topAnchor),
+            child.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            child.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+        ])
+        updateBottom()
+        child.didMove(toParent: self)
+        setNeedsStatusBarAppearanceUpdate()
+    }
+
+    private func updateBottom() {
+        bottomToEdge?.isActive = !tabBarVisible
+        bottomToSafeArea?.isActive = tabBarVisible
+    }
+}
+
+#if DEBUG
+// Test-only stand-in for a native screen (sc-3514); never in a Release build
+final class StubNativeViewController: UIViewController {
+    private let section: NativeTab
+
+    init(tab: NativeTab) {
+        self.section = tab
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .systemGroupedBackground
+        let label = UILabel()
+        label.text = "Native \(section.title) (test stub)"
+        label.font = .preferredFont(forTextStyle: .title2)
+        label.adjustsFontForContentSizeCategory = true
+        label.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            label.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+        ])
+    }
+}
+#endif

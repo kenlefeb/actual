@@ -20,6 +20,7 @@ import { useDrag } from '@use-gesture/react';
 
 import { useIsTestEnv } from '#hooks/useIsTestEnv';
 import { useScrollListener } from '#hooks/useScrollListener';
+import { hasNativeTabBar } from '#native/nativeChrome';
 
 const COLUMN_COUNT = 3;
 const ROW_COUNT = 2;
@@ -30,9 +31,17 @@ const OPEN_FULL_Y = 1;
 const OPEN_DEFAULT_Y = TOTAL_HEIGHT - ROW_HEIGHT;
 const HIDDEN_Y = TOTAL_HEIGHT;
 
-export const MOBILE_NAV_HEIGHT = ROW_HEIGHT + PILL_HEIGHT;
+// fork: sc-3514. Inside the iOS app the native tab bar replaces the web tab
+// grid, and the web view already ends above it.
+export const MOBILE_NAV_HEIGHT = hasNativeTabBar()
+  ? 0
+  : ROW_HEIGHT + PILL_HEIGHT;
 
 export function MobileNavTabs() {
+  return hasNativeTabBar() ? null : <WebNavTabs />;
+}
+
+function WebNavTabs() {
   const { t } = useTranslation();
   const { isNarrowWidth } = useResponsive();
   const isTestEnv = useIsTestEnv();

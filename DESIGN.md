@@ -71,6 +71,8 @@ components:
 
 # Design System: Actual Budget
 
+> Fork-only: the native "Home Economics" apps (iOS and Mac) use their own system in [DESIGN.native.md](DESIGN.native.md). This file stays the web design system.
+
 ## 1. Overview
 
 **Creative North Star: "The Home Office"**

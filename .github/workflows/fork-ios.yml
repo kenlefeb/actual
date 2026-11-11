@@ -23,10 +23,6 @@
 name: Fork iOS
 
 on:
-  # TEMPORARY: dispatch needs the file on development; remove before merge.
-  push:
-    branches:
-      - kenlefeb/sc-3398/ios-testflight-slice-1
   workflow_dispatch:
     inputs:
       revision:
@@ -44,8 +40,6 @@ permissions:
 env:
   BUNDLE_ID: app.homeeconomics.budget
   DISPLAY_NAME: Home Economics
-  # Ken's internal TestFlight group; internal groups need no Beta App Review.
-  BETA_GROUP: Testers
 
 jobs:
   testflight:
@@ -143,8 +137,9 @@ jobs:
             -allowProvisioningUpdates -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
             -authenticationKeyID "$API_KEY_ID" -authenticationKeyIssuerID "$API_ISSUER_ID"
 
-      # Without --testflight nothing goes to Beta App Review: the build is
-      # uploaded, processed and then added to the internal group.
+      # Without --testflight nothing goes to Beta App Review. The build is
+      # uploaded as internal-only; Ken's internal "Testers" group has access to
+      # all builds, so Apple distributes it there and it can't be added by API.
       - name: Upload to TestFlight
         env:
           APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.ASC_KEY_ID }}
@@ -156,7 +151,6 @@ jobs:
           pipx run --spec codemagic-cli-tools==0.70.0 app-store-connect publish \
             --path 'packages/mobile-client/build/export/*.ipa' --platform IOS \
             --max-find-build-wait 45 --max-build-processing-wait 45 \
-            --beta-group "$BETA_GROUP" \
             --whats-new "Version $VERSION, commit $COMMIT"
 
       - name: Clean up signing material

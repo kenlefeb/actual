@@ -37,6 +37,19 @@ async function addTransaction(page: Page) {
   });
 }
 
+// The add step is flaky (sc-3303); keep a trace of any failing run
+test.use({ trace: 'retain-on-failure' });
+
+// The ids of the account's transactions with a zero amount
+async function zeroAmountIds(page: Page, account: string) {
+  return page.evaluate(async account => {
+    const { data } = await window.$query(
+      window.$q('transactions').filter({ account, amount: 0 }).select('id'),
+    );
+    return (data as { id: string }[]).map(t => t.id);
+  }, account);
+}
+
 test.describe('Transaction documents on the phone', () => {
   test.describe.configure({ mode: 'serial' });
 
@@ -118,7 +131,16 @@ test.describe('Transaction documents on the phone', () => {
       await entry.createTransaction();
       // The add screen closes and the new row is listed before its paperclip
       await expect(entry.addTransactionButton).toBeHidden();
-      await expect(newRow).toHaveCount(1);
+      // Tells "not saved" (no row in the database) from "saved but not listed"
+      await expect
+        .poll(() => zeroAmountIds(page, account), {
+          message: 'The new transaction was not saved',
+        })
+        .toHaveLength(1);
+      await expect(
+        newRow,
+        'The new transaction was saved but is not listed',
+      ).toHaveCount(1);
       await expect(newRow.getByLabel('Has attached documents')).toBeVisible();
     } finally {
       await page.close();

@@ -1,0 +1,16 @@
+{
+  "data": [
+    {
+      "type": "betaFeedbackCrashSubmissions",
+      "id": "CRASH-EXAMPLE-1",
+      "attributes": {
+        "createdDate": "2026-11-12T09:30:00.000Z",
+        "comment": "It closed by itself when I opened Accounts.",
+        "deviceModel": "iPhone17_1",
+        "osVersion": "27.3"
+      }
+    }
+  ],
+  "links": {},
+  "meta": { "paging": { "total": 1, "limit": 50 } }
+}

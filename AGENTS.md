@@ -648,6 +648,24 @@ bundled feed (`packages/desktop-client/.env.browser` for the served web app,
 `.env.desktop` for Electron builds); do not edit upstream's
 generated `news.json`.
 
+### TestFlight feedback (before each release)
+
+Before the version-bump PR (Ken, 2026-11-11), check new beta feedback for the
+iOS app "Home Economics Budget" (`app.homeeconomics.budget`):
+
+1. Run `op run --env-file <file> -- node fork/scripts/testflight-feedback.mjs`,
+   where the file maps `ASC_KEY_ID`, `ASC_ISSUER_ID` and `ASC_KEY_P8` to
+   `op://` references for the "Ken & Agents" item "Apple App Store Connect API -
+   Home Economics Agents" (fields "Key ID", "Issuer ID", "credential"). It lists
+   feedback since the last release; `--since YYYY-MM-DD` overrides that.
+2. Triage each item. **Severe** (a crash, data loss, or can't sign in or sync):
+   pause the release and tell Ken. **Everything else**: after searching for a
+   duplicate, file a Backlog story (bug or feature, epic #470, label `mobile`,
+   related to sc-3398), to do right after the release.
+3. Comment the outcome on the release story: items seen, stories filed, and
+   whether the release was paused. Screenshot links expire after about 7 days,
+   so save any screenshot a story needs.
+
 ## Shortcut stories (fork-only)
 
 The fork's backlog lives in the Shortcut workspace `blacksmith-press`, team

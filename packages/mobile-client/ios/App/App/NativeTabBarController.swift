@@ -37,11 +37,12 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
                     containers[tab]!
                 }
             }
-            // The search role is the one iOS draws apart from the other tabs;
-            // selecting it is intercepted below, so no search UI ever shows
-            let add = UISearchTab { _ in UIViewController() }
-            add.title = NSLocalizedString("Add", comment: "Tab bar: add a transaction")
-            add.image = UIImage(systemName: "plus")
+            // A plain tab pinned to the trailing end. On iOS 27 it sits inside
+            // the glass bar either way; a UISearchTab drew no differently and
+            // carried search semantics. Selecting it is intercepted below.
+            let add = UITab(title: NSLocalizedString("Add", comment: "Tab bar: add a transaction"),
+                            image: UIImage(systemName: "plus"), identifier: Self.addIdentifier) { _ in UIViewController() }
+            add.preferredPlacement = .pinned
             tabs = sections + [add]
         } else {
             let add = UIViewController()
@@ -52,7 +53,7 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
         }
 
         let chrome = bridgeController.nativeChrome
-        chrome.onRoute = { [weak self] in self?.pageDidRoute(to: $0) }
+        chrome.onRoute = { [weak self] in self?.pageDidRoute(to: $0, tabBar: $1) }
         chrome.onClosed = { [weak self] in self?.setTabBarVisible(false) }
         // Hidden until a budget is open (sign-in and the budget list have none)
         setTabBarVisible(false)
@@ -76,8 +77,10 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
         bridgeController.nativeChrome.navigate(to: router.select(tab))
     }
 
-    private func pageDidRoute(to path: String) {
-        setTabBarVisible(true)
+    // The page decides when the bar hides: on a pushed form (new or edit
+    // transaction) and while a sheet shows, as iOS apps do
+    private func pageDidRoute(to path: String, tabBar: Bool) {
+        setTabBarVisible(tabBar)
         guard let tab = router.pageDidRoute(to: path) else { return }
         show(tab)
     }
@@ -110,15 +113,28 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
 
     @available(iOS 18, *)
     func tabBarController(_ tabBarController: UITabBarController, shouldSelectTab tab: UITab) -> Bool {
-        guard tab is UISearchTab else { return true }
-        openAdd()
-        return false
+        if tab.identifier == Self.addIdentifier {
+            openAdd()
+            return false
+        }
+        if tab === selectedTab { popToRoot() }
+        return true
     }
 
     func tabBarController(_ tabBarController: UITabBarController, shouldSelect viewController: UIViewController) -> Bool {
-        guard viewController.tabBarItem.accessibilityIdentifier == Self.addIdentifier else { return true }
-        openAdd()
-        return false
+        if viewController.tabBarItem.accessibilityIdentifier == Self.addIdentifier {
+            openAdd()
+            return false
+        }
+        if viewController === selectedViewController { popToRoot() }
+        return true
+    }
+
+    // Tapping the selected tab again returns to its section's first screen,
+    // as in other iOS apps (and reaches Settings again from Schedules)
+    private func popToRoot() {
+        guard !containers[router.selected]!.hostsNativeScreen else { return }
+        bridgeController.nativeChrome.navigate(to: router.selected.rootPath)
     }
 
     // MARK: Native screens

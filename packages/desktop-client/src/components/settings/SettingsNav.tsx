@@ -21,6 +21,7 @@ import {
 import { useSidebarMenuItemDetails } from '#components/sidebar/useSidebarMenuItemDetails';
 import { useNewsFeed } from '#hooks/useNewsFeed';
 import { useSidebarMenu } from '#hooks/useSidebarMenu';
+import { hasNativeTabBar } from '#native/nativeChrome';
 
 import { SettingsNavLink } from './SettingsNavLink';
 
@@ -100,6 +101,14 @@ export function SettingsNav() {
               </Text>
             )
           }
+        />
+      )}
+      {/* fork: sc-3514. The iOS app hides the web tab grid, which held Schedules */}
+      {isNarrowWidth && hasNativeTabBar() && (
+        <SettingsNavLink
+          title={itemDetails.schedules.title}
+          Icon={itemDetails.schedules.Icon}
+          to="/schedules"
         />
       )}
       {menuItems.map(item => (

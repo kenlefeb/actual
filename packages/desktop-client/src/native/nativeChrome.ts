@@ -5,7 +5,7 @@
 // The message handler exists only inside the iOS app, so everything here is a
 // no-op in a browser.
 type ChromeMessage =
-  | { type: 'route'; path: string }
+  | { type: 'route'; path: string; tabBar: boolean }
   | { type: 'closed' }
   | { type: 'haptic' };
 
@@ -20,7 +20,6 @@ export type ChromeWindow = {
       actualNativeChrome?: { postMessage: (message: ChromeMessage) => void };
     };
   };
-  location: { pathname: string };
   __actualNativeChrome?: NativeChrome;
 };
 
@@ -61,13 +60,23 @@ export function nativeHaptic(win: ChromeWindow = window) {
   post(win, { type: 'haptic' });
 }
 
-export function postNativeRoute(win: ChromeWindow, path: string) {
-  post(win, { type: 'route', path });
+export function postNativeRoute(
+  win: ChromeWindow,
+  path: string,
+  tabBar: boolean,
+) {
+  post(win, { type: 'route', path, tabBar });
+}
+
+// iOS convention: the tab bar hides while a pushed form or a sheet shows
+export function showsNativeTabBar(path: string, hasSheet: boolean) {
+  return !hasSheet && !path.startsWith('/transactions/');
 }
 
 export function installNativeChrome(
   win: ChromeWindow,
   navigate: (path: string) => void,
+  report: () => void,
 ) {
   if (!hasNativeTabBar(win)) return undefined;
 
@@ -79,9 +88,7 @@ export function installNativeChrome(
       }
       navigate(path);
     },
-    report() {
-      postNativeRoute(win, win.location.pathname);
-    },
+    report,
   };
   return () => {
     delete win.__actualNativeChrome;

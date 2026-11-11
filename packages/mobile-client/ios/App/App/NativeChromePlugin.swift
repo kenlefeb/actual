@@ -15,7 +15,8 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
     public let pluginMethods: [CAPPluginMethod] = []
 
     // Main queue
-    var onRoute: ((String) -> Void)?
+    // The path, and whether the tab bar shows (not on a pushed form or sheet)
+    var onRoute: ((String, Bool) -> Void)?
     var onClosed: (() -> Void)?
     private let haptics = UIImpactFeedbackGenerator(style: .light)
 
@@ -31,7 +32,7 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
         else { return }
         switch type {
         case "route":
-            if let path = body["path"] as? String { onRoute?(path) }
+            if let path = body["path"] as? String { onRoute?(path, body["tabBar"] as? Bool ?? true) }
         case "closed":
             onClosed?()
         case "haptic":

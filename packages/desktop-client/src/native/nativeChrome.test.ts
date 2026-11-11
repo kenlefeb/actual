@@ -4,6 +4,7 @@ import {
   nativeHaptic,
   postNativeClosed,
   postNativeRoute,
+  showsNativeTabBar,
 } from './nativeChrome';
 import type { ChromeWindow } from './nativeChrome';
 
@@ -12,12 +13,11 @@ function iosApp() {
   const postMessage = vi.fn();
   const win: ChromeWindow = {
     webkit: { messageHandlers: { actualNativeChrome: { postMessage } } },
-    location: { pathname: '/accounts/a1' },
   };
   return { win, postMessage };
 }
 
-const browser = (): ChromeWindow => ({ location: { pathname: '/budget' } });
+const browser = (): ChromeWindow => ({});
 
 describe('hasNativeTabBar', () => {
   it('is true only inside the iOS app', () => {
@@ -41,11 +41,30 @@ describe('nativeHaptic', () => {
 describe('postNativeRoute', () => {
   it('tells the tab bar which screen the page shows', () => {
     const { win, postMessage } = iosApp();
-    postNativeRoute(win, '/reports');
+    postNativeRoute(win, '/reports', true);
     expect(postMessage).toHaveBeenCalledWith({
       type: 'route',
       path: '/reports',
+      tabBar: true,
     });
+  });
+});
+
+// iOS convention: the tab bar hides while a pushed form or a sheet shows, so
+// the form's own footer and the keyboard have the bottom of the screen
+describe('showsNativeTabBar', () => {
+  it('shows on section screens', () => {
+    expect(showsNativeTabBar('/budget', false)).toBe(true);
+    expect(showsNativeTabBar('/accounts/a1', false)).toBe(true);
+  });
+
+  it('hides on the new and edit transaction forms', () => {
+    expect(showsNativeTabBar('/transactions/new', false)).toBe(false);
+    expect(showsNativeTabBar('/transactions/t1', false)).toBe(false);
+  });
+
+  it('hides while a sheet is open', () => {
+    expect(showsNativeTabBar('/budget', true)).toBe(false);
   });
 });
 
@@ -53,14 +72,14 @@ describe('installNativeChrome', () => {
   it('does nothing in a browser', () => {
     const win = browser();
     const navigate = vi.fn();
-    installNativeChrome(win, navigate);
+    installNativeChrome(win, navigate, vi.fn());
     expect(win.__actualNativeChrome).toBeUndefined();
   });
 
   it('navigates to an allowlisted section when a tab is tapped', () => {
     const { win } = iosApp();
     const navigate = vi.fn();
-    installNativeChrome(win, navigate);
+    installNativeChrome(win, navigate, vi.fn());
 
     win.__actualNativeChrome?.navigate('/accounts');
     win.__actualNativeChrome?.navigate('/transactions/new');
@@ -84,7 +103,7 @@ describe('installNativeChrome', () => {
   ])('refuses %j without navigating', path => {
     const { win } = iosApp();
     const navigate = vi.fn();
-    installNativeChrome(win, navigate);
+    installNativeChrome(win, navigate, vi.fn());
 
     expect(() => win.__actualNativeChrome?.navigate(path)).toThrow(
       'not allowlisted',
@@ -93,20 +112,18 @@ describe('installNativeChrome', () => {
   });
 
   it('re-reports the current route when the app returns to the foreground', () => {
-    const { win, postMessage } = iosApp();
-    installNativeChrome(win, vi.fn());
+    const { win } = iosApp();
+    const report = vi.fn();
+    installNativeChrome(win, vi.fn(), report);
 
     win.__actualNativeChrome?.report();
 
-    expect(postMessage).toHaveBeenCalledWith({
-      type: 'route',
-      path: '/accounts/a1',
-    });
+    expect(report).toHaveBeenCalledOnce();
   });
 
   it('removes the page call on cleanup', () => {
     const { win } = iosApp();
-    const cleanup = installNativeChrome(win, vi.fn());
+    const cleanup = installNativeChrome(win, vi.fn(), vi.fn());
 
     cleanup?.();
 

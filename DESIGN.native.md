@@ -114,7 +114,7 @@ Corners inside sheets are concentric with the sheet. Content respects the safe a
   - **iPhone:** medium and large detents and a grabber. They dismiss by swipe, with a Cancel ✕ on the left and a prominent ✓ on the right.
   - **Mac:** a window-attached sheet.
 - **Navigation:**
-  - **iPhone:** a native tab bar with Budget, Accounts, Reports and Settings, plus a separate Add button at the trailing end. Tabs navigate; actions never go in the tab bar. Every screen has a large title.
+  - **iPhone:** a native tab bar with Budget, Accounts, Reports and Settings, plus an Add item pinned at the trailing end. On iOS 27 the system draws Add inside the same glass bar as the tabs, not as a separate circle, and VoiceOver reads it as "Add". Tapping it opens the new-transaction screen instead of selecting a tab. Tapping the selected tab again returns to its first screen. The bar hides on a pushed form (new or edit transaction) and while a sheet shows. Every screen has a large title.
   - **Mac:** a sidebar with the same four destinations, a unified toolbar with the view's title (never the app name), and a menu bar that holds every command with its keyboard shortcut.
 - **Feedback:** on iPhone, haptics confirm saving a transaction and moving money. They respect the system's haptics settings.
 
@@ -122,7 +122,7 @@ Corners inside sheets are concentric with the sheet. Content respects the safe a
 
 | Concern    | iPhone                                 | Mac                                                                   |
 | ---------- | -------------------------------------- | --------------------------------------------------------------------- |
-| Navigation | Native tab bar plus Add button         | Sidebar, unified toolbar, menu bar                                    |
+| Navigation | Native tab bar with a pinned Add item  | Sidebar, unified toolbar, menu bar                                    |
 | Density    | 44 pt rows, one column                 | Dense money table kept (DESIGN.md "Money Table"), 28 pt controls      |
 | Type       | Dynamic Type                           | Fixed macOS sizes                                                     |
 | Accent     | Hearth Teal                            | Hearth Teal, unless the user picked a system accent                   |

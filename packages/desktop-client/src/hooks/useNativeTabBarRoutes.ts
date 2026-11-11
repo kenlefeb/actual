@@ -6,7 +6,9 @@ import {
   installNativeChrome,
   postNativeClosed,
   postNativeRoute,
+  showsNativeTabBar,
 } from '#native/nativeChrome';
+import { useSelector } from '#redux';
 
 // Fork-only (sc-3514, ADR 11). Connects the iOS app's native tab bar to the
 // router while a budget is open; does nothing in a browser. Unmounting
@@ -14,11 +16,21 @@ import {
 export function useNativeTabBarRoutes() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const hasSheet = useSelector(state => state.modals.modalStack.length > 0);
+  const tabBar = showsNativeTabBar(pathname, hasSheet);
 
   useEffect(
-    () => installNativeChrome(window, path => void navigate(path)),
-    [navigate],
+    () =>
+      installNativeChrome(
+        window,
+        path => void navigate(path),
+        () => postNativeRoute(window, pathname, tabBar),
+      ),
+    [navigate, pathname, tabBar],
   );
-  useEffect(() => postNativeRoute(window, pathname), [pathname]);
+  useEffect(
+    () => postNativeRoute(window, pathname, tabBar),
+    [pathname, tabBar],
+  );
   useEffect(() => () => postNativeClosed(window), []);
 }

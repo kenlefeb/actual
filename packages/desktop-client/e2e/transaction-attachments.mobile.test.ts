@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 
+import { connectToServer } from './connect-to-server';
 import { expect, test } from './fixtures';
 import { startSyncServer } from './fixtures/sync-server';
 import type { SyncServer } from './fixtures/sync-server';
@@ -34,28 +35,6 @@ async function addTransaction(page: Page) {
     });
     return { account, id };
   });
-}
-
-// Connects a fresh browser page to the sync server and opens a new budget
-async function connectToServer(page: Page, server: SyncServer) {
-  await page.goto('/');
-  const configurationPage = new ConfigurationPage(page);
-  await configurationPage.clickOnConnectServer();
-  await page.getByPlaceholder('https://example.com').fill(server.url);
-  await page.getByRole('button', { name: 'Connect' }).click();
-  await page.getByPlaceholder('Password', { exact: true }).fill('e2e-pass');
-  await page.getByPlaceholder('Confirm password').fill('e2e-pass');
-  await page.getByRole('button', { name: 'OK' }).click();
-  await page
-    .getByRole('heading', { name: 'Sign in to this Actual instance' })
-    .waitFor();
-  await page.getByPlaceholder('Password', { exact: true }).fill('e2e-pass');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await page.getByRole('button', { name: 'Start budgeting' }).click();
-  await expect(page.getByRole('status')).toBeVisible();
-  await expect(page.getByRole('status')).not.toHaveText(
-    'Local file — not syncing',
-  );
 }
 
 test.describe('Transaction documents on the phone', () => {
@@ -116,6 +95,7 @@ test.describe('Transaction documents on the phone', () => {
       await page.getByRole('button', { name: 'Undo' }).click();
       await expect(entry.documentName(pdf.name)).toBeVisible();
       await page.goto(`/accounts/${account}`);
+      await expect(row).toBeVisible();
       await expect(row.getByLabel('Has attached documents')).toBeVisible();
 
       // Cancel while adding: a held document leaves nothing behind. The add
@@ -136,6 +116,9 @@ test.describe('Transaction documents on the phone', () => {
       await entry.attachDocument(pdf);
       await expect(entry.addTransactionButton).toBeEnabled();
       await entry.createTransaction();
+      // The add screen closes and the new row is listed before its paperclip
+      await expect(entry.addTransactionButton).toBeHidden();
+      await expect(newRow).toHaveCount(1);
       await expect(newRow.getByLabel('Has attached documents')).toBeVisible();
     } finally {
       await page.close();

@@ -23,7 +23,7 @@ export function usePendingAttachments(initialFiles: PendingAttachment[] = []) {
   const [checking, setChecking] = useState<string[]>([]);
   // Refs mirror state so picks and Save in flight see the latest, not a stale render
   const filesRef = useRef(initialFiles);
-  const checksRef = useRef(new Set<Promise<void>>());
+  const checksRef = useRef(new Set<Promise<PendingAttachment | null>>());
   // Held plus being checked: what the cap counts, so two picks can't both pass it
   const slotsRef = useRef(initialFiles.length);
   // Bumped by clear(), so a check that started before it is discarded
@@ -38,7 +38,11 @@ export function usePendingAttachments(initialFiles: PendingAttachment[] = []) {
     setFiles(next);
   }
 
-  async function check(file: PendingAttachment, generation: number) {
+  // Resolves to the file when it passes, so take() can collect late checks
+  async function check(
+    file: PendingAttachment,
+    generation: number,
+  ): Promise<PendingAttachment | null> {
     let result;
     try {
       result = await send('transaction-attachment-check', { data: file.data });
@@ -47,7 +51,8 @@ export function usePendingAttachments(initialFiles: PendingAttachment[] = []) {
     }
     if (generation !== generationRef.current) {
       // clear() already reset the slots and the pending rows
-      return;
+      // Silent on purpose: the user has moved on from this pick
+      return 'error' in result ? null : file;
     }
     setChecking(names => {
       const at = names.indexOf(file.name);
@@ -56,9 +61,10 @@ export function usePendingAttachments(initialFiles: PendingAttachment[] = []) {
     if ('error' in result) {
       slotsRef.current--;
       notify('error', attachErrorMessage(result, t));
-      return;
+      return null;
     }
     setHeld([...filesRef.current, file]);
+    return file;
   }
 
   // Checks the file now, by the same rules as a saved transaction, and holds
@@ -96,12 +102,9 @@ export function usePendingAttachments(initialFiles: PendingAttachment[] = []) {
     setHeld([]);
   }
 
-  // One batch call (one undo step). Waits for checks still running, so a
-  // document picked just before Save isn't dropped. A failure never undoes the
-  // save; the user gets one message naming the documents that weren't attached.
-  async function attachTo(transactionId: string) {
-    await Promise.all([...checksRef.current]);
-    const held = filesRef.current;
+  // One batch call (one undo step). A failure never undoes the save; the user
+  // gets one message naming the documents that weren't attached.
+  async function sendBatch(transactionId: string, held: PendingAttachment[]) {
     if (held.length === 0) {
       return;
     }
@@ -118,7 +121,6 @@ export function usePendingAttachments(initialFiles: PendingAttachment[] = []) {
     } catch {
       failedNames = held.map(f => f.name);
     }
-    clear();
     if (failedNames.length > 0) {
       notify(
         'error',
@@ -130,9 +132,53 @@ export function usePendingAttachments(initialFiles: PendingAttachment[] = []) {
     }
   }
 
+  // Waits for checks still running, so a document picked just before Save
+  // isn't dropped.
+  async function attachTo(transactionId: string) {
+    await Promise.all([...checksRef.current]);
+    await sendBatch(transactionId, filesRef.current);
+    clear();
+  }
+
+  // For a form that stays open after Save (the register's add row): hands the
+  // held files to `attach` and clears now, so the next entry starts empty while
+  // the attach is still running. `restore` puts the files back if the save
+  // failed before `attach` began, so nothing is lost.
+  function take() {
+    const held = filesRef.current;
+    const running = [...checksRef.current];
+    let started = false;
+    clear();
+    return {
+      async attach(transactionId: string) {
+        started = true;
+        const late = (await Promise.all(running)).filter(
+          // A check that finished just before this call is in both lists
+          (f): f is PendingAttachment => f != null && !held.includes(f),
+        );
+        await sendBatch(transactionId, [...held, ...late]);
+      },
+      async restore() {
+        if (started) {
+          return;
+        }
+        const late = (await Promise.all(running)).filter(
+          (f): f is PendingAttachment => f != null && !held.includes(f),
+        );
+        const back = [...held, ...late, ...filesRef.current].slice(
+          0,
+          MAX_PENDING_ATTACHMENTS,
+        );
+        slotsRef.current = back.length;
+        setHeld(back);
+      },
+    };
+  }
+
   const isFull = files.length + checking.length >= MAX_PENDING_ATTACHMENTS;
 
-  return { files, checking, isFull, add, remove, clear, attachTo };
+  return { files, checking, isFull, add, remove, clear, attachTo, take };
 }
 
 export type PendingAttachments = ReturnType<typeof usePendingAttachments>;
+export type TakenAttachments = ReturnType<PendingAttachments['take']>;

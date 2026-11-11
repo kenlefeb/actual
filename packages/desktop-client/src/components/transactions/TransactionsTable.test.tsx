@@ -40,7 +40,11 @@ import { SchedulesProvider } from '#hooks/useCachedSchedules';
 import { SelectedProviderWithItems } from '#hooks/useSelected';
 import { SplitsExpandedProvider } from '#hooks/useSplitsExpanded';
 import { SpreadsheetProvider } from '#hooks/useSpreadsheet';
-import { createTestQueryClient, TestProviders } from '#mocks';
+import {
+  createTestAppStore,
+  createTestQueryClient,
+  TestProviders,
+} from '#mocks';
 import * as modalsSlice from '#modals/modalsSlice';
 import { payeeQueries } from '#payees';
 import { tagQueries } from '#tags/queries';
@@ -52,6 +56,17 @@ import {
 } from './TransactionsTable';
 
 const queryClient = createTestQueryClient();
+let testStore = createTestAppStore();
+const attachState = vi.hoisted(() => ({
+  cloudFileId: 'cloud-file' as string | undefined,
+}));
+
+vi.mock('#hooks/useMetadataPref', () => ({
+  useMetadataPref: (key: string) => [
+    key === 'cloudFileId' ? attachState.cloudFileId : undefined,
+    vi.fn(),
+  ],
+}));
 
 vi.mock(
   '@actual-app/core/platform/client/connection',
@@ -168,6 +183,7 @@ type LiveTransactionTableProps = {
   balances?: Record<TransactionEntity['id'], number>;
   onReorder?: () => void;
   isAdding: boolean;
+  failAdd?: boolean;
   onTransactionsChange?: (newTrans: TransactionEntity[]) => void;
   onCloseAddTransaction?: () => void;
   onNotesTagClick?: (tag: string) => void;
@@ -198,9 +214,17 @@ function LiveTransactionTable(props: LiveTransactionTableProps) {
     setTransactions(data);
   };
 
-  const onAdd = (newTransactions: TransactionEntity[]) => {
+  // Mirrors TransactionList.onAdd: mint the real ids, save, then attach
+  const onAdd = async (
+    newTransactions: TransactionEntity[],
+    documents?: { attach: (transactionId: string) => Promise<void> },
+  ) => {
+    if (props.failAdd) {
+      throw new Error('could not save');
+    }
     newTransactions = realizeTempTransactions(newTransactions);
     setTransactions(trans => [...newTransactions, ...trans]);
+    await documents?.attach(newTransactions[0].id);
   };
 
   const onAddSplit = (id: string) => {
@@ -216,7 +240,7 @@ function LiveTransactionTable(props: LiveTransactionTableProps) {
   // implementation properly uses the right latest state even if the
   // hook dependencies haven't changed
   return (
-    <TestProviders queryClient={queryClient}>
+    <TestProviders queryClient={queryClient} store={testStore}>
       <AuthProvider>
         <SpreadsheetProvider>
           <SchedulesProvider>
@@ -288,6 +312,8 @@ function initBasicServer() {
 }
 
 beforeEach(() => {
+  testStore = createTestAppStore();
+  attachState.cloudFileId = 'cloud-file';
   schedules = [];
   createScheduleMock.mockClear();
   initBasicServer();
@@ -2197,6 +2223,434 @@ describe('Transactions', () => {
         await new Promise(resolve => setTimeout(resolve, 700));
       });
       expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    });
+  });
+});
+
+describe('Documents while adding', () => {
+  const checkOk = () => ({ ok: true });
+  const messages = () =>
+    testStore
+      .getState()
+      .notifications.notifications.map(n => n.message ?? '')
+      .join('\n');
+
+  function serve(handlers: Record<string, (args: never) => unknown> = {}) {
+    initServer({
+      query: async () => ({ data: [], dependencies: [] }),
+      'get-cell': async () => ({ name: 'test-cell', value: 0 }),
+      'get-categories': async () => ({ grouped: categoryGroups, list: [] }),
+      'tags-get': async () => tags,
+      'transaction-attachment-check': checkOk,
+      ...handlers,
+    } as unknown as Parameters<typeof initServer>[0]);
+  }
+
+  function renderAdding(extra?: Partial<LiveTransactionTableProps>) {
+    const view = renderTransactions(extra);
+    view.updateProps({ isAdding: true });
+    return view;
+  }
+
+  async function pick(container: HTMLElement, name = 'invoice.pdf') {
+    vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(
+      () => undefined,
+    );
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Attach document' }),
+    );
+    fireEvent.change(
+      container.querySelector(
+        '[data-testid="new-transaction"] input[type="file"]',
+      )!,
+      {
+        target: {
+          files: [new File(['%PDF-1.4'], name, { type: 'application/pdf' })],
+        },
+      },
+    );
+  }
+
+  const held = () => screen.getByTestId('pending-attachments');
+
+  test('Pick a document while adding on desktop', async () => {
+    const check = vi.fn(checkOk);
+    const addOne = vi.fn();
+    serve({
+      'transaction-attachment-check': check,
+      'transaction-attachment-add': addOne,
+    });
+    const { container } = renderAdding();
+
+    await pick(container);
+
+    expect(await screen.findByText('invoice.pdf')).toBeVisible();
+    expect(screen.getByTestId('pending-attachments-count')).toHaveTextContent(
+      '1',
+    );
+    expect(
+      within(held()).getByRole('button', { name: 'Remove invoice.pdf' }),
+    ).toBeVisible();
+    expect(check).toHaveBeenCalledOnce();
+    // Held on the device: nothing uploaded
+    expect(addOne).not.toHaveBeenCalled();
+  });
+
+  test('Count badge', async () => {
+    serve();
+    const { container } = renderAdding();
+
+    await pick(container, 'a.pdf');
+    await screen.findByText('a.pdf');
+    await pick(container, 'b.pdf');
+    await screen.findByText('b.pdf');
+
+    const badge = screen.getByTestId('pending-attachments-count');
+    expect(badge).toHaveTextContent('2');
+    expect(badge).toHaveAccessibleName('Documents held: 2');
+    // Remove only: no Open
+    expect(within(held()).getAllByRole('button')).toHaveLength(2);
+    expect(within(held()).queryByRole('button', { name: /Open/ })).toBeNull();
+  });
+
+  test('Remove a held document', async () => {
+    const addOne = vi.fn();
+    serve({ 'transaction-attachment-add': addOne });
+    const { container } = renderAdding();
+    await pick(container);
+    await screen.findByText('invoice.pdf');
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Remove invoice.pdf' }),
+    );
+
+    expect(screen.queryByText('invoice.pdf')).toBeNull();
+    expect(screen.queryByTestId('pending-attachments-count')).toBeNull();
+    expect(addOne).not.toHaveBeenCalled();
+  });
+
+  test('Refused when picked', async () => {
+    serve({
+      'transaction-attachment-check': () => ({ error: 'unsupported-type' }),
+    });
+    const { container } = renderAdding();
+
+    await pick(container, 'notes.docx');
+
+    await waitFor(() =>
+      expect(messages()).toContain('Only PDF, JPEG, PNG and WebP'),
+    );
+    expect(screen.queryByText('notes.docx')).toBeNull();
+    expect(screen.queryByTestId('pending-attachments-count')).toBeNull();
+  });
+
+  test('Local-only budget while adding', async () => {
+    attachState.cloudFileId = undefined;
+    serve();
+    const click = vi
+      .spyOn(HTMLInputElement.prototype, 'click')
+      .mockImplementation(() => undefined);
+    renderAdding();
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Attach document' }),
+    );
+
+    expect(click).not.toHaveBeenCalled();
+    expect(messages()).toContain('Attaching documents needs a sync server.');
+  });
+
+  test('Offline pick', async () => {
+    serve({
+      'transaction-attachment-check': () => ({ error: 'upload-failed' }),
+    });
+    const { container } = renderAdding();
+
+    await pick(container);
+
+    await waitFor(() =>
+      expect(messages()).toContain('Check your connection to the server'),
+    );
+    expect(screen.queryByText('invoice.pdf')).toBeNull();
+  });
+
+  test('Sixth document', async () => {
+    serve();
+    const { container } = renderAdding();
+    for (let i = 1; i <= 5; i++) {
+      await pick(container, `doc${i}.pdf`);
+      await screen.findByText(`doc${i}.pdf`);
+    }
+
+    expect(
+      screen.getByText('The limit of 5 documents has been reached.'),
+    ).toBeVisible();
+    expect(
+      screen.getByRole('button', { name: 'Attach document' }),
+    ).toBeDisabled();
+    expect(screen.getByTestId('pending-attachments-count')).toHaveTextContent(
+      '5',
+    );
+  });
+
+  test('Schedule with held documents: the row says they are not kept', async () => {
+    const batch = vi.fn();
+    serve({
+      'transaction-attachments-add-batch': batch,
+      'schedule/create': createScheduleMock,
+    });
+    const { container } = renderAdding();
+    await pick(container);
+    await screen.findByText('invoice.pdf');
+    const note =
+      'Documents are attached when you choose Add. Schedule does not keep them.';
+    expect(screen.queryByText(note)).toBeNull();
+
+    const dateInput = queryNewField(container, 'date', 'input');
+    await userEvent.clear(dateInput);
+    await userEvent.type(dateInput, '01/02/2017[Tab]');
+
+    expect(screen.getByTestId('schedule-button')).toBeVisible();
+    expect(screen.getByText(note)).toBeVisible();
+    // Held files stay listed, with Remove, while Schedule is offered
+    expect(
+      screen.getByRole('button', { name: 'Remove invoice.pdf' }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Attach document' }),
+    ).toBeNull();
+
+    // Schedule never attaches them
+    await userEvent.click(screen.getByTestId('schedule-button'));
+    await waitFor(() => expect(createScheduleMock).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText('invoice.pdf')).toBeNull());
+    expect(batch).not.toHaveBeenCalled();
+  });
+
+  test('Removing the last held document moves focus to the paperclip', async () => {
+    serve();
+    const { container } = renderAdding();
+    await pick(container);
+    await screen.findByText('invoice.pdf');
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Remove invoice.pdf' }),
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'Attach document' }),
+    ).toHaveFocus();
+  });
+
+  test('Schedule has no paperclip', async () => {
+    serve();
+    const { container } = renderAdding();
+    expect(
+      screen.getByRole('button', { name: 'Attach document' }),
+    ).toBeVisible();
+
+    // A future date offers Schedule, so the row can be adding a schedule
+    const dateInput = queryNewField(container, 'date', 'input');
+    await userEvent.clear(dateInput);
+    await userEvent.type(dateInput, '02/01/2017[Tab]');
+
+    expect(screen.getByTestId('schedule-button')).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Attach document' }),
+    ).toBeNull();
+  });
+
+  describe('save', () => {
+    const batchOk = () => ({ attachments: [{}], failed: [] });
+
+    test('Add with a document on desktop', async () => {
+      const batch = vi.fn(batchOk);
+      serve({ 'transaction-attachments-add-batch': batch });
+      const { container, getTransactions } = renderAdding();
+      await pick(container);
+      await screen.findByText('invoice.pdf');
+
+      await userEvent.click(screen.getByTestId('add-button'));
+
+      await waitFor(() => expect(batch).toHaveBeenCalledOnce());
+      expect(getTransactions()).toHaveLength(6);
+      expect(getTransactions()[0].id).not.toBe('temp');
+      expect(batch).toHaveBeenCalledWith({
+        transactionId: getTransactions()[0].id,
+        files: [expect.objectContaining({ name: 'invoice.pdf' })],
+      });
+      // The row is empty for the next entry
+      await waitFor(() => expect(screen.queryByText('invoice.pdf')).toBeNull());
+      expect(screen.queryByTestId('pending-attachments-count')).toBeNull();
+    });
+
+    test('Add and close attaches too', async () => {
+      const batch = vi.fn(batchOk);
+      const onClose = vi.fn();
+      serve({ 'transaction-attachments-add-batch': batch });
+      const { container, getTransactions } = renderAdding({
+        onCloseAddTransaction: onClose,
+      });
+      await pick(container);
+      await screen.findByText('invoice.pdf');
+
+      fireEvent.click(screen.getByTestId('add-button'), { ctrlKey: true });
+
+      await waitFor(() => expect(batch).toHaveBeenCalledOnce());
+      expect(onClose).toHaveBeenCalled();
+      expect(batch).toHaveBeenCalledWith(
+        expect.objectContaining({ transactionId: getTransactions()[0].id }),
+      );
+    });
+
+    test('Cancel while adding', async () => {
+      const batch = vi.fn();
+      const addOne = vi.fn();
+      serve({
+        'transaction-attachments-add-batch': batch,
+        'transaction-attachment-add': addOne,
+      });
+      const onClose = vi.fn();
+      const { container, getTransactions, updateProps } = renderAdding({
+        onCloseAddTransaction: onClose,
+      });
+      await pick(container);
+      await screen.findByText('invoice.pdf');
+
+      await userEvent.click(screen.getByTestId('cancel-button'));
+      expect(onClose).toHaveBeenCalled();
+      // The parent closes the row, then the next Add starts clean
+      updateProps({ isAdding: false });
+      updateProps({ isAdding: true });
+
+      expect(screen.queryByText('invoice.pdf')).toBeNull();
+      expect(screen.queryByTestId('pending-attachments-count')).toBeNull();
+      expect(getTransactions()).toHaveLength(5);
+      expect(batch).not.toHaveBeenCalled();
+      expect(addOne).not.toHaveBeenCalled();
+    });
+
+    test('Split while adding', async () => {
+      const batch = vi.fn(batchOk);
+      serve({ 'transaction-attachments-add-batch': batch });
+      const { container, getTransactions } = renderAdding();
+      await pick(container);
+      await screen.findByText('invoice.pdf');
+
+      let input = await editNewField(container, 'debit');
+      await userEvent.clear(input);
+      await userEvent.type(input, '55.00');
+      await editNewField(container, 'category');
+      await userEvent.click(screen.getByTestId('split-transaction-button'));
+      await waitForAutocomplete();
+      await waitForAutocomplete();
+      await waitForAutocomplete();
+      input = await editNewField(container, 'debit', 1);
+      await userEvent.clear(input);
+      await userEvent.type(input, '45.00');
+      input = await editNewField(container, 'debit', 2);
+      await userEvent.clear(input);
+      await userEvent.type(input, '10.00');
+      await userEvent.tab();
+
+      await userEvent.click(screen.getByTestId('add-button'));
+
+      await waitFor(() => expect(batch).toHaveBeenCalledOnce());
+      expect(getTransactions()[0].is_parent).toBe(true);
+      expect(batch).toHaveBeenCalledWith(
+        expect.objectContaining({ transactionId: getTransactions()[0].id }),
+      );
+    });
+
+    test('The transaction fails to save: the documents stay held', async () => {
+      const batch = vi.fn();
+      serve({ 'transaction-attachments-add-batch': batch });
+      const { container } = renderAdding({ failAdd: true });
+      await pick(container);
+      await screen.findByText('invoice.pdf');
+
+      await userEvent.click(screen.getByTestId('add-button'));
+
+      await waitFor(() => expect(messages()).toContain("wasn't saved"));
+      expect(await screen.findByText('invoice.pdf')).toBeVisible();
+      expect(batch).not.toHaveBeenCalled();
+    });
+
+    test('Connection lost between pick and save', async () => {
+      serve({
+        'transaction-attachments-add-batch': () => {
+          throw new Error('offline');
+        },
+      });
+      const { container, getTransactions } = renderAdding();
+      await pick(container);
+      await screen.findByText('invoice.pdf');
+
+      await userEvent.click(screen.getByTestId('add-button'));
+
+      await waitFor(() => expect(messages()).toContain("weren't attached"));
+      expect(getTransactions()).toHaveLength(6);
+    });
+
+    test('One document fails', async () => {
+      serve({
+        'transaction-attachments-add-batch': () => ({
+          attachments: [{}],
+          failed: [{ name: 'a.pdf', error: 'upload-failed' }],
+        }),
+      });
+      const { container } = renderAdding();
+      await pick(container, 'a.pdf');
+      await screen.findByText('a.pdf');
+      await pick(container, 'b.pdf');
+      await screen.findByText('b.pdf');
+
+      await userEvent.click(screen.getByTestId('add-button'));
+
+      await waitFor(() =>
+        expect(messages()).toMatch(/weren't attached.*a\.pdf/),
+      );
+      expect(messages()).not.toContain('b.pdf');
+    });
+
+    test('Undo after adding with two documents: one batch, so one undo step', async () => {
+      const batch = vi.fn(() => ({ attachments: [{}, {}], failed: [] }));
+      serve({ 'transaction-attachments-add-batch': batch });
+      const { container } = renderAdding();
+      await pick(container, 'a.pdf');
+      await screen.findByText('a.pdf');
+      await pick(container, 'b.pdf');
+      await screen.findByText('b.pdf');
+
+      await userEvent.click(screen.getByTestId('add-button'));
+
+      await waitFor(() => expect(batch).toHaveBeenCalledOnce());
+      // The add is undo step one; the single batch is step two
+      expect(batch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          files: [
+            expect.objectContaining({ name: 'a.pdf' }),
+            expect.objectContaining({ name: 'b.pdf' }),
+          ],
+        }),
+      );
+    });
+
+    test('A document picked for the next entry survives the previous attach', async () => {
+      let finish: (value: unknown) => void = () => undefined;
+      const batch = vi.fn(() => new Promise(resolve => (finish = resolve)));
+      serve({ 'transaction-attachments-add-batch': batch });
+      const { container } = renderAdding();
+      await pick(container, 'first.pdf');
+      await screen.findByText('first.pdf');
+
+      await userEvent.click(screen.getByTestId('add-button'));
+      await waitFor(() => expect(batch).toHaveBeenCalledOnce());
+      await pick(container, 'second.pdf');
+      await screen.findByText('second.pdf');
+      await act(async () => finish({ attachments: [{}], failed: [] }));
+
+      expect(within(held()).getByText('second.pdf')).toBeVisible();
     });
   });
 });

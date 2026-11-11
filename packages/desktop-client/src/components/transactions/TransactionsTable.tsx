@@ -28,6 +28,7 @@ import { SvgSplit } from '@actual-app/components/icons/v0';
 import {
   SvgArrowDown,
   SvgArrowUp,
+  SvgAttachment,
   SvgCheveronDown,
 } from '@actual-app/components/icons/v1';
 import {
@@ -130,6 +131,14 @@ import type {
 } from '#hooks/useDragDrop';
 import { useLocalPref } from '#hooks/useLocalPref';
 import { useMergedRefs } from '#hooks/useMergedRefs';
+import {
+  MAX_PENDING_ATTACHMENTS,
+  usePendingAttachments,
+} from '#hooks/usePendingAttachments';
+import type {
+  PendingAttachments,
+  TakenAttachments,
+} from '#hooks/usePendingAttachments';
 import { usePrevious } from '#hooks/usePrevious';
 import { useProperFocus } from '#hooks/useProperFocus';
 import { useResizeObserver } from '#hooks/useResizeObserver';
@@ -175,6 +184,7 @@ import type {
 import {
   AttachmentsIndicator,
   AttachmentsProvider,
+  useAttachDocument,
   useTransactionAttachments,
 } from './TransactionAttachments';
 import { useTransactionRowContextActions } from './useTransactionRowContextActions';
@@ -2468,6 +2478,7 @@ type NewTransactionProps = {
     [id: TransactionEntity['id']]: AccountEntity | null;
   };
   showHiddenCategories?: boolean;
+  pendingAttachments: PendingAttachments;
 };
 function NewTransaction({
   transactions,
@@ -2499,7 +2510,17 @@ function NewTransaction({
   onNotesTagClick,
   balance,
   showHiddenCategories,
+  pendingAttachments,
 }: NewTransactionProps) {
+  const { t } = useTranslation();
+  const { attach, fileInput } = useAttachDocument(file => {
+    void pendingAttachments.add(file);
+  });
+  const heldCount = pendingAttachments.files.length;
+  const showHeld =
+    heldCount > 0 ||
+    pendingAttachments.checking.length > 0 ||
+    pendingAttachments.isFull;
   const error = transactions[0].error;
   const isDeposit = transactions[0].amount > 0;
   const isFuture = isFutureTransaction(transactions[0]);
@@ -2510,6 +2531,7 @@ function NewTransaction({
 
   const addButtonRef = useRef(null);
   useProperFocus(addButtonRef, focusedField === 'add');
+  const attachButtonRef = useRef<HTMLButtonElement>(null);
   const scheduleButtonRef = useRef(null);
   useProperFocus(scheduleButtonRef, focusedField === 'schedule');
   const cancelButtonRef = useRef(null);
@@ -2583,6 +2605,46 @@ function NewTransaction({
           marginRight: 20,
         }}
       >
+        {!isFuture && (
+          <View style={{ marginRight: 10 }}>
+            <Button
+              style={{ padding: '4px 8px' }}
+              ref={attachButtonRef}
+              aria-label={t('Attach document')}
+              data-testid="attach-button"
+              isDisabled={pendingAttachments.isFull}
+              onPress={() => attach()}
+            >
+              <SvgAttachment style={{ width: 13, height: 13 }} />
+            </Button>
+            {heldCount > 0 && (
+              <Text
+                role="status"
+                aria-label={t('Documents held: {{count}}', {
+                  count: heldCount,
+                })}
+                data-testid="pending-attachments-count"
+                style={{
+                  position: 'absolute',
+                  top: -6,
+                  right: -6,
+                  minWidth: 16,
+                  height: 16,
+                  borderRadius: 8,
+                  fontSize: 10,
+                  lineHeight: '16px',
+                  textAlign: 'center',
+                  pointerEvents: 'none',
+                  backgroundColor: theme.buttonPrimaryBackground,
+                  color: theme.buttonPrimaryText,
+                }}
+              >
+                {heldCount}
+              </Text>
+            )}
+          </View>
+        )}
+        {fileInput}
         <Button
           style={{ marginRight: 10, padding: '4px 10px' }}
           onPress={() => onClose()}
@@ -2622,6 +2684,74 @@ function NewTransaction({
           </Button>
         )}
       </View>
+      {showHeld && (
+        <View
+          data-testid="pending-attachments"
+          style={{
+            alignItems: 'flex-end',
+            gap: 4,
+            marginTop: 6,
+            marginRight: 20,
+          }}
+        >
+          {pendingAttachments.files.map((file, index) => (
+            <View
+              // Names can repeat, and the list only ever removes by position
+              key={`${index}-${file.name}`}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+            >
+              <Text
+                style={{
+                  maxWidth: 260,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {file.name}
+              </Text>
+              <Button
+                style={{ padding: '4px 8px' }}
+                aria-label={t('Remove {{name}}', { name: file.name })}
+                onPress={() => {
+                  pendingAttachments.remove(index);
+                  if (heldCount === 1) {
+                    // The button that had focus is gone: the paperclip, or Add
+                    // while Schedule is offered and the paperclip is hidden
+                    (attachButtonRef.current ?? addButtonRef.current)?.focus();
+                  }
+                }}
+              >
+                <Trans>Remove</Trans>
+              </Button>
+            </View>
+          ))}
+          {pendingAttachments.checking.map((name, index) => (
+            <Text
+              key={`${index}-${name}`}
+              style={{ color: theme.pageTextSubdued }}
+            >
+              <Trans>Checking {{ name }}…</Trans>
+            </Text>
+          ))}
+          {isFuture && heldCount > 0 && (
+            <Text style={{ color: theme.pageTextSubdued }}>
+              <Trans>
+                Documents are attached when you choose Add. Schedule does not
+                keep them.
+              </Trans>
+            </Text>
+          )}
+          {pendingAttachments.isFull && (
+            <Text style={{ color: theme.pageTextSubdued }}>
+              <Trans>
+                The limit of {{ max: MAX_PENDING_ATTACHMENTS }} documents has
+                been reached.
+              </Trans>
+            </Text>
+          )}
+        </View>
+      )}
     </View>
   );
 }
@@ -2667,7 +2797,12 @@ type TransactionTableInnerProps = {
   onSplit: (id: TransactionEntity['id']) => void;
   onAddSplit: (id: TransactionEntity['id']) => void;
   onCloseAddTransaction: () => void;
-  onAdd: (transactions: TransactionEntity[]) => void;
+  onAdd: (
+    transactions: TransactionEntity[],
+    // The documents held in the add row: `attach` runs on the saved
+    // transaction's id; a failed save leaves them to the table to put back
+    documents?: TakenAttachments,
+  ) => void | Promise<void>;
   onCreatePayee: (name: string) => Promise<null | PayeeEntity['id']>;
   style?: CSSProperties;
   onNavigateToTransferAccount: (id: AccountEntity['id']) => void;
@@ -2692,6 +2827,7 @@ type TransactionTableInnerProps = {
   onCheckNewEnter: (e: KeyboardEvent) => void;
   onCheckEnter: (e: KeyboardEvent) => void;
   onScheduleTemporary: (id?: TransactionEntity['id']) => void;
+  pendingAttachments: PendingAttachments;
   onAddTemporary: (id?: TransactionEntity['id']) => void;
   onAddAndCloseTemporary: () => void;
   onDistributeRemainder: (id: TransactionEntity['id']) => void;
@@ -2992,6 +3128,7 @@ function TransactionTableInner({
               onNotesTagClick={onNotesTagClick}
               onDistributeRemainder={props.onDistributeRemainder}
               showHiddenCategories={showHiddenCategories}
+              pendingAttachments={props.pendingAttachments}
             />
           </View>
         )}
@@ -3078,7 +3215,12 @@ export type TransactionTableProps = {
   onSplit: (id: TransactionEntity['id']) => TransactionEntity['id'];
   onAddSplit: (id: TransactionEntity['id']) => TransactionEntity['id'];
   onCloseAddTransaction: () => void;
-  onAdd: (transactions: TransactionEntity[]) => void;
+  onAdd: (
+    transactions: TransactionEntity[],
+    // The documents held in the add row: `attach` runs on the saved
+    // transaction's id; a failed save leaves them to the table to put back
+    documents?: TakenAttachments,
+  ) => void | Promise<void>;
   onCreatePayee: (name: string) => Promise<null | PayeeEntity['id']>;
   style?: CSSProperties;
   onNavigateToTransferAccount: (id: AccountEntity['id']) => void;
@@ -3119,6 +3261,9 @@ export const TransactionTable = forwardRef(
     const [upcomingLength = DEFAULT_UPCOMING_SCHEDULE_DAYS] = useSyncedPref(
       'upcomingScheduledTransactionLength',
     );
+    // Held here, not in the add row, so Add can hand the files to onAdd while
+    // the row resets for the next entry
+    const pendingAttachments = usePendingAttachments();
     const [newTransactions, setNewTransactions] = useState<TransactionEntity[]>(
       [],
     );
@@ -3323,6 +3468,8 @@ export const TransactionTable = forwardRef(
       getFieldsTableTransaction,
     );
     const shouldSchedule = useRef(false);
+    // Taken from the add row by the Add handlers, then handed to onAdd
+    const takenDocuments = useRef<TakenAttachments | undefined>(undefined);
     const shouldAdd = useRef(false);
     const shouldAddAndClose = useRef(false);
     const pendingConvertToSchedule = useRef<null | {
@@ -3358,6 +3505,8 @@ export const TransactionTable = forwardRef(
 
     // Derive new transactions from the `isAdding` prop
     if (prevIsAdding !== props.isAdding) {
+      // Opening or closing the add row drops the held documents
+      pendingAttachments.clear();
       if (!prevIsAdding && props.isAdding) {
         clearedFields.current.clear();
         setNewTransactions(
@@ -3368,6 +3517,26 @@ export const TransactionTable = forwardRef(
         );
       }
       setPrevIsAdding(props.isAdding);
+    }
+
+    function addTransactions(
+      transactions: TransactionEntity[],
+      documents?: TakenAttachments,
+    ) {
+      // A rejected save puts the held documents back instead of losing them
+      Promise.resolve(props.onAdd(transactions, documents)).catch(() => {
+        void documents?.restore();
+        dispatch(
+          addNotification({
+            notification: {
+              type: 'error',
+              message: t(
+                "The transaction wasn't saved. Any documents you picked are still held; choose Add again.",
+              ),
+            },
+          }),
+        );
+      });
     }
 
     if (shouldAdd.current || shouldAddAndClose.current) {
@@ -3384,8 +3553,11 @@ export const TransactionTable = forwardRef(
       } else {
         const transactions = latestState.current.newTransactions;
 
+        const documents = takenDocuments.current;
+        takenDocuments.current = undefined;
+
         if (shouldAddAndClose.current) {
-          props.onAdd(transactions);
+          addTransactions(transactions, documents);
           props.onCloseAddTransaction();
         } else {
           const lastDate =
@@ -3399,7 +3571,7 @@ export const TransactionTable = forwardRef(
             ),
           );
           newNavigator.onEdit('temp', 'date');
-          props.onAdd(transactions);
+          addTransactions(transactions, documents);
         }
       }
       shouldAdd.current = false;
@@ -3442,7 +3614,9 @@ export const TransactionTable = forwardRef(
                   },
                 }),
               );
-              // Reset form like onAddTemporary does
+              // Reset form like onAddTemporary does; a schedule has no
+              // transaction to attach to
+              pendingAttachments.clear();
               clearedFields.current.clear();
               setNewTransactions(
                 makeTemporaryTransactions(
@@ -3611,10 +3785,7 @@ export const TransactionTable = forwardRef(
         } else if (e.metaKey || e.ctrlKey) {
           e.preventDefault();
           e.stopPropagation();
-          afterSave(() => {
-            shouldAddAndClose.current = true;
-            forceRerender({});
-          });
+          onAddAndCloseTemporary();
         } else if (!e.shiftKey) {
           function getLastTransaction(state: RefObject<TableState>) {
             const { newTransactions } = state.current;
@@ -3683,8 +3854,18 @@ export const TransactionTable = forwardRef(
       });
     };
 
+    // Takes the held documents in the event handler, not during render. With no
+    // account the add is refused, so the documents stay held.
+    function takeDocuments() {
+      takenDocuments.current =
+        latestState.current.newTransactions[0]?.account == null
+          ? undefined
+          : pendingAttachments.take();
+    }
+
     const onAddTemporary = () => {
       afterSave(() => {
+        takeDocuments();
         shouldAdd.current = true;
         // A little hacky - this forces a rerender which will cause the
         // effect we want to run. We have to wait for all updates to be
@@ -3695,6 +3876,7 @@ export const TransactionTable = forwardRef(
 
     const onAddAndCloseTemporary = () => {
       afterSave(() => {
+        takeDocuments();
         shouldAddAndClose.current = true;
         forceRerender({});
       });
@@ -4082,6 +4264,7 @@ export const TransactionTable = forwardRef(
               onCheckNewEnter={onCheckNewEnter}
               onCheckEnter={onCheckEnter}
               onScheduleTemporary={onScheduleTemporary}
+              pendingAttachments={pendingAttachments}
               onAddTemporary={onAddTemporary}
               onAddAndCloseTemporary={onAddAndCloseTemporary}
               onAddSplit={onAddSplit}

@@ -105,6 +105,10 @@ The list of held documents SHALL offer Remove only. On desktop the add row SHALL
 - **WHEN** the user is adding a schedule in the desktop add row
 - **THEN** the add row shows no paperclip
 
+#### Scenario: Schedule with held documents
+- **GIVEN** a transaction being added in the desktop add row with a held document, and a date for which the row offers Schedule
+- **THEN** the paperclip is hidden, the held document stays listed with Remove, and the row says documents are attached when the user chooses Add and that Schedule does not keep them; Add attaches the document and Schedule never does
+
 ### Requirement: Held documents attach when the transaction saves
 When the transaction being added is saved, the app SHALL attach each held document to the saved transaction (the parent, for a split) by the same attach as for a saved transaction, and SHALL then clear the held documents. A failure to attach one document SHALL not undo the save and SHALL not stop the others, and the user SHALL see a message naming the documents that weren't attached.
 

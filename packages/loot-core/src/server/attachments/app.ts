@@ -222,25 +222,56 @@ async function unseal(stored: Uint8Array, encryptMeta: string | null) {
   );
 }
 
-// The cached copy, else the server's (cached for next time). Throws when
-// neither is available.
-async function getStored(remote: Remote | null, id: string) {
-  const cached = await readCache(id);
-  if (cached) {
-    return cached;
-  }
+// Downloads the stored form and caches it. `notFound` is set only when the
+// sync server itself says the document isn't there, not for any 404 (a proxy,
+// or a server without the endpoint).
+async function download(remote: Remote | null, id: string) {
   if (!remote) {
     throw new Error('No sync server');
   }
   const res = await attachmentRequest(remote, 'download-attachment', id);
   if (!res.ok) {
-    throw new Error(`Attachment download failed: ${res.status}`);
+    const notFound =
+      res.status === 404 && (await res.text()) === 'attachment-not-found';
+    throw Object.assign(
+      new Error(`Attachment download failed: ${res.status}`),
+      { notFound },
+    );
   }
   const stored = new Uint8Array(await res.arrayBuffer());
   await writeCache(id, stored).catch(e =>
     logger.warn('Could not cache attachment', e),
   );
   return stored;
+}
+
+// The document's stored and plain forms: the cached copy, else the server's.
+// A cached copy that no longer decrypts (another device changed the key) is
+// dropped and the document downloaded once.
+async function load(
+  remote: Remote | null,
+  id: string,
+  encryptMeta: string | null,
+) {
+  const cached = await readCache(id);
+  if (cached) {
+    try {
+      return { stored: cached, data: await unseal(cached, encryptMeta) };
+    } catch (e) {
+      logger.warn('Cached attachment does not decrypt; downloading', e);
+    }
+  }
+  let stored: Uint8Array;
+  try {
+    stored = await download(remote, id);
+  } catch (cause) {
+    return { error: 'download-failed' as const, cause };
+  }
+  try {
+    return { stored, data: await unseal(stored, encryptMeta) };
+  } catch (cause) {
+    return { error: 'decrypt-failed' as const, cause };
+  }
 }
 
 // The checks every document passes before it is stored: sync server, type
@@ -489,21 +520,12 @@ async function openAttachment({
     return { error: 'not-found' };
   }
 
-  let stored: Uint8Array;
-  try {
-    stored = await getStored(await getRemote(), id);
-  } catch (e) {
-    logger.warn('Could not load attachment', e);
-    return { error: 'download-failed' };
+  const loaded = await load(await getRemote(), id, row.encrypt_meta);
+  if (loaded.error) {
+    logger.warn('Could not load attachment', loaded.cause);
+    return { error: loaded.error };
   }
-
-  let data: Uint8Array;
-  try {
-    data = await unseal(stored, row.encrypt_meta);
-  } catch (e) {
-    logger.warn('Could not decrypt attachment', e);
-    return { error: 'decrypt-failed' };
-  }
+  const { data } = loaded;
 
   // The synced mime is untrusted: the opened blob gets the app's origin, so
   // only a type the bytes prove can be opened (never HTML)
@@ -570,11 +592,17 @@ export async function reencryptAttachments(
 
   try {
     for (const row of rows) {
-      const old = await getStored(remote, row.id);
-      const { stored, encryptMeta } = await seal(
-        await unseal(old, row.encrypt_meta),
-        newKeyId,
-      );
+      const loaded = await load(remote, row.id, row.encrypt_meta);
+      if (loaded.error) {
+        // The sync server says the document is gone: nothing to re-encrypt
+        if ((loaded.cause as { notFound?: boolean }).notFound) {
+          logger.warn(`Skipped attachment ${row.id}: document not found`);
+          continue;
+        }
+        throw loaded.cause;
+      }
+      const old = loaded.stored;
+      const { stored, encryptMeta } = await seal(loaded.data, newKeyId);
       // Before the upload: one stored but never acknowledged is restored too
       moved.push({ row, old });
       const refused = remote

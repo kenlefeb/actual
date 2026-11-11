@@ -329,6 +329,44 @@ describe('transaction-attachment-open', () => {
     expect(await open({ id: 'other-device' })).toMatchObject({ data: PDF });
   });
 
+  it('drops a cached copy that no longer decrypts and downloads once', async () => {
+    // Cached under key-1, then another device re-encrypts under key-2
+    await useEncryptionKey();
+    const stale = await encryption.encrypt(Buffer.from(PDF), 'key-1');
+    attachmentServer.blobs.set('rekeyed', new Uint8Array(stale.value));
+    const row = {
+      id: 'rekeyed',
+      transaction_id: transactionId,
+      name: 'r.pdf',
+      mime: 'application/pdf',
+      size: PDF.length,
+      sha256: '',
+      encrypt_meta: JSON.stringify(stale.meta),
+      created_at: '2026-11-05T00:00:00.000Z',
+    };
+    await db.insert('transaction_attachments', row);
+    await open({ id: 'rekeyed' });
+
+    const key2 = await encryption.createKey({
+      id: 'key-2',
+      password: 'other password',
+      salt: 'other salt',
+    });
+    await encryption.loadKey(key2);
+    const fresh = await encryption.encrypt(Buffer.from(PDF), 'key-2');
+    attachmentServer.blobs.set('rekeyed', new Uint8Array(fresh.value));
+    await db.update('transaction_attachments', {
+      id: 'rekeyed',
+      encrypt_meta: JSON.stringify(fresh.meta),
+    });
+    encryption.unloadKey(encryption.getKey('key-1'));
+
+    expect(await open({ id: 'rekeyed' })).toMatchObject({ data: PDF });
+    // The refreshed copy is cached: opens again offline
+    attachmentServer.offline = true;
+    expect(await open({ id: 'rekeyed' })).toMatchObject({ data: PDF });
+  });
+
   it('Never opened, offline', async () => {
     attachmentServer.blobs.set('remote', PDF);
     await db.insert('transaction_attachments', {

@@ -4,6 +4,7 @@ import * as path from 'path';
 
 import * as asyncStorage from '#platform/server/asyncStorage';
 import * as fs from '#platform/server/fs';
+import { logger } from '#platform/server/log';
 import { app as attachmentsApp } from '#server/attachments/app';
 import * as db from '#server/db';
 import { loadMappings } from '#server/db/mappings';
@@ -137,6 +138,96 @@ describe('key-make with attachments', () => {
     const newKeyId = vi.mocked(resetSync).mock.calls[0][0].key.getId();
     const [row] = await attachmentRows();
     expect(JSON.parse(row.encrypt_meta ?? '').keyId).toBe(newKeyId);
+  });
+
+  it('skips an attachment whose document is gone from the server', async () => {
+    const gone = await attach('a-receipt.pdf', PDF);
+    const kept = await attach('b-receipt.pdf', PDF);
+    attachmentServer.blobs.delete(gone);
+    clearAttachmentCache();
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+
+    const result = await app.handlers['key-make']({ password: 'new' });
+
+    expect(result).toEqual({});
+    expect(resetSync).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(gone));
+    const newKeyId = vi.mocked(resetSync).mock.calls[0][0].key.getId();
+    const keptRow = (await attachmentRows()).find(row => row.id === kept);
+    expect(JSON.parse(keptRow?.encrypt_meta ?? '').keyId).toBe(newKeyId);
+    expect(await openAttachment({ id: kept })).toMatchObject({ data: PDF });
+  });
+
+  it('stops the key change on a 404 that is not the sync server answering', async () => {
+    const first = await attach('a-receipt.pdf', PDF);
+    const second = await attach('b-receipt.pdf', PDF);
+    attachmentServer.blobs.delete(second);
+    attachmentServer.notFoundBody = '<html>Not Found</html>';
+    clearAttachmentCache();
+
+    const result = await app.handlers['key-make']({ password: 'new' });
+
+    expect(result).toEqual({
+      error: { reason: 'attachment-reencrypt-failed' },
+    });
+    expect(resetSync).not.toHaveBeenCalled();
+    expect(prefs.getPrefs().encryptKeyId).toBe(OLD_KEY);
+    for (const row of await attachmentRows()) {
+      expect(JSON.parse(row.encrypt_meta ?? '').keyId).toBe(OLD_KEY);
+    }
+    attachmentServer.blobs.set(
+      second,
+      attachmentServer.blobs.get(first) ?? PDF,
+    );
+  });
+
+  it('stops the key change and restores when a download answers 500', async () => {
+    const first = await attach('a-receipt.pdf', PDF);
+    const second = await attach('b-receipt.pdf', PDF);
+    attachmentServer.failDownloads.add(second);
+    clearAttachmentCache();
+
+    const result = await app.handlers['key-make']({ password: 'new' });
+
+    expect(result).toEqual({
+      error: { reason: 'attachment-reencrypt-failed' },
+    });
+    expect(resetSync).not.toHaveBeenCalled();
+    expect(prefs.getPrefs().encryptKeyId).toBe(OLD_KEY);
+    for (const row of await attachmentRows()) {
+      expect(JSON.parse(row.encrypt_meta ?? '').keyId).toBe(OLD_KEY);
+    }
+    attachmentServer.failDownloads.clear();
+    clearAttachmentCache();
+    expect(await openAttachment({ id: first })).toMatchObject({ data: PDF });
+    expect(await openAttachment({ id: second })).toMatchObject({ data: PDF });
+  });
+
+  it('a stale cached copy does not block the key change', async () => {
+    const id = await attach('receipt.pdf', PDF);
+    // Another device changed the key: the server holds the document under
+    // key-2 and the row says so, but this device still caches the old copy
+    const key2 = await encryption.createKey({
+      id: 'key-2',
+      password: 'other password',
+      salt: 'other salt',
+    });
+    await encryption.loadKey(key2);
+    const rekeyed = await encryption.encrypt(Buffer.from(PDF), 'key-2');
+    attachmentServer.blobs.set(id, new Uint8Array(rekeyed.value));
+    await db.update('transaction_attachments', {
+      id,
+      encrypt_meta: JSON.stringify(rekeyed.meta),
+    });
+    attachmentServer.uploads = [];
+
+    const result = await app.handlers['key-make']({ password: 'new' });
+
+    expect(result).toEqual({});
+    const newKeyId = vi.mocked(resetSync).mock.calls[0][0].key.getId();
+    const [row] = await attachmentRows();
+    expect(JSON.parse(row.encrypt_meta ?? '').keyId).toBe(newKeyId);
+    expect(await openAttachment({ id })).toMatchObject({ data: PDF });
   });
 
   it('Re-encryption fails', async () => {

@@ -1,6 +1,6 @@
 # Tasks
 
-Test-first: write the tests, run them and see them fail before writing the code. Each group ships in its own PR. The group headings name sc-3483 for now; the Product Owner will split the groups into their own stories and update these headings and `.openspec.yaml`.
+Test-first: write the tests, run them and see them fail before writing the code. Each group ships in its own PR. Each group heading names its story.
 
 ## 1. Native theme (sc-3505)
 

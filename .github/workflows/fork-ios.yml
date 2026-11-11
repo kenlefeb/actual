@@ -1,0 +1,167 @@
+# Fork-only (sc-3398): build the iOS app "Home Economics" from the fork's web
+# code and upload it to TestFlight for internal testing only. Never upstream
+# (fork/README.md). Upstream's publish-ios.yml stays untouched; it is skipped
+# here by its repository check.
+#
+# Run it by hand (Actions -> Fork iOS -> Run workflow) with the commit to build,
+# normally the commit pinned in actual-hosting's source.json.
+#
+# Repository secrets, from the 1Password item
+# "Apple App Store Connect API - Home Economics Agents" in "Ken & Agents":
+#
+# - ASC_KEY_ID: the App Store Connect API key's Key ID.
+# - ASC_ISSUER_ID: the Issuer ID shown above the Team Keys list.
+# - ASC_KEY_P8: the full contents of the AuthKey_<KeyID>.p8 file. The key must
+#   have the Admin role: lower roles fail the export with "Cloud signing
+#   permission error" (see upstream's publish-ios.yml).
+# - APPLE_TEAM_ID: developer.apple.com -> Membership details -> Team ID.
+#
+# Signing is cloud signing: the archive is built unsigned and xcodebuild's
+# export signs it with an Apple-managed distribution certificate through the
+# API key, so no .p12 or keychain is needed.
+
+name: Fork iOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: "Commit to build (default: the selected branch's head)"
+        required: false
+        type: string
+
+concurrency:
+  group: fork-ios
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  BUNDLE_ID: app.homeeconomics.budget
+  DISPLAY_NAME: Home Economics
+  # Ken's internal TestFlight group; internal groups need no Beta App Review.
+  BETA_GROUP: Testers
+
+jobs:
+  testflight:
+    if: github.repository == 'kenlefeb/actual'
+    # Apple accepts uploads built with the iOS 26 SDK or later.
+    runs-on: macos-26
+    # Includes up to 45 minutes waiting for Apple to process the build.
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.revision || github.sha }}
+
+      - name: Set up environment
+        uses: ./.github/actions/setup
+        with:
+          # Avoid restoring potentially poisoned caches in release jobs.
+          cache: 'false'
+
+      # Build before any signing material lands on the runner.
+      - name: Build web app
+        run: yarn build:browser
+
+      - name: Work out the versions
+        id: version
+        run: |
+          VERSION="$(node -p "require('./packages/mobile-client/package.json').version")"
+          {
+            echo "version=$VERSION"
+            echo "marketing=$(node fork/scripts/apple-version.mjs "$VERSION")"
+            # Always increases, so every upload has a new build number.
+            echo "build=$(date -u +%Y%m%d%H%M)"
+            echo "commit=$(git rev-parse HEAD)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Sync the native project
+        run: |
+          NODE_ENV=production yarn workspace mobile-client sync:ios
+          # The name under the icon; set here so upstream's Info.plist stays as is.
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $DISPLAY_NAME" \
+            packages/mobile-client/ios/App/App/Info.plist
+
+      - name: Archive
+        working-directory: packages/mobile-client
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          MARKETING_VERSION: ${{ steps.version.outputs.marketing }}
+          BUILD_NUMBER: ${{ steps.version.outputs.build }}
+        run: |
+          xcodebuild -version
+          xcodebuild -workspace ios/App/App.xcworkspace -scheme App \
+            -configuration Release -destination generic/platform=iOS \
+            -archivePath build/App.xcarchive \
+            PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            MARKETING_VERSION="$MARKETING_VERSION" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            CODE_SIGNING_ALLOWED=NO archive
+
+      - name: Export the signed app
+        working-directory: packages/mobile-client
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          API_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          API_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          API_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          printf '%s\n' "$API_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
+          chmod 600 "$RUNNER_TEMP/AuthKey.p8"
+          # Upstream's ExportOptions.plist plus the team and
+          # testFlightInternalTestingOnly, which marks the build
+          # "TestFlight Internal Only" so it can never reach external testers.
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>teamID</key><string>$APPLE_TEAM_ID</string>
+            <key>testFlightInternalTestingOnly</key><true/>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive -archivePath build/App.xcarchive \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath build/export \
+            -allowProvisioningUpdates -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+            -authenticationKeyID "$API_KEY_ID" -authenticationKeyIssuerID "$API_ISSUER_ID"
+
+      # Without --testflight nothing goes to Beta App Review: the build is
+      # uploaded, processed and then added to the internal group.
+      - name: Upload to TestFlight
+        env:
+          APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.ASC_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.ASC_KEY_P8 }}
+          VERSION: ${{ steps.version.outputs.version }}
+          COMMIT: ${{ steps.version.outputs.commit }}
+        run: |
+          pipx run --spec codemagic-cli-tools==0.70.0 app-store-connect publish \
+            --path 'packages/mobile-client/build/export/*.ipa' --platform IOS \
+            --max-find-build-wait 45 --max-build-processing-wait 45 \
+            --beta-group "$BETA_GROUP" \
+            --whats-new "Version $VERSION, commit $COMMIT"
+
+      - name: Clean up signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/AuthKey.p8"
+
+      - name: Summarize build
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          MARKETING_VERSION: ${{ steps.version.outputs.marketing }}
+          BUILD_NUMBER: ${{ steps.version.outputs.build }}
+          COMMIT: ${{ steps.version.outputs.commit }}
+        run: |
+          {
+            echo "## iOS build"
+            echo
+            echo "| Version | Apple version | Build | Commit |"
+            echo "| --- | --- | --- | --- |"
+            echo "| $VERSION | $MARKETING_VERSION | $BUILD_NUMBER | $COMMIT |"
+          } >> "$GITHUB_STEP_SUMMARY"

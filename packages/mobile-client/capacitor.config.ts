@@ -21,9 +21,23 @@ const devConfig: CapacitorConfig = {
   },
 };
 
+// Fork-only (sc-3398): keep Ken's production server and its Auth0 sign-in
+// inside the app's WebView. Capacitor opens other hosts in Safari, which can't
+// return to capacitor://localhost after sign-in. Hosts from actual-hosting
+// production/households/ken.json.
+const prodConfig: CapacitorConfig = {
+  ...baseConfig,
+  server: {
+    allowNavigation: [
+      'actual-production.owl-becrux.ts.net',
+      'actual-staging.us.auth0.com',
+    ],
+  },
+};
+
 // NODE_ENV is unset in development, 'production' in production builds.
 const config: CapacitorConfig =
-  process.env.NODE_ENV === 'production' ? baseConfig : devConfig;
+  process.env.NODE_ENV === 'production' ? prodConfig : devConfig;
 
 // https://capacitorjs.com/docs/config
 // eslint-disable-next-line import/no-default-export

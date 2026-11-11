@@ -7,6 +7,7 @@ import { HotkeysProvider } from 'react-hotkeys-hook';
 import { useTranslation } from 'react-i18next';
 import { BrowserRouter } from 'react-router';
 
+import { useResponsive } from '@actual-app/components/hooks/useResponsive';
 import { styles } from '@actual-app/components/styles';
 import { View } from '@actual-app/components/view';
 import {
@@ -36,6 +37,7 @@ import { signOut } from '#users/usersSlice';
 import { ExposeNavigate } from '#util/router-tools';
 
 import { AppBackground } from './AppBackground';
+import { appSafeAreaPadding } from './appSafeArea';
 import { BudgetMonthCountProvider } from './budget/BudgetMonthCountContext';
 import { AriaRouterProvider } from './common/AriaRouterProvider';
 import { DevelopmentTopBar } from './DevelopmentTopBar';
@@ -205,6 +207,8 @@ export function App() {
   }, [hiddenScrollbars]);
 
   const [theme] = useTheme();
+  const [budgetId] = useMetadataPref('id');
+  const { isNarrowWidth } = useResponsive();
 
   return (
     <BrowserRouter>
@@ -221,6 +225,9 @@ export function App() {
                       height: '100%',
                       display: 'flex',
                       flexDirection: 'column',
+                      ...appSafeAreaPadding({
+                        hasMobilePageHeader: !!budgetId && isNarrowWidth,
+                      }),
                     }}
                   >
                     <View

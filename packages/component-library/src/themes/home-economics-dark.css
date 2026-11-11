@@ -137,7 +137,7 @@
   --color-mobileTransactionSelected: #4fd1c5;
 
   --color-mobileViewTheme: var(--color-mobileHeaderBackground);
-  --color-mobileConfigServerViewTheme: #4fd1c5;
+  --color-mobileConfigServerViewTheme: var(--color-pageBackground);
 
   --color-markdownNormal: var(--palette-purple700);
   --color-markdownDark: var(--palette-purple500);

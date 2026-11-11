@@ -2,20 +2,22 @@
 import UIKit
 import WebKit
 
-// Fork-only (sc-3584). The bridge spike's benchmark; Debug builds only. Start
-// it with the launch argument `-NativeBridgeBenchmark YES`, for example
-// `xcrun simctl launch --console-pty <device> <bundle id> -NativeBridgeBenchmark YES`.
+// Fork-only (sc-3584). The bridge spike's Simulator harness; Debug builds
+// only, because it seeds data. Start it with the launch argument
+// `-NativeBridgeBenchmark YES`, for example
+// `xcrun simctl launch --stdout=<file> <device> <bundle id> -NativeBridgeBenchmark YES`.
+// (On a device, use the read-only gesture in NativeBridgeBenchmarkTrigger.swift.)
 // It opens (or seeds) a 300-category budget through the page's debug `$send`,
 // times `native/budget-month` round trips with the WebView visible and hidden,
 // checks change events, and probes the bridge across background and
 // foreground. Each result is one stdout line starting with NATIVE_BRIDGE_BENCH.
 @MainActor
-final class NativeBridgeBenchmark {
-    private static var current: NativeBridgeBenchmark?
+final class NativeBridgeBenchmarkHarness {
+    private static var current: NativeBridgeBenchmarkHarness?
 
     static func startIfRequested(plugin: NativeBridgePlugin) {
         guard UserDefaults.standard.bool(forKey: "NativeBridgeBenchmark") else { return }
-        let bench = NativeBridgeBenchmark(plugin: plugin)
+        let bench = NativeBridgeBenchmarkHarness(plugin: plugin)
         current = bench
         Task { await bench.run() }
     }
@@ -25,11 +27,7 @@ final class NativeBridgeBenchmark {
     private var rereads = 0
     private var ticksAtBackground = 0
     private var backgroundedAt = Date()
-    private let month: String = {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM"
-        return f.string(from: Date())
-    }()
+    private let month = NativeBridgeBenchmark.currentMonth()
 
     private init(plugin: NativeBridgePlugin) {
         self.plugin = plugin
@@ -96,16 +94,8 @@ final class NativeBridgeBenchmark {
     }
 
     private func measure(_ step: String, count: Int) async throws {
-        for _ in 0..<5 { _ = try await roundTrip() }  // warm-up
-        var times: [Double] = []
-        var categories = 0
-        for _ in 0..<count {
-            let (ms, n) = try await roundTrip()
-            times.append(ms)
-            categories = n
-        }
-        let bytes = try await plugin.client.call("native/budget-month", args: ["month": month]).count
-        log(step, Self.stats(times).merging(["categories": categories, "bytes": bytes]) { a, _ in a })
+        let result = try await NativeBridgeBenchmark.run(client: plugin.client, month: month, count: count)
+        log(step, Self.fields(result.stats).merging(["categories": result.categories, "bytes": result.bytes]) { a, _ in a })
     }
 
     // The same call timed inside the page: loot-core plus the worker hop, no WebKit bridge
@@ -119,7 +109,7 @@ final class NativeBridgeBenchmark {
             }
             return out.slice(5);
             """) as? [Double] ?? []
-        log("page-only", Self.stats(times))
+        log("page-only", Self.fields(BenchmarkStats(timesMs: times)))
     }
 
     // Five budget writes from the web side in one burst
@@ -180,12 +170,8 @@ final class NativeBridgeBenchmark {
         }
     }
 
-    private static func stats(_ times: [Double]) -> [String: Any] {
-        let sorted = times.sorted()
-        guard !sorted.isEmpty else { return ["n": 0] }
-        func pct(_ p: Double) -> Double { sorted[min(sorted.count - 1, Int(Double(sorted.count) * p))] }
-        return ["n": sorted.count, "medianMs": pct(0.5), "p95Ms": pct(0.95),
-                "minMs": sorted.first!, "maxMs": sorted.last!]
+    private static func fields(_ stats: BenchmarkStats) -> [String: Any] {
+        ["n": stats.count, "medianMs": stats.medianMs, "p95Ms": stats.p95Ms, "minMs": stats.minMs, "maxMs": stats.maxMs]
     }
 
     // Opens the "Bridge Benchmark" budget, creating it with 300 expense

@@ -7,10 +7,12 @@ Shortcut sc-3584. ADR 11 (`docs/adr/0011-native-ui-without-upstream-parity.md`) 
 ## What Changes
 
 - **Batched read handler.** A fork-only loot-core handler, `native/budget-month`, returns one month's snapshot in one message: every group and category with budgeted, spent and balance, plus the month totals. It serves envelope and tracking budgets with one shape.
-- **Allowlisted bridge.** The page exposes a bridge that forwards only allowlisted handlers to loot-core's `send()`. A Capacitor iOS plugin calls it from Swift and refuses any other name before it reaches the page.
+- **Allowlisted bridge.** The page exposes a bridge that forwards only allowlisted handlers to loot-core's `send()`. A Capacitor iOS plugin calls it from Swift and refuses any other name before it reaches the page; that Swift check is the security boundary.
+- **Suspended engine.** iOS suspends the WebView in the background, and calls into it hang. Every bridge call has a timeout (about 5 s); native screens don't read in the background and re-read on returning to the foreground.
+- **App extensions.** Widgets and App Intents never start their own engine: they read an App Group snapshot or call through the host app. Only the host app registers the bridge plugin.
 - **Change events.** The bridge forwards `cells-changed` and `sync-event` to native code, which coalesces a burst of them into one re-read.
-- **No native database access.** Swift code never opens SQLite and never writes; a fork check fails CI if a Swift source imports SQLite or names a `.sqlite` path.
-- **Latency gate.** A round trip for a 300-category month must take under 50 ms. The spike measures it in the iOS Simulator; the real-device number comes from TestFlight on Ken's iPhone.
+- **No native database access.** Native code never opens SQLite and never writes; a fork check fails CI if a Swift, header or Objective-C source imports or checks for a database library, includes `sqlite3.h`, or names a `.sqlite` path.
+- **Latency gate.** A round trip for a 300-category month must take under 50 ms. The spike measures it in the iOS Simulator. The real-device number comes from Ken's iPhone (sc-3670): the Release build has a hidden, read-only benchmark (hold two fingers for 3 seconds, then confirm) that shows the median and p95 and can share them.
 
 Out of scope: any native screen, write handlers on the allowlist (each native screen story adds the ones it needs), and the Mac SwiftUI app.
 

@@ -1,7 +1,10 @@
 // Fork-only (sc-3584, ADR 11). The page side of the native bridge: Swift
 // calls `window.__actualNativeBridge.call(name, args)` and gets the result as
-// JSON. Only allowlisted handlers reach loot-core; the Swift plugin checks the
-// same list (its tests compare against src/data/native-bridge-allowlist.json).
+// JSON. The security boundary is the Swift-side allowlist
+// (NativeBridgeAllowlist in NativeBridgeClient.swift), which refuses a name
+// before it reaches the page. This page-side check only catches mistakes: a
+// compromised page can call `send` directly. The Swift tests check that both
+// lists match src/data/native-bridge-allowlist.json.
 import { listen, send } from '@actual-app/core/platform/client/connection';
 
 import allowlist from '#data/native-bridge-allowlist.json';

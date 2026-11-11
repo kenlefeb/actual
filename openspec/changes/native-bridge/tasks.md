@@ -11,3 +11,7 @@ Test-first: write the tests, run them and see them fail before writing the code.
 - [x] 1.5 Add the Capacitor plugin to the iOS app, calling the page bridge and receiving its events. Verify: the app builds and runs in the Simulator.
 - [x] 1.6 Add `fork/scripts/check-native-swift.mjs` with a test, and run it in Fork CI. Verify: it fails on a Swift file that imports SQLite.
 - [x] 1.7 Benchmark a 300-category month in the iOS Simulator, with the WebView visible, hidden, and across background and foreground. Verify: the numbers and findings are on sc-3584.
+- [x] 1.8 Add failing Swift tests for a bridge call timeout (about 5 s default, configurable, fails with an error naming the handler, even when the transport ignores cancellation), then implement it in `NativeBridgeClient`. Verify: `swift test` passes.
+- [x] 1.9 Move the benchmark's measurement into `NativeBridgeCore` with tests, and add a Release-build trigger: a two-finger, 3-second hold, then a confirmation, runs read-only reads of the open budget and shows the median and p95 with a Share button. Verify: in a Release Simulator build, the result shows and the share sheet opens.
+- [x] 1.10 Extend `check-native-swift.mjs` to typed imports (`import struct SQLite3.x`), `canImport(...)`, FMDB, SQLCipher, CSQLite and Core Data, `sqlite3.h` in headers and `.sqlite3` paths, with tests first. Verify: the tests pass and the checkout is clean.
+- [x] 1.11 Add the spec requirements for app extensions and for a suspended engine. Verify: `openspec validate --all --strict` passes.

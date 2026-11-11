@@ -109,6 +109,81 @@ final class AllowlistTests: XCTestCase {
     }
 }
 
+// native-bridge: "Native views survive a suspended engine" (sc-3584)
+final class TimeoutTests: XCTestCase {
+    func testDefaultsToAboutFiveSeconds() {
+        XCTAssertEqual(NativeBridgeClient.defaultTimeout, 5)
+    }
+
+    // A transport that never returns and ignores cancellation, like a call
+    // into a suspended WebContent process
+    private func hangingClient(timeout: TimeInterval) -> NativeBridgeClient {
+        NativeBridgeClient(timeout: timeout) { _, _ in
+            await withCheckedContinuation { (_: CheckedContinuation<Void, Never>) in }
+            return "{}"
+        }
+    }
+
+    func testAHungCallThrowsATimeoutNamingTheHandler() async {
+        let started = Date()
+        do {
+            _ = try await hangingClient(timeout: 0.1).call("native/budget-month")
+            XCTFail("expected a timeout")
+        } catch NativeBridgeError.timedOut(let name) {
+            XCTAssertEqual(name, "native/budget-month")
+        } catch {
+            XCTFail("unexpected error \(error)")
+        }
+        XCTAssertLessThan(Date().timeIntervalSince(started), 2)
+    }
+
+    func testAFastCallIsNotAffected() async throws {
+        let client = NativeBridgeClient(timeout: 1) { _, _ in "[]" }
+        let data = try await client.call("query")
+        XCTAssertEqual(String(decoding: data, as: UTF8.self), "[]")
+    }
+
+    func testATransportErrorPassesThrough() async {
+        struct Boom: Error {}
+        let client = NativeBridgeClient(timeout: 1) { _, _ in throw Boom() }
+        do {
+            _ = try await client.call("query")
+            XCTFail("expected an error")
+        } catch {
+            XCTAssertTrue(error is Boom)
+        }
+    }
+}
+
+final class BenchmarkTests: XCTestCase {
+    func testStatsUseNearestRankPercentiles() {
+        let stats = BenchmarkStats(timesMs: (1...20).map(Double.init))
+        XCTAssertEqual(stats.count, 20)
+        XCTAssertEqual(stats.medianMs, 10)
+        XCTAssertEqual(stats.p95Ms, 19)
+        XCTAssertEqual(stats.maxMs, 20)
+    }
+
+    func testRunsOnlyTheBatchedReadAndReportsTheMonthSize() async throws {
+        let fixtureJSON = String(decoding: try fixture("budget-month-envelope"), as: UTF8.self)
+        var names = Set<String>()
+        var calls = 0
+        let client = NativeBridgeClient { name, _ in
+            names.insert(name)
+            calls += 1
+            return fixtureJSON
+        }
+        let result = try await NativeBridgeBenchmark.run(client: client, month: "2026-03", count: 10, warmUp: 2)
+        XCTAssertEqual(names, ["native/budget-month"])
+        XCTAssertEqual(calls, 12)
+        XCTAssertEqual(result.stats.count, 10)
+        XCTAssertEqual(result.categories, 3)
+        XCTAssertEqual(result.bytes, fixtureJSON.utf8.count)
+        XCTAssertTrue(result.summary.contains("median"))
+        XCTAssertTrue(result.summary.contains("2026-03"))
+    }
+}
+
 final class ChangeCoalescerTests: XCTestCase {
     func testABurstOfEventsFiresOnce() {
         let fired = expectation(description: "fired")

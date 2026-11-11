@@ -160,5 +160,8 @@
   },
   "getCategoryUsage": {
     "tool": "write_delete_category"
+  },
+  "native/budget-month": {
+    "skip": "Native iOS bridge read (sc-3584, ADR 11); MCP reads the same month through get_budget_month"
   }
 }

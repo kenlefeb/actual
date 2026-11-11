@@ -20,6 +20,7 @@ import * as budgetfilesSlice from './budgetfiles/budgetfilesSlice';
 import { App } from './components/App';
 import { ServerProvider } from './components/ServerContext';
 import * as modalsSlice from './modals/modalsSlice';
+import { installNativeBridge } from './native/nativeBridge';
 import * as notificationsSlice from './notifications/notificationsSlice';
 import * as prefsSlice from './prefs/prefsSlice';
 import { aqlQuery } from './queries/aqlQuery';
@@ -78,6 +79,9 @@ window.__actionsForMenu = {
 
 // Expose send for fun!
 window.$send = send;
+
+// Fork-only (sc-3584): native iOS screens read loot-core through this
+installNativeBridge(window);
 window.$query = aqlQuery;
 window.$q = q;
 

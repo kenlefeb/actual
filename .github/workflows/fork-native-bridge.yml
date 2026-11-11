@@ -1,0 +1,35 @@
+# Fork-only (sc-3584, ADR 11): the Swift half of the native bridge contract.
+# The Swift tests decode the fixtures loot-core's vitest contract test writes
+# and check the allowlist against the page's, so a shape change fails here
+# too. Never upstream (fork/README.md). Runs only when those files change,
+# because macOS runner minutes are expensive.
+name: Fork native bridge
+
+on:
+  pull_request:
+    branches:
+      - development
+    paths:
+      - 'packages/mobile-client/ios/NativeBridge/**'
+      - 'packages/loot-core/src/server/native/**'
+      - 'packages/desktop-client/src/data/native-bridge-allowlist.json'
+      - '.github/workflows/fork-native-bridge.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  swift-tests:
+    if: github.repository == 'kenlefeb/actual'
+    runs-on: macos-26
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Swift contract tests
+        run: swift test --package-path packages/mobile-client/ios/NativeBridge

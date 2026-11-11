@@ -29,6 +29,7 @@ import { app as forecastApp } from './forecast/app';
 import { app as formulasApp } from './formulas/app';
 import { app } from './main-app';
 import { mutator, runHandler } from './mutators';
+import { app as nativeApp } from './native/app';
 import { app as notesApp } from './notes/app';
 import { app as paychecksApp } from './paychecks/app';
 import { app as payeesApp } from './payees/app';
@@ -140,6 +141,7 @@ app.combine(
   budgetApp,
   dashboardApp,
   notesApp,
+  nativeApp,
   preferencesApp,
   toolsApp,
   filtersApp,

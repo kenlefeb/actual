@@ -88,6 +88,13 @@ jobs:
           # The name under the icon; set here so upstream's Info.plist stays as is.
           /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName $DISPLAY_NAME" \
             packages/mobile-client/ios/App/App/Info.plist
+          # Only the App target gets the fork's bundle id: on the xcodebuild
+          # command line it would also rename the Capacitor pod frameworks,
+          # and Apple rejects the upload as a CFBundleIdentifier collision.
+          sed -i '' "s/PRODUCT_BUNDLE_IDENTIFIER = com.actualbudget.actual;/PRODUCT_BUNDLE_IDENTIFIER = $BUNDLE_ID;/" \
+            packages/mobile-client/ios/App/App.xcodeproj/project.pbxproj
+          grep -c "PRODUCT_BUNDLE_IDENTIFIER = $BUNDLE_ID;" \
+            packages/mobile-client/ios/App/App.xcodeproj/project.pbxproj
 
       - name: Archive
         working-directory: packages/mobile-client
@@ -100,7 +107,7 @@ jobs:
           xcodebuild -workspace ios/App/App.xcworkspace -scheme App \
             -configuration Release -destination generic/platform=iOS \
             -archivePath build/App.xcarchive \
-            PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             MARKETING_VERSION="$MARKETING_VERSION" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             CODE_SIGNING_ALLOWED=NO archive
 

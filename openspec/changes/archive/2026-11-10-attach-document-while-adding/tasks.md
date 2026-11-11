@@ -4,7 +4,7 @@ Write each test first, run it and see it fail before implementing. Name tests af
 
 ## 1. Spec (sc-2622)
 
-- [ ] 1.1 Solution Architect and Product Owner review this change (spec PRs need both). Confirm two undo steps (design decision 6). Verify `npx openspec validate attach-document-while-adding --strict` and `yarn check:openspec-shortcut` pass.
+- [x] 1.1 Solution Architect and Product Owner review this change (spec PRs need both). Confirm two undo steps (design decision 6). Verify `npx openspec validate attach-document-while-adding --strict` and `yarn check:openspec-shortcut` pass. (Done as: reviewed on the archive PR, which carries the same spec.)
 
 ## 2. loot-core validate-only check (sc-3234)
 

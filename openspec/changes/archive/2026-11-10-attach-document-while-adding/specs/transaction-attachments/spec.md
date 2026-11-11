@@ -107,6 +107,7 @@ The list of held documents SHALL offer Remove only. On desktop the add row SHALL
 
 #### Scenario: Schedule with held documents
 - **GIVEN** a transaction being added in the desktop add row with a held document, and a date for which the row offers Schedule
+- **WHEN** the user looks at the add row
 - **THEN** the paperclip is hidden, the held document stays listed with Remove, and the row says documents are attached when the user chooses Add and that Schedule does not keep them; Add attaches the document and Schedule never does
 
 ### Requirement: Held documents attach when the transaction saves

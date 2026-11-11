@@ -101,7 +101,27 @@ describe('attachments', () => {
 
   it('download of a missing document is 404', async () => {
     const fileId = addBudget();
-    expect((await download(fileId, newId())).statusCode).toBe(404);
+    const res = await download(fileId, newId());
+    expect(res.statusCode).toBe(404);
+    expect(res.body.toString()).toBe('attachment-not-found');
+  });
+
+  it('download of an unreadable document is 500, not "not found"', async () => {
+    // chmod does not stop root from reading
+    if (process.getuid?.() === 0) {
+      return;
+    }
+    const fileId = addBudget();
+    const id = newId();
+    await upload(fileId, id, PDF);
+    const target = getPathForAttachment(fileId, id);
+    fs.chmodSync(target, 0o000);
+    onTestFinished(() => fs.chmodSync(target, 0o600));
+
+    const res = await download(fileId, id);
+
+    expect(res.statusCode).toBe(500);
+    expect(res.body.toString()).not.toBe('attachment-not-found');
   });
 
   describe('Server checks too', () => {

@@ -158,6 +158,78 @@ describe('key-make with attachments', () => {
     expect(await openAttachment({ id: kept })).toMatchObject({ data: PDF });
   });
 
+  it('stops the key change on a 404 that is not the sync server answering', async () => {
+    const first = await attach('a-receipt.pdf', PDF);
+    const second = await attach('b-receipt.pdf', PDF);
+    attachmentServer.blobs.delete(second);
+    attachmentServer.notFoundBody = '<html>Not Found</html>';
+    clearAttachmentCache();
+
+    const result = await app.handlers['key-make']({ password: 'new' });
+
+    expect(result).toEqual({
+      error: { reason: 'attachment-reencrypt-failed' },
+    });
+    expect(resetSync).not.toHaveBeenCalled();
+    expect(prefs.getPrefs().encryptKeyId).toBe(OLD_KEY);
+    for (const row of await attachmentRows()) {
+      expect(JSON.parse(row.encrypt_meta ?? '').keyId).toBe(OLD_KEY);
+    }
+    attachmentServer.blobs.set(
+      second,
+      attachmentServer.blobs.get(first) ?? PDF,
+    );
+  });
+
+  it('stops the key change and restores when a download answers 500', async () => {
+    const first = await attach('a-receipt.pdf', PDF);
+    const second = await attach('b-receipt.pdf', PDF);
+    attachmentServer.failDownloads.add(second);
+    clearAttachmentCache();
+
+    const result = await app.handlers['key-make']({ password: 'new' });
+
+    expect(result).toEqual({
+      error: { reason: 'attachment-reencrypt-failed' },
+    });
+    expect(resetSync).not.toHaveBeenCalled();
+    expect(prefs.getPrefs().encryptKeyId).toBe(OLD_KEY);
+    for (const row of await attachmentRows()) {
+      expect(JSON.parse(row.encrypt_meta ?? '').keyId).toBe(OLD_KEY);
+    }
+    attachmentServer.failDownloads.clear();
+    clearAttachmentCache();
+    expect(await openAttachment({ id: first })).toMatchObject({ data: PDF });
+    expect(await openAttachment({ id: second })).toMatchObject({ data: PDF });
+  });
+
+  it('a stale cached copy does not block the key change', async () => {
+    const id = await attach('receipt.pdf', PDF);
+    // Another device changed the key: the server holds the document under
+    // key-2 and the row says so, but this device still caches the old copy
+    const key2 = await encryption.createKey({
+      id: 'key-2',
+      password: 'other password',
+      salt: 'other salt',
+    });
+    await encryption.loadKey(key2);
+    const rekeyed = await encryption.encrypt(Buffer.from(PDF), 'key-2');
+    attachmentServer.blobs.set(id, new Uint8Array(rekeyed.value));
+    await db.update('transaction_attachments', {
+      id,
+      encrypt_meta: JSON.stringify(rekeyed.meta),
+    });
+    attachmentServer.uploads = [];
+
+    const result = await app.handlers['key-make']({ password: 'new' });
+
+    expect(result).toEqual({});
+    const newKeyId = vi.mocked(resetSync).mock.calls[0][0].key.getId();
+    const [row] = await attachmentRows();
+    expect(JSON.parse(row.encrypt_meta ?? '').keyId).toBe(newKeyId);
+    expect(await openAttachment({ id })).toMatchObject({ data: PDF });
+  });
+
   it('Re-encryption fails', async () => {
     const first = await attach('a-receipt.pdf', PDF);
     const second = await attach('b-receipt.pdf', PDF);

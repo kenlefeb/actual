@@ -15,6 +15,10 @@ export const attachmentServer = {
   refusal: null as Refusal | null,
   // Runs after a document is stored, before the response
   onStored: null as (() => void) | null,
+  // What a download of a missing document answers with (404)
+  notFoundBody: 'attachment-not-found',
+  // Documents whose download answers 500
+  failDownloads: new Set<string>(),
 
   reset() {
     this.blobs.clear();
@@ -26,6 +30,8 @@ export const attachmentServer = {
     this.refuseUploadsFrom = null;
     this.refusal = null;
     this.onStored = null;
+    this.notFoundBody = 'attachment-not-found';
+    this.failDownloads.clear();
   },
 
   async fetch(url: string, init: RequestInit = {}): Promise<Response> {
@@ -64,10 +70,13 @@ export const attachmentServer = {
         return Response.json({ status: 'ok' });
       }
       case '/sync/download-attachment': {
+        if (attachmentServer.failDownloads.has(id)) {
+          return new Response('error', { status: 500 });
+        }
         const blob = attachmentServer.blobs.get(id);
         return blob
           ? new Response(new Uint8Array(blob))
-          : new Response('attachment-not-found', { status: 404 });
+          : new Response(attachmentServer.notFoundBody, { status: 404 });
       }
       case '/sync/delete-attachment':
         attachmentServer.deletes.push(id);

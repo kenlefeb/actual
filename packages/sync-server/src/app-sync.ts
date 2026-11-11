@@ -715,7 +715,13 @@ app.get('/download-attachment', (req, res) => {
   }
   res.sendFile(target.path, { dotfiles: 'allow' }, err => {
     if (err && !res.headersSent) {
-      res.status(404).send('attachment-not-found');
+      // Clients skip a document on this answer, so only a missing file says it
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+        res.status(404).send('attachment-not-found');
+      } else {
+        console.log('Error reading attachment', err);
+        res.status(500).send({ status: 'error' });
+      }
     }
   });
 });

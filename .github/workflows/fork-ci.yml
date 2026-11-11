@@ -90,6 +90,18 @@ jobs:
       - name: Check MCP coverage
         run: node fork/scripts/check-mcp-coverage.mjs
 
+  # Swift code never opens the budget database (sc-3584, ADR 11). Needs only
+  # Node and the checkout.
+  native-swift:
+    if: github.repository == 'kenlefeb/actual'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Check native Swift sources
+        run: node fork/scripts/check-native-swift.mjs
+
   # The eight release packages share one version (sc-1573). Needs only Node and
   # the checkout.
   package-versions:

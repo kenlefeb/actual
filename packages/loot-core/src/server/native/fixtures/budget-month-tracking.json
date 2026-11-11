@@ -1,0 +1,68 @@
+{
+  "month": "2026-03",
+  "budgetType": "tracking",
+  "totals": {
+    "budgeted": 150000,
+    "spent": -120000,
+    "income": 300000,
+    "balance": 30000,
+    "toBudget": null,
+    "available": null,
+    "lastMonthOverspent": null,
+    "forNextMonth": null,
+    "fromLastMonth": null,
+    "budgetedIncome": 320000,
+    "saved": 170000
+  },
+  "groups": [
+    {
+      "id": "bills",
+      "name": "Bills",
+      "isIncome": false,
+      "hidden": false,
+      "budgeted": 150000,
+      "spent": -120000,
+      "balance": 30000,
+      "categories": [
+        {
+          "id": "power",
+          "name": "Power",
+          "hidden": true,
+          "budgeted": 10000,
+          "spent": 0,
+          "balance": 10000,
+          "carryover": false
+        },
+        {
+          "id": "rent",
+          "name": "Rent",
+          "hidden": false,
+          "budgeted": 150000,
+          "spent": -120000,
+          "balance": 30000,
+          "carryover": false
+        }
+      ]
+    },
+    {
+      "id": "income",
+      "name": "Income",
+      "isIncome": true,
+      "hidden": false,
+      "budgeted": 320000,
+      "spent": 300000,
+      "balance": 20000,
+      "categories": [
+        {
+          "id": "salary",
+          "name": "Salary",
+          "hidden": false,
+          "budgeted": 320000,
+          "spent": 300000,
+          "balance": 20000,
+          "carryover": false
+        }
+      ]
+    }
+  ]
+}

@@ -16,6 +16,14 @@
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		A084ECDBA7D38E1E42DFC39D /* Pods_App.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AF277DCFFFF123FFC6DF26C7 /* Pods_App.framework */; };
+		FB3584000000000000000101 /* NativeBridgePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000001 /* NativeBridgePlugin.swift */; };
+		FB3584000000000000000102 /* AppBridgeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000002 /* AppBridgeViewController.swift */; };
+		FB3584000000000000000103 /* NativeBridgeBenchmarkHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000003 /* NativeBridgeBenchmarkHarness.swift */; };
+		FB3584000000000000000104 /* BudgetMonth.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000004 /* BudgetMonth.swift */; };
+		FB3584000000000000000105 /* NativeBridgeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000005 /* NativeBridgeClient.swift */; };
+		FB3584000000000000000106 /* ChangeCoalescer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000006 /* ChangeCoalescer.swift */; };
+		FB3584000000000000000110 /* NativeBridgeBenchmarkTrigger.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000010 /* NativeBridgeBenchmarkTrigger.swift */; };
+		FB3584000000000000000111 /* NativeBridgeBenchmark.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000011 /* NativeBridgeBenchmark.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -32,6 +40,14 @@
 		AF277DCFFFF123FFC6DF26C7 /* Pods_App.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_App.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		AF51FD2D460BCFE21FA515B2 /* Pods-App.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-App.release.xcconfig"; path = "Pods/Target Support Files/Pods-App/Pods-App.release.xcconfig"; sourceTree = "<group>"; };
 		FC68EB0AF532CFC21C3344DD /* Pods-App.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-App.debug.xcconfig"; path = "Pods/Target Support Files/Pods-App/Pods-App.debug.xcconfig"; sourceTree = "<group>"; };
+		FB3584000000000000000001 /* NativeBridgePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBridgePlugin.swift; sourceTree = "<group>"; };
+		FB3584000000000000000002 /* AppBridgeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBridgeViewController.swift; sourceTree = "<group>"; };
+		FB3584000000000000000003 /* NativeBridgeBenchmarkHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBridgeBenchmarkHarness.swift; sourceTree = "<group>"; };
+		FB3584000000000000000004 /* BudgetMonth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetMonth.swift; sourceTree = "<group>"; };
+		FB3584000000000000000005 /* NativeBridgeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBridgeClient.swift; sourceTree = "<group>"; };
+		FB3584000000000000000006 /* ChangeCoalescer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeCoalescer.swift; sourceTree = "<group>"; };
+		FB3584000000000000000010 /* NativeBridgeBenchmarkTrigger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBridgeBenchmarkTrigger.swift; sourceTree = "<group>"; };
+		FB3584000000000000000011 /* NativeBridgeBenchmark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBridgeBenchmark.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -58,6 +74,7 @@
 			isa = PBXGroup;
 			children = (
 				504EC3061FED79650016851F /* App */,
+				FB3584000000000000000200 /* NativeBridgeCore */,
 				504EC3051FED79650016851F /* Products */,
 				7F8756D8B27F46E3366F6CEA /* Pods */,
 				27E2DDA53C4D2A4D1A88CE4A /* Frameworks */,
@@ -77,6 +94,10 @@
 			children = (
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
+				FB3584000000000000000001 /* NativeBridgePlugin.swift */,
+				FB3584000000000000000002 /* AppBridgeViewController.swift */,
+				FB3584000000000000000003 /* NativeBridgeBenchmarkHarness.swift */,
+				FB3584000000000000000010 /* NativeBridgeBenchmarkTrigger.swift */,
 				5C3E1A012EBC000100A1B2C3 /* SceneDelegate.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
@@ -96,6 +117,18 @@
 			);
 			name = Pods;
 			sourceTree = "<group>";
+		};
+		FB3584000000000000000200 /* NativeBridgeCore */ = {
+			isa = PBXGroup;
+			children = (
+				FB3584000000000000000004 /* BudgetMonth.swift */,
+				FB3584000000000000000005 /* NativeBridgeClient.swift */,
+				FB3584000000000000000006 /* ChangeCoalescer.swift */,
+				FB3584000000000000000011 /* NativeBridgeBenchmark.swift */,
+			);
+			name = NativeBridgeCore;
+			path = ../NativeBridge/Sources/NativeBridgeCore;
+			sourceTree = SOURCE_ROOT;
 		};
 /* End PBXGroup section */
 
@@ -213,6 +246,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
+				FB3584000000000000000111 /* NativeBridgeBenchmark.swift in Sources */,
+				FB3584000000000000000110 /* NativeBridgeBenchmarkTrigger.swift in Sources */,
+				FB3584000000000000000101 /* NativeBridgePlugin.swift in Sources */,
+				FB3584000000000000000102 /* AppBridgeViewController.swift in Sources */,
+				FB3584000000000000000103 /* NativeBridgeBenchmarkHarness.swift in Sources */,
+				FB3584000000000000000104 /* BudgetMonth.swift in Sources */,
+				FB3584000000000000000105 /* NativeBridgeClient.swift in Sources */,
+				FB3584000000000000000106 /* ChangeCoalescer.swift in Sources */,
 				5C3E1A022EBC000100A1B2C3 /* SceneDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

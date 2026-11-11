@@ -12,6 +12,7 @@ import type { EncryptionHandlers } from '#server/encryption/app';
 import type { FiltersHandlers } from '#server/filters/app';
 import type { ForecastHandlers } from '#server/forecast/app';
 import type { FormulasHandlers } from '#server/formulas/app';
+import type { NativeHandlers } from '#server/native/app';
 import type { NotesHandlers } from '#server/notes/app';
 import type { PaychecksHandlers } from '#server/paychecks/app';
 import type { PayeesHandlers } from '#server/payees/app';
@@ -36,6 +37,7 @@ export type Handlers = {} & ServerHandlers &
   FormulasHandlers &
   ForecastHandlers &
   NotesHandlers &
+  NativeHandlers &
   PreferencesHandlers &
   ReportsHandlers &
   RulesHandlers &

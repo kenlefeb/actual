@@ -52,6 +52,7 @@
     "generate:news-feed": "yarn workspace @actual-app/ci-actions tsx bin/generate-news-feed.ts",
     "generate:fork-news": "node ./fork/scripts/generate-release-news.mjs",
     "check:mcp-coverage": "node ./fork/scripts/check-mcp-coverage.mjs",
+    "check:native-swift": "node ./fork/scripts/check-native-swift.mjs",
     "check:package-versions": "node ./fork/scripts/check-package-versions.mjs",
     "check:openspec-shortcut": "node ./fork/scripts/check-openspec-shortcut.mjs",
     "check:spec-scenarios": "node ./fork/scripts/check-spec-scenarios.mjs",

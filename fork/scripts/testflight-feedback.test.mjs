@@ -23,7 +23,7 @@ const crashes = parseSubmissions(
   'crash',
 );
 
-test('parses a screenshot submission', () => {
+void test('parses a screenshot submission', () => {
   assert.equal(shots.length, 1);
   assert.equal(shots[0].id, 'FIXTURE-SHOT-0001');
   assert.equal(shots[0].device, 'iPad15_4');
@@ -35,7 +35,7 @@ test('parses a screenshot submission', () => {
   );
 });
 
-test('summary lists details and flags only crashes', () => {
+void test('summary lists details and flags only crashes', () => {
   const text = summarise([...shots, ...crashes], '2026-11-01');
   assert.match(text, /FIXTURE-SHOT-0001 {2}2026-11-11T17:59:48.493Z\n/);
   assert.match(text, /device: iPad15_4 {2}OS: 27.3/);
@@ -44,12 +44,12 @@ test('summary lists details and flags only crashes', () => {
   assert.equal(text.match(/ {2}CRASH\n/g).length, 1);
 });
 
-test('summary drops feedback before --since and handles none', () => {
+void test('summary drops feedback before --since and handles none', () => {
   assert.equal(summarise(shots, '2026-11-12'), 'No new TestFlight feedback.');
   assert.equal(summarise([], '2026-11-01'), 'No new TestFlight feedback.');
 });
 
-test('handles empty data and missing fields', () => {
+void test('handles empty data and missing fields', () => {
   assert.deepEqual(parseSubmissions({}, 'crash'), []);
   assert.equal(
     parseSubmissions({ data: [{ id: 'x' }] }, 'crash')[0].comment,
@@ -57,7 +57,7 @@ test('handles empty data and missing fields', () => {
   );
 });
 
-test('signs an ES256 JWT that verifies and holds no key', () => {
+void test('signs an ES256 JWT that verifies and holds no key', () => {
   const { privateKey, publicKey } = generateKeyPairSync('ec', {
     namedCurve: 'prime256v1',
   });

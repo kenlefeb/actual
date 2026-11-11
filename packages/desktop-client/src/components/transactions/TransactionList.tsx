@@ -188,9 +188,16 @@ export function TransactionList({
   }, [transactions]);
 
   const onAdd = useCallback(
-    async (newTransactions: TransactionEntity[]) => {
+    async (
+      newTransactions: TransactionEntity[],
+      attachDocuments?: (
+        transactionId: TransactionEntity['id'],
+      ) => Promise<void>,
+    ) => {
       newTransactions = realizeTempTransactions(newTransactions);
       await saveDiff({ added: newTransactions }, isLearnCategoriesEnabled);
+      // The real ids exist now; documents attach to the parent, as one undo step
+      await attachDocuments?.(newTransactions[0].id);
       onRefetch();
     },
     [isLearnCategoriesEnabled, onRefetch],

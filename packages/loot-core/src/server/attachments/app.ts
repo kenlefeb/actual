@@ -224,8 +224,8 @@ async function unseal(stored: Uint8Array, encryptMeta: string | null) {
 
 // The cached copy, else the server's (cached for next time). Throws when
 // neither is available.
-async function getStored(remote: Remote | null, id: string) {
-  const cached = await readCache(id);
+async function getStored(remote: Remote | null, id: string, skipCache = false) {
+  const cached = skipCache ? null : await readCache(id);
   if (cached) {
     return cached;
   }
@@ -234,7 +234,10 @@ async function getStored(remote: Remote | null, id: string) {
   }
   const res = await attachmentRequest(remote, 'download-attachment', id);
   if (!res.ok) {
-    throw new Error(`Attachment download failed: ${res.status}`);
+    throw Object.assign(
+      new Error(`Attachment download failed: ${res.status}`),
+      { status: res.status },
+    );
   }
   const stored = new Uint8Array(await res.arrayBuffer());
   await writeCache(id, stored).catch(e =>
@@ -489,20 +492,30 @@ async function openAttachment({
     return { error: 'not-found' };
   }
 
-  let stored: Uint8Array;
-  try {
-    stored = await getStored(await getRemote(), id);
-  } catch (e) {
-    logger.warn('Could not load attachment', e);
-    return { error: 'download-failed' };
-  }
-
   let data: Uint8Array;
-  try {
-    data = await unseal(stored, row.encrypt_meta);
-  } catch (e) {
-    logger.warn('Could not decrypt attachment', e);
-    return { error: 'decrypt-failed' };
+  // A cached copy another device's key change left undecryptable is dropped
+  // and downloaded once more
+  let skipCache = false;
+  for (;;) {
+    let stored: Uint8Array;
+    try {
+      skipCache ||= !(await fs.exists(cachePath(id)));
+      stored = await getStored(await getRemote(), id, skipCache);
+    } catch (e) {
+      logger.warn('Could not load attachment', e);
+      return { error: 'download-failed' };
+    }
+
+    try {
+      data = await unseal(stored, row.encrypt_meta);
+      break;
+    } catch (e) {
+      if (skipCache) {
+        logger.warn('Could not decrypt attachment', e);
+        return { error: 'decrypt-failed' };
+      }
+      skipCache = true;
+    }
   }
 
   // The synced mime is untrusted: the opened blob gets the app's origin, so
@@ -570,7 +583,17 @@ export async function reencryptAttachments(
 
   try {
     for (const row of rows) {
-      const old = await getStored(remote, row.id);
+      let old: Uint8Array;
+      try {
+        old = await getStored(remote, row.id);
+      } catch (e) {
+        // The document is gone from the server: nothing to re-encrypt
+        if ((e as { status?: number }).status !== 404) {
+          throw e;
+        }
+        logger.warn(`Skipped attachment ${row.id}: document not found`);
+        continue;
+      }
       const { stored, encryptMeta } = await seal(
         await unseal(old, row.encrypt_meta),
         newKeyId,

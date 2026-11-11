@@ -4,6 +4,7 @@ import * as path from 'path';
 
 import * as asyncStorage from '#platform/server/asyncStorage';
 import * as fs from '#platform/server/fs';
+import { logger } from '#platform/server/log';
 import { app as attachmentsApp } from '#server/attachments/app';
 import * as db from '#server/db';
 import { loadMappings } from '#server/db/mappings';
@@ -137,6 +138,24 @@ describe('key-make with attachments', () => {
     const newKeyId = vi.mocked(resetSync).mock.calls[0][0].key.getId();
     const [row] = await attachmentRows();
     expect(JSON.parse(row.encrypt_meta ?? '').keyId).toBe(newKeyId);
+  });
+
+  it('skips an attachment whose document is gone from the server', async () => {
+    const gone = await attach('a-receipt.pdf', PDF);
+    const kept = await attach('b-receipt.pdf', PDF);
+    attachmentServer.blobs.delete(gone);
+    clearAttachmentCache();
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+
+    const result = await app.handlers['key-make']({ password: 'new' });
+
+    expect(result).toEqual({});
+    expect(resetSync).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining(gone));
+    const newKeyId = vi.mocked(resetSync).mock.calls[0][0].key.getId();
+    const keptRow = (await attachmentRows()).find(row => row.id === kept);
+    expect(JSON.parse(keptRow?.encrypt_meta ?? '').keyId).toBe(newKeyId);
+    expect(await openAttachment({ id: kept })).toMatchObject({ data: PDF });
   });
 
   it('Re-encryption fails', async () => {

@@ -4,7 +4,7 @@
 
 Shortcut sc-3483. Ken (2026-11-11) wants the native "Home Economics" apps to have their own look and take full advantage of Apple's design language. The apps are the iOS app (sc-3398, a Capacitor WebView) and the Mac app (sc-3410, Electron). Today both show the browser's web UI and upstream Actual's theme. The web app keeps upstream's look.
 
-The UX Designer's exploration on sc-3483 (comments 3492, 3499 and 3503) recommends two things. First, a native theme chosen only inside the native shells. Second, system-drawn chrome: a native tab bar on iPhone, and the native window, sidebar and menu bar on Mac. A SwiftUI rewrite is rejected, because the budget engine is JavaScript and a second app would double every feature. Ken's decisions are the Hearth Teal accent, app icon direction A (a jar of coins), and following the system light and dark appearance.
+The UX Designer's exploration on sc-3483 (comments 3492, 3499 and 3503) recommends two things. First, a native theme chosen only inside the native shells. Second, system-drawn chrome: a native tab bar on iPhone, and the native window, sidebar and menu bar on Mac. [ADR 11](../../../docs/adr/0011-native-ui-without-upstream-parity.md) later chose native SwiftUI screens built one at a time on the one JavaScript budget engine. This change lays that foundation: the theme still styles the web screens that remain, and the iPhone tab bar becomes the native root that can host web or native screens. Ken's decisions are the Hearth Teal accent, app icon direction A (a jar of coins), and following the system light and dark appearance.
 
 ## What Changes
 
@@ -14,7 +14,7 @@ The UX Designer's exploration on sc-3483 (comments 3492, 3499 and 3503) recommen
   - **Mac:** text uses the macOS sizes.
   - **Amounts:** tabular digits, and an amount never truncates.
 - **iPhone chrome.**
-  - **Tab bar:** a native tab bar with Budget, Accounts, Reports and Settings, plus a separate Add button. It replaces the web tab grid inside the app only.
+  - **Tab bar:** a native tab bar with Budget, Accounts, Reports and Settings, plus a separate Add button. It is the app's root: each tab hosts its section's web screen, or a native screen once one exists, and all web screens share one WebView and one engine. It replaces the web tab grid inside the app only.
   - **System touches:** haptics on save and on moving money, a status bar that matches the appearance, and system keyboards.
 - **Mac chrome.**
   - **Window:** an inset title bar and a system sidebar material.
@@ -25,7 +25,7 @@ The UX Designer's exploration on sc-3483 (comments 3492, 3499 and 3503) recommen
 
 Out of scope:
 - Android (sc-3419).
-- Native SwiftUI or AppKit screens.
+- The native SwiftUI or AppKit screens themselves, and the bridge they use (ADR 11; later changes).
 - Widgets and Shortcuts.
 - Vision receipt reading (sc-2640).
 - Any change to the browser look.

@@ -13,8 +13,8 @@ Test-first: write the tests, run them and see them fail before writing the code.
 
 ## 2. iPhone native chrome (sc-3514)
 
-- [ ] 2.1 Choose the tab bar plugin (the Capgo native-navigation plugin, or a small local Swift plugin) and record the choice and its review by the Security Analyst. Verify: there is a comment on the story.
-- [ ] 2.2 Add a failing test that `MobileNavTabs` renders nothing when the native tab bar is present, and still renders in a phone browser. Then implement the bridge: tab selection drives the router, and the Add button opens the new-transaction screen. Verify: the tests pass.
+- [ ] 2.1 Choose how to build the native tab bar as the app's root (ADR 11): a plugin or a small local Swift plugin whose tabs can each host either the shared WebView or a native view controller. A plugin that only draws a tab bar over one WebView doesn't qualify. Record the choice and its review by the Security Analyst. Verify: there is a comment on the story.
+- [ ] 2.2 Add a failing test that `MobileNavTabs` renders nothing when the native tab bar is present, and still renders in a phone browser. Then implement the root: one shared WebView (one engine) moves into whichever tab shows a web screen, tab selection drives the router, a tab can be marked as native (no native screen ships in this group), and the Add button opens the new-transaction screen. Verify: the tests pass, and in the iOS Simulator only one WebView exists after visiting every tab.
 - [ ] 2.3 Add haptics on saving a transaction and on moving money (a no-op outside the iOS app), with unit tests for the call sites. Verify: the tests pass.
 - [ ] 2.4 Make the status bar follow the appearance and use system keyboard behaviour (decimal keypad for amounts). Verify in the iOS Simulator: the screenshots are attached.
 - [ ] 2.5 Add the scenarios "Switching sections on iPhone" and "Adding a transaction on iPhone" as a TestFlight acceptance checklist for Ken. Verify: Ken's result is recorded on the story.

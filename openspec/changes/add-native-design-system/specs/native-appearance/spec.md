@@ -71,12 +71,17 @@ In the iOS app, text SHALL follow the user's text-size setting (Dynamic Type), i
 - **THEN** body text uses the macOS body size, and the money table keeps its columns
 
 ### Requirement: iPhone uses a native tab bar
-In the iOS app, the main sections SHALL be in a native tab bar drawn by iOS: Budget, Accounts, Reports and Settings, with a separate Add button that opens a new transaction. The web tab grid SHALL NOT show in the iOS app. Saving a transaction and moving money SHALL give haptic feedback when the system allows it. In a phone browser, the existing tab grid SHALL remain.
+In the iOS app, a native tab bar drawn by iOS SHALL be the app's root (ADR 11), with Budget, Accounts, Reports and Settings plus a separate Add button for a new transaction. Each tab SHALL host its section's native screen if one exists, and its web screen otherwise. The web tab grid SHALL NOT show in the iOS app but SHALL remain in a phone browser. Saving a transaction and moving money SHALL give haptic feedback when allowed.
 
 #### Scenario: Switching sections on iPhone
 - **GIVEN** the iOS app is on the Budget tab
 - **WHEN** the user taps Accounts in the tab bar
 - **THEN** the accounts screen shows, the Accounts tab is selected, and tapping Budget returns to the budget where it was
+
+#### Scenario: A tab hosts a web or a native screen
+- **GIVEN** the Budget section has a native screen and the Accounts section does not
+- **WHEN** the user taps Budget and then Accounts
+- **THEN** Budget shows the native screen, Accounts shows the web accounts screen, and both show the same balances for the same account
 
 #### Scenario: Adding a transaction on iPhone
 - **WHEN** the user taps the Add button next to the tab bar and saves a transaction
@@ -85,6 +90,14 @@ In the iOS app, the main sections SHALL be in a native tab bar drawn by iOS: Bud
 #### Scenario: Phone browser keeps the web tab grid
 - **WHEN** the same server is opened in Safari on an iPhone
 - **THEN** the web tab grid shows, and there is no native tab bar
+
+### Requirement: The iOS app runs one budget engine
+The iOS app SHALL run exactly one budget engine (ADR 11). Every web screen, whichever tab shows it, SHALL come from one shared WebView, and native screens SHALL read and change budget data only through that engine's handlers. This requirement is iPhone-only; the Mac app runs one engine in Electron.
+
+#### Scenario: Visiting every tab keeps one engine
+- **GIVEN** the iOS app has just opened on the Budget tab
+- **WHEN** the user visits Accounts, Reports and Settings, then returns to Budget
+- **THEN** the app still has one WebView and one budget engine, and a transaction added on one tab shows on every other tab without a sync
 
 ### Requirement: Mac uses native window chrome and a menu bar
 In the Mac app, the window SHALL use an inset title bar with the system's sidebar material, its title SHALL name the current view rather than the app, and the menu bar SHALL hold the main commands with keyboard shortcuts. This requirement is Mac-only; on iPhone the tab bar requirement covers navigation.

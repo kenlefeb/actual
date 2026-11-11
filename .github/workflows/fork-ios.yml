@@ -23,6 +23,10 @@
 name: Fork iOS
 
 on:
+  # TEMPORARY: dispatch needs the file on development; remove before merge.
+  push:
+    branches:
+      - kenlefeb/sc-3398/ios-testflight-slice-1
   workflow_dispatch:
     inputs:
       revision:

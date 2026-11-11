@@ -34,6 +34,10 @@ import type {
 } from 'electron';
 
 import {
+  ATTACHMENT_TEMP_PREFIX,
+  removeAttachmentTempDirs,
+} from './attachment-temp';
+import {
   attachmentFileName,
   openExternalUrl,
   revealLocalFile,
@@ -628,6 +632,9 @@ async function createWindow() {
 app.setAppUserModelId('com.actualbudget.actual');
 
 app.on('ready', async () => {
+  // Copies a crashed run left behind.
+  removeAttachmentTempDirs(app.getPath('temp'));
+
   // Install an `app://` protocol that always returns the base HTML
   // file no matter what URL it is. This allows us to use react-router
   // on the frontend
@@ -705,6 +712,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  removeAttachmentTempDirs(app.getPath('temp'));
   if (serverProcess) {
     const processToKill = serverProcess;
     serverProcess = null;
@@ -840,14 +848,14 @@ ipcMain.handle('open-external-url', (event, url) => {
 
 // New windows are always denied, so an attached document opens in the OS
 // viewer from a private temp folder.
-// shortcut: the copy stays until the OS clears its temp folder; delete on quit if that matters
+// The copy is removed on quit, or at the next start (removeAttachmentTempDirs).
 ipcMain.handle('open-attachment', async (_event, { name, mime, data }) => {
   const fileName = attachmentFileName(name, mime);
   if (!fileName || !(data instanceof Uint8Array)) {
     return;
   }
   const dir = await mkdtemp(
-    path.join(app.getPath('temp'), 'actual-attachment-'),
+    path.join(app.getPath('temp'), ATTACHMENT_TEMP_PREFIX),
   );
   const filePath = path.join(dir, fileName);
   await writeFile(filePath, data);

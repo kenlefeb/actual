@@ -62,11 +62,18 @@ public final class BudgetViewModel: ObservableObject {
     // they have, that month stays.
     public func load() async {
         if !navigated { month = Self.currentMonth(now(), calendar: calendar) }
+        let target = wanted ?? month
+        requests += 1
+        let mine = requests
         if case .loaded = state {} else { state = .loading }
         do {
-            let result = try await client.budgetMonth(month)
+            let result = try await client.budgetMonth(target)
+            guard mine == requests else { return }
+            wanted = nil
             state = result.budgetType == .tracking ? .useWebScreen : .loaded(result)
         } catch {
+            guard mine == requests else { return }
+            wanted = nil
             state = .failed(BudgetLoadError.from(error))
         }
     }
@@ -78,6 +85,11 @@ public final class BudgetViewModel: ObservableObject {
     // shortcut: the picker's window is 24 months back and 12 forward, widening as
     // the user steps; upgrade if the budget gets an additive range field.
     private var navigated = false
+    // Taps do not wait for the read before them: each read gets a number, only
+    // the latest may change the screen, and a step starts from the month the
+    // latest tap asked for, not the one still on screen.
+    private var requests = 0
+    private var wanted: String?
     private var missingBefore: String?
     private var missingAfter: String?
 
@@ -88,26 +100,34 @@ public final class BudgetViewModel: ObservableObject {
         (-24...12).map { Self.shift(month, by: $0) }.filter(isReachable)
     }
 
-    public func previous() async { await select(Self.shift(month, by: -1)) }
-    public func next() async { await select(Self.shift(month, by: 1)) }
+    public func previous() async { await select(Self.shift(wanted ?? month, by: -1)) }
+    public func next() async { await select(Self.shift(wanted ?? month, by: 1)) }
 
     public func select(_ target: String) async {
-        guard target != month, isReachable(target) else { return }
+        guard target != (wanted ?? month), isReachable(target) else { return }
+        requests += 1
+        let mine = requests
+        wanted = target
         do {
             let result = try await client.budgetMonth(target)
+            guard mine == requests else { return }
+            wanted = nil
             navigated = true
             month = target
             state = result.budgetType == .tracking ? .useWebScreen : .loaded(result)
         } catch {
             let failure = BudgetLoadError.from(error)
             if failure == .noBudgetForMonth {
-                // Keep the month and numbers on screen
+                // What the edge is does not depend on which tap was last
                 if target < month { missingBefore = target } else { missingAfter = target }
-            } else {
-                navigated = true
-                month = target
-                state = .failed(failure)
             }
+            guard mine == requests else { return }
+            wanted = nil
+            // Keep the month and numbers on screen
+            if failure == .noBudgetForMonth { return }
+            navigated = true
+            month = target
+            state = .failed(failure)
         }
     }
 

@@ -266,6 +266,46 @@ final class BudgetMonthNavigationTests: XCTestCase {
         XCTAssertEqual(seen.last, "2026-01")
     }
 
+    // Taps do not wait for the read before them: the last tap wins, and a slow
+    // earlier read must not put an older month back on screen.
+    func testASlowEarlierReadDoesNotOverwriteALaterTap() async throws {
+        let json = try fixtureJSON("budget-month-envelope")
+        var slow: CheckedContinuation<Void, Never>?
+        let model = BudgetViewModel(
+            client: NativeBridgeClient { _, args in
+                if args == #"{"month":"2026-02"}"# {
+                    await withCheckedContinuation { slow = $0 }
+                }
+                return json
+            }, now: march9, calendar: utc)
+        await model.load()
+        async let first: Void = model.select("2026-02")
+        while slow == nil { await Task.yield() }
+        await model.select("2026-04")
+        slow?.resume()
+        await first
+        XCTAssertEqual(model.month, "2026-04")
+    }
+
+    func testTwoQuickPreviousTapsStepTwoMonths() async throws {
+        let json = try fixtureJSON("budget-month-envelope")
+        var gate: CheckedContinuation<Void, Never>?
+        let model = BudgetViewModel(
+            client: NativeBridgeClient { _, args in
+                if args == #"{"month":"2026-02"}"# {
+                    await withCheckedContinuation { gate = $0 }
+                }
+                return json
+            }, now: march9, calendar: utc)
+        await model.load()
+        async let first: Void = model.previous()
+        while gate == nil { await Task.yield() }
+        await model.previous()  // the 2026-02 read is still in flight
+        gate?.resume()
+        await first
+        XCTAssertEqual(model.month, "2026-01")
+    }
+
     func testATimeoutOnAStepShowsRetryForThatMonth() async throws {
         let json = try fixtureJSON("budget-month-envelope")
         var hang = false

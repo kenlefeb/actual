@@ -41,7 +41,9 @@ The allowlist adds `budget/budget-amount`, `budget/transfer-category` and `budge
 
 ### 4. Typed bridge arguments
 
-`NativeBridgeClient.call` takes `args: [String: String]`, which cannot send an amount (a number) to `budget/budget-amount`. The first write slice (sc-3769) changes the argument type to a small `Encodable` JSON value, keeping every existing call working, with the same allowlist and timeout checks. Amounts cross the bridge as integer minor units, exactly as `native/budget-month` returns them; conversion from what the user types uses the budget's currency precision and happens only at the edit field. `transfer-category` also needs a `currencyCode` (it only writes the movement note); the screen passes the budget's currency code, read from loot-core, not a Swift constant.
+`NativeBridgeClient.call` takes `args: [String: String]`, which cannot send an amount (a number) to `budget/budget-amount`. The first write slice (sc-3769) changes the argument type to a small `Encodable` JSON value, keeping every existing call working, with the same allowlist and timeout checks. Amounts cross the bridge as integer minor units, exactly as `native/budget-month` returns them; conversion from what the user types happens only at the edit field. The currency comes from `native/budget-month`: the snapshot gains the currency code and decimal places (an additive field, in the `native-bridge` delta), which the handler reads from the `defaultCurrencyCode` preference and the currency table. `transfer-category` needs a `currencyCode` (it only writes the movement note); the screen passes the snapshot's code, not a Swift constant. The web gets its currency from a client hook, which native code cannot call.
+
+**Write validation.** loot-core's handlers trust their arguments: `setBudget` turns a non-number amount into 0 and writes a row for any month or category string, and `transferCategory` does not clamp. So the bridge validates writes itself, at the boundary, on both sides. The page side validates before `send` (the amount is a finite integer, the month is `YYYY-MM` and has a snapshot, the category id is a category of that snapshot, plus the transfer rules), by reading the month's snapshot, which needs no new handler. Swift builds each write from a typed per-handler struct (`BudgetAmountWrite`, `Transfer`), not a generic `Encodable`, and validates it too. Neither side trusts the other.
 
 ### 5. Month range
 
@@ -61,7 +63,8 @@ Swift unit tests against a fake transport and the shared fixtures, per ADR 11. T
 - [A write while the engine is suspended hangs] → the 5 s timeout, no calls in the background, and an error that keeps the old value.
 - [A native write lands but the re-read times out] → the screen shows the error and re-reads on the next change event or foreground; the write is never retried automatically, so an edit cannot apply twice.
 - [Unusual budget state: carryover, hidden categories, income group] → the snapshot already carries them; slices render what it says, and the web screen is the oracle in their comparison scenarios.
-- [`native-bridge` is still an open change] → the delta is written against it and archives after it.
+- [`native-bridge` is still an open change] → the delta is written against it and archives after it. Its base requirement says the allowlist holds only reads until a screen story adds writes; the next native screen that adds a write handler modifies this delta's requirement (MODIFIED) once both are archived.
+- [loot-core handlers accept bad arguments] → validated in the bridge on both sides (Decision 4); no loot-core change, so the upstream-merge risk stays low.
 
 ## Migration Plan
 

@@ -24,6 +24,11 @@ The iOS app SHALL show the native Budget tab only while a per-screen switch is o
 - **WHEN** the user opens the Budget tab
 - **THEN** the web Budget screen is shown, and Settings offers the switch
 
+#### Scenario: Tracking budget before tracking support lands
+- **GIVEN** the switch is on and the open budget is a tracking budget, before the tracking requirement below is built
+- **WHEN** the user opens the Budget tab
+- **THEN** the web Budget screen is shown (the fallback), not a blank or an error
+
 #### Scenario: The read times out
 - **GIVEN** the switch is on and the engine does not answer
 - **WHEN** the tab loads its month
@@ -59,6 +64,11 @@ On an envelope month the user SHALL be able to tap a category's budgeted amount,
 - **GIVEN** the native Budget tab on an envelope month
 - **WHEN** a save fails or times out
 - **THEN** an error shows and the category keeps its old budgeted amount
+
+#### Scenario: Only valid ids and months are sent
+- **GIVEN** the native Budget tab showing a month
+- **WHEN** the user edits a category
+- **THEN** native code sends only a category id and a month from the last decoded snapshot, and an amount that is an integer in the budget's minor units; an invalid value is never sent
 
 #### Scenario: Writes stay inside loot-core
 - **GIVEN** the native Budget tab and the bridge allowlist
@@ -166,12 +176,12 @@ Every control of the native Budget tab, including groups, categories, the edit f
 - **THEN** each field and button has a label, a value and a trait, in reading order
 
 ### Requirement: A 300-category month meets the latency target
-On a 300-category month, one `native/budget-month` round trip SHALL complete in under 50 ms median (the bridge spike's target), and the screen SHALL render and scroll without hitches. The median and the 95th percentile SHALL be recorded on the story, from the Simulator and then from Ken's iPhone using the existing hidden benchmark where it applies. If the target cannot be met, the work SHALL stop and be reported to the Director, so that ADR 11 is revisited.
+On a 300-category month, one `native/budget-month` round trip SHALL complete in under 50 ms median (the bridge spike's target), and scrolling the whole month SHALL show no frame that takes longer than 33 ms to render (a dropped frame at 60 Hz). The median and the 95th percentile SHALL be recorded on the story, from the Simulator and then from Ken's iPhone. If the target cannot be met, work SHALL stop and be reported to the Director, so ADR 11 is revisited.
 
 #### Scenario: Render and scroll a big month
 - **GIVEN** a 300-category budget open in the iOS app with the switch on
 - **WHEN** the native Budget tab loads and the user scrolls through all of it
-- **THEN** the month renders within the target and scrolling shows no hitches, and the median and p95 are recorded on the story
+- **THEN** the month renders within the target and no scrolled frame takes longer than 33 ms, and the median and p95 are recorded on the story
 
 #### Scenario: The target is missed
 - **GIVEN** the measurement above

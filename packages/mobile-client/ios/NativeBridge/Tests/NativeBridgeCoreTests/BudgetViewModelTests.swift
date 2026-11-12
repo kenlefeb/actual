@@ -279,6 +279,181 @@ final class BudgetViewModelTests: XCTestCase {
     }
 }
 
+// native-budget-screen spec (sc-3760): month navigation. The budget's range
+// is not listed anywhere handler-free, so loot-core's own "no budget for
+// month" answer is the edge: a step into it reads once, fails, and the screen
+// stays where it was.
+@MainActor
+final class BudgetMonthNavigationTests: XCTestCase {
+    // A budget that has months first...last, like createAllBudgets' range
+    private func rangedClient(_ first: String, _ last: String, reads: @escaping (String) -> Void) throws -> NativeBridgeClient {
+        let json = try fixtureJSON("budget-month-envelope")
+        return NativeBridgeClient { _, args in
+            let month = String(args.dropFirst(10).prefix(7))  // {"month":"2026-03"}
+            reads(month)
+            if month < first || month > last {
+                throw NSError(
+                    domain: "WKErrorDomain", code: 4,
+                    userInfo: ["WKJavaScriptExceptionMessage": "Error: native/budget-month: no budget for month \(month)"])
+            }
+            return json
+        }
+    }
+
+    private func model(_ first: String = "2026-01", _ last: String = "2026-05", reads: @escaping (String) -> Void = { _ in }) throws -> BudgetViewModel {
+        BudgetViewModel(client: try rangedClient(first, last, reads: reads), now: march9, calendar: utc)
+    }
+
+    func testSteppingBackThreeMonthsReadsEachMonthOnce() async throws {
+        var seen: [String] = []
+        let model = try model("2025-01", "2026-05") { seen.append($0) }
+        await model.load()
+        await model.previous()
+        await model.previous()
+        await model.previous()
+        XCTAssertEqual(model.month, "2025-12")
+        XCTAssertEqual(seen, ["2026-03", "2026-02", "2026-01", "2025-12"])
+        guard case .loaded = model.state else { return XCTFail("expected loaded, got \(model.state)") }
+    }
+
+    func testNextStepsForwardAcrossAYear() async throws {
+        let model = try model("2026-01", "2027-02")
+        await model.select("2026-12")
+        await model.next()
+        XCTAssertEqual(model.month, "2027-01")
+    }
+
+    func testPreviousAtTheFirstMonthStaysPutAndThenMakesNoRead() async throws {
+        var seen: [String] = []
+        let model = try model("2026-01", "2026-05") { seen.append($0) }
+        await model.select("2026-01")
+        XCTAssertTrue(model.canGoPrevious)  // the edge is only learned by asking
+        await model.previous()
+        XCTAssertEqual(model.month, "2026-01")
+        guard case .loaded = model.state else { return XCTFail("expected loaded, got \(model.state)") }
+        XCTAssertFalse(model.canGoPrevious)
+        XCTAssertTrue(model.canGoNext)
+        let reads = seen.count
+        await model.previous()
+        XCTAssertEqual(seen.count, reads)
+    }
+
+    func testNextAtTheLastMonthStaysPut() async throws {
+        let model = try model("2026-01", "2026-05")
+        await model.select("2026-05")
+        await model.next()
+        XCTAssertEqual(model.month, "2026-05")
+        XCTAssertFalse(model.canGoNext)
+        XCTAssertTrue(model.canGoPrevious)
+    }
+
+    func testThePickerReadsTheChosenMonthOnce() async throws {
+        var seen: [String] = []
+        let model = try model { seen.append($0) }
+        await model.select("2026-01")
+        XCTAssertEqual(model.month, "2026-01")
+        XCTAssertEqual(seen, ["2026-01"])
+    }
+
+    func testThePickerOffersNoMonthBeyondAnEdgeAndRefusesItWithoutARead() async throws {
+        var seen: [String] = []
+        let model = try model("2026-01", "2026-05") { seen.append($0) }
+        await model.select("2026-01")
+        XCTAssertTrue(model.pickerMonths.contains("2025-12"))  // not known yet
+        await model.previous()  // learns 2025-12 does not exist
+        XCTAssertFalse(model.pickerMonths.contains("2025-12"))
+        XCTAssertFalse(model.pickerMonths.contains("2025-06"))
+        XCTAssertTrue(model.pickerMonths.contains("2026-01"))
+        let reads = seen.count
+        await model.select("2025-06")
+        XCTAssertEqual(model.month, "2026-01")
+        XCTAssertEqual(seen.count, reads)
+    }
+
+    func testAMonthOutsideTheRangeKeepsTheLastGoodNumbers() async throws {
+        let model = try model("2026-01", "2026-05")
+        await model.select("2026-01")
+        let before = model.state
+        await model.previous()
+        XCTAssertEqual(model.state, before)
+    }
+
+    func testTheVisibleMonthSurvivesLeavingTheTab() async throws {
+        var seen: [String] = []
+        let model = try model { seen.append($0) }
+        await model.load()
+        await model.previous()
+        await model.previous()
+        // The tab showing again calls load(): same month, not the current one
+        await model.load()
+        XCTAssertEqual(model.month, "2026-01")
+        XCTAssertEqual(seen.last, "2026-01")
+    }
+
+    // Taps do not wait for the read before them: the last tap wins, and a slow
+    // earlier read must not put an older month back on screen.
+    func testASlowEarlierReadDoesNotOverwriteALaterTap() async throws {
+        let json = try fixtureJSON("budget-month-envelope")
+        var slow: CheckedContinuation<Void, Never>?
+        let model = BudgetViewModel(
+            client: NativeBridgeClient { _, args in
+                if args == #"{"month":"2026-02"}"# {
+                    await withCheckedContinuation { slow = $0 }
+                }
+                return json
+            }, now: march9, calendar: utc)
+        await model.load()
+        async let first: Void = model.select("2026-02")
+        while slow == nil { await Task.yield() }
+        await model.select("2026-04")
+        slow?.resume()
+        await first
+        XCTAssertEqual(model.month, "2026-04")
+    }
+
+    func testTwoQuickPreviousTapsStepTwoMonths() async throws {
+        let json = try fixtureJSON("budget-month-envelope")
+        var gate: CheckedContinuation<Void, Never>?
+        let model = BudgetViewModel(
+            client: NativeBridgeClient { _, args in
+                if args == #"{"month":"2026-02"}"# {
+                    await withCheckedContinuation { gate = $0 }
+                }
+                return json
+            }, now: march9, calendar: utc)
+        await model.load()
+        async let first: Void = model.previous()
+        while gate == nil { await Task.yield() }
+        await model.previous()  // the 2026-02 read is still in flight
+        gate?.resume()
+        await first
+        XCTAssertEqual(model.month, "2026-01")
+    }
+
+    func testATimeoutOnAStepShowsRetryForThatMonth() async throws {
+        let json = try fixtureJSON("budget-month-envelope")
+        var hang = false
+        var seen: [String] = []
+        let model = BudgetViewModel(
+            client: NativeBridgeClient(timeout: 0.1) { _, args in
+                seen.append(args)
+                if hang {
+                    await withCheckedContinuation { (_: CheckedContinuation<Void, Never>) in }
+                }
+                return json
+            }, now: march9, calendar: utc)
+        await model.load()
+        hang = true
+        await model.previous()
+        XCTAssertEqual(model.month, "2026-02")
+        XCTAssertEqual(model.state, .failed(.timedOut))
+        hang = false
+        await model.load()  // the retry button
+        XCTAssertEqual(seen.last, #"{"month":"2026-02"}"#)
+        guard case .loaded = model.state else { return XCTFail("expected loaded, got \(model.state)") }
+    }
+}
+
 final class NativeScreenSwitchTests: XCTestCase {
     private func defaults() -> UserDefaults {
         let suite = "NativeScreenSwitchTests-\(UUID().uuidString)"

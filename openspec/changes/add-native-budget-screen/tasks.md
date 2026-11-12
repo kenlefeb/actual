@@ -13,9 +13,9 @@ Test-first: write the tests, run them and see them fail before writing the code.
 
 ## 2. Month navigation (sc-3760)
 
-- [ ] 2.1 Add failing tests for previous, next and picker on the view model: one `native/budget-month` read per month, no month outside the range, and the visible month kept across leaving the tab. Verify: they fail first.
-- [ ] 2.2 Find the budget's month range without a new handler (a cell or `query`); if that is impossible, file a Backlog story for an additive field and stop. Verify: the choice is written in the PR.
-- [ ] 2.3 Implement the navigation controls and the picker in the tab. Verify: 2.1 passes; stepping back three months in the Simulator matches the web screen.
+- [x] 2.1 Add failing tests for previous, next and picker on the view model: one `native/budget-month` read per month, no month outside the range, and the visible month kept across leaving the tab. Verify: they fail first.
+- [x] 2.2 Find the budget's month range without a new handler (a cell or `query`); if that is impossible, file a Backlog story for an additive field and stop. Verify: the choice is written in the PR.
+- [x] 2.3 Implement the navigation controls and the picker in the tab. Verify: 2.1 passes; stepping back three months in the Simulator matches the web screen.
 
 ## 3. Edit a budgeted amount through loot-core (sc-3769)
 

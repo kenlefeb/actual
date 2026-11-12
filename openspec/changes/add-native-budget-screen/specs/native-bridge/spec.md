@@ -138,3 +138,116 @@ The page-origin guard of the bridge (sc-3697) SHALL apply to the write handler n
 - **GIVEN** the app's page in the main frame from the app server
 - **WHEN** it posts a valid write for an allowlisted handler
 - **THEN** the native side acts on it
+
+### Requirement: Swift calls into the page only while it is the app's own page
+Before every call into the page, read or write, bridge or native chrome, Swift SHALL check that the main frame URL has the app server's scheme, host and port, with default ports normalized, through one shared checked path. Every call SHALL target the main frame (no `WKFrameInfo`) in the page content world. If the check fails, or the main frame has no URL, the call SHALL fail closed: it returns an error, and no handler name or argument reaches the page.
+
+#### Scenario: A write while a foreign page is loaded
+- **GIVEN** the web view's main frame shows a page on another host, such as a sign-in page
+- **WHEN** native code calls `budget/budget-amount`, `budget/transfer-category` or `budget/transfer-available`
+- **THEN** the call returns the origin error, the page is never called and receives no arguments, and no budget amount changes
+
+#### Scenario: A read while a foreign page is loaded
+- **GIVEN** the web view's main frame shows a page on another host
+- **WHEN** native code calls `native/budget-month` or `query`
+- **THEN** the call returns the origin error without calling the page, and the screen shows its error state with the last good numbers, not data from that page
+
+#### Scenario: The web app served from the sync server
+- **GIVEN** the main frame shows the Actual web app from the sync server host, which has its own `__actualNativeBridge`
+- **WHEN** native code calls `native/budget-month` or a write
+- **THEN** the call returns the origin error and that page's bridge is never called
+
+#### Scenario: Same host on another scheme or port
+- **GIVEN** the main frame shows a page on the app server's host but on another scheme or port
+- **WHEN** native code makes any bridge call
+- **THEN** the call returns the origin error and the page is never called
+
+#### Scenario: No page loaded
+- **GIVEN** the main frame has no URL, or shows `about:blank`
+- **WHEN** native code makes any bridge call
+- **THEN** the call returns the origin error and the page is never called
+
+#### Scenario: A tab-bar tap while a foreign page is loaded
+- **GIVEN** the main frame shows a page on another host, such as a sign-in page
+- **WHEN** the user taps a tab, so the native tab bar asks the page to navigate to a route
+- **THEN** the page is never called and receives no route, and the tap is dropped, not queued to fire after the app's page returns
+
+#### Scenario: The app's own page
+- **GIVEN** the app's page in the main frame from the app server
+- **WHEN** native code calls `native/budget-month` or a valid allowlisted write
+- **THEN** the call reaches the page and returns loot-core's result, as before
+
+#### Scenario: Back on the app's own page
+- **GIVEN** native calls were refused while a sign-in page was in the main frame
+- **WHEN** the app's own page is back in the main frame, and its page bridge reports that it is ready through a message that passes the inbound origin guard
+- **THEN** the native screen re-reads on that message and shows the month, with no relaunch; a page-load event alone, which fires for any page, does not trigger it
+
+### Requirement: The expected origin comes from the server URL
+Swift SHALL derive the expected origin from the same server URL `PageOriginGuard` uses, in the form `location.origin` serializes: lowercased scheme and host, with the default port omitted (for example `capacitor://localhost`, `http://localhost:3001`, `https://host`). It SHALL pass it to the page script as a string argument that is not named `location` or `window`.
+
+#### Scenario: The production config
+- **GIVEN** the app built with no `server.url`, so the server URL is `capacitor://localhost`
+- **WHEN** the app's page is in the main frame and native code makes a bridge call
+- **THEN** the expected origin is `capacitor://localhost`, both checks pass, and the call reaches the page
+
+#### Scenario: A dev config
+- **GIVEN** the app built with a dev `server.url` such as `http://localhost:3001`
+- **WHEN** the app's page from that server is in the main frame and native code makes a bridge call
+- **THEN** the expected origin is `http://localhost:3001`, both checks pass, and the call reaches the page
+
+#### Scenario: A default port written out
+- **GIVEN** a server URL of `https://host:443`
+- **WHEN** the app's page from `https://host` is in the main frame
+- **THEN** the expected origin is `https://host`, and the call is not refused
+
+### Requirement: The origin is checked again where the call runs
+The script Swift runs in the page SHALL first compare `location.origin` with the expected origin using only `!==` on strings. It SHALL use no page-defined function, constructor or prototype before or during the check, and on a mismatch SHALL return a fixed primitive sentinel, before it reads the arguments or touches any other page object. This covers a navigation that commits between the two checks.
+
+#### Scenario: The page navigates between the two checks
+- **GIVEN** Swift's check passed, and the main frame then commits a page on another host before the script runs
+- **WHEN** the script runs in that page
+- **THEN** it returns the sentinel without reading the arguments or calling any page function, and the call returns the origin error
+
+#### Scenario: A foreign page replaces page globals
+- **GIVEN** a foreign page in the main frame that has replaced `Error`, `JSON.parse` and `window.__actualNativeBridge`
+- **WHEN** the script runs in it
+- **THEN** none of them is called, and the script returns the sentinel
+
+### Requirement: Swift trusts only a confirmed result
+After the check passes, the script SHALL return a fixed-shape value it builds itself (e.g. `{ confirmed: true, value }`, with bridge errors caught and returned inside it). Swift SHALL treat a call as confirmed only on that shape; the sentinel, any exception and any other result are unconfirmed and map to the origin error.
+
+#### Scenario: A confirmed call
+- **GIVEN** the app's own page in the main frame
+- **WHEN** the script's check passes and loot-core returns a result, or the bridge refuses the call
+- **THEN** the script returns the confirmed shape carrying that result or that bridge error, and Swift returns it as before
+
+#### Scenario: An unconfirmed result
+- **GIVEN** a call whose script returned the sentinel, threw, or returned any value without the confirmed shape
+- **WHEN** Swift receives it
+- **THEN** the call returns the origin error, and none of that value is returned or logged
+
+### Requirement: An origin refusal reveals nothing about the foreign page
+The origin error SHALL be one fixed error. Swift SHALL map the sentinel, and any JavaScript exception from a call whose in-page check did not confirm the origin, to that error, and SHALL never log or return the exception's message, source URL or `userInfo`. Neither the error nor its log line SHALL contain any part of the foreign page's URL, host, path, query or title.
+
+#### Scenario: A refused call's error
+- **GIVEN** the main frame shows `https://login.example.com/authorize?state=abc`
+- **WHEN** a bridge call is refused
+- **THEN** the error and its log line are the same as for any other foreign page, and contain neither `login.example.com` nor `state=abc`
+
+#### Scenario: A foreign page throws its own value
+- **GIVEN** a call whose in-page check did not confirm the origin, in a page that throws a string containing its URL
+- **WHEN** Swift receives the exception
+- **THEN** the call returns the fixed origin error, and the URL appears in neither the error nor any log line
+
+### Requirement: Injected page scripts act only on the app's own page
+Every `WKUserScript` the app injects SHALL do nothing unless `location.origin` equals the expected origin, compared with `===` or `!==` only and using no page-defined function. `NativeScreensScript` SHALL therefore set `window.__actualNativeScreens` only on the app's own page.
+
+#### Scenario: A sign-in page loads
+- **GIVEN** the native screens script is installed
+- **WHEN** a sign-in page on another host loads in the main frame
+- **THEN** that page gets no `__actualNativeScreens`
+
+#### Scenario: The app's page loads
+- **GIVEN** the native screens script is installed
+- **WHEN** the app's page loads in the main frame
+- **THEN** `__actualNativeScreens` holds the current switch values, as before

@@ -3,7 +3,7 @@ import { MemoryRouter } from 'react-router';
 import type { PaycheckEntity } from '@actual-app/core/types/models';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TestProviders } from '#mocks';
 
@@ -76,7 +76,7 @@ vi.mock('#components/schedules/PaychecksSection', () => ({
 function renderPage() {
   render(
     <TestProviders>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/schedules']}>
         <MobileSchedulesPage />
       </MemoryRouter>
     </TestProviders>,
@@ -130,5 +130,27 @@ describe('MobileSchedulesPage business calendars', () => {
     expect(
       screen.queryByRole('button', { name: 'Business calendars' }),
     ).not.toBeInTheDocument();
+  });
+});
+
+// native-appearance: "Back through Schedules" (sc-3845)
+describe('MobileSchedulesPage Back', () => {
+  beforeEach(() => state.navigate.mockReset());
+  afterEach(() => {
+    delete (window as { webkit?: unknown }).webkit;
+  });
+
+  it('goes up to Settings in the iOS app', async () => {
+    (window as { webkit?: unknown }).webkit = {
+      messageHandlers: { actualNativeChrome: { postMessage: vi.fn() } },
+    };
+    renderPage();
+    await userEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(state.navigate).toHaveBeenCalledExactlyOnceWith('/settings');
+  });
+
+  it('shows no Back in a phone browser', () => {
+    renderPage();
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
   });
 });

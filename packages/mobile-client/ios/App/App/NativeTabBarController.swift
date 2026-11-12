@@ -11,10 +11,8 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
     private var containers: [NativeTab: TabContainerViewController] = [:]
     private var foregroundObserver: NSObjectProtocol?
     // The native Budget tab (sc-3751) lies over the web Budget screen while the
-    // switch is on, the page shows /budget with the tab bar, and the budget is
-    // an envelope one; otherwise the web screen below shows as before
+    // switch is on and the page shows /budget with the tab bar; otherwise the web screen below shows as before
     private var budgetOverlay: NativeBudgetViewController?
-    private var budgetFellBack = false
     private var pagePath = NativeTab.budget.rootPath
     private var tabBarShown = false
     private static let addIdentifier = "add"
@@ -62,11 +60,9 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
         let chrome = bridgeController.nativeChrome
         chrome.onRoute = { [weak self] in self?.pageDidRoute(to: $0, tabBar: $1) }
         chrome.onClosed = { [weak self] in
-            self?.budgetFellBack = false
             self?.setTabBarVisible(false)
         }
         chrome.onNativeScreenChanged = { [weak self] _ in
-            self?.budgetFellBack = false
             self?.updateBudgetOverlay()
         }
         // Hidden until a budget is open (sign-in and the budget list have none)
@@ -130,16 +126,9 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
     private func updateBudgetOverlay() {
         let container = containers[.budget]!
         let wanted = NativeScreenSwitch.screen(for: .budget) == .native && tabBarShown
-            && pagePath == NativeTab.budget.rootPath && !budgetFellBack && !container.hostsNativeScreen
+            && pagePath == NativeTab.budget.rootPath && !container.hostsNativeScreen
         if wanted, budgetOverlay == nil {
             let overlay = NativeBudgetViewController(client: bridgeController.nativeBridge.client)
-            overlay.onUseWebScreen = { [weak self] in
-                // After the publisher callback returns: the overlay removes itself
-                DispatchQueue.main.async {
-                    self?.budgetFellBack = true
-                    self?.updateBudgetOverlay()
-                }
-            }
             budgetOverlay = overlay
             // shortcut: onEvent is a single slot; the benchmark harness also sets it, and only runs in its own build
             bridgeController.nativeBridge.onEvent = { [weak overlay] _ in overlay?.changeEventReceived() }

@@ -1,27 +1,19 @@
-import Combine
 import SwiftUI
 import UIKit
 
 // Fork-only (sc-3751, native-budget-screen spec). The read-only native Budget
-// tab: the current month of an envelope budget. Every number is a loot-core
+// tab: a month of an envelope or tracking budget. Every number is a loot-core
 // cell, read through native/budget-month and shown as it came; this file adds
 // nothing up. The one write is a category's budgeted amount, sent through the
 // view model to loot-core (sc-3769). NativeTabBarController lays it over the web
 // Budget screen while the switch is on, so the web view stays in the window.
 final class NativeBudgetViewController: UIHostingController<BudgetTabView> {
     private let model: BudgetViewModel
-    private var stateObserver: AnyCancellable?
     private var lifecycleObservers: [NSObjectProtocol] = []
-
-    // A tracking budget has no native screen yet: the web Budget screen shows
-    var onUseWebScreen: (() -> Void)?
 
     init(client: NativeBridgeClient) {
         model = BudgetViewModel(client: client)
         super.init(rootView: BudgetTabView(model: model))
-        stateObserver = model.$state.sink { [weak self] state in
-            if state == .useWebScreen { self?.onUseWebScreen?() }
-        }
     }
 
     @available(*, unavailable)
@@ -81,7 +73,7 @@ struct BudgetTabView: View {
 
     @ViewBuilder private var content: some View {
         switch model.state {
-        case .loading, .useWebScreen:
+        case .loading:
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         case .loaded(let month):
             BudgetMonthList(month: month, onEdit: { (editingMonth, editing) = (month.month, $0) })
@@ -160,6 +152,11 @@ private enum Words {
     static let editHint = NSLocalizedString("Edits the budgeted amount", comment: "Native Budget tab: VoiceOver hint on the budgeted amount")
     static let save = NSLocalizedString("Save", comment: "Native Budget tab: save an edited amount")
     static let cancel = NSLocalizedString("Cancel", comment: "Native Budget tab: close the edit sheet")
+    static let budgetedIncome = NSLocalizedString("Budgeted income", comment: "Native Budget tab: tracking budget summary")
+    static let income = NSLocalizedString("Income", comment: "Native Budget tab: tracking budget summary")
+    static let budgetedExpenses = NSLocalizedString("Budgeted expenses", comment: "Native Budget tab: tracking budget summary")
+    static let expenses = NSLocalizedString("Expenses", comment: "Native Budget tab: tracking budget summary")
+    static let saved = NSLocalizedString("Saved", comment: "Native Budget tab: tracking budget summary")
     static let overspent = NSLocalizedString("Overspent", comment: "Native Budget tab: a negative balance")
 }
 
@@ -194,6 +191,25 @@ private struct BudgetMonthList: View {
                     }
                 }
             }
+            // A tracking budget has no to-budget: its totals as loot-core computed them
+            if month.budgetType == .tracking {
+                Section {
+                    ForEach([
+                        (Words.budgetedIncome, month.totals.budgetedIncome), (Words.income, month.totals.income),
+                        (Words.budgetedExpenses, month.totals.budgeted), (Words.expenses, month.totals.spent),
+                        (Words.saved, month.totals.saved),
+                    ], id: \.0) { title, amount in
+                        if let amount {
+                            HStack {
+                                Text(title).font(title == Words.saved ? .headline : .body)
+                                Spacer()
+                                Text(format(amount)).monospacedDigit()
+                                    .foregroundColor(moneyColor(BudgetAmountFormat.tone(amount)))
+                            }
+                        }
+                    }
+                }
+            }
             ForEach(month.expenseGroups) { group in
                 groupSection(group)
             }
@@ -207,7 +223,8 @@ private struct BudgetMonthList: View {
     private func groupSection(_ group: BudgetMonth.Group) -> some View {
         Section(header: GroupHeader(group: group, format: format)) {
             ForEach(group.visibleCategories) { category in
-                CategoryRow(category: category, isIncome: group.isIncome, format: format, onEdit: onEdit)
+                CategoryRow(
+                    category: category, isIncome: group.isIncome, canEditIncome: month.budgetType == .tracking, format: format, onEdit: onEdit)
             }
         }
     }
@@ -238,6 +255,8 @@ private struct GroupHeader: View {
 private struct CategoryRow: View {
     let category: BudgetMonth.Category
     let isIncome: Bool
+    // A tracking budget holds budgeted income; an envelope budget does not
+    let canEditIncome: Bool
     let format: (Int?) -> String
     let onEdit: ((BudgetMonth.Category) -> Void)?
 
@@ -245,7 +264,7 @@ private struct CategoryRow: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(category.name)
             HStack(alignment: .top) {
-                if category.budgeted != nil && !isIncome, let onEdit {
+                if category.budgeted != nil && (!isIncome || canEditIncome), let onEdit {
                     // Tap the budgeted amount to type a new one
                     Button { onEdit(category) } label: { column(Words.budgeted, category.budgeted) }
                         .buttonStyle(.plain)

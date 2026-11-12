@@ -309,6 +309,27 @@ final class BudgetSaveTests: XCTestCase {
         XCTAssertEqual(writes, 0)
     }
 
+    // 4.1 (sc-3778): a tracking budget holds budgeted income, so there it is
+    // editable; the page bridge allows the same, and only for tracking
+    func testATrackingBudgetEditsAnIncomeCategoryThroughTheSameHandler() async throws {
+        var sent: [(String, String)] = []
+        let model = try await loadedModel(fixture: "budget-month-tracking") { name, args in
+            if name == "budget/budget-amount" { sent.append((name, args)) }
+        }
+        for id in ["rent", "salary"] {
+            let saved = await model.saveBudgeted(month: "2026-03", category: id, text: "125.00")
+            XCTAssertTrue(saved, id)
+        }
+        XCTAssertEqual(sent.count, 2)
+        XCTAssertTrue(sent[1].1.contains("\"category\":\"salary\""))
+        // A group, an unknown id and to-budget are still never sent
+        for id in ["bills", "income", "nope", "to-budget", ""] {
+            let saved = await model.saveBudgeted(month: "2026-03", category: id, text: "1")
+            XCTAssertFalse(saved, id)
+        }
+        XCTAssertEqual(sent.count, 2)
+    }
+
     func testNothingIsSentBeforeAMonthIsLoaded() async {
         var writes = 0
         let model = BudgetViewModel(client: NativeBridgeClient { _, _ in writes += 1; return "null" }, now: march9, calendar: utc)

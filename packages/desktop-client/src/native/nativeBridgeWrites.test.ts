@@ -4,6 +4,7 @@ import { createNativeBridge } from './nativeBridge';
 // "The native Budget screen's write handlers are allowlisted" (sc-3769)
 const snapshot = {
   month: '2026-03',
+  budgetType: 'envelope',
   groups: [
     {
       id: 'group-food',
@@ -14,14 +15,14 @@ const snapshot = {
   ],
 };
 
-function setup() {
+function setup(budgetType = 'envelope') {
   const send = vi.fn(async (name: string, args?: unknown) => {
     if (name === 'native/budget-month') {
       const { month } = args as { month: string };
       if (month !== '2026-03') {
         throw new Error(`native/budget-month: no budget for month ${month}`);
       }
-      return snapshot;
+      return { ...snapshot, budgetType };
     }
     // loot-core's write handlers resolve to undefined
     return undefined;
@@ -110,8 +111,8 @@ describe('budget/budget-amount through the page bridge', () => {
     ['an unknown category id', 'cat-nope'],
     ['a category group id', 'group-food'],
     ['to-budget', 'to-budget'],
-    // The native screen edits only expense categories, as Swift does
-    ['an income category', 'cat-salary'],
+    // An envelope budget has no income budgets to edit, as Swift does
+    ['an income category of an envelope budget', 'cat-salary'],
     ['a number', 7],
     ['missing', undefined],
   ])('refuses %s without writing', async (_label, category) => {
@@ -119,6 +120,33 @@ describe('budget/budget-amount through the page bridge', () => {
 
     await expect(
       bridge.call('budget/budget-amount', { ...valid, category }),
+    ).rejects.toThrow('category');
+    expect(writes()).toHaveLength(0);
+  });
+
+  // sc-3778: a tracking budget holds budgeted income; both layers allow it
+  // only there (Swift: BudgetViewModel.saveBudgeted)
+  it('writes an income category of a tracking budget', async () => {
+    const { bridge, writes } = setup('tracking');
+
+    await bridge.call('budget/budget-amount', {
+      ...valid,
+      category: 'cat-salary',
+    });
+
+    expect(writes()).toEqual([
+      ['budget/budget-amount', { ...valid, category: 'cat-salary' }],
+    ]);
+  });
+
+  it('still refuses a group id on a tracking budget', async () => {
+    const { bridge, writes } = setup('tracking');
+
+    await expect(
+      bridge.call('budget/budget-amount', {
+        ...valid,
+        category: 'group-income',
+      }),
     ).rejects.toThrow('category');
     expect(writes()).toHaveLength(0);
   });

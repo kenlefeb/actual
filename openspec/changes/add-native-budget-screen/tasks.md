@@ -30,8 +30,8 @@ Test-first: write the tests, run them and see them fail before writing the code.
 
 ## 4. Tracking budget mode (sc-3778)
 
-- [ ] 4.1 Add failing view-model tests on a tracking fixture: the tracking layout with no to-budget, the tracking totals, and a mode switch between two reads. Verify: they fail first.
-- [ ] 4.2 Implement the tracking layout, taking the layout from `budgetType`, and edit through `budget/budget-amount`. Verify: 4.1 passes.
+- [x] 4.1 Add failing view-model tests on a tracking fixture: the tracking layout with no to-budget, the tracking totals, and a mode switch between two reads. Verify: they fail first.
+- [x] 4.2 Implement the tracking layout, taking the layout from `budgetType`, and edit through `budget/budget-amount`. Verify: 4.1 passes.
 - [ ] 4.3 Compare a seeded tracking budget with the web screen, and edit an amount. Verify: the numbers are equal and the web screen shows the edit; record it on the story.
 
 ## 5. Move money (sc-3787)

@@ -94,7 +94,7 @@ On a tracking budget the native Budget tab SHALL show the tracking layout (to-bu
 - **THEN** it shows the layout of the type in the snapshot
 
 ### Requirement: Money is moved between categories and to-budget
-On an envelope month the native Budget tab SHALL offer a Move money sheet: pick a source and a destination (a category or to-budget), enter an amount and confirm. The native side SHALL call the allowlisted `budget/transfer-category` or `budget/transfer-available` handler and then re-read the month. A success SHALL give a haptic. The sheet SHALL NOT be offered on a tracking month.
+On an envelope month the native Budget tab SHALL offer a Move money sheet: pick a source and a destination (a category or to-budget), enter an amount and confirm. The native side SHALL call an allowlisted transfer handler, re-read the month, and give a haptic on success. The sheet SHALL prefill the source's balance, show "You can move up to <amount>", and accept no more; this intentionally differs from the web, which accepts any amount. It SHALL NOT be offered on a tracking month.
 
 #### Scenario: Move from to-budget to a category
 - **GIVEN** the native Budget tab on an envelope month with money in to-budget
@@ -105,6 +105,11 @@ On an envelope month the native Budget tab SHALL offer a Move money sheet: pick 
 - **GIVEN** the native Budget tab on an envelope month
 - **WHEN** the user moves an amount from one category to another and confirms
 - **THEN** both categories show the moved amount and equal the web screen's afterwards
+
+#### Scenario: The sheet shows the limit
+- **GIVEN** the Move money sheet opened for a source with a balance of 50.00
+- **WHEN** the sheet shows
+- **THEN** the amount is prefilled with 50.00, the sheet reads "You can move up to $50.00", and an amount above 50.00 cannot be confirmed
 
 #### Scenario: Tracking month
 - **GIVEN** the native Budget tab on a tracking budget

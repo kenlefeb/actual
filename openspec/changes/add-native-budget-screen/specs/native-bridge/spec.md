@@ -53,7 +53,7 @@ The bridge allowlist, on the Swift and the page side, SHALL also hold `budget/bu
 - **THEN** both the vitest contract test and the Swift decode test pass against the regenerated fixture, and fail against the old one
 
 ### Requirement: Bridge writes are validated before loot-core runs them
-The page side of the bridge SHALL validate every write call before it reaches loot-core and refuse an invalid one with an error result and no write. Swift SHALL build each write from a typed per-handler value and refuse an invalid one before the call. A write SHALL be refused when its amount is not a finite integer, its month is not a `YYYY-MM` that has a budget, or its category id is not a category in that month's snapshot (so a group id is refused too).
+The page and Swift SHALL each refuse an invalid write with an error result and no write, before loot-core runs it; Swift builds each write from a typed per-handler value. A write is invalid when its amount is not a finite integer, its month is not a `YYYY-MM` with a budget, or its category id is not a category in that month's snapshot (a group id included). The only exception is the literal `to-budget`, accepted as source or destination of `budget/transfer-category`.
 
 #### Scenario: Amount is not an integer
 - **GIVEN** the iOS app with a budget open
@@ -91,7 +91,12 @@ The page side of the bridge SHALL validate every write call before it reaches lo
 - **THEN** Swift refuses it before the call, without reaching the page
 
 ### Requirement: Transfers follow the move-money rules
-Before loot-core runs it, the bridge SHALL refuse `budget/transfer-category` and `budget/transfer-available` with an amount of 0 or less. It SHALL refuse `budget/transfer-category` with the same source and destination, or an income category as either end (as on the web form), or, on an envelope budget, an amount above the source's balance (to-budget as the source is limited by the month's to-budget). A refusal returns an error result and writes nothing.
+The page and Swift SHALL each refuse, with an error result and no write, a transfer with an amount of 0 or less; and a `budget/transfer-category` with the same source and destination, an income category as either end, or (envelope) an amount above the source's balance, where to-budget is limited by the month's to-budget. Refusing a move above the balance is intentional and stricter than the web.
+
+#### Scenario: To-budget as a source or destination
+- **GIVEN** an envelope budget with money in to-budget
+- **WHEN** native code sends `budget/transfer-category` with `to-budget` as the source or as the destination, and a valid amount
+- **THEN** the call is accepted and forwarded, and `to-budget` sent as a category id to `budget/budget-amount` or `budget/transfer-available` is still refused
 
 #### Scenario: Transfer to itself
 - **GIVEN** an envelope budget

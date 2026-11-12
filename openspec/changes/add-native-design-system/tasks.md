@@ -43,5 +43,5 @@ Test-first: write the tests, run them and see them fail before writing the code.
 
 ## 7. iPhone landscape keeps the phone layout (sc-3706)
 
-- [ ] 7.1 Add a failing test that the layout choice returns the phone layout in the iOS app on iPhone at landscape widths, and the wide layout on iPad and in a phone browser. Verify: the test fails.
-- [ ] 7.2 Implement the check beside the native-shell detection, so no wide-layout chrome (sidebar, privacy-mode top bar) shows on iPhone. Verify: the test passes, and rotating in the iOS Simulator keeps the screen and selected tab, with Schedules reachable from Settings in both orientations; screenshots are attached to the story.
+- [x] 7.1 Add a failing test that the layout choice returns the phone layout in the iOS app on iPhone at landscape widths, and the wide layout on iPad and in a phone browser. Verify: the test fails.
+- [x] 7.2 Implement the check beside the native-shell detection, so no wide-layout chrome (sidebar, privacy-mode top bar) shows on iPhone. Verify: the test passes, and rotating in the iOS Simulator keeps the screen and selected tab, with Schedules reachable from Settings in both orientations; screenshots are attached to the story.

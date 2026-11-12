@@ -36,6 +36,32 @@ final class PageOriginGuardTests: XCTestCase {
         XCTAssertFalse(accepts(port: 8443))
     }
 
+    func testAMixedCaseServerURLIsAccepted() {
+        let url = URL(string: "HTTPS://App.Example.COM")!
+        XCTAssertTrue(PageOriginGuard.accepts(isMainFrame: true, scheme: "https", host: "app.example.com", port: 0, serverURL: url))
+    }
+
+    func testAMixedCaseMessageOriginIsAccepted() {
+        XCTAssertTrue(accepts(scheme: "HTTPS", host: "APP.example.com"))
+    }
+
+    // A default-port message (port 0) matches a server URL that spells the default port out
+    func testDefaultPortMessageMatchesExplicitDefaultPortServer() {
+        let url = URL(string: "https://app.example.com:443")!
+        XCTAssertTrue(PageOriginGuard.accepts(isMainFrame: true, scheme: "https", host: "app.example.com", port: 0, serverURL: url))
+    }
+
+    func testDefaultPortMessageIsRejectedForANonDefaultPortServer() {
+        let url = URL(string: "https://app.example.com:8443")!
+        XCTAssertFalse(PageOriginGuard.accepts(isMainFrame: true, scheme: "https", host: "app.example.com", port: 0, serverURL: url))
+    }
+
+    func testHttpDefaultPortIs80() {
+        let url = URL(string: "http://app.example.com:80")!
+        XCTAssertTrue(PageOriginGuard.accepts(isMainFrame: true, scheme: "http", host: "app.example.com", port: 0, serverURL: url))
+        XCTAssertFalse(PageOriginGuard.accepts(isMainFrame: true, scheme: "http", host: "app.example.com", port: 443, serverURL: url))
+    }
+
     func testNoServerURLRejectsEverything() {
         XCTAssertFalse(PageOriginGuard.accepts(isMainFrame: true, scheme: "https", host: "app.example.com", port: 0, serverURL: nil))
     }

@@ -7,7 +7,15 @@ import Foundation
 // gives port 0 for a scheme's default port, as URL.port does when absent).
 public enum PageOriginGuard {
     public static func accepts(isMainFrame: Bool, scheme: String, host: String, port: Int, serverURL: URL?) -> Bool {
-        guard isMainFrame, let url = serverURL else { return false }
-        return scheme == url.scheme && host == url.host && port == (url.port ?? 0)
+        guard isMainFrame, let url = serverURL, let serverScheme = url.scheme?.lowercased() else { return false }
+        let messageScheme = scheme.lowercased()
+        return messageScheme == serverScheme
+            && host.lowercased() == url.host?.lowercased()
+            && effectivePort(port, scheme: messageScheme) == effectivePort(url.port ?? 0, scheme: serverScheme)
+    }
+
+    // Port 0 means the scheme's default, so compare effective ports.
+    private static func effectivePort(_ port: Int, scheme: String) -> Int {
+        port != 0 ? port : (scheme == "https" ? 443 : scheme == "http" ? 80 : 0)
     }
 }

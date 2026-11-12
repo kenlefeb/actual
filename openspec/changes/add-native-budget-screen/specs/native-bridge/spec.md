@@ -138,3 +138,52 @@ The page-origin guard of the bridge (sc-3697) SHALL apply to the write handler n
 - **GIVEN** the app's page in the main frame from the app server
 - **WHEN** it posts a valid write for an allowlisted handler
 - **THEN** the native side acts on it
+
+### Requirement: Swift calls into the page only while it is the app's own page
+Before every call into the page, read or write, bridge or native chrome, Swift SHALL check that the web view's main frame URL has the app server's scheme, host and port, through one shared checked path that every such call uses. If it does not, or the main frame has no URL, the call SHALL fail closed: it returns an error, and no handler name or argument reaches the page.
+
+#### Scenario: A write while a foreign page is loaded
+- **GIVEN** the web view's main frame shows a page on another host, such as a sign-in page
+- **WHEN** native code calls `budget/budget-amount`, `budget/transfer-category` or `budget/transfer-available`
+- **THEN** the call returns the origin error, the page is never called and receives no arguments, and no budget amount changes
+
+#### Scenario: A read while a foreign page is loaded
+- **GIVEN** the web view's main frame shows a page on another host
+- **WHEN** native code calls `native/budget-month` or `query`
+- **THEN** the call returns the origin error without calling the page, and the screen shows its error state, not data from that page
+
+#### Scenario: Same host on another scheme or port
+- **GIVEN** the main frame shows a page on the app server's host but on another scheme or port
+- **WHEN** native code makes any bridge call
+- **THEN** the call returns the origin error and the page is never called
+
+#### Scenario: No page loaded
+- **GIVEN** the main frame has no URL, or shows `about:blank`
+- **WHEN** native code makes any bridge call
+- **THEN** the call returns the origin error and the page is never called
+
+#### Scenario: A chrome call while a foreign page is loaded
+- **GIVEN** the main frame shows a page on another host
+- **WHEN** the native tab bar asks the page to navigate to a route
+- **THEN** the page is never called and receives no route
+
+#### Scenario: The app's own page
+- **GIVEN** the app's page in the main frame from the app server
+- **WHEN** native code calls `native/budget-month` or a valid allowlisted write
+- **THEN** the call reaches the page and returns loot-core's result, as before
+
+### Requirement: The origin is checked again where the call runs
+The script Swift runs in the page SHALL first compare the frame's `location.origin` with the app server's origin, and throw before it reads the arguments or calls any page function if they differ. Swift SHALL then return the origin error and discard any result. This covers a navigation that commits between Swift's check and the script.
+
+#### Scenario: The page navigates between the check and the script
+- **GIVEN** Swift's check passed, and the main frame then commits a page on another host before the script runs
+- **WHEN** the script runs in that page
+- **THEN** it throws before the arguments are read or any page function is called, and the call returns the origin error
+
+### Requirement: An origin refusal reveals nothing about the foreign page
+The origin error SHALL be one fixed error. Neither it nor any log line written for it SHALL contain any part of the foreign page's URL, host, path, query or title.
+
+#### Scenario: A refused call's error
+- **GIVEN** the main frame shows `https://login.example.com/authorize?state=abc`
+- **WHEN** a bridge call is refused
+- **THEN** the error and its log line are the same as for any other foreign page, and contain neither `login.example.com` nor `state=abc`

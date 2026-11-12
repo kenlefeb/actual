@@ -67,3 +67,12 @@ Test-first: write the tests, run them and see them fail before writing the code.
 - [ ] 9.1 Add a measurement test or script for the screen's load and scroll on the 300-category fixture. Verify: it runs and prints the median and p95 before any fix.
 - [ ] 9.2 Measure in the Simulator, then on Ken's iPhone with the hidden benchmark where it applies. Verify: the median and p95 are on the story and compared with 50 ms.
 - [ ] 9.3 Fix regressions (lazy lists, diffing, no per-category reads) until it meets the target; if it cannot, stop and report to the Director so ADR 11 is revisited. Verify: the numbers after the fix are on the story.
+
+## 10. Origin check before Swift calls into the page (sc-3859)
+
+- [ ] 10.1 Add failing Swift tests in `NativeBridgeCore` for one checked page-call path (for example `PageCall`, built on `PageOriginGuard`) with a fake web view: a main frame on another host, scheme or port, with no URL or `about:blank`, refuses every bridge read and write with the fixed origin error and never calls the fake; the app's own origin calls it once with the name and arguments. Verify: the tests fail first.
+- [ ] 10.2 Add a failing test that the origin error's description and log text are identical for two different foreign URLs and contain no part of either. Verify: it fails first.
+- [ ] 10.3 Add a failing test that the script the path runs checks `location.origin` before it reads the arguments or touches `window`, and that a thrown origin mismatch maps to the origin error with any result discarded. Verify: it fails first.
+- [ ] 10.4 Implement the path and route `NativeBridgePlugin.evaluate`, `NativeChromePlugin.callPage` and the benchmark harness through it, so no other `callAsyncJavaScript` or `evaluateJavaScript` remains. Verify: 10.1 to 10.3 pass and `swift test` is green.
+- [ ] 10.5 Extend `check-native-swift` (or add a test) to fail on any `callAsyncJavaScript` or `evaluateJavaScript` outside the checked path, with a failing fixture first. Verify: the check fails on the fixture and passes on the app.
+- [ ] 10.6 In the Simulator, load a foreign page in the main frame (for example the sign-in page), trigger a native Budget read and an edit, then return to the app's page and repeat. Verify: the first two fail with the origin error and nothing changes; the last two work; record it on the story.

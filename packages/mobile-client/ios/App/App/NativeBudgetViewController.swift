@@ -11,6 +11,7 @@ import UIKit
 final class NativeBudgetViewController: UIHostingController<BudgetTabView> {
     private let model: BudgetViewModel
     private var stateObserver: AnyCancellable?
+    private var lifecycleObservers: [NSObjectProtocol] = []
 
     // A tracking budget has no native screen yet: the web Budget screen shows
     var onUseWebScreen: (() -> Void)?
@@ -26,7 +27,10 @@ final class NativeBudgetViewController: UIHostingController<BudgetTabView> {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    // Until change events land (sc-3796), the tab re-reads each time it shows
+    // The page's change events (NativeBridgePlugin.onEvent) end here
+    func changeEventReceived() { model.changeEventReceived() }
+
+    // The tab also re-reads each time it shows
     func reload() {
         Task { await model.load() }
     }
@@ -37,7 +41,17 @@ final class NativeBudgetViewController: UIHostingController<BudgetTabView> {
         // modal, so VoiceOver skips that web view while this screen shows
         view.backgroundColor = .systemGroupedBackground
         view.accessibilityViewIsModal = true
+        let center = NotificationCenter.default
+        for (name, active) in [(UIApplication.didBecomeActiveNotification, true), (UIApplication.willResignActiveNotification, false)] {
+            lifecycleObservers.append(
+                center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                    guard let model = self?.model else { return }
+                    Task { await model.setSceneActive(active) }
+                })
+        }
     }
+
+    deinit { for observer in lifecycleObservers { NotificationCenter.default.removeObserver(observer) } }
 }
 
 struct BudgetTabView: View {
@@ -68,18 +82,28 @@ struct BudgetTabView: View {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         case .loaded(let month):
             BudgetMonthList(month: month, onEdit: { editing = $0 })
-        case .failed(let error):
-            VStack(spacing: 12) {
-                Text(verbatim: error.message).multilineTextAlignment(.center)
-                if error.canRetry {
-                    Button(NSLocalizedString("Retry", comment: "Native Budget tab: try loading again")) {
-                        Task { await model.load() }
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
+        case .stale(let month, let error):
+            // The last good numbers, dimmed, with the reason and a retry; not editable
+            VStack(spacing: 0) {
+                errorMessage(error).padding().background(Color(.secondarySystemGroupedBackground))
+                BudgetMonthList(month: month).opacity(0.5)
             }
-            .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .failed(let error):
+            errorMessage(error)
+                .padding()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private func errorMessage(_ error: BudgetLoadError) -> some View {
+        VStack(spacing: 12) {
+            Text(verbatim: error.message).multilineTextAlignment(.center)
+            if error.canRetry {
+                Button(NSLocalizedString("Retry", comment: "Native Budget tab: try loading again")) {
+                    Task { await model.load() }
+                }
+                .buttonStyle(.borderedProminent)
+            }
         }
     }
 
@@ -123,7 +147,7 @@ private func moneyColor(_ tone: BudgetAmountFormat.Tone) -> Color {
 
 private struct BudgetMonthList: View {
     let month: BudgetMonth
-    let onEdit: (BudgetMonth.Category) -> Void
+    var onEdit: ((BudgetMonth.Category) -> Void)?
 
     var body: some View {
         List {
@@ -182,13 +206,13 @@ private struct CategoryRow: View {
     let category: BudgetMonth.Category
     let isIncome: Bool
     let format: (Int?) -> String
-    let onEdit: (BudgetMonth.Category) -> Void
+    let onEdit: ((BudgetMonth.Category) -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(category.name)
             HStack(alignment: .top) {
-                if category.budgeted != nil && !isIncome {
+                if category.budgeted != nil && !isIncome, let onEdit {
                     // Tap the budgeted amount to type a new one
                     Button { onEdit(category) } label: { column(Words.budgeted, category.budgeted) }
                         .buttonStyle(.plain)

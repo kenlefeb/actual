@@ -57,6 +57,8 @@ public enum BudgetLoadState: Equatable {
     case loading
     case loaded(BudgetMonth)
     case failed(BudgetLoadError)
+    // A refresh failed: the last good numbers stay, dimmed, with a retry
+    case stale(BudgetMonth, BudgetLoadError)
     // Tracking budgets show the web Budget screen until sc-3778 builds them
     case useWebScreen
 }
@@ -71,12 +73,38 @@ public final class BudgetViewModel: ObservableObject {
     private let client: NativeBridgeClient
     private let now: () -> Date
     private let calendar: Calendar
+    // A suspended page does not answer, so nothing reads while inactive
+    private var isSceneActive = true
+    private var coalescer: ChangeCoalescer?
+    // Reads can overlap (an event while a load is in flight); only the newest counts
+    private var loadGeneration = 0
+    private var lastGood: BudgetMonth?
 
-    public init(client: NativeBridgeClient, now: @escaping () -> Date = Date.init, calendar: Calendar = .current) {
+    public init(
+        client: NativeBridgeClient, now: @escaping () -> Date = Date.init, calendar: Calendar = .current,
+        changeInterval: TimeInterval = 1.0 / 60
+    ) {
         self.client = client
         self.now = now
         self.calendar = calendar
         month = Self.currentMonth(now(), calendar: calendar)
+        coalescer = ChangeCoalescer(interval: changeInterval) { [weak self] in
+            guard let self, self.isSceneActive else { return }
+            Task { @MainActor in await self.load() }
+        }
+    }
+
+    // A `cells-changed` or `sync-event` from the page: one re-read per frame
+    public func changeEventReceived() {
+        guard isSceneActive else { return }
+        coalescer?.notify()
+    }
+
+    // Events during the background are dropped; the one read on returning covers them
+    public func setSceneActive(_ active: Bool) async {
+        guard active != isSceneActive else { return }
+        isSceneActive = active
+        if active { await load() }
     }
 
     // Also the retry action of the error state, and the reload each time the
@@ -84,12 +112,24 @@ public final class BudgetViewModel: ObservableObject {
     // showing last month after midnight.
     public func load() async {
         month = Self.currentMonth(now(), calendar: calendar)
-        if case .loaded = state {} else { state = .loading }
+        loadGeneration += 1
+        let generation = loadGeneration
+        if lastGood == nil { state = .loading }
         do {
             let result = try await client.budgetMonth(month)
+            guard generation == loadGeneration else { return }
+            lastGood = result.budgetType == .tracking ? nil : result
             state = result.budgetType == .tracking ? .useWebScreen : .loaded(result)
         } catch {
-            state = .failed(BudgetLoadError.from(error))
+            guard generation == loadGeneration else { return }
+            let loadError = BudgetLoadError.from(error)
+            // Keep the last good numbers, unless they are for another month
+            if let good = lastGood, good.month == month, loadError.canRetry {
+                state = .stale(good, loadError)
+            } else {
+                lastGood = nil
+                state = .failed(loadError)
+            }
         }
     }
 
@@ -121,11 +161,11 @@ public final class BudgetViewModel: ObservableObject {
             if case NativeBridgeError.timedOut = error { saveError = .timedOut } else { saveError = .failed }
             return false
         }
-        do {
-            let result = try await client.budgetMonth(snapshot.month)
-            state = result.budgetType == .tracking ? .useWebScreen : .loaded(result)
-        } catch {
-            saveError = .refreshFailed
+        // The same generation-counted read as a change event, so an older read cannot win
+        await load()
+        switch state {
+        case .stale, .failed: saveError = .refreshFailed
+        default: break
         }
         return true
     }

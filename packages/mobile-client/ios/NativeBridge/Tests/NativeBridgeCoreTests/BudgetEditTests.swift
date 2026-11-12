@@ -279,10 +279,11 @@ final class BudgetSaveTests: XCTestCase {
                 return json
             }, now: march9, calendar: utc)
         await model.load()
-        let before = model.state
+        guard case .loaded(let before) = model.state else { return XCTFail("expected loaded") }
         let saved = await model.saveBudgeted(category: "rent", text: "125.00")
         XCTAssertTrue(saved)
-        XCTAssertEqual(model.state, before)
+        // The re-read is the generation-counted load: the old numbers stay, dimmed, with a retry
+        XCTAssertEqual(model.state, .stale(before, .other))
         XCTAssertEqual(model.saveError, .refreshFailed)
         XCTAssertEqual(writes, 1)
     }

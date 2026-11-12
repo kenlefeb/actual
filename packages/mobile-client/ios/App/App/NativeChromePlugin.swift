@@ -27,7 +27,7 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
 
     public func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
         // Only the app's own page: sign-in pages load in this web view too
-        guard message.frameInfo.isMainFrame, isAppOrigin(message.frameInfo.securityOrigin),
+        guard isFromAppPage(message),
               let body = message.body as? [String: Any], let type = body["type"] as? String
         else { return }
         switch type {
@@ -41,6 +41,11 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
         default:
             break
         }
+    }
+
+    private func isFromAppPage(_ message: WKScriptMessage) -> Bool {
+        let origin = message.frameInfo.securityOrigin
+        return PageOriginGuard.accepts(isMainFrame: message.frameInfo.isMainFrame, scheme: origin.protocol, host: origin.host, port: origin.port, serverURL: bridge?.config.serverURL)
     }
 
     func navigate(to path: String) {
@@ -59,10 +64,5 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
         webView.callAsyncJavaScript(script, arguments: arguments, in: nil, in: .page) { result in
             if case .failure(let error) = result { CAPLog.print("NativeChrome: \(error.localizedDescription)") }
         }
-    }
-
-    private func isAppOrigin(_ origin: WKSecurityOrigin) -> Bool {
-        guard let url = bridge?.config.serverURL else { return false }
-        return origin.protocol == url.scheme && origin.host == url.host && (url.port ?? 0) == origin.port
     }
 }

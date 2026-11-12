@@ -1,6 +1,8 @@
 {
   "month": "2026-03",
   "budgetType": "envelope",
+  "currencyCode": "",
+  "currencyDecimalPlaces": 2,
   "totals": {
     "budgeted": -160000,
     "spent": -120000,

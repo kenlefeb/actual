@@ -27,6 +27,10 @@
 		FB3514000000000000000102 /* NativeTabBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3514000000000000000002 /* NativeTabBarController.swift */; };
 		FB3514000000000000000103 /* NativeTabRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3514000000000000000003 /* NativeTabRouter.swift */; };
 		FB3697000000000000000101 /* PageOriginGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3697000000000000000001 /* PageOriginGuard.swift */; };
+		FB3751000000000000000101 /* BudgetViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3751000000000000000001 /* BudgetViewModel.swift */; };
+		FB3751000000000000000102 /* NativeScreenSwitch.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3751000000000000000002 /* NativeScreenSwitch.swift */; };
+		FB3751000000000000000103 /* BudgetAmountFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3751000000000000000003 /* BudgetAmountFormat.swift */; };
+		FB3751000000000000000104 /* NativeBudgetViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3751000000000000000004 /* NativeBudgetViewController.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -54,6 +58,10 @@
 		FB3514000000000000000002 /* NativeTabBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeTabBarController.swift; sourceTree = "<group>"; };
 		FB3514000000000000000003 /* NativeTabRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeTabRouter.swift; sourceTree = "<group>"; };
 		FB3697000000000000000001 /* PageOriginGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageOriginGuard.swift; sourceTree = "<group>"; };
+		FB3751000000000000000001 /* BudgetViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetViewModel.swift; sourceTree = "<group>"; };
+		FB3751000000000000000002 /* NativeScreenSwitch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeScreenSwitch.swift; sourceTree = "<group>"; };
+		FB3751000000000000000003 /* BudgetAmountFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetAmountFormat.swift; sourceTree = "<group>"; };
+		FB3751000000000000000004 /* NativeBudgetViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBudgetViewController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -105,6 +113,7 @@
 				FB3584000000000000000003 /* NativeBridgeBenchmarkHarness.swift */,
 				FB3584000000000000000010 /* NativeBridgeBenchmarkTrigger.swift */,
 				FB3514000000000000000001 /* NativeChromePlugin.swift */,
+				FB3751000000000000000004 /* NativeBudgetViewController.swift */,
 				FB3514000000000000000002 /* NativeTabBarController.swift */,
 				5C3E1A012EBC000100A1B2C3 /* SceneDelegate.swift */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
@@ -134,6 +143,9 @@
 				FB3584000000000000000011 /* NativeBridgeBenchmark.swift */,
 				FB3514000000000000000003 /* NativeTabRouter.swift */,
 				FB3697000000000000000001 /* PageOriginGuard.swift */,
+				FB3751000000000000000001 /* BudgetViewModel.swift */,
+				FB3751000000000000000002 /* NativeScreenSwitch.swift */,
+				FB3751000000000000000003 /* BudgetAmountFormat.swift */,
 			);
 			name = NativeBridgeCore;
 			path = ../NativeBridge/Sources/NativeBridgeCore;
@@ -267,6 +279,10 @@
 				FB3514000000000000000102 /* NativeTabBarController.swift in Sources */,
 				FB3514000000000000000103 /* NativeTabRouter.swift in Sources */,
 				FB3697000000000000000101 /* PageOriginGuard.swift in Sources */,
+				FB3751000000000000000101 /* BudgetViewModel.swift in Sources */,
+				FB3751000000000000000102 /* NativeScreenSwitch.swift in Sources */,
+				FB3751000000000000000103 /* BudgetAmountFormat.swift in Sources */,
+				FB3751000000000000000104 /* NativeBudgetViewController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

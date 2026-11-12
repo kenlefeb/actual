@@ -18,11 +18,17 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
     // The path, and whether the tab bar shows (not on a pushed form or sheet)
     var onRoute: ((String, Bool) -> Void)?
     var onClosed: (() -> Void)?
+    // A per-screen switch changed in Settings (sc-3751)
+    var onNativeScreenChanged: ((NativeTab) -> Void)?
     private let haptics = UIImpactFeedbackGenerator(style: .light)
 
     // Runs before the page loads, so the page sees the handler at startup
     override public func load() {
-        bridge?.webView?.configuration.userContentController.add(self, name: "actualNativeChrome")
+        guard let controller = bridge?.webView?.configuration.userContentController else { return }
+        controller.add(self, name: "actualNativeChrome")
+        // Which native screens are on, for the Settings switch (sc-3751)
+        let screens = NativeScreenSwitch.nativeTabs.map { "\"\($0.rawValue)\": \(NativeScreenSwitch.screen(for: $0) == .native)" }
+        controller.addUserScript(WKUserScript(source: "window.__actualNativeScreens = {\(screens.joined(separator: ", "))};", injectionTime: .atDocumentStart, forMainFrameOnly: true))
     }
 
     public func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -35,6 +41,13 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
             if let path = body["path"] as? String { onRoute?(path, body["tabBar"] as? Bool ?? true) }
         case "closed":
             onClosed?()
+        case "nativeScreen":
+            // Only a tab that has a native screen can be switched
+            if let name = body["screen"] as? String, let on = body["on"] as? Bool,
+               let tab = NativeTab(rawValue: name), NativeScreenSwitch.nativeTabs.contains(tab) {
+                UserDefaults.standard.set(on, forKey: NativeScreenSwitch.key(for: tab))
+                onNativeScreenChanged?(tab)
+            }
         case "haptic":
             // Follows the system's haptics setting
             haptics.impactOccurred()

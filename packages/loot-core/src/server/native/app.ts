@@ -5,7 +5,9 @@
 import { createApp } from '#server/app';
 import { aqlQuery } from '#server/aql';
 import { getBudgetType } from '#server/budget/base';
+import * as db from '#server/db';
 import * as sheet from '#server/sheet';
+import { getDecimalPlaces } from '#shared/currencies';
 import * as monthUtils from '#shared/months';
 import { q } from '#shared/query';
 import type { CategoryEntity, CategoryGroupEntity } from '#types/models';
@@ -37,6 +39,9 @@ export type NativeBudgetMonthGroup = {
 export type NativeBudgetMonth = {
   month: string;
   budgetType: 'envelope' | 'tracking';
+  // From the defaultCurrencyCode preference; '' (none) formats with 2 places
+  currencyCode: string;
+  currencyDecimalPlaces: number;
   totals: {
     budgeted: Amount;
     spent: Amount;
@@ -86,9 +91,17 @@ async function budgetMonth({
     q('category_groups').select('*'),
   )) as { data: CategoryGroupEntity[] };
 
+  const currency = await db.first<{ value: string | null }>(
+    'SELECT value FROM preferences WHERE id = ?',
+    ['defaultCurrencyCode'],
+  );
+  const currencyCode = currency?.value ?? '';
+
   return {
     month,
     budgetType: isEnvelope ? 'envelope' : 'tracking',
+    currencyCode,
+    currencyDecimalPlaces: getDecimalPlaces(currencyCode),
     totals: {
       budgeted: amount('total-budgeted'),
       spent: amount('total-spent'),

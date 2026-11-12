@@ -1,6 +1,8 @@
 {
   "month": "2026-03",
   "budgetType": "tracking",
+  "currencyCode": "",
+  "currencyDecimalPlaces": 2,
   "totals": {
     "budgeted": 150000,
     "spent": -120000,

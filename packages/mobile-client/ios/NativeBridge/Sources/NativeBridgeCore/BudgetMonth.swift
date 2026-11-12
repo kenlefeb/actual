@@ -44,6 +44,9 @@ public struct BudgetMonth: Codable, Equatable {
 
     public let month: String
     public let budgetType: BudgetType
+    // The budget's currency; '' is none (2 decimal places)
+    public let currencyCode: String
+    public let currencyDecimalPlaces: Int
     public let totals: Totals
     public let groups: [Group]
 }

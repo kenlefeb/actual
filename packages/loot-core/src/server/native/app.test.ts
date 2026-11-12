@@ -91,6 +91,21 @@ describe('native/budget-month', () => {
     );
   });
 
+  it('carries the budget currency code and decimal places', async () => {
+    await createBudget(['2026-02', '2026-03']);
+    await db.insert('preferences', { id: 'defaultCurrencyCode', value: 'JPY' });
+    const result = await budgetMonth('2026-03');
+    expect(result.currencyCode).toBe('JPY');
+    expect(result.currencyDecimalPlaces).toBe(0);
+  });
+
+  it('uses the web default when no currency is set', async () => {
+    await createBudget(['2026-02', '2026-03']);
+    const result = await budgetMonth('2026-03');
+    expect(result.currencyCode).toBe('');
+    expect(result.currencyDecimalPlaces).toBe(2);
+  });
+
   it('refuses a month outside the budget', async () => {
     await createBudget(['2026-02', '2026-03']);
     await expect(budgetMonth('1999-01')).rejects.toThrow(/1999-01/);

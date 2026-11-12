@@ -37,6 +37,7 @@ import { ExperimentalFeatures } from './Experimental';
 import { ExportBudget } from './Export';
 import { FormatSettings } from './Format';
 import { LanguageSettings } from './LanguageSettings';
+import { NativeScreens } from './NativeScreens';
 import { RepairTransactions } from './RepairTransactions';
 import { ResetCache, ResetSync } from './Reset';
 import { SettingsBackButton } from './SettingsBackButton';
@@ -288,6 +289,7 @@ export function GeneralSettings() {
       <FormatSettings />
       {isCurrencyExperimentalEnabled && <CurrencySettings />}
       <LanguageSettings />
+      <NativeScreens />
       <SettingsGroup title={t('Budget')}>
         <BudgetTypeSettings />
       </SettingsGroup>

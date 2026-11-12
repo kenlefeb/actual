@@ -23,7 +23,8 @@ function setup() {
       }
       return snapshot;
     }
-    return null;
+    // loot-core's write handlers resolve to undefined
+    return undefined;
   });
   const bridge = createNativeBridge({
     send,
@@ -44,6 +45,15 @@ describe('budget/budget-amount through the page bridge', () => {
     await bridge.call('budget/budget-amount', { ...valid, extra: 'x' });
 
     expect(writes()).toEqual([['budget/budget-amount', valid]]);
+  });
+
+  // Swift needs a JSON string back; JSON.stringify(undefined) is not one
+  it('answers a write that returns nothing with the JSON string null', async () => {
+    const { bridge } = setup();
+
+    await expect(bridge.call('budget/budget-amount', valid)).resolves.toBe(
+      'null',
+    );
   });
 
   it('accepts zero and a negative integer amount', async () => {

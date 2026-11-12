@@ -82,7 +82,8 @@ export function createNativeBridge({
       if (name === 'budget/budget-amount') {
         args = await validateBudgetAmount(forward, args);
       }
-      return JSON.stringify(await forward(name, args));
+      // A write resolves to undefined, which JSON.stringify does not make a string
+      return JSON.stringify((await forward(name, args)) ?? null);
     },
   };
 }

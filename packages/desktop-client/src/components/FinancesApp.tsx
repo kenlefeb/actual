@@ -253,10 +253,13 @@ export function FinancesApp() {
                   <Titlebar
                     style={{
                       WebkitAppRegion: 'drag',
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      right: 0,
+                      // fork: sc-3554. In the flow, not absolute, so when the
+                      // titlebar wraps (iPad portrait) it pushes the page down
+                      // instead of overlapping it. The -36 keeps the one-row
+                      // overlap pages already leave room for.
+                      position: 'relative',
+                      flexShrink: 0,
+                      marginBottom: -36,
                       zIndex: 1000,
                     }}
                   />

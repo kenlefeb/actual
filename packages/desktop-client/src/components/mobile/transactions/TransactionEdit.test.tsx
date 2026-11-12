@@ -1,3 +1,4 @@
+import { Trans } from 'react-i18next';
 import { MemoryRouter, Route, Routes } from 'react-router';
 
 import {
@@ -9,11 +10,12 @@ import {
   within,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTestAppStore, resetTestProviders, TestProviders } from '#mocks';
 import { initServer } from '#mocks/connection';
 import * as modalsSlice from '#modals/modalsSlice';
+import { rememberNativeScreen } from '#native/nativeChrome';
 
 import { TransactionEdit } from './TransactionEdit';
 
@@ -797,5 +799,123 @@ describe('Phone transaction edit page', () => {
         'row note',
       );
     });
+  });
+});
+// native-appearance: "Back goes up one level in the iOS app" (sc-3736)
+
+describe('Phone transaction edit page: leaving it', () => {
+  function renderWithDestinations(path: string) {
+    return render(
+      <TestProviders store={createTestAppStore()}>
+        <MemoryRouter initialEntries={[path]}>
+          <Routes>
+            <Route
+              path="/transactions/:transactionId"
+              element={<TransactionEdit />}
+            />
+            <Route
+              path="/accounts/:id"
+              element={
+                <div>
+                  <Trans>Account page</Trans>
+                </div>
+              }
+            />
+            <Route path="/categories/:id" element={<div>Category page</div>} />
+            <Route path="/reports/:id" element={<div>Reports page</div>} />
+            <Route path="/accounts" element={<div>Accounts list</div>} />
+          </Routes>
+        </MemoryRouter>
+      </TestProviders>,
+    );
+  }
+
+  const back = async () =>
+    userEvent.click(await screen.findByRole('button', { name: 'Back' }));
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    resetTestProviders();
+    state.subtransactions = undefined;
+    state.notes = '';
+    state.cloudFileId = 'cloud-file';
+    window.innerWidth = 1024;
+    initServer({
+      'transaction-attachment-check': () => ({ ok: true }),
+      'transactions-batch-update': () => ({ added: [], updated: [] }),
+    } as Parameters<typeof initServer>[0]);
+    (window as { webkit?: unknown }).webkit = {
+      messageHandlers: { actualNativeChrome: { postMessage: vi.fn() } },
+    };
+  });
+
+  afterEach(() => {
+    delete (window as { webkit?: unknown }).webkit;
+    rememberNativeScreen(null);
+  });
+
+  it('Back returns to the account register it was opened from', async () => {
+    rememberNativeScreen('/accounts/vanguard');
+    renderWithDestinations('/transactions/t1');
+    await back();
+    expect(await screen.findByText('Account page')).toBeVisible();
+  });
+
+  it('Back returns to the category on the Budget tab', async () => {
+    rememberNativeScreen('/categories/groceries');
+    renderWithDestinations('/transactions/t1');
+    await back();
+    expect(await screen.findByText('Category page')).toBeVisible();
+  });
+
+  it('Back from a new transaction returns to the screen the Add tab was used on', async () => {
+    rememberNativeScreen('/reports/d1');
+    renderWithDestinations('/transactions/new?account=Vanguard');
+    await back();
+    expect(await screen.findByText('Reports page')).toBeVisible();
+  });
+
+  it("Back after a deep link goes to the transaction's account", async () => {
+    rememberNativeScreen(null);
+    renderWithDestinations('/transactions/t1');
+    await back();
+    expect(await screen.findByText('Account page')).toBeVisible();
+  });
+
+  it('Back with nothing known about the transaction goes to the accounts list', async () => {
+    rememberNativeScreen(null);
+    renderWithDestinations('/transactions/new');
+    await back();
+    expect(await screen.findByText('Accounts list')).toBeVisible();
+  });
+
+  it('Add returns to the category it was opened from', async () => {
+    rememberNativeScreen('/categories/groceries');
+    const { container } = renderWithDestinations(
+      '/transactions/new?account=Vanguard',
+    );
+    // As in the haptic test, a held document leaves the amount field
+    await pickPdf(container);
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Add transaction' }),
+    );
+    expect(await screen.findByText('Category page')).toBeVisible();
+  });
+
+  it('Delete returns to the account register it was opened from', async () => {
+    const pushModal = vi.spyOn(modalsSlice, 'pushModal');
+    rememberNativeScreen('/accounts/vanguard');
+    renderWithDestinations('/transactions/t1');
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Delete transaction' }),
+    );
+    const confirm = pushModal.mock.calls
+      .map(c => c[0].modal)
+      .find(m => m.name === 'confirm-delete') as Extract<
+      modalsSlice.Modal,
+      { name: 'confirm-delete' }
+    >;
+    await act(async () => confirm.options.onConfirm?.());
+    expect(await screen.findByText('Account page')).toBeVisible();
   });
 });

@@ -96,32 +96,48 @@ export function installNativeChrome(
 }
 
 const TAB_ROOTS = ['/budget', '/accounts', '/reports', '/settings'];
-// Settings sections: the list's parent is Settings, a detail's parent the list
-const SETTINGS_LISTS = [
-  '/schedules',
-  '/payees',
-  '/rules',
-  '/tags',
-  '/bank-sync',
-  '/business-calendars',
-  '/notifications',
-];
+// Settings sections and the list screen their details go back to; the list's
+// own parent is Settings
+const SETTINGS_LISTS: Record<string, string> = {
+  '/schedules': '/schedules',
+  '/business-calendars': '/business-calendars',
+  '/notifications': '/notifications',
+  '/payees': '/settings/payees',
+  '/rules': '/settings/rules',
+  '/tags': '/settings/tags',
+  '/bank-sync': '/settings/bank-sync',
+};
 const DETAIL_PARENTS: Record<string, string> = {
   '/paychecks': '/schedules',
   '/categories': '/budget',
-  '/transactions': '/accounts',
 };
 
+// The last screen shown that was not a transaction page: where a transaction
+// opened from (an account register, a category, the Add tab) returns to
+let lastScreen: string | null = null;
+export function rememberNativeScreen(path: string | null) {
+  // null forgets it, as after a relaunch
+  if (path == null || !path.startsWith('/transactions/')) lastScreen = path;
+}
+
 // Fork-only (sc-3736). The fixed parent screen the iOS app's Back goes to, or
-// null on a tab root. Never history, never another tab.
-export function nativeParentPath(path: string): string | null {
+// null on a tab root or a screen with no mapped parent (Back is hidden).
+// Never history, never another tab. `account` is the fallback for a
+// transaction with no remembered screen (deep link or relaunch).
+export function nativeParentPath(
+  path: string,
+  account?: string | null,
+): string | null {
   const segments = path.split('/').filter(Boolean);
   const root = `/${segments[0] ?? ''}`;
   if (TAB_ROOTS.includes(root)) return segments.length === 1 ? null : root;
-  if (SETTINGS_LISTS.includes(root)) {
-    return segments.length === 1 ? '/settings' : root;
+  if (root in SETTINGS_LISTS) {
+    return segments.length === 1 ? '/settings' : SETTINGS_LISTS[root];
   }
-  return DETAIL_PARENTS[root] ?? '/budget';
+  if (root === '/transactions') {
+    return lastScreen ?? (account ? `/accounts/${account}` : '/accounts');
+  }
+  return DETAIL_PARENTS[root] ?? null;
 }
 
 // The budget closed: hide the tab bar until a budget is open again

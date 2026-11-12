@@ -151,9 +151,9 @@ describe('nativeParentPath', () => {
     ['/schedules', '/settings'],
     ['/business-calendars', '/settings'],
     ['/business-calendars/b1', '/business-calendars'],
-    ['/payees/p1', '/payees'],
-    ['/rules/r1', '/rules'],
-    ['/bank-sync/account/a1/edit', '/bank-sync'],
+    ['/payees/p1', '/settings/payees'],
+    ['/rules/r1', '/settings/rules'],
+    ['/bank-sync/account/a1/edit', '/settings/bank-sync'],
     ['/settings/general', '/settings'],
     ['/reports/d1', '/reports'],
     ['/notifications', '/settings'],
@@ -165,5 +165,37 @@ describe('nativeParentPath', () => {
     for (const root of ['/budget', '/accounts', '/reports', '/settings/']) {
       expect(nativeParentPath(root)).toBeNull();
     }
+  });
+
+  it('has no parent for an unmapped screen, so Back is hidden', () => {
+    expect(nativeParentPath('/something-else/1')).toBeNull();
+  });
+
+  describe('a transaction page', () => {
+    // The remembered screen is module state, so each case starts fresh
+    async function load() {
+      vi.resetModules();
+      return import('./nativeChrome');
+    }
+
+    it('goes back to the account when there is nothing remembered (deep link)', async () => {
+      const chrome = await load();
+      expect(chrome.nativeParentPath('/transactions/t1', 'acct')).toBe(
+        '/accounts/acct',
+      );
+      expect(chrome.nativeParentPath('/transactions/new')).toBe('/accounts');
+    });
+
+    it.each([
+      ['/accounts/acct'],
+      ['/categories/c1'],
+      ['/reports/d1'],
+      ['/settings'],
+    ])('goes back to %s, the screen it was opened from', async from => {
+      const chrome = await load();
+      chrome.rememberNativeScreen(from);
+      chrome.rememberNativeScreen('/transactions/t1');
+      expect(chrome.nativeParentPath('/transactions/t1', 'acct')).toBe(from);
+    });
   });
 });

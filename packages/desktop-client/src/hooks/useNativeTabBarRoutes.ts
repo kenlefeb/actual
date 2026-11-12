@@ -6,6 +6,7 @@ import {
   installNativeChrome,
   postNativeClosed,
   postNativeRoute,
+  rememberNativeScreen,
   showsNativeTabBar,
 } from '#native/nativeChrome';
 import { useSelector } from '#redux';
@@ -18,6 +19,7 @@ export function useNativeTabBarRoutes() {
   const { pathname } = useLocation();
   const hasSheet = useSelector(state => state.modals.modalStack.length > 0);
   const tabBar = showsNativeTabBar(pathname, hasSheet);
+  rememberNativeScreen(pathname);
 
   useEffect(
     () =>

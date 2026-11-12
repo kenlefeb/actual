@@ -24,11 +24,6 @@ The iOS app SHALL show the native Budget tab only while a per-screen switch is o
 - **WHEN** the user opens the Budget tab
 - **THEN** the web Budget screen is shown, and Settings offers the switch
 
-#### Scenario: Tracking budget before tracking support lands
-- **GIVEN** the switch is on and the open budget is a tracking budget, before the tracking requirement below is built
-- **WHEN** the user opens the Budget tab
-- **THEN** the web Budget screen is shown (the fallback), not a blank or an error
-
 #### Scenario: The read times out
 - **GIVEN** the switch is on and the engine does not answer
 - **WHEN** the tab loads its month
@@ -85,10 +80,20 @@ On a tracking budget the native Budget tab SHALL show the tracking layout (to-bu
 - **WHEN** the user opens the Budget tab
 - **THEN** the tab shows the tracking layout, with no to-budget, and its numbers equal the web screen's for the same month
 
+#### Scenario: Tracking summary
+- **GIVEN** the native Budget tab on a tracking month
+- **WHEN** the month loads
+- **THEN** a summary shows loot-core's budgeted income, income, budgeted expenses, expenses and saved, and no to-budget row
+
 #### Scenario: Edit on a tracking budget
 - **GIVEN** the native Budget tab on a tracking budget
 - **WHEN** the user saves a new budgeted amount
 - **THEN** the tab re-reads the month, its numbers equal the web screen's, and the web screen shows the edit
+
+#### Scenario: Edit budgeted income on a tracking budget
+- **GIVEN** the native Budget tab on a tracking month with an income category
+- **WHEN** the user saves a new budgeted amount for that income category
+- **THEN** the amount is written through `budget/budget-amount`, and on an envelope month income rows offer no edit
 
 #### Scenario: A budget switched between modes
 - **GIVEN** a budget switched from envelope to tracking, or back, on the web

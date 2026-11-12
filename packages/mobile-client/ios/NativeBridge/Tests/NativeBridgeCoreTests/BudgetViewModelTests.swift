@@ -36,6 +36,7 @@ private func client(returning json: String, timeout: TimeInterval = 1) -> Native
 }
 
 private final class Counter { var count = 0 }
+private final class Gate { var continuation: CheckedContinuation<Void, Never>? }
 
 @MainActor
 final class BudgetViewModelTests: XCTestCase {
@@ -195,8 +196,9 @@ final class BudgetViewModelTests: XCTestCase {
         XCTAssertEqual(reads.count, 2)
     }
 
-    // 6.2: a refresh goes through the client, so the client timeout applies
-    func testARefreshThatTimesOutShowsTheTimeoutErrorWithRetry() async throws {
+    // 6.2 and the design: a refresh that times out keeps the last good numbers
+    // (the view dims them and offers a retry) instead of replacing them
+    func testARefreshThatTimesOutKeepsTheLastGoodNumbers() async throws {
         let json = try fixtureJSON("budget-month-envelope")
         var hang = false
         let model = BudgetViewModel(
@@ -205,11 +207,68 @@ final class BudgetViewModelTests: XCTestCase {
                 return json
             }, now: march9, calendar: utc, changeInterval: 0.01)
         await model.load()
+        guard case .loaded(let good) = model.state else { return XCTFail("expected loaded, got \(model.state)") }
         hang = true
         model.changeEventReceived()
         try await Task.sleep(nanoseconds: 400_000_000)
-        XCTAssertEqual(model.state, .failed(.timedOut))
+        XCTAssertEqual(model.state, .stale(good, .timedOut))
         XCTAssertTrue(BudgetLoadError.timedOut.canRetry)
+        // The retry brings the numbers back
+        hang = false
+        await model.load()
+        XCTAssertEqual(model.state, .loaded(good))
+    }
+
+    func testATimeoutWithNothingLoadedYetShowsTheErrorView() async {
+        let model = BudgetViewModel(
+            client: NativeBridgeClient(timeout: 0.1) { _, _ in
+                await withCheckedContinuation { (_: CheckedContinuation<Void, Never>) in }
+                return ""
+            }, now: march9, calendar: utc)
+        await model.load()
+        XCTAssertEqual(model.state, .failed(.timedOut))
+    }
+
+    // Numbers for last month must not stay under the new month's title
+    func testAFailureAfterTheMonthRolledOverDoesNotKeepLastMonthsNumbers() async throws {
+        let json = try fixtureJSON("budget-month-envelope")
+        var fail = false
+        var now = day(2026, 3, 31)
+        let model = BudgetViewModel(
+            client: NativeBridgeClient { _, _ in
+                if fail { throw NativeBridgeError.timedOut("native/budget-month") }
+                return json
+            }, now: { now() }, calendar: utc)
+        await model.load()
+        fail = true
+        now = day(2026, 4, 1)
+        await model.load()
+        XCTAssertEqual(model.state, .failed(.timedOut))
+    }
+
+    // Two reads can overlap (an event while a load is in flight); the older
+    // answer must not overwrite the newer one
+    func testAnOlderReadFinishingLastDoesNotOverwriteANewerOne() async throws {
+        let older = try fixtureJSON("budget-month-envelope")
+        let newer = try fixtureJSON("budget-month-envelope-jpy")
+        let gate = Gate()
+        var calls = 0
+        let model = BudgetViewModel(
+            client: NativeBridgeClient(timeout: 5) { _, _ in
+                calls += 1
+                if calls == 1 {
+                    await withCheckedContinuation { gate.continuation = $0 }
+                    return older
+                }
+                return newer
+            }, now: march9, calendar: utc)
+        let first = Task { await model.load() }
+        while gate.continuation == nil { await Task.yield() }
+        await model.load()
+        gate.continuation?.resume()
+        await first.value
+        guard case .loaded(let shown) = model.state else { return XCTFail("expected loaded, got \(model.state)") }
+        XCTAssertEqual(shown.currencyCode, "JPY")
     }
 
     func testCurrentMonthIsYearDashMonth() {

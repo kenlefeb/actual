@@ -36,6 +36,8 @@ public enum BudgetLoadState: Equatable {
     case loading
     case loaded(BudgetMonth)
     case failed(BudgetLoadError)
+    // A refresh failed: the last good numbers stay, dimmed, with a retry
+    case stale(BudgetMonth, BudgetLoadError)
     // Tracking budgets show the web Budget screen until sc-3778 builds them
     case useWebScreen
 }
@@ -51,6 +53,9 @@ public final class BudgetViewModel: ObservableObject {
     // A suspended page does not answer, so nothing reads while inactive
     private var isSceneActive = true
     private var coalescer: ChangeCoalescer?
+    // Reads can overlap (an event while a load is in flight); only the newest counts
+    private var loadGeneration = 0
+    private var lastGood: BudgetMonth?
 
     public init(
         client: NativeBridgeClient, now: @escaping () -> Date = Date.init, calendar: Calendar = .current,
@@ -84,12 +89,24 @@ public final class BudgetViewModel: ObservableObject {
     // showing last month after midnight.
     public func load() async {
         month = Self.currentMonth(now(), calendar: calendar)
-        if case .loaded = state {} else { state = .loading }
+        loadGeneration += 1
+        let generation = loadGeneration
+        if lastGood == nil { state = .loading }
         do {
             let result = try await client.budgetMonth(month)
+            guard generation == loadGeneration else { return }
+            lastGood = result.budgetType == .tracking ? nil : result
             state = result.budgetType == .tracking ? .useWebScreen : .loaded(result)
         } catch {
-            state = .failed(BudgetLoadError.from(error))
+            guard generation == loadGeneration else { return }
+            let loadError = BudgetLoadError.from(error)
+            // Keep the last good numbers, unless they are for another month
+            if let good = lastGood, good.month == month, loadError.canRetry {
+                state = .stale(good, loadError)
+            } else {
+                lastGood = nil
+                state = .failed(loadError)
+            }
         }
     }
 

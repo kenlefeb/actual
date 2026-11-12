@@ -71,18 +71,28 @@ struct BudgetTabView: View {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         case .loaded(let month):
             BudgetMonthList(month: month)
-        case .failed(let error):
-            VStack(spacing: 12) {
-                Text(verbatim: error.message).multilineTextAlignment(.center)
-                if error.canRetry {
-                    Button(NSLocalizedString("Retry", comment: "Native Budget tab: try loading again")) {
-                        Task { await model.load() }
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
+        case .stale(let month, let error):
+            // The last good numbers, dimmed, with the reason and a retry
+            VStack(spacing: 0) {
+                errorMessage(error).padding().background(Color(.secondarySystemGroupedBackground))
+                BudgetMonthList(month: month).opacity(0.5)
             }
-            .padding()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .failed(let error):
+            errorMessage(error)
+                .padding()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private func errorMessage(_ error: BudgetLoadError) -> some View {
+        VStack(spacing: 12) {
+            Text(verbatim: error.message).multilineTextAlignment(.center)
+            if error.canRetry {
+                Button(NSLocalizedString("Retry", comment: "Native Budget tab: try loading again")) {
+                    Task { await model.load() }
+                }
+                .buttonStyle(.borderedProminent)
+            }
         }
     }
 

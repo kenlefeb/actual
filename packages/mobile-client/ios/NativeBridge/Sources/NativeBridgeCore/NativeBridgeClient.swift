@@ -5,7 +5,9 @@ import Foundation
 // (packages/desktop-client/src/data/native-bridge-allowlist.json, compared by
 // a test) only stops accidents. Each native screen story adds the writes it needs.
 public enum NativeBridgeAllowlist {
-    public static let handlers: Set<String> = ["native/budget-month", "query", "budget/budget-amount"]
+    // Sent only as their typed value (BudgetAmountWrite), never as loose arguments
+    public static let writes: Set<String> = ["budget/budget-amount"]
+    public static let handlers: Set<String> = Set(["native/budget-month", "query"]).union(writes)
 }
 
 public enum NativeBridgeError: Error, Equatable {
@@ -30,10 +32,10 @@ public struct BudgetAmountWrite: Encodable, Equatable {
 
     public init(category: String, month: String, amount: Int) throws {
         guard !category.isEmpty, category != "to-budget" else { throw NativeBridgeError.invalidWrite("category") }
-        guard month.range(of: #"^\d{4}-(0[1-9]|1[0-2])$"#, options: .regularExpression) != nil else {
+        guard month.range(of: #"^[0-9]{4}-(0[1-9]|1[0-2])\z"#, options: .regularExpression) != nil else {
             throw NativeBridgeError.invalidWrite("month")
         }
-        guard abs(amount) <= Self.maxAmount else { throw NativeBridgeError.invalidWrite("amount") }
+        guard amount.magnitude <= Self.maxAmount else { throw NativeBridgeError.invalidWrite("amount") }
         (self.category, self.month, self.amount) = (category, month, amount)
     }
 }
@@ -64,6 +66,9 @@ public struct NativeBridgeClient {
     public func call<Args: Encodable>(_ name: String, args: Args) async throws -> Data {
         guard NativeBridgeAllowlist.handlers.contains(name) else {
             throw NativeBridgeError.notAllowlisted(name)
+        }
+        guard !NativeBridgeAllowlist.writes.contains(name) || args is BudgetAmountWrite else {
+            throw NativeBridgeError.invalidWrite(name)
         }
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys

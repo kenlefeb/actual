@@ -39,8 +39,33 @@ final class WriteAllowlistTests: XCTestCase {
             seen = (name, args)
             return "null"
         }
-        _ = try await client.call("budget/budget-amount", args: ["category": "rent"])
+        try await client.setBudgetAmount(BudgetAmountWrite(category: "rent", month: "2026-03", amount: 1))
         XCTAssertEqual(seen?.0, "budget/budget-amount")
+    }
+
+    // A write is built only from its typed value, never from loose arguments
+    func testAWriteNameWithUntypedArgumentsIsRefused() async {
+        var calls = 0
+        let client = NativeBridgeClient { _, _ in
+            calls += 1
+            return "null"
+        }
+        do {
+            _ = try await client.call("budget/budget-amount", args: ["category": "rent", "month": "2026-03"])
+            XCTFail("expected a refusal")
+        } catch NativeBridgeError.invalidWrite(let name) {
+            XCTAssertEqual(name, "budget/budget-amount")
+        } catch {
+            XCTFail("unexpected error \(error)")
+        }
+        do {
+            _ = try await client.call("budget/budget-amount")
+            XCTFail("expected a refusal")
+        } catch NativeBridgeError.invalidWrite {
+        } catch {
+            XCTFail("unexpected error \(error)")
+        }
+        XCTAssertEqual(calls, 0)
     }
 
     func testOtherWriteHandlersAreStillRefused() async {
@@ -123,6 +148,16 @@ final class BudgetAmountWriteTests: XCTestCase {
         for month in ["2026-3", "2026-13", "2026-00", "march", "", "2026-03-01", " 2026-03"] {
             assertRefused { try BudgetAmountWrite(category: "rent", month: month, amount: 1) }
         }
+    }
+
+    func testAMonthWithATrailingNewlineOrNonASCIIDigitsIsRefused() {
+        for month in ["2026-03\n", "\u{0662}\u{0660}\u{0662}\u{0666}-\u{0660}\u{0663}"] {
+            assertRefused { try BudgetAmountWrite(category: "rent", month: month, amount: 1) }
+        }
+    }
+
+    func testTheSmallestIntIsRefusedWithoutATrap() {
+        assertRefused { try BudgetAmountWrite(category: "rent", month: "2026-03", amount: Int.min) }
     }
 
     func testAnEmptyOrToBudgetIdIsRefused() {
@@ -327,6 +362,18 @@ final class BudgetAmountInputTests: XCTestCase {
         XCTAssertEqual(BudgetAmountFormat.minorUnits(from: "1500", style: yen), 1500)
         XCTAssertEqual(BudgetAmountFormat.minorUnits(from: "1.500", style: yen), 1500)
         XCTAssertNil(BudgetAmountFormat.minorUnits(from: "1500,5", style: yen))
+    }
+
+    // The web reads "12,50" in a comma-dot budget as 12.50; a grouping
+    // separator not followed by three digits is refused, never read as 1,250
+    func testAGroupingSeparatorOnlyCountsBeforeThreeDigits() {
+        XCTAssertNil(BudgetAmountFormat.minorUnits(from: "12,50", style: style()))
+        XCTAssertNil(BudgetAmountFormat.minorUnits(from: "12,5", style: style()))
+        XCTAssertNil(BudgetAmountFormat.minorUnits(from: "12.5", style: style(format: .dotComma)))
+        XCTAssertNil(BudgetAmountFormat.minorUnits(from: "12.50", style: style(format: .dotComma)))
+        XCTAssertNil(BudgetAmountFormat.minorUnits(from: ",250", style: style()))
+        XCTAssertEqual(BudgetAmountFormat.minorUnits(from: "1,00,000.50", style: style(format: .commaDotIn)), 10_000_050)
+        XCTAssertEqual(BudgetAmountFormat.minorUnits(from: "12,345,678", style: style()), 1_234_567_800)
     }
 
     func testTheCurrencySymbolIsIgnored() {

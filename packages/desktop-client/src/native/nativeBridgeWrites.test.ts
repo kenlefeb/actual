@@ -5,8 +5,12 @@ import { createNativeBridge } from './nativeBridge';
 const snapshot = {
   month: '2026-03',
   groups: [
-    { id: 'group-food', categories: [{ id: 'cat-groceries' }] },
-    { id: 'group-income', categories: [{ id: 'cat-salary' }] },
+    {
+      id: 'group-food',
+      isIncome: false,
+      categories: [{ id: 'cat-groceries' }],
+    },
+    { id: 'group-income', isIncome: true, categories: [{ id: 'cat-salary' }] },
   ],
 };
 
@@ -55,6 +59,7 @@ describe('budget/budget-amount through the page bridge', () => {
     ['a fraction', 12.5],
     ['NaN', NaN],
     ['infinity', Infinity],
+    ['beyond a safe integer', 2 ** 53],
     ['a text', '12500'],
     ['null', null],
     ['missing', undefined],
@@ -95,6 +100,8 @@ describe('budget/budget-amount through the page bridge', () => {
     ['an unknown category id', 'cat-nope'],
     ['a category group id', 'group-food'],
     ['to-budget', 'to-budget'],
+    // The native screen edits only expense categories, as Swift does
+    ['an income category', 'cat-salary'],
     ['a number', 7],
     ['missing', undefined],
   ])('refuses %s without writing', async (_label, category) => {

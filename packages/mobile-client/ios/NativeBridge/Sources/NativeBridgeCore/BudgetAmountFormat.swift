@@ -84,13 +84,18 @@ public enum BudgetAmountFormat {
         if !style.currencySymbol.isEmpty { rest = Substring(rest.replacingOccurrences(of: style.currencySymbol, with: "")) }
         let negative = rest.hasPrefix("-")
         if negative { rest.removeFirst() }
-        let parts = rest.filter { !grouping.contains($0) }.split(separator: decimal, maxSplits: 1, omittingEmptySubsequences: false)
-        guard let whole = parts.first, parts.count <= (style.decimalPlaces > 0 ? 2 : 1) else { return nil }
+        let parts = rest.split(separator: decimal, maxSplits: 1, omittingEmptySubsequences: false)
+        guard let grouped = parts.first, parts.count <= (style.decimalPlaces > 0 ? 2 : 1) else { return nil }
+        // A grouping separator must close a three-digit group, so "12,50" is
+        // refused, not read as 1,250 (the web reads it as 12.50)
+        let groups = grouped.split(omittingEmptySubsequences: false) { grouping.contains($0) }
+        guard groups.count == 1 || (groups.allSatisfy { !$0.isEmpty } && groups.last?.count == 3) else { return nil }
+        let whole = groups.joined()
         let fraction = parts.count == 2 ? parts[1] : ""
         guard whole.count + fraction.count > 0, whole.count <= 15, fraction.count <= style.decimalPlaces,
             (whole + fraction).allSatisfy({ $0.isASCII && $0.isNumber })
         else { return nil }
-        let digits = String(whole) + fraction + String(repeating: "0", count: style.decimalPlaces - fraction.count)
+        let digits = whole + fraction + String(repeating: "0", count: style.decimalPlaces - fraction.count)
         guard let value = Int(digits) else { return nil }
         return negative ? -value : value
     }

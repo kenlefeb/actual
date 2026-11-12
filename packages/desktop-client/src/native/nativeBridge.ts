@@ -38,7 +38,8 @@ const EVENTS = ['cells-changed', 'sync-event'];
 // Returns only the three fields, so nothing else reaches the handler.
 async function validateBudgetAmount(forward: Send, args: unknown) {
   const { category, month, amount } = (args ?? {}) as Record<string, unknown>;
-  if (typeof amount !== 'number' || !Number.isInteger(amount)) {
+  // A larger number has already lost precision crossing JSON
+  if (typeof amount !== 'number' || !Number.isSafeInteger(amount)) {
     throw new Error('native bridge: amount must be an integer');
   }
   if (typeof month !== 'string' || !/^\d{4}-\d{2}$/.test(month)) {
@@ -46,13 +47,17 @@ async function validateBudgetAmount(forward: Send, args: unknown) {
   }
   // Throws "no budget for month" when the month has none
   const snapshot = (await forward('native/budget-month', { month })) as {
-    groups: { categories: { id: string }[] }[];
+    groups: { isIncome: boolean; categories: { id: string }[] }[];
   };
-  const isCategory = snapshot.groups.some(group =>
-    group.categories.some(cat => cat.id === category),
+  // Expense categories only, as Swift edits; never a group or income category
+  const isCategory = snapshot.groups.some(
+    group =>
+      !group.isIncome && group.categories.some(cat => cat.id === category),
   );
   if (typeof category !== 'string' || !isCategory) {
-    throw new Error('native bridge: category is not a category of the month');
+    throw new Error(
+      'native bridge: category is not an expense category of the month',
+    );
   }
   return { category, month, amount };
 }

@@ -10,6 +10,13 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
     private var router = NativeTabRouter()
     private var containers: [NativeTab: TabContainerViewController] = [:]
     private var foregroundObserver: NSObjectProtocol?
+    // The native Budget tab (sc-3751) lies over the web Budget screen while the
+    // switch is on, the page shows /budget with the tab bar, and the budget is
+    // an envelope one; otherwise the web screen below shows as before
+    private var budgetOverlay: NativeBudgetViewController?
+    private var budgetFellBack = false
+    private var pagePath = NativeTab.budget.rootPath
+    private var tabBarShown = false
     private static let addIdentifier = "add"
 
     // Hearth Teal, DESIGN.native.md §3
@@ -54,7 +61,14 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
 
         let chrome = bridgeController.nativeChrome
         chrome.onRoute = { [weak self] in self?.pageDidRoute(to: $0, tabBar: $1) }
-        chrome.onClosed = { [weak self] in self?.setTabBarVisible(false) }
+        chrome.onClosed = { [weak self] in
+            self?.budgetFellBack = false
+            self?.setTabBarVisible(false)
+        }
+        chrome.onNativeScreenChanged = { [weak self] _ in
+            self?.budgetFellBack = false
+            self?.updateBudgetOverlay()
+        }
         // Hidden until a budget is open (sign-in and the budget list have none)
         setTabBarVisible(false)
 
@@ -67,6 +81,7 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
 
     private func tabWillAppear(_ tab: NativeTab) {
         let container = containers[tab]!
+        if tab == .budget { budgetOverlay?.reload() }
         guard !container.hostsNativeScreen else {
             _ = router.select(tab)
             return
@@ -80,6 +95,7 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
     // The page decides when the bar hides: on a pushed form (new or edit
     // transaction) and while a sheet shows, as iOS apps do
     private func pageDidRoute(to path: String, tabBar: Bool) {
+        pagePath = path
         setTabBarVisible(tabBar)
         guard let tab = router.pageDidRoute(to: path) else { return }
         show(tab)
@@ -107,6 +123,29 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
             tabBar.isHidden = !visible
         }
         containers.values.forEach { $0.tabBarVisible = visible }
+        tabBarShown = visible
+        updateBudgetOverlay()
+    }
+
+    private func updateBudgetOverlay() {
+        let container = containers[.budget]!
+        let wanted = NativeScreenSwitch.screen(for: .budget) == .native && tabBarShown
+            && pagePath == NativeTab.budget.rootPath && !budgetFellBack && !container.hostsNativeScreen
+        if wanted, budgetOverlay == nil {
+            let overlay = NativeBudgetViewController(client: bridgeController.nativeBridge.client)
+            overlay.onUseWebScreen = { [weak self] in
+                // After the publisher callback returns: the overlay removes itself
+                DispatchQueue.main.async {
+                    self?.budgetFellBack = true
+                    self?.updateBudgetOverlay()
+                }
+            }
+            budgetOverlay = overlay
+            container.setOverlay(overlay)
+        } else if !wanted, budgetOverlay != nil {
+            budgetOverlay = nil
+            container.setOverlay(nil)
+        }
     }
 
     // MARK: UITabBarControllerDelegate (the Add button never becomes selected)
@@ -139,9 +178,10 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
 
     // MARK: Native screens
 
-    // No native screen ships yet (sc-3593 adds the first). DEBUG builds can
-    // mark a tab native with a launch argument, e.g. `-NativeTabStub reports`,
-    // to check that the bar does not change and the web view stays single.
+    // A tab that is native for good (none ships; the Budget tab of sc-3593 is an
+    // overlay, see updateBudgetOverlay). DEBUG builds can mark a tab native
+    // with a launch argument, e.g. `-NativeTabStub reports`, to check that the
+    // bar does not change and the web view stays single.
     private static func nativeScreen(for tab: NativeTab) -> UIViewController? {
         #if DEBUG
         if UserDefaults.standard.string(forKey: "NativeTabStub") == tab.rawValue {
@@ -178,6 +218,7 @@ final class TabContainerViewController: UIViewController {
     let section: NativeTab
     var onWillAppear: ((NativeTab) -> Void)?
     private(set) var hostsNativeScreen = false
+    private var overlay: UIViewController?
     private var bottomToSafeArea: NSLayoutConstraint?
     private var bottomToEdge: NSLayoutConstraint?
 
@@ -229,6 +270,28 @@ final class TabContainerViewController: UIViewController {
         attach(bridge)
     }
 
+    // A native screen lying over the hosted web view (sc-3751); nil removes it.
+    // It is only ever shown with the tab bar, so it ends above the bar.
+    func setOverlay(_ screen: UIViewController?) {
+        if let old = overlay {
+            old.willMove(toParent: nil)
+            old.view.removeFromSuperview()
+            old.removeFromParent()
+        }
+        overlay = screen
+        guard let screen else { return }
+        addChild(screen)
+        screen.view.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(screen.view)
+        NSLayoutConstraint.activate([
+            screen.view.topAnchor.constraint(equalTo: view.topAnchor),
+            screen.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            screen.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            screen.view.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+        ])
+        screen.didMove(toParent: self)
+    }
+
     private func attach(_ child: UIViewController) {
         addChild(child)
         child.view.translatesAutoresizingMaskIntoConstraints = false
@@ -241,6 +304,7 @@ final class TabContainerViewController: UIViewController {
             child.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
         ])
         updateBottom()
+        if let overlay { view.bringSubviewToFront(overlay.view) }
         child.didMove(toParent: self)
         setNeedsStatusBarAppearanceUpdate()
     }

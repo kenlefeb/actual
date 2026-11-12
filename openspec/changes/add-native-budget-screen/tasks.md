@@ -4,12 +4,12 @@ Test-first: write the tests, run them and see them fail before writing the code.
 
 ## 1. Read-only envelope tab, per-screen switch and web fallback (sc-3751)
 
-- [ ] 1.1 Add failing Swift tests in `NativeBridgeCore` for a `BudgetViewModel` that loads the current month through a fake transport fed by the contract fixtures: loaded, loading, error and timeout states, and no total computed in Swift. Verify: the tests fail before the view model exists.
-- [ ] 1.2 Add failing tests for the switch: `nativeScreen(for: .budget)` is the web view while `NativeScreen.budget` is off or unset, and the native screen while on. Verify: they fail first.
-- [ ] 1.3 Implement the view model and the SwiftUI Budget tab (groups, categories, budgeted, spent, balance, to-budget, error state with retry) in `packages/mobile-client/ios/`, hosted by the native tab bar. Verify: 1.1 passes and the tab runs in the Simulator on a seeded budget.
-- [ ] 1.3a Add failing tests that, with the switch on and a tracking budget open, the tab shows the web Budget screen until the tracking group (sc-3778) lands. Then implement the fallback. Verify: the tests pass.
-- [ ] 1.4 Add the switch to Settings in the iOS app through the native chrome plugin, default off. Verify: toggling it in the Simulator swaps the tab between native and web.
-- [ ] 1.5 Compare the native month with the web Budget screen for the same seeded budget and month. Verify: the numbers are equal; record the check on the story.
+- [x] 1.1 Add failing Swift tests in `NativeBridgeCore` for a `BudgetViewModel` that loads the current month through a fake transport fed by the contract fixtures: loaded, loading, error and timeout states, and no total computed in Swift. Verify: the tests fail before the view model exists.
+- [x] 1.2 Add failing tests for the switch: `nativeScreen(for: .budget)` is the web view while `NativeScreen.budget` is off or unset, and the native screen while on. Verify: they fail first.
+- [x] 1.3 Implement the view model and the SwiftUI Budget tab (groups, categories, budgeted, spent, balance, to-budget, error state with retry) in `packages/mobile-client/ios/`, hosted by the native tab bar. Verify: 1.1 passes and the tab runs in the Simulator on a seeded budget.
+- [x] 1.3a Add failing tests that, with the switch on and a tracking budget open, the tab shows the web Budget screen until the tracking group (sc-3778) lands. Then implement the fallback. Verify: the tests pass.
+- [x] 1.4 Add the switch to Settings in the iOS app through the native chrome plugin, default off. Verify: toggling it in the Simulator swaps the tab between native and web.
+- [x] 1.5 Compare the native month with the web Budget screen for the same seeded budget and month. Verify: the numbers are equal; record the check on the story.
 
 ## 2. Month navigation (sc-3760)
 
@@ -19,7 +19,7 @@ Test-first: write the tests, run them and see them fail before writing the code.
 
 ## 3. Edit a budgeted amount through loot-core (sc-3769)
 
-- [ ] 3.0 Add a failing vitest contract test that `native/budget-month` returns the currency code and decimal places, on a seeded budget with a currency and one without, and regenerate the fixtures; add the fields to the handler and the Swift `BudgetMonth`. Verify: the vitest test and the Swift decode test pass.
+- [x] 3.0 Add a failing vitest contract test that `native/budget-month` returns the currency code and decimal places, on a seeded budget with a currency and one without, and regenerate the fixtures; add the fields to the handler and the Swift `BudgetMonth`. Verify: the vitest test and the Swift decode test pass.
 - [ ] 3.0a Add failing vitest tests in `packages/desktop-client/src/native/` that the page bridge refuses, with an error result and no `send` of the write: a non-integer, non-finite, missing or non-number amount; a month not `YYYY-MM` or with no budget; an unknown category id and a group id. Then implement the validation before `send`. Verify: the tests pass and a valid write is still forwarded.
 - [ ] 3.0b Add failing Swift tests for typed per-handler write values (`BudgetAmountWrite`): an invalid amount, month or id is refused before the transport is called. Then implement them. Verify: `swift test` passes.
 - [ ] 3.0c Add a failing origin-guard test (extending `PageOriginGuardTests`) that a write message from another frame, host, scheme or port is ignored for `budget/budget-amount`, `budget/transfer-category` and `budget/transfer-available`. Verify: it passes after the allowlist change.

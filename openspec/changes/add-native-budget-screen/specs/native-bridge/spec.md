@@ -35,7 +35,7 @@ The bridge allowlist, on the Swift and the page side, SHALL also hold `budget/bu
 - **THEN** the allowlist tests on both sides fail
 
 ### Requirement: A budget month carries the budget's currency
-`native/budget-month` SHALL also return the budget's currency code and its number of decimal places, read by the handler from the budget's `defaultCurrencyCode` preference and loot-core's currency table. This is an additive field of the existing shape. Native code SHALL use these values, and no constant, to turn what the user types into minor units and to fill `currencyCode` for `budget/transfer-category`.
+`native/budget-month` SHALL also return the budget's currency code, decimal places and symbol, and the web's formatting preferences (`numberFormat`, `hideFraction`, `currencySymbolPosition`, `currencySpaceBetweenAmountAndSymbol`), resolved as the web's `useFormat` does. An unknown code or invalid preference SHALL fall back to the web's default (no currency, `comma-dot`, symbol before). These are additive fields of the existing shape.
 
 #### Scenario: A budget with a currency
 - **GIVEN** a budget whose currency is set
@@ -51,6 +51,14 @@ The bridge allowlist, on the Swift and the page side, SHALL also hold `budget/bu
 - **GIVEN** the contract fixtures checked by vitest and decoded by the Swift tests
 - **WHEN** the currency fields are added
 - **THEN** both the vitest contract test and the Swift decode test pass against the regenerated fixture, and fail against the old one
+
+
+### Requirement: Native code formats amounts from the budget month
+Native code SHALL format amounts, turn typed input into minor units, and fill `currencyCode` for `budget/transfer-category` from the currency and formatting fields of `native/budget-month`, never from the device locale or a constant.
+
+#### Scenario: Formatting ignores the device locale
+- **WHEN** the device locale uses a different number format from the budget's `numberFormat`
+- **THEN** the native screen shows amounts in the budget's format, the same as the web screen
 
 ### Requirement: Bridge writes are validated before loot-core runs them
 The page and Swift SHALL each refuse an invalid write with an error result and no write, before loot-core runs it; Swift builds each write from a typed per-handler value. A write is invalid when its amount is not a finite integer, its month is not a `YYYY-MM` with a budget, or its category id is not a category in that month's snapshot (a group id included). The only exception is the literal `to-budget`, accepted as source or destination of `budget/transfer-category`.

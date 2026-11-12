@@ -5,8 +5,15 @@ import { createBudget } from '#server/budget/base';
 import * as db from '#server/db';
 import * as prefs from '#server/prefs';
 import * as sheet from '#server/sheet';
+import { getCurrency } from '#shared/currencies';
 
 import { app } from './app';
+
+async function setPrefs(prefs: Record<string, string>) {
+  for (const [id, value] of Object.entries(prefs)) {
+    await db.insert('preferences', { id, value });
+  }
+}
 
 const budgetMonth = (month: string) =>
   app.handlers['native/budget-month']({ month });
@@ -89,6 +96,69 @@ describe('native/budget-month', () => {
     await expect(JSON.stringify(result, null, 2) + '\n').toMatchFileSnapshot(
       './fixtures/budget-month-tracking.json',
     );
+  });
+
+  it('carries the web formatting preferences, JPY fixture', async () => {
+    await createBudget(['2026-02', '2026-03']);
+    await seedMonth();
+    await setPrefs({
+      defaultCurrencyCode: 'JPY',
+      numberFormat: 'dot-comma',
+      currencySymbolPosition: 'after',
+      currencySpaceBetweenAmountAndSymbol: 'true',
+    });
+    const result = await budgetMonth('2026-03');
+    expect(result).toMatchObject({
+      currencyCode: 'JPY',
+      currencyDecimalPlaces: 0,
+      currencySymbol: '¥',
+      currencySymbolPosition: 'after',
+      currencySpace: true,
+      numberFormat: 'dot-comma',
+      hideFraction: false,
+    });
+    await expect(JSON.stringify(result, null, 2) + '\n').toMatchFileSnapshot(
+      './fixtures/budget-month-envelope-jpy.json',
+    );
+  });
+
+  it('uses the web defaults when no formatting is set', async () => {
+    await createBudget(['2026-02', '2026-03']);
+    expect(await budgetMonth('2026-03')).toMatchObject({
+      currencyCode: '',
+      currencyDecimalPlaces: 2,
+      currencySymbol: '',
+      currencySymbolPosition: 'before',
+      currencySpace: false,
+      numberFormat: 'comma-dot',
+      hideFraction: false,
+    });
+  });
+
+  it('carries hideFraction and a symbol like the web table', async () => {
+    await createBudget(['2026-02', '2026-03']);
+    await setPrefs({ defaultCurrencyCode: 'CAD', hideFraction: 'true' });
+    expect(await budgetMonth('2026-03')).toMatchObject({
+      currencyCode: 'CAD',
+      currencySymbol: getCurrency('CAD').symbol,
+      hideFraction: true,
+    });
+  });
+
+  it('falls back like the web for an unknown or invalid preference', async () => {
+    await createBudget(['2026-02', '2026-03']);
+    await setPrefs({
+      defaultCurrencyCode: 'ZZZ',
+      numberFormat: 'nonsense',
+      currencySymbolPosition: 'sideways',
+    });
+    expect(await budgetMonth('2026-03')).toMatchObject({
+      currencyCode: '',
+      currencySymbol: '',
+      currencyDecimalPlaces: 2,
+      numberFormat: 'comma-dot',
+      currencySymbolPosition: 'before',
+    });
   });
 
   it('refuses a month outside the budget', async () => {

@@ -7,7 +7,11 @@
 type ChromeMessage =
   | { type: 'route'; path: string; tabBar: boolean }
   | { type: 'closed' }
-  | { type: 'haptic' };
+  | { type: 'haptic' }
+  | { type: 'nativeScreen'; screen: NativeScreenName; on: boolean };
+
+// The tabs that have a native screen behind a per-screen switch (sc-3751)
+export type NativeScreenName = 'budget';
 
 type NativeChrome = {
   navigate: (path: string) => void;
@@ -21,12 +25,15 @@ export type ChromeWindow = {
     };
   };
   __actualNativeChrome?: NativeChrome;
+  // Set by the app at document start: which native screens are switched on
+  __actualNativeScreens?: Partial<Record<NativeScreenName, boolean>>;
 };
 
 declare global {
   // oxlint-disable-next-line typescript/consistent-type-definitions
   interface Window {
     __actualNativeChrome?: NativeChrome;
+    __actualNativeScreens?: Partial<Record<NativeScreenName, boolean>>;
   }
 }
 
@@ -58,6 +65,25 @@ export function hasNativeTabBar(win: ChromeWindow = window) {
 
 export function nativeHaptic(win: ChromeWindow = window) {
   post(win, { type: 'haptic' });
+}
+
+export function isNativeScreenOn(
+  screen: NativeScreenName,
+  win: ChromeWindow = window,
+) {
+  return win.__actualNativeScreens?.[screen] === true;
+}
+
+// The app stores the switch (UserDefaults) and applies it when the tab is
+// next shown; no-op in a browser
+export function setNativeScreenOn(
+  screen: NativeScreenName,
+  on: boolean,
+  win: ChromeWindow = window,
+) {
+  if (!hasNativeTabBar(win)) return;
+  win.__actualNativeScreens = { ...win.__actualNativeScreens, [screen]: on };
+  post(win, { type: 'nativeScreen', screen, on });
 }
 
 export function postNativeRoute(

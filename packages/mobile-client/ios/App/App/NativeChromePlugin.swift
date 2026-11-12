@@ -18,11 +18,33 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
     // The path, and whether the tab bar shows (not on a pushed form or sheet)
     var onRoute: ((String, Bool) -> Void)?
     var onClosed: (() -> Void)?
+    // A per-screen switch changed in Settings (sc-3751)
+    var onNativeScreenChanged: ((NativeTab) -> Void)?
     private let haptics = UIImpactFeedbackGenerator(style: .light)
 
     // Runs before the page loads, so the page sees the handler at startup
     override public func load() {
-        bridge?.webView?.configuration.userContentController.add(self, name: "actualNativeChrome")
+        guard let controller = bridge?.webView?.configuration.userContentController else { return }
+        controller.add(self, name: "actualNativeChrome")
+        installScreensScript(on: controller)
+    }
+
+    // Tells the page which native screens are on (for the Settings switch,
+    // sc-3751) at the start of every load. WebKit reruns the script text it
+    // was given, so a toggle replaces the script; otherwise a reload would
+    // bring back the value from launch.
+    private var screensScript: WKUserScript?
+
+    private func installScreensScript(on controller: WKUserContentController) {
+        if let old = screensScript {
+            // No API removes one script; keep the others (Capacitor's)
+            let others = controller.userScripts.filter { $0 !== old }
+            controller.removeAllUserScripts()
+            others.forEach(controller.addUserScript)
+        }
+        let script = WKUserScript(source: NativeScreensScript.source(), injectionTime: .atDocumentStart, forMainFrameOnly: true)
+        screensScript = script
+        controller.addUserScript(script)
     }
 
     public func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -35,6 +57,14 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
             if let path = body["path"] as? String { onRoute?(path, body["tabBar"] as? Bool ?? true) }
         case "closed":
             onClosed?()
+        case "nativeScreen":
+            // Only a tab that has a native screen can be switched
+            if let name = body["screen"] as? String, let on = body["on"] as? Bool,
+               let tab = NativeTab(rawValue: name), NativeScreenSwitch.nativeTabs.contains(tab) {
+                UserDefaults.standard.set(on, forKey: NativeScreenSwitch.key(for: tab))
+                if let controller = bridge?.webView?.configuration.userContentController { installScreensScript(on: controller) }
+                onNativeScreenChanged?(tab)
+            }
         case "haptic":
             // Follows the system's haptics setting
             haptics.impactOccurred()

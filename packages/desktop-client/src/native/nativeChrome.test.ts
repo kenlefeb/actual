@@ -1,10 +1,12 @@
 import {
   hasNativeTabBar,
   installNativeChrome,
+  isNativeScreenOn,
   nativeHaptic,
   nativeParentPath,
   postNativeClosed,
   postNativeRoute,
+  setNativeScreenOn,
   showsNativeTabBar,
 } from './nativeChrome';
 import type { ChromeWindow } from './nativeChrome';
@@ -137,6 +139,35 @@ describe('postNativeClosed', () => {
     const { win, postMessage } = iosApp();
     postNativeClosed(win);
     expect(postMessage).toHaveBeenCalledWith({ type: 'closed' });
+  });
+});
+
+// native-budget-screen: "The native Budget tab has a per-screen switch" (sc-3751)
+describe('the native Budget screen switch', () => {
+  it('is off until the app says it is on', () => {
+    expect(isNativeScreenOn('budget', iosApp().win)).toBe(false);
+    const { win } = iosApp();
+    win.__actualNativeScreens = { budget: true };
+    expect(isNativeScreenOn('budget', win)).toBe(true);
+  });
+
+  it('tells the app and remembers the new value', () => {
+    const { win, postMessage } = iosApp();
+    setNativeScreenOn('budget', true, win);
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'nativeScreen',
+      screen: 'budget',
+      on: true,
+    });
+    expect(isNativeScreenOn('budget', win)).toBe(true);
+    setNativeScreenOn('budget', false, win);
+    expect(isNativeScreenOn('budget', win)).toBe(false);
+  });
+
+  it('is always off in a browser', () => {
+    const win = browser();
+    setNativeScreenOn('budget', true, win);
+    expect(isNativeScreenOn('budget', win)).toBe(false);
   });
 });
 

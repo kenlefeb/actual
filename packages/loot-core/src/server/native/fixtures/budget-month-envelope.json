@@ -1,6 +1,13 @@
 {
   "month": "2026-03",
   "budgetType": "envelope",
+  "currencyCode": "",
+  "currencyDecimalPlaces": 2,
+  "currencySymbol": "",
+  "currencySymbolPosition": "before",
+  "currencySpace": false,
+  "numberFormat": "comma-dot",
+  "hideFraction": false,
   "totals": {
     "budgeted": -160000,
     "spent": -120000,

@@ -15,7 +15,7 @@ final class NativeBudgetViewController: UIHostingController<BudgetTabView> {
     var onUseWebScreen: (() -> Void)?
 
     init(client: NativeBridgeClient) {
-        model = BudgetViewModel(client: client, month: BudgetViewModel.currentMonth())
+        model = BudgetViewModel(client: client)
         super.init(rootView: BudgetTabView(model: model))
         stateObserver = model.$state.sink { [weak self] state in
             if state == .useWebScreen { self?.onUseWebScreen?() }
@@ -59,8 +59,13 @@ struct BudgetTabView: View {
             BudgetMonthList(month: month)
         case .failed(let error):
             VStack(spacing: 12) {
-                Text(message(for: error)).multilineTextAlignment(.center)
-                Button("Retry") { Task { await model.load() } }.buttonStyle(.borderedProminent)
+                Text(verbatim: error.message).multilineTextAlignment(.center)
+                if error.canRetry {
+                    Button(NSLocalizedString("Retry", comment: "Native Budget tab: try loading again")) {
+                        Task { await model.load() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
             }
             .padding()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -76,12 +81,29 @@ struct BudgetTabView: View {
         formatter.setLocalizedDateFormatFromTemplate("MMMM yyyy")
         return formatter.string(from: date)
     }
+}
 
-    private func message(for error: BudgetLoadError) -> String {
-        switch error {
-        case .timedOut: return NSLocalizedString("The budget did not answer in time.", comment: "Native Budget tab")
-        case .message(let text): return text
-        }
+private enum Words {
+    static let toBudget = NSLocalizedString("To budget", comment: "Native Budget tab: money not yet given a category")
+    static let budgeted = NSLocalizedString("Budgeted", comment: "Native Budget tab column")
+    static let spent = NSLocalizedString("Spent", comment: "Native Budget tab column")
+    static let received = NSLocalizedString("Received", comment: "Native Budget tab: income column")
+    static let balance = NSLocalizedString("Balance", comment: "Native Budget tab column")
+    static let overspent = NSLocalizedString("Overspent", comment: "Native Budget tab: a negative balance")
+}
+
+// DESIGN.native.md money colours (light, dark)
+private func moneyColor(_ tone: BudgetAmountFormat.Tone) -> Color {
+    func color(_ light: UInt32, _ dark: UInt32) -> Color {
+        Color(UIColor { traits in
+            let hex = traits.userInterfaceStyle == .dark ? dark : light
+            return UIColor(red: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255, blue: CGFloat(hex & 0xFF) / 255, alpha: 1)
+        })
+    }
+    switch tone {
+    case .positive: return color(0x1F7A35, 0x30D158)
+    case .negative: return color(0xC00013, 0xFF7B73)
+    case .zero: return color(0x636366, 0xAEAEB2)
     }
 }
 
@@ -93,48 +115,81 @@ private struct BudgetMonthList: View {
             if let toBudget = month.totals.toBudget {
                 Section {
                     HStack {
-                        Text("To budget").font(.headline)
+                        Text(Words.toBudget).font(.headline)
                         Spacer()
                         Text(format(toBudget)).font(.headline).monospacedDigit()
+                            .foregroundColor(moneyColor(BudgetAmountFormat.tone(toBudget)))
                     }
                 }
             }
-            ForEach(month.groups.filter { !$0.hidden }) { group in
-                Section(header: Text(group.name)) {
-                    ForEach(group.categories.filter { !$0.hidden }) { category in
-                        CategoryRow(category: category, format: format)
-                    }
-                }
+            ForEach(month.expenseGroups) { group in
+                groupSection(group)
+            }
+            ForEach(month.incomeGroups) { group in
+                groupSection(group)
             }
         }
         .listStyle(.insetGrouped)
     }
 
+    private func groupSection(_ group: BudgetMonth.Group) -> some View {
+        Section(header: GroupHeader(group: group, format: format)) {
+            ForEach(group.visibleCategories) { category in
+                CategoryRow(category: category, isIncome: group.isIncome, format: format)
+            }
+        }
+    }
+
     private func format(_ amount: Int?) -> String {
-        BudgetAmountFormat.string(amount, decimalPlaces: month.currencyDecimalPlaces, currencyCode: month.currencyCode)
+        BudgetAmountFormat.string(amount, style: month.amountStyle)
+    }
+}
+
+// The group's own totals, as loot-core computed them; nothing is added here
+private struct GroupHeader: View {
+    let group: BudgetMonth.Group
+    let format: (Int?) -> String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(group.name)
+            // Only the totals loot-core has for this group (an income group has no budgeted or balance)
+            let parts = [(Words.budgeted, group.budgeted), (group.isIncome ? Words.received : Words.spent, group.spent), (Words.balance, group.balance)]
+                .compactMap { title, amount in amount.map { "\(title) \(format($0))" } }
+            if !parts.isEmpty {
+                Text(verbatim: parts.joined(separator: "  ")).font(.caption2).monospacedDigit().textCase(nil)
+            }
+        }
     }
 }
 
 private struct CategoryRow: View {
     let category: BudgetMonth.Category
+    let isIncome: Bool
     let format: (Int?) -> String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(category.name)
-            HStack {
-                column("Budgeted", category.budgeted)
-                column("Spent", category.spent)
-                column("Balance", category.balance)
+            HStack(alignment: .top) {
+                if category.budgeted != nil { column(Words.budgeted, category.budgeted) }
+                column(isIncome ? Words.received : Words.spent, category.spent)
+                if category.balance != nil { column(Words.balance, category.balance, colored: true) }
             }
         }
         .padding(.vertical, 2)
     }
 
-    private func column(_ title: LocalizedStringKey, _ amount: Int?) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+    private func column(_ title: String, _ amount: Int?, colored: Bool = false) -> some View {
+        let tone = BudgetAmountFormat.tone(amount)
+        return VStack(alignment: .leading, spacing: 0) {
             Text(title).font(.caption2).foregroundColor(.secondary)
             Text(format(amount).isEmpty ? "-" : format(amount)).font(.footnote).monospacedDigit()
+                .foregroundColor(colored ? moneyColor(tone) : .primary)
+            // The word, never colour alone
+            if colored, tone == .negative {
+                Text(Words.overspent).font(.caption2).foregroundColor(moneyColor(.negative))
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

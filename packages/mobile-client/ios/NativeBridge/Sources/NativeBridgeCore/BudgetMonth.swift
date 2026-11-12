@@ -7,6 +7,15 @@ import Foundation
 public struct BudgetMonth: Codable, Equatable {
     public enum BudgetType: String, Codable { case envelope, tracking }
 
+    public enum SymbolPosition: String, Codable { case before, after }
+    public enum NumberFormat: String, Codable {
+        case commaDot = "comma-dot"
+        case dotComma = "dot-comma"
+        case spaceComma = "space-comma"
+        case apostropheDot = "apostrophe-dot"
+        case commaDotIn = "comma-dot-in"
+    }
+
     public struct Totals: Codable, Equatable {
         public let budgeted: Int?
         public let spent: Int?
@@ -40,13 +49,32 @@ public struct BudgetMonth: Codable, Equatable {
         public let spent: Int?
         public let balance: Int?
         public let categories: [Category]
+
+        public var visibleCategories: [Category] { categories.filter { !$0.hidden } }
     }
 
     public let month: String
     public let budgetType: BudgetType
-    // The budget's currency; '' is none (2 decimal places)
+    // How the web formats money, as loot-core resolved it (useFormat.ts): the
+    // currency ('' is none) and the formatting preferences
     public let currencyCode: String
     public let currencyDecimalPlaces: Int
+    public let currencySymbol: String
+    public let currencySymbolPosition: SymbolPosition
+    public let currencySpace: Bool
+    public let numberFormat: NumberFormat
+    public let hideFraction: Bool
     public let totals: Totals
     public let groups: [Group]
+
+    public var amountStyle: BudgetAmountStyle {
+        BudgetAmountStyle(
+            currencyCode: currencyCode, currencySymbol: currencySymbol, decimalPlaces: currencyDecimalPlaces,
+            symbolPosition: currencySymbolPosition, symbolSpace: currencySpace, numberFormat: numberFormat,
+            hideFraction: hideFraction)
+    }
+
+    // Income is shown apart from the expense groups; hidden groups are left out
+    public var expenseGroups: [Group] { groups.filter { !$0.hidden && !$0.isIncome } }
+    public var incomeGroups: [Group] { groups.filter { !$0.hidden && $0.isIncome } }
 }

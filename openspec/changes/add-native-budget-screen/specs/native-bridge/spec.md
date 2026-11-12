@@ -35,7 +35,7 @@ The bridge allowlist, on the Swift and the page side, SHALL also hold `budget/bu
 - **THEN** the allowlist tests on both sides fail
 
 ### Requirement: A budget month carries the budget's currency
-`native/budget-month` SHALL also return the budget's currency code and its number of decimal places, read by the handler from the budget's `defaultCurrencyCode` preference and loot-core's currency table. This is an additive field of the existing shape. Native code SHALL use these values, and no constant, to turn what the user types into minor units and to fill `currencyCode` for `budget/transfer-category`.
+`native/budget-month` SHALL also return the budget's currency code, decimal places and symbol, and the web's formatting preferences (`numberFormat`, `hideFraction`, `currencySymbolPosition`, `currencySpaceBetweenAmountAndSymbol`), resolved by the handler as the web's `useFormat` does: from the budget's preferences and loot-core's currency table, with an unknown code or invalid preference falling back to the web's default (no currency, `comma-dot`, symbol before). These are additive fields of the existing shape, and native code SHALL format amounts from them, not from the device locale. Native code SHALL use these values, and no constant, to turn what the user types into minor units and to fill `currencyCode` for `budget/transfer-category`.
 
 #### Scenario: A budget with a currency
 - **GIVEN** a budget whose currency is set

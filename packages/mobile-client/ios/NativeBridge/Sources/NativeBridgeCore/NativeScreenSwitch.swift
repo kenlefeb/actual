@@ -15,3 +15,15 @@ public enum NativeScreenSwitch {
         nativeTabs.contains(tab) && defaults.bool(forKey: key(for: tab)) ? .native : .web
     }
 }
+
+// The script that tells the page which native screens are on, at the start of
+// every page load. It is built from the current switch, so the app rebuilds it
+// when the switch changes; a reload after a toggle then reads the new value.
+public enum NativeScreensScript {
+    public static func source(defaults: UserDefaults = .standard) -> String {
+        let screens = NativeTab.allCases.filter(NativeScreenSwitch.nativeTabs.contains).map {
+            "\"\($0.rawValue)\": \(NativeScreenSwitch.screen(for: $0, defaults: defaults) == .native)"
+        }
+        return "window.__actualNativeScreens = {\(screens.joined(separator: ", "))};"
+    }
+}

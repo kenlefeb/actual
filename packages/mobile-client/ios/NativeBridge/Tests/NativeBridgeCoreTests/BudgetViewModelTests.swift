@@ -18,6 +18,19 @@ private func fixtureJSON(_ name: String) throws -> String {
     String(decoding: try Data(contentsOf: fixturesDir.appendingPathComponent("\(name).json")), as: UTF8.self)
 }
 
+private var utc: Calendar {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "UTC")!
+    return calendar
+}
+
+private func day(_ year: Int, _ month: Int, _ day: Int) -> () -> Date {
+    let date = DateComponents(calendar: utc, year: year, month: month, day: day).date!
+    return { date }
+}
+
+private let march9 = day(2026, 3, 9)
+
 private func client(returning json: String, timeout: TimeInterval = 1) -> NativeBridgeClient {
     NativeBridgeClient(timeout: timeout) { _, _ in json }
 }
@@ -26,7 +39,7 @@ private func client(returning json: String, timeout: TimeInterval = 1) -> Native
 final class BudgetViewModelTests: XCTestCase {
     func testStartsLoadingThenShowsTheMonthLootCoreSent() async throws {
         let json = try fixtureJSON("budget-month-envelope")
-        let model = BudgetViewModel(client: client(returning: json), month: "2026-03")
+        let model = BudgetViewModel(client: client(returning: json), now: march9, calendar: utc)
         XCTAssertEqual(model.state, .loading)
         await model.load()
         let expected = try JSONDecoder().decode(BudgetMonth.self, from: Data(json.utf8))
@@ -42,7 +55,7 @@ final class BudgetViewModelTests: XCTestCase {
             client: NativeBridgeClient { name, args in
                 seen.append((name, args))
                 return json
-            }, month: "2026-03")
+            }, now: march9, calendar: utc)
         await model.load()
         XCTAssertEqual(seen.count, 1)
         XCTAssertEqual(seen.first?.0, "native/budget-month")
@@ -57,7 +70,7 @@ final class BudgetViewModelTests: XCTestCase {
             client: NativeBridgeClient { _, _ in
                 if fail { throw Boom() }
                 return json
-            }, month: "2026-03")
+            }, now: march9, calendar: utc)
         await model.load()
         guard case .failed = model.state else { return XCTFail("expected failed, got \(model.state)") }
         fail = false
@@ -70,16 +83,68 @@ final class BudgetViewModelTests: XCTestCase {
             await withCheckedContinuation { (_: CheckedContinuation<Void, Never>) in }
             return "{}"
         }
-        let model = BudgetViewModel(client: hanging, month: "2026-03")
+        let model = BudgetViewModel(client: hanging, now: march9, calendar: utc)
         await model.load()
         XCTAssertEqual(model.state, .failed(.timedOut))
     }
 
     // 1.3a: a tracking budget shows the web Budget screen until sc-3778 lands
     func testATrackingBudgetFallsBackToTheWebScreen() async throws {
-        let model = BudgetViewModel(client: client(returning: try fixtureJSON("budget-month-tracking")), month: "2026-03")
+        let model = BudgetViewModel(client: client(returning: try fixtureJSON("budget-month-tracking")), now: march9, calendar: utc)
         await model.load()
         XCTAssertEqual(model.state, .useWebScreen)
+    }
+
+    // The real handler throws this text (app.ts); WebKit wraps it in an NSError
+    private let noBudgetError = NSError(
+        domain: "WKErrorDomain", code: 4,
+        userInfo: [
+            NSLocalizedDescriptionKey: "A JavaScript exception occurred",
+            "WKJavaScriptExceptionMessage": "Error: native/budget-month: no budget for month 2026-03",
+        ])
+
+    func testAMonthWithNoBudgetShowsAnEmptyStateNotARetry() async {
+        let model = BudgetViewModel(client: NativeBridgeClient { _, _ in throw self.noBudgetError }, now: march9, calendar: utc)
+        await model.load()
+        XCTAssertEqual(model.state, .failed(.noBudgetForMonth))
+        XCTAssertFalse(BudgetLoadError.noBudgetForMonth.canRetry)
+        XCTAssertTrue(BudgetLoadError.timedOut.canRetry)
+        XCTAssertTrue(BudgetLoadError.other.canRetry)
+    }
+
+    func testErrorsReadAsPlainSentences() {
+        for error in [BudgetLoadError.timedOut, .noBudgetForMonth, .other] {
+            XCTAssertFalse(error.message.isEmpty)
+            XCTAssertFalse(error.message.contains("Error Domain"))
+            XCTAssertFalse(error.message.contains("native/budget-month"))
+            XCTAssertTrue(error.message.hasSuffix("."))
+        }
+    }
+
+    func testAnUnexpectedErrorShowsThePlainMessage() async {
+        struct Boom: Error {}
+        let model = BudgetViewModel(client: NativeBridgeClient { _, _ in throw Boom() }, now: march9, calendar: utc)
+        await model.load()
+        XCTAssertEqual(model.state, .failed(.other))
+    }
+
+    // The month is read again on each load, so an app left open over midnight
+    // on the last day of a month shows the new month
+    func testAReloadAfterTheMonthRollsOverAsksForTheNewMonth() async throws {
+        var seen: [String] = []
+        var now = day(2026, 10, 31)
+        let json = try fixtureJSON("budget-month-envelope")
+        let model = BudgetViewModel(
+            client: NativeBridgeClient { _, args in
+                seen.append(args)
+                return json
+            }, now: { now() }, calendar: utc)
+        await model.load()
+        XCTAssertEqual(model.month, "2026-10")
+        now = day(2026, 11, 1)
+        await model.load()
+        XCTAssertEqual(model.month, "2026-11")
+        XCTAssertEqual(seen, [#"{"month":"2026-10"}"#, #"{"month":"2026-11"}"#])
     }
 
     func testCurrentMonthIsYearDashMonth() {
@@ -118,20 +183,77 @@ final class NativeScreenSwitchTests: XCTestCase {
     }
 }
 
-final class BudgetAmountFormatTests: XCTestCase {
-    private let us = Locale(identifier: "en_US")
-
-    func testFormatsMinorUnitsWithTheBudgetsDecimalPlaces() {
-        XCTAssertEqual(BudgetAmountFormat.string(140000, decimalPlaces: 2, currencyCode: "", locale: us), "1,400.00")
-        XCTAssertEqual(BudgetAmountFormat.string(-1250, decimalPlaces: 2, currencyCode: "", locale: us), "-12.50")
-        XCTAssertEqual(BudgetAmountFormat.string(1500, decimalPlaces: 0, currencyCode: "", locale: us), "1,500")
+final class BudgetAmountStyleTests: XCTestCase {
+    private func style(
+        _ code: String = "", symbol: String = "", places: Int = 2, position: BudgetMonth.SymbolPosition = .before,
+        space: Bool = false, format: BudgetMonth.NumberFormat = .commaDot, hideFraction: Bool = false
+    ) -> BudgetAmountStyle {
+        BudgetAmountStyle(
+            currencyCode: code, currencySymbol: symbol, decimalPlaces: places, symbolPosition: position,
+            symbolSpace: space, numberFormat: format, hideFraction: hideFraction)
     }
 
-    func testUsesTheCurrencyWhenTheBudgetHasOne() {
-        XCTAssertEqual(BudgetAmountFormat.string(140000, decimalPlaces: 2, currencyCode: "USD", locale: us), "$1,400.00")
+    func testANegativeAmountWithACurrency() {
+        XCTAssertEqual(BudgetAmountFormat.string(-1250, style: style("USD", symbol: "$")), "-$12.50")
     }
 
-    func testAnAmountThatDoesNotApplyShowsNothing() {
-        XCTAssertEqual(BudgetAmountFormat.string(nil, decimalPlaces: 2, currencyCode: "", locale: us), "")
+    func testNumberFormatsLikeTheWeb() {
+        XCTAssertEqual(BudgetAmountFormat.string(140000, style: style(format: .dotComma)), "1.400,00")
+        XCTAssertEqual(BudgetAmountFormat.string(140000, style: style(format: .spaceComma)), "1\u{202F}400,00")
+        XCTAssertEqual(BudgetAmountFormat.string(123_456_789, style: style(format: .apostropheDot)), "1\u{2019}234\u{2019}567.89")
+        XCTAssertEqual(BudgetAmountFormat.string(12_345_678_900, style: style(format: .commaDotIn)), "12,34,56,789.00")
+    }
+
+    func testHideFractionShowsWholeUnits() {
+        XCTAssertEqual(BudgetAmountFormat.string(140000, style: style(hideFraction: true)), "1,400")
+        XCTAssertEqual(BudgetAmountFormat.string(-140050, style: style("USD", symbol: "$", hideFraction: true)), "-$1,401")
+    }
+
+    func testSymbolAfterWithAThinSpace() {
+        let yen = style("JPY", symbol: "¥", places: 0, position: .after, space: true, format: .dotComma)
+        XCTAssertEqual(BudgetAmountFormat.string(140000, style: yen), "140.000\u{202F}¥")
+        XCTAssertEqual(BudgetAmountFormat.string(-1500, style: yen), "-1.500\u{202F}¥")
+    }
+
+    func testNoCurrencyShowsNoSymbol() {
+        XCTAssertEqual(BudgetAmountFormat.string(5, style: style(symbol: "x")), "0.05")
+        XCTAssertEqual(BudgetAmountFormat.string(nil, style: style()), "")
+        XCTAssertEqual(BudgetAmountFormat.string(0, style: style()), "0.00")
+    }
+
+    func testTheJPYFixtureDecodesAndFormatsWithZeroDecimals() throws {
+        let month = try JSONDecoder().decode(BudgetMonth.self, from: Data(try fixtureJSON("budget-month-envelope-jpy").utf8))
+        XCTAssertEqual(month.currencyCode, "JPY")
+        XCTAssertEqual(month.currencyDecimalPlaces, 0)
+        XCTAssertEqual(BudgetAmountFormat.string(month.totals.toBudget, style: month.amountStyle), "140.000\u{202F}¥")
+    }
+
+    func testTonesFollowTheSign() {
+        XCTAssertEqual(BudgetAmountFormat.tone(-1), .negative)
+        XCTAssertEqual(BudgetAmountFormat.tone(1), .positive)
+        XCTAssertEqual(BudgetAmountFormat.tone(0), .zero)
+        XCTAssertEqual(BudgetAmountFormat.tone(nil), .zero)
+    }
+}
+
+final class BudgetGroupsTests: XCTestCase {
+    func testIncomeIsSeparateFromExpenseGroupsAndHiddenRowsAreLeftOut() throws {
+        let month = try JSONDecoder().decode(BudgetMonth.self, from: Data(try fixtureJSON("budget-month-envelope").utf8))
+        XCTAssertEqual(month.incomeGroups.map(\.name), ["Income"])
+        XCTAssertEqual(month.expenseGroups.map(\.name), ["Bills"])
+        // Power is hidden in the fixture
+        XCTAssertEqual(month.expenseGroups.first?.visibleCategories.map(\.name), ["Rent"])
+    }
+}
+
+final class NativeScreensScriptTests: XCTestCase {
+    // After a toggle and a page reload the script must say what is on now
+    func testTheScriptFollowsTheSwitchNotTheValueAtLaunch() {
+        let suite = "NativeScreensScriptTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        addTeardownBlock { defaults.removePersistentDomain(forName: suite) }
+        XCTAssertEqual(NativeScreensScript.source(defaults: defaults), #"window.__actualNativeScreens = {"budget": false};"#)
+        defaults.set(true, forKey: "NativeScreen.budget")
+        XCTAssertEqual(NativeScreensScript.source(defaults: defaults), #"window.__actualNativeScreens = {"budget": true};"#)
     }
 }

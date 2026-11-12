@@ -7,9 +7,11 @@ import { aqlQuery } from '#server/aql';
 import { getBudgetType } from '#server/budget/base';
 import * as db from '#server/db';
 import * as sheet from '#server/sheet';
-import { getDecimalPlaces } from '#shared/currencies';
+import { getCurrency } from '#shared/currencies';
 import * as monthUtils from '#shared/months';
 import { q } from '#shared/query';
+import { parseNumberFormat } from '#shared/util';
+import type { NumberFormats } from '#shared/util';
 import type { CategoryEntity, CategoryGroupEntity } from '#types/models';
 
 // null: the value doesn't apply to this budget type (or row)
@@ -39,9 +41,16 @@ export type NativeBudgetMonthGroup = {
 export type NativeBudgetMonth = {
   month: string;
   budgetType: 'envelope' | 'tracking';
-  // From the defaultCurrencyCode preference; '' (none) formats with 2 places
+  // How the web formats money (useFormat.ts), so native amounts read the
+  // same: the currency (the web's fallback for an unknown code is none, '' with
+  // 2 places) and the formatting preferences
   currencyCode: string;
   currencyDecimalPlaces: number;
+  currencySymbol: string;
+  currencySymbolPosition: 'before' | 'after';
+  currencySpace: boolean;
+  numberFormat: NumberFormats;
+  hideFraction: boolean;
   totals: {
     budgeted: Amount;
     spent: Amount;
@@ -91,17 +100,29 @@ async function budgetMonth({
     q('category_groups').select('*'),
   )) as { data: CategoryGroupEntity[] };
 
-  const currency = await db.first<{ value: string | null }>(
-    'SELECT value FROM preferences WHERE id = ?',
-    ['defaultCurrencyCode'],
+  const prefs = await db.all<{ id: string; value: string | null }>(
+    `SELECT id, value FROM preferences WHERE id IN
+       ('defaultCurrencyCode', 'numberFormat', 'hideFraction',
+        'currencySymbolPosition', 'currencySpaceBetweenAmountAndSymbol')`,
   );
-  const currencyCode = currency?.value ?? '';
+  const pref = (id: string) => prefs.find(p => p.id === id)?.value ?? undefined;
+  const currency = getCurrency(pref('defaultCurrencyCode') ?? '');
+  const { format: numberFormat, hideFraction } = parseNumberFormat({
+    format: pref('numberFormat'),
+    hideFraction: pref('hideFraction'),
+  });
 
   return {
     month,
     budgetType: isEnvelope ? 'envelope' : 'tracking',
-    currencyCode,
-    currencyDecimalPlaces: getDecimalPlaces(currencyCode),
+    currencyCode: currency.code,
+    currencyDecimalPlaces: currency.decimalPlaces,
+    currencySymbol: currency.symbol,
+    currencySymbolPosition:
+      pref('currencySymbolPosition') === 'after' ? 'after' : 'before',
+    currencySpace: pref('currencySpaceBetweenAmountAndSymbol') === 'true',
+    numberFormat,
+    hideFraction,
     totals: {
       budgeted: amount('total-budgeted'),
       spent: amount('total-spent'),

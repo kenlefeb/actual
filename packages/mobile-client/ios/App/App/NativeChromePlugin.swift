@@ -26,9 +26,25 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
     override public func load() {
         guard let controller = bridge?.webView?.configuration.userContentController else { return }
         controller.add(self, name: "actualNativeChrome")
-        // Which native screens are on, for the Settings switch (sc-3751)
-        let screens = NativeScreenSwitch.nativeTabs.map { "\"\($0.rawValue)\": \(NativeScreenSwitch.screen(for: $0) == .native)" }
-        controller.addUserScript(WKUserScript(source: "window.__actualNativeScreens = {\(screens.joined(separator: ", "))};", injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        installScreensScript(on: controller)
+    }
+
+    // Tells the page which native screens are on (for the Settings switch,
+    // sc-3751) at the start of every load. WebKit reruns the script text it
+    // was given, so a toggle replaces the script; otherwise a reload would
+    // bring back the value from launch.
+    private var screensScript: WKUserScript?
+
+    private func installScreensScript(on controller: WKUserContentController) {
+        if let old = screensScript {
+            // No API removes one script; keep the others (Capacitor's)
+            let others = controller.userScripts.filter { $0 !== old }
+            controller.removeAllUserScripts()
+            others.forEach(controller.addUserScript)
+        }
+        let script = WKUserScript(source: NativeScreensScript.source(), injectionTime: .atDocumentStart, forMainFrameOnly: true)
+        screensScript = script
+        controller.addUserScript(script)
     }
 
     public func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -46,6 +62,7 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
             if let name = body["screen"] as? String, let on = body["on"] as? Bool,
                let tab = NativeTab(rawValue: name), NativeScreenSwitch.nativeTabs.contains(tab) {
                 UserDefaults.standard.set(on, forKey: NativeScreenSwitch.key(for: tab))
+                if let controller = bridge?.webView?.configuration.userContentController { installScreensScript(on: controller) }
                 onNativeScreenChanged?(tab)
             }
         case "haptic":

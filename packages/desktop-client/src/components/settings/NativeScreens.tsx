@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { Text } from '@actual-app/components/text';
+import { View } from '@actual-app/components/view';
 
 import { Checkbox } from '#components/forms';
 import {
@@ -30,20 +31,31 @@ export function NativeScreens() {
         description={
           <Text>
             <Trans>
-              Shows the Budget tab as a native iPhone screen (envelope budgets).
-              Turn it off to use the web screen.
+              Show the Budget tab as a native iPhone screen. It starts the next
+              time you open Budget. It is read-only for now, and tracking
+              budgets still use the web screen. Turn it off to go back.
             </Trans>
           </Text>
         }
         control={
-          <Checkbox
-            id="settings-native-budget"
-            checked={budgetOn}
-            onChange={() => {
-              setNativeScreenOn('budget', !budgetOn);
-              setBudgetOn(!budgetOn);
+          // 44pt: the touch target iOS expects
+          <View
+            style={{
+              minWidth: 44,
+              minHeight: 44,
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
-          />
+          >
+            <Checkbox
+              id="settings-native-budget"
+              checked={budgetOn}
+              onChange={() => {
+                setNativeScreenOn('budget', !budgetOn);
+                setBudgetOn(!budgetOn);
+              }}
+            />
+          </View>
         }
       />
     </SettingsGroup>

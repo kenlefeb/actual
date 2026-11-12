@@ -10,6 +10,7 @@ import UIKit
 final class NativeBudgetViewController: UIHostingController<BudgetTabView> {
     private let model: BudgetViewModel
     private var stateObserver: AnyCancellable?
+    private var lifecycleObservers: [NSObjectProtocol] = []
 
     // A tracking budget has no native screen yet: the web Budget screen shows
     var onUseWebScreen: (() -> Void)?
@@ -25,7 +26,10 @@ final class NativeBudgetViewController: UIHostingController<BudgetTabView> {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    // Until change events land (sc-3796), the tab re-reads each time it shows
+    // The page's change events (NativeBridgePlugin.onEvent) end here
+    func changeEventReceived() { model.changeEventReceived() }
+
+    // The tab also re-reads each time it shows
     func reload() {
         Task { await model.load() }
     }
@@ -36,7 +40,17 @@ final class NativeBudgetViewController: UIHostingController<BudgetTabView> {
         // modal, so VoiceOver skips that web view while this screen shows
         view.backgroundColor = .systemGroupedBackground
         view.accessibilityViewIsModal = true
+        let center = NotificationCenter.default
+        for (name, active) in [(UIApplication.didBecomeActiveNotification, true), (UIApplication.willResignActiveNotification, false)] {
+            lifecycleObservers.append(
+                center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                    guard let model = self?.model else { return }
+                    Task { await model.setSceneActive(active) }
+                })
+        }
     }
+
+    deinit { for observer in lifecycleObservers { NotificationCenter.default.removeObserver(observer) } }
 }
 
 struct BudgetTabView: View {

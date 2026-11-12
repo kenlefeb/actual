@@ -35,6 +35,8 @@ private func client(returning json: String, timeout: TimeInterval = 1) -> Native
     NativeBridgeClient(timeout: timeout) { _, _ in json }
 }
 
+private final class Counter { var count = 0 }
+
 @MainActor
 final class BudgetViewModelTests: XCTestCase {
     func testStartsLoadingThenShowsTheMonthLootCoreSent() async throws {
@@ -145,6 +147,69 @@ final class BudgetViewModelTests: XCTestCase {
         await model.load()
         XCTAssertEqual(model.month, "2026-11")
         XCTAssertEqual(seen, [#"{"month":"2026-10"}"#, #"{"month":"2026-11"}"#])
+    }
+
+    // sc-3796: change events, foreground and background
+    private func countingModel(_ json: String, timeout: TimeInterval = 1, reads: Counter) -> BudgetViewModel {
+        BudgetViewModel(
+            client: NativeBridgeClient(timeout: timeout) { _, _ in
+                reads.count += 1
+                return json
+            }, now: march9, calendar: utc, changeInterval: 0.01)
+    }
+
+    private func settle() async { try? await Task.sleep(nanoseconds: 150_000_000) }
+
+    func testAChangeEventRefreshesTheMonth() async throws {
+        let reads = Counter()
+        let model = countingModel(try fixtureJSON("budget-month-envelope"), reads: reads)
+        await model.load()
+        model.changeEventReceived()
+        await settle()
+        XCTAssertEqual(reads.count, 2)
+        guard case .loaded = model.state else { return XCTFail("expected loaded, got \(model.state)") }
+    }
+
+    func testABurstInOneFrameReadsOnce() async throws {
+        let reads = Counter()
+        let model = countingModel(try fixtureJSON("budget-month-envelope"), reads: reads)
+        await model.load()
+        for _ in 0..<5 { model.changeEventReceived() }
+        await settle()
+        XCTAssertEqual(reads.count, 2)
+    }
+
+    func testNoReadWhileTheSceneIsInactiveAndOneOnBecomingActive() async throws {
+        let reads = Counter()
+        let model = countingModel(try fixtureJSON("budget-month-envelope"), reads: reads)
+        await model.load()
+        await model.setSceneActive(false)
+        model.changeEventReceived()
+        model.changeEventReceived()
+        await settle()
+        XCTAssertEqual(reads.count, 1)
+        await model.setSceneActive(true)
+        XCTAssertEqual(reads.count, 2)
+        // Already active: no second read
+        await model.setSceneActive(true)
+        XCTAssertEqual(reads.count, 2)
+    }
+
+    // 6.2: a refresh goes through the client, so the client timeout applies
+    func testARefreshThatTimesOutShowsTheTimeoutErrorWithRetry() async throws {
+        let json = try fixtureJSON("budget-month-envelope")
+        var hang = false
+        let model = BudgetViewModel(
+            client: NativeBridgeClient(timeout: 0.1) { _, _ in
+                if hang { await withCheckedContinuation { (_: CheckedContinuation<Void, Never>) in } }
+                return json
+            }, now: march9, calendar: utc, changeInterval: 0.01)
+        await model.load()
+        hang = true
+        model.changeEventReceived()
+        try await Task.sleep(nanoseconds: 400_000_000)
+        XCTAssertEqual(model.state, .failed(.timedOut))
+        XCTAssertTrue(BudgetLoadError.timedOut.canRetry)
     }
 
     func testCurrentMonthIsYearDashMonth() {

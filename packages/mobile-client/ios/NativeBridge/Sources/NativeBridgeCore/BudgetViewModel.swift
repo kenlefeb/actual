@@ -48,12 +48,35 @@ public final class BudgetViewModel: ObservableObject {
     private let client: NativeBridgeClient
     private let now: () -> Date
     private let calendar: Calendar
+    // A suspended page does not answer, so nothing reads while inactive
+    private var isSceneActive = true
+    private var coalescer: ChangeCoalescer?
 
-    public init(client: NativeBridgeClient, now: @escaping () -> Date = Date.init, calendar: Calendar = .current) {
+    public init(
+        client: NativeBridgeClient, now: @escaping () -> Date = Date.init, calendar: Calendar = .current,
+        changeInterval: TimeInterval = 1.0 / 60
+    ) {
         self.client = client
         self.now = now
         self.calendar = calendar
         month = Self.currentMonth(now(), calendar: calendar)
+        coalescer = ChangeCoalescer(interval: changeInterval) { [weak self] in
+            guard let self, self.isSceneActive else { return }
+            Task { @MainActor in await self.load() }
+        }
+    }
+
+    // A `cells-changed` or `sync-event` from the page: one re-read per frame
+    public func changeEventReceived() {
+        guard isSceneActive else { return }
+        coalescer?.notify()
+    }
+
+    // Events during the background are dropped; the one read on returning covers them
+    public func setSceneActive(_ active: Bool) async {
+        guard active != isSceneActive else { return }
+        isSceneActive = active
+        if active { await load() }
     }
 
     // Also the retry action of the error state, and the reload each time the

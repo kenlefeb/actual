@@ -108,6 +108,7 @@ import {
 import { useSyncedPref } from '#hooks/useSyncedPref';
 import { useTouchTargetStyle } from '#hooks/useTouchTargetStyle';
 import { pushModal } from '#modals/modalsSlice';
+import { nativeHaptic } from '#native/nativeChrome';
 import { addNotification } from '#notifications/notificationsSlice';
 import { useSavePayeeLocationMutation } from '#payees';
 import { locationService } from '#payees/location';
@@ -739,6 +740,8 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
         }
 
         onSave(transactionsToSave);
+        // fork: sc-3514. Saving gives a haptic tap in the iOS app
+        nativeHaptic();
         void navigate(-1);
       };
 

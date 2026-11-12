@@ -16,6 +16,7 @@ import { useAutomaticBankSync } from '#hooks/useAutomaticBankSync';
 import { useGlobalPref } from '#hooks/useGlobalPref';
 import { useLocalPref } from '#hooks/useLocalPref';
 import { useMetaThemeColor } from '#hooks/useMetaThemeColor';
+import { useNativeTabBarRoutes } from '#hooks/useNativeTabBarRoutes';
 import { useNavigate } from '#hooks/useNavigate';
 import { useNewsNotification } from '#hooks/useNewsNotification';
 import { ScrollProvider } from '#hooks/useScrollListener';
@@ -93,6 +94,7 @@ function WideNotSupported({
 function RouterBehaviors() {
   const location = useLocation();
   const href = useHref(location);
+  useNativeTabBarRoutes();
   useEffect(() => {
     undo.setUndoState('url', href);
   }, [href]);

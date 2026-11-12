@@ -57,10 +57,11 @@ public final class BudgetViewModel: ObservableObject {
     }
 
     // Also the retry action of the error state, and the reload each time the
-    // tab shows. The month is taken again each time, so the tab never keeps
-    // showing last month after midnight.
+    // tab shows. Until the user picks another month it is taken again each
+    // time, so the tab never keeps showing last month after midnight; once
+    // they have, that month stays.
     public func load() async {
-        month = Self.currentMonth(now(), calendar: calendar)
+        if !navigated { month = Self.currentMonth(now(), calendar: calendar) }
         if case .loaded = state {} else { state = .loading }
         do {
             let result = try await client.budgetMonth(month)
@@ -68,6 +69,57 @@ public final class BudgetViewModel: ObservableObject {
         } catch {
             state = .failed(BudgetLoadError.from(error))
         }
+    }
+
+    // Month navigation (sc-3760). Nothing handler-free lists the budget's
+    // months, so the edge is learned by asking: a step into a month with no
+    // budget makes one read, fails with loot-core's own "no budget" answer and
+    // stays where it was; that month and everything beyond it is then out.
+    // shortcut: the picker's window is 24 months back and 12 forward, widening as
+    // the user steps; upgrade if the budget gets an additive range field.
+    private var navigated = false
+    private var missingBefore: String?
+    private var missingAfter: String?
+
+    public var canGoPrevious: Bool { isReachable(Self.shift(month, by: -1)) }
+    public var canGoNext: Bool { isReachable(Self.shift(month, by: 1)) }
+
+    public var pickerMonths: [String] {
+        (-24...12).map { Self.shift(month, by: $0) }.filter(isReachable)
+    }
+
+    public func previous() async { await select(Self.shift(month, by: -1)) }
+    public func next() async { await select(Self.shift(month, by: 1)) }
+
+    public func select(_ target: String) async {
+        guard target != month, isReachable(target) else { return }
+        do {
+            let result = try await client.budgetMonth(target)
+            navigated = true
+            month = target
+            state = result.budgetType == .tracking ? .useWebScreen : .loaded(result)
+        } catch {
+            let failure = BudgetLoadError.from(error)
+            if failure == .noBudgetForMonth {
+                // Keep the month and numbers on screen
+                if target < month { missingBefore = target } else { missingAfter = target }
+            } else {
+                navigated = true
+                month = target
+                state = .failed(failure)
+            }
+        }
+    }
+
+    private func isReachable(_ candidate: String) -> Bool {
+        candidate > (missingBefore ?? "") && candidate < (missingAfter ?? "9999-99")
+    }
+
+    static func shift(_ month: String, by offset: Int) -> String {
+        let parts = month.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 2 else { return month }
+        let index = parts[0] * 12 + (parts[1] - 1) + offset
+        return String(format: "%04d-%02d", index / 12, index % 12 + 1)
     }
 
     public static func currentMonth(_ now: Date = Date(), calendar: Calendar = .current) -> String {

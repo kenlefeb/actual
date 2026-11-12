@@ -46,6 +46,7 @@ struct BudgetTabView: View {
         NavigationView {
             content
                 .navigationBarTitle(Text(monthTitle), displayMode: .large)
+                .toolbar { monthControls }
         }
         .navigationViewStyle(.stack)
         .task { await model.load() }
@@ -72,11 +73,41 @@ struct BudgetTabView: View {
         }
     }
 
-    private var monthTitle: String {
+    // Previous, picker and next (sc-3760); the view model decides what is reachable
+    @ToolbarContentBuilder private var monthControls: some ToolbarContent {
+        ToolbarItemGroup(placement: .navigationBarTrailing) {
+            Button {
+                Task { await model.previous() }
+            } label: {
+                Image(systemName: "chevron.left")
+            }
+            .disabled(!model.canGoPrevious)
+            .accessibilityLabel(Text(NSLocalizedString("Previous month", comment: "Native Budget tab: month navigation")))
+            Menu {
+                ForEach(model.pickerMonths.reversed(), id: \.self) { month in
+                    Button(Self.title(of: month)) { Task { await model.select(month) } }
+                }
+            } label: {
+                Image(systemName: "calendar")
+            }
+            .accessibilityLabel(Text(NSLocalizedString("Choose month", comment: "Native Budget tab: month picker")))
+            Button {
+                Task { await model.next() }
+            } label: {
+                Image(systemName: "chevron.right")
+            }
+            .disabled(!model.canGoNext)
+            .accessibilityLabel(Text(NSLocalizedString("Next month", comment: "Native Budget tab: month navigation")))
+        }
+    }
+
+    private var monthTitle: String { Self.title(of: model.month) }
+
+    private static func title(of month: String) -> String {
         let parser = DateFormatter()
         parser.dateFormat = "yyyy-MM"
         parser.locale = Locale(identifier: "en_US_POSIX")
-        guard let date = parser.date(from: model.month) else { return model.month }
+        guard let date = parser.date(from: month) else { return month }
         let formatter = DateFormatter()
         formatter.setLocalizedDateFormatFromTemplate("MMMM yyyy")
         return formatter.string(from: date)

@@ -112,18 +112,46 @@ const DETAIL_PARENTS: Record<string, string> = {
   '/categories': '/budget',
 };
 
-// The last screen shown that was not a transaction page: where a transaction
-// opened from (an account register, a category, the Add tab) returns to
-let lastScreen: string | null = null;
-export function rememberNativeScreen(path: string | null) {
-  // null forgets it, as after a relaunch
-  if (path == null || !path.startsWith('/transactions/')) lastScreen = path;
+type RouteState = {
+  // Set by useNavigate: the screen the user was on
+  previousLocation?: { pathname: string };
+  // Set when the tab bar (a tab or Add) moved the page
+  fromTabBar?: boolean;
+};
+
+// Which tab shows the page, as the iOS app's tab router works it out: a
+// screen under a tab's section selects that tab, any other screen belongs to
+// the tab that was selected
+let selectedTab = 'budget';
+// Where each transaction page was opened from. The tab bar restoring a tab's
+// last screen is not an opening, so it never changes this: the origin always
+// stays in the tab the transaction was opened in.
+const origins = new Map<string, string>();
+
+export function rememberNativeRoute(path: string, state?: RouteState) {
+  const section = `/${path.split('/')[1]}`;
+  if (TAB_ROOTS.includes(section)) selectedTab = section.slice(1);
+  if (!path.startsWith('/transactions/')) return;
+  const from = state?.previousLocation?.pathname;
+  const isOpening = !state?.fromTabBar || path === '/transactions/new';
+  if (from && isOpening && !from.startsWith('/transactions/')) {
+    origins.set(path, from);
+  } else if (isOpening) {
+    // A deep link, or a relaunch: nothing to go back to
+    origins.delete(path);
+  }
+}
+
+export function resetNativeRoutes() {
+  selectedTab = 'budget';
+  origins.clear();
 }
 
 // Fork-only (sc-3736). The fixed parent screen the iOS app's Back goes to, or
 // null on a tab root or a screen with no mapped parent (Back is hidden).
 // Never history, never another tab. `account` is the fallback for a
-// transaction with no remembered screen (deep link or relaunch).
+// transaction with no remembered origin (deep link or relaunch); a new one
+// then goes to the selected tab's root.
 export function nativeParentPath(
   path: string,
   account?: string | null,
@@ -135,7 +163,10 @@ export function nativeParentPath(
     return segments.length === 1 ? '/settings' : SETTINGS_LISTS[root];
   }
   if (root === '/transactions') {
-    return lastScreen ?? (account ? `/accounts/${account}` : '/accounts');
+    return (
+      origins.get(path) ??
+      (account ? `/accounts/${account}` : `/${selectedTab}`)
+    );
   }
   return DETAIL_PARENTS[root] ?? null;
 }

@@ -6,7 +6,7 @@ import {
   installNativeChrome,
   postNativeClosed,
   postNativeRoute,
-  rememberNativeScreen,
+  rememberNativeRoute,
   showsNativeTabBar,
 } from '#native/nativeChrome';
 import { useSelector } from '#redux';
@@ -16,16 +16,17 @@ import { useSelector } from '#redux';
 // (closing the budget) hides the tab bar.
 export function useNativeTabBarRoutes() {
   const navigate = useNavigate();
-  const { pathname } = useLocation();
-  const hasSheet = useSelector(state => state.modals.modalStack.length > 0);
+  const { pathname, state } = useLocation();
+  const hasSheet = useSelector(s => s.modals.modalStack.length > 0);
   const tabBar = showsNativeTabBar(pathname, hasSheet);
-  rememberNativeScreen(pathname);
+  // After the page shows, so a render never changes what Back means
+  useEffect(() => rememberNativeRoute(pathname, state), [pathname, state]);
 
   useEffect(
     () =>
       installNativeChrome(
         window,
-        path => void navigate(path),
+        path => void navigate(path, { state: { fromTabBar: true } }),
         () => postNativeRoute(window, pathname, tabBar),
       ),
     [navigate, pathname, tabBar],

@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestAppStore, resetTestProviders, TestProviders } from '#mocks';
 import { initServer } from '#mocks/connection';
 import * as modalsSlice from '#modals/modalsSlice';
-import { rememberNativeScreen } from '#native/nativeChrome';
+import { rememberNativeRoute, resetNativeRoutes } from '#native/nativeChrome';
 
 import { TransactionEdit } from './TransactionEdit';
 
@@ -851,46 +851,58 @@ describe('Phone transaction edit page: leaving it', () => {
 
   afterEach(() => {
     delete (window as { webkit?: unknown }).webkit;
-    rememberNativeScreen(null);
+    resetNativeRoutes();
   });
 
   it('Back returns to the account register it was opened from', async () => {
-    rememberNativeScreen('/accounts/vanguard');
+    rememberNativeRoute('/transactions/t1', {
+      previousLocation: { pathname: '/accounts/vanguard' },
+    });
     renderWithDestinations('/transactions/t1');
     await back();
     expect(await screen.findByText('Account page')).toBeVisible();
   });
 
   it('Back returns to the category on the Budget tab', async () => {
-    rememberNativeScreen('/categories/groceries');
+    rememberNativeRoute('/transactions/t1', {
+      previousLocation: { pathname: '/categories/groceries' },
+    });
     renderWithDestinations('/transactions/t1');
     await back();
     expect(await screen.findByText('Category page')).toBeVisible();
   });
 
   it('Back from a new transaction returns to the screen the Add tab was used on', async () => {
-    rememberNativeScreen('/reports/d1');
+    rememberNativeRoute('/transactions/new', {
+      previousLocation: { pathname: '/reports/d1' },
+      fromTabBar: true,
+    });
     renderWithDestinations('/transactions/new?account=Vanguard');
     await back();
     expect(await screen.findByText('Reports page')).toBeVisible();
   });
 
-  it("Back after a deep link goes to the transaction's account", async () => {
-    rememberNativeScreen(null);
+  it("Back after a deep link goes to the transaction's account, whatever tab the app was on", async () => {
+    rememberNativeRoute('/reports/d1', undefined);
+    rememberNativeRoute('/transactions/t1', undefined);
     renderWithDestinations('/transactions/t1');
     await back();
     expect(await screen.findByText('Account page')).toBeVisible();
   });
 
-  it('Back with nothing known about the transaction goes to the accounts list', async () => {
-    rememberNativeScreen(null);
+  it('Back from a new transaction with nothing known goes to the selected tab root', async () => {
+    rememberNativeRoute('/accounts/vanguard', undefined);
+    rememberNativeRoute('/transactions/new', undefined);
     renderWithDestinations('/transactions/new');
     await back();
     expect(await screen.findByText('Accounts list')).toBeVisible();
   });
 
   it('Add returns to the category it was opened from', async () => {
-    rememberNativeScreen('/categories/groceries');
+    rememberNativeRoute('/transactions/new', {
+      previousLocation: { pathname: '/categories/groceries' },
+      fromTabBar: true,
+    });
     const { container } = renderWithDestinations(
       '/transactions/new?account=Vanguard',
     );
@@ -904,7 +916,9 @@ describe('Phone transaction edit page: leaving it', () => {
 
   it('Delete returns to the account register it was opened from', async () => {
     const pushModal = vi.spyOn(modalsSlice, 'pushModal');
-    rememberNativeScreen('/accounts/vanguard');
+    rememberNativeRoute('/transactions/t1', {
+      previousLocation: { pathname: '/accounts/vanguard' },
+    });
     renderWithDestinations('/transactions/t1');
     await userEvent.click(
       await screen.findByRole('button', { name: 'Delete transaction' }),
@@ -917,5 +931,25 @@ describe('Phone transaction edit page: leaving it', () => {
     >;
     await act(async () => confirm.options.onConfirm?.());
     expect(await screen.findByText('Account page')).toBeVisible();
+  });
+
+  it('Accounts, an account, a transaction, Reports, Accounts, Back: the account, not Reports', async () => {
+    rememberNativeRoute('/accounts/vanguard', undefined);
+    rememberNativeRoute('/transactions/t1', {
+      previousLocation: { pathname: '/accounts/vanguard' },
+    });
+    rememberNativeRoute('/reports', {
+      previousLocation: { pathname: '/transactions/t1' },
+      fromTabBar: true,
+    });
+    // Tapping Accounts shows the transaction again, as the tab's last screen
+    rememberNativeRoute('/transactions/t1', {
+      previousLocation: { pathname: '/reports' },
+      fromTabBar: true,
+    });
+    renderWithDestinations('/transactions/t1');
+    await back();
+    expect(await screen.findByText('Account page')).toBeVisible();
+    expect(screen.queryByText('Reports page')).toBeNull();
   });
 });

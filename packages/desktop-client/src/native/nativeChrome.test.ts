@@ -145,7 +145,6 @@ describe('nativeParentPath', () => {
   it.each([
     ['/accounts/1', '/accounts'],
     ['/categories/c1', '/budget'],
-    ['/transactions/t1', '/accounts'],
     ['/schedules/s1', '/schedules'],
     ['/paychecks/p1', '/schedules'],
     ['/schedules', '/settings'],
@@ -172,18 +171,30 @@ describe('nativeParentPath', () => {
   });
 
   describe('a transaction page', () => {
-    // The remembered screen is module state, so each case starts fresh
+    // The remembered origins are module state, so each case starts fresh
     async function load() {
       vi.resetModules();
       return import('./nativeChrome');
     }
+    const from = (pathname: string) => ({ previousLocation: { pathname } });
+    const fromTabBar = (pathname: string) => ({
+      ...from(pathname),
+      fromTabBar: true,
+    });
 
-    it('goes back to the account when there is nothing remembered (deep link)', async () => {
+    it('goes back to the account when it was not opened from a screen (deep link)', async () => {
       const chrome = await load();
+      chrome.rememberNativeRoute('/transactions/t1', undefined);
       expect(chrome.nativeParentPath('/transactions/t1', 'acct')).toBe(
         '/accounts/acct',
       );
-      expect(chrome.nativeParentPath('/transactions/new')).toBe('/accounts');
+    });
+
+    it('goes back to the selected tab root for a new transaction with nothing known', async () => {
+      const chrome = await load();
+      chrome.rememberNativeRoute('/reports/d1', undefined);
+      chrome.rememberNativeRoute('/transactions/new', undefined);
+      expect(chrome.nativeParentPath('/transactions/new')).toBe('/reports');
     });
 
     it.each([
@@ -191,11 +202,51 @@ describe('nativeParentPath', () => {
       ['/categories/c1'],
       ['/reports/d1'],
       ['/settings'],
-    ])('goes back to %s, the screen it was opened from', async from => {
+    ])('goes back to %s, the screen it was opened from', async origin => {
       const chrome = await load();
-      chrome.rememberNativeScreen(from);
-      chrome.rememberNativeScreen('/transactions/t1');
-      expect(chrome.nativeParentPath('/transactions/t1', 'acct')).toBe(from);
+      chrome.rememberNativeRoute('/transactions/t1', from(origin));
+      expect(chrome.nativeParentPath('/transactions/t1', 'acct')).toBe(origin);
+    });
+
+    it('Add opens from the screen the tab bar was used on', async () => {
+      const chrome = await load();
+      chrome.rememberNativeRoute(
+        '/transactions/new',
+        fromTabBar('/categories/c1'),
+      );
+      expect(chrome.nativeParentPath('/transactions/new')).toBe(
+        '/categories/c1',
+      );
+    });
+
+    it('Accounts, account 7, a transaction, Reports, Accounts, Back: the account, on the Accounts tab', async () => {
+      const chrome = await load();
+      chrome.rememberNativeRoute('/accounts/7', undefined);
+      chrome.rememberNativeRoute('/transactions/t1', from('/accounts/7'));
+      chrome.rememberNativeRoute('/reports', fromTabBar('/transactions/t1'));
+      // The Accounts tab restores its last screen, the transaction
+      chrome.rememberNativeRoute('/transactions/t1', fromTabBar('/reports'));
+      expect(chrome.nativeParentPath('/transactions/t1', '7')).toBe(
+        '/accounts/7',
+      );
+    });
+
+    it("a tab restoring a transaction never takes the other tab's screen", async () => {
+      const chrome = await load();
+      chrome.rememberNativeRoute('/reports/d1', undefined);
+      chrome.rememberNativeRoute('/transactions/t9', fromTabBar('/reports/d1'));
+      expect(chrome.nativeParentPath('/transactions/t9', 'acct')).toBe(
+        '/accounts/acct',
+      );
+    });
+
+    it('a deep link while the app is on /reports/d1 goes back to the account', async () => {
+      const chrome = await load();
+      chrome.rememberNativeRoute('/reports/d1', undefined);
+      chrome.rememberNativeRoute('/transactions/t1', undefined);
+      expect(chrome.nativeParentPath('/transactions/t1', 'acct')).toBe(
+        '/accounts/acct',
+      );
     });
   });
 });

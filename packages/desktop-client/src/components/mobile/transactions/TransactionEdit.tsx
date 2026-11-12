@@ -1226,7 +1226,7 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
                   : t('Transaction')
                 : title
             }
-            leftContent={<MobileBackButton onPress={goBack} />}
+            leftContent={<MobileBackButton account={transaction.account} />}
           />
         }
         footer={

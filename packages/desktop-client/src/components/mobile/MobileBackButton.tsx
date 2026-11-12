@@ -9,14 +9,18 @@ import { Text } from '@actual-app/components/text';
 
 import { useGoBack } from '#hooks/useGoBack';
 
-type MobileBackButtonProps = ComponentPropsWithoutRef<typeof Button>;
+type MobileBackButtonProps = ComponentPropsWithoutRef<typeof Button> & {
+  // A transaction page's account, where Back goes if it wasn't opened from a screen
+  account?: string | null;
+};
 
 export function MobileBackButton({
   onPress,
+  account,
   style,
   ...props
 }: MobileBackButtonProps) {
-  const { hidden, goBack } = useGoBack();
+  const { hidden, goBack } = useGoBack(account);
   if (hidden && !onPress) return null;
   return (
     <Button

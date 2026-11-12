@@ -70,6 +70,29 @@ describe('MobileBackButton', () => {
       expect(navigate).toHaveBeenCalledWith(to);
     });
 
+    it('shows nothing on a screen with no parent', () => {
+      inApp();
+      location.pathname = '/something-else/1';
+      render(
+        <TestProviders>
+          <MobileBackButton />
+        </TestProviders>,
+      );
+      expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
+    });
+
+    it("goes from a transaction to the transaction's account when it was not opened from a screen", async () => {
+      inApp();
+      location.pathname = '/transactions/t1';
+      render(
+        <TestProviders>
+          <MobileBackButton account="acct" />
+        </TestProviders>,
+      );
+      await userEvent.click(screen.getByRole('button', { name: 'Back' }));
+      expect(navigate).toHaveBeenCalledExactlyOnceWith('/accounts/acct');
+    });
+
     it('shows nothing on a tab root', () => {
       inApp();
       location.pathname = '/accounts';

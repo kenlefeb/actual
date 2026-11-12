@@ -179,8 +179,8 @@ Before every call into the page, read or write, bridge or native chrome, Swift S
 
 #### Scenario: Back on the app's own page
 - **GIVEN** native calls were refused while a sign-in page was in the main frame
-- **WHEN** the app's own page is back in the main frame and its budget is open
-- **THEN** the native screen re-reads on its own and shows the month, with no relaunch
+- **WHEN** the app's own page is back in the main frame, and its page bridge reports that it is ready through a message that passes the inbound origin guard
+- **THEN** the native screen re-reads on that message and shows the month, with no relaunch; a page-load event alone, which fires for any page, does not trigger it
 
 ### Requirement: The expected origin comes from the server URL
 Swift SHALL derive the expected origin from the same server URL `PageOriginGuard` uses, in the form `location.origin` serializes: lowercased scheme and host, with the default port omitted (for example `capacitor://localhost`, `http://localhost:3001`, `https://host`). It SHALL pass it to the page script as a string argument that is not named `location` or `window`.
@@ -212,6 +212,19 @@ The script Swift runs in the page SHALL first compare `location.origin` with the
 - **GIVEN** a foreign page in the main frame that has replaced `Error`, `JSON.parse` and `window.__actualNativeBridge`
 - **WHEN** the script runs in it
 - **THEN** none of them is called, and the script returns the sentinel
+
+### Requirement: Swift trusts only a confirmed result
+After the check passes, the script SHALL return a fixed-shape value it builds itself (e.g. `{ confirmed: true, value }`, with bridge errors caught and returned inside it). Swift SHALL treat a call as confirmed only on that shape; the sentinel, any exception and any other result are unconfirmed and map to the origin error.
+
+#### Scenario: A confirmed call
+- **GIVEN** the app's own page in the main frame
+- **WHEN** the script's check passes and loot-core returns a result, or the bridge refuses the call
+- **THEN** the script returns the confirmed shape carrying that result or that bridge error, and Swift returns it as before
+
+#### Scenario: An unconfirmed result
+- **GIVEN** a call whose script returned the sentinel, threw, or returned any value without the confirmed shape
+- **WHEN** Swift receives it
+- **THEN** the call returns the origin error, and none of that value is returned or logged
 
 ### Requirement: An origin refusal reveals nothing about the foreign page
 The origin error SHALL be one fixed error. Swift SHALL map the sentinel, and any JavaScript exception from a call whose in-page check did not confirm the origin, to that error, and SHALL never log or return the exception's message, source URL or `userInfo`. Neither the error nor its log line SHALL contain any part of the foreign page's URL, host, path, query or title.

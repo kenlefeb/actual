@@ -32,6 +32,27 @@ public enum BudgetLoadError: Equatable {
     }
 }
 
+public enum BudgetSaveError: Equatable {
+    case invalidAmount
+    case failed
+    case timedOut
+    // The write landed but the month could not be read again
+    case refreshFailed
+
+    public var message: String {
+        switch self {
+        case .invalidAmount:
+            return NSLocalizedString("That is not an amount this budget can hold.", comment: "Native Budget tab: bad amount typed")
+        case .failed:
+            return NSLocalizedString("The amount could not be saved. The budget is unchanged.", comment: "Native Budget tab: save failed")
+        case .timedOut:
+            return NSLocalizedString("The budget did not answer in time. The amount was not saved.", comment: "Native Budget tab: save timed out")
+        case .refreshFailed:
+            return NSLocalizedString("Saved, but the budget could not be refreshed.", comment: "Native Budget tab: re-read failed after a save")
+        }
+    }
+}
+
 public enum BudgetLoadState: Equatable {
     case loading
     case loaded(BudgetMonth)
@@ -47,6 +68,8 @@ public final class BudgetViewModel: ObservableObject {
     @Published public private(set) var state: BudgetLoadState = .loading
     // The current month as of the last load
     @Published public private(set) var month: String
+    @Published public private(set) var saveError: BudgetSaveError?
+    @Published public private(set) var isSaving = false
     private let client: NativeBridgeClient
     private let now: () -> Date
     private let calendar: Calendar
@@ -127,6 +150,45 @@ public final class BudgetViewModel: ObservableObject {
                 state = .failed(failure)
             }
         }
+    }
+
+    public func clearSaveError() { saveError = nil }
+
+    // Saves a typed budgeted amount for a category of the loaded month, then
+    // reads the month again; the numbers shown are never patched locally. A
+    // failed save keeps the old numbers and sets `saveError`; the write is
+    // never retried. Returns whether the write was made (sc-3769).
+    // `month` is the month the edit was opened on: a save never lands on a
+    // month the user has stepped to since, or is stepping to now.
+    public func saveBudgeted(month target: String, category id: String, text: String) async -> Bool {
+        guard !isSaving, case .loaded(let snapshot) = state else { return false }
+        saveError = nil
+        // Only a category of the snapshot, never a group, income or to-budget
+        guard snapshot.month == target, wanted == nil, snapshot.expenseGroups.contains(where: { $0.categories.contains { $0.id == id } }) else {
+            saveError = .failed
+            return false
+        }
+        guard let amount = BudgetAmountFormat.minorUnits(from: text, style: snapshot.amountStyle),
+            let write = try? BudgetAmountWrite(category: id, month: snapshot.month, amount: amount)
+        else {
+            saveError = .invalidAmount
+            return false
+        }
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            try await client.setBudgetAmount(write)
+        } catch {
+            if case NativeBridgeError.timedOut = error { saveError = .timedOut } else { saveError = .failed }
+            return false
+        }
+        // The same generation-counted read as a change event, so an older read cannot win
+        await load()
+        switch state {
+        case .stale, .failed: saveError = .refreshFailed
+        default: break
+        }
+        return true
     }
 
     private func settle(on target: String) {

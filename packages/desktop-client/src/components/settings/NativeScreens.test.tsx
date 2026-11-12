@@ -45,12 +45,13 @@ describe('NativeScreens', () => {
     ).not.toBeChecked();
   });
 
-  it('says when it applies, that tracking budgets use the web and that it is read-only', () => {
+  it('says when it applies, that tracking budgets use the web and that budgeted amounts can be edited', () => {
     insideIosApp();
     renderSettings();
     expect(screen.getByText(/next time you open Budget/i)).toBeInTheDocument();
     expect(screen.getByText(/tracking budgets/i)).toBeInTheDocument();
-    expect(screen.getByText(/read-only/i)).toBeInTheDocument();
+    expect(screen.getByText(/edit budgeted amounts/i)).toBeInTheDocument();
+    expect(screen.queryByText(/read-only/i)).not.toBeInTheDocument();
   });
 
   it('shows the switch as on when the app says it is on', () => {

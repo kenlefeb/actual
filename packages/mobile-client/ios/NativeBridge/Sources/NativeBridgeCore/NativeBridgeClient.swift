@@ -5,7 +5,9 @@ import Foundation
 // (packages/desktop-client/src/data/native-bridge-allowlist.json, compared by
 // a test) only stops accidents. Each native screen story adds the writes it needs.
 public enum NativeBridgeAllowlist {
-    public static let handlers: Set<String> = ["native/budget-month", "query"]
+    // Sent only as their typed value (BudgetAmountWrite), never as loose arguments
+    public static let writes: Set<String> = ["budget/budget-amount"]
+    public static let handlers: Set<String> = Set(["native/budget-month", "query"]).union(writes)
 }
 
 public enum NativeBridgeError: Error, Equatable {
@@ -13,6 +15,29 @@ public enum NativeBridgeError: Error, Equatable {
     case timedOut(String)
     case noPage
     case badResult
+    // A write built from a value loot-core would mishandle; never sent (sc-3769)
+    case invalidWrite(String)
+}
+
+// The arguments of `budget/budget-amount`. loot-core's handler trusts them, so
+// the value is checked here, before it can be built, and again by the page.
+// The amount is an integer in minor units, as native/budget-month returns it.
+public struct BudgetAmountWrite: Encodable, Equatable {
+    public let category: String
+    public let month: String
+    public let amount: Int
+
+    // loot-core stores amounts as JavaScript numbers
+    private static let maxAmount = 9_007_199_254_740_991
+
+    public init(category: String, month: String, amount: Int) throws {
+        guard !category.isEmpty, category != "to-budget" else { throw NativeBridgeError.invalidWrite("category") }
+        guard month.range(of: #"^[0-9]{4}-(0[1-9]|1[0-2])\z"#, options: .regularExpression) != nil else {
+            throw NativeBridgeError.invalidWrite("month")
+        }
+        guard amount.magnitude <= Self.maxAmount else { throw NativeBridgeError.invalidWrite("amount") }
+        (self.category, self.month, self.amount) = (category, month, amount)
+    }
 }
 
 // Calls the page bridge. `transport` takes the handler name and its arguments
@@ -33,12 +58,26 @@ public struct NativeBridgeClient {
         self.transport = transport
     }
 
-    public func call(_ name: String, args: [String: String] = [:]) async throws -> Data {
+    public func call(_ name: String) async throws -> Data {
+        try await call(name, args: [String: String]())
+    }
+
+    // Arguments are any JSON value, so a number crosses as a number
+    public func call<Args: Encodable>(_ name: String, args: Args) async throws -> Data {
         guard NativeBridgeAllowlist.handlers.contains(name) else {
             throw NativeBridgeError.notAllowlisted(name)
         }
-        let argsJSON = String(decoding: try JSONEncoder().encode(args), as: UTF8.self)
+        guard !NativeBridgeAllowlist.writes.contains(name) || args is BudgetAmountWrite else {
+            throw NativeBridgeError.invalidWrite(name)
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        let argsJSON = String(decoding: try encoder.encode(args), as: UTF8.self)
         return Data(try await withTimeout(name) { try await transport(name, argsJSON) }.utf8)
+    }
+
+    public func setBudgetAmount(_ write: BudgetAmountWrite) async throws {
+        _ = try await call("budget/budget-amount", args: write)
     }
 
     public func budgetMonth(_ month: String) async throws -> BudgetMonth {

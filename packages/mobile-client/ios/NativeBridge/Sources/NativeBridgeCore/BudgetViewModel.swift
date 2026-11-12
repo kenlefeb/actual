@@ -108,27 +108,46 @@ public final class BudgetViewModel: ObservableObject {
     }
 
     // Also the retry action of the error state, and the reload each time the
-    // tab shows. The month is taken again each time, so the tab never keeps
-    // showing last month after midnight.
+    // tab shows. Until the user picks another month it is taken again each
+    // time, so the tab never keeps showing last month after midnight; once
+    // they have, that month stays.
     public func load() async {
-        month = Self.currentMonth(now(), calendar: calendar)
+        if !navigated { month = Self.currentMonth(now(), calendar: calendar) }
+        await read(wanted ?? month, isStep: false)
+    }
+
+    // The one read path: every load and every month step takes a number from
+    // loadGeneration, and only the newest read may change the screen.
+    private func read(_ target: String, isStep: Bool) async {
         loadGeneration += 1
         let generation = loadGeneration
-        if lastGood == nil { state = .loading }
+        if isStep { wanted = target }
+        if !isStep, lastGood == nil { state = .loading }
         do {
-            let result = try await client.budgetMonth(month)
+            let result = try await client.budgetMonth(target)
             guard generation == loadGeneration else { return }
+            settle(on: target)
             lastGood = result.budgetType == .tracking ? nil : result
             state = result.budgetType == .tracking ? .useWebScreen : .loaded(result)
         } catch {
+            let failure = BudgetLoadError.from(error)
+            // What the edge is does not depend on which read was the newest
+            if isStep, failure == .noBudgetForMonth {
+                if target < month { missingBefore = target } else { missingAfter = target }
+            }
             guard generation == loadGeneration else { return }
-            let loadError = BudgetLoadError.from(error)
+            if isStep, failure == .noBudgetForMonth {
+                // Keep the month and numbers on screen
+                wanted = nil
+                return
+            }
+            settle(on: target)
             // Keep the last good numbers, unless they are for another month
-            if let good = lastGood, good.month == month, loadError.canRetry {
-                state = .stale(good, loadError)
+            if let good = lastGood, good.month == target, failure.canRetry {
+                state = .stale(good, failure)
             } else {
                 lastGood = nil
-                state = .failed(loadError)
+                state = .failed(failure)
             }
         }
     }
@@ -139,11 +158,13 @@ public final class BudgetViewModel: ObservableObject {
     // reads the month again; the numbers shown are never patched locally. A
     // failed save keeps the old numbers and sets `saveError`; the write is
     // never retried. Returns whether the write was made (sc-3769).
-    public func saveBudgeted(category id: String, text: String) async -> Bool {
+    // `month` is the month the edit was opened on: a save never lands on a
+    // month the user has stepped to since, or is stepping to now.
+    public func saveBudgeted(month target: String, category id: String, text: String) async -> Bool {
         guard !isSaving, case .loaded(let snapshot) = state else { return false }
         saveError = nil
         // Only a category of the snapshot, never a group, income or to-budget
-        guard snapshot.expenseGroups.contains(where: { $0.categories.contains { $0.id == id } }) else {
+        guard snapshot.month == target, wanted == nil, snapshot.expenseGroups.contains(where: { $0.categories.contains { $0.id == id } }) else {
             saveError = .failed
             return false
         }
@@ -168,6 +189,51 @@ public final class BudgetViewModel: ObservableObject {
         default: break
         }
         return true
+    }
+
+    private func settle(on target: String) {
+        if wanted != nil { navigated = true }
+        wanted = nil
+        month = target
+    }
+
+    // Month navigation (sc-3760). Nothing handler-free lists the budget's
+    // months, so the edge is learned by asking: a step into a month with no
+    // budget makes one read, fails with loot-core's own "no budget" answer and
+    // stays where it was; that month and everything beyond it is then out.
+    // shortcut: the picker's window is 24 months back and 12 forward, widening as
+    // the user steps; upgrade if the budget gets an additive range field.
+    private var navigated = false
+    // Taps do not wait for the read before them: a step starts from the month
+    // the latest tap asked for (read(_:isStep:) keeps only the newest read)
+    private var wanted: String?
+    private var missingBefore: String?
+    private var missingAfter: String?
+
+    public var canGoPrevious: Bool { isReachable(Self.shift(month, by: -1)) }
+    public var canGoNext: Bool { isReachable(Self.shift(month, by: 1)) }
+
+    public var pickerMonths: [String] {
+        (-24...12).map { Self.shift(month, by: $0) }.filter(isReachable)
+    }
+
+    public func previous() async { await select(Self.shift(wanted ?? month, by: -1)) }
+    public func next() async { await select(Self.shift(wanted ?? month, by: 1)) }
+
+    public func select(_ target: String) async {
+        guard target != (wanted ?? month), isReachable(target) else { return }
+        await read(target, isStep: true)
+    }
+
+    private func isReachable(_ candidate: String) -> Bool {
+        candidate > (missingBefore ?? "") && candidate < (missingAfter ?? "9999-99")
+    }
+
+    static func shift(_ month: String, by offset: Int) -> String {
+        let parts = month.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 2 else { return month }
+        let index = parts[0] * 12 + (parts[1] - 1) + offset
+        return String(format: "%04d-%02d", index / 12, index % 12 + 1)
     }
 
     public static func currentMonth(_ now: Date = Date(), calendar: Calendar = .current) -> String {

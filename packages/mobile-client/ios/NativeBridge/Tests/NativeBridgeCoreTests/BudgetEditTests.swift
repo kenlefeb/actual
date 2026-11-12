@@ -231,7 +231,7 @@ final class BudgetSaveTests: XCTestCase {
         var reread = try envelope()
         reread = reread.replacingOccurrences(of: #""budgeted": 150000"#, with: #""budgeted": 12500"#)
         let model = try await loadedModel(afterWrite: reread) { seen.append(($0, $1)) }
-        let saved = await model.saveBudgeted(category: "rent", text: "125.00")
+        let saved = await model.saveBudgeted(month: "2026-03", category: "rent", text: "125.00")
         XCTAssertTrue(saved)
         XCTAssertEqual(seen.map(\.0), ["native/budget-month", "budget/budget-amount", "native/budget-month"])
         let write = try JSONSerialization.jsonObject(with: Data(seen[1].1.utf8)) as? [String: Any]
@@ -247,7 +247,7 @@ final class BudgetSaveTests: XCTestCase {
         var seen: [String] = []
         let model = try await loadedModel(writeError: Boom()) { name, _ in seen.append(name) }
         let before = model.state
-        let saved = await model.saveBudgeted(category: "rent", text: "125.00")
+        let saved = await model.saveBudgeted(month: "2026-03", category: "rent", text: "125.00")
         XCTAssertFalse(saved)
         XCTAssertEqual(model.state, before)
         XCTAssertEqual(model.saveError, .failed)
@@ -258,7 +258,7 @@ final class BudgetSaveTests: XCTestCase {
     func testATimedOutSaveKeepsTheOldValueAndSaysSo() async throws {
         let model = try await loadedModel(hangWrite: true) { _, _ in }
         let before = model.state
-        let saved = await model.saveBudgeted(category: "rent", text: "125.00")
+        let saved = await model.saveBudgeted(month: "2026-03", category: "rent", text: "125.00")
         XCTAssertFalse(saved)
         XCTAssertEqual(model.state, before)
         XCTAssertEqual(model.saveError, .timedOut)
@@ -280,7 +280,7 @@ final class BudgetSaveTests: XCTestCase {
             }, now: march9, calendar: utc)
         await model.load()
         guard case .loaded(let before) = model.state else { return XCTFail("expected loaded") }
-        let saved = await model.saveBudgeted(category: "rent", text: "125.00")
+        let saved = await model.saveBudgeted(month: "2026-03", category: "rent", text: "125.00")
         XCTAssertTrue(saved)
         // The re-read is the generation-counted load: the old numbers stay, dimmed, with a retry
         XCTAssertEqual(model.state, .stale(before, .other))
@@ -288,12 +288,22 @@ final class BudgetSaveTests: XCTestCase {
         XCTAssertEqual(writes, 1)
     }
 
+    // The sheet's month, not whatever is loaded when Save is tapped
+    func testASaveForAMonthOtherThanTheSnapshotsIsNeverSent() async throws {
+        var writes = 0
+        let model = try await loadedModel { name, _ in if name == "budget/budget-amount" { writes += 1 } }
+        let saved = await model.saveBudgeted(month: "2026-02", category: "rent", text: "1")
+        XCTAssertFalse(saved)
+        XCTAssertEqual(model.saveError, .failed)
+        XCTAssertEqual(writes, 0)
+    }
+
     func testAnIdOrMonthNotInTheSnapshotIsNeverSent() async throws {
         var writes = 0
         let model = try await loadedModel { name, _ in if name == "budget/budget-amount" { writes += 1 } }
         // an unknown id, a group id, an income category, the literal to-budget, an empty id
         for id in ["nope", "bills", "salary", "to-budget", ""] {
-            let saved = await model.saveBudgeted(category: id, text: "1")
+            let saved = await model.saveBudgeted(month: "2026-03", category: id, text: "1")
             XCTAssertFalse(saved, id)
         }
         XCTAssertEqual(writes, 0)
@@ -302,7 +312,7 @@ final class BudgetSaveTests: XCTestCase {
     func testNothingIsSentBeforeAMonthIsLoaded() async {
         var writes = 0
         let model = BudgetViewModel(client: NativeBridgeClient { _, _ in writes += 1; return "null" }, now: march9, calendar: utc)
-        let saved = await model.saveBudgeted(category: "rent", text: "1")
+        let saved = await model.saveBudgeted(month: "2026-03", category: "rent", text: "1")
         XCTAssertFalse(saved)
         XCTAssertEqual(writes, 0)
     }
@@ -311,7 +321,7 @@ final class BudgetSaveTests: XCTestCase {
         var writes = 0
         let model = try await loadedModel { name, _ in if name == "budget/budget-amount" { writes += 1 } }
         for text in ["", "abc", "1.234", "1,2,3x", "--5", "1e3", "NaN"] {
-            let saved = await model.saveBudgeted(category: "rent", text: text)
+            let saved = await model.saveBudgeted(month: "2026-03", category: "rent", text: text)
             XCTAssertFalse(saved, text)
         }
         XCTAssertEqual(writes, 0)
@@ -329,8 +339,8 @@ final class BudgetSaveTests: XCTestCase {
                 amounts.append(amount)
             }
         }
-        _ = await model.saveBudgeted(category: "rent", text: "1.500")
-        _ = await model.saveBudgeted(category: "rent", text: "1500")
+        _ = await model.saveBudgeted(month: "2026-03", category: "rent", text: "1.500")
+        _ = await model.saveBudgeted(month: "2026-03", category: "rent", text: "1500")
         XCTAssertEqual(amounts, [1500, 1500])
     }
 }

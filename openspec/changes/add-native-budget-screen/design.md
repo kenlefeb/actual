@@ -72,5 +72,5 @@ No data migration. Ship behind the default-off switch; Ken turns it on in Settin
 
 ## Open Questions
 
-- Month range source (Decision 5): handler-free if a cell or `query` can give it. If sc-3760 finds it cannot, it files a Backlog story for a small additive field on `native/budget-month` before going on; that is a spec change to `native-bridge`.
+- Month range source (Decision 5): sc-3760 found no safe handler-free source (`get-budget-bounds` creates budgets; `createdMonths` is not queryable; deriving it with `query` would copy `getBudgetRange` into Swift). It ships with the learned edge (see the spec scenario) and a Backlog story asks for a small additive `firstMonth`/`lastMonth` on `native/budget-month`, a `native-bridge` spec change that would make the edge known at load.
 - Whether the Move money sheet should offer "cover overbudgeted" beyond a plain move. Out of scope here; revisit after sc-3787.

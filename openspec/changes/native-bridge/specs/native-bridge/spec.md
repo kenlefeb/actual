@@ -19,6 +19,19 @@ The native bridge SHALL forward a call to loot-core only when the handler name i
 - **WHEN** native code calls `delete-budget` through the bridge
 - **THEN** the call is refused with an error naming the handler, and loot-core never receives it
 
+### Requirement: The bridge accepts messages only from the app's own page
+The native side SHALL act on a message from the page only when it comes from the main frame and from the app server's scheme, host and port. Sign-in pages and other frames load in the same web view, so every message handler (the bridge and the native chrome) SHALL apply this check and ignore anything else.
+
+#### Scenario: A message from the app's page
+- **GIVEN** the app's page is loaded in the main frame from the app server
+- **WHEN** it posts a bridge or chrome message
+- **THEN** the native side acts on it
+
+#### Scenario: A message from another frame or origin
+- **GIVEN** a frame, or a page on another host, scheme or port, is loaded in the web view
+- **WHEN** it posts a bridge or chrome message
+- **THEN** the native side ignores it
+
 ### Requirement: A budget month is one batched read
 `native/budget-month` SHALL return, in one message, the month, the budget type, every category group and category with its budgeted, spent and balance, and the month totals. Envelope and tracking budgets SHALL share one shape; a value that does not apply to the budget type SHALL be null.
 

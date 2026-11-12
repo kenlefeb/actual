@@ -30,7 +30,10 @@ public class NativeBridgePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
     }
 
     public func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard let body = message.body as? [String: Any], let event = body["event"] as? String else { return }
+        // Only the app's own page: sign-in pages load in this web view too
+        let origin = message.frameInfo.securityOrigin
+        guard PageOriginGuard.accepts(isMainFrame: message.frameInfo.isMainFrame, scheme: origin.protocol, host: origin.host, port: origin.port, serverURL: bridge?.config.serverURL),
+              let body = message.body as? [String: Any], let event = body["event"] as? String else { return }
         onEvent?(event)
         coalescer.notify()
     }

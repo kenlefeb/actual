@@ -26,6 +26,7 @@
 		FB3514000000000000000101 /* NativeChromePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3514000000000000000001 /* NativeChromePlugin.swift */; };
 		FB3514000000000000000102 /* NativeTabBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3514000000000000000002 /* NativeTabBarController.swift */; };
 		FB3514000000000000000103 /* NativeTabRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3514000000000000000003 /* NativeTabRouter.swift */; };
+		FB3697000000000000000101 /* PageOriginGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3697000000000000000001 /* PageOriginGuard.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -52,6 +53,7 @@
 		FB3514000000000000000001 /* NativeChromePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeChromePlugin.swift; sourceTree = "<group>"; };
 		FB3514000000000000000002 /* NativeTabBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeTabBarController.swift; sourceTree = "<group>"; };
 		FB3514000000000000000003 /* NativeTabRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeTabRouter.swift; sourceTree = "<group>"; };
+		FB3697000000000000000001 /* PageOriginGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageOriginGuard.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -131,6 +133,7 @@
 				FB3584000000000000000006 /* ChangeCoalescer.swift */,
 				FB3584000000000000000011 /* NativeBridgeBenchmark.swift */,
 				FB3514000000000000000003 /* NativeTabRouter.swift */,
+				FB3697000000000000000001 /* PageOriginGuard.swift */,
 			);
 			name = NativeBridgeCore;
 			path = ../NativeBridge/Sources/NativeBridgeCore;
@@ -263,6 +266,7 @@
 				FB3514000000000000000101 /* NativeChromePlugin.swift in Sources */,
 				FB3514000000000000000102 /* NativeTabBarController.swift in Sources */,
 				FB3514000000000000000103 /* NativeTabRouter.swift in Sources */,
+				FB3697000000000000000101 /* PageOriginGuard.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -31,9 +31,9 @@ export function NativeScreens() {
         description={
           <Text>
             <Trans>
-              Show the Budget tab as a native iPhone screen. It starts the next
-              time you open Budget. You can edit budgeted amounts there;
-              tracking budgets still use the web screen. Turn it off to go back.
+              Show the Budget tab as a native iPhone screen, for envelope and
+              tracking budgets. It starts the next time you open Budget. You can
+              edit budgeted amounts there. Turn it off to go back.
             </Trans>
           </Text>
         }

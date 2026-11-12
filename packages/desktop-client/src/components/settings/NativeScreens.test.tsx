@@ -45,11 +45,15 @@ describe('NativeScreens', () => {
     ).not.toBeChecked();
   });
 
-  it('says when it applies, that tracking budgets use the web and that budgeted amounts can be edited', () => {
+  // sc-3778: tracking budgets render natively too, so no web fallback is promised
+  it('says when it applies, that it covers envelope and tracking budgets and that budgeted amounts can be edited', () => {
     insideIosApp();
     renderSettings();
     expect(screen.getByText(/next time you open Budget/i)).toBeInTheDocument();
-    expect(screen.getByText(/tracking budgets/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/envelope and tracking budgets/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/web screen/i)).not.toBeInTheDocument();
     expect(screen.getByText(/edit budgeted amounts/i)).toBeInTheDocument();
     expect(screen.queryByText(/read-only/i)).not.toBeInTheDocument();
   });

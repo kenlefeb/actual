@@ -34,3 +34,14 @@ Test-first: write the tests, run them and see them fail before writing the code.
 ## 5. Dynamic Type on iPhone (sc-3564)
 
 - [ ] 5.1 On iPhone, map body text to the `-apple-system-*` keywords so Dynamic Type applies, and stop amounts from truncating in the mobile budget rows (`packages/desktop-client/src/components/mobile/budget/`). Verify, in the iOS Simulator at the default size and at the largest accessibility size, in light and dark: the screenshots are attached to the story.
+
+## 6. Back goes up one level (sc-3736)
+
+- [ ] 6.1 Add failing tests for `MobileBackButton`: in the iOS app it goes to the page's declared parent route and never calls `navigate(-1)` or changes the tab; on a tab root it renders nothing; in a phone browser it still goes back in history. Verify: the tests fail.
+- [ ] 6.2 Change the shared `MobileBackButton` default and declare a parent route for each mobile page under `packages/desktop-client/src/components/mobile/` (account to accounts, category to budget, a schedule to Schedules, Schedules to Settings, business calendars to Settings). Verify: the tests pass, and a deep-linked or restored page goes to its parent.
+- [ ] 6.3 Add the "Back goes up one level" scenarios to the TestFlight acceptance checklist for Ken. Verify: Ken's result is recorded on the story.
+
+## 7. iPhone landscape keeps the phone layout (sc-3706)
+
+- [ ] 7.1 Add a failing test that the layout choice returns the phone layout in the iOS app on iPhone at landscape widths, and the wide layout on iPad and in a phone browser. Verify: the test fails.
+- [ ] 7.2 Implement the check beside the native-shell detection, so no wide-layout chrome (sidebar, privacy-mode top bar) shows on iPhone. Verify: the test passes, and rotating in the iOS Simulator keeps the screen and selected tab, with Schedules reachable from Settings in both orientations; screenshots are attached to the story.

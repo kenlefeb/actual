@@ -7,16 +7,21 @@ import { SvgCheveronLeft } from '@actual-app/components/icons/v1';
 import { styles } from '@actual-app/components/styles';
 import { Text } from '@actual-app/components/text';
 
-import { useNavigate } from '#hooks/useNavigate';
+import { useGoBack } from '#hooks/useGoBack';
 
-type MobileBackButtonProps = ComponentPropsWithoutRef<typeof Button>;
+type MobileBackButtonProps = ComponentPropsWithoutRef<typeof Button> & {
+  // A transaction page's account, where Back goes if it wasn't opened from a screen
+  account?: string | null;
+};
 
 export function MobileBackButton({
   onPress,
+  account,
   style,
   ...props
 }: MobileBackButtonProps) {
-  const navigate = useNavigate();
+  const { hidden, goBack } = useGoBack(account);
+  if (hidden && !onPress) return null;
   return (
     <Button
       variant="bare"
@@ -27,7 +32,7 @@ export function MobileBackButton({
         minWidth: styles.mobileMinHeight,
         ...style,
       }}
-      onPress={onPress || (() => navigate(-1))}
+      onPress={onPress || goBack}
       {...props}
     >
       <SvgCheveronLeft

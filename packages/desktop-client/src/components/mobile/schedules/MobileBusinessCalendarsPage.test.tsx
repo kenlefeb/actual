@@ -359,3 +359,40 @@ describe('mobile business calendars', () => {
     expect(screen.getByText('Schedules page')).toBeInTheDocument();
   });
 });
+
+// native-appearance: "Back goes up one level in the iOS app" (sc-3736)
+function inIosApp() {
+  (window as { webkit?: unknown }).webkit = {
+    messageHandlers: { actualNativeChrome: { postMessage: vi.fn() } },
+  };
+}
+afterEach(() => {
+  delete (window as { webkit?: unknown }).webkit;
+});
+
+describe('MobileBusinessCalendarPage in the iOS app', () => {
+  beforeEach(() => {
+    state.isNarrowWidth = true;
+    state.isEnabled = true;
+    state.calendars = [federal];
+    state.navigate.mockReset();
+  });
+
+  it('Back goes up to the calendars list, not through history', async () => {
+    inIosApp();
+    renderAt('/business-calendars/federal');
+    await userEvent.click(screen.getByRole('button', { name: 'Back' }));
+
+    expect(state.navigate).toHaveBeenCalledExactlyOnceWith(
+      '/business-calendars',
+    );
+  });
+
+  it('the calendars list goes up to Settings', async () => {
+    inIosApp();
+    renderAt('/business-calendars');
+    await userEvent.click(screen.getByRole('button', { name: 'Back' }));
+
+    expect(state.navigate).toHaveBeenCalledExactlyOnceWith('/settings');
+  });
+});

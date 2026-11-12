@@ -12,6 +12,7 @@ import type { NewRuleEntity, RuleEntity } from '@actual-app/core/types/models';
 import { MobileBackButton } from '#components/mobile/MobileBackButton';
 import { MobilePageHeader, Page } from '#components/Page';
 import { RuleEditor } from '#components/rules/RuleEditor';
+import { useGoBack } from '#hooks/useGoBack';
 import { useNavigate } from '#hooks/useNavigate';
 import { useSchedules } from '#hooks/useSchedules';
 import { useUndo } from '#hooks/useUndo';
@@ -22,6 +23,7 @@ import { useDispatch } from '#redux';
 export function MobileRuleEditPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { goBack } = useGoBack();
   const { id } = useParams<{ id?: string }>();
   const location = useLocation();
   const dispatch = useDispatch();
@@ -106,7 +108,7 @@ export function MobileRuleEditPage() {
   };
 
   const handleCancel = () => {
-    void navigate(-1);
+    goBack();
   };
 
   const handleDelete = () => {

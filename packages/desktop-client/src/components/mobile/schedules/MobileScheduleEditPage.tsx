@@ -180,7 +180,7 @@ export function MobileScheduleEditPage() {
         header={
           <MobilePageHeader
             title={t('Loading...')}
-            leftContent={<MobileBackButton onPress={() => navigate(-1)} />}
+            leftContent={<MobileBackButton />}
           />
         }
         padding={0}
@@ -235,7 +235,7 @@ export function MobileScheduleEditPage() {
       header={
         <MobilePageHeader
           title={pageTitle}
-          leftContent={<MobileBackButton onPress={() => navigate(-1)} />}
+          leftContent={<MobileBackButton />}
         />
       }
       footer={

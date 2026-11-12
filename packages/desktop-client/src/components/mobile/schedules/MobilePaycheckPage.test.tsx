@@ -4,7 +4,7 @@ import { theme } from '@actual-app/components/theme';
 import type { PaycheckEntity } from '@actual-app/core/types/models';
 import { render, renderHook, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PaycheckEditModal } from '#components/modals/PaycheckEditModal/PaycheckEditModal';
 import { useOpenPaycheck } from '#components/schedules/PaycheckRow';
@@ -575,5 +575,43 @@ describe('MobilePaycheckPage', () => {
     expect(state.navigate).toHaveBeenCalledWith('/paychecks/new');
     result.current('acme');
     expect(state.navigate).toHaveBeenCalledWith('/paychecks/acme');
+  });
+});
+
+// native-appearance: "Back goes up one level in the iOS app" (sc-3736)
+function inIosApp() {
+  (window as { webkit?: unknown }).webkit = {
+    messageHandlers: { actualNativeChrome: { postMessage: vi.fn() } },
+  };
+}
+afterEach(() => {
+  delete (window as { webkit?: unknown }).webkit;
+});
+
+describe('MobilePaycheckPage in the iOS app', () => {
+  beforeEach(() => {
+    state.paychecks = [];
+    state.saveAsync.mockReset().mockResolvedValue(undefined);
+    state.navigate.mockReset();
+    state.isNarrowWidth = true;
+  });
+
+  it('Back goes up to Schedules, not through history', async () => {
+    inIosApp();
+    renderPage('new');
+    await userEvent.click(screen.getByRole('button', { name: 'Back' }));
+
+    expect(state.navigate).toHaveBeenCalledExactlyOnceWith('/schedules');
+  });
+
+  it('saving closes up to Schedules too', async () => {
+    inIosApp();
+    renderPage('new');
+    await setUpAcme();
+
+    await waitFor(() =>
+      expect(state.navigate).toHaveBeenCalledWith('/schedules'),
+    );
+    expect(state.navigate).not.toHaveBeenCalledWith(-1);
   });
 });

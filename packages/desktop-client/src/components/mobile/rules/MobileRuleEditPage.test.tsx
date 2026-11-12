@@ -2,7 +2,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TestProviders } from '#mocks';
 import type * as ModalsSlice from '#modals/modalsSlice';
@@ -118,5 +118,25 @@ describe('MobileRuleEditPage', () => {
       }),
     );
     expect(state.send).not.toHaveBeenCalledWith('rule-delete', 'rule-1');
+  });
+});
+
+// native-appearance: "Back goes up one level in the iOS app" (sc-3736)
+function inIosApp() {
+  (window as { webkit?: unknown }).webkit = {
+    messageHandlers: { actualNativeChrome: { postMessage: vi.fn() } },
+  };
+}
+afterEach(() => {
+  delete (window as { webkit?: unknown }).webkit;
+});
+
+describe('MobileRuleEditPage in the iOS app', () => {
+  it('cancels up to the rules list, not through history', async () => {
+    inIosApp();
+    renderPage('/rules/rule-1');
+    await userEvent.click(screen.getByRole('button', { name: 'Back' }));
+
+    expect(state.navigate).toHaveBeenCalledExactlyOnceWith('/settings/rules');
   });
 });

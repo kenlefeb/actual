@@ -1,3 +1,4 @@
+import { Trans } from 'react-i18next';
 import { MemoryRouter, Route, Routes } from 'react-router';
 
 import {
@@ -9,11 +10,12 @@ import {
   within,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTestAppStore, resetTestProviders, TestProviders } from '#mocks';
 import { initServer } from '#mocks/connection';
 import * as modalsSlice from '#modals/modalsSlice';
+import { rememberNativeRoute, resetNativeRoutes } from '#native/nativeChrome';
 
 import { TransactionEdit } from './TransactionEdit';
 
@@ -797,5 +799,157 @@ describe('Phone transaction edit page', () => {
         'row note',
       );
     });
+  });
+});
+// native-appearance: "Back goes up one level in the iOS app" (sc-3736)
+
+describe('Phone transaction edit page: leaving it', () => {
+  function renderWithDestinations(path: string) {
+    return render(
+      <TestProviders store={createTestAppStore()}>
+        <MemoryRouter initialEntries={[path]}>
+          <Routes>
+            <Route
+              path="/transactions/:transactionId"
+              element={<TransactionEdit />}
+            />
+            <Route
+              path="/accounts/:id"
+              element={
+                <div>
+                  <Trans>Account page</Trans>
+                </div>
+              }
+            />
+            <Route path="/categories/:id" element={<div>Category page</div>} />
+            <Route path="/reports/:id" element={<div>Reports page</div>} />
+            <Route path="/accounts" element={<div>Accounts list</div>} />
+          </Routes>
+        </MemoryRouter>
+      </TestProviders>,
+    );
+  }
+
+  const back = async () =>
+    userEvent.click(await screen.findByRole('button', { name: 'Back' }));
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    resetTestProviders();
+    state.subtransactions = undefined;
+    state.notes = '';
+    state.cloudFileId = 'cloud-file';
+    window.innerWidth = 1024;
+    initServer({
+      'transaction-attachment-check': () => ({ ok: true }),
+      'transactions-batch-update': () => ({ added: [], updated: [] }),
+    } as Parameters<typeof initServer>[0]);
+    (window as { webkit?: unknown }).webkit = {
+      messageHandlers: { actualNativeChrome: { postMessage: vi.fn() } },
+    };
+  });
+
+  afterEach(() => {
+    delete (window as { webkit?: unknown }).webkit;
+    resetNativeRoutes();
+  });
+
+  it('Back returns to the account register it was opened from', async () => {
+    rememberNativeRoute('/transactions/t1', {
+      previousLocation: { pathname: '/accounts/vanguard' },
+    });
+    renderWithDestinations('/transactions/t1');
+    await back();
+    expect(await screen.findByText('Account page')).toBeVisible();
+  });
+
+  it('Back returns to the category on the Budget tab', async () => {
+    rememberNativeRoute('/transactions/t1', {
+      previousLocation: { pathname: '/categories/groceries' },
+    });
+    renderWithDestinations('/transactions/t1');
+    await back();
+    expect(await screen.findByText('Category page')).toBeVisible();
+  });
+
+  it('Back from a new transaction returns to the screen the Add tab was used on', async () => {
+    rememberNativeRoute('/transactions/new', {
+      previousLocation: { pathname: '/reports/d1' },
+      fromTabBar: true,
+    });
+    renderWithDestinations('/transactions/new?account=Vanguard');
+    await back();
+    expect(await screen.findByText('Reports page')).toBeVisible();
+  });
+
+  it("Back after a deep link goes to the transaction's account, whatever tab the app was on", async () => {
+    rememberNativeRoute('/reports/d1', undefined);
+    rememberNativeRoute('/transactions/t1', undefined);
+    renderWithDestinations('/transactions/t1');
+    await back();
+    expect(await screen.findByText('Account page')).toBeVisible();
+  });
+
+  it('Back from a new transaction with nothing known goes to the selected tab root', async () => {
+    rememberNativeRoute('/accounts/vanguard', undefined);
+    rememberNativeRoute('/transactions/new', undefined);
+    renderWithDestinations('/transactions/new');
+    await back();
+    expect(await screen.findByText('Accounts list')).toBeVisible();
+  });
+
+  it('Add returns to the category it was opened from', async () => {
+    rememberNativeRoute('/transactions/new', {
+      previousLocation: { pathname: '/categories/groceries' },
+      fromTabBar: true,
+    });
+    const { container } = renderWithDestinations(
+      '/transactions/new?account=Vanguard',
+    );
+    // As in the haptic test, a held document leaves the amount field
+    await pickPdf(container);
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Add transaction' }),
+    );
+    expect(await screen.findByText('Category page')).toBeVisible();
+  });
+
+  it('Delete returns to the account register it was opened from', async () => {
+    const pushModal = vi.spyOn(modalsSlice, 'pushModal');
+    rememberNativeRoute('/transactions/t1', {
+      previousLocation: { pathname: '/accounts/vanguard' },
+    });
+    renderWithDestinations('/transactions/t1');
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Delete transaction' }),
+    );
+    const confirm = pushModal.mock.calls
+      .map(c => c[0].modal)
+      .find(m => m.name === 'confirm-delete') as Extract<
+      modalsSlice.Modal,
+      { name: 'confirm-delete' }
+    >;
+    await act(async () => confirm.options.onConfirm?.());
+    expect(await screen.findByText('Account page')).toBeVisible();
+  });
+
+  it('Accounts, an account, a transaction, Reports, Accounts, Back: the account, not Reports', async () => {
+    rememberNativeRoute('/accounts/vanguard', undefined);
+    rememberNativeRoute('/transactions/t1', {
+      previousLocation: { pathname: '/accounts/vanguard' },
+    });
+    rememberNativeRoute('/reports', {
+      previousLocation: { pathname: '/transactions/t1' },
+      fromTabBar: true,
+    });
+    // Tapping Accounts shows the transaction again, as the tab's last screen
+    rememberNativeRoute('/transactions/t1', {
+      previousLocation: { pathname: '/reports' },
+      fromTabBar: true,
+    });
+    renderWithDestinations('/transactions/t1');
+    await back();
+    expect(await screen.findByText('Account page')).toBeVisible();
+    expect(screen.queryByText('Reports page')).toBeNull();
   });
 });

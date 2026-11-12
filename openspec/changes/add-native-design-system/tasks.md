@@ -37,8 +37,8 @@ Test-first: write the tests, run them and see them fail before writing the code.
 
 ## 6. Back goes up one level (sc-3736)
 
-- [ ] 6.1 Add failing tests for `MobileBackButton`: in the iOS app it goes to the page's declared parent route and never calls `navigate(-1)` or changes the tab; on a tab root it renders nothing; in a phone browser it still goes back in history. Verify: the tests fail.
-- [ ] 6.2 Change the shared `MobileBackButton` default and declare a parent route for each mobile page under `packages/desktop-client/src/components/mobile/` (account to accounts, category to budget, a schedule to Schedules, Schedules to Settings, business calendars to Settings). Verify: the tests pass, and a deep-linked or restored page goes to its parent.
+- [x] 6.1 Add failing tests for `MobileBackButton`: in the iOS app it goes to the page's declared parent route and never calls `navigate(-1)` or changes the tab; on a tab root it renders nothing; in a phone browser it still goes back in history. Verify: the tests fail. The first commit wrote these tests after the code; the follow-up tests (transaction page from an account, a category and Add, Save and Delete, the payee, rule, calendar and paycheck pages, and the deep link) were run failing against the first commit before the fix.
+- [x] 6.2 Change the shared `MobileBackButton` default and declare a parent route for each mobile page under `packages/desktop-client/src/components/mobile/` (account to accounts, category to budget, a schedule to Schedules, Schedules to Settings, business calendars to Settings). Verify: the tests pass, and a deep-linked or restored page goes to its parent.
 - [ ] 6.3 Add the "Back goes up one level" scenarios to the TestFlight acceptance checklist for Ken. Verify: Ken's result is recorded on the story.
 
 ## 7. iPhone landscape keeps the phone layout (sc-3706)

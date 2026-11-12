@@ -15,7 +15,7 @@ import { MobilePageHeader, Page } from '#components/Page';
 import { useBusinessCalendars } from '#hooks/useBusinessCalendars';
 import { useConfirmDelete } from '#hooks/useConfirmDelete';
 import { useFeatureFlag } from '#hooks/useFeatureFlag';
-import { useNavigate } from '#hooks/useNavigate';
+import { useGoBack } from '#hooks/useGoBack';
 
 export function MobileBusinessCalendarPage() {
   const isEnabled = useFeatureFlag('businessCalendars');
@@ -27,14 +27,14 @@ export function MobileBusinessCalendarPage() {
 
 function CalendarEditorPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
+  const { goBack } = useGoBack();
   const confirmDelete = useConfirmDelete();
   const { id } = useParams<{ id: string }>();
   const { data: calendars = [], isPlaceholderData } = useBusinessCalendars();
   const updateCalendar = useUpdateBusinessCalendarMutation();
   const deleteCalendar = useDeleteBusinessCalendarMutation();
   const calendar = calendars.find(c => c.id === id);
-  const close = () => void navigate(-1);
+  const close = goBack;
 
   // Wait for the calendar before seeding the editor's draft with it
   if (isPlaceholderData) {

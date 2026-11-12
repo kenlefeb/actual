@@ -94,6 +94,7 @@ import {
   useConfirmMovedHistory,
 } from '#hooks/useConfirmMovedHistory';
 import { useDateFormat } from '#hooks/useDateFormat';
+import { useGoBack } from '#hooks/useGoBack';
 import { useLocalPref } from '#hooks/useLocalPref';
 import { useLocationPermission } from '#hooks/useLocationPermission';
 import { useNavigate } from '#hooks/useNavigate';
@@ -645,7 +646,6 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
     nearestPayee,
   }) {
     const { t } = useTranslation();
-    const navigate = useNavigate();
     const dispatch = useDispatch();
     const movedHistory = useConfirmMovedHistory();
     const [showHiddenCategories] = useLocalPref('budget.showHiddenCategories');
@@ -670,6 +670,7 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
     }, []);
 
     const [transaction, ...childTransactions] = transactions;
+    const { goBack } = useGoBack(transaction?.account);
 
     const isFuture =
       unserializedTransactions.length > 0 &&
@@ -742,7 +743,7 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
         onSave(transactionsToSave);
         // fork: sc-3514. Saving gives a haptic tap in the iOS app
         nativeHaptic();
-        void navigate(-1);
+        goBack();
       };
 
       if (unserializedTransactions.some(t => t.reconciled)) {
@@ -794,7 +795,7 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
           onConfirmSave();
         }
       }
-    }, [isAdding, dispatch, navigate, onSave, unserializedTransactions]);
+    }, [isAdding, dispatch, goBack, onSave, unserializedTransactions]);
 
     const onSchedule = useCallback(async () => {
       const [unserializedTransaction] = unserializedTransactions;
@@ -861,7 +862,7 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
               },
             }),
           );
-          void navigate(-1);
+          goBack();
           return;
         }
 
@@ -873,7 +874,7 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
             },
           }),
         );
-        void navigate(-1);
+        goBack();
       };
 
       const { isBeyondWindow, daysUntilTransaction, upcomingDays } =
@@ -898,7 +899,7 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
     }, [
       isAdding,
       dispatch,
-      navigate,
+      goBack,
       unserializedTransactions,
       upcomingLength,
       t,
@@ -1119,7 +1120,7 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
                       return;
                     }
 
-                    void navigate(-1);
+                    goBack();
                   },
                 },
               },
@@ -1169,7 +1170,7 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
       },
       [
         dispatch,
-        navigate,
+        goBack,
         onClearActiveEdit,
         onDelete,
         unserializedTransactions,
@@ -1225,7 +1226,7 @@ const TransactionEditInner = memo<TransactionEditInnerProps>(
                   : t('Transaction')
                 : title
             }
-            leftContent={<MobileBackButton />}
+            leftContent={<MobileBackButton account={transaction.account} />}
           />
         }
         footer={

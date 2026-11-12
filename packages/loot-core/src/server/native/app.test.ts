@@ -1,3 +1,4 @@
+import { app as budgetApp } from '#server/budget/app';
 import { createBudget } from '#server/budget/base';
 // Fork-only (sc-3584). The contract for the native bridge: the Swift tests in
 // packages/mobile-client/ios/NativeBridge decode the same fixture files, so a
@@ -165,5 +166,29 @@ describe('native/budget-month', () => {
     await createBudget(['2026-02', '2026-03']);
     await expect(budgetMonth('1999-01')).rejects.toThrow(/1999-01/);
     await expect(budgetMonth('not-a-month')).rejects.toThrow(/not-a-month/);
+  });
+});
+
+// native-bridge: "Setting a budgeted amount" (sc-3769). The edit is the web's
+// own handler; the next native read shows it, and to-budget moves with it.
+describe('budget/budget-amount then native/budget-month', () => {
+  it('shows the new amount and the changed to-budget on the next read', async () => {
+    await createBudget(['2026-02', '2026-03']);
+    await seedMonth();
+    const before = await budgetMonth('2026-03');
+
+    await budgetApp.handlers['budget/budget-amount']({
+      category: 'rent',
+      month: '2026-03',
+      amount: 125000,
+    });
+    await sheet.waitOnSpreadsheet();
+
+    const after = await budgetMonth('2026-03');
+    const rent = (m: typeof before) =>
+      m.groups.flatMap(g => g.categories).find(c => c.id === 'rent');
+    expect(rent(before)?.budgeted).toBe(150000);
+    expect(rent(after)?.budgeted).toBe(125000);
+    expect(after.totals.toBudget).toBe((before.totals.toBudget ?? 0) + 25000);
   });
 });

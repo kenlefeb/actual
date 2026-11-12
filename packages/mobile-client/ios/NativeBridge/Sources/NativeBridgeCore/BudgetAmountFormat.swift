@@ -66,6 +66,45 @@ public enum BudgetAmountFormat {
         }
     }
 
+    private static func separators(_ style: BudgetAmountStyle) -> (grouping: [Character], decimal: Character) {
+        switch style.numberFormat {
+        case .commaDot, .commaDotIn: return ([","], ".")
+        case .dotComma: return (["."], ",")
+        case .spaceComma: return ([" ", "\u{202F}", "\u{00A0}"], ",")
+        case .apostropheDot: return (["'", "\u{2019}"], ".")
+        }
+    }
+
+    // The edit field's input to loot-core minor units, using the budget's own
+    // separators and decimal places (never the device locale). nil: not an
+    // amount this budget can hold, so it is never sent.
+    public static func minorUnits(from text: String, style: BudgetAmountStyle) -> Int? {
+        let (grouping, decimal) = separators(style)
+        var rest = Substring(text.trimmingCharacters(in: .whitespacesAndNewlines))
+        if !style.currencySymbol.isEmpty { rest = Substring(rest.replacingOccurrences(of: style.currencySymbol, with: "")) }
+        let negative = rest.hasPrefix("-")
+        if negative { rest.removeFirst() }
+        let parts = rest.filter { !grouping.contains($0) }.split(separator: decimal, maxSplits: 1, omittingEmptySubsequences: false)
+        guard let whole = parts.first, parts.count <= (style.decimalPlaces > 0 ? 2 : 1) else { return nil }
+        let fraction = parts.count == 2 ? parts[1] : ""
+        guard whole.count + fraction.count > 0, whole.count <= 15, fraction.count <= style.decimalPlaces,
+            (whole + fraction).allSatisfy({ $0.isASCII && $0.isNumber })
+        else { return nil }
+        let digits = String(whole) + fraction + String(repeating: "0", count: style.decimalPlaces - fraction.count)
+        guard let value = Int(digits) else { return nil }
+        return negative ? -value : value
+    }
+
+    // The amount as the edit field first shows it: no symbol or grouping
+    public static func editString(_ minorUnits: Int, style: BudgetAmountStyle) -> String {
+        let places = style.decimalPlaces
+        let digits = String(abs(minorUnits))
+        let padded = String(repeating: "0", count: max(0, places + 1 - digits.count)) + digits
+        let split = padded.index(padded.endIndex, offsetBy: -places)
+        let fraction = places > 0 ? String(separators(style).decimal) + padded[split...] : ""
+        return (minorUnits < 0 ? "-" : "") + padded[..<split] + fraction
+    }
+
     public static func tone(_ minorUnits: Int?) -> Tone {
         guard let minorUnits, minorUnits != 0 else { return .zero }
         return minorUnits < 0 ? .negative : .positive

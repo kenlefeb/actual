@@ -5,7 +5,8 @@ import UIKit
 // Fork-only (sc-3751, native-budget-screen spec). The read-only native Budget
 // tab: the current month of an envelope budget. Every number is a loot-core
 // cell, read through native/budget-month and shown as it came; this file adds
-// nothing up and writes nothing. NativeTabBarController lays it over the web
+// nothing up. The one write is a category's budgeted amount, sent through the
+// view model to loot-core (sc-3769). NativeTabBarController lays it over the web
 // Budget screen while the switch is on, so the web view stays in the window.
 final class NativeBudgetViewController: UIHostingController<BudgetTabView> {
     private let model: BudgetViewModel
@@ -41,6 +42,7 @@ final class NativeBudgetViewController: UIHostingController<BudgetTabView> {
 
 struct BudgetTabView: View {
     @ObservedObject var model: BudgetViewModel
+    @State private var editing: BudgetMonth.Category?
 
     var body: some View {
         NavigationView {
@@ -49,6 +51,15 @@ struct BudgetTabView: View {
         }
         .navigationViewStyle(.stack)
         .task { await model.load() }
+        .sheet(item: $editing) { category in
+            if case .loaded(let month) = model.state {
+                EditBudgetedSheet(model: model, category: category, style: month.amountStyle)
+            }
+        }
+        // A failure after the sheet closed (the save landed, the refresh did not)
+        .alert(isPresented: Binding(get: { editing == nil && model.saveError != nil }, set: { _ in model.clearSaveError() })) {
+            Alert(title: Text(verbatim: model.saveError?.message ?? ""))
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -56,7 +67,7 @@ struct BudgetTabView: View {
         case .loading, .useWebScreen:
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         case .loaded(let month):
-            BudgetMonthList(month: month)
+            BudgetMonthList(month: month, onEdit: { editing = $0 })
         case .failed(let error):
             VStack(spacing: 12) {
                 Text(verbatim: error.message).multilineTextAlignment(.center)
@@ -89,6 +100,9 @@ private enum Words {
     static let spent = NSLocalizedString("Spent", comment: "Native Budget tab column")
     static let received = NSLocalizedString("Received", comment: "Native Budget tab: income column")
     static let balance = NSLocalizedString("Balance", comment: "Native Budget tab column")
+    static let editHint = NSLocalizedString("Edits the budgeted amount", comment: "Native Budget tab: VoiceOver hint on the budgeted amount")
+    static let save = NSLocalizedString("Save", comment: "Native Budget tab: save an edited amount")
+    static let cancel = NSLocalizedString("Cancel", comment: "Native Budget tab: close the edit sheet")
     static let overspent = NSLocalizedString("Overspent", comment: "Native Budget tab: a negative balance")
 }
 
@@ -109,6 +123,7 @@ private func moneyColor(_ tone: BudgetAmountFormat.Tone) -> Color {
 
 private struct BudgetMonthList: View {
     let month: BudgetMonth
+    let onEdit: (BudgetMonth.Category) -> Void
 
     var body: some View {
         List {
@@ -135,7 +150,7 @@ private struct BudgetMonthList: View {
     private func groupSection(_ group: BudgetMonth.Group) -> some View {
         Section(header: GroupHeader(group: group, format: format)) {
             ForEach(group.visibleCategories) { category in
-                CategoryRow(category: category, isIncome: group.isIncome, format: format)
+                CategoryRow(category: category, isIncome: group.isIncome, format: format, onEdit: onEdit)
             }
         }
     }
@@ -167,12 +182,20 @@ private struct CategoryRow: View {
     let category: BudgetMonth.Category
     let isIncome: Bool
     let format: (Int?) -> String
+    let onEdit: (BudgetMonth.Category) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(category.name)
             HStack(alignment: .top) {
-                if category.budgeted != nil { column(Words.budgeted, category.budgeted) }
+                if category.budgeted != nil && !isIncome {
+                    // Tap the budgeted amount to type a new one
+                    Button { onEdit(category) } label: { column(Words.budgeted, category.budgeted) }
+                        .buttonStyle(.plain)
+                        .accessibilityHint(Words.editHint)
+                } else if category.budgeted != nil {
+                    column(Words.budgeted, category.budgeted)
+                }
                 column(isIncome ? Words.received : Words.spent, category.spent)
                 if category.balance != nil { column(Words.balance, category.balance, colored: true) }
             }
@@ -192,5 +215,59 @@ private struct CategoryRow: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// Types a category's budgeted amount. The text becomes minor units in the view
+// model, from the snapshot's currency; nothing is computed here.
+private struct EditBudgetedSheet: View {
+    @ObservedObject var model: BudgetViewModel
+    let category: BudgetMonth.Category
+    let style: BudgetAmountStyle
+    @State private var text: String
+    @Environment(\.presentationMode) private var presentation
+
+    init(model: BudgetViewModel, category: BudgetMonth.Category, style: BudgetAmountStyle) {
+        self.model = model
+        self.category = category
+        self.style = style
+        _text = State(initialValue: BudgetAmountFormat.editString(category.budgeted ?? 0, style: style))
+    }
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text(category.name), footer: error) {
+                    TextField(Words.budgeted, text: $text)
+                        .keyboardType(.numbersAndPunctuation)
+                        .monospacedDigit()
+                        .accessibilityLabel(Text(verbatim: "\(Words.budgeted) \(category.name)"))
+                }
+            }
+            .navigationBarTitle(Text(Words.budgeted), displayMode: .inline)
+            .navigationBarItems(
+                leading: Button(Words.cancel) { close() },
+                trailing: Button(Words.save) { Task { await save() } }.disabled(model.isSaving))
+        }
+        .navigationViewStyle(.stack)
+        .onAppear { model.clearSaveError() }
+    }
+
+    @ViewBuilder private var error: some View {
+        if let saveError = model.saveError {
+            Text(verbatim: saveError.message).foregroundColor(moneyColor(.negative))
+        }
+    }
+
+    private func save() async {
+        if await model.saveBudgeted(category: category.id, text: text) {
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            close()
+        }
+    }
+
+    private func close() {
+        model.clearSaveError()
+        presentation.wrappedValue.dismiss()
     }
 }

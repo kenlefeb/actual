@@ -33,6 +33,30 @@ declare global {
 
 const EVENTS = ['cells-changed', 'sync-event'];
 
+// loot-core's setBudget turns a non-number amount into 0 and writes a row for
+// any month or category string, so the bridge checks a write itself (sc-3769).
+// Returns only the three fields, so nothing else reaches the handler.
+async function validateBudgetAmount(forward: Send, args: unknown) {
+  const { category, month, amount } = (args ?? {}) as Record<string, unknown>;
+  if (typeof amount !== 'number' || !Number.isInteger(amount)) {
+    throw new Error('native bridge: amount must be an integer');
+  }
+  if (typeof month !== 'string' || !/^\d{4}-\d{2}$/.test(month)) {
+    throw new Error('native bridge: month must be YYYY-MM');
+  }
+  // Throws "no budget for month" when the month has none
+  const snapshot = (await forward('native/budget-month', { month })) as {
+    groups: { categories: { id: string }[] }[];
+  };
+  const isCategory = snapshot.groups.some(group =>
+    group.categories.some(cat => cat.id === category),
+  );
+  if (typeof category !== 'string' || !isCategory) {
+    throw new Error('native bridge: category is not a category of the month');
+  }
+  return { category, month, amount };
+}
+
 export function createNativeBridge({
   send: forward,
   listen: subscribe,
@@ -49,6 +73,9 @@ export function createNativeBridge({
     async call(name, args) {
       if (!allowlist.includes(name)) {
         throw new Error(`native bridge: ${name} is not allowlisted`);
+      }
+      if (name === 'budget/budget-amount') {
+        args = await validateBudgetAmount(forward, args);
       }
       return JSON.stringify(await forward(name, args));
     },

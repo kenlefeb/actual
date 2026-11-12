@@ -91,6 +91,55 @@ In the iOS app, a native tab bar drawn by iOS SHALL be the app's root (ADR 11), 
 - **WHEN** the same server is opened in Safari on an iPhone
 - **THEN** the web tab grid shows, and there is no native tab bar
 
+#### Scenario: iPhone keeps the phone layout in landscape
+- **GIVEN** the iOS app on an iPhone is on Budget, Accounts, an account's transactions, Reports or Settings
+- **WHEN** the user rotates the iPhone to landscape
+- **THEN** the phone layout still shows, with no desktop sidebar and no privacy-mode top bar, the native tab bar is the only navigation, and rotating back to portrait keeps the same screen and selected tab
+
+#### Scenario: Schedules opens from the Settings tab
+- **WHEN** the user taps Settings and then Schedules, in portrait or in landscape
+- **THEN** the schedules screen shows with the Settings tab selected
+
+#### Scenario: iPad and phone browsers keep the wide layout
+- **WHEN** the app is an iPad, or the server is opened in a phone browser in landscape
+- **THEN** the wide layout shows as before
+
+### Requirement: Back goes up one level in the iOS app
+In the iOS app on iPhone, every screen except a tab root SHALL have one fixed parent screen within its own tab, and Back SHALL go to that parent, never follow browser history and never change the selected tab. A tab root SHALL show no Back button. A phone browser SHALL keep browser-history Back. Tab memory (tapping a tab returns to its last screen) is separate from Back, and no per-tab history stack SHALL be kept.
+
+#### Scenario: Back from an account
+- **GIVEN** the user opened Accounts from Settings and then an account
+- **WHEN** the user taps Back
+- **THEN** the accounts list shows and the Accounts tab stays selected
+
+#### Scenario: Back from a category
+- **GIVEN** the user opened a category on the Budget tab
+- **WHEN** the user taps Back
+- **THEN** the budget shows, on the Budget tab
+
+#### Scenario: Tab memory is not Back
+- **GIVEN** the user opened an account, switched to Reports, and tapped Accounts
+- **WHEN** the same account shows and the user taps Back
+- **THEN** the accounts list shows
+
+#### Scenario: Back through Schedules
+- **GIVEN** the user opened Schedules from Settings and then a schedule
+- **WHEN** the user taps Back twice
+- **THEN** Schedules shows, then Settings, with the Settings tab selected throughout
+
+#### Scenario: A tab root has no Back
+- **WHEN** the accounts list shows as the Accounts tab's root
+- **THEN** there is no Back button
+
+#### Scenario: Back after a deep link or relaunch
+- **GIVEN** the app was opened by a deep link to an account, or restored there after a relaunch
+- **WHEN** the user taps Back
+- **THEN** the accounts list shows, and the app does not close or leave the tab
+
+#### Scenario: Phone browser Back follows history
+- **WHEN** the user taps Back on a screen in a phone browser
+- **THEN** the browser goes to the previous page in its history
+
 ### Requirement: The iOS app runs one budget engine
 The iOS app SHALL run exactly one budget engine (ADR 11). Every web screen, whichever tab shows it, SHALL come from one shared WebView, and native screens SHALL read and change budget data only through that engine's handlers. This requirement is iPhone-only; the Mac app runs one engine in Electron.
 

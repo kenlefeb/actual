@@ -14,6 +14,7 @@ import { getScheduledAmount } from '@actual-app/core/shared/schedules';
 import type { ScheduleEntity } from '@actual-app/core/types/models';
 
 import { Search } from '#components/common/Search';
+import { MobileBackButton } from '#components/mobile/MobileBackButton';
 import { MobilePageHeader, Page } from '#components/Page';
 import { PaychecksSection } from '#components/schedules/PaychecksSection';
 import { useAccounts } from '#hooks/useAccounts';
@@ -26,6 +27,7 @@ import { usePaycheckMembership } from '#hooks/usePaycheckMembership';
 import { usePayees } from '#hooks/usePayees';
 import { useSchedules } from '#hooks/useSchedules';
 import { useUndo } from '#hooks/useUndo';
+import { hasNativeTabBar } from '#native/nativeChrome';
 import { addNotification } from '#notifications/notificationsSlice';
 import { useDispatch } from '#redux';
 
@@ -138,6 +140,8 @@ export function MobileSchedulesPage() {
               <Trans>Schedules</Trans>
             </Text>
           }
+          // A phone browser keeps Schedules a top-level page (sc-3845)
+          leftContent={hasNativeTabBar() ? <MobileBackButton /> : undefined}
           rightContent={<AddScheduleButton />}
         />
       }

@@ -26,7 +26,7 @@ Test-first: write the tests, run them and see them fail before writing the code.
 - [x] 3.1 Add `budget/budget-amount` to the Swift allowlist and `native-bridge-allowlist.json`, with failing tests first: both lists equal, the call is forwarded, and `budget/set-zero` is still refused. Verify: the tests pass after.
 - [x] 3.2 Add failing tests for typed bridge arguments: a number arrives at the page as a number, and every existing string-argument call still works. Then change `NativeBridgeClient.call` to an `Encodable` JSON argument type. Verify: `swift test` passes.
 - [x] 3.3 Add failing view-model tests for save: the call, the re-read after it, a failed or timed-out save that keeps the old value, and the minor-unit conversion at the edit field using the snapshot's currency decimal places, and that an id or month not in the snapshot is never sent. Then implement the edit field, the save and the haptic. Verify: the tests pass.
-- [ ] 3.4 Run `check-native-swift` and compare native against web after an edit on a seeded budget. Verify: the check is green and the web screen shows the edit.
+- [x] 3.4 Run `check-native-swift` and compare native against web after an edit on a seeded budget. Verify: the check is green and the web screen shows the edit.
 
 ## 4. Tracking budget mode (sc-3778)
 

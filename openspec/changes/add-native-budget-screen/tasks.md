@@ -45,9 +45,9 @@ Test-first: write the tests, run them and see them fail before writing the code.
 
 ## 6. Change events, foreground and background (sc-3796)
 
-- [ ] 6.1 Add failing tests for the view model's event handling with the `ChangeCoalescer`: a change event refreshes the month, a burst in one frame re-reads at most once, no read while the scene is inactive, and one re-read on becoming active. Verify: they fail first.
-- [ ] 6.2 Add failing tests that every call on the screen uses the client timeout and handles the timeout error. Verify: they fail first.
-- [ ] 6.3 Implement the subscription to `cells-changed` and `sync-event` and the scene-phase handling. Verify: 6.1 and 6.2 pass.
+- [x] 6.1 Add failing tests for the view model's event handling with the `ChangeCoalescer`: a change event refreshes the month, a burst in one frame re-reads at most once, no read while the scene is inactive, and one re-read on becoming active. Verify: they fail first.
+- [x] 6.2 Add failing tests that every call on the screen uses the client timeout and handles the timeout error. Verify: they fail first.
+- [x] 6.3 Implement the subscription to `cells-changed` and `sync-event` and the scene-phase handling. Verify: 6.1 and 6.2 pass.
 - [ ] 6.4 In the Simulator, edit in the web Budget, then background and foreground the app. Verify: the native tab refreshes, and makes no read in the background.
 
 ## 7. Real sync-event on a device against staging (sc-3805)

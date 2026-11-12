@@ -95,6 +95,35 @@ export function installNativeChrome(
   };
 }
 
+const TAB_ROOTS = ['/budget', '/accounts', '/reports', '/settings'];
+// Settings sections: the list's parent is Settings, a detail's parent the list
+const SETTINGS_LISTS = [
+  '/schedules',
+  '/payees',
+  '/rules',
+  '/tags',
+  '/bank-sync',
+  '/business-calendars',
+  '/notifications',
+];
+const DETAIL_PARENTS: Record<string, string> = {
+  '/paychecks': '/schedules',
+  '/categories': '/budget',
+  '/transactions': '/accounts',
+};
+
+// Fork-only (sc-3736). The fixed parent screen the iOS app's Back goes to, or
+// null on a tab root. Never history, never another tab.
+export function nativeParentPath(path: string): string | null {
+  const segments = path.split('/').filter(Boolean);
+  const root = `/${segments[0] ?? ''}`;
+  if (TAB_ROOTS.includes(root)) return segments.length === 1 ? null : root;
+  if (SETTINGS_LISTS.includes(root)) {
+    return segments.length === 1 ? '/settings' : root;
+  }
+  return DETAIL_PARENTS[root] ?? '/budget';
+}
+
 // The budget closed: hide the tab bar until a budget is open again
 export function postNativeClosed(win: ChromeWindow) {
   post(win, { type: 'closed' });

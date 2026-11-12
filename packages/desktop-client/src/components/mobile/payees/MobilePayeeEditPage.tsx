@@ -13,6 +13,7 @@ import { MobileBackButton } from '#components/mobile/MobileBackButton';
 import { InputField } from '#components/mobile/MobileForms';
 import { StickyFormFooter } from '#components/mobile/StickyFormFooter';
 import { MobilePageHeader, Page } from '#components/Page';
+import { useGoBack } from '#hooks/useGoBack';
 import { useNavigate } from '#hooks/useNavigate';
 import { usePayees } from '#hooks/usePayees';
 import { useTouchTargetStyle } from '#hooks/useTouchTargetStyle';
@@ -24,6 +25,7 @@ export function MobilePayeeEditPage() {
   const { t } = useTranslation();
   const touchTarget = useTouchTargetStyle();
   const navigate = useNavigate();
+  const { goBack } = useGoBack();
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
   const dispatch = useDispatch();
@@ -53,8 +55,8 @@ export function MobilePayeeEditPage() {
   }, [id, payees, navigate, payeesListPath]);
 
   const handleCancel = useCallback(() => {
-    void navigate(-1);
-  }, [navigate]);
+    goBack();
+  }, [goBack]);
 
   const handleSave = useCallback(async () => {
     if (!payee || !editedPayeeName.trim()) {

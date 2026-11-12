@@ -27,7 +27,7 @@ import { PaycheckYearToDate } from '#components/modals/PaycheckEditModal/Paychec
 import { MobilePageHeader, Page } from '#components/Page';
 import { useDateFormat } from '#hooks/useDateFormat';
 import { useFormat } from '#hooks/useFormat';
-import { useNavigate } from '#hooks/useNavigate';
+import { useGoBack } from '#hooks/useGoBack';
 import { usePaycheckForm } from '#hooks/usePaycheckForm';
 import { usePaychecks } from '#hooks/usePaychecks';
 import { useTouchTargetStyle } from '#hooks/useTouchTargetStyle';
@@ -53,11 +53,11 @@ export function MobilePaycheckPage() {
 function MobilePaycheckEditor({ paycheck }: { paycheck?: PaycheckEntity }) {
   const { t } = useTranslation();
   const touchTarget = useTouchTargetStyle();
-  const navigate = useNavigate();
+  const { goBack } = useGoBack();
   const format = useFormat();
   const dateFormat = useDateFormat() || 'MM/dd/yyyy';
   const form = usePaycheckForm(paycheck);
-  const close = () => void navigate(-1);
+  const close = goBack;
   // A new paycheck starts open; an existing one starts as summaries
   const isOpenAtStart = !paycheck;
   const { definition, accountById } = form;

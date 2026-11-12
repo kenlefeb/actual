@@ -2,6 +2,7 @@ import {
   hasNativeTabBar,
   installNativeChrome,
   nativeHaptic,
+  nativeParentPath,
   postNativeClosed,
   postNativeRoute,
   showsNativeTabBar,
@@ -136,5 +137,33 @@ describe('postNativeClosed', () => {
     const { win, postMessage } = iosApp();
     postNativeClosed(win);
     expect(postMessage).toHaveBeenCalledWith({ type: 'closed' });
+  });
+});
+
+// native-appearance: "Back goes up one level in the iOS app" (sc-3736)
+describe('nativeParentPath', () => {
+  it.each([
+    ['/accounts/1', '/accounts'],
+    ['/categories/c1', '/budget'],
+    ['/transactions/t1', '/accounts'],
+    ['/schedules/s1', '/schedules'],
+    ['/paychecks/p1', '/schedules'],
+    ['/schedules', '/settings'],
+    ['/business-calendars', '/settings'],
+    ['/business-calendars/b1', '/business-calendars'],
+    ['/payees/p1', '/payees'],
+    ['/rules/r1', '/rules'],
+    ['/bank-sync/account/a1/edit', '/bank-sync'],
+    ['/settings/general', '/settings'],
+    ['/reports/d1', '/reports'],
+    ['/notifications', '/settings'],
+  ])('puts %s under %s', (path, parent) => {
+    expect(nativeParentPath(path)).toBe(parent);
+  });
+
+  it('has no parent for a tab root', () => {
+    for (const root of ['/budget', '/accounts', '/reports', '/settings/']) {
+      expect(nativeParentPath(root)).toBeNull();
+    }
   });
 });

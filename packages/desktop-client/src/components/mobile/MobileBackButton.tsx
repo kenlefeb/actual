@@ -7,7 +7,7 @@ import { SvgCheveronLeft } from '@actual-app/components/icons/v1';
 import { styles } from '@actual-app/components/styles';
 import { Text } from '@actual-app/components/text';
 
-import { useNavigate } from '#hooks/useNavigate';
+import { useGoBack } from '#hooks/useGoBack';
 
 type MobileBackButtonProps = ComponentPropsWithoutRef<typeof Button>;
 
@@ -16,7 +16,8 @@ export function MobileBackButton({
   style,
   ...props
 }: MobileBackButtonProps) {
-  const navigate = useNavigate();
+  const { hidden, goBack } = useGoBack();
+  if (hidden && !onPress) return null;
   return (
     <Button
       variant="bare"
@@ -27,7 +28,7 @@ export function MobileBackButton({
         minWidth: styles.mobileMinHeight,
         ...style,
       }}
-      onPress={onPress || (() => navigate(-1))}
+      onPress={onPress || goBack}
       {...props}
     >
       <SvgCheveronLeft

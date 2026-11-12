@@ -15,6 +15,7 @@ import { MobileBackButton } from '#components/mobile/MobileBackButton';
 import { MOBILE_NAV_HEIGHT } from '#components/mobile/MobileNavTabs';
 import { MobilePageHeader, Page } from '#components/Page';
 import { Setting } from '#components/settings/UI';
+import { useGoBack } from '#hooks/useGoBack';
 import { useNavigate } from '#hooks/useNavigate';
 import { useNewsFeed } from '#hooks/useNewsFeed';
 import { getUnseenEntries } from '#news/utils';
@@ -29,6 +30,7 @@ export function NotificationsPage() {
   const { t } = useTranslation();
   const { isNarrowWidth } = useResponsive();
   const navigate = useNavigate();
+  const { goBack } = useGoBack();
   const location = useLocation();
   const {
     entries,
@@ -68,7 +70,7 @@ export function NotificationsPage() {
                   if (location.key === 'default') {
                     void navigate('/settings');
                   } else {
-                    void navigate(-1);
+                    goBack();
                   }
                 }}
               />

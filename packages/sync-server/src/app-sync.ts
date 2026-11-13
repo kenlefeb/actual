@@ -401,6 +401,8 @@ app.post('/upload-user-file', async (req, res) => {
     const accountDb = getAccountDb();
     accountDb.transaction(() => {
       if (deletedFile) {
+        // Shares reference files(id); the re-created budget starts unshared
+        accountDb.mutate('DELETE FROM user_access WHERE file_id = ?', [fileId]);
         accountDb.mutate('DELETE FROM files WHERE id = ?', [fileId]);
         accountDb.mutate('DELETE FROM budget_removals WHERE file_id = ?', [
           fileId,

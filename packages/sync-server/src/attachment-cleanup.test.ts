@@ -653,6 +653,29 @@ describe("A deleted budget's documents", () => {
     expect(stored(fileId, id)).toBe(true);
   });
 
+  it('an owner upload of a deleted shared budget succeeds and drops the old shares', async () => {
+    const fileId = addBudget();
+    getAccountDb().mutate(
+      'INSERT INTO user_access (file_id, user_id) VALUES (?, ?)',
+      [fileId, 'genericUser'],
+    );
+    const id = newId();
+    store(fileId, id);
+    await deleteBudget(fileId);
+
+    const res = await uploadBudget(fileId);
+
+    expect(res.statusCode).toBe(200);
+    expect(budgetMarkedAt(fileId)).toBeUndefined();
+    expect(stored(fileId, id)).toBe(true);
+    expect(
+      getAccountDb().first(
+        'SELECT COUNT(*) AS n FROM user_access WHERE file_id = ?',
+        [fileId],
+      ).n,
+    ).toBe(0);
+  });
+
   it('an upload by another user under the id leaves the record', async () => {
     const fileId = addBudget();
     store(fileId, newId());

@@ -33,7 +33,8 @@ export function NativeScreens() {
             <Trans>
               Show the Budget tab as a native iPhone screen, for envelope and
               tracking budgets. It starts the next time you open Budget. You can
-              edit budgeted amounts there. Turn it off to go back.
+              edit budgeted amounts and move money there. Turn it off to go
+              back.
             </Trans>
           </Text>
         }

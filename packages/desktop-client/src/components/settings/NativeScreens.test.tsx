@@ -54,7 +54,9 @@ describe('NativeScreens', () => {
       screen.getByText(/envelope and tracking budgets/i),
     ).toBeInTheDocument();
     expect(screen.queryByText(/web screen/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/edit budgeted amounts/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/edit budgeted amounts and move money/i),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/read-only/i)).not.toBeInTheDocument();
   });
 

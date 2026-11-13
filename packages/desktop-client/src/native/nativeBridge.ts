@@ -33,11 +33,22 @@ declare global {
 
 const EVENTS = ['cells-changed', 'sync-event'];
 
-// loot-core's setBudget turns a non-number amount into 0 and writes a row for
-// any month or category string, so the bridge checks a write itself (sc-3769).
-// Returns only the three fields, so nothing else reaches the handler.
-async function validateBudgetAmount(forward: Send, args: unknown) {
-  const { category, month, amount } = (args ?? {}) as Record<string, unknown>;
+type Snapshot = {
+  budgetType: string;
+  currencyCode: string;
+  totals: { toBudget: number | null };
+  groups: {
+    isIncome: boolean;
+    categories: { id: string; balance: number | null }[];
+  }[];
+};
+
+// The amount and month every write carries, checked; the rest still unknown
+function readWrite(
+  args: unknown,
+): Record<string, unknown> & { amount: number; month: string } {
+  const fields = (args ?? {}) as Record<string, unknown>;
+  const { amount, month } = fields;
   // A larger number has already lost precision crossing JSON
   if (typeof amount !== 'number' || !Number.isSafeInteger(amount)) {
     throw new Error('native bridge: amount must be an integer');
@@ -45,22 +56,76 @@ async function validateBudgetAmount(forward: Send, args: unknown) {
   if (typeof month !== 'string' || !/^\d{4}-\d{2}$/.test(month)) {
     throw new Error('native bridge: month must be YYYY-MM');
   }
-  // Throws "no budget for month" when the month has none
-  const snapshot = (await forward('native/budget-month', { month })) as {
-    budgetType: string;
-    groups: { isIncome: boolean; categories: { id: string }[] }[];
-  };
-  // As Swift edits (BudgetMonth.editableGroups): never a group id, and income
-  // categories only on a tracking budget, the only one with budgeted income
-  const isCategory = snapshot.groups.some(
-    group =>
-      (!group.isIncome || snapshot.budgetType === 'tracking') &&
-      group.categories.some(cat => cat.id === category),
-  );
-  if (typeof category !== 'string' || !isCategory) {
+  return { ...fields, amount, month };
+}
+
+// Throws "no budget for month" when the month has none
+async function readMonth(forward: Send, month: string) {
+  return (await forward('native/budget-month', { month })) as Snapshot;
+}
+
+// A category of the month's snapshot: never a group id or to-budget, and an
+// income category only when `withIncome`
+function findCategory(snapshot: Snapshot, id: unknown, withIncome = false) {
+  return snapshot.groups
+    .filter(group => withIncome || !group.isIncome)
+    .flatMap(group => group.categories)
+    .find(cat => cat.id === id);
+}
+
+// loot-core's setBudget turns a non-number amount into 0 and writes a row for
+// any month or category string, so the bridge checks a write itself (sc-3769).
+// Returns only the three fields, so nothing else reaches the handler.
+async function validateBudgetAmount(forward: Send, args: unknown) {
+  const { category, month, amount } = readWrite(args);
+  const snapshot = await readMonth(forward, month);
+  // As Swift edits (BudgetMonth.editableGroups): income categories only on a
+  // tracking budget, the only one with budgeted income
+  const withIncome = snapshot.budgetType === 'tracking';
+  if (
+    typeof category !== 'string' ||
+    !findCategory(snapshot, category, withIncome)
+  ) {
     throw new Error('native bridge: category cannot be edited in the month');
   }
   return { category, month, amount };
+}
+
+// The move-money rules (sc-3787), as Swift's Transfer: an envelope month, a
+// positive amount no larger than the source holds, and two different expense
+// categories, or to-budget as the destination. A move out of to-budget is
+// budget/transfer-available: loot-core's transferCategory would write a
+// budget row for a category called to-budget. Returns only the handler's fields.
+async function validateTransfer(forward: Send, name: string, args: unknown) {
+  const { amount, month, from, to, category } = readWrite(args);
+  if (amount <= 0) {
+    throw new Error('native bridge: a move needs a positive amount');
+  }
+  const snapshot = await readMonth(forward, month);
+  if (snapshot.budgetType !== 'envelope') {
+    throw new Error('native bridge: money moves only on an envelope budget');
+  }
+  if (name === 'budget/transfer-available') {
+    if (!findCategory(snapshot, category)) {
+      throw new Error('native bridge: category cannot take the money');
+    }
+    if (amount > (snapshot.totals.toBudget ?? 0)) {
+      throw new Error('native bridge: more than to-budget holds');
+    }
+    return { month, amount, category };
+  }
+  const source = findCategory(snapshot, from);
+  if (!source || (to !== 'to-budget' && !findCategory(snapshot, to))) {
+    throw new Error('native bridge: money cannot move between these');
+  }
+  if (from === to) {
+    throw new Error('native bridge: source and destination are the same');
+  }
+  if (amount > (source.balance ?? 0)) {
+    throw new Error('native bridge: more than the source holds');
+  }
+  // The currency only labels the movement note: the month's own, as the web's
+  return { month, amount, from, to, currencyCode: snapshot.currencyCode };
 }
 
 export function createNativeBridge({
@@ -82,6 +147,8 @@ export function createNativeBridge({
       }
       if (name === 'budget/budget-amount') {
         args = await validateBudgetAmount(forward, args);
+      } else if (name.startsWith('budget/transfer-')) {
+        args = await validateTransfer(forward, name, args);
       }
       // A write resolves to undefined, which JSON.stringify does not make a string
       return JSON.stringify((await forward(name, args)) ?? null);

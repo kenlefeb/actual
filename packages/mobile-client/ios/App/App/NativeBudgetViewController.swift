@@ -4,8 +4,9 @@ import UIKit
 // Fork-only (sc-3751, native-budget-screen spec). The read-only native Budget
 // tab: a month of an envelope or tracking budget. Every number is a loot-core
 // cell, read through native/budget-month and shown as it came; this file adds
-// nothing up. The one write is a category's budgeted amount, sent through the
-// view model to loot-core (sc-3769). NativeTabBarController lays it over the web
+// nothing up. The writes are a category's budgeted amount (sc-3769) and a move
+// of money on an envelope month (sc-3787), sent through the view model to
+// loot-core. NativeTabBarController lays it over the web
 // Budget screen while the switch is on, so the web view stays in the window.
 final class NativeBudgetViewController: UIHostingController<BudgetTabView> {
     private let model: BudgetViewModel
@@ -56,12 +57,19 @@ struct BudgetTabView: View {
     @State private var editing: BudgetMonth.Category?
     // The month the edit was opened on; the save is refused if it changed
     @State private var editingMonth = ""
+    // The month the Move money sheet was opened on (sc-3787)
+    @State private var moving: BudgetMonth?
 
     var body: some View {
         NavigationView {
             content
                 .navigationBarTitle(Text(monthTitle), displayMode: .large)
                 .toolbar { monthControls }
+                .toolbar { moveControl }
+                // Its own view, so it never competes with the edit sheet below
+                .sheet(isPresented: Binding(get: { moving != nil }, set: { if !$0 { moving = nil } })) {
+                    if let moving { MoveMoneySheet(model: model, month: moving) }
+                }
         }
         .navigationViewStyle(.stack)
         .task { await model.load() }
@@ -71,7 +79,7 @@ struct BudgetTabView: View {
             }
         }
         // A failure after the sheet closed (the save landed, the refresh did not)
-        .alert(isPresented: Binding(get: { editing == nil && model.saveError != nil }, set: { _ in model.clearSaveError() })) {
+        .alert(isPresented: Binding(get: { editing == nil && moving == nil && model.saveError != nil }, set: { _ in model.clearSaveError() })) {
             Alert(title: Text(verbatim: model.saveError?.message ?? ""))
         }
     }
@@ -135,6 +143,16 @@ struct BudgetTabView: View {
         }
     }
 
+    // Envelope months only: the view model refuses a tracking month, so it is not offered there
+    @ToolbarContentBuilder private var moveControl: some ToolbarContent {
+        ToolbarItem(placement: .navigationBarLeading) {
+            if model.canMoveMoney, case .loaded(let month) = model.state {
+                Button { moving = month } label: { Image(systemName: "arrow.left.arrow.right") }
+                    .accessibilityLabel(Text(Words.moveMoney))
+            }
+        }
+    }
+
     private var monthTitle: String { Self.title(of: model.month) }
 
     private static func title(of month: String) -> String {
@@ -163,6 +181,11 @@ private enum Words {
     static let expenses = NSLocalizedString("Expenses", comment: "Native Budget tab: tracking budget summary")
     static let saved = NSLocalizedString("Saved", comment: "Native Budget tab: tracking budget summary")
     static let overspent = NSLocalizedString("Overspent", comment: "Native Budget tab: a negative balance")
+    static let moveMoney = NSLocalizedString("Move money", comment: "Native Budget tab: move money between categories and to-budget")
+    static let move = NSLocalizedString("Move", comment: "Native Move money sheet: confirm the move")
+    static let from = NSLocalizedString("From", comment: "Native Move money sheet: the source")
+    static let to = NSLocalizedString("To", comment: "Native Move money sheet: the destination")
+    static let amount = NSLocalizedString("Amount", comment: "Native Move money sheet: the amount to move")
 }
 
 // DESIGN.native.md money colours (light, dark)
@@ -344,6 +367,81 @@ private struct EditBudgetedSheet: View {
 
     private func save() async {
         if await model.saveBudgeted(month: month, category: category.id, text: text) {
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            close()
+        }
+    }
+
+    private func close() {
+        model.clearSaveError()
+        presentation.wrappedValue.dismiss()
+    }
+}
+
+// Moves money between to-budget and the visible expense categories of an
+// envelope month. The view model checks the move and sends it; the sheet only
+// shows the limit loot-core's numbers give (sc-3787).
+private struct MoveMoneySheet: View {
+    @ObservedObject var model: BudgetViewModel
+    let month: BudgetMonth
+    @State private var from: MoveEnd = .toBudget
+    @State private var to: MoveEnd
+    @State private var text: String
+    @Environment(\.presentationMode) private var presentation
+
+    init(model: BudgetViewModel, month: BudgetMonth) {
+        self.model = model
+        self.month = month
+        let first = month.expenseGroups.flatMap(\.visibleCategories).first
+        _to = State(initialValue: first.map { .category($0.id) } ?? .toBudget)
+        _text = State(initialValue: model.movePrefill(from: .toBudget))
+    }
+
+    private var ends: [(MoveEnd, String)] {
+        [(.toBudget, Words.toBudget)] + month.expenseGroups.flatMap(\.visibleCategories).map { (.category($0.id), $0.name) }
+    }
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(footer: footer) {
+                    picker(Words.from, $from)
+                    picker(Words.to, $to)
+                    TextField(Words.amount, text: $text)
+                        .keyboardType(.numbersAndPunctuation)
+                        .monospacedDigit()
+                        .accessibilityLabel(Text(Words.amount))
+                }
+            }
+            .navigationBarTitle(Text(Words.moveMoney), displayMode: .inline)
+            .navigationBarItems(
+                leading: Button(Words.cancel) { close() },
+                trailing: Button(Words.move) { Task { await move() } }
+                    .disabled(model.isSaving || !model.canConfirmMove(from: from, to: to, text: text)))
+        }
+        .navigationViewStyle(.stack)
+        .onAppear { model.clearSaveError() }
+        // A new source: start again from all it holds
+        .onChange(of: from) { text = model.movePrefill(from: $0) }
+    }
+
+    private func picker(_ title: String, _ selection: Binding<MoveEnd>) -> some View {
+        Picker(title, selection: selection) {
+            ForEach(ends, id: \.0) { end, name in Text(verbatim: name).tag(end) }
+        }
+    }
+
+    private var footer: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(verbatim: model.moveLimitMessage(from: from))
+            if let saveError = model.saveError {
+                Text(verbatim: saveError.message).foregroundColor(moneyColor(.negative))
+            }
+        }
+    }
+
+    private func move() async {
+        if await model.moveMoney(month: month.month, from: from, to: to, text: text) {
             UINotificationFeedbackGenerator().notificationOccurred(.success)
             close()
         }

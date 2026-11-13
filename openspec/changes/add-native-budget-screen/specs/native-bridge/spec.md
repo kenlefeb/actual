@@ -61,7 +61,7 @@ Native code SHALL format amounts, turn typed input into minor units, and fill `c
 - **THEN** the native screen shows amounts in the budget's format, the same as the web screen
 
 ### Requirement: Bridge writes are validated before loot-core runs them
-The page and Swift SHALL each refuse an invalid write with an error result and no write, before loot-core runs it; Swift builds each write from a typed per-handler value. A write is invalid when its amount is not a finite integer, its month is not a `YYYY-MM` with a budget, or its category id is not a category in that month's snapshot (a group id included). The only exception is the literal `to-budget`, accepted as source or destination of `budget/transfer-category`.
+The page and Swift SHALL each refuse an invalid write with an error result and no write, before loot-core runs it; Swift builds each write from a typed per-handler value. A write is invalid when its amount is not a finite integer, its month is not a `YYYY-MM` with a budget, or its category id is not a category in that month's snapshot (a group id included). The only exception is the literal `to-budget`, accepted as the destination of `budget/transfer-category`.
 
 #### Scenario: Amount is not an integer
 - **GIVEN** the iOS app with a budget open
@@ -99,12 +99,27 @@ The page and Swift SHALL each refuse an invalid write with an error result and n
 - **THEN** Swift refuses it before the call, without reaching the page
 
 ### Requirement: Transfers follow the move-money rules
-The page and Swift SHALL each refuse, with an error result and no write, a transfer with an amount of 0 or less; and a `budget/transfer-category` with the same source and destination, an income category as either end, or (envelope) an amount above the source's balance, where to-budget is limited by the month's to-budget. Refusing a move above the balance is intentional and stricter than the web.
+The page and Swift SHALL each refuse, with an error result and no write, a transfer that breaks the move-money rules: an envelope month only, an amount above 0 and no more than the source holds, two different ends, no income category at either end, and `to-budget` only as a destination of `budget/transfer-category`. Refusing a move above the balance is intentional and stricter than the web.
 
-#### Scenario: To-budget as a source or destination
+#### Scenario: A month that is not an envelope month
+- **GIVEN** a tracking budget
+- **WHEN** native code sends `budget/transfer-category` or `budget/transfer-available` with a valid amount
+- **THEN** the call returns an error and nothing is written
+
+#### Scenario: Moving out of to-budget
 - **GIVEN** an envelope budget with money in to-budget
-- **WHEN** native code sends `budget/transfer-category` with `to-budget` as the source or as the destination, and a valid amount
-- **THEN** the call is accepted and forwarded, and `to-budget` sent as a category id to `budget/budget-amount` or `budget/transfer-available` is still refused
+- **WHEN** native code moves money from to-budget into a category
+- **THEN** it uses `budget/transfer-available`, and a `budget/transfer-category` with `to-budget` as the source returns an error and writes nothing, because loot-core's `transferCategory` would write a budget row for a category called `to-budget`
+
+#### Scenario: Moving more than to-budget holds
+- **GIVEN** an envelope month whose to-budget is 5000
+- **WHEN** native code sends `budget/transfer-available` for 5001, or for an income category
+- **THEN** the call returns an error and nothing is written
+
+#### Scenario: To-budget as the destination
+- **GIVEN** an envelope budget
+- **WHEN** native code sends `budget/transfer-category` with `to-budget` as the destination, and a valid amount
+- **THEN** the call is accepted and forwarded, and `to-budget` sent as the source of `budget/transfer-category`, or as a category id to `budget/budget-amount` or `budget/transfer-available`, is refused
 
 #### Scenario: Transfer to itself
 - **GIVEN** an envelope budget

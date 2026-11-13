@@ -73,6 +73,11 @@ The message SHALL depend only on R: `network` "You're offline. Showing the last 
 - **WHEN** the user pulls down and `sync` returns `{"ok": false, "reason": "network"}`
 - **THEN** the same numbers stay, marked stale, with "You're offline. Showing the last numbers." inline, and the spinner ends
 
+#### Scenario: The failed sync's own sync-event
+- **GIVEN** a pull whose sync fails, so loot-core sends `sync-event` before `sync` returns `{"ok": false, "reason": R}`
+- **WHEN** that event, or any later change event, re-reads the month
+- **THEN** the numbers from the read show, still marked stale, with R's fixed message; only a read that no change event caused (a later pull, a month step, the tab showing again or a return to the foreground) clears it
+
 #### Scenario: Signed out
 - **GIVEN** the native Budget tab showing a month and an expired session
 - **WHEN** the user pulls down and `sync` returns `{"ok": false, "reason": "unauthorized"}`

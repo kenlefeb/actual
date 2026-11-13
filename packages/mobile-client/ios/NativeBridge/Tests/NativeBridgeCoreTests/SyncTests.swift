@@ -467,4 +467,26 @@ final class BudgetRefreshTests: XCTestCase {
         XCTAssertNil(model.refreshError)
         XCTAssertEqual(page.names.filter { $0 == "sync" }.count, 1)
     }
+
+    // A failed sync sends its own sync-event before its result (offline-sync.test.ts
+    // in loot-core); the re-read it causes must not clear the message or the dimming
+    func testTheFailedSyncsOwnEventKeepsTheMessageAndTheDimming() async throws {
+        let json = try fixtureJSON("budget-month-envelope")
+        let page = Page(month: json)
+        let model = model(page, changeInterval: 0.01)
+        let reply = try syncFixture("network")
+        page.syncReply = {
+            await model.changeEventReceived()
+            return reply
+        }
+        await model.load()
+        await model.refresh()
+        // The event's re-read lands after the failure
+        for _ in 0..<100 where page.names.count < 3 { try await Task.sleep(nanoseconds: 10_000_000) }
+        try await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertEqual(page.names, ["native/budget-month", "sync", "native/budget-month"])
+        XCTAssertEqual(model.refreshError, .offline)
+        XCTAssertEqual(model.refreshError?.message, "You're offline. Showing the last numbers.")
+        guard case .stale = model.state else { return XCTFail("expected stale, got \(model.state)") }
+    }
 }

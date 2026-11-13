@@ -35,12 +35,20 @@ The bridge allowlist, on the Swift and the page side, SHALL also hold `sync`, lo
 - **THEN** the call returns the fixed origin error, and the page receives nothing
 
 ### Requirement: The page returns only whether the sync worked and why not
-The page bridge SHALL return `{"ok": true}` when loot-core's sync returns no error, and `{"ok": false, "reason": R}` when it does. R SHALL be one of `network`, `unauthorized`, `out-of-sync`, `clock-drift`, `encryption` or `other`: `network-failure` maps to `network`, `unauthorized`, `out-of-sync` and `clock-drift` map to themselves, `encrypt-failure` and `decrypt-failure` map to `encryption`, and every other reason, including an unknown one, maps to `other`. The page SHALL build this shape itself. loot-core's `messages`, `message` and `meta` SHALL NOT cross the bridge, and Swift SHALL decode R into a closed set and treat any other value as `other`.
+The page bridge SHALL return `{"ok": true}` when loot-core's sync returns no error, and `{"ok": false, "reason": R}` when it does. R SHALL be one of `network`, `unauthorized`, `out-of-sync`, `clock-drift`, `encryption` or `other`. The page SHALL build this shape itself, and loot-core's `messages`, `message` and `meta` SHALL NOT cross the bridge.
 
 #### Scenario: A sync that works
 - **GIVEN** a budget with a sync server and a change made on another device
 - **WHEN** native code calls `sync`
 - **THEN** the result is `{"ok": true}` and carries no messages
+
+#### Scenario: The shape changes
+- **GIVEN** the contract fixtures checked by vitest and decoded by the Swift tests
+- **WHEN** the result shape changes
+- **THEN** the vitest contract test fails, and the Swift decode test fails against the regenerated fixture
+
+### Requirement: Sync failure reasons map to a closed set
+The page SHALL map loot-core's reason as follows: `network-failure` to `network`; `unauthorized`, `out-of-sync` and `clock-drift` to themselves; `encrypt-failure` and `decrypt-failure` to `encryption`; every other reason, including an unknown one, to `other`. Swift SHALL decode R into a closed set and treat any other value as `other`.
 
 #### Scenario: Each failure
 - **GIVEN** loot-core's sync fails with reason `network-failure`, `unauthorized`, `out-of-sync`, `clock-drift`, `encrypt-failure`, `decrypt-failure` or `invalid-schema`
@@ -51,11 +59,6 @@ The page bridge SHALL return `{"ok": true}` when loot-core's sync returns no err
 - **GIVEN** loot-core's sync fails with a reason not listed above, or the page returns a reason Swift does not know
 - **WHEN** native code receives the result
 - **THEN** the reason is `other`
-
-#### Scenario: The shape changes
-- **GIVEN** the contract fixtures checked by vitest and decoded by the Swift tests
-- **WHEN** the result shape changes
-- **THEN** the vitest contract test fails, and the Swift decode test fails against the regenerated fixture
 
 ### Requirement: A sync error reveals nothing about the server
 No part of a failed sync SHALL reach native code, a log line or the screen except R. The page SHALL drop the error's `message` and `meta`, which can carry the server address, an HTTP status or a response body. No credential, token or file id SHALL cross the bridge in either direction.

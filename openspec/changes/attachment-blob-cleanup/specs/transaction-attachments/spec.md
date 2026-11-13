@@ -49,6 +49,27 @@ The server SHALL accept a report only from a user with access to the budget, and
 - **WHEN** a user with no access to the budget sends a report for it
 - **THEN** the server refuses it and records nothing
 
+### Requirement: Recorded ids are served narrowly
+`/attachment-records` SHALL run the other attachment endpoints' checks: a valid file id, a budget that exists and isn't deleted, and access for the session user, refusing anyone else with no ids. It SHALL return only that budget's recorded ids, no times and nothing from other budgets, at most 1000 per page, with an `after` cursor for the next page.
+
+#### Scenario: A user without access
+- **WHEN** a user with no access to the budget asks for its recorded ids
+- **THEN** the server refuses with 403 and returns no ids
+
+#### Scenario: A deleted or invalid budget
+- **WHEN** a request names a deleted budget, an unknown budget or an invalid file id
+- **THEN** the server refuses it and returns no ids
+
+#### Scenario: Only this budget's ids
+- **GIVEN** records for budgets A and B
+- **WHEN** a user with access to A asks for A's recorded ids
+- **THEN** the response holds only A's ids, with no times
+
+#### Scenario: A large backlog
+- **GIVEN** 2,500 recorded ids
+- **WHEN** a device pages through with the `after` cursor
+- **THEN** each page holds at most 1000 ids, and three pages return all of them
+
 ### Requirement: Orphaned after 30 days
 The server SHALL treat a document as orphaned only when it holds a removal record at least 30 days old; the days SHALL be set by `attachments.orphanRetentionDays`, and 0 SHALL turn deletion off. A document with no record SHALL never be deleted by cleanup.
 

@@ -386,6 +386,18 @@ final class BudgetMonthNavigationTests: XCTestCase {
         XCTAssertEqual(model.pickerMonths.first, "2016-01")
     }
 
+    // The picker marks the shown month (sc-4092): one row, taken from the model
+    func testThePickerMarksTheShownMonthAndTheMarkFollowsAStepAndAPick() async {
+        let model = model("2026-01", "2026-05")
+        await model.load()
+        XCTAssertEqual(model.markedPickerMonth, model.month)
+        XCTAssertEqual(model.pickerMonths.filter { $0 == model.markedPickerMonth }.count, 1)
+        await model.previous()
+        XCTAssertEqual(model.markedPickerMonth, "2026-02")
+        await model.select("2026-05")
+        XCTAssertEqual(model.markedPickerMonth, "2026-05")
+    }
+
     func testALaterMonthIsOfferedAfterTheNextReadWithNoRelaunch() async {
         let budget = Budget("2026-01", "2026-03")
         let model = model(budget)

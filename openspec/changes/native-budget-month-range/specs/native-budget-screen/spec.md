@@ -49,3 +49,12 @@ When a read carries no `firstMonth` and `lastMonth`, the tab SHALL still show th
 - **GIVEN** the largest accessibility text size and VoiceOver on
 - **WHEN** previous or next month is unavailable at an edge
 - **THEN** its control is announced as dimmed, and the picker lists the months without truncating
+
+### Requirement: The month picker marks the month on screen
+The native Budget tab's month picker SHALL mark the row of the month the tab shows, and no other row, so the user can tell where they are in the list. The picker keeps its order (newest first) and does not scroll to the marked row.
+
+#### Scenario: The picker marks the shown month
+- **GIVEN** the tab shows a month between the first and the last
+- **WHEN** the user opens the picker
+- **THEN** that month's row carries a checkmark and no other row does, and after a step or a pick the checkmark is on the new month
+- **AND** VoiceOver announces the marked row as selected

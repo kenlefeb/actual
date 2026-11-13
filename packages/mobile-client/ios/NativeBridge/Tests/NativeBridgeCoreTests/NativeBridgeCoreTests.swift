@@ -57,6 +57,7 @@ final class BudgetMonthContractTests: XCTestCase {
         XCTAssertEqual(month.budgetType, .tracking)
         XCTAssertNil(month.totals.toBudget)
         XCTAssertEqual(month.totals.budgetedIncome, 320000)
+        XCTAssertEqual(month.totals.saved, 180000)
         XCTAssertTrue(try roundTrips(data))
     }
 

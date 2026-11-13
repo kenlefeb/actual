@@ -32,4 +32,24 @@ final class BudgetSpeechTests: XCTestCase {
     func testRowWithNoAmountsSpeaksNothing() {
         XCTAssertEqual(BudgetSpeech.value(budgeted: nil, spent: nil, balance: nil, isIncome: false, style: style), "")
     }
+
+    // sc-3929: the web hides Balance for income, so native neither shows nor speaks it
+    func testIncomeRowDoesNotSpeakBalanceEvenWhenLootCoreSendsOne() {
+        XCTAssertEqual(
+            BudgetSpeech.value(budgeted: 320000, spent: 300000, balance: 20000, isIncome: true, style: style),
+            "Budgeted $3,200.00, Received $3,000.00")
+    }
+
+    func testBalanceColumnAppliesToExpensesOnly() {
+        XCTAssertNil(BudgetBalance.shown(20000, isIncome: true))
+        XCTAssertEqual(BudgetBalance.shown(20000, isIncome: false), 20000)
+        XCTAssertNil(BudgetBalance.shown(nil, isIncome: false))
+    }
+
+    // sc-3938: a negative Saved reads "Overspent", as on the web
+    func testSavedIsLabelledOverspentWhenNegative() {
+        XCTAssertTrue(BudgetBalance.savedIsOverspent(-1))
+        XCTAssertFalse(BudgetBalance.savedIsOverspent(0))
+        XCTAssertFalse(BudgetBalance.savedIsOverspent(180000))
+    }
 }

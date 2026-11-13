@@ -116,6 +116,14 @@ public enum BudgetAmountFormat {
     }
 }
 
+// Fork-only (sc-3929, sc-3938). Where native follows the web's tracking screen:
+// no Balance for income rows or income groups, and a negative Saved reads
+// "Overspent". loot-core's shape is unchanged; the view decides.
+public enum BudgetBalance {
+    public static func shown(_ balance: Int?, isIncome: Bool) -> Int? { isIncome ? nil : balance }
+    public static func savedIsOverspent(_ saved: Int) -> Bool { saved < 0 }
+}
+
 // Fork-only (sc-3814). What VoiceOver speaks for a category or group row: each
 // amount that applies, named by its column, and the word "Overspent" for a
 // negative balance so colour is never the only signal.
@@ -127,10 +135,10 @@ public enum BudgetSpeech {
             : NSLocalizedString("Spent", comment: "Native Budget tab column")
         var parts = [
             (NSLocalizedString("Budgeted", comment: "Native Budget tab column"), budgeted), (spentTitle, spent),
-            (NSLocalizedString("Balance", comment: "Native Budget tab column"), balance),
+            (NSLocalizedString("Balance", comment: "Native Budget tab column"), BudgetBalance.shown(balance, isIncome: isIncome)),
         ]
         .compactMap { title, amount in amount.map { "\(title) \(BudgetAmountFormat.string($0, style: style))" } }
-        if let balance, balance < 0 { parts.append(NSLocalizedString("Overspent", comment: "Native Budget tab: a negative balance")) }
+        if let balance = BudgetBalance.shown(balance, isIncome: isIncome), balance < 0 { parts.append(NSLocalizedString("Overspent", comment: "Native Budget tab: a negative balance")) }
         return parts.joined(separator: ", ")
     }
 }

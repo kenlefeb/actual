@@ -134,7 +134,7 @@ async function budgetMonth({
       forNextMonth: envelope('buffered'),
       fromLastMonth: envelope('from-last-month'),
       budgetedIncome: tracking('total-budget-income'),
-      saved: tracking('total-saved'),
+      saved: tracking('real-saved'),
     },
     groups: groups.map(group => ({
       id: group.id,

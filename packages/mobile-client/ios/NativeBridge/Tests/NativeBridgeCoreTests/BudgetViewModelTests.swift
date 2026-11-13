@@ -101,7 +101,7 @@ final class BudgetViewModelTests: XCTestCase {
         XCTAssertEqual(expected.budgetType, .tracking)
         XCTAssertNil(expected.totals.toBudget)
         XCTAssertEqual(expected.totals.budgetedIncome, 320000)
-        XCTAssertEqual(expected.totals.saved, 170000)
+        XCTAssertEqual(expected.totals.saved, 180000)
     }
 
     // The layout follows the snapshot's budgetType on every read

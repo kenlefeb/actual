@@ -376,6 +376,75 @@ describe('schedules', () => {
     });
   });
 
+  describe('auto-posted schedules with an approximate date', () => {
+    const occurrenceDate = '2024-03-10';
+    const approx = (value: unknown, posts_transaction = true) => ({
+      posts_transaction,
+      _conditions: [
+        { op: 'isapprox', field: 'date', value },
+      ] as RuleConditionEntity[],
+    });
+    const monthly = approx({ start: '2024-01-10', frequency: 'monthly' });
+
+    it('looks back 2 days like the import matcher', () => {
+      expect(getScheduleOccurrenceMatchStartDate(monthly, occurrenceDate)).toBe(
+        '2024-03-08',
+      );
+    });
+
+    it('counts a transaction linked 2 days early as posted', () => {
+      expect(
+        isScheduleOccurrencePosted({
+          schedule: monthly,
+          scheduleId: 's',
+          occurrenceDate,
+          postedTransactions: [{ schedule: 's', date: '2024-03-08' }],
+        }),
+      ).toBe(true);
+    });
+
+    it('does not count a transaction 3 days early', () => {
+      expect(
+        isScheduleOccurrencePosted({
+          schedule: monthly,
+          scheduleId: 's',
+          occurrenceDate,
+          postedTransactions: [{ schedule: 's', date: '2024-03-07' }],
+        }),
+      ).toBe(false);
+    });
+
+    it.each([1, 2])(
+      'is exact when repeating every %i day(s), so the previous occurrence does not count',
+      interval => {
+        expect(
+          getScheduleOccurrenceMatchStartDate(
+            approx({ start: '2024-03-01', frequency: 'daily', interval }),
+            occurrenceDate,
+          ),
+        ).toBe(occurrenceDate);
+      },
+    );
+
+    it('keeps the lookback for manual daily schedules', () => {
+      expect(
+        getScheduleOccurrenceMatchStartDate(
+          approx({ start: '2024-03-01', frequency: 'daily' }, false),
+          occurrenceDate,
+        ),
+      ).toBe('2024-03-08');
+    });
+
+    it('still looks back when repeating every 3 days', () => {
+      expect(
+        getScheduleOccurrenceMatchStartDate(
+          approx({ start: '2024-03-01', frequency: 'daily', interval: 3 }),
+          occurrenceDate,
+        ),
+      ).toBe('2024-03-08');
+    });
+  });
+
   describe('indexPostedScheduleTransactions', () => {
     it('groups schedule-linked transactions by schedule id', () => {
       const indexed = indexPostedScheduleTransactions([

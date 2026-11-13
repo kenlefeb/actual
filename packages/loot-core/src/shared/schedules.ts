@@ -12,6 +12,9 @@ import { q } from './query';
 import { getNextRelativeDate } from './relative-dates';
 import { RSchedule } from './rschedule';
 
+// Days either side of an approximate date that the import matcher links.
+export const APPROX_DATE_WINDOW_DAYS = 2;
+
 export const DEFAULT_UPCOMING_SCHEDULE_DAYS = '7';
 
 // Preset token values used by UI selects. Keep labels in the UI (i18n) but
@@ -99,10 +102,25 @@ export function getScheduleOccurrenceMatchStartDate(
   if (dateCond?.op === 'is') {
     return occurrenceDate;
   }
-  if (schedule.posts_transaction) {
+  const isApprox = dateCond?.op === 'isapprox';
+  // Auto-posted schedules are exact, unless the date is approximate: the
+  // import matcher then links up to 2 days either side, so a link that early
+  // must count or the schedule posts a second transaction.
+  if (schedule.posts_transaction && !isApprox) {
     return occurrenceDate;
   }
-  return monthUtils.subDays(occurrenceDate, 2);
+  // Repeating every 2 days or less, the window would reach the previous
+  // occurrence's transaction.
+  const value = dateCond?.value as { frequency?: string; interval?: number };
+  if (
+    schedule.posts_transaction &&
+    isApprox &&
+    value?.frequency === 'daily' &&
+    (value.interval ?? 1) <= APPROX_DATE_WINDOW_DAYS
+  ) {
+    return occurrenceDate;
+  }
+  return monthUtils.subDays(occurrenceDate, APPROX_DATE_WINDOW_DAYS);
 }
 
 export type PostedScheduleTransaction = {
@@ -160,9 +178,11 @@ export function isScheduleOccurrencePosted({
  *
  * The date lower-bound varies:
  * - `dateCond.op === 'is'` (one-time or recurring): exact `next_date`, no lookback.
- * - `posts_transaction` (auto-posted recurring): exact `next_date`, since
- *   auto-posted dates are always precise. A lookback here would cause
- *   yesterday's transaction to falsely match today's occurrence.
+ * - `posts_transaction` (auto-posted recurring) without `isapprox`: exact
+ *   `next_date`, since auto-posted dates are precise. A lookback here would
+ *   cause yesterday's transaction to falsely match today's occurrence.
+ * - `isapprox` with `posts_transaction`: same 2-day lookback, matching the
+ *   import matcher, except when repeating every 2 days or less.
  * - Otherwise (manual recurring with `isapprox`, etc.): 2-day lookback to catch
  *   early payments.
  */

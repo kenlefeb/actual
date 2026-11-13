@@ -41,6 +41,7 @@ import {
 import { q } from '#shared/query';
 import { getRelativeOccurrences } from '#shared/relative-dates';
 import { getApproxNumberThreshold, sortNumbers } from '#shared/rules';
+import { APPROX_DATE_WINDOW_DAYS } from '#shared/schedules';
 import { extractTagsForFilter, makeTagAqlRegex } from '#shared/tags';
 import { ungroupTransaction } from '#shared/transactions';
 import { fastSetMerge, partitionByField } from '#shared/util';
@@ -645,8 +646,8 @@ export function conditionsToAQL(
                 op === 'isapprox'
                   ? {
                       $and: [
-                        { date: { $gte: subDays(d, 2) } },
-                        { date: { $lte: addDays(d, 2) } },
+                        { date: { $gte: subDays(d, APPROX_DATE_WINDOW_DAYS) } },
+                        { date: { $lte: addDays(d, APPROX_DATE_WINDOW_DAYS) } },
                       ],
                     }
                   : { date: d },
@@ -663,8 +664,8 @@ export function conditionsToAQL(
                 if (op === 'isapprox') {
                   return {
                     $and: [
-                      { date: { $gte: subDays(d, 2) } },
-                      { date: { $lte: addDays(d, 2) } },
+                      { date: { $gte: subDays(d, APPROX_DATE_WINDOW_DAYS) } },
+                      { date: { $lte: addDays(d, APPROX_DATE_WINDOW_DAYS) } },
                     ],
                   };
                 }
@@ -674,8 +675,8 @@ export function conditionsToAQL(
           } else {
             if (op === 'isapprox') {
               const fullDate = parseDate(value.date);
-              const high = addDays(fullDate, 2);
-              const low = subDays(fullDate, 2);
+              const high = addDays(fullDate, APPROX_DATE_WINDOW_DAYS);
+              const low = subDays(fullDate, APPROX_DATE_WINDOW_DAYS);
 
               return {
                 $and: [{ date: { $gte: low } }, { date: { $lte: high } }],

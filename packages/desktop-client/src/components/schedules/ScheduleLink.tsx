@@ -3,6 +3,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
+import { useResponsive } from '@actual-app/components/hooks/useResponsive';
 import { SvgAdd } from '@actual-app/components/icons/v0';
 import { InitialFocus } from '@actual-app/components/initial-focus';
 import { Text } from '@actual-app/components/text';
@@ -17,7 +18,11 @@ import { pushModal } from '#modals/modalsSlice';
 import type { Modal as ModalType } from '#modals/modalsSlice';
 import { useDispatch } from '#redux';
 
-import { ROW_HEIGHT, SchedulesTable } from './SchedulesTable';
+import {
+  NARROW_ROW_HEIGHT,
+  ROW_HEIGHT,
+  SchedulesTable,
+} from './SchedulesTable';
 
 type ScheduleLinkProps = Extract<
   ModalType,
@@ -31,6 +36,8 @@ export function ScheduleLink({
   onScheduleLinked,
 }: ScheduleLinkProps) {
   const { t } = useTranslation();
+  const { isNarrowWidth } = useResponsive();
+  const rowHeight = isNarrowWidth ? NARROW_ROW_HEIGHT : ROW_HEIGHT;
 
   const dispatch = useDispatch();
   const [filter, setFilter] = useState(accountName || '');
@@ -86,10 +93,10 @@ export function ScheduleLink({
           />
           <View
             style={{
-              flexDirection: 'row',
-              gap: 4,
+              flexDirection: isNarrowWidth ? 'column' : 'row',
+              gap: isNarrowWidth ? 8 : 4,
               marginBottom: 20,
-              alignItems: 'center',
+              alignItems: isNarrowWidth ? 'stretch' : 'center',
             }}
           >
             <Text>
@@ -106,7 +113,7 @@ export function ScheduleLink({
                     searchInput.current = r;
                   }}
                   isInModal
-                  width={300}
+                  width={isNarrowWidth ? '100%' : 300}
                   placeholder={t('Filter schedules…')}
                   value={filter}
                   onChange={setFilter}
@@ -116,7 +123,10 @@ export function ScheduleLink({
             {ids.length === 1 && (
               <Button
                 variant="primary"
-                style={{ marginLeft: 15, padding: '4px 10px' }}
+                style={{
+                  marginLeft: isNarrowWidth ? 0 : 15,
+                  padding: '4px 10px',
+                }}
                 onPress={() => {
                   state.close();
                   void onCreate();
@@ -131,7 +141,7 @@ export function ScheduleLink({
           <View
             style={{
               flex: `1 1 ${
-                (ROW_HEIGHT - 1) * (Math.max(schedules.length, 1) + 1)
+                (rowHeight - 1) * (Math.max(schedules.length, 1) + 1)
               }px`,
               marginTop: 15,
               maxHeight: '50vh',

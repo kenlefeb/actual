@@ -398,6 +398,16 @@ final class BudgetMonthNavigationTests: XCTestCase {
         XCTAssertEqual(model.markedPickerMonth, "2026-05")
     }
 
+    func testAShownMonthOutsideTheAdvertisedRangeGetsNoMark() async {
+        let budget = Budget("2026-01", "2026-05")
+        budget.advertised = ("2026-04", "2026-05")  // the tab opens on March, which the range leaves out
+        let model = model(budget)
+        await model.load()
+        XCTAssertEqual(model.month, "2026-03")
+        XCTAssertFalse(model.pickerMonths.contains("2026-03"))
+        XCTAssertNil(model.markedPickerMonth)
+    }
+
     func testALaterMonthIsOfferedAfterTheNextReadWithNoRelaunch() async {
         let budget = Budget("2026-01", "2026-03")
         let model = model(budget)

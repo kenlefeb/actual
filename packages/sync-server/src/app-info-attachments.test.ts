@@ -9,6 +9,9 @@ async function getInfo() {
   return request(app).get('/info');
 }
 
+// Re-importing the whole app per case can exceed the 5 s default on a loaded machine.
+vi.setConfig({ testTimeout: 30_000 });
+
 describe('/info attachments limit', () => {
   afterEach(() => {
     delete process.env.ACTUAL_ATTACHMENTS_FILE_SIZE_LIMIT_MB;

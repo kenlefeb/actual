@@ -54,11 +54,16 @@ The server SHALL accept a report only from a user with access to the budget, and
 
 #### Scenario: A user without access
 - **WHEN** a user with no access to the budget asks for its recorded ids
-- **THEN** the server refuses with 403 and returns no ids
+- **THEN** the server answers 403 and returns no ids
 
 #### Scenario: A deleted or invalid budget
 - **WHEN** a request names a deleted budget, an unknown budget or an invalid file id
 - **THEN** the server refuses it and returns no ids
+
+#### Scenario: Another budget's ids
+- **GIVEN** records for budgets A and B, and a user with access to B only
+- **WHEN** that user asks for A's recorded ids
+- **THEN** the server answers 403 and returns none of A's ids
 
 #### Scenario: Only this budget's ids
 - **GIVEN** records for budgets A and B
@@ -69,6 +74,19 @@ The server SHALL accept a report only from a user with access to the budget, and
 - **GIVEN** 2,500 recorded ids
 - **WHEN** a device pages through with the `after` cursor
 - **THEN** each page holds at most 1000 ids, and three pages return all of them
+
+### Requirement: Recorded ids are for stored documents, and older servers are tolerated
+`/attachment-records` SHALL list only ids whose document is still stored. When it answers 404, as a server without cleanup does, the client SHALL report nothing and show no error, and SHALL try again after a later sync.
+
+#### Scenario: A record whose document is gone
+- **GIVEN** a record whose document was deleted by a rollback
+- **WHEN** a device asks for the recorded ids
+- **THEN** that id is not listed
+
+#### Scenario: An older server
+- **GIVEN** a sync server that answers 404 to `/attachment-records`
+- **WHEN** a device finishes a sync after an attachment change
+- **THEN** it sends no report and shows no error
 
 ### Requirement: Orphaned after 30 days
 The server SHALL treat a document as orphaned only when it holds a removal record at least 30 days old; the days SHALL be set by `attachments.orphanRetentionDays`, and 0 SHALL turn deletion off. A document with no record SHALL never be deleted by cleanup.

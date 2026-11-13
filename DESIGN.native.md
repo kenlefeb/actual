@@ -1,6 +1,6 @@
 # Design System: Home Economics (native apps)
 
-Fork-only. This file covers the native apps only: "Home Economics" on iPhone (Capacitor, `packages/mobile-client`) and on Mac (Electron, `packages/desktop-electron`), bundle id `app.homeeconomics.budget`. The web app in a browser keeps upstream Actual's design system in [DESIGN.md](DESIGN.md), and nothing here changes it. Behaviour is specified in `openspec/specs/native-appearance/` (proposed in `openspec/changes/add-native-design-system/`).
+Fork-only. This file covers the native apps only: "Home Economics" on iPhone (Capacitor, `packages/mobile-client`) and on Mac (Electron, `packages/desktop-electron`), bundle id `app.homeeconomics.budget`. The web app in a browser keeps upstream Actual's design system in [DESIGN.md](DESIGN.md), and nothing here changes it, with one exception: the app icon (section 2) is shared by every platform (web, Electron on Mac and Windows, Android, iOS). Behaviour is specified in `openspec/specs/native-appearance/` (proposed in `openspec/changes/add-native-design-system/`).
 
 - **Figma:** [Home Economics — Native Design System](https://www.figma.com/design/2Ts4fUoFzCWfvubD9vgTWx). The tokens there are Figma variables: "HE Color" (Light/Dark) and "HE Space & Radius" (iPhone/Mac).
 - **Decisions:** Ken, 2026-11-11, on Shortcut sc-3483.
@@ -26,7 +26,7 @@ Four rules are new:
 
 - **Name:** "Home Economics" on the device. The App Store record is "Home Economics Budget".
 - **Wordmark:** "Home Economics" set in SF Pro Rounded Semibold, in the accent colour.
-- **App icon:** direction A, a jar of coins (envelope budgeting). It is delivered as a layered Icon Composer file: an accent background, the jar and the coins as separate foreground layers, and no text. The system then makes the Liquid Glass, dark, tinted and clear variants.
+- **App icon:** direction A, a jar of coins (envelope budgeting). Every platform uses it: web favicon and PWA icons, Electron on Mac and Windows, Android and iOS. On iOS and Mac it is delivered as a layered Icon Composer file: an accent background, the jar and the coins as separate foreground layers, and no text. The system then makes the Liquid Glass, dark, tinted and clear variants.
 
 ## 3. Colour
 

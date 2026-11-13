@@ -2,7 +2,7 @@
 
 ## Purpose
 
-How the native "Home Economics" apps on iPhone (Capacitor) and Mac (Electron) look and navigate, while the web app in a browser keeps upstream Actual's look. The design rules behind these requirements are in `DESIGN.native.md`.
+How the native "Home Economics" apps on iPhone (Capacitor) and Mac (Electron) look and navigate, while the web app in a browser keeps upstream Actual's look apart from the app icon, which every platform shares (see the brand requirement). The design rules behind these requirements are in `DESIGN.native.md`.
 
 ## ADDED Requirements
 
@@ -160,8 +160,8 @@ In the Mac app, the window SHALL use an inset title bar with the system's sideba
 - **WHEN** the user chooses the menu command for a new transaction, or presses its shortcut
 - **THEN** a new transaction row opens for editing in that account
 
-### Requirement: The native apps carry the Home Economics brand
-The iOS and Mac apps SHALL show the name "Home Economics" and the jar-of-coins app icon (direction A). The icon SHALL be a layered Icon Composer file, so that the system provides its dark, tinted and clear variants.
+### Requirement: Every platform carries the Home Economics app icon
+Every platform SHALL use the jar-of-coins app icon (direction A) as its app icon: the web app (favicon and PWA icons), the Electron app on Mac and Windows, and the Android and iOS apps. The icon is the only part of the brand that the web shares; the web app otherwise keeps upstream's design system. The iOS and Mac apps SHALL also show the name "Home Economics", and their icon SHALL be a layered Icon Composer file, so that the system provides its dark, tinted and clear variants.
 
 #### Scenario: iPhone Home Screen
 - **WHEN** the app is installed from TestFlight on an iPhone
@@ -170,3 +170,15 @@ The iOS and Mac apps SHALL show the name "Home Economics" and the jar-of-coins a
 #### Scenario: Mac Dock
 - **WHEN** the Mac app is running
 - **THEN** the Dock and the app switcher show the same jar-of-coins icon, and the menu bar names the app "Home Economics"
+
+#### Scenario: Browser tab and installed web app
+- **WHEN** the web app is open in a browser, or installed as a PWA
+- **THEN** the tab shows the jar-of-coins favicon and the installed app uses the jar-of-coins icon, while the rest of the web app looks as upstream's does
+
+#### Scenario: Windows app
+- **WHEN** the Electron app is running on Windows
+- **THEN** the taskbar, the window and the installer show the jar-of-coins icon
+
+#### Scenario: Android app
+- **WHEN** the Android app is installed
+- **THEN** the launcher shows the jar-of-coins icon, including its adaptive and themed variants

@@ -2,7 +2,7 @@
 
 ## Why
 
-Shortcut sc-3483. Ken (2026-11-11) wants the native "Home Economics" apps to have their own look and take full advantage of Apple's design language. The apps are the iOS app (sc-3398, a Capacitor WebView) and the Mac app (sc-3410, Electron). Today both show the browser's web UI and upstream Actual's theme. The web app keeps upstream's look.
+Shortcut sc-3483. Ken (2026-11-11) wants the native "Home Economics" apps to have their own look and take full advantage of Apple's design language. The apps are the iOS app (sc-3398, a Capacitor WebView) and the Mac app (sc-3410, Electron). Today both show the browser's web UI and upstream Actual's theme. The web app keeps upstream's look, except for the app icon: on 2026-11-12 Ken decided the jar-of-coins icon goes on every platform.
 
 The UX Designer's exploration on sc-3483 (comments 3492, 3499 and 3503) recommends two things. First, a native theme chosen only inside the native shells. Second, system-drawn chrome: a native tab bar on iPhone, and the native window, sidebar and menu bar on Mac. [ADR 11](../../../docs/adr/0011-native-ui-without-upstream-parity.md) later chose native SwiftUI screens built one at a time on the one JavaScript budget engine. This change lays that foundation: the theme still styles the web screens that remain, and the iPhone tab bar becomes the native root that can host web or native screens. Ken's decisions are the Hearth Teal accent, app icon direction A (a jar of coins), and following the system light and dark appearance.
 
@@ -20,7 +20,7 @@ The UX Designer's exploration on sc-3483 (comments 3492, 3499 and 3503) recommen
   - **Window:** an inset title bar and a system sidebar material.
   - **Menu bar:** holds the main commands with keyboard shortcuts.
   - **Window titles:** name the view, not the app.
-- **Brand.** The app icon is direction A, delivered as an Icon Composer file. The wordmark is "Home Economics" in SF Pro Rounded.
+- **Brand.** The app icon is direction A and is shared by every platform: web (favicon, PWA icons), Electron on Mac and Windows, Android and iOS. The iOS and Mac apps get it as an Icon Composer file. Nothing else of the native design system reaches the web. The wordmark is "Home Economics" in SF Pro Rounded.
 - **Design rules.** The design rules live in the fork-only `DESIGN.native.md`, with one cross-link from `DESIGN.md`. Upstream's web themes and tokens are not edited.
 
 Out of scope:
@@ -34,7 +34,7 @@ Out of scope:
 
 ### New Capabilities
 
-- `native-appearance`: how the native iOS and Mac apps look and navigate. It covers the native theme and system appearance, type and amounts, the iPhone tab bar and haptics, the Mac window and menu bar, and the app's brand. The browser stays on upstream's look.
+- `native-appearance`: how the native iOS and Mac apps look and navigate. It covers the native theme and system appearance, type and amounts, the iPhone tab bar and haptics, the Mac window and menu bar, and the app icon. The icon is shared by every platform, including the web; otherwise the browser stays on upstream's look.
 
 ### Modified Capabilities
 

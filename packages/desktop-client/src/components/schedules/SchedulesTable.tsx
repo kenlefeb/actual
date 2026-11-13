@@ -4,6 +4,7 @@ import type { CSSProperties } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
+import { useResponsive } from '@actual-app/components/hooks/useResponsive';
 import { SvgDotsHorizontalTriple } from '@actual-app/components/icons/v1';
 import { SvgCheck } from '@actual-app/components/icons/v2';
 import { styles } from '@actual-app/components/styles';
@@ -67,6 +68,7 @@ export type ScheduleItemAction =
   | 'delete';
 
 export const ROW_HEIGHT = 43;
+export const NARROW_ROW_HEIGHT = 76;
 
 export function ScheduleAmountCell({
   amount,
@@ -159,9 +161,12 @@ function ScheduleRow({
   statuses,
   dateFormat,
   isSourceMissing,
+  isNarrow,
 }: {
   schedule: ScheduleEntity;
   dateFormat: string;
+  // Phone width: stack name, payee/account and date/status/amount
+  isNarrow: boolean;
   // A relative schedule whose source schedule was deleted
   isSourceMissing: boolean;
 } & Pick<
@@ -215,6 +220,74 @@ function ScheduleRow({
       : [],
   });
 
+  const dateContent = isSourceMissing ? (
+    <Text style={{ color: theme.warningText }}>
+      <Trans>Source schedule was deleted</Trans>
+    </Text>
+  ) : schedule.next_date ? (
+    monthUtilFormat(schedule.next_date, dateFormat)
+  ) : null;
+
+  if (isNarrow) {
+    return (
+      <Row
+        ref={rowRef}
+        height={NARROW_ROW_HEIGHT}
+        inset={15}
+        onClick={() => onSelect(schedule.id)}
+        style={{
+          cursor: 'pointer',
+          backgroundColor: theme.tableBackground,
+          color: theme.tableText,
+          flexDirection: 'column',
+          alignItems: 'stretch',
+          justifyContent: 'center',
+          gap: 2,
+          ':hover': { backgroundColor: theme.tableRowBackgroundHover },
+        }}
+      >
+        <Text
+          style={{
+            fontWeight: 600,
+            ...(schedule.name == null
+              ? { color: theme.buttonNormalDisabledText }
+              : null),
+          }}
+          title={schedule.name ? schedule.name : ''}
+        >
+          {schedule.name ? schedule.name : t('None')}
+        </Text>
+        <View
+          style={{
+            flexDirection: 'row',
+            gap: 4,
+            color: theme.pageTextSubdued,
+            fontSize: 12,
+          }}
+        >
+          <DisplayId type="payees" id={schedule._payee} />
+          <Text>·</Text>
+          <DisplayId type="accounts" id={schedule._account} />
+        </View>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+          }}
+        >
+          <Text>{dateContent}</Text>
+          <StatusBadge status={status} />
+          <ScheduleAmountCell
+            amount={schedule._amount}
+            op={schedule._amountOp}
+          />
+        </View>
+      </Row>
+    );
+  }
+
   return (
     <Row
       ref={rowRef}
@@ -247,13 +320,7 @@ function ScheduleRow({
         <DisplayId type="accounts" id={schedule._account} />
       </Field>
       <Field width={110} name="date">
-        {isSourceMissing ? (
-          <Text style={{ color: theme.warningText }}>
-            <Trans>Source schedule was deleted</Trans>
-          </Text>
-        ) : schedule.next_date ? (
-          monthUtilFormat(schedule.next_date, dateFormat)
-        ) : null}
+        {dateContent}
       </Field>
       <Field width={120} name="status" style={{ alignItems: 'flex-start' }}>
         <StatusBadge status={statuses.get(schedule.id)} />
@@ -315,6 +382,8 @@ export function SchedulesTable({
 }: SchedulesTableProps) {
   const { t } = useTranslation();
   const format = useFormat();
+  const { isNarrowWidth } = useResponsive();
+  const isNarrow = !!minimal && isNarrowWidth;
 
   const dateFormat = useDateFormat() || 'MM/dd/yyyy';
   const [showCompleted, setShowCompleted] = useState(false);
@@ -416,42 +485,44 @@ export function SchedulesTable({
       <ScheduleRow
         schedule={item as ScheduleEntity}
         isSourceMissing={isSourceMissing(item as ScheduleEntity)}
-        {...{ statuses, dateFormat, onSelect, onAction, minimal }}
+        {...{ statuses, dateFormat, onSelect, onAction, minimal, isNarrow }}
       />
     );
   }
 
   return (
     <View style={{ ...styles.tableContainer, ...tableStyle }}>
-      <TableHeader height={ROW_HEIGHT} inset={15}>
-        <Field width="flex">
-          <Trans>Name</Trans>
-        </Field>
-        <Field width="flex">
-          <Trans>Payee</Trans>
-        </Field>
-        <Field width="flex">
-          <Trans>Account</Trans>
-        </Field>
-        <Field width={110}>
-          <Trans>Next date</Trans>
-        </Field>
-        <Field width={120}>
-          <Trans>Status</Trans>
-        </Field>
-        <Field width={100} style={{ textAlign: 'right' }}>
-          <Trans>Amount</Trans>
-        </Field>
-        {!minimal && (
-          <Field width={80} style={{ textAlign: 'center' }}>
-            <Trans>Recurring</Trans>
+      {!isNarrow && (
+        <TableHeader height={ROW_HEIGHT} inset={15}>
+          <Field width="flex">
+            <Trans>Name</Trans>
           </Field>
-        )}
-        {!minimal && <Field width={40} />}
-      </TableHeader>
+          <Field width="flex">
+            <Trans>Payee</Trans>
+          </Field>
+          <Field width="flex">
+            <Trans>Account</Trans>
+          </Field>
+          <Field width={110}>
+            <Trans>Next date</Trans>
+          </Field>
+          <Field width={120}>
+            <Trans>Status</Trans>
+          </Field>
+          <Field width={100} style={{ textAlign: 'right' }}>
+            <Trans>Amount</Trans>
+          </Field>
+          {!minimal && (
+            <Field width={80} style={{ textAlign: 'center' }}>
+              <Trans>Recurring</Trans>
+            </Field>
+          )}
+          {!minimal && <Field width={40} />}
+        </TableHeader>
+      )}
       <Table
         loading={isLoading}
-        rowHeight={ROW_HEIGHT}
+        rowHeight={isNarrow ? NARROW_ROW_HEIGHT : ROW_HEIGHT}
         backgroundColor="transparent"
         style={{ flex: 1, backgroundColor: 'transparent', ...style }}
         items={items as ScheduleEntity[]}

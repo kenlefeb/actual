@@ -127,9 +127,12 @@ public final class BudgetViewModel: ObservableObject {
     }
 
     // The page bridge posted "ready" (sc-3859): the app's own page is back, so
-    // calls refused while a sign-in page showed can succeed again
+    // calls refused while a sign-in page showed can succeed again. It re-reads
+    // only when the last read did not leave the month loaded (refused, failed,
+    // or none yet), so a ready message on a healthy screen costs no read (sc-3965)
     public func pageReady() async {
         guard isSceneActive else { return }
+        if case .loaded = state { return }
         await load()
     }
 

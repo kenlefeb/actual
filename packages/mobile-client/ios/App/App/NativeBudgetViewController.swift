@@ -59,6 +59,7 @@ struct BudgetTabView: View {
     @State private var editingMonth = ""
     // The month the Move money sheet was opened on (sc-3787)
     @State private var moving: BudgetMonth?
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         NavigationView {
@@ -93,6 +94,7 @@ struct BudgetTabView: View {
         switch model.state {
         case .loading:
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityLabel(Text(Words.loading))
         case .loaded(let month):
             BudgetMonthList(month: month, onEdit: { (editingMonth, editing) = (month.month, $0) })
         case .stale(let month, let error):
@@ -105,7 +107,7 @@ struct BudgetTabView: View {
                 .padding()
                 .frame(maxWidth: .infinity)
                 .background(Color(.secondarySystemGroupedBackground))
-                BudgetMonthList(month: month).opacity(0.5)
+                BudgetMonthList(month: month).opacity(contrast == .increased ? 0.75 : 0.5)
             }
         case .failed(let error):
             errorMessage(error)
@@ -205,11 +207,17 @@ private enum Words {
     static let expenses = NSLocalizedString("Expenses", comment: "Native Budget tab: tracking budget summary")
     static let saved = NSLocalizedString("Saved", comment: "Native Budget tab: tracking budget summary")
     static let overspent = NSLocalizedString("Overspent", comment: "Native Budget tab: a negative balance")
+    static let loading = NSLocalizedString("Loading", comment: "Native Budget tab: VoiceOver label on the loading spinner")
     static let moveMoney = NSLocalizedString("Move money", comment: "Native Budget tab: move money between categories and to-budget")
     static let move = NSLocalizedString("Move", comment: "Native Move money sheet: confirm the move")
     static let from = NSLocalizedString("From", comment: "Native Move money sheet: the source")
     static let to = NSLocalizedString("To", comment: "Native Move money sheet: the destination")
     static let amount = NSLocalizedString("Amount", comment: "Native Move money sheet: the amount to move")
+}
+
+// A save error shows in the sheet's footer; VoiceOver is told when it appears
+private func announce(_ message: String?) {
+    if let message { UIAccessibility.post(notification: .announcement, argument: message) }
 }
 
 // DESIGN.native.md money colours (light, dark)
@@ -227,6 +235,36 @@ private func moneyColor(_ tone: BudgetAmountFormat.Tone) -> Color {
     }
 }
 
+// A title and one amount: side by side, stacked at the accessibility text sizes
+// so the amount wraps instead of truncating. One VoiceOver element.
+private struct AmountRow: View {
+    let title: String
+    let amount: String
+    let tone: BudgetAmountFormat.Tone
+    var isHeadline = false
+    @Environment(\.sizeCategory) private var sizeCategory
+
+    var body: some View {
+        Group {
+            if sizeCategory.isAccessibilityCategory {
+                VStack(alignment: .leading, spacing: 2) { texts }
+            } else {
+                HStack { texts }
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(title))
+        .accessibilityValue(Text(amount))
+    }
+
+    @ViewBuilder private var texts: some View {
+        Text(title).font(isHeadline ? .headline : .body)
+        if !sizeCategory.isAccessibilityCategory { Spacer() }
+        Text(amount).font(isHeadline ? .headline : .body).monospacedDigit().foregroundColor(moneyColor(tone))
+    }
+}
+
 private struct BudgetMonthList: View {
     let month: BudgetMonth
     var onEdit: ((BudgetMonth.Category) -> Void)?
@@ -235,12 +273,7 @@ private struct BudgetMonthList: View {
         List {
             if let toBudget = month.totals.toBudget {
                 Section {
-                    HStack {
-                        Text(Words.toBudget).font(.headline)
-                        Spacer()
-                        Text(format(toBudget)).font(.headline).monospacedDigit()
-                            .foregroundColor(moneyColor(BudgetAmountFormat.tone(toBudget)))
-                    }
+                    AmountRow(title: Words.toBudget, amount: format(toBudget), tone: BudgetAmountFormat.tone(toBudget), isHeadline: true)
                 }
             }
             // A tracking budget has no to-budget: its totals as loot-core computed them
@@ -252,12 +285,7 @@ private struct BudgetMonthList: View {
                         (Words.saved, month.totals.saved),
                     ], id: \.0) { title, amount in
                         if let amount {
-                            HStack {
-                                Text(title).font(title == Words.saved ? .headline : .body)
-                                Spacer()
-                                Text(format(amount)).monospacedDigit()
-                                    .foregroundColor(moneyColor(BudgetAmountFormat.tone(amount)))
-                            }
+                            AmountRow(title: title, amount: format(amount), tone: BudgetAmountFormat.tone(amount), isHeadline: title == Words.saved)
                         }
                     }
                 }
@@ -273,10 +301,11 @@ private struct BudgetMonthList: View {
     }
 
     private func groupSection(_ group: BudgetMonth.Group) -> some View {
-        Section(header: GroupHeader(group: group, format: format)) {
+        Section(header: GroupHeader(group: group, style: month.amountStyle)) {
             ForEach(group.visibleCategories) { category in
                 CategoryRow(
-                    category: category, isIncome: group.isIncome, canEditIncome: month.budgetType == .tracking, format: format, onEdit: onEdit)
+                    category: category, isIncome: group.isIncome, canEditIncome: month.budgetType == .tracking, style: month.amountStyle,
+                    onEdit: onEdit)
             }
         }
     }
@@ -289,18 +318,28 @@ private struct BudgetMonthList: View {
 // The group's own totals, as loot-core computed them; nothing is added here
 private struct GroupHeader: View {
     let group: BudgetMonth.Group
-    let format: (Int?) -> String
+    let style: BudgetAmountStyle
+    @Environment(\.sizeCategory) private var sizeCategory
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(group.name)
             // Only the totals loot-core has for this group (an income group has no budgeted or balance)
             let parts = [(Words.budgeted, group.budgeted), (group.isIncome ? Words.received : Words.spent, group.spent), (Words.balance, group.balance)]
-                .compactMap { title, amount in amount.map { "\(title) \(format($0))" } }
+                .compactMap { title, amount in amount.map { "\(title) \(BudgetAmountFormat.string($0, style: style))" } }
             if !parts.isEmpty {
-                Text(verbatim: parts.joined(separator: "  ")).font(.caption2).monospacedDigit().textCase(nil)
+                // One part per line at the accessibility sizes, so none is cut mid-amount
+                Text(verbatim: parts.joined(separator: sizeCategory.isAccessibilityCategory ? "\n" : "  "))
+                    .font(.caption2).monospacedDigit().textCase(nil)
             }
         }
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: group.name))
+        .accessibilityValue(
+            Text(verbatim: BudgetSpeech.value(budgeted: group.budgeted, spent: group.spent, balance: group.balance, isIncome: group.isIncome, style: style))
+        )
+        .accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -309,27 +348,58 @@ private struct CategoryRow: View {
     let isIncome: Bool
     // A tracking budget holds budgeted income; an envelope budget does not
     let canEditIncome: Bool
-    let format: (Int?) -> String
+    let style: BudgetAmountStyle
     let onEdit: ((BudgetMonth.Category) -> Void)?
+    @Environment(\.sizeCategory) private var sizeCategory
 
-    var body: some View {
+    private var editAction: (() -> Void)? {
+        guard category.budgeted != nil, !isIncome || canEditIncome, let onEdit else { return nil }
+        return { onEdit(category) }
+    }
+
+    // The activate action exists only when the amount can be edited
+    @ViewBuilder var body: some View {
+        if let editAction { row.accessibilityAction(.default, editAction) } else { row }
+    }
+
+    private var row: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(category.name)
-            HStack(alignment: .top) {
-                if category.budgeted != nil && (!isIncome || canEditIncome), let onEdit {
-                    // Tap the budgeted amount to type a new one
-                    Button { onEdit(category) } label: { column(Words.budgeted, category.budgeted) }
-                        .buttonStyle(.plain)
-                        .accessibilityHint(Words.editHint)
-                } else if category.budgeted != nil {
-                    column(Words.budgeted, category.budgeted)
-                }
-                column(isIncome ? Words.received : Words.spent, category.spent)
-                if category.balance != nil { column(Words.balance, category.balance, colored: true) }
+            // Side by side, stacked at the accessibility sizes so no amount is cut
+            if sizeCategory.isAccessibilityCategory {
+                VStack(alignment: .leading, spacing: 6) { columns }
+            } else {
+                HStack(alignment: .top) { columns }
             }
         }
         .padding(.vertical, 2)
+        .fixedSize(horizontal: false, vertical: true)
+        // One element: the name, then the amounts; a button when the amount can be edited
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: category.name))
+        .accessibilityValue(
+            Text(
+                verbatim: BudgetSpeech.value(
+                    budgeted: category.budgeted, spent: category.spent, balance: category.balance, isIncome: isIncome, style: style)))
+        .accessibilityHint(Text(editAction == nil ? "" : Words.editHint))
+        .accessibilityAddTraits(editAction == nil ? [] : .isButton)
     }
+
+    @ViewBuilder private var columns: some View {
+        if category.budgeted != nil {
+            if let editAction {
+                // Tap the budgeted amount to type a new one
+                Button(action: editAction) { column(Words.budgeted, category.budgeted) }
+                    .buttonStyle(.plain)
+            } else {
+                column(Words.budgeted, category.budgeted)
+            }
+        }
+        column(isIncome ? Words.received : Words.spent, category.spent)
+        if category.balance != nil { column(Words.balance, category.balance, colored: true) }
+    }
+
+    private func format(_ amount: Int?) -> String { BudgetAmountFormat.string(amount, style: style) }
 
     private func column(_ title: String, _ amount: Int?, colored: Bool = false) -> some View {
         let tone = BudgetAmountFormat.tone(amount)
@@ -381,6 +451,7 @@ private struct EditBudgetedSheet: View {
         }
         .navigationViewStyle(.stack)
         .onAppear { model.clearSaveError() }
+        .onChange(of: model.saveError?.message) { announce($0) }
     }
 
     @ViewBuilder private var error: some View {
@@ -435,6 +506,7 @@ private struct MoveMoneySheet: View {
                         .keyboardType(.numbersAndPunctuation)
                         .monospacedDigit()
                         .accessibilityLabel(Text(Words.amount))
+                        .accessibilityHint(Text(verbatim: model.moveLimitMessage(from: from)))
                 }
             }
             .navigationBarTitle(Text(Words.moveMoney), displayMode: .inline)
@@ -447,6 +519,7 @@ private struct MoveMoneySheet: View {
         .onAppear { model.clearSaveError() }
         // A new source: start again from all it holds
         .onChange(of: from) { text = model.movePrefill(from: $0) }
+        .onChange(of: model.saveError?.message) { announce($0) }
     }
 
     private func picker(_ title: String, _ selection: Binding<MoveEnd>) -> some View {

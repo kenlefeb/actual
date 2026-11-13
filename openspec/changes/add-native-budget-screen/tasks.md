@@ -58,8 +58,8 @@ Test-first: write the tests, run them and see them fail before writing the code.
 
 ## 8. Dynamic Type, Dark Mode and VoiceOver (sc-3814)
 
-- [ ] 8.1 Add failing UI or snapshot checks where the project can: the largest accessibility size with a large amount, dark appearance, and VoiceOver labels on a category row and in the Move money sheet. Verify: they fail on any control that truncates or lacks a label.
-- [ ] 8.2 Fix every control: tabular digits and no truncation, `native-appearance` semantic colours, and VoiceOver label, value, trait and focus order for groups, categories, the edit field and the Move money sheet. Verify: 8.1 passes.
+- [x] 8.1 Add failing UI or snapshot checks where the project can: the largest accessibility size with a large amount, dark appearance, and VoiceOver labels on a category row and in the Move money sheet. Verify: they fail on any control that truncates or lacks a label.
+- [x] 8.2 Fix every control: tabular digits and no truncation, `native-appearance` semantic colours, and VoiceOver label, value, trait and focus order for groups, categories, the edit field and the Move money sheet. Verify: 8.1 passes.
 - [ ] 8.3 Audit with VoiceOver and the Accessibility Inspector in the Simulator. Verify: the notes are on the story.
 
 ## 9. 300-category performance check (sc-3823)

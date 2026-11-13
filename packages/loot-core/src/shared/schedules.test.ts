@@ -426,6 +426,15 @@ describe('schedules', () => {
       },
     );
 
+    it('keeps the lookback for manual daily schedules', () => {
+      expect(
+        getScheduleOccurrenceMatchStartDate(
+          approx({ start: '2024-03-01', frequency: 'daily' }, false),
+          occurrenceDate,
+        ),
+      ).toBe('2024-03-08');
+    });
+
     it('still looks back when repeating every 3 days', () => {
       expect(
         getScheduleOccurrenceMatchStartDate(

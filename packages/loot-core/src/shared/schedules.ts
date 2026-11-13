@@ -113,6 +113,7 @@ export function getScheduleOccurrenceMatchStartDate(
   // occurrence's transaction.
   const value = dateCond?.value as { frequency?: string; interval?: number };
   if (
+    schedule.posts_transaction &&
     isApprox &&
     value?.frequency === 'daily' &&
     (value.interval ?? 1) <= APPROX_DATE_WINDOW_DAYS

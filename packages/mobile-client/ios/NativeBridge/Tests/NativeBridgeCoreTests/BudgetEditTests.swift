@@ -69,7 +69,7 @@ final class WriteAllowlistTests: XCTestCase {
     }
 
     func testOtherWriteHandlersAreStillRefused() async {
-        for name in ["budget/set-zero", "budget/cover-overspending", "budget/transfer-category", "budget/transfer-available"] {
+        for name in ["budget/set-zero", "budget/cover-overspending"] {
             var calls = 0
             let client = NativeBridgeClient { _, _ in
                 calls += 1

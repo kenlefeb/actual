@@ -5,8 +5,8 @@ import Foundation
 // (packages/desktop-client/src/data/native-bridge-allowlist.json, compared by
 // a test) only stops accidents. Each native screen story adds the writes it needs.
 public enum NativeBridgeAllowlist {
-    // Sent only as their typed value (BudgetAmountWrite), never as loose arguments
-    public static let writes: Set<String> = ["budget/budget-amount"]
+    // Sent only as their typed value (BudgetAmountWrite, Transfer), never as loose arguments
+    public static let writes: Set<String> = ["budget/budget-amount", "budget/transfer-category", "budget/transfer-available"]
     public static let handlers: Set<String> = Set(["native/budget-month", "query"]).union(writes)
 }
 
@@ -33,15 +33,89 @@ public struct BudgetAmountWrite: Encodable, Equatable {
     public let amount: Int
 
     // loot-core stores amounts as JavaScript numbers
-    private static let maxAmount = 9_007_199_254_740_991
+    static let maxAmount = 9_007_199_254_740_991
 
     public init(category: String, month: String, amount: Int) throws {
         guard !category.isEmpty, category != "to-budget" else { throw NativeBridgeError.invalidWrite("category") }
-        guard month.range(of: #"^[0-9]{4}-(0[1-9]|1[0-2])\z"#, options: .regularExpression) != nil else {
-            throw NativeBridgeError.invalidWrite("month")
-        }
+        guard Self.isMonth(month) else { throw NativeBridgeError.invalidWrite("month") }
         guard amount.magnitude <= Self.maxAmount else { throw NativeBridgeError.invalidWrite("amount") }
         (self.category, self.month, self.amount) = (category, month, amount)
+    }
+
+    static func isMonth(_ month: String) -> Bool {
+        month.range(of: #"^[0-9]{4}-(0[1-9]|1[0-2])\z"#, options: .regularExpression) != nil
+    }
+}
+
+// One end of a move: to-budget, or a category by id
+public enum MoveEnd: Hashable {
+    case toBudget
+    case category(String)
+}
+
+// A move of money on an envelope month (sc-3787), checked against the month's
+// snapshot before it can be built, and again by the page: a positive amount no
+// larger than the source holds, two different ends, and only expense
+// categories. Out of to-budget it is `budget/transfer-available`; otherwise
+// `budget/transfer-category`, which would write a budget row for a category
+// called to-budget if it were the source.
+public struct Transfer: Encodable, Equatable {
+    public let month: String
+    public let from: MoveEnd
+    public let to: MoveEnd
+    public let amount: Int
+    // Only labels loot-core's movement note: the budget's own, from the snapshot
+    public let currencyCode: String
+
+    public var handler: String { from == .toBudget ? "budget/transfer-available" : "budget/transfer-category" }
+
+    public init(from: MoveEnd, to: MoveEnd, amount: Int, in snapshot: BudgetMonth) throws {
+        guard snapshot.budgetType == .envelope, BudgetAmountWrite.isMonth(snapshot.month) else {
+            throw NativeBridgeError.invalidWrite("month")
+        }
+        guard amount > 0, amount <= BudgetAmountWrite.maxAmount else { throw NativeBridgeError.invalidWrite("amount") }
+        guard from != to, Self.isEnd(from, in: snapshot), Self.isEnd(to, in: snapshot) else {
+            throw NativeBridgeError.invalidWrite("category")
+        }
+        guard amount <= Self.limit(of: from, in: snapshot) ?? 0 else { throw NativeBridgeError.invalidWrite("amount") }
+        (self.month, self.from, self.to, self.amount, self.currencyCode) = (snapshot.month, from, to, amount, snapshot.currencyCode)
+    }
+
+    // What the end holds to move: the month's to-budget, or the category's balance
+    public static func limit(of end: MoveEnd, in snapshot: BudgetMonth) -> Int? {
+        switch end {
+        case .toBudget: return snapshot.totals.toBudget
+        case .category(let id): return expenseCategories(snapshot).first { $0.id == id }?.balance
+        }
+    }
+
+    // Expense categories of any group, hidden ones included, as the page checks
+    static func expenseCategories(_ snapshot: BudgetMonth) -> [BudgetMonth.Category] {
+        snapshot.groups.filter { !$0.isIncome }.flatMap(\.categories)
+    }
+
+    private static func isEnd(_ end: MoveEnd, in snapshot: BudgetMonth) -> Bool {
+        guard case .category(let id) = end else { return true }
+        return id != "to-budget" && expenseCategories(snapshot).contains { $0.id == id }
+    }
+
+    private enum Keys: String, CodingKey { case month, amount, category, from, to, currencyCode }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: Keys.self)
+        try container.encode(month, forKey: .month)
+        try container.encode(amount, forKey: .amount)
+        func id(_ end: MoveEnd) -> String {
+            if case .category(let id) = end { return id }
+            return "to-budget"
+        }
+        if from == .toBudget {
+            try container.encode(id(to), forKey: .category)
+        } else {
+            try container.encode(id(from), forKey: .from)
+            try container.encode(id(to), forKey: .to)
+            try container.encode(currencyCode, forKey: .currencyCode)
+        }
     }
 }
 
@@ -72,7 +146,9 @@ public struct NativeBridgeClient {
         guard NativeBridgeAllowlist.handlers.contains(name) else {
             throw NativeBridgeError.notAllowlisted(name)
         }
-        guard !NativeBridgeAllowlist.writes.contains(name) || args is BudgetAmountWrite else {
+        // Each write name takes only its own typed value
+        let isTyped = (args is BudgetAmountWrite && name == "budget/budget-amount") || (args as? Transfer)?.handler == name
+        guard !NativeBridgeAllowlist.writes.contains(name) || isTyped else {
             throw NativeBridgeError.invalidWrite(name)
         }
         let encoder = JSONEncoder()
@@ -83,6 +159,10 @@ public struct NativeBridgeClient {
 
     public func setBudgetAmount(_ write: BudgetAmountWrite) async throws {
         _ = try await call("budget/budget-amount", args: write)
+    }
+
+    public func transfer(_ transfer: Transfer) async throws {
+        _ = try await call(transfer.handler, args: transfer)
     }
 
     public func budgetMonth(_ month: String) async throws -> BudgetMonth {

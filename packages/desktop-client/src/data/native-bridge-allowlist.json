@@ -1,1 +1,7 @@
-["native/budget-month", "query", "budget/budget-amount"]
+[
+  "native/budget-month",
+  "query",
+  "budget/budget-amount",
+  "budget/transfer-category",
+  "budget/transfer-available"
+]

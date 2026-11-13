@@ -174,15 +174,65 @@ public final class BudgetViewModel: ObservableObject {
             return false
         }
         guard let amount = BudgetAmountFormat.minorUnits(from: text, style: snapshot.amountStyle),
-            let write = try? BudgetAmountWrite(category: id, month: snapshot.month, amount: amount)
+            let value = try? BudgetAmountWrite(category: id, month: snapshot.month, amount: amount)
         else {
             saveError = .invalidAmount
             return false
         }
+        return await write { try await self.client.setBudgetAmount(value) }
+    }
+
+    // Move money (sc-3787): only on a loaded envelope month with no month step pending
+    public var canMoveMoney: Bool {
+        guard case .loaded(let snapshot) = state else { return false }
+        return snapshot.budgetType == .envelope && wanted == nil
+    }
+
+    // The sheet opens with all the source holds, and accepts no more (stricter than the web)
+    public func movePrefill(from source: MoveEnd) -> String {
+        guard case .loaded(let snapshot) = state else { return "" }
+        return BudgetAmountFormat.editString(max(Transfer.limit(of: source, in: snapshot) ?? 0, 0), style: snapshot.amountStyle)
+    }
+
+    public func moveLimitMessage(from source: MoveEnd) -> String {
+        guard case .loaded(let snapshot) = state else { return "" }
+        let limit = BudgetAmountFormat.string(max(Transfer.limit(of: source, in: snapshot) ?? 0, 0), style: snapshot.amountStyle)
+        return String(format: NSLocalizedString("You can move up to %@", comment: "Native Move money sheet: the source's limit"), limit)
+    }
+
+    public func canConfirmMove(from source: MoveEnd, to destination: MoveEnd, text: String) -> Bool {
+        guard canMoveMoney, case .loaded(let snapshot) = state else { return false }
+        return transfer(from: source, to: destination, text: text, in: snapshot) != nil
+    }
+
+    // Moves money on the loaded month through an allowlisted transfer handler,
+    // then reads the month again, exactly like saveBudgeted. `month` is the
+    // month the sheet was opened on. Returns whether the move was made.
+    public func moveMoney(month target: String, from source: MoveEnd, to destination: MoveEnd, text: String) async -> Bool {
+        guard !isSaving, case .loaded(let snapshot) = state else { return false }
+        saveError = nil
+        guard snapshot.month == target, canMoveMoney else {
+            saveError = .failed
+            return false
+        }
+        guard let transfer = transfer(from: source, to: destination, text: text, in: snapshot) else {
+            saveError = .invalidAmount
+            return false
+        }
+        return await write { try await self.client.transfer(transfer) }
+    }
+
+    private func transfer(from source: MoveEnd, to destination: MoveEnd, text: String, in snapshot: BudgetMonth) -> Transfer? {
+        guard let amount = BudgetAmountFormat.minorUnits(from: text, style: snapshot.amountStyle) else { return nil }
+        return try? Transfer(from: source, to: destination, amount: amount, in: snapshot)
+    }
+
+    // One write, then the generation-counted re-read; a failed write is never retried
+    private func write(_ send: () async throws -> Void) async -> Bool {
         isSaving = true
         defer { isSaving = false }
         do {
-            try await client.setBudgetAmount(write)
+            try await send()
         } catch {
             if case NativeBridgeError.timedOut = error { saveError = .timedOut } else { saveError = .failed }
             return false

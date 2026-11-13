@@ -7,7 +7,7 @@ The `sync` call that lets a native screen ask loot-core to sync with the server 
 ## ADDED Requirements
 
 ### Requirement: Sync is allowlisted as a call with no arguments
-The bridge allowlist, on the Swift and the page side, SHALL also hold `sync`, loot-core's existing sync handler, and the two lists SHALL stay equal. Swift SHALL send it only through one typed method that passes no arguments, and the generic `call` SHALL refuse the name `sync` in every shape, including with no arguments, so the result is always decoded and the 30 second deadline always applies. `sync` SHALL be the only handler on the allowlist that is neither a batched read, `query`, nor one of the named budget writes. Every call SHALL still go through the origin-checked path.
+The bridge allowlist, on the Swift and the page side, SHALL also hold `sync`, loot-core's existing sync handler, and the two lists SHALL stay equal. Swift SHALL send it only through one typed method that passes no arguments, and the generic `call` SHALL refuse the name `sync` in every shape, including with no arguments, so the result is always decoded and the 30 second deadline always applies.
 
 #### Scenario: A sync call
 - **GIVEN** the iOS app with a budget open
@@ -39,13 +39,29 @@ The bridge allowlist, on the Swift and the page side, SHALL also hold `sync`, lo
 - **WHEN** native code calls `sync`
 - **THEN** the call returns the fixed origin error, and the page receives nothing
 
+### Requirement: Sync is the only handler outside reads and budget writes
+`sync` SHALL be the only handler on the allowlist that is neither a batched read, `query`, nor one of the named budget writes. Every `sync` call SHALL still go through the origin-checked path.
+
+#### Scenario: Another handler off the classes
+- **GIVEN** the Swift allowlist
+- **WHEN** a handler is added that is not a batched read, `query`, a named budget write or `sync`
+- **THEN** the allowlist tests fail
+
 ### Requirement: The page returns only whether the sync worked and why not
-The page bridge SHALL return `{"ok": true}` when loot-core's sync returns no error, and `{"ok": false, "reason": R}` when it does. R SHALL be one of `network`, `unauthorized`, `out-of-sync`, `clock-drift`, `encryption` or `other`. The page SHALL call `send('sync')` with no arguments, whatever it was given, and SHALL build this shape itself. loot-core's `messages`, `message` and `meta` SHALL NOT cross the bridge, and a rejection of `send('sync')` SHALL return `{"ok": false, "reason": "other"}`, never the rejection's message.
+The page bridge SHALL return `{"ok": true}` when loot-core's sync returns no error, and `{"ok": false, "reason": R}` when it does. R SHALL be one of `network`, `unauthorized`, `out-of-sync`, `clock-drift`, `encryption` or `other`. The page SHALL build this shape itself, and loot-core's `messages`, `message` and `meta` SHALL NOT cross the bridge.
 
 #### Scenario: A sync that works
 - **GIVEN** a budget with a sync server and a change made on another device
 - **WHEN** native code calls `sync`
 - **THEN** the result is `{"ok": true}` and carries no messages
+
+#### Scenario: The shape changes
+- **GIVEN** the contract fixtures checked by vitest and decoded by the Swift tests
+- **WHEN** the result shape changes
+- **THEN** the vitest contract test fails, and the Swift decode test fails against the regenerated fixture
+
+### Requirement: The page calls sync with no arguments and survives a rejection
+The page SHALL call `send('sync')` with no arguments, whatever it was given. A rejection of `send('sync')` SHALL return `{"ok": false, "reason": "other"}`, never the rejection's message.
 
 #### Scenario: A rejection that carries the server address
 - **GIVEN** `send('sync')` rejects with a message containing `https://sync.example.com/sync/sync`
@@ -56,11 +72,6 @@ The page bridge SHALL return `{"ok": true}` when loot-core's sync returns no err
 - **GIVEN** the page bridge
 - **WHEN** it is called for `sync` with any arguments
 - **THEN** it calls `send('sync')` with none
-
-#### Scenario: The shape changes
-- **GIVEN** the contract fixtures checked by vitest and decoded by the Swift tests
-- **WHEN** the result shape changes
-- **THEN** the vitest contract test fails, and the Swift decode test fails against the regenerated fixture
 
 ### Requirement: Sync failure reasons map to a closed set
 The page SHALL map loot-core's reason as follows: `network-failure` to `network`; `unauthorized`, `out-of-sync` and `clock-drift` to themselves; `encrypt-failure` and `decrypt-failure` to `encryption`; every other reason, including an unknown one, to `other`. Swift SHALL decode R into a closed set and treat any other value as `other`.

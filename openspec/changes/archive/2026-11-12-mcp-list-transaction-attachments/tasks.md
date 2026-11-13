@@ -2,7 +2,7 @@
 
 ## 1. Spec (sc-2526)
 
-- [ ] 1.1 Solution Architect and Product Owner review this change. Verify `npx openspec validate mcp-list-transaction-attachments --strict` and `yarn check:openspec-shortcut` pass.
+- [x] 1.1 Solution Architect and Product Owner review this change. Verify `npx openspec validate mcp-list-transaction-attachments --strict` and `yarn check:openspec-shortcut` pass.
 
 ## 2. MCP read tool (sc-2526)
 

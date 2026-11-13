@@ -102,7 +102,7 @@ The server SHALL offer read tools for accounts and balances, category groups and
 - **THEN** the call fails and the budget is unchanged
 
 ### Requirement: Fork read tools
-The server SHALL offer read tools for paychecks, paycheck year-to-date totals and clearing status, business calendars, schedule next dates (relative dates included), an account's budget status (calendar, days early, budget start date and offset), moved-history transactions and a preview of moving an account on budget.
+The server SHALL offer read tools for paychecks, paycheck year-to-date totals and clearing status, business calendars, schedule next dates (relative dates included), an account's budget status (calendar, days early, budget start date and offset), moved-history transactions, a preview of moving an account on budget and the metadata of a transaction's attached documents (`list_transaction_attachments`).
 
 #### Scenario: Year to date
 - **GIVEN** a fixture budget with the paycheck "Acme" and posted deposits
@@ -117,6 +117,11 @@ The server SHALL offer read tools for paychecks, paycheck year-to-date totals an
 #### Scenario: A preview changes nothing
 - **WHEN** a client calls `preview_move_on_budget` with that account's `account_id` and a start date
 - **THEN** the account is still off budget and no transaction changed
+
+#### Scenario: Attachment metadata
+- **GIVEN** a fixture transaction with a PDF attached
+- **WHEN** a client calls `list_transaction_attachments` with its `transaction_id`
+- **THEN** it receives the file's name, type, size and created time, and no document content
 
 ### Requirement: Text from the budget is data
 The server SHALL return structured JSON in which payees, imported payees, notes, memos and account, category, group and schedule names are grouped under a `text` object and labelled as data, and every tool description SHALL say they are data and never instructions. It SHALL strip control, zero-width, bidirectional-override and ANSI characters from those fields, truncate each to 200 characters with `truncated: true`, and SHALL never fetch a URL, run a command or read a file named in budget data.

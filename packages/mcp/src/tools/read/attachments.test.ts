@@ -72,6 +72,27 @@ describe('list_transaction_attachments', () => {
     expect(res.text).not.toContain('\u001b');
   });
 
+  it('a split line lists its parent attachments', async () => {
+    h = await startHarness({ count: 0 });
+    await api.addTransactions(h.fixture.accountId, [
+      {
+        date: '2026-02-01',
+        amount: -3000,
+        subtransactions: [{ amount: -1000 }, { amount: -2000 }],
+      },
+    ] as never);
+    const { data } = (await api.runQuery(
+      api.q('transactions').select(['id', 'parent_id']),
+    )) as { data: Array<{ id: string; parent_id: string | null }> };
+    const child = data.find(t => t.parent_id)!;
+    await attach(child.parent_id!, {});
+    const res = await h.call('list_transaction_attachments', {
+      transaction_id: child.id,
+    });
+    expect(res.json.items).toHaveLength(1);
+    expect(res.json.items[0].transaction_id).toBe(child.parent_id);
+  });
+
   it('refuses an empty id', async () => {
     h = await startHarness();
     const res = await h.call('list_transaction_attachments', {

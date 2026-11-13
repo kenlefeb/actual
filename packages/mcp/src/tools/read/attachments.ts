@@ -14,11 +14,19 @@ export function registerAttachmentTools(tool: RegisterTool) {
     { transaction_id: z.string().min(1).max(100), ...pageShape },
     async ({ transaction_id, ...input }) => {
       const p = pageParams(input);
+      // A split line's documents belong to its parent, as in the app
+      const { data: own } = (await api.runQuery(
+        api
+          .q('transactions')
+          .filter({ id: transaction_id })
+          .select('parent_id'),
+      )) as { data: Array<{ parent_id: string | null }> };
+      const owner = own[0]?.parent_id ?? transaction_id;
       // Only these columns are selected: no hash or encryption data
       const { data } = (await api.runQuery(
         api
           .q('transaction_attachments')
-          .filter({ transaction_id })
+          .filter({ transaction_id: owner })
           .select([
             'id',
             'transaction_id',

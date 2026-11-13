@@ -357,7 +357,12 @@ private struct CategoryRow: View {
         return { onEdit(category) }
     }
 
-    var body: some View {
+    // The activate action exists only when the amount can be edited
+    @ViewBuilder var body: some View {
+        if let editAction { row.accessibilityAction(.default, editAction) } else { row }
+    }
+
+    private var row: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(category.name)
             // Side by side, stacked at the accessibility sizes so no amount is cut
@@ -378,7 +383,6 @@ private struct CategoryRow: View {
                     budgeted: category.budgeted, spent: category.spent, balance: category.balance, isIncome: isIncome, style: style)))
         .accessibilityHint(Text(editAction == nil ? "" : Words.editHint))
         .accessibilityAddTraits(editAction == nil ? [] : .isButton)
-        .accessibilityAction { editAction?() }
     }
 
     @ViewBuilder private var columns: some View {

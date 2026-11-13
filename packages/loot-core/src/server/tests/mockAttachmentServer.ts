@@ -19,6 +19,24 @@ export const attachmentServer = {
   notFoundBody: 'attachment-not-found',
   // Documents whose download answers 500
   failDownloads: new Set<string>(),
+  // The ids the server holds removal records for
+  records: new Set<string>(),
+  // Status /attachment-records answers with instead of the ids
+  recordsStatus: null as number | null,
+  recordsRequests: [] as Array<{ after: string | null; fileId: string }>,
+  reports: [] as Array<{
+    fileId: string;
+    removed: string[];
+    live: string[];
+  }>,
+  reportStatus: null as number | null,
+  // Runs when /attachment-records is asked, before it answers
+  onRecords: null as (() => unknown) | null,
+  // Answers /attachment-records with this page instead of the ids
+  // (nth request from now, 1-based)
+  recordsPage: null as
+    | ((n: number) => { ids: string[]; after: unknown })
+    | null,
 
   reset() {
     this.blobs.clear();
@@ -32,6 +50,13 @@ export const attachmentServer = {
     this.onStored = null;
     this.notFoundBody = 'attachment-not-found';
     this.failDownloads.clear();
+    this.records.clear();
+    this.recordsStatus = null;
+    this.recordsRequests = [];
+    this.reports = [];
+    this.reportStatus = null;
+    this.onRecords = null;
+    this.recordsPage = null;
   },
 
   async fetch(url: string, init: RequestInit = {}): Promise<Response> {
@@ -82,6 +107,43 @@ export const attachmentServer = {
         attachmentServer.deletes.push(id);
         attachmentServer.blobs.delete(id);
         return Response.json({ status: 'ok' });
+      case '/sync/attachment-records': {
+        const after = new URL(url).searchParams.get('after');
+        attachmentServer.recordsRequests.push({
+          after,
+          fileId: headers.get('x-actual-file-id') ?? '',
+        });
+        await attachmentServer.onRecords?.();
+        if (attachmentServer.recordsStatus) {
+          return new Response('no', { status: attachmentServer.recordsStatus });
+        }
+        if (attachmentServer.recordsPage) {
+          return Response.json({
+            status: 'ok',
+            data: attachmentServer.recordsPage(
+              attachmentServer.recordsRequests.length,
+            ),
+          });
+        }
+        const page = [...attachmentServer.records]
+          .sort()
+          .filter(recorded => after == null || recorded > after)
+          .slice(0, 1000);
+        return Response.json({
+          status: 'ok',
+          data: {
+            ids: page,
+            after: page.length === 1000 ? page[page.length - 1] : null,
+          },
+        });
+      }
+      case '/sync/report-attachments': {
+        if (attachmentServer.reportStatus) {
+          return new Response('no', { status: attachmentServer.reportStatus });
+        }
+        attachmentServer.reports.push(JSON.parse(init.body as string));
+        return Response.json({ status: 'ok' });
+      }
       default:
         return new Response('not found', { status: 404 });
     }

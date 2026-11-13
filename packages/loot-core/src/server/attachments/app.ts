@@ -5,6 +5,7 @@ import { fetch } from '#platform/server/fetch';
 import * as fs from '#platform/server/fs';
 import { logger } from '#platform/server/log';
 import { createApp } from '#server/app';
+import * as cloudStorage from '#server/cloud-storage';
 import * as db from '#server/db';
 import * as encryption from '#server/encryption';
 import { mutator, runMutator } from '#server/mutators';
@@ -13,6 +14,7 @@ import { getServer } from '#server/server-config';
 import { batchMessages } from '#server/sync';
 import { undoable, withUndo } from '#server/undo';
 import { detectAttachmentType } from '#shared/attachments';
+import type { ServerEvents } from '#types/server-events';
 
 // Documents attached to transactions (transaction-attachments spec). The
 // document lives on the sync server, the metadata row in the budget. Nothing
@@ -540,6 +542,165 @@ async function openAttachment({
 async function removeAttachment({ id }: { id: string }) {
   await db.delete_('transaction_attachments', id);
 }
+
+// Reporting removed documents (sc-2525). The server can't read a tombstone, so
+// the device tells it which documents are removed, and which recorded ones are
+// live again, so it can delete the orphaned ones after a retention period.
+const REPORT_BATCH = 1000;
+// 100 pages is 100,000 recorded ids, far beyond what waits for cleanup
+const MAX_RECORD_PAGES = 100;
+
+// Budgets that need a report: one is queued by an attachment change and by a
+// failed report, and a budget's first sync of the session adds it too
+const needsReport = new Set<string>();
+const seenThisSession = new Set<string>();
+
+// The ids the server holds removal records for, or null if it can't say
+// (an older server answers 404)
+async function fetchRecordedIds(remote: Remote): Promise<Set<string> | null> {
+  const recorded = new Set<string>();
+  const seen = new Set<string>();
+  let after: string | null = null;
+  for (let page = 0; page < MAX_RECORD_PAGES; page++) {
+    const res: Response = await fetch(
+      `${remote.syncServer}/attachment-records${
+        after == null ? '' : `?after=${encodeURIComponent(after)}`
+      }`,
+      {
+        headers: {
+          'X-ACTUAL-TOKEN': remote.token,
+          'X-ACTUAL-FILE-ID': remote.fileId,
+        },
+      },
+    );
+    if (!res.ok) {
+      return null;
+    }
+    const body = (await res.json()) as {
+      data?: { ids?: string[]; after?: unknown };
+    };
+    const page = body.data;
+    if (!page || !Array.isArray(page.ids)) {
+      return null;
+    }
+    for (const id of page.ids) {
+      recorded.add(id);
+    }
+    const next = page.after;
+    if (next == null) {
+      return recorded;
+    }
+    // A cursor that isn't a string, or comes back, would page forever
+    if (typeof next !== 'string' || next === '' || seen.has(next)) {
+      return null;
+    }
+    seen.add(next);
+    after = next;
+  }
+  // Too many pages: report nothing rather than page without end
+  return null;
+}
+
+async function postReport(remote: Remote, removed: string[], live: string[]) {
+  for (
+    let i = 0;
+    i < Math.max(removed.length, live.length);
+    i += REPORT_BATCH
+  ) {
+    const res = await fetch(`${remote.syncServer}/report-attachments`, {
+      method: 'POST',
+      headers: {
+        'X-ACTUAL-TOKEN': remote.token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        fileId: remote.fileId,
+        removed: removed.slice(i, i + REPORT_BATCH),
+        live: live.slice(i, i + REPORT_BATCH),
+      }),
+    });
+    if (!res.ok) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Never throws; false means the report didn't go out
+async function reportAttachments(remote: Remote): Promise<boolean> {
+  try {
+    const recorded = await fetchRecordedIds(remote);
+    if (!recorded) {
+      return false;
+    }
+    const rows = await db.all<{ id: string; tombstone: number }>(
+      'SELECT id, tombstone FROM transaction_attachments',
+    );
+    // The user may have switched budgets while we waited: these rows would
+    // belong to another budget
+    if (prefs.getPrefs()?.cloudFileId !== remote.fileId) {
+      return false;
+    }
+    const live = rows.filter(r => !r.tombstone && recorded.has(r.id));
+    const removed = rows.filter(r => r.tombstone && !recorded.has(r.id));
+    return await postReport(
+      remote,
+      removed.map(r => r.id),
+      live.map(r => r.id),
+    );
+  } catch (e) {
+    logger.warn('Could not report attachments', e);
+    return false;
+  }
+}
+
+async function reportIfNeeded({ force }: { force: boolean }) {
+  const remote = await getRemote();
+  if (!remote) {
+    return;
+  }
+  const { fileId } = remote;
+  if (!force && seenThisSession.has(fileId) && !needsReport.has(fileId)) {
+    return;
+  }
+  seenThisSession.add(fileId);
+  needsReport.delete(fileId);
+  if (!(await reportAttachments(remote))) {
+    // Sent again after the next sync
+    needsReport.add(fileId);
+  }
+}
+
+// Exported for tests; the app wires it to sync events below
+export async function onSyncEvent(event: ServerEvents['sync-event']) {
+  try {
+    if (
+      event.type === 'applied' &&
+      event.tables.includes('transaction_attachments')
+    ) {
+      const { cloudFileId } = prefs.getPrefs() ?? {};
+      if (cloudFileId) {
+        needsReport.add(cloudFileId);
+      }
+    } else if (event.type === 'success' && prefs.getPrefs()) {
+      await reportIfNeeded({ force: false });
+    }
+  } catch (e) {
+    logger.warn('Could not report attachments', e);
+  }
+}
+
+app.events.on('sync', event => {
+  void onSyncEvent(event);
+});
+
+cloudStorage.onUpload(async () => {
+  try {
+    await reportIfNeeded({ force: true });
+  } catch (e) {
+    logger.warn('Could not report attachments', e);
+  }
+});
 
 async function sha256(data: Uint8Array) {
   const digest = await crypto.subtle.digest('SHA-256', new Uint8Array(data));

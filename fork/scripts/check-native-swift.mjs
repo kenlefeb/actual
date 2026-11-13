@@ -37,13 +37,33 @@ const RULES = [
   [/\.sqlite3?\b/, 'names a .sqlite path'],
 ];
 
+// sc-3859: every Swift call into the page goes through PageCall, which checks
+// the page's origin first; user scripts are added only where they are gated
+// on that origin.
+const CHECKED_PATH =
+  'packages/mobile-client/ios/NativeBridge/Sources/NativeBridgeCore/PageOriginGuard.swift';
+const USER_SCRIPT_ALLOWED = new Set([
+  'packages/mobile-client/ios/App/App/NativeChromePlugin.swift',
+]);
+const PAGE_CALL =
+  /\b(?:callAsyncJavaScript|evaluateJavaScript|triggerJSEvent|triggerWindowJSEvent|triggerDocumentJSEvent|notifyListeners)\b|\beval\(\s*js\s*:/;
+const USER_SCRIPT = /\bWKUserScript\s*\(/;
+
 // files: { path: contents }. Returns failure messages; empty means pass.
 export function problems(files) {
-  return Object.entries(files).flatMap(([path, text]) =>
-    RULES.filter(([re]) => re.test(text)).map(
+  return Object.entries(files).flatMap(([path, text]) => [
+    ...RULES.filter(([re]) => re.test(text)).map(
       ([, what]) => `${path}: ${what}; only loot-core may open the budget`,
     ),
-  );
+    ...(path !== CHECKED_PATH && PAGE_CALL.test(text)
+      ? [
+          `${path}: calls into the page outside PageCall (PageOriginGuard.swift)`,
+        ]
+      : []),
+    ...(!USER_SCRIPT_ALLOWED.has(path) && USER_SCRIPT.test(text)
+      ? [`${path}: adds a WKUserScript outside the allowlist`]
+      : []),
+  ]);
 }
 
 export function findNativeSources(root) {

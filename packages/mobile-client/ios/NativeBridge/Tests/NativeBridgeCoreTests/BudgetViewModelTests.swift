@@ -551,8 +551,8 @@ final class NativeScreensScriptTests: XCTestCase {
         let suite = "NativeScreensScriptTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         addTeardownBlock { defaults.removePersistentDomain(forName: suite) }
-        XCTAssertEqual(NativeScreensScript.source(defaults: defaults), #"window.__actualNativeScreens = {"budget": false};"#)
+        XCTAssertTrue(NativeScreensScript.source(defaults: defaults, expectedOrigin: "capacitor://localhost").contains(#"window.__actualNativeScreens = {"budget": false};"#))
         defaults.set(true, forKey: "NativeScreen.budget")
-        XCTAssertEqual(NativeScreensScript.source(defaults: defaults), #"window.__actualNativeScreens = {"budget": true};"#)
+        XCTAssertTrue(NativeScreensScript.source(defaults: defaults, expectedOrigin: "capacitor://localhost").contains(#"window.__actualNativeScreens = {"budget": true};"#))
     }
 }

@@ -50,6 +50,48 @@ void test('Native Swift: fails on a bridging header that includes sqlite3.h', ()
   }
 });
 
+// native-bridge: "Swift calls into the page only while it is the app's own page" (sc-3859)
+const CHECKED_PATH =
+  'packages/mobile-client/ios/NativeBridge/Sources/NativeBridgeCore/PageOriginGuard.swift';
+const SCRIPT_ALLOWED =
+  'packages/mobile-client/ios/App/App/NativeChromePlugin.swift';
+
+void test('Native Swift: fails on a call into the page outside the checked path', () => {
+  for (const line of [
+    'webView.callAsyncJavaScript(body, arguments: [:], contentWorld: .page)',
+    'webView.evaluateJavaScript("x")',
+    'bridge?.eval(js: "x")',
+    'bridge?.eval(js:"x")',
+    'bridge?.triggerJSEvent(eventName: "x", target: "window")',
+    'bridge?.triggerWindowJSEvent(eventName: "x")',
+    'bridge?.triggerDocumentJSEvent(eventName: "x")',
+    'notifyListeners("x", data: [:])',
+    'let s = WKUserScript(source: "x", injectionTime: .atDocumentStart, forMainFrameOnly: true)',
+  ]) {
+    const path = 'packages/mobile-client/ios/App/App/Other.swift';
+    const found = problems({ [path]: `import WebKit\n${line}\n` });
+    assert.equal(found.length, 1, line);
+    assert.match(found[0], /Other\.swift/);
+  }
+});
+
+void test('Native Swift: allows the checked path and the allowlisted user script', () => {
+  assert.deepEqual(
+    problems({
+      [CHECKED_PATH]:
+        'try await callAsyncJavaScript(script, arguments: arguments, in: nil, contentWorld: .page)\n',
+      [SCRIPT_ALLOWED]:
+        'let script = WKUserScript(source: s, injectionTime: .atDocumentStart, forMainFrameOnly: true)\n',
+    }),
+    [],
+  );
+  // The allowlisted file may add a script, not call into the page
+  assert.equal(
+    problems({ [SCRIPT_ALLOWED]: 'webView.evaluateJavaScript("x")\n' }).length,
+    1,
+  );
+});
+
 void test('Native Swift: passes on bridge code', () => {
   assert.deepEqual(
     problems({

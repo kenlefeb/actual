@@ -42,7 +42,8 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
             controller.removeAllUserScripts()
             others.forEach(controller.addUserScript)
         }
-        let script = WKUserScript(source: NativeScreensScript.source(), injectionTime: .atDocumentStart, forMainFrameOnly: true)
+        let origin = PageCall.expectedOrigin(serverURL: bridge?.config.serverURL)
+        let script = WKUserScript(source: NativeScreensScript.source(expectedOrigin: origin), injectionTime: .atDocumentStart, forMainFrameOnly: true)
         screensScript = script
         controller.addUserScript(script)
     }
@@ -88,11 +89,20 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
     }
 
     // native-bridge: nothing calls into the page while the app is in the
-    // background, where its engine is suspended
+    // background, where its engine is suspended. Only on the app's own page
+    // (PageCall, sc-3859); a refused call, such as a tab tap while a sign-in
+    // page shows, is dropped, never queued.
     private func callPage(_ script: String, _ arguments: [String: Any]) {
         guard UIApplication.shared.applicationState != .background, let webView = bridge?.webView else { return }
-        webView.callAsyncJavaScript(script, arguments: arguments, in: nil, in: .page) { result in
-            if case .failure(let error) = result { CAPLog.print("NativeChrome: \(error.localizedDescription)") }
+        let call = PageCall(runner: webView, serverURL: bridge?.config.serverURL)
+        Task { @MainActor in
+            do {
+                _ = try await call.run(script, arguments: arguments)
+            } catch NativeBridgeError.pageOrigin {
+                CAPLog.print("NativeChrome: call refused, the page is not the app's own")
+            } catch {
+                CAPLog.print("NativeChrome: \(error)")
+            }
         }
     }
 }

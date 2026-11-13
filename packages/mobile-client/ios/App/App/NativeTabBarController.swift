@@ -142,7 +142,11 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
             }
             budgetOverlay = overlay
             // shortcut: onEvent is a single slot; the benchmark harness also sets it, and only runs in its own build
-            bridgeController.nativeBridge.onEvent = { [weak overlay] _ in overlay?.changeEventReceived() }
+            // "ready": the app's own page is back after a refused call (sc-3859). One
+            // posted before this overlay existed is covered by the overlay's first load.
+            bridgeController.nativeBridge.onEvent = { [weak overlay] event in
+                if event == "ready" { overlay?.pageReady() } else { overlay?.changeEventReceived() }
+            }
             container.setOverlay(overlay)
         } else if !wanted, budgetOverlay != nil {
             budgetOverlay = nil

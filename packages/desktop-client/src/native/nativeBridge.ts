@@ -98,4 +98,6 @@ export function installNativeBridge(win: BridgeWindow) {
     listen: listen as unknown as Listen,
     notify: message => handler.postMessage(message),
   });
+  // Native calls refused while another page showed can run again (sc-3859)
+  handler.postMessage({ event: 'ready', payload: null });
 }

@@ -181,4 +181,4 @@ Every platform SHALL use the jar-of-coins app icon (direction A) as its app icon
 
 #### Scenario: Android app
 - **WHEN** the Android app is installed
-- **THEN** the launcher shows the jar-of-coins icon, including its adaptive and themed variants
+- **THEN** the launcher shows the jar-of-coins icon, including its adaptive variant

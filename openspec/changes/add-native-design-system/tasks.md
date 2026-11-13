@@ -27,9 +27,9 @@ Test-first: write the tests, run them and see them fail before writing the code.
 
 ## 4. App icon on every platform (sc-3913) and wordmark (sc-3532)
 
-- [ ] 4.1 Build the direction-A icon in Icon Composer: an accent background with the jar and coins as foreground layers. Export it for iOS (`packages/mobile-client/ios`) and macOS (`packages/desktop-electron`). A standard asset-catalog icon is an acceptable interim step, so sc-3532 and sc-3913 can ship the icon on every platform (web favicon and PWA icons, Electron on Mac and Windows, Android, iOS) first; this task stays open until the layered file replaces it. Verify: the Simulator and Dock screenshots, in default, dark and tinted styles, are attached.
-- [ ] 4.2 Set the display name "Home Economics" for the Mac build, matching iOS's `CFBundleDisplayName`. Verify: the menu bar and the Dock show it.
-- [ ] 4.3 Add the wordmark asset (SF Pro Rounded Semibold, converted to outlines) for the sign-in screen in the native apps only. Verify: Simulator and Mac screenshots, and the browser sign-in screen is unchanged.
+- [ ] 4.1 Build the direction-A icon in Icon Composer: an accent background with the jar and coins as foreground layers. Export it for iOS (`packages/mobile-client/ios`) and macOS (`packages/desktop-electron`). A standard asset-catalog icon is an acceptable interim step, so sc-3532 and sc-3913 can ship the icon on every platform (web favicon and PWA icons, Electron on Mac and Windows, Android, iOS) first; this task stays open until the layered file replaces it. Verify: the Simulator and Dock screenshots, in default, dark and tinted styles, are attached. (tracked by sc-3974)
+- [ ] 4.2 Set the display name "Home Economics" for the Mac build, matching iOS's `CFBundleDisplayName`. Verify: the menu bar and the Dock show it. (folded into sc-3410, tracked by sc-3983)
+- [ ] 4.3 Add the wordmark asset (SF Pro Rounded Semibold, converted to outlines) for the sign-in screen in the native apps only. Verify: Simulator and Mac screenshots, and the browser sign-in screen is unchanged. (tracked by sc-3992)
 
 ## 5. Dynamic Type on iPhone (sc-3564)
 

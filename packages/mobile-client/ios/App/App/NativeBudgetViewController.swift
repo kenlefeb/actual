@@ -152,17 +152,18 @@ struct BudgetTabView: View {
             .disabled(!model.canGoPrevious)
             .accessibilityLabel(Text(NSLocalizedString("Previous month", comment: "Native Budget tab: month navigation")))
             Menu {
+                let marked = model.markedPickerMonth  // once, not per row
                 ForEach(model.pickerMonths.reversed(), id: \.self) { month in
                     Button {
                         Task { await model.select(month) }
                     } label: {
-                        if month == model.markedPickerMonth {
+                        if month == marked {
                             Label(Self.title(of: month), systemImage: "checkmark")
                         } else {
                             Text(Self.title(of: month))
                         }
                     }
-                    .accessibilityAddTraits(month == model.markedPickerMonth ? .isSelected : [])
+                    .accessibilityAddTraits(month == marked ? .isSelected : [])
                 }
             } label: {
                 Image(systemName: "calendar")

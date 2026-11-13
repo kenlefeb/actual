@@ -76,6 +76,18 @@ convict.addFormat({
       .filter(Boolean),
 });
 
+// fork: sc-2525. Refused rather than coerced: convict's 'nat' parses "1.5" as 1,
+// and a negative value would make every removal record old enough to delete.
+convict.addFormat({
+  name: 'nonNegativeInteger',
+  validate(val) {
+    if (!Number.isInteger(val) || val < 0) {
+      throw new Error('must be a non-negative integer');
+    }
+  },
+  coerce: val => (/^\d+$/.test(val) ? Number(val) : val),
+});
+
 // Main config schema
 const configSchema = convict({
   env: {
@@ -231,6 +243,13 @@ const configSchema = convict({
       format: 'nat',
       default: 1024,
       env: 'ACTUAL_ATTACHMENTS_BUDGET_QUOTA_MB',
+    },
+
+    orphanRetentionDays: {
+      doc: 'Days a removed document is kept on the server before cleanup deletes it; 0 turns deletion off',
+      format: 'nonNegativeInteger',
+      default: 30,
+      env: 'ACTUAL_ATTACHMENTS_ORPHAN_RETENTION_DAYS',
     },
   },
 

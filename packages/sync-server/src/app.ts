@@ -19,6 +19,10 @@ import * as pluggai from './app-pluggyai/app-pluggyai';
 import * as secretApp from './app-secrets';
 import * as simpleFinApp from './app-simplefin/app-simplefin';
 import * as syncApp from './app-sync';
+import {
+  attachmentMetrics,
+  startAttachmentCleanup,
+} from './attachment-cleanup';
 import { config } from './load-config';
 
 const debugSensitive = createDebug('actual-sensitive:server');
@@ -131,10 +135,11 @@ app.get('/health', (_req, res) => {
   res.status(200).json({ status: 'UP' });
 });
 
-app.get('/metrics', (_req, res) => {
+app.get('/metrics', async (_req, res) => {
   res.status(200).json({
     mem: process.memoryUsage(),
     uptime: process.uptime(),
+    attachments: await attachmentMetrics(),
   });
 });
 
@@ -197,6 +202,7 @@ export function parseHTTPSConfig(value: string) {
 }
 
 function sendServerStartedMessage() {
+  startAttachmentCleanup(); // fork: sc-2525
   // Signify to any parent process that the server has started. Used in electron desktop app
   // oxlint-disable-next-line typescript/ban-ts-comment
   // @ts-ignore-error electron types

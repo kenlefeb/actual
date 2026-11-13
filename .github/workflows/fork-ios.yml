@@ -4,7 +4,9 @@
 # here by its repository check.
 #
 # Run it by hand (Actions -> Fork iOS -> Run workflow) with the commit to build,
-# normally the commit pinned in actual-hosting's source.json.
+# normally the commit pinned in actual-hosting's source.json. actual-hosting's
+# build.yml dispatches it for every pin (sc-4125), passing revision and
+# buildVersion, then reads the "ios-build" artifact for its provenance record.
 #
 # Repository secrets, from the 1Password item
 # "Apple App Store Connect API - Home Economics Agents" in "Ken & Agents":
@@ -22,11 +24,18 @@
 
 name: Fork iOS
 
+# The revision is in the title so a dispatcher can find the run it started.
+run-name: Fork iOS ${{ inputs.revision || github.sha }}
+
 on:
   workflow_dispatch:
     inputs:
       revision:
         description: "Commit to build (default: the selected branch's head)"
+        required: false
+        type: string
+      buildVersion:
+        description: "Expected build version; the run fails if mobile-client's package version differs"
         required: false
         type: string
 
@@ -66,8 +75,14 @@ jobs:
 
       - name: Work out the versions
         id: version
+        env:
+          EXPECTED_VERSION: ${{ inputs.buildVersion }}
         run: |
           VERSION="$(node -p "require('./packages/mobile-client/package.json').version")"
+          if [ -n "$EXPECTED_VERSION" ] && [ "$EXPECTED_VERSION" != "$VERSION" ]; then
+            echo "::error::Expected build version $EXPECTED_VERSION but the commit builds $VERSION"
+            exit 1
+          fi
           {
             echo "version=$VERSION"
             echo "marketing=$(node fork/scripts/apple-version.mjs "$VERSION")"
@@ -171,3 +186,14 @@ jobs:
             echo "| --- | --- | --- | --- |"
             echo "| $VERSION | $MARKETING_VERSION | $BUILD_NUMBER | $COMMIT |"
           } >> "$GITHUB_STEP_SUMMARY"
+          # Read by actual-hosting's build.yml for the release provenance.
+          jq -n --arg version "$VERSION" --arg marketing "$MARKETING_VERSION" \
+            --arg build "$BUILD_NUMBER" --arg commit "$COMMIT" \
+            '{version: $version, marketingVersion: $marketing, buildNumber: $build, commit: $commit}' \
+            > "$RUNNER_TEMP/ios-build.json"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ios-build
+          path: ${{ runner.temp }}/ios-build.json
+          retention-days: 90

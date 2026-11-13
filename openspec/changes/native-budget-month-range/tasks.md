@@ -22,3 +22,8 @@ Test-first: write the tests, run them and see them fail before writing the code.
 
 - [ ] 4.1 Release note or fork news only if user-facing text changes; otherwise state why none is needed in the PR. Verify: `yarn check:fork-news` passes if a note was added.
 - [ ] 4.2 Archive this change after `add-native-budget-screen` and `native-bridge` are archived (the "Month outside the range" edit is already made in the spec PR). Verify: `yarn check:openspec-shortcut`.
+
+## 5. The picker marks the shown month (sc-4092)
+
+- [ ] 5.1 Add a failing Swift test in `BudgetViewModelTests.swift`: `markedPickerMonth` equals the shown month after load, after a step and after a pick, and is exactly one row of `pickerMonths`. Verify: it fails first.
+- [ ] 5.2 Add `markedPickerMonth` to `BudgetViewModel.swift` and mark that row in the picker `Menu` of `NativeBudgetViewController.swift` with a checkmark label and the selected accessibility trait; step, pick and order are unchanged. Verify: 5.1 passes; Simulator in light and dark and at the largest Dynamic Type size shows one checkmark that follows a step and a pick, and VoiceOver reads the row as selected.

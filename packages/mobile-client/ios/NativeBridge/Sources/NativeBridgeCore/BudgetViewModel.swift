@@ -349,6 +349,9 @@ public final class BudgetViewModel: ObservableObject {
         return (0...(to - from)).map { Self.shift(range.lowerBound, by: $0) }
     }
 
+    // The picker row to mark: the shown month, or none when it is not in the list (sc-4092)
+    public var markedPickerMonth: String? { pickerMonths.contains(month) ? month : nil }
+
     public func previous() async { await select(Self.shift(wanted ?? month, by: -1)) }
     public func next() async { await select(Self.shift(wanted ?? month, by: 1)) }
 

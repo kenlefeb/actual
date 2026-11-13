@@ -116,7 +116,7 @@ public final class BudgetViewModel: ObservableObject {
         month = Self.currentMonth(now(), calendar: calendar)
         coalescer = ChangeCoalescer(interval: changeInterval) { [weak self] in
             guard let self, self.isSceneActive else { return }
-            Task { @MainActor in await self.load() }
+            Task { @MainActor in await self.load(isEvent: true) }
         }
     }
 
@@ -144,14 +144,16 @@ public final class BudgetViewModel: ObservableObject {
     // tab shows. Until the user picks another month it is taken again each
     // time, so the tab never keeps showing last month after midnight; once
     // they have, that month stays.
-    public func load() async {
+    public func load() async { await load(isEvent: false) }
+
+    private func load(isEvent: Bool) async {
         if !navigated { month = Self.currentMonth(now(), calendar: calendar) }
-        await read(wanted ?? month, isStep: false)
+        await read(wanted ?? month, isStep: false, isEvent: isEvent)
     }
 
     // The one read path: every load and every month step takes a number from
     // loadGeneration, and only the newest read may change the screen.
-    private func read(_ target: String, isStep: Bool) async {
+    private func read(_ target: String, isStep: Bool, isEvent: Bool = false) async {
         loadGeneration += 1
         let generation = loadGeneration
         if isStep { wanted = target }
@@ -163,9 +165,15 @@ public final class BudgetViewModel: ObservableObject {
             lastGood = result
             // The newest good read decides the range; a failed read keeps the last one (sc-3850)
             range = result.firstMonth.flatMap { first in result.lastMonth.map { (first, $0) } }.flatMap { $0 <= $1 ? $0...$1 : nil }
-            state = .loaded(result)
-            // Fresh numbers answer any earlier refresh failure, such as the late sync-event after a timeout
-            refreshError = nil
+            // A failed sync sends its own sync-event before its result, so an
+            // event's read keeps that failure, dimmed; only a timed-out pull is
+            // answered by an event, the late one when the sync finishes (sc-4081)
+            if isEvent, let failure = refreshError, failure != .timedOut {
+                state = .stale(result, .other)
+            } else {
+                state = .loaded(result)
+                refreshError = nil
+            }
         } catch {
             let failure = BudgetLoadError.from(error)
             guard generation == loadGeneration else { return }

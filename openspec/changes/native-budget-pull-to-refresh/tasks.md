@@ -33,3 +33,9 @@ Test-first: write the tests, run them and see them fail before writing the code.
 - [ ] 5.2 On Ken's iPhone from a TestFlight build against staging, check (a) the native Budget tab shows another device's change after a pull, and (b) the web Accounts and Budget screens' pull-to-refresh fires and syncs inside the web view. Verify: the evidence (steps, observed result, timings) is on the story.
 - [ ] 5.3 If the web gesture fails in the web view, add a failing test and fix it there when small, or file a `bug` story. Do not add a second gesture. Verify: the test passes, or the story id is on sc-3884.
 - [ ] 5.4 On archive, file nothing new: sc-3899 (bank sync on native Accounts) already exists, and polling is decided against in `design.md`.
+
+## 6. Offline message survives the failed sync's own event (sc-4081)
+
+- [x] 6.1 Add a loot-core test that a sync whose post fails with `network-failure` sends `start`, then the error `sync-event`, then returns the reason, and a failing `BudgetViewModel` test that the event's re-read keeps the offline message and the stale marking. Verify: the view model test fails first.
+- [x] 6.2 Make a change-event read keep a non-timeout refresh failure, marked stale; a timed-out pull is still answered by the late event. Verify: 6.1 and 3.4 pass.
+- [ ] 6.3 On Ken's iPhone in Airplane Mode, a pull shows "You're offline. Showing the last numbers." with the numbers dimmed. Verify: the observed result is on sc-4081.

@@ -1,7 +1,7 @@
 # native-budget-screen Specification
 
 ## Purpose
-Pull-to-refresh on the native Budget tab (sc-3884), so a change from another device shows up without leaving the app. The base requirements ("The Budget tab re-reads on change events and respects the background", "A real sync reaches the native Budget tab") are in `add-native-budget-screen`; this delta adds to them. The change is iOS-native only: the web app syncs live, and its mobile web screens already pull to refresh.
+How the native Apple Budget tab reads, edits, navigates and refreshes a budget month; the tab only shows numbers loot-core computed (ADR 11).
 
 ## Requirements
 

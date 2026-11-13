@@ -42,6 +42,9 @@ function execSplitActions(actions: Action[], transaction) {
     if (splitTransactionIndex >= newTransactions.length) {
       const { data } = addSplitTransaction(newTransactions, transaction.id);
       newTransactions = data;
+      // addSplitTransaction copies the previous split's payee; a rule split
+      // starts from the parent's payee and changes it only via its own action.
+      newTransactions[splitTransactionIndex].payee = transaction.payee;
     }
     // Keep parent data separate from the child fields changed by split actions.
     newTransactions[splitTransactionIndex].parent_amount = transaction.amount;

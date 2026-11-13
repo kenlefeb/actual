@@ -148,6 +148,11 @@ Saving a paycheck SHALL create or update, in one undoable step, a pay schedule o
 - **WHEN** the pay schedule posts on November 13, 2026
 - **THEN** "Acme Paycheck" has one transaction of 2,250.00 split into 3,000.00 "Income", -450.00 "Taxes", -120.00 "Insurance" and a -180.00 transfer to "Retirement", and the budget shows 3,000.00 income in November
 
+#### Scenario: A transfer deduction does not change later deductions
+- **GIVEN** a paycheck whose deduction 9 is a transfer to "Shared HealthEquity FSA" and whose deductions 10 to 13 have categories and no transfer
+- **WHEN** the pay schedule posts
+- **THEN** deduction 9 is a transfer split, deductions 10 to 13 are splits with the paycheck payee and their own categories, and the FSA account receives only deduction 9's amount
+
 ### Requirement: Deposit schedules
 The same step SHALL keep one deposit schedule per direct deposit on its receiving account, for that deposit's amount, dated by the account's early-deposit rule relative to the pay schedule. Its transactions SHALL be transfers from the clearing account. Deposit schedules SHALL match imports by approximate amount and date. A paycheck's pay and deposit schedules SHALL NOT appear in the schedules list; they SHALL be reached from the paycheck's row and editor, and otherwise behave like any schedule.
 

@@ -117,3 +117,42 @@ describe('split parent formula context', () => {
     ).toMatchObject({ subtransactions: [{ amount: -100 }, { amount: -200 }] });
   });
 });
+
+describe('split payee inheritance', () => {
+  test('a split takes a payee only from an action on its own split index', () => {
+    const rule = new Rule({
+      conditionsOp: 'and',
+      conditions: [{ field: 'amount', op: 'gt', value: 0 }],
+      actions: [
+        {
+          op: 'set',
+          field: 'category',
+          value: 'a',
+          options: { splitIndex: 1 },
+        },
+        {
+          op: 'set',
+          field: 'payee',
+          value: 'transfer',
+          options: { splitIndex: 2 },
+        },
+        {
+          op: 'set',
+          field: 'category',
+          value: 'b',
+          options: { splitIndex: 3 },
+        },
+        {
+          op: 'set',
+          field: 'category',
+          value: 'c',
+          options: { splitIndex: 4 },
+        },
+      ],
+    });
+    const result = rule.apply({ ...parent, amount: 5000 });
+    expect(
+      result.subtransactions.map((s: { payee: string }) => s.payee),
+    ).toEqual(['source-payee', 'transfer', 'source-payee', 'source-payee']);
+  });
+});

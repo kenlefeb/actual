@@ -489,4 +489,31 @@ final class BudgetRefreshTests: XCTestCase {
         XCTAssertEqual(model.refreshError?.message, "You're offline. Showing the last numbers.")
         guard case .stale = model.state else { return XCTFail("expected stale, got \(model.state)") }
     }
+
+    // A read that no change event caused clears a pull's failure (sc-4081)
+    func testNonEventReadsClearTheFailure() async throws {
+        let json = try fixtureJSON("budget-month-envelope")
+        for how in ["load", "foreground", "pageReady", "pull", "month step"] {
+            let page = Page(month: json)
+            let model = model(page)
+            let reply = try syncFixture("network")
+            page.syncReply = { reply }
+            await model.load()
+            await model.refresh()
+            XCTAssertEqual(model.refreshError, .offline, how)
+            switch how {
+            case "load": await model.load()
+            case "foreground":
+                await model.setSceneActive(false)
+                await model.setSceneActive(true)
+            case "pageReady": await model.pageReady()
+            case "month step": await model.previous()
+            default:
+                page.syncReply = { #"{"ok":true}"# }
+                await model.refresh()
+            }
+            XCTAssertNil(model.refreshError, how)
+            guard case .loaded = model.state else { return XCTFail("\(how): expected loaded, got \(model.state)") }
+        }
+    }
 }

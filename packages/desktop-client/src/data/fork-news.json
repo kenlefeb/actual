@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "id": "fork-release-26.10.1-alpha.35",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.35 — Ken's Actual fork",
+      "date": "2026-11-13",
+      "version": "26.10.1-alpha.35",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.35.md",
+      "body": "**Unofficial fork prerelease.** Based on upstream Actual v26.11.0 (`1766241e3f4b3c578e424c4fa15f1eb83c0da17d`, October 29, 2026); not an official Actual Budget release.\n\nThis release makes the sync server delete documents that were removed from transactions, after a waiting period, instead of keeping them forever.",
+      "details": "#### Features\n\n- The sync server now deletes a document 30 days after every device has reported it removed from its transaction, and deletes a deleted budget's documents 30 days after the budget was deleted. A daily job does the deleting, at most 500 documents per run, and logs each deletion. Undoing a removal, or opening the document, restarts its 30 days. Set `ACTUAL_ATTACHMENTS_ORPHAN_RETENTION_DAYS` to change the waiting period, or to `0` to stop all deletion.\n- The server's `/metrics` shows how many bytes of documents are stored, how many are waiting to be deleted, and the result of the last cleanup.\n\n#### Enhancements\n\n- Devices report removed and restored documents to the server when they sync.\n\n#### Bugfixes\n\n- Re-creating a budget you deleted now keeps its documents and starts with no old shares.\n\n#### Maintenance\n\n- No upstream changes in this release; the fork stays on upstream Actual 26.11.0.\n- The hosted MCP server's dependency `hono` is updated past five security advisories, and its documents listing treats attachment types and ids as untrusted.\n- Native iPhone and Mac app work (native Budget tab, Home Economics icon and theme, accessibility, sign-in and sign-out) and its OpenSpec records; these do not change the server or web image.\n\n#### Known limitations\n\n- Experimental.\n- Tapping a tag in the transaction editor does nothing.\n- Tags are not yet fully accessible on the phone.\n- OpenID sign-out needs the server's address in the identity provider's allowed sign-out addresses; without it the provider shows an error page, though you are already signed out of Actual.\n- Attached documents aren't included in a budget export.\n- Documents already removed before this release are not tracked, so they are not deleted.\n- HEIC pictures are refused; use the Photos library or a JPEG or PNG copy.\n- Attaching a document needs a connection; there is no offline upload queue.\n- After restoring server data from a backup, pause the cleanup first (`production/RESTORE.md`)."
+    },
+    {
       "id": "fork-release-26.10.1-alpha.34",
       "type": "release",
       "title": "Release 26.10.1-alpha.34 — Ken's Actual fork",

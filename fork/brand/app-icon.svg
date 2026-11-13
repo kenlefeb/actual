@@ -1,0 +1,19 @@
+<!-- Home Economics app icon, direction A (a jar of coins). Exported from the
+     Figma file "Home Economics, Native Design System", Foundations page,
+     node 3:11 (sc-3483). Full bleed: each platform masks or rounds it.
+     Every icon file is generated from this one by
+     fork/scripts/generate-app-icons.mjs; edit here, then rerun it. -->
+<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <rect id="background" width="120" height="120" fill="#0E7C74"/>
+  <g id="foreground">
+    <g id="jar">
+      <path d="M78 26H42C39.7909 26 38 27.7909 38 30V32C38 34.2091 39.7909 36 42 36H78C80.2091 36 82 34.2091 82 32V30C82 27.7909 80.2091 26 78 26Z" fill="#E9F7F5"/>
+      <path d="M36 42H84C88 42 90 45 90 49V86C90 93 85 98 78 98H42C35 98 30 93 30 86V49C30 45 32 42 36 42Z" fill="#E9F7F5" fill-opacity="0.92"/>
+    </g>
+    <g id="coins">
+      <circle cx="52" cy="80" r="9" fill="#F2B544"/>
+      <circle cx="68" cy="74" r="9" fill="#F2B544"/>
+      <circle cx="60" cy="62" r="9" fill="#F7C96B"/>
+    </g>
+  </g>
+</svg>

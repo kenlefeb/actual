@@ -115,3 +115,22 @@ public enum BudgetAmountFormat {
         return minorUnits < 0 ? .negative : .positive
     }
 }
+
+// Fork-only (sc-3814). What VoiceOver speaks for a category or group row: each
+// amount that applies, named by its column, and the word "Overspent" for a
+// negative balance so colour is never the only signal.
+public enum BudgetSpeech {
+    public static func value(budgeted: Int?, spent: Int?, balance: Int?, isIncome: Bool, style: BudgetAmountStyle) -> String {
+        let spentTitle =
+            isIncome
+            ? NSLocalizedString("Received", comment: "Native Budget tab: income column")
+            : NSLocalizedString("Spent", comment: "Native Budget tab column")
+        var parts = [
+            (NSLocalizedString("Budgeted", comment: "Native Budget tab column"), budgeted), (spentTitle, spent),
+            (NSLocalizedString("Balance", comment: "Native Budget tab column"), balance),
+        ]
+        .compactMap { title, amount in amount.map { "\(title) \(BudgetAmountFormat.string($0, style: style))" } }
+        if let balance, balance < 0 { parts.append(NSLocalizedString("Overspent", comment: "Native Budget tab: a negative balance")) }
+        return parts.joined(separator: ", ")
+    }
+}

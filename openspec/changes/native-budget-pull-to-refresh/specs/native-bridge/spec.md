@@ -7,12 +7,17 @@ The `sync` call that lets a native screen ask loot-core to sync with the server 
 ## ADDED Requirements
 
 ### Requirement: Sync is allowlisted as a call with no arguments
-The bridge allowlist, on the Swift and the page side, SHALL also hold `sync`, loot-core's existing sync handler, and the two lists SHALL stay equal. Swift SHALL send it only through one typed method that passes no arguments, and SHALL refuse the name in any other call shape. `sync` SHALL be the only handler on the allowlist that is neither a batched read, `query`, nor one of the named budget writes. Every call SHALL still go through the origin-checked path.
+The bridge allowlist, on the Swift and the page side, SHALL also hold `sync`, loot-core's existing sync handler, and the two lists SHALL stay equal. Swift SHALL send it only through one typed method that passes no arguments, and the generic `call` SHALL refuse the name `sync` in every shape, including with no arguments, so the result is always decoded and the 30 second deadline always applies. `sync` SHALL be the only handler on the allowlist that is neither a batched read, `query`, nor one of the named budget writes. Every call SHALL still go through the origin-checked path.
 
 #### Scenario: A sync call
 - **GIVEN** the iOS app with a budget open
 - **WHEN** native code calls `sync` through its typed method
 - **THEN** loot-core runs its sync handler and native code receives the reduced result
+
+#### Scenario: The generic call with no arguments
+- **GIVEN** the iOS app with a budget open
+- **WHEN** native code calls `call("sync")` with no arguments
+- **THEN** the call is refused with an error naming the handler, and loot-core never receives it
 
 #### Scenario: Sync with arguments
 - **GIVEN** the iOS app with a budget open
@@ -35,12 +40,22 @@ The bridge allowlist, on the Swift and the page side, SHALL also hold `sync`, lo
 - **THEN** the call returns the fixed origin error, and the page receives nothing
 
 ### Requirement: The page returns only whether the sync worked and why not
-The page bridge SHALL return `{"ok": true}` when loot-core's sync returns no error, and `{"ok": false, "reason": R}` when it does. R SHALL be one of `network`, `unauthorized`, `out-of-sync`, `clock-drift`, `encryption` or `other`. The page SHALL build this shape itself, and loot-core's `messages`, `message` and `meta` SHALL NOT cross the bridge.
+The page bridge SHALL return `{"ok": true}` when loot-core's sync returns no error, and `{"ok": false, "reason": R}` when it does. R SHALL be one of `network`, `unauthorized`, `out-of-sync`, `clock-drift`, `encryption` or `other`. The page SHALL call `send('sync')` with no arguments, whatever it was given, and SHALL build this shape itself. loot-core's `messages`, `message` and `meta` SHALL NOT cross the bridge, and a rejection of `send('sync')` SHALL return `{"ok": false, "reason": "other"}`, never the rejection's message.
 
 #### Scenario: A sync that works
 - **GIVEN** a budget with a sync server and a change made on another device
 - **WHEN** native code calls `sync`
 - **THEN** the result is `{"ok": true}` and carries no messages
+
+#### Scenario: A rejection that carries the server address
+- **GIVEN** `send('sync')` rejects with a message containing `https://sync.example.com/sync/sync`
+- **WHEN** native code calls `sync`
+- **THEN** the result is `{"ok": false, "reason": "other"}` and the address appears nowhere in it
+
+#### Scenario: Arguments are not forwarded
+- **GIVEN** the page bridge
+- **WHEN** it is called for `sync` with any arguments
+- **THEN** it calls `send('sync')` with none
 
 #### Scenario: The shape changes
 - **GIVEN** the contract fixtures checked by vitest and decoded by the Swift tests
@@ -61,12 +76,17 @@ The page SHALL map loot-core's reason as follows: `network-failure` to `network`
 - **THEN** the reason is `other`
 
 ### Requirement: A sync error reveals nothing about the server
-No part of a failed sync SHALL reach native code, a log line or the screen except R. The page SHALL drop the error's `message` and `meta`, which can carry the server address, an HTTP status or a response body. No credential, token or file id SHALL cross the bridge in either direction.
+No part of a failed sync's call result SHALL reach native code, a log line or the screen except R. The page SHALL drop the error's `message` and `meta`, which can carry the server address, an HTTP status or a response body. No credential, token or file id SHALL cross the bridge in either direction. The `sync-event` the page forwards still carries loot-core's payload, including `meta`; Swift SHALL read only the event name and SHALL NOT read, store or log the payload.
 
 #### Scenario: A failure that carries the server address
 - **GIVEN** loot-core's sync fails with a `message` and `meta` that contain `https://sync.example.com/sync/sync` and a response body
 - **WHEN** native code calls `sync`
 - **THEN** the result is the reduced shape only, and neither the address nor the body appears in the result, in any log line or on the screen
+
+#### Scenario: The sync-event payload
+- **GIVEN** a failed sync emits `sync-event` with a `meta` holding an error message and stack
+- **WHEN** native code receives the event
+- **THEN** it reads only the event name, and the payload is stored and logged nowhere
 
 #### Scenario: Read-only mode after unauthorized
 - **GIVEN** loot-core's sync fails with `unauthorized`, which puts it into read-only mode

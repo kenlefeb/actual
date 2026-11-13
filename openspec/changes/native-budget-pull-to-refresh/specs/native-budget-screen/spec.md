@@ -25,12 +25,17 @@ Pulling down on the native Budget tab, in envelope and tracking mode, SHALL call
 - **THEN** the spinner ends, the numbers are unchanged and no error shows
 
 ### Requirement: A pull runs one server sync and nothing else
-A pull SHALL NOT run bank sync. A pull while one is in flight SHALL do nothing, and no refresh SHALL start while the app is not active.
+A pull SHALL NOT run bank sync. A pull SHALL do nothing while an earlier pull's `sync` call is still pending, which includes the time after its deadline until the page call settles, so repeated pulls over a suspended engine never queue calls; and no refresh SHALL start while the app is not active.
 
 #### Scenario: Pulling twice
 - **GIVEN** a pull whose sync has not returned
 - **WHEN** the user pulls again
 - **THEN** no second `sync` call is made
+
+#### Scenario: Pulling after the deadline
+- **GIVEN** a pull whose 30 second deadline has passed and whose page call has not settled
+- **WHEN** the user pulls again
+- **THEN** no second `sync` call is made until the first settles
 
 #### Scenario: Not active
 - **GIVEN** the app is in the background or the scene is inactive
@@ -61,7 +66,7 @@ When `sync` returns `{"ok": false, "reason": R}`, fails with the timeout error, 
 - **THEN** it wraps without truncating, uses the semantic colours of `native-appearance`, and VoiceOver reads it
 
 ### Requirement: Each refresh failure has a fixed message
-The message SHALL depend only on R: `network` "You're offline. Showing the last numbers."; `unauthorized` "Sign in again to sync."; the timeout "Still syncing. The screen updates when it finishes."; every other reason, and a re-read that fails after a good sync, "Couldn't sync. Try again."
+The message SHALL depend only on R: `network` "You're offline. Showing the last numbers."; `unauthorized` "Sign in again to sync."; the timeout "Still syncing. The screen updates when it finishes."; every other reason, every other bridge error (the page's own error, the origin error, no page, a bad result) and a re-read that fails after a good sync, "Couldn't sync. Try again." The tab SHALL NOT store, log or show any text that comes with an error.
 
 #### Scenario: Offline
 - **GIVEN** the native Budget tab showing a month and no network
@@ -77,6 +82,11 @@ The message SHALL depend only on R: `network` "You're offline. Showing the last 
 - **GIVEN** the native Budget tab showing a month
 - **WHEN** `sync` returns `out-of-sync`, `clock-drift`, `encryption` or `other`
 - **THEN** the numbers stay, with "Couldn't sync. Try again." inline
+
+#### Scenario: A bridge error that carries the server address
+- **GIVEN** the native Budget tab showing a month
+- **WHEN** `sync` fails with the page error `https://sync.example.com/sync/sync`, the origin error, no page or a bad result
+- **THEN** the numbers stay, with "Couldn't sync. Try again." inline, and the address appears in no log line or on the screen
 
 ### Requirement: A timed-out refresh is not retried
 After the timeout the tab SHALL NOT retry the sync and SHALL NOT re-read on its own. The `sync-event` that loot-core sends when the sync finishes re-reads the month through the change-event path.

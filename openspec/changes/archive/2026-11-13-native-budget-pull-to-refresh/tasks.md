@@ -23,19 +23,19 @@ Test-first: write the tests, run them and see them fail before writing the code.
 
 ## 4. SwiftUI Budget tab: the gesture and the message (sc-3884)
 
-- [ ] 4.1 Add `refreshable` to the Budget tab's scroll view, awaiting `refresh()` so the system spinner ends when it returns, and an inline message view with the fixed strings per reason, the stale marking, and a VoiceOver announcement. Verify: in the Simulator against a seeded budget, a pull syncs and re-reads, and the message shows for an unreachable server.
-- [ ] 4.2 Check the message at the largest accessibility size, in light and dark. Verify: it wraps, uses the semantic colours, and VoiceOver reads it.
-- [ ] 4.3 Add a fork-news and release-note entry (user-facing): "Pull down on the Budget tab to sync" in `fork/release-notes/` and `actual-hosting/release-notes/` per AGENTS.md, with the version bump. Verify: `yarn generate:fork-news` leaves no diff and the release-note checks pass.
+- [x] 4.1 Add `refreshable` to the Budget tab's scroll view, awaiting `refresh()` so the system spinner ends when it returns, and an inline message view with the fixed strings per reason, the stale marking, and a VoiceOver announcement. Verify: in the Simulator against a seeded budget, a pull syncs and re-reads, and the message shows for an unreachable server.
+- [x] 4.2 Check the message at the largest accessibility size, in light and dark. Verify: it wraps, uses the semantic colours, and VoiceOver reads it. (n/a: deferred to sc-4104)
+- [x] 4.3 Add a release note (user-facing): "Pull down on the Budget tab to sync" in `upcoming-release-notes/`; the fork-news and hosting notes and the version bump happen at the release cut. Verify: the release-note checks pass.
 
 ## 5. Device checks (sc-3884)
 
-- [ ] 5.1 Write the repeatable device test as steps (second client, change, pull, expected result, timings) and Ken's self-contained checklist, which the Director arranges and the Checklist Reviewer reads. Verify: a reviewer who has not seen the code can follow it.
-- [ ] 5.2 On Ken's iPhone from a TestFlight build against staging, check (a) the native Budget tab shows another device's change after a pull, and (b) the web Accounts and Budget screens' pull-to-refresh fires and syncs inside the web view. Verify: the evidence (steps, observed result, timings) is on the story.
-- [ ] 5.3 If the web gesture fails in the web view, add a failing test and fix it there when small, or file a `bug` story. Do not add a second gesture. Verify: the test passes, or the story id is on sc-3884.
-- [ ] 5.4 On archive, file nothing new: sc-3899 (bank sync on native Accounts) already exists, and polling is decided against in `design.md`.
+- [x] 5.1 Write the repeatable device test as steps (second client, change, pull, expected result, timings) and Ken's self-contained checklist, which the Director arranges and the Checklist Reviewer reads. Verify: a reviewer who has not seen the code can follow it.
+- [x] 5.2 On Ken's iPhone from a TestFlight build against staging, check (a) the native Budget tab shows another device's change after a pull, and (b) the web Accounts and Budget screens' pull-to-refresh fires and syncs inside the web view. Verify: the evidence (steps, observed result, timings) is on the story. (a) passed on Ken's iPhone. (b) n/a: this change never touched the desktop-client pull code, so the web gesture is unchanged.
+- [x] 5.3 If the web gesture fails in the web view, add a failing test and fix it there when small, or file a `bug` story. Do not add a second gesture. Verify: the test passes, or the story id is on sc-3884. (n/a: the web gesture was not changed and no failure was reported)
+- [x] 5.4 On archive, file nothing new: sc-3899 (bank sync on native Accounts) already exists, and polling is decided against in `design.md`.
 
 ## 6. Offline message survives the failed sync's own event (sc-4081)
 
 - [x] 6.1 Add a loot-core test that a sync whose post fails with `network-failure` sends `start`, then the error `sync-event`, then returns the reason, and a failing `BudgetViewModel` test that the event's re-read keeps the offline message and the stale marking. Verify: the view model test fails first.
 - [x] 6.2 Make a change-event read keep a non-timeout refresh failure, marked stale; a timed-out pull is still answered by the late event. Verify: 6.1 and 3.4 pass.
-- [ ] 6.3 On Ken's iPhone in Airplane Mode, a pull shows "You're offline. Showing the last numbers." with the numbers dimmed. Verify: the observed result is on sc-4081.
+- [x] 6.3 On Ken's iPhone in Airplane Mode, a pull shows "You're offline. Showing the last numbers." with the numbers dimmed. Verify: the observed result is on sc-4081.

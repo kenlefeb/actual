@@ -53,6 +53,31 @@ public enum BudgetSaveError: Equatable {
     }
 }
 
+// Why a pull-to-refresh did not show new numbers (sc-3884). Fixed local
+// strings only: nothing from the page, the server or loot-core is shown.
+public enum BudgetRefreshError: Equatable {
+    case offline
+    case signedOut
+    case timedOut
+    case failed
+    // The sync worked but the month could not be read again
+    case refreshFailed
+
+    public var message: String {
+        switch self {
+        case .offline:
+            return NSLocalizedString("You're offline. Showing the last numbers.", comment: "Native Budget tab: pull to refresh, no network")
+        case .signedOut:
+            return NSLocalizedString("Sign in again to sync.", comment: "Native Budget tab: pull to refresh, session expired")
+        case .timedOut:
+            return NSLocalizedString(
+                "Still syncing. The screen updates when it finishes.", comment: "Native Budget tab: pull to refresh, sync still running")
+        case .failed, .refreshFailed:
+            return NSLocalizedString("Couldn't sync. Try again.", comment: "Native Budget tab: pull to refresh failed")
+        }
+    }
+}
+
 public enum BudgetLoadState: Equatable {
     case loading
     case loaded(BudgetMonth)
@@ -68,6 +93,9 @@ public final class BudgetViewModel: ObservableObject {
     @Published public private(set) var month: String
     @Published public private(set) var saveError: BudgetSaveError?
     @Published public private(set) var isSaving = false
+    @Published public private(set) var refreshError: BudgetRefreshError?
+    // From a pull until its page call settles, which can be after the deadline (sc-3884)
+    public private(set) var isSyncing = false
     private let client: NativeBridgeClient
     private let now: () -> Date
     private let calendar: Calendar
@@ -134,6 +162,8 @@ public final class BudgetViewModel: ObservableObject {
             settle(on: target)
             lastGood = result
             state = .loaded(result)
+            // Fresh numbers answer any earlier refresh failure, such as the late sync-event after a timeout
+            refreshError = nil
         } catch {
             let failure = BudgetLoadError.from(error)
             // What the edge is does not depend on which read was the newest
@@ -155,6 +185,43 @@ public final class BudgetViewModel: ObservableObject {
                 state = .failed(failure)
             }
         }
+    }
+
+    // Pull to refresh (sc-3884): one server sync through the page, then the
+    // usual generation-counted read. The numbers always come from that read,
+    // never from the sync result. A failure keeps the last good numbers, marked
+    // stale, with a fixed message; nothing is retried, and after a timeout the
+    // late sync-event re-reads through the change-event path.
+    public func refresh() async {
+        guard isSceneActive, !isSyncing else { return }
+        isSyncing = true
+        refreshError = nil
+        let result: SyncResult
+        do {
+            result = try await client.sync(settled: { Task { @MainActor [weak self] in self?.isSyncing = false } })
+        } catch {
+            // Only the timeout has its own message; no error's text is kept
+            if case NativeBridgeError.timedOut = error { failRefresh(.timedOut) } else { failRefresh(.failed) }
+            return
+        }
+        switch result {
+        case .failed(.network): failRefresh(.offline)
+        case .failed(.unauthorized): failRefresh(.signedOut)
+        case .failed: failRefresh(.failed)
+        case .ok:
+            // A suspended page would not answer; the read on becoming active covers it
+            guard isSceneActive else { return }
+            await load()
+            switch state {
+            case .stale, .failed: refreshError = .refreshFailed
+            default: break
+            }
+        }
+    }
+
+    private func failRefresh(_ error: BudgetRefreshError) {
+        refreshError = error
+        if case .loaded(let month) = state { state = .stale(month, error == .timedOut ? .timedOut : .other) }
     }
 
     public func clearSaveError() { saveError = nil }

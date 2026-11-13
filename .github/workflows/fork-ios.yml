@@ -24,8 +24,9 @@
 
 name: Fork iOS
 
-# The revision is in the title so a dispatcher can find the run it started.
-run-name: Fork iOS ${{ inputs.revision || github.sha }}
+# The revision and the dispatcher's unique id are in the title so a dispatcher
+# can find exactly the run it started.
+run-name: Fork iOS ${{ inputs.revision || github.sha }} ${{ inputs.dispatchId }}
 
 on:
   workflow_dispatch:
@@ -36,6 +37,10 @@ on:
         type: string
       buildVersion:
         description: "Expected build version; the run fails if mobile-client's package version differs"
+        required: false
+        type: string
+      dispatchId:
+        description: "Unique id from the dispatcher (actual-hosting's ios.yml), shown in the run title"
         required: false
         type: string
 

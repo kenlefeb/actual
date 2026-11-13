@@ -161,15 +161,13 @@ public final class BudgetViewModel: ObservableObject {
             guard generation == loadGeneration else { return }
             settle(on: target)
             lastGood = result
+            // The newest good read decides the range; a failed read keeps the last one (sc-3850)
+            range = result.firstMonth.flatMap { first in result.lastMonth.map { (first, $0) } }.flatMap { $0 <= $1 ? $0...$1 : nil }
             state = .loaded(result)
             // Fresh numbers answer any earlier refresh failure, such as the late sync-event after a timeout
             refreshError = nil
         } catch {
             let failure = BudgetLoadError.from(error)
-            // What the edge is does not depend on which read was the newest
-            if isStep, failure == .noBudgetForMonth {
-                if target < month { missingBefore = target } else { missingAfter = target }
-            }
             guard generation == loadGeneration else { return }
             if isStep, failure == .noBudgetForMonth {
                 // Keep the month and numbers on screen
@@ -319,24 +317,28 @@ public final class BudgetViewModel: ObservableObject {
         month = target
     }
 
-    // Month navigation (sc-3760). Nothing handler-free lists the budget's
-    // months, so the edge is learned by asking: a step into a month with no
-    // budget makes one read, fails with loot-core's own "no budget" answer and
-    // stays where it was; that month and everything beyond it is then out.
-    // shortcut: the picker's window is 24 months back and 12 forward, widening as
-    // the user steps; upgrade if the budget gets an additive range field.
+    // Month navigation (sc-3760, sc-3850). Every successful read carries the
+    // budget's first and last month, so the edges are known from the first load
+    // and no month is remembered as missing.
+    // shortcut: a server whose loot-core predates the range fields sends none;
+    // the controls then stay enabled, the picker is a window of 24 months back
+    // and 12 forward, and a refused step just keeps the month on screen.
+    // Delete this fallback once the minimum supported server sends the range.
     private var navigated = false
     // Taps do not wait for the read before them: a step starts from the month
     // the latest tap asked for (read(_:isStep:) keeps only the newest read)
     private var wanted: String?
-    private var missingBefore: String?
-    private var missingAfter: String?
+    private var range: ClosedRange<String>?
 
     public var canGoPrevious: Bool { isReachable(Self.shift(month, by: -1)) }
     public var canGoNext: Bool { isReachable(Self.shift(month, by: 1)) }
 
+    // Every month of the range, oldest first (the tab shows it newest first)
     public var pickerMonths: [String] {
-        (-24...12).map { Self.shift(month, by: $0) }.filter(isReachable)
+        guard let range, let from = Self.index(range.lowerBound), let to = Self.index(range.upperBound) else {
+            return (-24...12).map { Self.shift(month, by: $0) }
+        }
+        return (0...(to - from)).map { Self.shift(range.lowerBound, by: $0) }
     }
 
     public func previous() async { await select(Self.shift(wanted ?? month, by: -1)) }
@@ -348,14 +350,17 @@ public final class BudgetViewModel: ObservableObject {
     }
 
     private func isReachable(_ candidate: String) -> Bool {
-        candidate > (missingBefore ?? "") && candidate < (missingAfter ?? "9999-99")
+        range?.contains(candidate) ?? true
+    }
+
+    private static func index(_ month: String) -> Int? {
+        let parts = month.split(separator: "-").compactMap { Int($0) }
+        return parts.count == 2 ? parts[0] * 12 + (parts[1] - 1) : nil
     }
 
     static func shift(_ month: String, by offset: Int) -> String {
-        let parts = month.split(separator: "-").compactMap { Int($0) }
-        guard parts.count == 2 else { return month }
-        let index = parts[0] * 12 + (parts[1] - 1) + offset
-        return String(format: "%04d-%02d", index / 12, index % 12 + 1)
+        guard let index = index(month) else { return month }
+        return String(format: "%04d-%02d", (index + offset) / 12, (index + offset) % 12 + 1)
     }
 
     public static func currentMonth(_ now: Date = Date(), calendar: Calendar = .current) -> String {

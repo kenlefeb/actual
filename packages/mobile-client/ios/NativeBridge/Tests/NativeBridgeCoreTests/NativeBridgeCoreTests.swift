@@ -61,6 +61,21 @@ final class BudgetMonthContractTests: XCTestCase {
         XCTAssertTrue(try roundTrips(data))
     }
 
+    // sc-3850: the range fields, and a result from a server that predates them
+    func testDecodesTheRangeInEveryFixtureAndWithoutIt() throws {
+        for name in ["budget-month-envelope", "budget-month-tracking", "budget-month-envelope-jpy"] {
+            let month = try JSONDecoder().decode(BudgetMonth.self, from: fixture(name))
+            XCTAssertEqual(month.firstMonth, "2026-02", name)
+            XCTAssertEqual(month.lastMonth, "2026-03", name)
+        }
+        var json = try JSONSerialization.jsonObject(with: fixture("budget-month-envelope")) as! [String: Any]
+        json["firstMonth"] = nil
+        json["lastMonth"] = nil
+        let old = try JSONDecoder().decode(BudgetMonth.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertNil(old.firstMonth)
+        XCTAssertNil(old.lastMonth)
+    }
+
     func testFailsOnAShapeChange() throws {
         var json = try JSONSerialization.jsonObject(with: fixture("budget-month-envelope")) as! [String: Any]
         json["groups"] = nil

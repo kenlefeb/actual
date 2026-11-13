@@ -4,14 +4,14 @@ Test-first: write the tests, run them and see them fail before writing the code.
 
 ## 1. loot-core: report the range (sc-3850)
 
-- [ ] 1.1 Add failing vitest tests in `packages/loot-core/src/server/native/app.test.ts`: `firstMonth` and `lastMonth` on a multi-month budget, the same from every month, on envelope, tracking and JPY budgets; the set of created months is unchanged after repeated reads; a month added later moves `lastMonth` on the next read; an out-of-range month still throws "no budget for month". Verify: they fail first.
-- [ ] 1.2 Add `firstMonth` and `lastMonth` to `NativeBudgetMonth` and `budgetMonth` in `packages/loot-core/src/server/native/app.ts`, from the minimum and maximum of `sheet.get().meta().createdMonths`, and regenerate the three fixtures with `vitest -u`. Verify: 1.1 passes and the diff of the fixtures is only the two fields.
-- [ ] 1.3 Run `yarn check:mcp-coverage` and the 50 ms perf test (`app.perf.test.ts`). Verify: both pass with no `coverage.json` change.
+- [x] 1.1 Add failing vitest tests in `packages/loot-core/src/server/native/app.test.ts`: `firstMonth` and `lastMonth` on a multi-month budget, the same from every month, on envelope, tracking and JPY budgets; the set of created months is unchanged after repeated reads; a month added later moves `lastMonth` on the next read; an out-of-range month still throws "no budget for month". Verify: they fail first.
+- [x] 1.2 Add `firstMonth` and `lastMonth` to `NativeBudgetMonth` and `budgetMonth` in `packages/loot-core/src/server/native/app.ts`, from the minimum and maximum of `sheet.get().meta().createdMonths`, and regenerate the three fixtures with `vitest -u`. Verify: 1.1 passes and the diff of the fixtures is only the two fields.
+- [x] 1.3 Run `yarn check:mcp-coverage` and the 50 ms perf test (`app.perf.test.ts`). Verify: both pass with no `coverage.json` change.
 
 ## 2. Swift: decode the range and drive the controls from it (sc-3850)
 
-- [ ] 2.1 Add failing Swift tests in `NativeBridgeCore`: `BudgetMonth` decodes the updated fixtures with the range and still decodes a result without it; the view model, loaded on the first month, has `canGoPrevious` false and a picker with no earlier month after one read; likewise at the last month; the picker equals the range; a later `lastMonth` is offered after the next read with no relaunch; a failed read keeps the last range; an absent range gives the window and enabled controls; a refused step is not remembered. Verify: they fail first.
-- [ ] 2.2 Add optional `firstMonth` and `lastMonth` to `BudgetMonth.swift`; in `BudgetViewModel.swift` keep the range of the last successful read, derive `canGoPrevious`, `canGoNext` and `pickerMonths` from it with the window as the fallback, and delete `missingBefore`, `missingAfter` and the memory in `isReachable`. Verify: 2.1 passes.
+- [x] 2.1 Add failing Swift tests in `NativeBridgeCore`: `BudgetMonth` decodes the updated fixtures with the range and still decodes a result without it; the view model, loaded on the first month, has `canGoPrevious` false and a picker with no earlier month after one read; likewise at the last month; the picker equals the range; a later `lastMonth` is offered after the next read with no relaunch; a failed read keeps the last range; an absent range gives the window and enabled controls; a refused step is not remembered. Verify: they fail first.
+- [x] 2.2 Add optional `firstMonth` and `lastMonth` to `BudgetMonth.swift`; in `BudgetViewModel.swift` keep the range of the last successful read, derive `canGoPrevious`, `canGoNext` and `pickerMonths` from it with the window as the fallback, and delete `missingBefore`, `missingAfter` and the memory in `isReachable`. Verify: 2.1 passes.
 
 ## 3. SwiftUI Budget tab (sc-3850)
 

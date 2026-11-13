@@ -31,7 +31,9 @@ private final class StepGate { var continuation: CheckedContinuation<Void, Never
 @MainActor
 final class BudgetSaveGuardTests: XCTestCase {
     func testASaveDuringAPendingMonthStepMakesNoWriteAndOneAfterItSettles() async throws {
+        // The fake answers every month with the fixture; widen its range so that 2026-04 is a step the screen will send
         let json = String(decoding: try Data(contentsOf: fixturesDir.appendingPathComponent("budget-month-envelope.json")), as: UTF8.self)
+            .replacingOccurrences(of: #""lastMonth": "2026-03""#, with: #""lastMonth": "2026-06""#)
         let gate = StepGate()
         var held = false
         var writes = 0

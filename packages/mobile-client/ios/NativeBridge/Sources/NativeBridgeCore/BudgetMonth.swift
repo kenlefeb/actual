@@ -54,6 +54,10 @@ public struct BudgetMonth: Codable, Equatable {
     }
 
     public let month: String
+    // The budget's first and last month (sc-3850). nil from a server that
+    // predates them, or when loot-core holds no months.
+    public let firstMonth: String?
+    public let lastMonth: String?
     public let budgetType: BudgetType
     // How the web formats money, as loot-core resolved it (useFormat.ts): the
     // currency ('' is none) and the formatting preferences

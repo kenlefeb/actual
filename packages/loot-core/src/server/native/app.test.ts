@@ -185,6 +185,56 @@ describe('native/budget-month', () => {
   });
 });
 
+// sc-3850: the range. createdMonths only grows while a budget is open, so
+// firstMonth can sit before the web's range start; those months are readable.
+// The seeded set is gap-free, as createAllBudgets makes it.
+describe('native/budget-month range', () => {
+  const createdMonths = () => [...sheet.get().meta().createdMonths].sort();
+
+  it('reports the first and last month from any month', async () => {
+    await createBudget(['2026-02', '2026-03', '2026-04', '2026-05', '2026-06']);
+    for (const month of ['2026-02', '2026-04', '2026-06']) {
+      expect(await budgetMonth(month)).toMatchObject({
+        month,
+        firstMonth: '2026-02',
+        lastMonth: '2026-06',
+      });
+    }
+  });
+
+  it('reports the range on a tracking budget', async () => {
+    sheet.get().meta().budgetType = 'tracking';
+    await db.update('preferences', { id: 'budgetType', value: 'tracking' });
+    await createBudget(['2026-02', '2026-03', '2026-04']);
+    expect(await budgetMonth('2026-03')).toMatchObject({
+      budgetType: 'tracking',
+      firstMonth: '2026-02',
+      lastMonth: '2026-04',
+    });
+  });
+
+  it('creates nothing when it reads', async () => {
+    await createBudget(['2026-02', '2026-03']);
+    const before = createdMonths();
+    await budgetMonth('2026-03');
+    await budgetMonth('2026-02');
+    await expect(budgetMonth('2026-04')).rejects.toThrow(/2026-04/);
+    expect(createdMonths()).toEqual(before);
+  });
+
+  it('moves lastMonth when months are added later', async () => {
+    await createBudget(['2026-02', '2026-03']);
+    expect((await budgetMonth('2026-03')).lastMonth).toBe('2026-03');
+    await createBudget(['2026-04', '2026-05']);
+    expect((await budgetMonth('2026-03')).lastMonth).toBe('2026-05');
+  });
+
+  it('still refuses a month beyond the range', async () => {
+    await createBudget(['2026-02', '2026-03']);
+    await expect(budgetMonth('2026-04')).rejects.toThrow(/no budget for month/);
+  });
+});
+
 // native-bridge: "Setting a budgeted amount" (sc-3769). The edit is the web's
 // own handler; the next native read shows it, and to-budget moves with it.
 describe('budget/budget-amount then native/budget-month', () => {

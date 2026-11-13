@@ -40,6 +40,10 @@ export type NativeBudgetMonthGroup = {
 
 export type NativeBudgetMonth = {
   month: string;
+  // The budget's earliest and latest month (YYYY-MM), from the months loot-core
+  // already holds; reading them creates nothing. Omitted if there are none.
+  firstMonth?: string;
+  lastMonth?: string;
   budgetType: 'envelope' | 'tracking';
   // How the web formats money (useFormat.ts), so native amounts read the
   // same: the currency (the web's fallback for an unknown code is none, '' with
@@ -96,6 +100,8 @@ async function budgetMonth({
   const envelope = (name: string) => (isEnvelope ? amount(name) : null);
   const tracking = (name: string) => (isEnvelope ? null : amount(name));
 
+  const created = [...(sheet.get().meta().createdMonths as Set<string>)].sort();
+
   const { data: groups } = (await aqlQuery(
     q('category_groups').select('*'),
   )) as { data: CategoryGroupEntity[] };
@@ -114,6 +120,10 @@ async function budgetMonth({
 
   return {
     month,
+    ...(created.length > 0 && {
+      firstMonth: created[0],
+      lastMonth: created[created.length - 1],
+    }),
     budgetType: isEnvelope ? 'envelope' : 'tracking',
     currencyCode: currency.code,
     currencyDecimalPlaces: currency.decimalPlaces,

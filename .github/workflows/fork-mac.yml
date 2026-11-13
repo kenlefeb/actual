@@ -1,0 +1,208 @@
+# Fork-only (sc-3410, sc-3983): build the sandboxed Mac App Store (`mas`)
+# variant of the Electron app "Home Economics" from the fork's code and upload
+# it to TestFlight for Mac for internal testers (no external group is added).
+# Never upstream (fork/README.md). Upstream's publish-mac-app-store.yml stays untouched; it is
+# skipped here by its repository check.
+#
+# Run it by hand (Actions -> Fork Mac -> Run workflow) with the commit to build,
+# normally the commit pinned in actual-hosting's source.json.
+#
+# Every fork difference goes on the electron-builder command line, so
+# packages/desktop-electron/package.json stays identical to upstream.
+#
+# Repository secrets:
+#
+# - ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8: the Admin App Store Connect API key,
+#   shared with fork-ios.yml (see there).
+# - MAC_CERT_PRIVATE_KEY: an RSA private key in PEM form (`openssl genrsa
+#   2048`). The "Apple Distribution" and "Mac Installer Distribution"
+#   certificates are issued for it, so a run finds them again by this key. The
+#   first run creates both certificates and the Mac App Store provisioning
+#   profile through the API key. Replacing the key makes the next run create
+#   new certificates, so revoke the old ones then.
+
+name: Fork Mac
+
+on:
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: "Commit to build (default: the selected branch's head)"
+        required: false
+        type: string
+
+concurrency:
+  group: fork-mac
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  BUNDLE_ID: app.homeeconomics.budget
+  DISPLAY_NAME: Home Economics
+  CODEMAGIC: codemagic-cli-tools==0.70.0
+
+jobs:
+  testflight:
+    if: github.repository == 'kenlefeb/actual'
+    runs-on: macos-26
+    # Includes up to 45 minutes waiting for Apple to process the build.
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.revision || github.sha }}
+
+      # node-gyp needs setuptools to rebuild the native modules.
+      - run: |
+          mkdir .venv
+          python3 -m venv .venv
+          source .venv/bin/activate
+          python3 -m pip install setuptools
+
+      - name: Set up environment
+        uses: ./.github/actions/setup
+        with:
+          # Avoid restoring potentially poisoned caches in release jobs.
+          cache: 'false'
+
+      # Build before any signing material lands on the runner.
+      - name: Build web app and Electron sources
+        run: ./bin/package-electron --skip-translations --skip-exe-build
+
+      - name: Work out the versions
+        id: version
+        run: |
+          VERSION="$(node -p "require('./packages/desktop-electron/package.json').version")"
+          {
+            echo "version=$VERSION"
+            echo "marketing=$(node fork/scripts/apple-version.mjs "$VERSION")"
+            echo "commit=$(git rev-parse HEAD)"
+          } >> "$GITHUB_OUTPUT"
+
+      # Finds the certificates issued for MAC_CERT_PRIVATE_KEY and the profile
+      # that holds them, creating any that don't exist yet.
+      - name: Fetch signing files
+        env:
+          API_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          CERT_KEY: ${{ secrets.MAC_CERT_PRIVATE_KEY }}
+          APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.ASC_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          umask 077
+          SIGNING="$RUNNER_TEMP/signing"
+          mkdir -p "$SIGNING"
+          # The secrets may have lost their line breaks; rebuild valid PEMs.
+          printf '%s' "$API_KEY_P8" | node fork/scripts/normalize-pem.mjs > "$RUNNER_TEMP/AuthKey.p8"
+          printf '%s' "$CERT_KEY" | node fork/scripts/normalize-pem.mjs > "$SIGNING/cert.key"
+          export APP_STORE_CONNECT_PRIVATE_KEY="@file:$RUNNER_TEMP/AuthKey.p8"
+          asc() { pipx run --spec "$CODEMAGIC" app-store-connect "$@" --certificate-key "@file:$SIGNING/cert.key"; }
+
+          # "Apple Distribution" certificate and the Mac App Store profile. The
+          # bundle id is registered as UNIVERSAL (sc-3398), so --create never
+          # makes a second, Mac-only one.
+          asc fetch-signing-files "$BUNDLE_ID" --platform UNIVERSAL --type MAC_APP_STORE \
+            --strict-match-identifier --create \
+            --certificates-dir "$SIGNING/app" --profiles-dir "$SIGNING/profiles"
+          # "Mac Installer Distribution" certificate, which signs the .pkg.
+          asc certificates list --type MAC_INSTALLER_DISTRIBUTION --save --certificates-dir "$SIGNING/installer"
+          if ! compgen -G "$SIGNING/installer/*.p12" > /dev/null; then
+            asc certificates create --type MAC_INSTALLER_DISTRIBUTION --save --certificates-dir "$SIGNING/installer"
+          fi
+
+          PROFILE="$(find "$SIGNING/profiles" -name '*.provisionprofile' | head -1)"
+          cp "$PROFILE" packages/desktop-electron/mas/embedded.provisionprofile
+
+          KEYCHAIN="$RUNNER_TEMP/mac-signing.keychain-db"
+          pipx run --spec "$CODEMAGIC" keychain initialize --path "$KEYCHAIN"
+          pipx run --spec "$CODEMAGIC" keychain add-certificates --path "$KEYCHAIN" \
+            --certificate "$SIGNING/app/*.p12" "$SIGNING/installer/*.p12" \
+            --allow-app codesign productbuild productsign
+          # Lets codesign and productbuild use the keys without a prompt.
+          security set-key-partition-list -S apple-tool:,apple: -s -k '' "$KEYCHAIN" > /dev/null
+          security find-identity -v "$KEYCHAIN"
+          echo "KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+
+      # The upstream script sets the build number (CFBundleVersion) to a UTC
+      # timestamp, the same scheme as fork-ios.yml. The name changes through
+      # productName, not extendInfo: Electron finds its helper apps by
+      # CFBundleName. That moves Electron's user-data folder, which is safe here
+      # because this bundle id's sandbox container starts empty.
+      - name: Package and sign
+        env:
+          CSC_KEYCHAIN: ${{ env.KEYCHAIN }}
+          MARKETING_VERSION: ${{ steps.version.outputs.marketing }}
+        run: |
+          yarn workspace desktop-electron build:mas \
+            "--config.appId=$BUNDLE_ID" \
+            "--config.mac.bundleShortVersion=$MARKETING_VERSION" \
+            "--config.productName=$DISPLAY_NAME"
+
+      - name: Check the package
+        id: package
+        env:
+          MARKETING_VERSION: ${{ steps.version.outputs.marketing }}
+        run: |
+          shopt -s nullglob
+          APPS=(packages/desktop-electron/dist/mas-arm64/*.app)
+          test "${#APPS[@]}" -eq 1
+          APP="${APPS[0]}"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          PLIST="$APP/Contents/Info.plist"
+          plist() { /usr/libexec/PlistBuddy -c "Print :$1" "$PLIST"; }
+          test "$(plist CFBundleIdentifier)" = "$BUNDLE_ID"
+          test "$(plist CFBundleName)" = "$DISPLAY_NAME"
+          test "$(plist CFBundleDisplayName)" = "$DISPLAY_NAME"
+          test "$(plist CFBundleShortVersionString)" = "$MARKETING_VERSION"
+          test "$(plist ITSAppUsesNonExemptEncryption)" = false
+          PKG="$(find packages/desktop-electron/dist -maxdepth 2 -name '*.pkg' | head -1)"
+          test -n "$PKG"
+          pkgutil --check-signature "$PKG" | tee "$RUNNER_TEMP/pkg-signature.txt"
+          grep -q '3rd Party Mac Developer Installer' "$RUNNER_TEMP/pkg-signature.txt"
+          {
+            echo "build=$(plist CFBundleVersion)"
+            echo "pkg=$PKG"
+          } >> "$GITHUB_OUTPUT"
+
+      # Without --testflight nothing goes to Beta App Review and no external
+      # group gets the build; the internal group "Ken" has access to all builds.
+      # Apple doesn't mark a .pkg internal-only (unlike fork-ios.yml's
+      # testFlightInternalTestingOnly), so the build stays internal only
+      # because no step adds an external group. Never add one.
+      - name: Upload to TestFlight
+        env:
+          APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.ASC_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          PKG: ${{ steps.package.outputs.pkg }}
+          VERSION: ${{ steps.version.outputs.version }}
+          COMMIT: ${{ steps.version.outputs.commit }}
+        run: |
+          export APP_STORE_CONNECT_PRIVATE_KEY="@file:$RUNNER_TEMP/AuthKey.p8"
+          pipx run --spec "$CODEMAGIC" app-store-connect publish \
+            --path "$PKG" --platform MAC_OS \
+            --max-find-build-wait 45 --max-build-processing-wait 45 \
+            --whats-new "Version $VERSION, commit $COMMIT"
+
+      - name: Clean up signing material
+        if: always()
+        run: |
+          if [ -n "${KEYCHAIN:-}" ]; then security delete-keychain "$KEYCHAIN" || true; fi
+          rm -rf "$RUNNER_TEMP/signing" "$RUNNER_TEMP/AuthKey.p8" \
+            packages/desktop-electron/mas/embedded.provisionprofile
+
+      - name: Summarize build
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          MARKETING_VERSION: ${{ steps.version.outputs.marketing }}
+          BUILD_NUMBER: ${{ steps.package.outputs.build }}
+          COMMIT: ${{ steps.version.outputs.commit }}
+        run: |
+          {
+            echo "## Mac build"
+            echo
+            echo "| Version | Apple version | Build | Commit |"
+            echo "| --- | --- | --- | --- |"
+            echo "| $VERSION | $MARKETING_VERSION | $BUILD_NUMBER | $COMMIT |"
+          } >> "$GITHUB_STEP_SUMMARY"

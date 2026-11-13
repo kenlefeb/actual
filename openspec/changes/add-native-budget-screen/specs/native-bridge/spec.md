@@ -99,7 +99,22 @@ The page and Swift SHALL each refuse an invalid write with an error result and n
 - **THEN** Swift refuses it before the call, without reaching the page
 
 ### Requirement: Transfers follow the move-money rules
-The page and Swift SHALL each refuse, with an error result and no write, a transfer on a month that is not an envelope month, or with an amount of 0 or less; a `budget/transfer-category` with the same source and destination, an income category as either end, `to-budget` as the source, or an amount above the source's balance; and a `budget/transfer-available` for an income category or an amount above the month's to-budget. Refusing a move above the balance is intentional and stricter than the web. A move out of to-budget is always `budget/transfer-available`, because loot-core's `transferCategory` would write a budget row for a category called `to-budget`.
+The page and Swift SHALL each refuse, with an error result and no write, a transfer that breaks the move-money rules: an envelope month only, an amount above 0 and no more than the source holds, two different ends, no income category at either end, and `to-budget` only as a destination of `budget/transfer-category`. Refusing a move above the balance is intentional and stricter than the web.
+
+#### Scenario: A month that is not an envelope month
+- **GIVEN** a tracking budget
+- **WHEN** native code sends `budget/transfer-category` or `budget/transfer-available` with a valid amount
+- **THEN** the call returns an error and nothing is written
+
+#### Scenario: Moving out of to-budget
+- **GIVEN** an envelope budget with money in to-budget
+- **WHEN** native code moves money from to-budget into a category
+- **THEN** it uses `budget/transfer-available`, and a `budget/transfer-category` with `to-budget` as the source returns an error and writes nothing, because loot-core's `transferCategory` would write a budget row for a category called `to-budget`
+
+#### Scenario: Moving more than to-budget holds
+- **GIVEN** an envelope month whose to-budget is 5000
+- **WHEN** native code sends `budget/transfer-available` for 5001, or for an income category
+- **THEN** the call returns an error and nothing is written
 
 #### Scenario: To-budget as the destination
 - **GIVEN** an envelope budget

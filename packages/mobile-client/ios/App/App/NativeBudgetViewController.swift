@@ -282,10 +282,10 @@ private struct BudgetMonthList: View {
                     ForEach([
                         (Words.budgetedIncome, month.totals.budgetedIncome), (Words.income, month.totals.income),
                         (Words.budgetedExpenses, month.totals.budgeted), (Words.expenses, month.totals.spent),
-                        (Words.saved, month.totals.saved),
+                        (month.totals.saved.map(BudgetBalance.savedIsOverspent) == true ? Words.overspent : Words.saved, month.totals.saved),
                     ], id: \.0) { title, amount in
                         if let amount {
-                            AmountRow(title: title, amount: format(amount), tone: BudgetAmountFormat.tone(amount), isHeadline: title == Words.saved)
+                            AmountRow(title: title, amount: format(amount), tone: BudgetAmountFormat.tone(amount), isHeadline: title == Words.saved || title == Words.overspent)
                         }
                     }
                 }
@@ -325,7 +325,7 @@ private struct GroupHeader: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(group.name)
             // Only the totals loot-core has for this group (an income group has no budgeted or balance)
-            let parts = [(Words.budgeted, group.budgeted), (group.isIncome ? Words.received : Words.spent, group.spent), (Words.balance, group.balance)]
+            let parts = [(Words.budgeted, group.budgeted), (group.isIncome ? Words.received : Words.spent, group.spent), (Words.balance, BudgetBalance.shown(group.balance, isIncome: group.isIncome))]
                 .compactMap { title, amount in amount.map { "\(title) \(BudgetAmountFormat.string($0, style: style))" } }
             if !parts.isEmpty {
                 // One part per line at the accessibility sizes, so none is cut mid-amount
@@ -396,7 +396,7 @@ private struct CategoryRow: View {
             }
         }
         column(isIncome ? Words.received : Words.spent, category.spent)
-        if category.balance != nil { column(Words.balance, category.balance, colored: true) }
+        if let balance = BudgetBalance.shown(category.balance, isIncome: isIncome) { column(Words.balance, balance, colored: true) }
     }
 
     private func format(_ amount: Int?) -> String { BudgetAmountFormat.string(amount, style: style) }

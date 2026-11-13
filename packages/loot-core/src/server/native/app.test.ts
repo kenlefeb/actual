@@ -94,10 +94,26 @@ describe('native/budget-month', () => {
     expect(result.budgetType).toBe('tracking');
     expect(result.totals.toBudget).toBeNull();
     expect(result.totals.budgetedIncome).toBe(320000);
+    // sc-3938: the web's Saved (real-saved): actual income minus spent, not
+    // budgeted income (320000) minus budgeted expenses (150000)
+    expect(result.totals.saved).toBe(300000 - 120000);
     await expect(JSON.stringify(result, null, 2) + '\n').toMatchFileSnapshot(
       './fixtures/budget-month-tracking.json',
     );
   });
+
+  it.each([100000, 300000, 320000])(
+    'tracking Saved is actual income minus spent when income is budgeted at %i',
+    async budgetedSalary => {
+      sheet.get().meta().budgetType = 'tracking';
+      await db.update('preferences', { id: 'budgetType', value: 'tracking' });
+      await createBudget(['2026-02', '2026-03']);
+      sheet.get().set('budget202603!budget-salary', budgetedSalary);
+      await seedMonth();
+
+      expect((await budgetMonth('2026-03')).totals.saved).toBe(180000);
+    },
+  );
 
   it('carries the web formatting preferences, JPY fixture', async () => {
     await createBudget(['2026-02', '2026-03']);

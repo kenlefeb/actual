@@ -64,7 +64,7 @@ Test-first: write the tests, run them and see them fail before writing the code.
 
 ## 9. 300-category performance check (sc-3823)
 
-- [ ] 9.1 Add a measurement test or script for the screen's load and scroll on the 300-category fixture. Verify: it runs and prints the median and p95 before any fix.
+- [x] 9.1 Add a measurement test or script for the screen's load and scroll on the 300-category fixture. Verify: it runs and prints the median and p95 before any fix.
 - [ ] 9.2 Measure in the Simulator, then on Ken's iPhone with the hidden benchmark where it applies. Verify: the median and p95 are on the story and compared with 50 ms.
 - [ ] 9.3 Fix regressions (lazy lists, diffing, no per-category reads) until it meets the target; if it cannot, stop and report to the Director so ADR 11 is revisited. Verify: the numbers after the fix are on the story.
 

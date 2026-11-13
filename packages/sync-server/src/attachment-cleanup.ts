@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto';
+import { renameSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
 
@@ -15,6 +17,7 @@ import {
 const DAY = 24 * 60 * 60 * 1000;
 const RUN_LIMIT = 500;
 const METRICS_TTL = 60 * 1000;
+const TOMBSTONE_PREFIX = '.deleting-';
 
 type CleanupResult = 'ok' | 'partial' | 'error';
 type Candidate = {
@@ -63,6 +66,27 @@ function attachmentsRoot() {
 
 function ageInDays(markedAt: number, now: number) {
   return Math.floor((now - markedAt) / DAY);
+}
+
+// Finishes removals whose recursive delete failed in an earlier run
+async function sweepTombstones() {
+  const root = attachmentsRoot();
+  const names = await fs.readdir(root).catch(err => {
+    if (isMissing(err)) {
+      return [];
+    }
+    throw err;
+  });
+  let failed = 0;
+  for (const name of names.filter(n => n.startsWith(TOMBSTONE_PREFIX))) {
+    try {
+      await fs.rm(resolve(root, name), { recursive: true, force: true });
+    } catch (err) {
+      failed++;
+      console.log('Attachment cleanup could not remove a leftover folder', err);
+    }
+  }
+  return failed;
 }
 
 // Deletes the record first, conditioned on its age, so a download that touched
@@ -120,20 +144,32 @@ async function deleteCandidate(row: Candidate, cutoff: number, now: number) {
   if (changes === 0) {
     return false;
   }
+  // Re-check and rename with no await between them: the server is one Node
+  // process, so no upload can run in between. A missing row means the budget
+  // is gone; only an existing, undeleted row counts as restored.
   const file = db.first('SELECT deleted FROM files WHERE id = ?', [fileId]);
-  if (!file?.deleted) {
+  if (file && !file.deleted) {
     console.log(`Kept the documents of budget ${fileId}: it is not deleted`);
     return false;
   }
+  const tombstone = resolve(
+    root,
+    `${TOMBSTONE_PREFIX}${fileId}-${randomBytes(4).toString('hex')}`,
+  );
   try {
-    await fs.rm(dir, { recursive: true, force: true });
+    renameSync(dir, tombstone);
   } catch (err) {
+    if (isMissing(err)) {
+      return false;
+    }
     db.mutate(
       'INSERT OR REPLACE INTO budget_removals (file_id, marked_at) VALUES (?, ?)',
       [fileId, Date.now()],
     );
     throw err;
   }
+  // A failed delete leaves the tombstone for the next run's sweep
+  await fs.rm(tombstone, { recursive: true, force: true });
   console.info(
     `Deleted the documents of deleted budget ${fileId}, ${ageInDays(row.marked_at, now)} days after deletion`,
   );
@@ -151,6 +187,7 @@ export async function runAttachmentCleanup(now = Date.now()) {
     const days = config.get('attachments.orphanRetentionDays');
     if (days > 0) {
       const cutoff = now - days * DAY;
+      failed += await sweepTombstones();
       const rows: Candidate[] = getAccountDb().all(
         `SELECT file_id, attachment_id, marked_at FROM attachment_removals WHERE marked_at <= ?
          UNION ALL

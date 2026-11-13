@@ -10,6 +10,7 @@ import { getAccountDb } from './account-db';
 import { app as serverApp } from './app';
 import { handlers as app } from './app-sync';
 import {
+  attachmentMetrics,
   resetAttachmentMetrics,
   runAttachmentCleanup,
 } from './attachment-cleanup';
@@ -618,6 +619,72 @@ describe("A deleted budget's documents", () => {
     await runAttachmentCleanup();
 
     expect(fs.existsSync(getPathForAttachmentsDir(fileId))).toBe(true);
+  });
+
+  it('removes the folder of a deleted budget whose files row is missing', async () => {
+    const fileId = newId();
+    store(fileId, newId());
+    getAccountDb().mutate(
+      'INSERT INTO budget_removals (file_id, marked_at) VALUES (?, ?)',
+      [fileId, Date.now() - 31 * DAY],
+    );
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+
+    await runAttachmentCleanup();
+
+    expect(fs.existsSync(getPathForAttachmentsDir(fileId))).toBe(false);
+    expect(budgetMarkedAt(fileId)).toBeUndefined();
+    expect(info).toHaveBeenCalledWith(
+      expect.stringContaining('Deleted the documents of deleted budget'),
+    );
+  });
+
+  it('keeps the documents of a budget re-uploaded after the re-check', async () => {
+    const fileId = addBudget();
+    getAccountDb().mutate('UPDATE files SET deleted = TRUE WHERE id = ?', [
+      fileId,
+    ]);
+    store(fileId, newId());
+    getAccountDb().mutate(
+      'INSERT INTO budget_removals (file_id, marked_at) VALUES (?, ?)',
+      [fileId, Date.now() - 31 * DAY],
+    );
+    const reUploaded = newId();
+    const realRm = fsPromises.rm;
+    // The owner re-uploads while the folder removal is under way
+    vi.spyOn(fsPromises, 'rm').mockImplementation(async (...args) => {
+      getAccountDb().mutate('UPDATE files SET deleted = FALSE WHERE id = ?', [
+        fileId,
+      ]);
+      store(fileId, reUploaded);
+      return realRm(...args);
+    });
+
+    await runAttachmentCleanup();
+
+    expect(stored(fileId, reUploaded)).toBe(true);
+  });
+
+  it('reports partial when the removal fails, and the next run finishes it', async () => {
+    const fileId = addBudget();
+    getAccountDb().mutate('UPDATE files SET deleted = TRUE WHERE id = ?', [
+      fileId,
+    ]);
+    store(fileId, newId());
+    getAccountDb().mutate(
+      'INSERT INTO budget_removals (file_id, marked_at) VALUES (?, ?)',
+      [fileId, Date.now() - 31 * DAY],
+    );
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.spyOn(fsPromises, 'rm').mockRejectedValueOnce(new Error('disk'));
+
+    await runAttachmentCleanup();
+    expect((await attachmentMetrics()).lastCleanup?.result).toBe('partial');
+
+    resetAttachmentMetrics();
+    await runAttachmentCleanup();
+    expect((await attachmentMetrics()).lastCleanup?.result).toBe('ok');
+    expect(fs.readdirSync(attachmentsRoot())).toEqual([]);
   });
 
   it.each(['', '..', '../attachments'])(

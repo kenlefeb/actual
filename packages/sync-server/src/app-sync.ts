@@ -25,6 +25,11 @@ import {
   validateSyncedFile,
   validateUploadedFile,
 } from './app-sync/validation';
+import {
+  isStored,
+  isValidAttachmentId,
+  touchRemoval,
+} from './attachment-cleanup';
 import { config } from './load-config';
 import { SecretName, secretsService } from './services/secrets-service';
 import * as UserService from './services/user-service';
@@ -357,6 +362,14 @@ app.post('/upload-user-file', async (req, res) => {
     }
   }
 
+  // fork: sc-2525. Only the owner of a deleted budget may upload under its id,
+  // which keeps its documents; anyone else would adopt the old folder.
+  const deletedFile = currentFile ? null : filesService.getRaw(fileId);
+  if (deletedFile && deletedFile.owner !== res.locals.user_id) {
+    res.status(403).send('file-access-not-allowed');
+    return;
+  }
+
   const fileAccessError = currentFile
     ? requireFileAccess(currentFile, res.locals.user_id)
     : null;
@@ -385,20 +398,31 @@ app.post('/upload-user-file', async (req, res) => {
     noteFileAccess(fileId); // fork-only access log
     const newGroupId = generateGroupId();
     groupId = newGroupId;
-    filesService.set(
-      new File({
-        id: fileId,
-        groupId: newGroupId,
-        syncVersion: syncFormatVersion,
-        name,
-        encryptMeta,
-        owner:
-          res.locals.user_id ||
-          (() => {
-            throw new Error('User ID is required for file creation');
-          })(),
-      }),
-    );
+    const accountDb = getAccountDb();
+    accountDb.transaction(() => {
+      if (deletedFile) {
+        // Shares reference files(id); the re-created budget starts unshared
+        accountDb.mutate('DELETE FROM user_access WHERE file_id = ?', [fileId]);
+        accountDb.mutate('DELETE FROM files WHERE id = ?', [fileId]);
+        accountDb.mutate('DELETE FROM budget_removals WHERE file_id = ?', [
+          fileId,
+        ]);
+      }
+      filesService.set(
+        new File({
+          id: fileId,
+          groupId: newGroupId,
+          syncVersion: syncFormatVersion,
+          name,
+          encryptMeta,
+          owner:
+            res.locals.user_id ||
+            (() => {
+              throw new Error('User ID is required for file creation');
+            })(),
+        }),
+      );
+    });
 
     res.send({ status: 'ok', groupId });
     return;
@@ -583,6 +607,11 @@ app.post('/delete-user-file', (req, res) => {
 
   accountDb.transaction(() => {
     filesService.update(file.id, new FileUpdate({ deleted: true }));
+    // fork: sc-2525. Cleanup removes the budget's documents after retention
+    accountDb.mutate(
+      'INSERT OR REPLACE INTO budget_removals (file_id, marked_at) VALUES (?, ?)',
+      [file.id, Date.now()],
+    );
     for (const name of Object.values(SecretName)) {
       secretsService.reset(name, file.id);
     }
@@ -608,18 +637,9 @@ function attachmentTooLarge(res: Response) {
     .send({ status: 'error', reason: 'too-large', limitMB: attachmentLimitMB });
 }
 
-// Checks the ids and the session's access to the budget; on failure it has
-// already answered and returns null
-function attachmentTarget(req: Request, res: Response) {
-  const fileId = extractSingleHeader(req, res, 'x-actual-file-id');
-  if (res.headersSent) return null;
-  const attachmentId = extractSingleHeader(req, res, 'x-actual-attachment-id');
-  if (res.headersSent) return null;
-  if (!attachmentId || !isValidFileId(attachmentId)) {
-    res.status(400).send('invalid attachmentId');
-    return null;
-  }
-
+// Checks the budget exists, isn't deleted and the session can reach it; on
+// failure it has already answered and returns null
+function accessibleBudget(fileId: unknown, res: Response) {
   const file = verifyFileExists(
     fileId,
     new FilesService(getAccountDb()),
@@ -634,7 +654,28 @@ function attachmentTarget(req: Request, res: Response) {
     res.status(403).send(fileAccessError);
     return null;
   }
+  return file;
+}
+
+// Checks the ids and the session's access to the budget; on failure it has
+// already answered and returns null
+function attachmentTarget(req: Request, res: Response) {
+  const fileId = extractSingleHeader(req, res, 'x-actual-file-id');
+  if (res.headersSent) return null;
+  const attachmentId = extractSingleHeader(req, res, 'x-actual-attachment-id');
+  if (res.headersSent) return null;
+  if (!attachmentId || !isValidFileId(attachmentId)) {
+    res.status(400).send('invalid attachmentId');
+    return null;
+  }
+
+  const file = accessibleBudget(fileId, res);
+  if (!file) {
+    return null;
+  }
   return {
+    fileId: file.id,
+    attachmentId,
     dir: getPathForAttachmentsDir(file.id),
     path: getPathForAttachment(file.id, attachmentId),
   };
@@ -704,6 +745,7 @@ app.post(
       res.status(500).send({ status: 'error' });
       return;
     }
+    touchRemoval(target.fileId, target.attachmentId);
     res.send(OK_RESPONSE);
   },
 );
@@ -713,6 +755,7 @@ app.get('/download-attachment', (req, res) => {
   if (!target) {
     return;
   }
+  touchRemoval(target.fileId, target.attachmentId);
   res.sendFile(target.path, { dotfiles: 'allow' }, err => {
     if (err && !res.headersSent) {
       // Clients skip a document on this answer, so only a missing file says it
@@ -735,4 +778,90 @@ app.post('/delete-attachment', async (req, res) => {
   }
   await fs.rm(target.path, { force: true });
   res.send(OK_RESPONSE);
+});
+
+// fork: sc-2525. Clients report which documents are removed and which are live
+// again; cleanup deletes a document once its removal record is old enough.
+const REPORT_LIMIT = 1000;
+
+function isIdList(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.length <= REPORT_LIMIT &&
+    value.every(isValidAttachmentId)
+  );
+}
+
+app.post('/report-attachments', async (req, res) => {
+  const { fileId, removed, live } = req.body || {};
+  if (!isIdList(removed) || !isIdList(live)) {
+    res.status(400).send('invalid report');
+    return;
+  }
+  const file = accessibleBudget(fileId, res);
+  if (!file) {
+    return;
+  }
+
+  // An id whose document cleanup already deleted gets no new record
+  const storedRemoved = (
+    await Promise.all(
+      removed.map(async id => ((await isStored(file.id, id)) ? id : null)),
+    )
+  ).filter(id => id !== null);
+
+  const accountDb = getAccountDb();
+  const now = Date.now();
+  accountDb.transaction(() => {
+    for (const id of storedRemoved) {
+      accountDb.mutate(
+        'INSERT OR IGNORE INTO attachment_removals (file_id, attachment_id, marked_at) VALUES (?, ?, ?)',
+        [file.id, id, now],
+      );
+    }
+    for (const id of live) {
+      accountDb.mutate(
+        'DELETE FROM attachment_removals WHERE file_id = ? AND attachment_id = ?',
+        [file.id, id],
+      );
+    }
+  });
+  res.send(OK_RESPONSE);
+});
+
+// The budget's recorded ids, in id order so paging never skips or repeats one
+app.get('/attachment-records', async (req, res) => {
+  const fileId = extractSingleHeader(req, res, 'x-actual-file-id');
+  if (res.headersSent) return;
+  const { after } = req.query;
+  if (after !== undefined && !isValidAttachmentId(after)) {
+    res.status(400).send('invalid after');
+    return;
+  }
+  const file = accessibleBudget(fileId, res);
+  if (!file) {
+    return;
+  }
+
+  const rows: { attachment_id: string }[] = getAccountDb().all(
+    'SELECT attachment_id FROM attachment_removals WHERE file_id = ? AND attachment_id > ? ORDER BY attachment_id LIMIT ?',
+    [file.id, after ?? '', REPORT_LIMIT],
+  );
+  const ids = (
+    await Promise.all(
+      rows.map(async row =>
+        (await isStored(file.id, row.attachment_id)) ? row.attachment_id : null,
+      ),
+    )
+  ).filter(id => id !== null);
+  res.send({
+    status: 'ok',
+    data: {
+      ids,
+      after:
+        rows.length === REPORT_LIMIT
+          ? rows[rows.length - 1].attachment_id
+          : null,
+    },
+  });
 });

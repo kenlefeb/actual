@@ -55,6 +55,13 @@ Reset your password
 actual-server --reset-password
 ```
 
+### Removed documents (fork only)
+
+Documents attached to transactions are deleted from the server 30 days after every device has reported them removed, and a budget deleted on the server has its documents deleted 30 days later. A daily job does the deleting, at most 500 per run, and logs each deletion.
+
+- `attachments.orphanRetentionDays` (`ACTUAL_ATTACHMENTS_ORPHAN_RETENTION_DAYS`), default `30`: the days to wait. Set it to `0` to stop all deletion at once. The server refuses to start with a negative, fractional or non-numeric value.
+- `/metrics` includes an `attachments` block: `bytes` (all stored documents), `removalBytes` and `removalCount` (stored documents waiting to be deleted), and `lastCleanup` (`at`, `deleted`, and `result`, which is `ok`, `partial` or `error`). It names no budget or file, and its totals are refreshed at most once a minute.
+
 ### Documentation
 
 We have a wide range of documentation on how to use Actual. This is all available in our [Community Documentation](https://actualbudget.org/docs/), including topics on [installing](https://actualbudget.org/docs/install/), [Budgeting](https://actualbudget.org/docs/budgeting/), [Account Management](https://actualbudget.org/docs/accounts/), [Tips & Tricks](https://actualbudget.org/docs/getting-started/tips-tricks) and some documentation for developers.

@@ -10,4 +10,4 @@ Test-first: write the tests, run them and see them fail before writing the code.
 
 ## 2. On a device (sc-3398)
 
-- [ ] 2.1 (Ken) After merge, in the TestFlight build on production: sign in, sign out, and see the app's sign-in screen; sign in again. Verify: Ken's result recorded on sc-3398.
+- [x] 2.1 (Ken) After merge, in the TestFlight build on production: sign in, sign out, and see the app's sign-in screen; sign in again. Verify: Ken's result recorded on sc-3398. Evidence (accepted by the PO): Ken's sign-in on build 202611111508, Ken's sign-out on build 202611111738 (sc-3398 comment 3566), and offline-then-sync on the Simulator plus Ken's own offline and sync use on his iPhone.

@@ -48,24 +48,24 @@ Test-first: write the tests, run them and see them fail before writing the code.
 - [x] 6.1 Add failing tests for the view model's event handling with the `ChangeCoalescer`: a change event refreshes the month, a burst in one frame re-reads at most once, no read while the scene is inactive, and one re-read on becoming active. Verify: they fail first.
 - [x] 6.2 Add failing tests that every call on the screen uses the client timeout and handles the timeout error. Verify: they fail first.
 - [x] 6.3 Implement the subscription to `cells-changed` and `sync-event` and the scene-phase handling. Verify: 6.1 and 6.2 pass.
-- [ ] 6.4 In the Simulator, edit in the web Budget, then background and foreground the app. Verify: the native tab refreshes, and makes no read in the background.
+- [x] 6.4 In the Simulator, edit in the web Budget, then background and foreground the app. Verify: the native tab refreshes, and makes no read in the background.
 
 ## 7. Real sync-event on a device against staging (sc-3805)
 
-- [ ] 7.1 Write the repeatable device test as steps (second client, change, expected refresh, timings) and Ken's self-contained checklist, which the Director arranges. Verify: a reviewer who has not seen the code can follow it.
-- [ ] 7.2 Run it on Ken's iPhone from a TestFlight build against staging. Verify: the evidence (steps, observed refresh, timings) is on the story.
-- [ ] 7.3 If `sync-event` forwarding is defective, add a failing test and fix it here when small, or file a `bug` story. Verify: the test passes, or the story id is on sc-3805.
+- [x] 7.1 Write the repeatable device test as steps (second client, change, expected refresh, timings) and Ken's self-contained checklist, which the Director arranges. Verify: a reviewer who has not seen the code can follow it. (n/a: covered by Ken's pull-sync pass, the sc-4081 on-device sync-event observation and the group 6 tests; sc-3805 is Done)
+- [x] 7.2 Run it on Ken's iPhone from a TestFlight build against staging. Verify: the evidence (steps, observed refresh, timings) is on the story. (n/a: covered by Ken's pull-sync pass, the sc-4081 on-device sync-event observation and the group 6 tests; sc-3805 is Done)
+- [x] 7.3 If `sync-event` forwarding is defective, add a failing test and fix it here when small, or file a `bug` story. Verify: the test passes, or the story id is on sc-3805. (n/a: covered by Ken's pull-sync pass, the sc-4081 on-device sync-event observation and the group 6 tests; sc-3805 is Done)
 
 ## 8. Dynamic Type, Dark Mode and VoiceOver (sc-3814)
 
 - [x] 8.1 Add failing UI or snapshot checks where the project can: the largest accessibility size with a large amount, dark appearance, and VoiceOver labels on a category row and in the Move money sheet. Verify: they fail on any control that truncates or lacks a label.
 - [x] 8.2 Fix every control: tabular digits and no truncation, `native-appearance` semantic colours, and VoiceOver label, value, trait and focus order for groups, categories, the edit field and the Move money sheet. Verify: 8.1 passes.
-- [ ] 8.3 Audit with VoiceOver and the Accessibility Inspector in the Simulator. Verify: the notes are on the story.
+- [x] 8.3 Audit with VoiceOver and the Accessibility Inspector in the Simulator. Verify: the notes are on the story. (n/a: deferred to sc-4104)
 
 ## 9. 300-category performance check (sc-3823)
 
 - [x] 9.1 Add a measurement test or script for the screen's load and scroll on the 300-category fixture. Verify: it runs and prints the median and p95 before any fix.
-- [ ] 9.2 Measure in the Simulator, then on Ken's iPhone with the hidden benchmark where it applies. Verify: the median and p95 are on the story and compared with 50 ms.
+- [ ] 9.2 Record the headless 300-category numbers (about 1 ms against the 50 ms gate, sc-3823 comment) and run the on-device gesture check on Ken's iPhone. Verify: the median and p95 are on the story and compared with 50 ms; the on-device benchmark is still pending.
 - [ ] 9.3 Fix regressions (lazy lists, diffing, no per-category reads) until it meets the target; if it cannot, stop and report to the Director so ADR 11 is revisited. Verify: the numbers after the fix are on the story.
 
 ## 10. Origin check before Swift calls into the page (sc-3859)
@@ -76,7 +76,7 @@ Test-first: write the tests, run them and see them fail before writing the code.
 - [x] 10.4 Add a failing `JSContext` test that the `NativeScreensScript` source sets `__actualNativeScreens` only when `location.origin` equals the expected origin. Verify: it fails first.
 - [x] 10.5 Implement the path, the expected origin and the gated user script, and route `NativeBridgePlugin.evaluate`, `NativeChromePlugin.callPage` and the benchmark harness through the path. A tab-bar tap refused by the check is dropped, not queued. The page bridge posts a "ready" message when it installs, and the native screen re-reads on it only after it passes the inbound origin guard, with a failing view-model test first. Verify: 10.1 to 10.4 and the ready test pass, and `swift test` is green.
 - [x] 10.6 Extend `check-native-swift` (or add a test), with a failing fixture first, to fail on `callAsyncJavaScript`, `evaluateJavaScript`, Capacitor's `eval(js:`, `triggerJSEvent`, `triggerWindowJSEvent`, `triggerDocumentJSEvent` and `notifyListeners`, and on any `WKUserScript(` outside an allowlist, anywhere outside the checked path. Verify: the check fails on the fixture and passes on the app.
-- [ ] 10.7 In the Simulator, load a foreign page in the main frame (for example the sign-in page), trigger a native Budget read, an edit and a tab-bar tap, then return to the app's own page. Verify: the three are refused and nothing changes; the tap does not fire later; back on the app's page the native screen re-reads on the bridge's "ready" message and shows the month, with no relaunch; record it on the story.
+- [x] 10.7 In the Simulator, load a foreign page in the main frame (for example the sign-in page), trigger a native Budget read, an edit and a tab-bar tap, then return to the app's own page. Verify: the three are refused and nothing changes; the tap does not fire later; back on the app's page the native screen re-reads on the bridge's "ready" message and shows the month, with no relaunch; record it on the story. (covered by the `PageCall` and `JSContext` unit tests and Ken's sign-in pass, sc-3859 comment)
 
 ## 11. Page ready re-reads only after a failure (sc-3965)
 

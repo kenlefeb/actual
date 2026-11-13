@@ -15,15 +15,15 @@ Test-first: write the tests, run them and see them fail before writing the code.
 
 ## 3. SwiftUI Budget tab (sc-3850)
 
-- [ ] 3.1 Confirm `NativeBudgetViewController.swift` needs no change (it binds the three view model properties), or make the smallest change if a check shows otherwise. Verify: Simulator on a budget with a first and a last month: Previous is dimmed on the first month and Next on the last from first load, and the picker spans the range, in light and dark and at the largest Dynamic Type size.
-- [ ] 3.2 Device check: on the TestFlight build, add a later month on the web, pull to refresh on the native tab, and see it offered without a relaunch. Record the steps and result on the story. Verify: the result is on sc-3850.
+- [x] 3.1 Confirm `NativeBudgetViewController.swift` needs no change (it binds the three view model properties), or make the smallest change if a check shows otherwise. Verify: Simulator on a budget with a first and a last month: Previous is dimmed on the first month and Next on the last from first load, and the picker spans the range, in light and dark and at the largest Dynamic Type size.
+- [x] 3.2 Device check: on the TestFlight build, add a later month on the web, pull to refresh on the native tab, and see it offered without a relaunch. Record the steps and result on the story. Verify: the result is on sc-3850.
 
 ## 4. Wrap up (sc-3850)
 
-- [ ] 4.1 Release note or fork news only if user-facing text changes; otherwise state why none is needed in the PR. Verify: `yarn check:fork-news` passes if a note was added.
+- [x] 4.1 Release note or fork news only if user-facing text changes; otherwise state why none is needed in the PR. Verify: `yarn check:fork-news` passes if a note was added.
 - [ ] 4.2 Archive this change after `add-native-budget-screen` and `native-bridge` are archived (the "Month outside the range" edit is already made in the spec PR). Verify: `yarn check:openspec-shortcut`.
 
 ## 5. The picker marks the shown month (sc-4092)
 
-- [ ] 5.1 Add a failing Swift test in `BudgetViewModelTests.swift`: `markedPickerMonth` equals the shown month after load, after a step and after a pick, and is exactly one row of `pickerMonths`. Verify: it fails first.
-- [ ] 5.2 Add `markedPickerMonth` to `BudgetViewModel.swift` and mark that row in the picker `Menu` of `NativeBudgetViewController.swift` with a checkmark label and the selected accessibility trait; step, pick and order are unchanged. Verify: 5.1 passes; Simulator in light and dark and at the largest Dynamic Type size shows one checkmark that follows a step and a pick, and VoiceOver reads the row as selected.
+- [x] 5.1 Add a failing Swift test in `BudgetViewModelTests.swift`: `markedPickerMonth` equals the shown month after load, after a step and after a pick, and is exactly one row of `pickerMonths`. Verify: it fails first.
+- [x] 5.2 Add `markedPickerMonth` to `BudgetViewModel.swift` and mark that row in the picker `Menu` of `NativeBudgetViewController.swift` with a checkmark label and the selected accessibility trait; step, pick and order are unchanged. Verify: 5.1 passes; Simulator in light and dark and at the largest Dynamic Type size shows one checkmark that follows a step and a pick, and VoiceOver reads the row as selected.

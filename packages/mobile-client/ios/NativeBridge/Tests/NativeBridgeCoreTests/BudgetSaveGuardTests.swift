@@ -51,7 +51,7 @@ final class BudgetSaveGuardTests: XCTestCase {
         await model.load()
 
         let step = Task { await model.next() }
-        while gate.continuation == nil { await Task.yield() }
+        try await waitUntil("the month step read reached its gate") { gate.continuation != nil }
 
         let refused = await model.saveBudgeted(month: "2026-03", category: "rent", text: "125.00")
         XCTAssertFalse(refused)

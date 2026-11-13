@@ -286,7 +286,7 @@ final class BudgetViewModelTests: XCTestCase {
                 return newer
             }, now: march9, calendar: utc)
         let first = Task { await model.load() }
-        while gate.continuation == nil { await Task.yield() }
+        try await waitUntil("the first load reached its gate") { gate.continuation != nil }
         await model.load()
         gate.continuation?.resume()
         await first.value
@@ -427,7 +427,7 @@ final class BudgetMonthNavigationTests: XCTestCase {
             }, now: march9, calendar: utc)
         await model.load()
         async let first: Void = model.select("2026-02")
-        while slow == nil { await Task.yield() }
+        try await waitUntil("the 2026-02 read was held") { slow != nil }
         await model.select("2026-04")
         slow?.resume()
         await first
@@ -446,7 +446,7 @@ final class BudgetMonthNavigationTests: XCTestCase {
             }, now: march9, calendar: utc)
         await model.load()
         async let first: Void = model.previous()
-        while gate == nil { await Task.yield() }
+        try await waitUntil("the 2026-02 read was held") { gate != nil }
         await model.previous()  // the 2026-02 read is still in flight
         gate?.resume()
         await first

@@ -72,7 +72,9 @@ public struct PageCall {
         guard let url = serverURL, let scheme = url.scheme?.lowercased(), let host = url.host?.lowercased(), !host.isEmpty
         else { return nil }
         let port = url.port.flatMap { $0 == PageOriginGuard.defaultPort(scheme) ? nil : $0 }
-        return "\(scheme)://\(host)" + (port.map { ":\($0)" } ?? "")
+        // Foundation drops an IPv6 host's brackets; location.origin keeps them
+        let authority = host.contains(":") ? "[\(host)]" : host
+        return "\(scheme)://\(authority)" + (port.map { ":\($0)" } ?? "")
     }
 
     // The in-page check, then `body` with its result or error in a shape only

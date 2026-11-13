@@ -130,6 +130,8 @@ final class PageCallTests: XCTestCase {
             ("http://host:80/", "http://host"),
             ("HTTPS://App.Example.COM/path?q=1", "https://app.example.com"),
             ("https://host:8443", "https://host:8443"),
+            ("http://[::1]:3001", "http://[::1]:3001"),
+            ("https://[2001:db8::1]:443", "https://[2001:db8::1]"),
         ]
         for (server, origin) in cases {
             XCTAssertEqual(PageCall.expectedOrigin(serverURL: URL(string: server)), origin, server)

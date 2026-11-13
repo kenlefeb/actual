@@ -91,11 +91,34 @@ final class BudgetViewModelTests: XCTestCase {
         XCTAssertEqual(model.state, .failed(.timedOut))
     }
 
-    // 1.3a: a tracking budget shows the web Budget screen until sc-3778 lands
-    func testATrackingBudgetFallsBackToTheWebScreen() async throws {
-        let model = BudgetViewModel(client: client(returning: try fixtureJSON("budget-month-tracking")), now: march9, calendar: utc)
+    // 4.1 (sc-3778): a tracking budget renders natively, from the same shape
+    func testATrackingBudgetLoadsWithTheTrackingTotalsAndNoToBudget() async throws {
+        let json = try fixtureJSON("budget-month-tracking")
+        let model = BudgetViewModel(client: client(returning: json), now: march9, calendar: utc)
         await model.load()
-        XCTAssertEqual(model.state, .useWebScreen)
+        let expected = try JSONDecoder().decode(BudgetMonth.self, from: Data(json.utf8))
+        XCTAssertEqual(model.state, .loaded(expected))
+        XCTAssertEqual(expected.budgetType, .tracking)
+        XCTAssertNil(expected.totals.toBudget)
+        XCTAssertEqual(expected.totals.budgetedIncome, 320000)
+        XCTAssertEqual(expected.totals.saved, 170000)
+    }
+
+    // The layout follows the snapshot's budgetType on every read
+    func testTheLayoutFollowsTheBudgetTypeOfEachRead() async throws {
+        let envelope = try fixtureJSON("budget-month-envelope")
+        let tracking = try fixtureJSON("budget-month-tracking")
+        var reply = envelope
+        let model = BudgetViewModel(client: NativeBridgeClient { _, _ in reply }, now: march9, calendar: utc)
+        func type() -> BudgetMonth.BudgetType? { if case .loaded(let month) = model.state { return month.budgetType } else { return nil } }
+        await model.load()
+        XCTAssertEqual(type(), .envelope)
+        reply = tracking
+        await model.load()
+        XCTAssertEqual(type(), .tracking)
+        reply = envelope
+        await model.load()
+        XCTAssertEqual(type(), .envelope)
     }
 
     // The real handler throws this text (app.ts); WebKit wraps it in an NSError

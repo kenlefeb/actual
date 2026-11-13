@@ -59,8 +59,6 @@ public enum BudgetLoadState: Equatable {
     case failed(BudgetLoadError)
     // A refresh failed: the last good numbers stay, dimmed, with a retry
     case stale(BudgetMonth, BudgetLoadError)
-    // Tracking budgets show the web Budget screen until sc-3778 builds them
-    case useWebScreen
 }
 
 @MainActor
@@ -134,8 +132,8 @@ public final class BudgetViewModel: ObservableObject {
             let result = try await client.budgetMonth(target)
             guard generation == loadGeneration else { return }
             settle(on: target)
-            lastGood = result.budgetType == .tracking ? nil : result
-            state = result.budgetType == .tracking ? .useWebScreen : .loaded(result)
+            lastGood = result
+            state = .loaded(result)
         } catch {
             let failure = BudgetLoadError.from(error)
             // What the edge is does not depend on which read was the newest
@@ -170,8 +168,8 @@ public final class BudgetViewModel: ObservableObject {
     public func saveBudgeted(month target: String, category id: String, text: String) async -> Bool {
         guard !isSaving, case .loaded(let snapshot) = state else { return false }
         saveError = nil
-        // Only a category of the snapshot, never a group, income or to-budget
-        guard snapshot.month == target, wanted == nil, snapshot.expenseGroups.contains(where: { $0.categories.contains { $0.id == id } }) else {
+        // Only a category of the snapshot, never a group or to-budget; income only on a tracking budget
+        guard snapshot.month == target, wanted == nil, snapshot.editableGroups.contains(where: { $0.categories.contains { $0.id == id } }) else {
             saveError = .failed
             return false
         }

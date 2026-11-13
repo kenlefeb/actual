@@ -47,17 +47,18 @@ async function validateBudgetAmount(forward: Send, args: unknown) {
   }
   // Throws "no budget for month" when the month has none
   const snapshot = (await forward('native/budget-month', { month })) as {
+    budgetType: string;
     groups: { isIncome: boolean; categories: { id: string }[] }[];
   };
-  // Expense categories only, as Swift edits; never a group or income category
+  // As Swift edits (BudgetMonth.editableGroups): never a group id, and income
+  // categories only on a tracking budget, the only one with budgeted income
   const isCategory = snapshot.groups.some(
     group =>
-      !group.isIncome && group.categories.some(cat => cat.id === category),
+      (!group.isIncome || snapshot.budgetType === 'tracking') &&
+      group.categories.some(cat => cat.id === category),
   );
   if (typeof category !== 'string' || !isCategory) {
-    throw new Error(
-      'native bridge: category is not an expense category of the month',
-    );
+    throw new Error('native bridge: category cannot be edited in the month');
   }
   return { category, month, amount };
 }

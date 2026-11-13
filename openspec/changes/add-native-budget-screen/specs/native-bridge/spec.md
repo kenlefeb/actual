@@ -126,6 +126,19 @@ The page and Swift SHALL each refuse, with an error result and no write, a trans
 - **WHEN** native code sends `budget/transfer-category` with an income category as source or destination
 - **THEN** the call returns an error and nothing is written
 
+### Requirement: Budgeted income is editable only on tracking months
+The page and Swift SHALL each refuse a `budget/budget-amount` for an income category, with an error result and no write, unless the month snapshot's `budgetType` is `tracking`, where income categories hold budgeted amounts. Both SHALL apply the same rule, and a group id SHALL stay refused in both modes.
+
+#### Scenario: Income category on a tracking month
+- **GIVEN** a tracking month whose snapshot has an income category
+- **WHEN** native code sends `budget/budget-amount` for it
+- **THEN** Swift and the page each accept it and loot-core stores the amount
+
+#### Scenario: Income category on an envelope month
+- **GIVEN** an envelope month whose snapshot has an income category
+- **WHEN** native code sends `budget/budget-amount` for it
+- **THEN** Swift and the page each refuse it, and nothing is written
+
 ### Requirement: The origin guard covers the write names
 The page-origin guard of the bridge (sc-3697) SHALL apply to the write handler names exactly as to the reads: a call to `budget/budget-amount`, `budget/transfer-category` or `budget/transfer-available` posted from a frame that is not the app's main frame, or from a page on another scheme, host or port, SHALL be ignored and SHALL NOT reach loot-core.
 

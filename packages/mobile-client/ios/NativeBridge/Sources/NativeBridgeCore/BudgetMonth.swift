@@ -77,4 +77,9 @@ public struct BudgetMonth: Codable, Equatable {
     // Income is shown apart from the expense groups; hidden groups are left out
     public var expenseGroups: [Group] { groups.filter { !$0.hidden && !$0.isIncome } }
     public var incomeGroups: [Group] { groups.filter { !$0.hidden && $0.isIncome } }
+
+    // Groups whose categories take a budgeted amount through `budget/budget-amount`.
+    // A tracking budget holds budgeted income; an envelope budget does not (sc-3778).
+    // The page bridge applies the same rule (nativeBridge.ts).
+    public var editableGroups: [Group] { budgetType == .tracking ? groups.filter { !$0.hidden } : expenseGroups }
 }

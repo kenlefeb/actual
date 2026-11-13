@@ -9,6 +9,6 @@
 
 ## 2. Clients report removals (sc-2525)
 
-- [ ] 2.1 Tests first, failing: after a sync that followed an attachment change, after a budget upload or restore, and after a budget's first sync in an app session, loot-core fetches the recorded ids and posts as live only the live ids that are recorded and as removed only removed ids not yet recorded, in batches of 1000; it posts nothing for a budget without a sync server; a failed report is dropped without an error shown and sent again after the next sync.
-- [ ] 2.2 Send the report from loot-core's attachments app after sync, for desktop and phone alike, tolerating a server without the endpoint (404: report nothing, show no error, try after a later sync).
+- [x] 2.1 Tests first, failing: after a sync that followed an attachment change, after a budget upload or restore, and after a budget's first sync in an app session, loot-core fetches the recorded ids and posts as live only the live ids that are recorded and as removed only removed ids not yet recorded, in batches of 1000; it posts nothing for a budget without a sync server; a failed report is dropped without an error shown and sent again after the next sync.
+- [x] 2.2 Send the report from loot-core's attachments app after sync, for desktop and phone alike, tolerating a server without the endpoint (404: report nothing, show no error, try after a later sync).
 - [ ] 2.3 Check on a desktop and a phone build that a removal is recorded, an undo clears it, and a document still shown after the record is cleared opens; record the result on sc-2525.

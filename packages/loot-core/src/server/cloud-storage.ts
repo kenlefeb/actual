@@ -296,6 +296,18 @@ export async function importBuffer(fileData, buffer, localId?: string) {
   return { id: meta.id };
 }
 
+// Listeners told when a budget upload succeeds (the attachments app reports
+// removed documents then)
+const uploadListeners: Array<() => unknown> = [];
+
+export function onUpload(listener: () => unknown) {
+  uploadListeners.push(listener);
+}
+
+export async function notifyUploaded() {
+  await Promise.all(uploadListeners.map(listener => listener()));
+}
+
 export async function upload() {
   const userToken = await asyncStorage.getItem('user-token');
   if (!userToken) {
@@ -381,6 +393,7 @@ export async function upload() {
         cloudFileId,
         groupId: res.groupId,
       });
+      void notifyUploaded();
     }
   } else {
     throw FileUploadError('internal');

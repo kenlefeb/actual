@@ -186,6 +186,41 @@ final class BudgetReadyTests: XCTestCase {
         guard case .loaded = model.state else { return XCTFail("expected loaded, got \(model.state)") }
     }
 
+    // sc-3965: "ready" re-reads only after a refused or failed read, or before any month loaded
+    func testTheReadyMessageMakesNoExtraReadWhenTheMonthIsLoaded() async throws {
+        let json = try envelopeJSON
+        var reads = 0
+        let model = BudgetViewModel(client: NativeBridgeClient { _, _ in reads += 1; return json })
+        await model.load()
+        XCTAssertEqual(reads, 1)
+        await model.pageReady()
+        XCTAssertEqual(reads, 1)
+        guard case .loaded = model.state else { return XCTFail("expected loaded, got \(model.state)") }
+    }
+
+    func testTheReadyMessageLoadsOnAColdStart() async throws {
+        let json = try envelopeJSON
+        var reads = 0
+        let model = BudgetViewModel(client: NativeBridgeClient { _, _ in reads += 1; return json })
+        await model.pageReady()
+        XCTAssertEqual(reads, 1)
+        guard case .loaded = model.state else { return XCTFail("expected loaded, got \(model.state)") }
+    }
+
+    func testTheReadyMessageReReadsAfterAFailedRead() async throws {
+        let json = try envelopeJSON
+        var fail = true
+        let model = BudgetViewModel(client: NativeBridgeClient { _, _ in
+            if fail { throw NativeBridgeError.timedOut("native/budget-month") }
+            return json
+        })
+        await model.load()
+        guard case .failed = model.state else { return XCTFail("expected failed, got \(model.state)") }
+        fail = false
+        await model.pageReady()
+        guard case .loaded = model.state else { return XCTFail("expected loaded, got \(model.state)") }
+    }
+
     func testTheReadyMessageWaitsWhileTheSceneIsInactive() async throws {
         let json = try envelopeJSON
         var reads = 0

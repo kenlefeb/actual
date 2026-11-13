@@ -490,6 +490,23 @@ final class BudgetRefreshTests: XCTestCase {
         guard case .stale = model.state else { return XCTFail("expected stale, got \(model.state)") }
     }
 
+    // sc-3965: a ready message after a failed pull (state .stale) re-reads and clears the failure
+    func testTheReadyMessageReReadsAStaleScreenAfterAFailedPull() async throws {
+        let json = try fixtureJSON("budget-month-envelope")
+        let page = Page(month: json)
+        let model = model(page)
+        let reply = try syncFixture("network")
+        page.syncReply = { reply }
+        await model.load()
+        await model.refresh()
+        guard case .stale = model.state else { return XCTFail("expected stale, got \(model.state)") }
+        let reads = page.names.filter { $0 == "native/budget-month" }.count
+        await model.pageReady()
+        XCTAssertEqual(page.names.filter { $0 == "native/budget-month" }.count, reads + 1)
+        XCTAssertNil(model.refreshError)
+        guard case .loaded = model.state else { return XCTFail("expected loaded, got \(model.state)") }
+    }
+
     // A read that no change event caused clears a pull's failure (sc-4081)
     func testNonEventReadsClearTheFailure() async throws {
         let json = try fixtureJSON("budget-month-envelope")

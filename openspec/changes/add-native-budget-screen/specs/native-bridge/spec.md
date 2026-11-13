@@ -208,7 +208,12 @@ Before every call into the page, read or write, bridge or native chrome, Swift S
 #### Scenario: Back on the app's own page
 - **GIVEN** native calls were refused while a sign-in page was in the main frame
 - **WHEN** the app's own page is back in the main frame, and its page bridge reports that it is ready through a message that passes the inbound origin guard
-- **THEN** the native screen re-reads on that message and shows the month, with no relaunch; a page-load event alone, which fires for any page, does not trigger it
+- **THEN** the native screen re-reads on that message unless it is already showing a plain loaded month, so a refused, failed or stale screen refreshes, and shows the month, with no relaunch; a page-load event alone, which fires for any page, does not trigger it
+
+#### Scenario: A ready message when nothing failed
+- **GIVEN** a loaded month that has no stale mark
+- **WHEN** the page bridge's ready message passes the inbound origin guard
+- **THEN** the screen makes no read; with no month loaded yet (a cold start), the message still loads it
 
 ### Requirement: The expected origin comes from the server URL
 Swift SHALL derive the expected origin from the same server URL `PageOriginGuard` uses, in the form `location.origin` serializes: lowercased scheme and host, with the default port omitted (for example `capacitor://localhost`, `http://localhost:3001`, `https://host`). It SHALL pass it to the page script as a string argument that is not named `location` or `window`.

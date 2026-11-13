@@ -100,6 +100,13 @@ public final class BudgetViewModel: ObservableObject {
         coalescer?.notify()
     }
 
+    // The page bridge posted "ready" (sc-3859): the app's own page is back, so
+    // calls refused while a sign-in page showed can succeed again
+    public func pageReady() async {
+        guard isSceneActive else { return }
+        await load()
+    }
+
     // Events during the background are dropped; the one read on returning covers them
     public func setSceneActive(_ active: Bool) async {
         guard active != isSceneActive else { return }

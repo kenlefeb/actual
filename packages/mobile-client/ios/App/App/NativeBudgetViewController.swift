@@ -30,6 +30,11 @@ final class NativeBudgetViewController: UIHostingController<BudgetTabView> {
     // The page's change events (NativeBridgePlugin.onEvent) end here
     func changeEventReceived() { model.changeEventReceived() }
 
+    // The page bridge's "ready" message, after the inbound origin guard (sc-3859)
+    func pageReady() {
+        Task { await model.pageReady() }
+    }
+
     // The tab also re-reads each time it shows
     func reload() {
         Task { await model.load() }

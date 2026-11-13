@@ -19,11 +19,14 @@ public enum NativeScreenSwitch {
 // The script that tells the page which native screens are on, at the start of
 // every page load. It is built from the current switch, so the app rebuilds it
 // when the switch changes; a reload after a toggle then reads the new value.
+// It acts only on the app's own page (PageCall.expectedOrigin, sc-3859), so a
+// sign-in page gets nothing; no expected origin means it does nothing.
 public enum NativeScreensScript {
-    public static func source(defaults: UserDefaults = .standard) -> String {
+    public static func source(defaults: UserDefaults = .standard, expectedOrigin: String?) -> String {
+        guard let origin = expectedOrigin, let literal = try? JSONEncoder().encode(origin) else { return "" }
         let screens = NativeTab.allCases.filter(NativeScreenSwitch.nativeTabs.contains).map {
             "\"\($0.rawValue)\": \(NativeScreenSwitch.screen(for: $0, defaults: defaults) == .native)"
         }
-        return "window.__actualNativeScreens = {\(screens.joined(separator: ", "))};"
+        return "if (location.origin === \(String(decoding: literal, as: UTF8.self))) { window.__actualNativeScreens = {\(screens.joined(separator: ", "))}; }"
     }
 }

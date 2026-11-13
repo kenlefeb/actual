@@ -67,4 +67,15 @@ describe('installNativeBridge', () => {
     installNativeBridge(win);
     expect(win.__actualNativeBridge?.call).toBeTypeOf('function');
   });
+
+  // native-bridge: "Back on the app's own page" (sc-3859)
+  it('tells native code it is ready once the bridge is installed', () => {
+    const win: Parameters<typeof installNativeBridge>[0] = {};
+    const postMessage = vi.fn(() => {
+      expect(win.__actualNativeBridge).toBeDefined();
+    });
+    win.webkit = { messageHandlers: { actualNativeBridge: { postMessage } } };
+    installNativeBridge(win);
+    expect(postMessage).toHaveBeenCalledWith({ event: 'ready', payload: null });
+  });
 });

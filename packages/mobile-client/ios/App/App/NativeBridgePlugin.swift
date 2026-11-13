@@ -38,19 +38,10 @@ public class NativeBridgePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
         coalescer.notify()
     }
 
+    // Only on the app's own page (PageCall, sc-3859)
     @MainActor
     private func evaluate(name: String, argsJSON: String) async throws -> String {
         guard let webView = bridge?.webView else { throw NativeBridgeError.noPage }
-        let result = try await webView.callAsyncJavaScript(
-            """
-            const bridge = window.__actualNativeBridge;
-            if (!bridge) throw new Error('native bridge: page not ready');
-            return await bridge.call(name, JSON.parse(args));
-            """,
-            arguments: ["name": name, "args": argsJSON],
-            contentWorld: .page
-        )
-        guard let json = result as? String else { throw NativeBridgeError.badResult }
-        return json
+        return try await PageCall(runner: webView, serverURL: bridge?.config.serverURL).bridgeCall(name: name, argsJSON: argsJSON)
     }
 }

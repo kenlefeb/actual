@@ -43,8 +43,10 @@ final class NativeBridgeBenchmarkHarness {
         fflush(stdout)  // stdout is a file under `simctl launch --stdout`, so fully buffered
     }
 
+    // Through the checked path, like every call into the page (sc-3859)
     private func js(_ body: String) async throws -> Any? {
-        try await webView?.callAsyncJavaScript(body, arguments: [:], contentWorld: .page)
+        guard let webView else { throw NativeBridgeError.noPage }
+        return try await PageCall(runner: webView, serverURL: plugin.bridge?.config.serverURL).run(body)
     }
 
     func run() async {

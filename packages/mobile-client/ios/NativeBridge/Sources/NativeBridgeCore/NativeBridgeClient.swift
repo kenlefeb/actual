@@ -17,6 +17,11 @@ public enum NativeBridgeError: Error, Equatable {
     case badResult
     // A write built from a value loot-core would mishandle; never sent (sc-3769)
     case invalidWrite(String)
+    // The main frame is not the app's own page (sc-3859). One fixed value, so
+    // it carries nothing of a foreign page's URL or text.
+    case pageOrigin
+    // The app's own page bridge refused or failed the call; its message
+    case page(String)
 }
 
 // The arguments of `budget/budget-amount`. loot-core's handler trusts them, so
@@ -42,7 +47,7 @@ public struct BudgetAmountWrite: Encodable, Equatable {
 
 // Calls the page bridge. `transport` takes the handler name and its arguments
 // as JSON, and returns the handler's result as JSON (the app runs it through
-// WKWebView.callAsyncJavaScript; tests pass a fake).
+// PageCall, which checks the page origin first; tests pass a fake).
 public struct NativeBridgeClient {
     public typealias Transport = (_ name: String, _ argsJSON: String) async throws -> String
 
@@ -84,7 +89,7 @@ public struct NativeBridgeClient {
         try JSONDecoder().decode(BudgetMonth.self, from: await call("native/budget-month", args: ["month": month]))
     }
 
-    // Not a task group: a group waits for every child, and callAsyncJavaScript
+    // Not a task group: a group waits for every child, and a WebKit script call
     // into a suspended page ignores cancellation, so the deadline would never fire.
     private func withTimeout(_ name: String, _ work: @escaping () async throws -> String) async throws -> String {
         let once = ResumeOnce<String>()

@@ -2,15 +2,24 @@ import * as api from '@actual-app/api';
 import { z } from 'zod';
 
 import { buildPage, pageParams } from '#paging';
-import { withText } from '#sanitize';
 
+import { withIds } from './paychecks';
 import { pageShape } from './shared';
 import type { RegisterTool } from './shared';
+
+// Synced data: a type the app accepts is returned as is, anything else as unknown.
+const MIMES = new Set([
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+]);
+const TIMESTAMP = /^[0-9T:.+Z-]{1,40}$/;
 
 export function registerAttachmentTools(tool: RegisterTool) {
   tool(
     'list_transaction_attachments',
-    "List the documents (receipts, invoices) attached to a transaction: id, name, type and size in bytes and created time. Metadata only; a document's content is never returned. Empty when the transaction has none.",
+    "List the documents (receipts, invoices) attached to a transaction: id, name, type and size in bytes and created time. Metadata only; a document's content is never returned. A split line returns its parent's documents. Empty when the transaction has none.",
     { transaction_id: z.string().min(1).max(100), ...pageShape },
     async ({ transaction_id, ...input }) => {
       const p = pageParams(input);
@@ -41,14 +50,15 @@ export function registerAttachmentTools(tool: RegisterTool) {
       )) as { data: Array<Record<string, unknown>> };
       return buildPage(
         data.map(a =>
-          withText(
+          withIds(
             {
-              id: a.id,
-              transaction_id: a.transaction_id,
-              mime: a.mime,
-              size: a.size,
-              created_at: a.created_at,
+              mime: MIMES.has(String(a.mime)) ? a.mime : 'unknown',
+              size: typeof a.size === 'number' ? a.size : null,
+              created_at: TIMESTAMP.test(String(a.created_at))
+                ? a.created_at
+                : null,
             },
+            { id: a.id, transaction_id: a.transaction_id },
             { name: a.name },
           ),
         ),

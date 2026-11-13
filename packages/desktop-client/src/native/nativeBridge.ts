@@ -128,6 +128,34 @@ async function validateTransfer(forward: Send, name: string, args: unknown) {
   return { month, amount, from, to, currencyCode: snapshot.currencyCode };
 }
 
+// loot-core's sync reasons that native code tells apart (sc-3884); a Map, so a
+// reason like "constructor" never reads the prototype
+const SYNC_REASONS = new Map([
+  ['network-failure', 'network'],
+  ['unauthorized', 'unauthorized'],
+  ['out-of-sync', 'out-of-sync'],
+  ['clock-drift', 'clock-drift'],
+  ['encrypt-failure', 'encryption'],
+  ['decrypt-failure', 'encryption'],
+]);
+
+// Only whether the sync worked and a fixed reason. loot-core's message and
+// meta, and a rejection's message, can carry the server address or a response
+// body, and messages are raw CRDT data, so none of them cross (sc-3884).
+async function sync(forward: Send) {
+  try {
+    // No arguments, whatever native code sent
+    const result = (await forward('sync')) as {
+      error?: { reason?: unknown };
+    } | null;
+    if (!result?.error) return { ok: true };
+    const reason = SYNC_REASONS.get(String(result.error.reason)) ?? 'other';
+    return { ok: false, reason };
+  } catch {
+    return { ok: false, reason: 'other' };
+  }
+}
+
 export function createNativeBridge({
   send: forward,
   listen: subscribe,
@@ -144,6 +172,9 @@ export function createNativeBridge({
     async call(name, args) {
       if (!allowlist.includes(name)) {
         throw new Error(`native bridge: ${name} is not allowlisted`);
+      }
+      if (name === 'sync') {
+        return JSON.stringify(await sync(forward));
       }
       if (name === 'budget/budget-amount') {
         args = await validateBudgetAmount(forward, args);

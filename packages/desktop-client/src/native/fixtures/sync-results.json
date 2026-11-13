@@ -1,0 +1,29 @@
+{
+  "ok": {
+    "ok": true
+  },
+  "network": {
+    "ok": false,
+    "reason": "network"
+  },
+  "unauthorized": {
+    "ok": false,
+    "reason": "unauthorized"
+  },
+  "out-of-sync": {
+    "ok": false,
+    "reason": "out-of-sync"
+  },
+  "clock-drift": {
+    "ok": false,
+    "reason": "clock-drift"
+  },
+  "encryption": {
+    "ok": false,
+    "reason": "encryption"
+  },
+  "other": {
+    "ok": false,
+    "reason": "other"
+  }
+}

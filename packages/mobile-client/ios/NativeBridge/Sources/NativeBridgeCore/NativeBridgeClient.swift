@@ -7,7 +7,45 @@ import Foundation
 public enum NativeBridgeAllowlist {
     // Sent only as their typed value (BudgetAmountWrite, Transfer), never as loose arguments
     public static let writes: Set<String> = ["budget/budget-amount", "budget/transfer-category", "budget/transfer-available"]
-    public static let handlers: Set<String> = Set(["native/budget-month", "query"]).union(writes)
+    public static let reads: Set<String> = ["native/budget-month", "query"]
+    // loot-core's server sync (sc-3884), the one handler that is neither a read
+    // nor a budget write. Only NativeBridgeClient.sync() reaches it: the generic
+    // call refuses it, so its result is always decoded and its deadline applies.
+    public static let sync: Set<String> = ["sync"]
+    public static let handlers: Set<String> = reads.union(writes).union(sync)
+}
+
+// The page's reduced sync result (nativeBridge.ts): whether it worked, and a
+// reason from a closed set. Nothing else of loot-core's error crosses.
+public enum SyncFailureReason: String, Equatable {
+    case network, unauthorized, outOfSync = "out-of-sync", clockDrift = "clock-drift", encryption, other
+}
+
+public enum SyncResult: Decodable, Equatable {
+    case ok
+    case failed(SyncFailureReason)
+
+    private enum Keys: String, CodingKey { case ok, reason }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: Keys.self)
+        if try container.decode(Bool.self, forKey: .ok) {
+            self = .ok
+        } else {
+            // A page older or newer than the app may send a reason this one does not know
+            let reason = try? container.decodeIfPresent(String.self, forKey: .reason)
+            self = .failed(reason.flatMap(SyncFailureReason.init(rawValue:)) ?? .other)
+        }
+    }
+}
+
+// What Swift reads of a message the page posts: the event name only. A
+// sync-event's payload carries loot-core's error meta, which can hold a server
+// address, a stack or SQL, so it is never read (sc-3884).
+public enum NativeBridgeEvent {
+    public static func name(of body: Any) -> String? {
+        (body as? [String: Any])?["event"] as? String
+    }
 }
 
 public enum NativeBridgeError: Error, Equatable {
@@ -128,12 +166,19 @@ public struct NativeBridgeClient {
     // A call into a suspended WebContent process hangs until the app is in
     // the foreground again (sc-3584 findings), so every call has a deadline.
     public static let defaultTimeout: TimeInterval = 5
+    // A sync can take longer than a read (sc-3884)
+    public static let defaultSyncTimeout: TimeInterval = 30
 
     private let transport: Transport
     private let timeout: TimeInterval
+    private let syncTimeout: TimeInterval
 
-    public init(timeout: TimeInterval = NativeBridgeClient.defaultTimeout, transport: @escaping Transport) {
+    public init(
+        timeout: TimeInterval = NativeBridgeClient.defaultTimeout, syncTimeout: TimeInterval = NativeBridgeClient.defaultSyncTimeout,
+        transport: @escaping Transport
+    ) {
         self.timeout = timeout
+        self.syncTimeout = syncTimeout
         self.transport = transport
     }
 
@@ -143,7 +188,7 @@ public struct NativeBridgeClient {
 
     // Arguments are any JSON value, so a number crosses as a number
     public func call<Args: Encodable>(_ name: String, args: Args) async throws -> Data {
-        guard NativeBridgeAllowlist.handlers.contains(name) else {
+        guard NativeBridgeAllowlist.handlers.contains(name), !NativeBridgeAllowlist.sync.contains(name) else {
             throw NativeBridgeError.notAllowlisted(name)
         }
         // Each write name takes only its own typed value
@@ -154,7 +199,19 @@ public struct NativeBridgeClient {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
         let argsJSON = String(decoding: try encoder.encode(args), as: UTF8.self)
-        return Data(try await withTimeout(name) { try await transport(name, argsJSON) }.utf8)
+        return Data(try await withTimeout(name, timeout) { try await transport(name, argsJSON) }.utf8)
+    }
+
+    // loot-core's server sync, with no arguments and its own deadline. The
+    // deadline only ends the wait; `settled` runs when the page call itself
+    // returns or fails, which can be later, since a script call into a
+    // suspended page ignores cancellation (sc-3884).
+    public func sync(settled: @escaping () -> Void = {}) async throws -> SyncResult {
+        let json = try await withTimeout("sync", syncTimeout, settled: settled) { try await transport("sync", "{}") }
+        guard let result = try? JSONDecoder().decode(SyncResult.self, from: Data(json.utf8)) else {
+            throw NativeBridgeError.badResult
+        }
+        return result
     }
 
     public func setBudgetAmount(_ write: BudgetAmountWrite) async throws {
@@ -171,12 +228,15 @@ public struct NativeBridgeClient {
 
     // Not a task group: a group waits for every child, and a WebKit script call
     // into a suspended page ignores cancellation, so the deadline would never fire.
-    private func withTimeout(_ name: String, _ work: @escaping () async throws -> String) async throws -> String {
+    private func withTimeout(
+        _ name: String, _ timeout: TimeInterval, settled: (() -> Void)? = nil, _ work: @escaping () async throws -> String
+    ) async throws -> String {
         let once = ResumeOnce<String>()
         return try await withCheckedThrowingContinuation { continuation in
             once.continuation = continuation
             let task = Task {
                 do { once.resume(.success(try await work())) } catch { once.resume(.failure(error)) }
+                settled?()
             }
             let nanoseconds = UInt64(timeout * 1_000_000_000)
             Task {

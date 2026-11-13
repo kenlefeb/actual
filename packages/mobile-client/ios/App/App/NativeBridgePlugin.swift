@@ -33,7 +33,7 @@ public class NativeBridgePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
         // Only the app's own page: sign-in pages load in this web view too
         let origin = message.frameInfo.securityOrigin
         guard PageOriginGuard.accepts(isMainFrame: message.frameInfo.isMainFrame, scheme: origin.protocol, host: origin.host, port: origin.port, serverURL: bridge?.config.serverURL),
-              let body = message.body as? [String: Any], let event = body["event"] as? String else { return }
+              let event = NativeBridgeEvent.name(of: message.body) else { return }
         onEvent?(event)
         coalescer.notify()
     }

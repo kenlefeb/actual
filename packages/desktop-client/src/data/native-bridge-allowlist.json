@@ -3,5 +3,6 @@
   "query",
   "budget/budget-amount",
   "budget/transfer-category",
-  "budget/transfer-available"
+  "budget/transfer-available",
+  "sync"
 ]

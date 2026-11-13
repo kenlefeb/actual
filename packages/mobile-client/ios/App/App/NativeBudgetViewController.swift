@@ -63,6 +63,8 @@ struct BudgetTabView: View {
     var body: some View {
         NavigationView {
             content
+                // Pull to refresh (sc-3884): the spinner shows until the sync and the re-read end
+                .refreshable { await model.refresh() }
                 .navigationBarTitle(Text(monthTitle), displayMode: .large)
                 .toolbar { monthControls }
                 .toolbar { moveControl }
@@ -73,6 +75,9 @@ struct BudgetTabView: View {
         }
         .navigationViewStyle(.stack)
         .task { await model.load() }
+        .onChange(of: model.refreshError) { error in
+            if let error { UIAccessibility.post(notification: .announcement, argument: error.message) }
+        }
         .sheet(item: $editing) { category in
             if case .loaded(let month) = model.state {
                 EditBudgetedSheet(model: model, month: editingMonth, category: category, style: month.amountStyle)
@@ -91,15 +96,34 @@ struct BudgetTabView: View {
         case .loaded(let month):
             BudgetMonthList(month: month, onEdit: { (editingMonth, editing) = (month.month, $0) })
         case .stale(let month, let error):
-            // The last good numbers, dimmed, with the reason and a retry; not editable
+            // The last good numbers, dimmed, with the reason and a retry; not editable.
+            // After a failed pull, the pull's fixed message, and the retry pulls again.
             VStack(spacing: 0) {
-                errorMessage(error).padding().background(Color(.secondarySystemGroupedBackground))
+                Group {
+                    if let refreshError = model.refreshError { refreshMessage(refreshError) } else { errorMessage(error) }
+                }
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(Color(.secondarySystemGroupedBackground))
                 BudgetMonthList(month: month).opacity(0.5)
             }
         case .failed(let error):
             errorMessage(error)
                 .padding()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private func refreshMessage(_ error: BudgetRefreshError) -> some View {
+        VStack(spacing: 12) {
+            Text(verbatim: error.message).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+            // A timed-out sync is still running and updates the screen itself
+            if error != .timedOut {
+                Button(NSLocalizedString("Retry", comment: "Native Budget tab: try loading again")) {
+                    Task { await model.refresh() }
+                }
+                .buttonStyle(.borderedProminent)
+            }
         }
     }
 

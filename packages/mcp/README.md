@@ -39,6 +39,7 @@ Fork read tools (all take ids, never names):
 | `get_account_budget_status`     | Business calendar, days early, budget start date and offset line                                                                                       |
 | `list_moved_history`            | A moved account's transactions before its start date, and offset line                                                                                  |
 | `preview_move_on_budget`        | What moving an account on budget would change (transfers paged), and its `confirm` for the whole preview                                               |
+| `list_transaction_attachments`  | A transaction's attached documents: name, type, size and created time; never the content                                                               |
 
 ## Write tools
 

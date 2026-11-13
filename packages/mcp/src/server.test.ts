@@ -55,6 +55,7 @@ describe('server surface', () => {
       'list_payees',
       'list_rules',
       'list_schedules',
+      'list_transaction_attachments',
       'list_transactions',
       'preview_move_on_budget',
       'run_query',

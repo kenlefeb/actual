@@ -38,7 +38,7 @@ function splitIds(ids: Record<string, unknown>) {
 }
 
 /** A record with its id fields; a `text` group only when one is not plain. */
-function withIds(
+export function withIds(
   record: Record<string, unknown>,
   ids: Record<string, unknown>,
   text: Record<string, unknown> = {},

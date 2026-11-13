@@ -10,6 +10,7 @@ import { actingUserId } from './connection';
 import { Refusal } from './refusal';
 import { DATA_NOTE, scrubSecrets } from './sanitize';
 import { registerAccountTools } from './tools/read/accounts';
+import { registerAttachmentTools } from './tools/read/attachments';
 import { registerCalendarTools } from './tools/read/calendars';
 import { registerCoreTools } from './tools/read/core';
 import { registerPaycheckTools } from './tools/read/paychecks';
@@ -97,6 +98,7 @@ export function createServer(
   registerPaycheckTools(tool);
   registerCalendarTools(tool);
   registerAccountTools(tool);
+  registerAttachmentTools(tool);
   registerExtra?.(tool);
 
   // Write tools: the stdio `--writes` entry and the hosted entry (tools/write/*)

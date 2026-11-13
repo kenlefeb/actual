@@ -30,6 +30,13 @@ export const attachmentServer = {
     live: string[];
   }>,
   reportStatus: null as number | null,
+  // Runs when /attachment-records is asked, before it answers
+  onRecords: null as (() => unknown) | null,
+  // Answers /attachment-records with this page instead of the ids
+  // (nth request from now, 1-based)
+  recordsPage: null as
+    | ((n: number) => { ids: string[]; after: unknown })
+    | null,
 
   reset() {
     this.blobs.clear();
@@ -48,6 +55,8 @@ export const attachmentServer = {
     this.recordsRequests = [];
     this.reports = [];
     this.reportStatus = null;
+    this.onRecords = null;
+    this.recordsPage = null;
   },
 
   async fetch(url: string, init: RequestInit = {}): Promise<Response> {
@@ -104,8 +113,17 @@ export const attachmentServer = {
           after,
           fileId: headers.get('x-actual-file-id') ?? '',
         });
+        await attachmentServer.onRecords?.();
         if (attachmentServer.recordsStatus) {
           return new Response('no', { status: attachmentServer.recordsStatus });
+        }
+        if (attachmentServer.recordsPage) {
+          return Response.json({
+            status: 'ok',
+            data: attachmentServer.recordsPage(
+              attachmentServer.recordsRequests.length,
+            ),
+          });
         }
         const page = [...attachmentServer.records]
           .sort()

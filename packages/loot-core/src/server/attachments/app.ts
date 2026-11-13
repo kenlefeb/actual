@@ -547,6 +547,8 @@ async function removeAttachment({ id }: { id: string }) {
 // the device tells it which documents are removed, and which recorded ones are
 // live again, so it can delete the orphaned ones after a retention period.
 const REPORT_BATCH = 1000;
+// 100 pages is 100,000 recorded ids, far beyond what waits for cleanup
+const MAX_RECORD_PAGES = 100;
 
 // Budgets that need a report: one is queued by an attachment change and by a
 // failed report, and a budget's first sync of the session adds it too
@@ -557,8 +559,9 @@ const seenThisSession = new Set<string>();
 // (an older server answers 404)
 async function fetchRecordedIds(remote: Remote): Promise<Set<string> | null> {
   const recorded = new Set<string>();
+  const seen = new Set<string>();
   let after: string | null = null;
-  do {
+  for (let page = 0; page < MAX_RECORD_PAGES; page++) {
     const res: Response = await fetch(
       `${remote.syncServer}/attachment-records${
         after == null ? '' : `?after=${encodeURIComponent(after)}`
@@ -574,7 +577,7 @@ async function fetchRecordedIds(remote: Remote): Promise<Set<string> | null> {
       return null;
     }
     const body = (await res.json()) as {
-      data?: { ids?: string[]; after?: string | null };
+      data?: { ids?: string[]; after?: unknown };
     };
     const page = body.data;
     if (!page || !Array.isArray(page.ids)) {
@@ -583,10 +586,19 @@ async function fetchRecordedIds(remote: Remote): Promise<Set<string> | null> {
     for (const id of page.ids) {
       recorded.add(id);
     }
-    // A cursor that doesn't move would page forever
-    after = page.after && page.after !== after ? page.after : null;
-  } while (after != null);
-  return recorded;
+    const next = page.after;
+    if (next == null) {
+      return recorded;
+    }
+    // A cursor that isn't a string, or comes back, would page forever
+    if (typeof next !== 'string' || next === '' || seen.has(next)) {
+      return null;
+    }
+    seen.add(next);
+    after = next;
+  }
+  // Too many pages: report nothing rather than page without end
+  return null;
 }
 
 async function postReport(remote: Remote, removed: string[], live: string[]) {
@@ -624,6 +636,11 @@ async function reportAttachments(remote: Remote): Promise<boolean> {
     const rows = await db.all<{ id: string; tombstone: number }>(
       'SELECT id, tombstone FROM transaction_attachments',
     );
+    // The user may have switched budgets while we waited: these rows would
+    // belong to another budget
+    if (prefs.getPrefs()?.cloudFileId !== remote.fileId) {
+      return false;
+    }
     const live = rows.filter(r => !r.tombstone && recorded.has(r.id));
     const removed = rows.filter(r => r.tombstone && !recorded.has(r.id));
     return await postReport(

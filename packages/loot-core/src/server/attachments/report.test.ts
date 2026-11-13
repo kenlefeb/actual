@@ -204,4 +204,49 @@ describe('reporting removed attachments', () => {
 
     await expect(onSyncEvent(success)).resolves.toBeUndefined();
   });
+  it('sends nothing when the budget changed while it waited for the records', async () => {
+    await addRow('gone', 1);
+    attachmentServer.onRecords = () =>
+      prefs.savePrefs({ cloudFileId: 'another-budget' });
+
+    await onSyncEvent(success);
+
+    expect(attachmentServer.reports).toEqual([]);
+  });
+
+  it.each([
+    ['a repeated cursor', () => ({ ids: [], after: 'a' })],
+    [
+      'a cursor that goes back',
+      (n: number) => ({ ids: [], after: n % 2 ? 'a' : 'b' }),
+    ],
+    ['a numeric cursor', () => ({ ids: [], after: 5 })],
+    ['an empty cursor', () => ({ ids: [], after: '' })],
+  ])('sends nothing and stops paging for %s', async (_name, recordsPage) => {
+    await addRow('gone', 1);
+    attachmentServer.recordsPage = recordsPage;
+
+    await onSyncEvent(success);
+
+    expect(attachmentServer.reports).toEqual([]);
+    expect(attachmentServer.recordsRequests.length).toBeLessThanOrEqual(3);
+  });
+
+  it('stops after 100 pages and sends nothing', async () => {
+    await addRow('gone', 1);
+    attachmentServer.recordsPage = n => ({ ids: [], after: `c${n}` });
+
+    await onSyncEvent(success);
+
+    expect(attachmentServer.recordsRequests).toHaveLength(100);
+    expect(attachmentServer.reports).toEqual([]);
+  });
+
+  it('a failing upload listener never rejects', async () => {
+    cloudStorage.onUpload(() => {
+      throw new Error('boom');
+    });
+
+    await expect(cloudStorage.notifyUploaded()).resolves.toBeUndefined();
+  });
 });

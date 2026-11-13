@@ -305,7 +305,8 @@ export function onUpload(listener: () => unknown) {
 }
 
 export async function notifyUploaded() {
-  await Promise.all(uploadListeners.map(listener => listener()));
+  // One failing listener must not reject (the caller doesn't await this)
+  await Promise.allSettled(uploadListeners.map(async listener => listener()));
 }
 
 export async function upload() {

@@ -39,10 +39,10 @@ The native Budget tab SHALL offer previous month, next month and a month picker.
 
 #### Scenario: Month outside the range
 - **GIVEN** the native Budget tab showing the budget's first month
-- **WHEN** the user steps to an earlier month
-- **THEN** the screen stays on the first month and shows its numbers, and from then on previous month is unavailable and the picker offers no earlier month
+- **WHEN** the tab has loaded
+- **THEN** previous month is unavailable and the picker offers no earlier month, with no tap needed to learn it
 
-Until `native/budget-month` reports the range, the edge is learned from loot-core's own "no budget for month" answer (a refused step makes one read), so previous and next can look available at the edge until the first refused step. Navigation never shows a month outside the range.
+The range comes from `native/budget-month` (`firstMonth` and `lastMonth`, change `native-budget-month-range`, sc-3850); navigation never shows a month outside it.
 
 #### Scenario: Leaving and returning
 - **GIVEN** the native Budget tab showing a month other than the current one

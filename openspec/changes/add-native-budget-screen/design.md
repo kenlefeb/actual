@@ -49,7 +49,7 @@ The allowlist adds `budget/budget-amount`, `budget/transfer-category` and `budge
 
 ### 5. Month range
 
-The snapshot does not list months. Navigation limits come from the same loot-core budget bounds the web screen uses. Slice sc-3760 first checks whether a cell or `query` gives them and, if not, treats the "no budget for month" error from `native/budget-month` as the edge. See Open Questions.
+The snapshot does not list months. Navigation limits come from the same loot-core budget bounds the web screen uses. Slice sc-3760 first checks whether a cell or `query` gives them and, if not, treated the "no budget for month" error from `native/budget-month` as the edge. Superseded by sc-3850 (change `native-budget-month-range`): the handler reports the range. See Open Questions.
 
 ### 6. Re-reads
 
@@ -74,5 +74,5 @@ No data migration. Ship behind the default-off switch; Ken turns it on in Settin
 
 ## Open Questions
 
-- Month range source (Decision 5): sc-3760 found no safe handler-free source (`get-budget-bounds` creates budgets; `createdMonths` is not queryable; deriving it with `query` would copy `getBudgetRange` into Swift). It ships with the learned edge (see the spec scenario) and a Backlog story asks for a small additive `firstMonth`/`lastMonth` on `native/budget-month`, a `native-bridge` spec change that would make the edge known at load.
+- Month range source (Decision 5): sc-3760 found no safe handler-free source (`get-budget-bounds` creates budgets; `createdMonths` is not queryable; deriving it with `query` would copy `getBudgetRange` into Swift). It shipped with a learned edge, and sc-3850 (change `native-budget-month-range`) replaces that with a small additive `firstMonth`/`lastMonth` on `native/budget-month`, so the edge is known at load.
 - Whether the Move money sheet should offer "cover overbudgeted" beyond a plain move. Out of scope here; revisit after sc-3787.

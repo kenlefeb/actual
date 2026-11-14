@@ -7,7 +7,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-function fixPermissions(dir) {
+function fixPermissions(dir, fixed = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (entry.isSymbolicLink()) continue; // chmod would follow it out of the app
     const file = path.join(dir, entry.name);
@@ -15,9 +15,13 @@ function fixPermissions(dir) {
     // a+r, plus a+x for directories and files already executable by the owner.
     const wanted =
       mode | 0o444 | (entry.isDirectory() || mode & 0o100 ? 0o111 : 0);
-    if (wanted !== mode) fs.chmodSync(file, wanted);
-    if (entry.isDirectory()) fixPermissions(file);
+    if (wanted !== mode) {
+      fs.chmodSync(file, wanted);
+      fixed.push(file);
+    }
+    if (entry.isDirectory()) fixPermissions(file, fixed);
   }
+  return fixed;
 }
 
 module.exports = async function afterPack(context) {
@@ -26,6 +30,8 @@ module.exports = async function afterPack(context) {
     context.appOutDir,
     `${context.packager.appInfo.productFilename}.app`,
   );
-  fixPermissions(app);
+  const fixed = fixPermissions(app);
+  console.info(`mas-fix-permissions: fixed ${fixed.length} entries in ${app}`);
+  for (const file of fixed.slice(0, 20)) console.info(`  ${file}`);
 };
 module.exports.fixPermissions = fixPermissions;

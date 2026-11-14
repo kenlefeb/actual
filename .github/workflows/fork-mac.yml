@@ -164,6 +164,20 @@ jobs:
           test -n "$PKG"
           pkgutil --check-signature "$PKG" | tee "$RUNNER_TEMP/pkg-signature.txt"
           grep -q '3rd Party Mac Developer Installer' "$RUNNER_TEMP/pkg-signature.txt"
+          # Fail here, with the offending files, instead of at App Store Connect
+          # (error 90255: files only readable by root).
+          EXPANDED="$RUNNER_TEMP/pkg-expanded"
+          rm -rf "$EXPANDED"
+          pkgutil --expand-full "$PKG" "$EXPANDED"
+          find "$EXPANDED" ! -type l ! -perm -o=r -print | tee "$RUNNER_TEMP/unreadable.txt"
+          for BOM in $(find "$EXPANDED" -name Bom); do
+            echo "Bom: $BOM"
+            lsbom -p MUGf "$BOM" | awk -F'\t' 'substr($1, 1, 1) != "l" && substr($1, 8, 1) != "r"' | tee -a "$RUNNER_TEMP/unreadable.txt"
+          done
+          if [ -s "$RUNNER_TEMP/unreadable.txt" ]; then
+            echo "::error::The package has files that non-root users can't read"
+            exit 1
+          fi
           {
             echo "build=$(plist CFBundleVersion)"
             echo "pkg=$PKG"

@@ -111,7 +111,7 @@ The assistant's BASIC user SHALL be a dedicated account in the Auth0 tenant, not
 - **THEN** none sends a link or code to Ken's mailbox
 
 ### Requirement: Ken's ADMIN identity is as protected as the assistant's
-Ken's account in the same tenant SHALL meet the same two-factor and recovery rules, because the first OpenID sign-in on household `ken`'s server becomes ADMIN. Ken's ADMIN credentials, recovery codes and second factor SHALL NOT be stored in "Ken & Agents" or in any other vault an agent can read.
+Ken's account in the same tenant SHALL meet the same two-factor and recovery rules, because the first OpenID sign-in on household `ken`'s server becomes ADMIN. Ken's ADMIN credentials, recovery codes and second factor SHALL NOT be stored in the "Actual Agents" 1Password Environment or in any other vault an agent can read.
 
 #### Scenario: Ken's credentials are not in an agent-readable vault
 - **WHEN** every vault an agent can read is searched for Ken's ADMIN credentials, recovery codes and second factor
@@ -126,10 +126,10 @@ The assistant's user SHALL have access (an owner or `user_access` row) to exactl
 - **THEN** the list omits it and the sync is refused
 
 ### Requirement: One rule for where the credential lives
-The assistant's production credential SHALL have one record and one deployed copy: a 1Password item in a vault named "Ken Assistant" that only Ken's interactive 1Password reads (no service account, no CLI integration, no copy on the Mac's disk or in a keychain), and a root-owned mode 0400 file on the production host mounted into the hosted connector's container. The "Ken & Agents" vault SHALL hold staging credentials only, and no production credential of the assistant or of an ADMIN.
+The assistant's production credential SHALL have one record and one deployed copy: a 1Password item in a vault named "Ken Assistant" that only Ken's interactive 1Password reads (no service account, no CLI integration, no copy on the Mac's disk or in a keychain), and a root-owned mode 0400 file on the production host mounted into the hosted connector's container. The "Actual Agents" Environment SHALL hold staging credentials only, and no production credential of the assistant or of an ADMIN.
 
 #### Scenario: Agents cannot read the production credential
-- **WHEN** a development agent session lists "Ken & Agents" and its own environment
+- **WHEN** a development agent session lists the "Actual Agents" Environment and its own environment
 - **THEN** neither holds a production session token, encryption key, or admin credential
 
 #### Scenario: The host copy is the only deployed one

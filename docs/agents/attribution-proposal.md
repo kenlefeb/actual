@@ -100,7 +100,8 @@ This covers goal 3 on GitHub, where it matters most.
 Ken registers one GitHub App per role (`kenlefeb-actual-developer`,
 `kenlefeb-actual-tester`, …) and installs each one on `kenlefeb/actual` and
 `kenlefeb/actual-hosting` with only the permissions that role needs. Each App's
-private key is stored in the 1Password "Ken & Agents" vault.
+private key would be stored in a 1Password Environment (or a Private-vault item Ken
+opens), never in a vault agents can read.
 
 An agent mints a one-hour installation token for its role's App and uses it as
 `GH_TOKEN` for `gh` and as the push credential. Its PRs, comments and reviews
@@ -130,8 +131,8 @@ What it costs:
   GitHub account.) The Checklist Reviewer reviews that checklist first.
 - A small helper script that mints a token from the App key. It's new code on
   the secrets path, so the Security Analyst reviews it.
-- Every App key sits in "Ken & Agents", which every agent can read, so any
-  agent could mint another role's token. Role separation on GitHub is only as
+- Every App key would sit in one 1Password Environment that every agent can
+  read, so any agent could mint another role's token. Role separation on GitHub is only as
   strong as that; the pilot should look at limiting which key a session can
   fetch.
 - Sessions of the same role still share an App. The `Agent-Session` trailer and

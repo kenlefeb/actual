@@ -145,10 +145,10 @@ sync (including the one at startup and `sync_budget`) pulls the server's changes
 schedules, reconciles no paychecks and uploads nothing, so nothing is sent to the server. The
 `--writes` entry runs the engine as the app does.
 
-Set these variables only in the `op run` env file. Never export them in a shell profile.
+Set these variables only in the mounted env file. Never export them in a shell profile.
 
-Credentials come from the "Ken & Agents" 1Password vault, passed in at launch by `op run` (or the
-service-account helper). Don't write them into `.mcp.json` or `~/.claude.json`.
+Credentials come from the 1Password Environment "Actual Agents", mounted as a local `.env` file at
+`~/.config/actual-agents/.env` and loaded at launch with `node --env-file` (or a launcher that reads it). Don't write them into `.mcp.json` or `~/.claude.json`.
 
 ## Hosted entry (`actual-mcp-http`)
 
@@ -211,19 +211,16 @@ administrator or it cannot be validated. A loopback server needs a loopback list
 
 ## Claude Code / Claude Desktop
 
-Build once with `yarn build:mcp`, then register a command that wraps the server in `op run` with an
-env file holding `op://` references (the file contains references, not secrets):
+Build once with `yarn build:mcp`, then register a command that loads the mounted env file (a
+1Password Environment, so no secret sits on disk):
 
 ```json
 {
   "mcpServers": {
     "actual-staging": {
-      "command": "op",
+      "command": "node",
       "args": [
-        "run",
-        "--env-file=/path/to/actual-mcp-staging.env",
-        "--",
-        "node",
+        "--env-file=/path/to/actual-agents/.env",
         "/path/to/actual/packages/mcp/dist/mcp.js"
       ]
     }

@@ -126,7 +126,9 @@ jobs:
           echo "KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
 
       # The upstream script sets the build number (CFBundleVersion) to a UTC
-      # timestamp, the same scheme as fork-ios.yml. The name changes through
+      # timestamp, the same scheme as fork-ios.yml. The afterPack hook makes
+      # every file in the app readable by non-root users before signing (App
+      # Store Connect error 90255). The name changes through
       # productName, not extendInfo: Electron finds its helper apps by
       # CFBundleName. That moves Electron's user-data folder, which is safe here
       # because this bundle id's sandbox container starts empty.
@@ -138,7 +140,8 @@ jobs:
           yarn workspace desktop-electron build:mas \
             "--config.appId=$BUNDLE_ID" \
             "--config.mac.bundleShortVersion=$MARKETING_VERSION" \
-            "--config.productName=$DISPLAY_NAME"
+            "--config.productName=$DISPLAY_NAME" \
+            "--config.afterPack=$GITHUB_WORKSPACE/fork/scripts/mas-fix-permissions.cjs"
 
       - name: Check the package
         id: package

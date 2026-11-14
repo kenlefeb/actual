@@ -6,7 +6,7 @@ import { test } from 'node:test';
 
 import afterPack from './mas-fix-permissions.cjs';
 
-test('makes root-only files readable and keeps execute bits and symlinks', async () => {
+void test('makes root-only files readable and keeps execute bits and symlinks', async () => {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'mas-perm-'));
   const app = path.join(out, 'Home Economics.app');
   const dir = path.join(app, 'Contents/Resources/node_modules/x');

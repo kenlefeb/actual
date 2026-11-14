@@ -14,13 +14,13 @@ This server ships with Ken's Actual fork and is released with the same version n
 
 - Node.js v22 or higher.
 - A running sync server you can reach, and your budget's Sync ID.
-- The [1Password CLI](https://developer.1password.com/docs/cli/) (`op`), signed in.
+- A [1Password Environment](https://www.1password.dev/environments/) holding the variables below, mounted as a local `.env` file (1Password calls this a local .env file).
 
 ## Keep Credentials in 1Password
 
 The server needs your sync server password, and sometimes an end-to-end encryption password. Treat both as secrets:
 
-- Credentials come from the "Ken & Agents" 1Password vault and the `op run` env file only.
+- Credentials come from a 1Password Environment (for Ken's agents, "Actual Agents") mounted as a local `.env` file, and only from there.
 - Never export them in a shell profile (such as `~/.zshrc`), and never write them into `.mcp.json` or `~/.claude.json`.
 - Never pass them as command-line arguments. The server refuses any argument it does not recognize.
 
@@ -34,14 +34,14 @@ yarn build:mcp
 
 This creates `packages/mcp/dist/mcp.js`.
 
-## Create the Env File
+## Mount the Env File
 
-Create a file outside the repository, for example `actual-mcp-staging.env`. It holds `op://` references, not the secrets themselves, so replace each placeholder with the path of the matching item in the "Ken & Agents" vault:
+In 1Password, create an Environment with these variables and mount it as a local `.env` file outside the repository, for example `~/.config/actual-agents/.env`. 1Password serves the file only while it is unlocked, and asks you to approve the first read. The file never holds secrets on disk, and you never copy them into the repository:
 
 ```bash
-ACTUAL_SERVER_URL=op://Ken & Agents/<item>/url
-ACTUAL_PASSWORD=op://Ken & Agents/<item>/password
-ACTUAL_SYNC_ID=op://Ken & Agents/<item>/sync id
+ACTUAL_SERVER_URL=<url>
+ACTUAL_PASSWORD=<password>
+ACTUAL_SYNC_ID=<sync id>
 ```
 
 | Variable                      | Required | Description                                                          |
@@ -57,18 +57,15 @@ The server refuses a data folder that is under Dropbox, iCloud, Obsidian, `~/Doc
 
 ## Register the Server with Your Assistant
 
-Add the server to your assistant's MCP settings, wrapping it in `op run` so 1Password supplies the variables only for that process:
+Add the server to your assistant's MCP settings, loading the mounted env file with Node's `--env-file` option, so the variables exist only in that process:
 
 ```json
 {
   "mcpServers": {
     "actual-staging": {
-      "command": "op",
+      "command": "node",
       "args": [
-        "run",
-        "--env-file=/path/to/actual-mcp-staging.env",
-        "--",
-        "node",
+        "--env-file=/path/to/actual-agents/.env",
         "/path/to/actual/packages/mcp/dist/mcp.js"
       ]
     }
@@ -84,12 +81,9 @@ To let the assistant change your budget, add a second, separate entry that runs 
 
 ```json
 "actual-staging-writes": {
-  "command": "op",
+  "command": "node",
   "args": [
-    "run",
-    "--env-file=/path/to/actual-mcp-staging.env",
-    "--",
-    "node",
+    "--env-file=/path/to/actual-agents/.env",
     "/path/to/actual/packages/mcp/dist/mcp.js",
     "--writes"
   ]

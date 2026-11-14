@@ -20,7 +20,7 @@ Test-first: in each group, write the tests, run them and see them fail before wr
 
 ## 4. Staging verification (sc-2970)
 
-- [ ] 4.1 On staging, with the staging test users from "Ken & Agents": sign out on desktop web, Electron, phone width and the mobile app; each returns to Actual's sign-in page with no Auth0 confirmation page, and the next sign-in asks for credentials. Verify: the Tester records the result on sc-2970.
+- [ ] 4.1 On staging, with the staging test users from the "Actual Agents" 1Password Environment: sign out on desktop web, Electron, phone width and the mobile app; each returns to Actual's sign-in page with no Auth0 confirmation page, and the next sign-in asks for credentials. Verify: the Tester records the result on sc-2970.
 - [ ] 4.2 On staging, sign out with a session created before the deploy (confirmation page as before, then the sign-in page) and with a session older than its ID token's `exp` (design, Risks). Verify: the Tester records both results on sc-2970; if Auth0 rejects the expired hint, file a follow-up story in epic 1550 and link it here.
 
 ## 5. Release note (sc-2970)

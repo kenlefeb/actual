@@ -8,8 +8,8 @@
 # build.yml dispatches it for every pin (sc-4125), passing revision and
 # buildVersion, then reads the "ios-build" artifact for its provenance record.
 #
-# Repository secrets, from the 1Password item
-# "Apple App Store Connect API - Home Economics Agents" in "Ken & Agents":
+# Repository secrets, copied once by Ken from the 1Password Environment
+# "Actual Agents" (the ASC_* variables below):
 #
 # - ASC_KEY_ID: the App Store Connect API key's Key ID.
 # - ASC_ISSUER_ID: the Issuer ID shown above the Team Keys list.

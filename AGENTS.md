@@ -653,11 +653,14 @@ generated `news.json`.
 Before the version-bump PR (Ken, 2026-11-11), check new beta feedback for the
 iOS app "Home Economics Budget" (`app.homeeconomics.budget`):
 
-1. Run `op run --env-file <file> -- node fork/scripts/testflight-feedback.mjs`,
-   where the file maps `ASC_KEY_ID`, `ASC_ISSUER_ID` and `ASC_KEY_P8` to
-   `op://` references for the "Ken & Agents" item "Apple App Store Connect API -
-   Home Economics Agents" (fields "Key ID", "Issuer ID", "credential"). It lists
-   feedback since the last release; `--since YYYY-MM-DD` overrides that.
+1. Run `node --env-file="$HOME/.config/actual-agents/.env"
+   fork/scripts/testflight-feedback.mjs`. That file is the 1Password
+   Environment "Actual Agents", mounted locally (the first read shows Ken a
+   1Password Authorize prompt); it supplies `ASC_KEY_ID`, `ASC_ISSUER_ID` and
+   `ASC_KEY_P8`. Node's own dotenv parser reads it, so a multi-line or escaped
+   `ASC_KEY_P8` works (the script normalizes the PEM); don't `source` it in a
+   shell, and never print it. The script lists feedback since the last release;
+   `--since YYYY-MM-DD` overrides that.
 2. Triage each item. **Severe** (a crash, data loss, or can't sign in or sync):
    pause the release and tell Ken. **Everything else**: after searching for a
    duplicate, file a Backlog story (bug or feature, epic #470, label `mobile`,

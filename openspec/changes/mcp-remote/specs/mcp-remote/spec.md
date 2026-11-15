@@ -3,7 +3,7 @@
 ## ADDED Requirements
 
 ### Requirement: A separate read-write hosted entry
-The hosted server SHALL be its own entry, apart from the stdio entry, that serves the same tools as the stdio `--writes` entry over stateless streamable HTTP. It SHALL listen only on its configured address (loopback by default), and the stdio entry SHALL stay unchanged and listener-free.
+The hosted server SHALL be its own entry, apart from the stdio entry, that serves the same tools as the stdio `--writes` entry over stateless streamable HTTP; the connection's grant decides which calls succeed (`mcp-server`). It SHALL listen only on its configured address (loopback by default), and the stdio entry SHALL stay unchanged and listener-free.
 
 #### Scenario: The stdio entry still opens no listener
 - **WHEN** the `actual-mcp` stdio entry is running

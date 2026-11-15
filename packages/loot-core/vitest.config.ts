@@ -11,6 +11,8 @@ export default defineConfig({
       'src/platform/server/fs/index.test.ts',
       'src/server/amazon-orders/app.web.test.ts',
       'node_modules',
+      // Timing gates need a quiet CPU: run them serially with `yarn workspace @actual-app/core run perf`.
+      ...(process.env.PERF ? [] : ['src/**/*.perf.test.ts']),
     ],
     onConsoleLog(log: string, type: 'stdout' | 'stderr'): boolean | void {
       // print only console.error

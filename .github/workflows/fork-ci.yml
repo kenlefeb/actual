@@ -37,6 +37,8 @@ jobs:
         run: yarn lint
       - name: Test
         run: yarn test
+      - name: Native perf gates
+        run: yarn workspace @actual-app/core run perf
 
   # Links between OpenSpec changes and Shortcut stories
   # (docs/agents/issue-tracker.md). Needs only Node, so it skips the setup.

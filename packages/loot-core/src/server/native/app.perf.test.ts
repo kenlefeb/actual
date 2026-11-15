@@ -1,3 +1,4 @@
+// Run: yarn workspace @actual-app/core run perf (excluded from `yarn test`).
 // Fork-only (sc-3823). Times the `native/budget-month` handler on a 300-category
 // month (plus one income category), the load behind the native Budget tab (ADR 11 gate: one round trip under
 // 50 ms). This is the loot-core half only: no WKWebView hop, no Swift decode.

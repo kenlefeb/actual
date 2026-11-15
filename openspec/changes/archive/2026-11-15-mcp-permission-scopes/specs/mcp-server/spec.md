@@ -40,7 +40,7 @@ A call refused by scope SHALL append one `refused` line to the entry's audit log
 - **THEN** the audit log gains a line with `phase` `refused`, the tool name and `missing` `["transactions:write"]`, and no transaction id
 
 ### Requirement: Stdio grants come from the environment
-The stdio entry without `--writes` SHALL always grant `budget:read` only and ignore the writes variables. The entry with `--writes` SHALL take its scopes from `ACTUAL_MCP_WRITES_SCOPES` (space-separated), granting every scope when it is unset, and SHALL stop at start with fixed text for an unknown scope.
+The stdio entry without `--writes` SHALL always grant `budget:read` only and ignore the writes variables. The entry with `--writes` SHALL take its scopes from `ACTUAL_MCP_WRITES_SCOPES` (space-separated), granting every scope when it is unset. It SHALL stop at start with fixed text for an unknown scope, and for a set but empty value, which never counts as unset.
 
 #### Scenario: Today's writes entry keeps its tools
 - **WHEN** the stdio entry starts with `--writes` and no `ACTUAL_MCP_WRITES_SCOPES`
@@ -58,6 +58,10 @@ The stdio entry without `--writes` SHALL always grant `budget:read` only and ign
 #### Scenario: An unknown scope on the writes entry
 - **WHEN** the stdio entry starts with `--writes` and `ACTUAL_MCP_WRITES_SCOPES="budget:read transactions:everything"`
 - **THEN** it exits with a fixed error and opens no budget
+
+#### Scenario: An empty scope list on the writes entry
+- **WHEN** the stdio entry starts with `--writes` and `ACTUAL_MCP_WRITES_SCOPES=""`
+- **THEN** it exits with a fixed error and opens no budget, rather than granting every scope
 
 ### Requirement: Hosted grants come from a grants file
 The hosted entry SHALL read grants from the file named by `ACTUAL_MCP_GRANTS_FILE`. Each grant names an OAuth subject, a client id or `*`, its scopes and optional `confirm_destructive` and `max_rows`. The file SHALL be checked on every call, so a change applies on the next call without a restart. An exact client id SHALL take precedence over `*`; a connection with no matching grant SHALL have no scopes.

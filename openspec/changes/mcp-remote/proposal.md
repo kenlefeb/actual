@@ -29,3 +29,5 @@ Non-goals: any write tool, per-client access with its own limits, changing the s
 ### Modified Capabilities
 
 - `mcp-server`: "Local stdio only" is scoped to the stdio entry (the requirement lives in the open `fork-mcp-server` change and is edited there).
+
+**Folded in on 2026-11-15:** `mcp-remote-read-write` (sc-2486) made the hosted entry read-write and was archived before this change. Its `mcp-remote` delta now lives in this change's spec: "A separate read-write hosted entry" and "Production under an identity guard" replace "A separate hosted entry" and "Production only under an explicit guard", and "Hosted means read-only, in code" is gone.

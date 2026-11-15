@@ -154,7 +154,7 @@ The assistant's connector SHALL sign in to production with a session token that 
 - **THEN** the staging rehearsal's record shows a headless BASIC sign-in with a minted token and a refused password login
 
 ### Requirement: The assistant reaches production only through the hosted connector
-The assistant SHALL read production only through the hosted connector (the production slice of `mcp-remote`), read-only by default. The local `actual-production` entry SHALL be removed from Claude Desktop, and no production credential SHALL be left in a local launcher.
+The assistant SHALL reach production only through the hosted connector (the production slice of `mcp-remote`), which reads and writes. The local `actual-production` entry SHALL be removed from Claude Desktop, and no production credential SHALL be left in a local launcher.
 
 #### Scenario: No local production entry
 - **WHEN** a Claude Code session in the repository lists its MCP tools

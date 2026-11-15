@@ -21,8 +21,10 @@ None.
 ### Modified Capabilities
 
 - `mcp-server`: production is no longer read-only; the write tools and the audit log cover production and the hosted entry.
-- `mcp-remote`: the hosted entry is read-write. Its spec is still in the unarchived `mcp-remote` change, which must archive first.
-- `production-identities`: the hosted connector reaches production read-write. Its spec is still in the unarchived `production-identities` change, which must archive first.
+- `mcp-remote`: the hosted entry is read-write.
+- `production-identities`: the hosted connector reaches production read-write.
+
+At archive (2026-11-15) neither `mcp-remote` nor `production-identities` had a main spec, because their own changes were still open. These two deltas were therefore folded into the open `mcp-remote` and `production-identities` changes, and removed from this change. Only the `mcp-server` delta synced here.
 
 ## Impact
 

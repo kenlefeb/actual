@@ -23,3 +23,5 @@ The identity provider, its client registration and the hostname are named config
 ### Modified Capabilities
 
 - `mcp-server`: audit lines gain the acting identity (slice A). The requirement text is edited in the slice that ships it, not here.
+
+**Folded in on 2026-11-15:** `mcp-remote-read-write` (sc-2486) was archived before this change, so its edit to "The assistant reaches production only through the hosted connector" (the connector reads and writes) now lives in this change's spec.

@@ -9,7 +9,7 @@ When a save picks a new next date (a new schedule, or changed dates or account),
 #### Scenario: Moved back before today
 
 - **GIVEN** today is Sunday, November 15, 2026
-- **WHEN** the user creates a monthly schedule on the 15th that moves dates before weekends
+- **WHEN** the user creates a monthly schedule on the 15th and the last day of the month that moves dates before weekends
 - **THEN** its next date is Monday, November 30, 2026, not Friday, November 13, and a budget load leaves it unchanged
 
 #### Scenario: Saved with the same dates

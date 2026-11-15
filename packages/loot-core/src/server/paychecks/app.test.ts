@@ -524,6 +524,102 @@ describe('paychecks', () => {
     expect((await scheduleRow(checking)).next_date).toBe('2026-11-25');
   });
 
+  describe('saving keeps skips', () => {
+    // Pay on Nov 13 and Nov 30 skipped, so the next paycheck is Dec 15
+    async function createSkippedAcme() {
+      const acmeIds = await createAcme();
+      await handlers['paycheck-skip-next']({ id: acmeIds.id });
+      await handlers['paycheck-skip-next']({ id: acmeIds.id });
+      expect((await scheduleRow(acmeIds.pay)).next_date).toBe('2026-12-15');
+      return acmeIds;
+    }
+
+    const nextDates = async (...ids: string[]) =>
+      Promise.all(ids.map(async id => (await scheduleRow(id)).next_date));
+
+    async function saveAcme(
+      id: string,
+      change: (definition: PaycheckDefinition) => Partial<PaycheckDefinition>,
+    ) {
+      const paycheck = await getPaycheck(id);
+      if (!paycheck) throw new Error('Missing paycheck');
+      await handlers['paycheck-update']({
+        id,
+        name: 'Acme',
+        definition: { ...paycheck.definition, ...change(paycheck.definition) },
+      });
+    }
+
+    async function depositOnPayDate() {
+      await handlers['account-set-business-days']({
+        id: 'checking',
+        businessCalendarId: 'reserve',
+        depositDaysEarly: 0,
+      });
+    }
+
+    it('Save with a clearing account that has no calendar: every next date is kept', async () => {
+      for (const id of ['clearing', 'checking', 'savings']) {
+        await handlers['account-set-business-days']({
+          id,
+          businessCalendarId: null,
+          depositDaysEarly: id === 'checking' ? 2 : 0,
+        });
+      }
+      const { id, pay, checking, savings } = await createSkippedAcme();
+      const before = await nextDates(pay, checking, savings);
+
+      // Stored next dates compare write times, so let the clock move on
+      vi.setSystemTime(new Date(2026, 10, 1, 12));
+      await saveAcme(id, ({ deductions }) => ({
+        deductions: deductions.map(d => ({ ...d, amount: d.amount + 100 })),
+      }));
+
+      expect(await nextDates(pay, checking, savings)).toEqual(before);
+    });
+
+    it('A pay date added keeps the skip: adding the 8th on Nov 16 gives Dec 8 for pay and every deposit', async () => {
+      await depositOnPayDate();
+      const { id, pay, checking, savings } = await createSkippedAcme();
+
+      vi.setSystemTime(new Date(2026, 10, 16, 12));
+      await saveAcme(id, ({ date }) => ({
+        date: {
+          ...date,
+          patterns: [...(date.patterns ?? []), { type: 'day', value: 8 }],
+        },
+      }));
+
+      expect(await nextDates(pay, checking, savings)).toEqual([
+        '2026-12-08',
+        '2026-12-08',
+        '2026-12-08',
+      ]);
+    });
+
+    it('Change the pay dates: the 1st and the 20th on Nov 15 drop the skip for pay and every deposit', async () => {
+      await depositOnPayDate();
+      const { id, pay, checking, savings } = await createSkippedAcme();
+
+      vi.setSystemTime(new Date(2026, 10, 15, 12));
+      await saveAcme(id, ({ date }) => ({
+        date: {
+          ...date,
+          patterns: [
+            { type: 'day', value: 1 },
+            { type: 'day', value: 20 },
+          ],
+        },
+      }));
+
+      expect(await nextDates(pay, checking, savings)).toEqual([
+        '2026-11-20',
+        '2026-11-20',
+        '2026-11-20',
+      ]);
+    });
+  });
+
   it('ignores schedule ids sent by the client', async () => {
     const rent = await schedulesApp.handlers['schedule/create']({
       schedule: { name: 'Rent' },

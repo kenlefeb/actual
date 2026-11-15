@@ -126,6 +126,11 @@ describe('paycheck reconcile', () => {
       });
     }
     await db.insertPayee({ id: 'acme', name: 'Acme' });
+    // Paychecks need business calendars on
+    await db.update('preferences', {
+      id: 'flags.businessCalendars',
+      value: 'true',
+    });
     await db.update('preferences', { id: 'flags.paychecks', value: 'true' });
     await paychecksApp.handlers['paycheck-create']({
       name: 'Acme',
@@ -167,11 +172,11 @@ describe('paycheck reconcile', () => {
   });
 
   it('A normal session still reconciles', async () => {
-    await paycheckWithDeletedSchedule();
+    const schedule = await paycheckWithDeletedSchedule();
     const before = pushed();
 
     await syncSucceeds(['schedules']);
-
+    expect(await tombstone(schedule)).toBe(0);
     expect(pushed()).toBeGreaterThan(before);
   });
 });

@@ -2,31 +2,27 @@
 
 ## ADDED Requirements
 
-### Requirement: A separate hosted entry
-The hosted server SHALL be its own entry, apart from the stdio entry, that serves the same read tools over stateless streamable HTTP. It SHALL listen only on its configured address (loopback by default), and the stdio entry SHALL stay unchanged and listener-free.
+### Requirement: A separate read-write hosted entry
+The hosted server SHALL be its own entry, apart from the stdio entry, that serves the same tools as the stdio `--writes` entry over stateless streamable HTTP; the connection's grant decides which calls succeed (`mcp-server`). It SHALL listen only on its configured address (loopback by default), and the stdio entry SHALL stay unchanged and listener-free.
 
 #### Scenario: The stdio entry still opens no listener
 - **WHEN** the `actual-mcp` stdio entry is running
 - **THEN** it has no listening socket, as before
 
-#### Scenario: The hosted entry serves the same read tools
+#### Scenario: The hosted entry serves the writes entry tools
 - **WHEN** an authorized client lists the hosted entry's tools
-- **THEN** it lists the read tools of the stdio entry and no other tool except `get_sync_status`
+- **THEN** it lists the read tools and the `write_` tools of the stdio `--writes` entry and `get_sync_status`, and no others
 
-### Requirement: Hosted means read-only, in code
-The hosted entry SHALL open the budget with `readOnly: true` unconditionally, SHALL never register a `write_` tool, and SHALL treat `--writes` or any write setting as a usage error. No configuration SHALL change this.
+#### Scenario: A hosted write is audited with its OAuth subject
+- **WHEN** an authorized client calls a write tool
+- **THEN** the hosted entry's audit log gains an attempt and an outcome line carrying the caller's OAuth subject
 
-#### Scenario: A writes flag is refused
-- **WHEN** the hosted entry is started with `--writes`
-- **THEN** it exits with a fixed usage error and serves nothing
+#### Scenario: A hosted sync runs the engine as the app does
+- **WHEN** the hosted entry opens its budget
+- **THEN** it opens it without `readOnly`, so writes sync and push like the app's
 
-#### Scenario: A hosted sync writes nothing
-- **GIVEN** an auto-post schedule that is due and paycheck edits that arrive by sync
-- **WHEN** the hosted entry syncs
-- **THEN** no transaction is created in its copy and nothing is pushed or uploaded
-
-### Requirement: Production only under an explicit guard
-The hosted entry SHALL serve a `production` host only when the dedicated flag `ACTUAL_MCP_REMOTE_PRODUCTION=1` is set, the credential is a session token file, the allowed account is a provider subject identifier (no `@`) and the data directory is `production-remote`; otherwise it SHALL exit with a fixed error before it signs in or listens. The stdio entry's `ACTUAL_MCP_ALLOW_PRODUCTION` SHALL NOT satisfy the flag, and production SHALL stay read-only in code.
+### Requirement: Production under an identity guard
+The hosted entry SHALL serve a `production` host only with `ACTUAL_MCP_REMOTE_PRODUCTION=1` (the stdio `ACTUAL_MCP_ALLOW_PRODUCTION` does not count), a session token file whose user is exactly BASIC (never ADMIN), a provider subject identifier (no `@`) as the account and the `production-remote` data directory; otherwise it SHALL exit with a fixed error before it listens. Production is read-write like staging.
 
 #### Scenario: Production without the flag
 - **GIVEN** `ACTUAL_SERVER_URL` names a host labelled `production` and only `ACTUAL_MCP_ALLOW_PRODUCTION=1` is set
@@ -43,15 +39,15 @@ The hosted entry SHALL serve a `production` host only when the dedicated flag `A
 - **WHEN** the hosted entry starts
 - **THEN** it exits with a fixed error
 
+#### Scenario: Production with an administrator's token
+- **GIVEN** every other guard condition is met and the session token belongs to an ADMIN user
+- **WHEN** the hosted entry starts
+- **THEN** it exits with a fixed error that does not name the token, before it listens
+
 #### Scenario: Production with the guard met
 - **GIVEN** the flag, a 0400 session token file, a subject identifier as the account and every other required setting
 - **WHEN** the hosted entry starts
-- **THEN** it serves the production budget through the read tools only, with `readOnly: true` and no write tool
-
-#### Scenario: Production writes stay impossible
-- **GIVEN** the production guard is met
-- **WHEN** the hosted entry is started with `--writes`
-- **THEN** it exits with the usage error and serves nothing
+- **THEN** it serves the production budget through the read and write tools, with its audit log at `production-remote.audit.jsonl`
 
 ### Requirement: Production identity
 A production instance SHALL sign users in only through its own application (client id, secret and callbacks) in the shared Auth0 tenant (Ken's decision of 2026-11-04: one tenant for staging and production), SHALL accept exactly one account, the assistant's provider subject identifier (for Auth0, its `auth0|...` `sub`), and SHALL NOT be configured with the staging client or account.

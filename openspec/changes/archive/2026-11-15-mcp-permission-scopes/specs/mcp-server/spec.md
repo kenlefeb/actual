@@ -40,7 +40,7 @@ A call refused by scope SHALL append one `refused` line to the entry's audit log
 - **THEN** the audit log gains a line with `phase` `refused`, the tool name and `missing` `["transactions:write"]`, and no transaction id
 
 ### Requirement: Stdio grants come from the environment
-The stdio entry without `--writes` SHALL always grant `budget:read` only and ignore the writes variables. The entry with `--writes` SHALL take its scopes from `ACTUAL_MCP_WRITES_SCOPES` (space-separated), granting every scope when it is unset, and SHALL stop at start with fixed text for an unknown scope.
+The stdio entry without `--writes` SHALL always grant `budget:read` only and ignore the writes variables. The entry with `--writes` SHALL take its scopes from `ACTUAL_MCP_WRITES_SCOPES` (space-separated), granting every scope when it is unset. It SHALL stop at start with fixed text for an unknown scope, and for a set but empty value, which never counts as unset.
 
 #### Scenario: Today's writes entry keeps its tools
 - **WHEN** the stdio entry starts with `--writes` and no `ACTUAL_MCP_WRITES_SCOPES`
@@ -58,6 +58,10 @@ The stdio entry without `--writes` SHALL always grant `budget:read` only and ign
 #### Scenario: An unknown scope on the writes entry
 - **WHEN** the stdio entry starts with `--writes` and `ACTUAL_MCP_WRITES_SCOPES="budget:read transactions:everything"`
 - **THEN** it exits with a fixed error and opens no budget
+
+#### Scenario: An empty scope list on the writes entry
+- **WHEN** the stdio entry starts with `--writes` and `ACTUAL_MCP_WRITES_SCOPES=""`
+- **THEN** it exits with a fixed error and opens no budget, rather than granting every scope
 
 ### Requirement: Hosted grants come from a grants file
 The hosted entry SHALL read grants from the file named by `ACTUAL_MCP_GRANTS_FILE`. Each grant names an OAuth subject, a client id or `*`, its scopes and optional `confirm_destructive` and `max_rows`. The file SHALL be checked on every call, so a change applies on the next call without a restart. An exact client id SHALL take precedence over `*`; a connection with no matching grant SHALL have no scopes.
@@ -151,6 +155,21 @@ A grant's `max_rows` SHALL lower the per-call row limit below 50 for that connec
 - **WHEN** the client calls `write_update_transactions` with 11 ids
 - **THEN** the call fails and no transaction changed
 
+### Requirement: Where the audit log lives
+The audit log SHALL be `~/Library/Application Support/actual-mcp/<env>.audit.jsonl`, `<env>-writes.audit.jsonl` for the `--writes` entry and `<env>-remote.audit.jsonl` for the hosted entry, with file mode 0600.
+
+#### Scenario: The writes entry's log
+- **WHEN** the stdio entry started with `--writes` on a `staging` host records a write
+- **THEN** the line is appended to `staging-writes.audit.jsonl`, whose mode is 0600
+
+### Requirement: A write needs its audit line
+A write SHALL NOT run when its audit line cannot be appended.
+
+#### Scenario: The log can't be written
+- **GIVEN** the audit log's directory is read-only
+- **WHEN** a client calls a write tool
+- **THEN** the call fails and the budget is unchanged
+
 ## RENAMED Requirements
 
 - FROM: `### Requirement: Read-only unless writes are turned on`
@@ -198,7 +217,7 @@ The server SHALL offer the write tools `write_create_transactions`, `write_updat
 - **THEN** every deleting tool is annotated destructive and needs the `delete` scope
 
 ### Requirement: Write audit log
-The server SHALL append one JSON line per write to `~/Library/Application Support/actual-mcp/<env>.audit.jsonl` (`<env>-writes.audit.jsonl` for the `--writes` entry, `<env>-remote.audit.jsonl` for the hosted entry), mode 0600, with the time, the acting identity (`user_id` and `subject`), the effective scopes, on the hosted entry a fingerprint of the grants file, tool, ids and the fields changed with their before and after values, and never a secret or token. A write SHALL NOT run when its audit line cannot be appended.
+The server SHALL append one JSON line per write to its audit log with the time, the acting identity (`user_id` and `subject`), the effective scopes, on the hosted entry a fingerprint of the grants file, the tool, the ids and the fields changed with their before and after values, and never a secret or token.
 
 #### Scenario: An audit line names its identity
 - **WHEN** a write tool records an attempt and its outcome
@@ -207,8 +226,3 @@ The server SHALL append one JSON line per write to `~/Library/Application Suppor
 #### Scenario: A write is logged
 - **WHEN** a client updates one transaction's notes
 - **THEN** the log gains one line naming the tool, the transaction id and the notes before and after, and the file mode is 0600
-
-#### Scenario: The log can't be written
-- **GIVEN** the audit log's directory is read-only
-- **WHEN** a client calls a write tool
-- **THEN** the call fails and the budget is unchanged

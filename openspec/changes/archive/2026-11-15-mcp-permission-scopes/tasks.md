@@ -22,16 +22,16 @@
 ## 4. Documentation and hosting rollout (sc-4477)
 
 - [x] 4.1 Update `packages/mcp/README.md`: scopes table, grants file format and schema, the stdio `ACTUAL_MCP_WRITES_*` variables (read by the writes entry only), the note that the stdio grant is a guard rail and not a boundary, that per-client grants do not separate agents sharing one sign-in, refusal text, confirm (mistakes only, 5 minutes, caller-bound) and row-cap options, and the migration notes. Verify every variable named in the README exists in `config.ts` or `remote-config.ts`
-- [ ] 4.2 `kenlefeb/actual-hosting` PR: mount `{{mcp_root}}/grants:/run/mcp-grants:ro`, set `ACTUAL_MCP_GRANTS_FILE` in both MCP compose templates, commit the staging and production `grants.json` (production = Ken's day-one grant: every scope except `delete`, `confirm_destructive` true, `max_rows` 10, on the pre-registered client id; `*` holds `budget:read`), and install them from `deploy-command.py` with the same schema validation. Verify the staging deploy installs the file root-owned 0644 in a root-owned directory, and that a staging write succeeds and a scope removed from the staging file is refused on the next call
-- [ ] 4.3 `kenlefeb/actual-hosting` CI: a schema check of both `grants.json` files that fails on an unknown key or scope, a duplicate (subject, client) pair or writes on `*`. Verify with a CI run on a deliberately bad fixture
+- [x] 4.2 `kenlefeb/actual-hosting` PR: mount `{{mcp_root}}/grants:/run/mcp-grants:ro`, set `ACTUAL_MCP_GRANTS_FILE` in both MCP compose templates, commit the staging and production `grants.json` (production = Ken's day-one grant: every scope except `delete`, `confirm_destructive` true, `max_rows` 10, on the pre-registered client id; `*` holds `budget:read`), and install them from `deploy-command.py` with the same schema validation. Verify the staging deploy installs the file root-owned 0644 in a root-owned directory, and that a staging write succeeds and a scope removed from the staging file is refused on the next call
+- [x] 4.3 `kenlefeb/actual-hosting` CI: a schema check of both `grants.json` files that fails on an unknown key or scope, a duplicate (subject, client) pair or writes on `*`. Verify with a CI run on a deliberately bad fixture
 - [x] 4.4 `docs/agents/team.md`: add the MCP grants files (`production/mcp/grants.json` and the staging copy) to the Security Analyst's row of the review matrix. Verify the row names them
-- [ ] 4.5 Run `yarn typecheck`, `yarn lint` and `yarn workspace @actual-app/mcp run test` and `yarn check:mcp-coverage`; all pass
-- [ ] 4.6 Before copying the grant to production: on staging, confirm that the `client` in an access record (`event: "tool_call"`) from Ken's connector equals `ACTUAL_MCP_CLIENT_ID`. If it differs, fix the client id in `grants.json` through a hosting PR and Ken's signed deploy; never add a write scope to `*`
+- [x] 4.5 Run `yarn typecheck`, `yarn lint` and `yarn workspace @actual-app/mcp run test` and `yarn check:mcp-coverage`; all pass
+- [x] 4.6 Before copying the grant to production: on staging, confirm that the `client` in an access record (`event: "tool_call"`) from Ken's connector equals `ACTUAL_MCP_CLIENT_ID`. If it differs, fix the client id in `grants.json` through a hosting PR and Ken's signed deploy; never add a write scope to `*`
 
 ## Workflow follow-up
 
 - Archive `mcp-remote-read-write` before archiving this change.
 - The Security Analyst reviews the model before it ships (sc-4477).
-- When undo (sc-4215) ships, a hosting PR may add `delete` to the production grant (Ken's day-one decision).
-- At archive, update the `mcp-server` Purpose line: write tools are listed on every entry and a grant decides which calls succeed.
-- After archiving, file a Backlog story for a grants-only deploy mode in `actual-hosting` (design D3; same signed approval and validation) and one for a grants editor UI, or mark them not planned.
+- When undo (sc-4215) ships, a hosting PR may add `delete` to the production grant (Ken's day-one decision). Filed as sc-4541.
+- At archive, update the `mcp-server` Purpose line: write tools are listed on every entry and a grant decides which calls succeed. (Done at archive, 2026-11-15.)
+- After archiving, file a Backlog story for a grants-only deploy mode in `actual-hosting` (design D3; same signed approval and validation) and one for a grants editor UI, or mark them not planned. Filed as sc-4523 (grants-only deploy) and sc-4532 (grants editor).

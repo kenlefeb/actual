@@ -26,7 +26,7 @@ Test-first: write the tests, run them and see them fail, then write the code. On
 
 ## 3. Budget-tab summary row and navigation (sc-4309)
 
-- [ ] 3.1 Add failing Swift tests that the row's state comes from the read's `summary`: values, the add prompt, "none upcoming", the warning, hidden while the switch or `enabled` is off, and that going back keeps the Budget tab's month and scroll position. Then implement it. Verify: the tests pass.
+- [x] 3.1 Add failing Swift tests that the row's state comes from the read's `summary`: values, the add prompt, "none upcoming", the warning, hidden while the switch or `enabled` is off, and that going back keeps the Budget tab's month and scroll position. Then implement it. Verify: the tests pass.
 - [ ] 3.2 Add the row above the Budget tab, opening the native list, with its VoiceOver label and incoming-only colour. Verify: in the Simulator the row equals the web Paychecks section for the same budget; flipping the switch removes the row and loses no edits.
 
 ## 4. Mac window and editor sheet (sc-4352)

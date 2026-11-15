@@ -67,6 +67,12 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
         }
         chrome.onNativeScreenChanged = { [weak self] in
             self?.updateOverlays()
+            self?.budgetOverlay?.syncPaychecksSwitch()
+        }
+        // The list's overlay and the Budget tab's paycheck row both follow the page's events
+        bridgeController.nativeBridge.onPaychecksEvent = { [weak self] event, tables in
+            self?.budgetOverlay?.paychecksEventReceived(event, tables: tables)
+            self?.paychecksOverlay?.screen.eventReceived(event, tables: tables)
         }
         // Hidden until a budget is open (sign-in and the budget list have none)
         setTabBarVisible(false)
@@ -127,8 +133,6 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
         updateOverlays()
     }
 
-    // The Budget overlay first: it clears its container's slot, which the
-    // paychecks overlay may take next
     private func updateOverlays() {
         updateBudgetOverlay()
         updatePaychecksOverlay()
@@ -140,8 +144,7 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
             && !container.hostsNativeScreen
         if let current = paychecksOverlay, !wanted || current.container !== container {
             paychecksOverlay = nil
-            bridgeController.nativeBridge.onPaychecksEvent = nil
-            current.container.setOverlay(nil)
+            current.container.setCover(nil)
         }
         guard wanted, paychecksOverlay == nil else { return }
         let chrome = bridgeController.nativeChrome
@@ -149,18 +152,20 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
             client: bridgeController.nativeBridge.client, backPath: router.selected.rootPath,
             navigate: { [weak chrome] in chrome?.navigate(to: $0) })
         paychecksOverlay = (screen, container)
-        bridgeController.nativeBridge.onPaychecksEvent = { [weak screen] event, tables in
-            screen?.eventReceived(event, tables: tables)
-        }
-        container.setOverlay(screen)
+        // A cover, so a native Budget tab below it keeps its month and scroll position (sc-4309)
+        container.setCover(screen)
     }
 
     private func updateBudgetOverlay() {
         let container = containers[.budget]!
-        let wanted = NativeScreenSwitch.screen(for: .budget) == .native && tabBarShown
-            && pagePath == NativeTab.budget.rootPath && !container.hostsNativeScreen
+        // Kept while the paychecks list covers it (opened from its row), so back finds the same month and scroll
+        let wanted = NativeScreenSwitch.keepsBudgetOverlay(
+            budgetNative: NativeScreenSwitch.screen(for: .budget) == .native, tabBarShown: tabBarShown, path: pagePath,
+            selected: router.selected, paychecksNative: NativeScreenSwitch.isPaychecksNative()) && !container.hostsNativeScreen
         if wanted, budgetOverlay == nil {
-            let overlay = NativeBudgetViewController(client: bridgeController.nativeBridge.client)
+            let chrome = bridgeController.nativeChrome
+            let overlay = NativeBudgetViewController(
+                client: bridgeController.nativeBridge.client, openPaychecks: { [weak chrome] in chrome?.navigate(to: "/schedules") })
             budgetOverlay = overlay
             // shortcut: onEvent is a single slot; the benchmark harness also sets it, and only runs in its own build
             // "ready": the app's own page is back after a refused call (sc-3859). One
@@ -247,6 +252,7 @@ final class TabContainerViewController: UIViewController {
     var onWillAppear: ((NativeTab) -> Void)?
     private(set) var hostsNativeScreen = false
     private var overlay: UIViewController?
+    private var cover: UIViewController?
     private var bottomToSafeArea: NSLayoutConstraint?
     private var bottomToEdge: NSLayoutConstraint?
 
@@ -301,12 +307,23 @@ final class TabContainerViewController: UIViewController {
     // A native screen lying over the hosted web view (sc-3751); nil removes it.
     // It is only ever shown with the tab bar, so it ends above the bar.
     func setOverlay(_ screen: UIViewController?) {
-        if let old = overlay {
+        install(screen, replacing: &overlay)
+        if let cover { view.bringSubviewToFront(cover.view) }
+    }
+
+    // A screen over the overlay (the paychecks list over the Budget tab, sc-4309);
+    // the overlay below stays as it is
+    func setCover(_ screen: UIViewController?) {
+        install(screen, replacing: &cover)
+    }
+
+    private func install(_ screen: UIViewController?, replacing slot: inout UIViewController?) {
+        if let old = slot {
             old.willMove(toParent: nil)
             old.view.removeFromSuperview()
             old.removeFromParent()
         }
-        overlay = screen
+        slot = screen
         guard let screen else { return }
         addChild(screen)
         screen.view.translatesAutoresizingMaskIntoConstraints = false
@@ -333,6 +350,7 @@ final class TabContainerViewController: UIViewController {
         ])
         updateBottom()
         if let overlay { view.bringSubviewToFront(overlay.view) }
+        if let cover { view.bringSubviewToFront(cover.view) }
         child.didMove(toParent: self)
         setNeedsStatusBarAppearanceUpdate()
     }

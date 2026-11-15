@@ -140,7 +140,7 @@ struct PaycheckEditorSheet: View {
     @ViewBuilder private var netPay: some View {
         let label = Text(EditorWords.netPay).font(.headline)
         let amount = Text(model.preview.map { PaycheckDateText.incoming($0.netAmount, style: style) } ?? "—")
-            .font(.headline).monospacedDigit().foregroundColor(EditorMoney.positive)
+            .font(.headline).monospacedDigit().foregroundColor(Money.positive)
             .lineLimit(1).minimumScaleFactor(0.5)
         Group {
             if sizeCategory.isAccessibilityCategory {
@@ -402,7 +402,7 @@ struct PaycheckEditorSheet: View {
                         Text(answer.date.map(EditorDates.medium) ?? "")
                         Spacer()
                         Text(PaycheckDateText.incoming(answer.amount, style: style)).monospacedDigit()
-                            .foregroundColor(EditorMoney.positive)
+                            .foregroundColor(Money.positive)
                     }
                     .font(.subheadline)
                     .accessibilityElement(children: .combine)
@@ -586,15 +586,6 @@ private struct PercentField: View {
             Text(verbatim: "%").foregroundColor(.secondary)
         }
     }
-}
-
-// Money in is the only coloured money (DESIGN.native.md, money/positive)
-private enum EditorMoney {
-    static let positive = Color(UIColor { traits in
-        traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0x30 / 255, green: 0xD1 / 255, blue: 0x58 / 255, alpha: 1)
-            : UIColor(red: 0x1F / 255, green: 0x7A / 255, blue: 0x35 / 255, alpha: 1)
-    })
 }
 
 private enum EditorDates {

@@ -128,6 +128,25 @@ async function validateTransfer(forward: Send, name: string, args: unknown) {
   return { month, amount, from, to, currencyCode: snapshot.currencyCode };
 }
 
+// The nonce Swift makes for a native write, recorded as its undo meta
+function readToken(value: unknown) {
+  if (typeof value !== 'string' || value === '') {
+    throw new Error('native bridge: a native write needs its undo token');
+  }
+  return value;
+}
+
+// sc-4341: a skip names a live paycheck, checked against a fresh
+// paychecks-get, and carries its undo token. Returns only those fields.
+async function validatePaycheckSkip(forward: Send, args: unknown) {
+  const { id, undoToken } = (args ?? {}) as Record<string, unknown>;
+  const paychecks = (await forward('paychecks-get')) as { id: string }[];
+  if (typeof id !== 'string' || !paychecks.some(p => p.id === id)) {
+    throw new Error('native bridge: no such paycheck');
+  }
+  return { id, undoToken: readToken(undoToken) };
+}
+
 // loot-core's sync reasons that native code tells apart (sc-3884); a Map, so a
 // reason like "constructor" never reads the prototype
 const SYNC_REASONS = new Map([
@@ -180,6 +199,11 @@ export function createNativeBridge({
         args = await validateBudgetAmount(forward, args);
       } else if (name.startsWith('budget/transfer-')) {
         args = await validateTransfer(forward, name, args);
+      } else if (name === 'paycheck-skip-next') {
+        args = await validatePaycheckSkip(forward, args);
+      } else if (name === 'native/undo') {
+        const { token } = (args ?? {}) as Record<string, unknown>;
+        args = { token: readToken(token) };
       }
       // A write resolves to undefined, which JSON.stringify does not make a string
       return JSON.stringify((await forward(name, args)) ?? null);

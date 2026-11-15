@@ -7,6 +7,7 @@ import { aqlQuery } from '#server/aql';
 import { getBudgetType } from '#server/budget/base';
 import { app as businessCalendarsApp } from '#server/business-calendars/app';
 import * as db from '#server/db';
+import { mutator } from '#server/mutators';
 import {
   getPaychecks,
   isPaychecksOn,
@@ -14,6 +15,7 @@ import {
 } from '#server/paychecks/app';
 import { refreshScheduleDateLookup } from '#server/schedules/app';
 import * as sheet from '#server/sheet';
+import { undo, undoTargetMeta } from '#server/undo';
 import { setBusinessCalendars } from '#shared/business-calendar-lookup';
 import { getCurrency } from '#shared/currencies';
 import * as monthUtils from '#shared/months';
@@ -157,11 +159,13 @@ export type NativeSchedulesPaychecks = NativeCurrency & {
 export type NativeHandlers = {
   'native/budget-month': typeof budgetMonth;
   'native/schedules-paychecks': typeof schedulesPaychecks;
+  'native/undo': typeof nativeUndo;
 };
 
 export const app = createApp<NativeHandlers>();
 app.method('native/budget-month', budgetMonth);
 app.method('native/schedules-paychecks', schedulesPaychecks);
+app.method('native/undo', mutator(nativeUndo));
 
 async function budgetMonth({
   month,
@@ -395,6 +399,19 @@ async function schedulesPaychecks(): Promise<NativeSchedulesPaychecks> {
     paychecks: planned,
     schedules,
   };
+}
+
+/**
+ * Undoes the latest undo step only when its marker carries `token`, the nonce
+ * Swift sent with that native write (design Decision 5). Mutators run one at
+ * a time, so nothing undoable lands between the check and the undo.
+ */
+async function nativeUndo({ token }: { token: string }) {
+  const meta = undoTargetMeta() as { nativeUndoToken?: string } | undefined;
+  if (!token || meta?.nativeUndoToken !== token) {
+    throw new Error('native/undo: nothing to undo');
+  }
+  await undo();
 }
 
 // null: the cell doesn't exist for this budget type or row

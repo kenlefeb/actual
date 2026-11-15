@@ -7,12 +7,15 @@ import Foundation
 public enum NativeBridgeAllowlist {
     // Sent only as their typed value (BudgetAmountWrite, Transfer), never as loose arguments
     public static let writes: Set<String> = ["budget/budget-amount", "budget/transfer-category", "budget/transfer-available"]
-    public static let reads: Set<String> = ["native/budget-month", "query"]
+    public static let reads: Set<String> = ["native/budget-month", "native/schedules-paychecks", "query"]
+    // sc-4341: sent only as PaycheckSkip and NativeUndo. The bare undo and redo
+    // stay off: they would reverse whatever is on top, maybe a web edit.
+    public static let paycheckWrites: Set<String> = ["paycheck-skip-next", "native/undo"]
     // loot-core's server sync (sc-3884), the one handler that is neither a read
     // nor a budget write. Only NativeBridgeClient.sync() reaches it: the generic
     // call refuses it, so its result is always decoded and its deadline applies.
     public static let sync: Set<String> = ["sync"]
-    public static let handlers: Set<String> = reads.union(writes).union(sync)
+    public static let handlers: Set<String> = reads.union(writes).union(paycheckWrites).union(sync)
 }
 
 // The page's reduced sync result (nativeBridge.ts): whether it worked, and a
@@ -192,8 +195,11 @@ public struct NativeBridgeClient {
             throw NativeBridgeError.notAllowlisted(name)
         }
         // Each write name takes only its own typed value
-        let isTyped = (args is BudgetAmountWrite && name == "budget/budget-amount") || (args as? Transfer)?.handler == name
-        guard !NativeBridgeAllowlist.writes.contains(name) || isTyped else {
+        let isTyped =
+            (args is BudgetAmountWrite && name == "budget/budget-amount") || (args as? Transfer)?.handler == name
+            || (args is PaycheckSkip && name == "paycheck-skip-next") || (args is NativeUndo && name == "native/undo")
+        let isWrite = NativeBridgeAllowlist.writes.contains(name) || NativeBridgeAllowlist.paycheckWrites.contains(name)
+        guard !isWrite || isTyped else {
             throw NativeBridgeError.invalidWrite(name)
         }
         let encoder = JSONEncoder()
@@ -220,6 +226,18 @@ public struct NativeBridgeClient {
 
     public func transfer(_ transfer: Transfer) async throws {
         _ = try await call(transfer.handler, args: transfer)
+    }
+
+    public func schedulesPaychecks() async throws -> SchedulesPaychecks {
+        try JSONDecoder().decode(SchedulesPaychecks.self, from: await call("native/schedules-paychecks"))
+    }
+
+    public func skipNextPaycheck(_ skip: PaycheckSkip) async throws {
+        _ = try await call("paycheck-skip-next", args: skip)
+    }
+
+    public func undo(_ undo: NativeUndo) async throws {
+        _ = try await call("native/undo", args: undo)
     }
 
     public func budgetMonth(_ month: String) async throws -> BudgetMonth {

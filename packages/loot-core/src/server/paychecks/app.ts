@@ -45,7 +45,14 @@ export const app = createApp<PaychecksHandlers>();
 app.method('paychecks-get', getPaychecks);
 app.method('paycheck-create', mutator(undoable(createPaycheck)));
 app.method('paycheck-update', mutator(undoable(updatePaycheck)));
-app.method('paycheck-delete', mutator(undoable(deletePaycheck)));
+// A native write records its token as the undo meta, for native/undo; web
+// calls pass none, so their meta is unchanged (sc-4341)
+const nativeUndoMeta = ({ undoToken }: { undoToken?: string }) =>
+  undoToken ? { nativeUndoToken: undoToken } : undefined;
+app.method(
+  'paycheck-delete',
+  mutator(undoable(deletePaycheck, nativeUndoMeta)),
+);
 // At budget load: record schedules of paychecks saved before the record
 // existed, then clean up edits that synced while the budget was closed
 app.service(() => {
@@ -74,7 +81,10 @@ onEverySync(event => {
     );
   }
 });
-app.method('paycheck-skip-next', mutator(undoable(skipNextPaycheck)));
+app.method(
+  'paycheck-skip-next',
+  mutator(undoable(skipNextPaycheck, nativeUndoMeta)),
+);
 app.method('paycheck-year-to-date', getYearToDate);
 app.method('paychecks-clearing-status', getClearingStatus);
 app.method(
@@ -625,7 +635,12 @@ async function updatePaycheck({
 
 // Deletes the paycheck and its schedules; the clearing account and posted
 // transactions stay
-async function deletePaycheck({ id }: { id: PaycheckEntity['id'] }) {
+async function deletePaycheck({
+  id,
+}: {
+  id: PaycheckEntity['id'];
+  undoToken?: string;
+}) {
   const { definition } = await getPaycheck(id);
   // Deposits first: they are relative to the pay schedule
   for (const deposit of definition.deposits) {
@@ -646,7 +661,12 @@ async function deletePaycheck({ id }: { id: PaycheckEntity['id'] }) {
   await db.delete_('paychecks', id);
 }
 
-async function skipNextPaycheck({ id }: { id: PaycheckEntity['id'] }) {
+async function skipNextPaycheck({
+  id,
+}: {
+  id: PaycheckEntity['id'];
+  undoToken?: string;
+}) {
   const { definition } = await getPaycheck(id);
   const schedules = [
     definition.paySchedule,

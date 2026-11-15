@@ -1,8 +1,11 @@
 [
   "native/budget-month",
+  "native/schedules-paychecks",
   "query",
   "budget/budget-amount",
   "budget/transfer-category",
   "budget/transfer-available",
+  "paycheck-skip-next",
+  "native/undo",
   "sync"
 ]

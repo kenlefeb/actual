@@ -31,6 +31,7 @@
 		FB3751000000000000000102 /* NativeScreenSwitch.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3751000000000000000002 /* NativeScreenSwitch.swift */; };
 		FB3751000000000000000103 /* BudgetAmountFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3751000000000000000003 /* BudgetAmountFormat.swift */; };
 		FB3751000000000000000104 /* NativeBudgetViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3751000000000000000004 /* NativeBudgetViewController.swift */; };
+		FB434100000000000000101 /* SchedulesPaychecks.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB434100000000000000001 /* SchedulesPaychecks.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -62,6 +63,7 @@
 		FB3751000000000000000002 /* NativeScreenSwitch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeScreenSwitch.swift; sourceTree = "<group>"; };
 		FB3751000000000000000003 /* BudgetAmountFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetAmountFormat.swift; sourceTree = "<group>"; };
 		FB3751000000000000000004 /* NativeBudgetViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBudgetViewController.swift; sourceTree = "<group>"; };
+		FB434100000000000000001 /* SchedulesPaychecks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchedulesPaychecks.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -146,6 +148,7 @@
 				FB3751000000000000000001 /* BudgetViewModel.swift */,
 				FB3751000000000000000002 /* NativeScreenSwitch.swift */,
 				FB3751000000000000000003 /* BudgetAmountFormat.swift */,
+				FB434100000000000000001 /* SchedulesPaychecks.swift */,
 			);
 			name = NativeBridgeCore;
 			path = ../NativeBridge/Sources/NativeBridgeCore;
@@ -283,6 +286,7 @@
 				FB3751000000000000000102 /* NativeScreenSwitch.swift in Sources */,
 				FB3751000000000000000103 /* BudgetAmountFormat.swift in Sources */,
 				FB3751000000000000000104 /* NativeBudgetViewController.swift in Sources */,
+				FB434100000000000000101 /* SchedulesPaychecks.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

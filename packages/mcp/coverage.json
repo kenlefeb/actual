@@ -163,5 +163,11 @@
   },
   "native/budget-month": {
     "skip": "Native iOS bridge read (sc-3584, ADR 11); MCP reads the same month through get_budget_month"
+  },
+  "native/schedules-paychecks": {
+    "skip": "Native iOS bridge read (sc-4341, ADR 11); MCP reads the same data through list_paychecks and get_paychecks_clearing_status"
+  },
+  "native/undo": {
+    "skip": "Native iOS bridge undo of a native write by its token (sc-4341); MCP writes record no native token"
   }
 }

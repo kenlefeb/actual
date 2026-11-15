@@ -145,3 +145,20 @@ final class PaycheckWriteTests: XCTestCase {
         XCTAssertEqual(read.paychecks.count, 1)
     }
 }
+
+// Only a sync-event's table names are read; its error meta never is (sc-3884)
+final class NativeBridgeEventTablesTests: XCTestCase {
+    func testReadsOnlyTheTableNamesOfASyncEvent() {
+        let body: [String: Any] = [
+            "event": "sync-event",
+            "payload": ["type": "applied", "tables": ["schedules", 7, "paychecks"], "meta": ["url": "https://x"]],
+        ]
+        XCTAssertEqual(NativeBridgeEvent.tables(of: body), ["schedules", "paychecks"])
+    }
+
+    func testHasNoTablesForOtherEventsOrShapes() {
+        XCTAssertEqual(NativeBridgeEvent.tables(of: ["event": "cells-changed", "payload": ["tables": ["x"]]]), [])
+        XCTAssertEqual(NativeBridgeEvent.tables(of: ["event": "sync-event", "payload": "nope"]), [])
+        XCTAssertEqual(NativeBridgeEvent.tables(of: "nope"), [])
+    }
+}

@@ -82,4 +82,22 @@ describe('NativeScreens', () => {
     });
     expect(checkbox).toBeChecked();
   });
+
+  // sc-4341
+  it('offers the Schedules & Paychecks switch, off by default, and tells the app', () => {
+    const postMessage = insideIosApp();
+    renderSettings();
+    const checkbox = screen.getByRole('checkbox', {
+      name: /Native Schedules & Paychecks screen/,
+    });
+    expect(checkbox).not.toBeChecked();
+    fireEvent.click(checkbox);
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'nativeScreen',
+      screen: 'paychecks',
+      on: true,
+    });
+    expect(checkbox).toBeChecked();
+    expect(win.__actualNativeScreens?.paychecks).toBe(true);
+  });
 });

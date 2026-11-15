@@ -19,7 +19,7 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
     var onRoute: ((String, Bool) -> Void)?
     var onClosed: (() -> Void)?
     // A per-screen switch changed in Settings (sc-3751)
-    var onNativeScreenChanged: ((NativeTab) -> Void)?
+    var onNativeScreenChanged: (() -> Void)?
     private let haptics = UIImpactFeedbackGenerator(style: .light)
 
     // Runs before the page loads, so the page sees the handler at startup
@@ -60,12 +60,19 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
             onClosed?()
         case "nativeScreen":
             // Only a tab that has a native screen can be switched
-            if let name = body["screen"] as? String, let on = body["on"] as? Bool,
-               let tab = NativeTab(rawValue: name), NativeScreenSwitch.nativeTabs.contains(tab) {
-                UserDefaults.standard.set(on, forKey: NativeScreenSwitch.key(for: tab))
-                if let controller = bridge?.webView?.configuration.userContentController { installScreensScript(on: controller) }
-                onNativeScreenChanged?(tab)
+            // or Schedules & Paychecks (sc-4341)
+            guard let name = body["screen"] as? String, let on = body["on"] as? Bool else { break }
+            let key: String
+            if name == "paychecks" {
+                key = NativeScreenSwitch.paychecksKey
+            } else if let tab = NativeTab(rawValue: name), NativeScreenSwitch.nativeTabs.contains(tab) {
+                key = NativeScreenSwitch.key(for: tab)
+            } else {
+                break
             }
+            UserDefaults.standard.set(on, forKey: key)
+            if let controller = bridge?.webView?.configuration.userContentController { installScreensScript(on: controller) }
+            onNativeScreenChanged?()
         case "haptic":
             // Follows the system's haptics setting
             haptics.impactOccurred()

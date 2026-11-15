@@ -49,6 +49,16 @@ public enum NativeBridgeEvent {
     public static func name(of body: Any) -> String? {
         (body as? [String: Any])?["event"] as? String
     }
+
+    // sc-4341: a sync-event's changed table names, and nothing else of its
+    // payload, so a screen re-reads only for tables it shows
+    public static func tables(of body: Any) -> [String] {
+        guard name(of: body) == "sync-event",
+            let payload = (body as? [String: Any])?["payload"] as? [String: Any],
+            let tables = payload["tables"] as? [Any]
+        else { return [] }
+        return tables.compactMap { $0 as? String }
+    }
 }
 
 public enum NativeBridgeError: Error, Equatable {

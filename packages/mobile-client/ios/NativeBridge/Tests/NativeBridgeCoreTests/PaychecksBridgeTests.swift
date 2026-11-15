@@ -162,3 +162,19 @@ final class NativeBridgeEventTablesTests: XCTestCase {
         XCTAssertEqual(NativeBridgeEvent.tables(of: "nope"), [])
     }
 }
+
+// sc-4341 review: amounts read as the web list writes them (SchedulesListItem)
+final class ScheduleAmountTextTests: XCTestCase {
+    private func schedule(_ amount: Int, approx: Bool) throws -> SchedulesPaychecks.Schedule {
+        let json = #"{"id":"s","name":null,"payeeName":null,"accountName":null,"nextDate":null,"amount":\#(amount),"isApprox":\#(approx),"completed":false,"status":"scheduled"}"#
+        return try JSONDecoder().decode(SchedulesPaychecks.Schedule.self, from: Data(json.utf8))
+    }
+
+    func testMatchesTheWebSigns() throws {
+        let style = try JSONDecoder().decode(SchedulesPaychecks.self, from: paychecksFixture()).amountStyle
+        XCTAssertEqual(try schedule(-14000, approx: true).amountText(style: style), "~140.00")
+        XCTAssertEqual(try schedule(-190000, approx: false).amountText(style: style), "1,900.00")
+        XCTAssertEqual(try schedule(5000, approx: false).amountText(style: style), "+50.00")
+        XCTAssertEqual(try schedule(5000, approx: true).amountText(style: style), "~+50.00")
+    }
+}

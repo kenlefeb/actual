@@ -35,6 +35,10 @@ final class NativePaychecksViewController: UIHostingController<PaychecksScreen> 
         super.viewDidLoad()
         view.backgroundColor = .systemGroupedBackground
         view.accessibilityViewIsModal = true
+        // An alert draws outside this view, so `.tint` never reaches it: the skip
+        // confirm button takes the accent through the alert's own appearance.
+        // App-wide, which is the accent's job anyway (DESIGN.native.md §3)
+        UIView.appearance(whenContainedInInstancesOf: [UIAlertController.self]).tintColor = UIColor(PaychecksTokens.skipConfirm)
         // Hidden until loot-core says paychecks are on, so the web screen shows
         // while they are off, or before the first read
         view.isHidden = true
@@ -95,24 +99,64 @@ struct PaychecksScreen: View {
                 }
         }
         .navigationViewStyle(.stack)
-        .tint(PaychecksTokens.skipConfirm)
         .task { await model.load() }
         .safeAreaInset(edge: .bottom) { undoBar }
+        // After the inset, so the Undo button takes the accent too
+        .tint(PaychecksTokens.skipConfirm)
         .onChange(of: model.announcement) { message in
             if let message { UIAccessibility.post(notification: .announcement, argument: message) }
         }
-        .alert(item: $confirmingSkip) { paycheck in
-            Alert(
-                title: Text(String(format: Words.skipQuestion, Dates.long(paycheck.next?.date ?? ""))),
-                message: Text(Words.skipCanUndo),
-                primaryButton: .cancel(Text(Words.keepIt)),
-                secondaryButton: .default(Text(Words.skipIt)) {
-                    Task { _ = await model.skipNext(paycheck.id) }
-                })
+        // One alert for the view, so the skip confirmation and an error never compete
+        .alert(alertTitle, isPresented: isAlertShown, presenting: alert.wrappedValue) { alert in
+            switch alert {
+            case .skip(let paycheck):
+                Button(Words.keepIt, role: .cancel) {}
+                // The preferred action takes the teal accent, not destructive styling
+                Button(Words.skipIt) { Task { _ = await model.skipNext(paycheck.id) } }
+                    .keyboardShortcut(.defaultAction)
+            case .error:
+                Button(Words.ok, role: .cancel) {}
+            }
+        } message: { alert in
+            if case .skip = alert { Text(Words.skipCanUndo) }
         }
-        .alert(isPresented: Binding(get: { confirmingSkip == nil && model.actionError != nil }, set: { _ in model.clearActionError() })) {
-            Alert(title: Text(verbatim: model.actionError?.message ?? ""))
+    }
+
+    private var alertTitle: String {
+        switch alert.wrappedValue {
+        case .skip(let paycheck): String(format: Words.skipQuestion, Dates.long(paycheck.next?.date ?? ""))
+        case .error(let message): message
+        case nil: ""
         }
+    }
+
+    private var isAlertShown: Binding<Bool> {
+        Binding(get: { alert.wrappedValue != nil }, set: { if !$0 { alert.wrappedValue = nil } })
+    }
+
+    private enum ScreenAlert: Identifiable {
+        case skip(SchedulesPaychecks.Paycheck)
+        case error(String)
+
+        var id: String {
+            switch self {
+            case .skip(let paycheck): "skip-\(paycheck.id)"
+            case .error(let message): "error-\(message)"
+            }
+        }
+    }
+
+    // The skip confirmation first; a failed skip or Undo after it closes
+    private var alert: Binding<ScreenAlert?> {
+        Binding(
+            get: {
+                if let paycheck = confirmingSkip { return .skip(paycheck) }
+                return model.actionError.map { .error($0.message) }
+            },
+            set: { value in
+                guard value == nil else { return }
+                if confirmingSkip != nil { confirmingSkip = nil } else { model.clearActionError() }
+            })
     }
 
     @ViewBuilder private var content: some View {
@@ -221,24 +265,34 @@ private struct PaycheckRow: View {
     let onToggleMore: () -> Void
     let onSkip: () -> Void
 
+    // A List row with several buttons sends a tap to every button in it, or
+    // to the wrong one, unless each button has its own style; no gesture on the
+    // row itself (sc-4341 review: "Skip next" did nothing, "Show more" skipped)
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(paycheck.name).font(.headline)
-            if let next = paycheck.next {
-                planned(next)
-            } else {
-                Text(Words.noUpcoming).foregroundColor(.secondary)
+            Button(action: onEdit) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(paycheck.name).font(.headline)
+                    if let next = paycheck.next {
+                        planned(next)
+                    } else {
+                        Text(Words.noUpcoming).foregroundColor(.secondary)
+                    }
+                    ForEach(paycheck.skipped, id: \.self) { date in
+                        Label(String(format: Words.skippedLine, Dates.medium(date)), systemImage: "forward.end")
+                            .foregroundColor(.orange)
+                    }
+                    if let warning = paycheck.clearingWarning {
+                        Label(warningText(warning), systemImage: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if isExpanded { ForEach(paycheck.later, id: \.date) { planned($0) } }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            ForEach(paycheck.skipped, id: \.self) { date in
-                Label(String(format: Words.skippedLine, Dates.medium(date)), systemImage: "forward.end")
-                    .foregroundColor(.orange)
-            }
-            if let warning = paycheck.clearingWarning {
-                Label(warningText(warning), systemImage: "exclamationmark.triangle.fill")
-                    .foregroundColor(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if isExpanded { ForEach(paycheck.later, id: \.date) { planned($0) } }
+            .buttonStyle(.plain)
             HStack(spacing: 12) {
                 if !paycheck.later.isEmpty {
                     Button(isExpanded ? Words.showLess : Words.showMore, action: onToggleMore).buttonStyle(.bordered)
@@ -249,8 +303,6 @@ private struct PaycheckRow: View {
             }
         }
         .padding(.vertical, 4)
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onEdit)
         // One VoiceOver element: net pay, next date, state and warning; the buttons are actions
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(spokenLabel))
@@ -346,10 +398,7 @@ private struct ScheduleRow: View {
         .accessibilityElement(children: .combine)
     }
 
-    private var amountText: String {
-        let body = BudgetAmountFormat.string(abs(schedule.amount), style: style)
-        return (schedule.isApprox ? "~" : "") + (schedule.amount > 0 ? "+" : schedule.amount < 0 ? "−" : "") + body
-    }
+    private var amountText: String { schedule.amountText(style: style) }
 }
 
 // Money in is the only coloured money (DESIGN.native.md, money/positive with "+")
@@ -407,6 +456,7 @@ private enum Words {
     static let keepIt = NSLocalizedString("Keep it", comment: "Native Paychecks: cancel the skip")
     static let skipIt = NSLocalizedString("Skip it", comment: "Native Paychecks: confirm the skip")
     static let skipped = NSLocalizedString("Skipped the paycheck on %@.", comment: "Native Paychecks: after a skip")
+    static let ok = NSLocalizedString("OK", comment: "Native Paychecks: close an error")
     static let undo = NSLocalizedString("Undo", comment: "Native Paychecks: undo the skip")
     static let skippedLine = NSLocalizedString("Skipped: %@", comment: "Native Paychecks: a skipped pay date")
     static let warning = NSLocalizedString("Needs attention", comment: "Native Paychecks: VoiceOver prefix of a clearing warning")

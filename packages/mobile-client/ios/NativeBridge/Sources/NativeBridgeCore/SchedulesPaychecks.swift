@@ -85,6 +85,11 @@ public struct SchedulesPaychecks: Codable, Equatable {
         public let isApprox: Bool
         public let completed: Bool
         public let status: Status
+
+        // As the web list (SchedulesListItem): "~" for an estimate, "+" for money in, no sign for money out
+        public func amountText(style: BudgetAmountStyle) -> String {
+            (isApprox ? "~" : "") + (amount > 0 ? "+" : "") + BudgetAmountFormat.string(abs(amount), style: style)
+        }
     }
 
     public let currencyCode: String

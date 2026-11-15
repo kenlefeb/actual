@@ -575,7 +575,7 @@ async function writePaycheckSchedules(
   return { ...definition, paySchedule, deposits };
 }
 
-async function createPaycheck({
+export async function createPaycheck({
   name,
   definition,
   newClearingAccountName,
@@ -607,7 +607,7 @@ async function createPaycheck({
   });
 }
 
-async function updatePaycheck({
+export async function updatePaycheck({
   id,
   name,
   definition,
@@ -695,6 +695,7 @@ async function getYearToDate({
     gross: 0,
     deductions: new Map<string, number>(),
     net: 0,
+    hasHistory: false,
   }));
   if (!definition.paySchedule) {
     return totals.map(t => ({ ...t, deductions: [] }));
@@ -723,6 +724,7 @@ async function getYearToDate({
   for (const row of rows) {
     const total = totals.find(t => t.year === Math.floor(row.date / 10000));
     if (!total) continue;
+    total.hasHistory = true;
     if (!row.is_child) {
       total.net += row.amount;
       // An unsplit transaction is all gross pay
@@ -869,7 +871,7 @@ async function getClearingStatus(): Promise<PaycheckClearingStatus[]> {
   return statuses;
 }
 
-async function setAccountBusinessDays({
+export async function setAccountBusinessDays({
   id,
   businessCalendarId,
   depositDaysEarly,

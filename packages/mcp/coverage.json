@@ -169,5 +169,11 @@
   },
   "native/undo": {
     "skip": "Native iOS bridge undo of a native write by its token (sc-4341); MCP writes record no native token"
+  },
+  "native/paycheck-preview": {
+    "skip": "Native iOS bridge read of an editor draft (sc-4343, ADR 11); MCP reads paychecks through list_paychecks"
+  },
+  "native/paycheck-save": {
+    "skip": "Native iOS bridge write (sc-4343); paychecks are not in the MCP v1 write set (mcp-server \"Write tools\")"
   }
 }

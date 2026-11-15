@@ -9,22 +9,39 @@ import { app as businessCalendarsApp } from '#server/business-calendars/app';
 import * as db from '#server/db';
 import { mutator } from '#server/mutators';
 import {
+  createPaycheck,
   getPaychecks,
   isPaychecksOn,
   app as paychecksApp,
+  setAccountBusinessDays,
+  updatePaycheck,
 } from '#server/paychecks/app';
 import { refreshScheduleDateLookup } from '#server/schedules/app';
 import * as sheet from '#server/sheet';
-import { undo, undoTargetMeta } from '#server/undo';
+import {
+  dropRedo,
+  undo,
+  undoable,
+  undoGroupHasWrites,
+  undoTargetMeta,
+} from '#server/undo';
 import { setBusinessCalendars } from '#shared/business-calendar-lookup';
 import { getCurrency } from '#shared/currencies';
 import * as monthUtils from '#shared/months';
-import { planPaycheck } from '#shared/paychecks';
-import type { PlannedPaycheck } from '#shared/paychecks';
+import {
+  changedDepositDaysEarly,
+  computePaycheck,
+  MAX_DEPOSIT_DAYS_EARLY,
+  planPaycheck,
+  validatePaycheckDraft,
+} from '#shared/paychecks';
+import type { PaycheckDraftError, PlannedPaycheck } from '#shared/paychecks';
 import { q } from '#shared/query';
+import { toRelativeDay } from '#shared/relative-dates';
 import {
   DEFAULT_UPCOMING_SCHEDULE_DAYS,
   getHasTransactionsQuery,
+  getNextDate,
   getScheduledAmount,
   getStatus,
 } from '#shared/schedules';
@@ -34,6 +51,7 @@ import type { NumberFormats } from '#shared/util';
 import type {
   CategoryEntity,
   CategoryGroupEntity,
+  PaycheckDefinition,
   ScheduleEntity,
   TransactionEntity,
 } from '#types/models';
@@ -156,16 +174,47 @@ export type NativeSchedulesPaychecks = NativeCurrency & {
   schedules: NativeSchedule[];
 };
 
+export type NativePaycheckPreview = {
+  netAmount: number;
+  // The next pay date from today, moved off the clearing account's
+  // non-business days; null when the pay dates can't be read
+  payDate: string | null;
+  // The employer's payee name; native names a new clearing account after it
+  employerName: string | null;
+  deposits: {
+    id: string;
+    amount: number;
+    // The deposit's date for payDate, by its account's days early (the typed
+    // value when valid, else the saved one) and calendar
+    date: string | null;
+    // The account's saved days early; null for an unknown account
+    savedDaysEarly: number | null;
+    // The account's business calendar; null means weekends only
+    calendarName: string | null;
+  }[];
+  errors: PaycheckDraftError[];
+};
+
 export type NativeHandlers = {
   'native/budget-month': typeof budgetMonth;
   'native/schedules-paychecks': typeof schedulesPaychecks;
   'native/undo': typeof nativeUndo;
+  'native/paycheck-preview': typeof paycheckPreview;
+  'native/paycheck-save': typeof paycheckSave;
 };
 
 export const app = createApp<NativeHandlers>();
 app.method('native/budget-month', budgetMonth);
 app.method('native/schedules-paychecks', schedulesPaychecks);
 app.method('native/undo', mutator(nativeUndo));
+app.method('native/paycheck-preview', paycheckPreview);
+// One undo step carrying Swift's token (design Decisions 4 and 5)
+app.method(
+  'native/paycheck-save',
+  mutator(
+    undoable(paycheckSave, args => ({ nativeUndoToken: args?.undoToken })),
+  ),
+);
 
 async function budgetMonth({
   month,
@@ -412,6 +461,257 @@ async function nativeUndo({ token }: { token: string }) {
     throw new Error('native/undo: nothing to undo');
   }
   await undo();
+}
+
+type PaycheckAccount = {
+  id: string;
+  name: string;
+  offbudget: number;
+  closed: number;
+  business_calendar_id: string | null;
+  deposit_days_early: number | null;
+};
+
+async function readPaycheckAccounts() {
+  return db.all<PaycheckAccount>(
+    `SELECT id, name, offbudget, closed, business_calendar_id, deposit_days_early
+     FROM accounts WHERE tombstone = 0`,
+  );
+}
+
+// The checks the web form makes (validatePaycheckDraft), with the days early
+// typed for each deposit account
+function checkDraft(
+  draft: {
+    name: string;
+    definition: PaycheckDefinition;
+    isNewAccount: boolean;
+    clearingName: string;
+    daysEarly: Record<string, number>;
+  },
+  accounts: PaycheckAccount[],
+) {
+  const changed = changedDepositDaysEarly(
+    draft.definition.deposits,
+    Object.fromEntries(
+      Object.entries(draft.daysEarly).map(([id, days]) => [id, String(days)]),
+    ),
+    new Map(accounts.map(a => [a.id, a.deposit_days_early ?? 0])),
+  );
+  const errors = validatePaycheckDraft({
+    ...draft,
+    clearing: accounts.find(a => a.id === draft.definition.clearingAccount),
+    changedDaysEarly: changed,
+  });
+  return { changed, errors };
+}
+
+/**
+ * What the native editor shows for a draft as the user edits it (sc-4343,
+ * design Decision 3): net pay, each deposit's amount and date, the employer's
+ * name and the web form's error codes. Read-only.
+ */
+async function paycheckPreview({
+  name,
+  definition,
+  isNewAccount,
+  newClearingAccountName = '',
+  daysEarly = {},
+}: {
+  name: string;
+  definition: PaycheckDefinition;
+  isNewAccount: boolean;
+  // The typed name of a new clearing account; empty uses the employer's
+  newClearingAccountName?: string;
+  // Days early typed for deposit accounts
+  daysEarly?: Record<string, number>;
+}): Promise<NativePaycheckPreview> {
+  const calendars =
+    await businessCalendarsApp.handlers['business-calendars-get']();
+  setBusinessCalendars(calendars);
+  const accounts = await readPaycheckAccounts();
+  const byId = new Map(accounts.map(a => [a.id, a]));
+  const employerName = definition.payee
+    ? ((
+        await db.first<{ name: string }>(
+          'SELECT name FROM payees WHERE id = ? AND tombstone = 0',
+          [definition.payee],
+        )
+      )?.name ?? null)
+    : null;
+  const { changed, errors } = checkDraft(
+    {
+      name,
+      definition,
+      isNewAccount,
+      clearingName: newClearingAccountName.trim() || employerName || '',
+      daysEarly,
+    },
+    accounts,
+  );
+  const { netAmount, depositAmounts } = computePaycheck(definition);
+  const clearing = isNewAccount
+    ? undefined
+    : byId.get(definition.clearingAccount);
+
+  let payDate: string | null = null;
+  try {
+    // As the pay schedule saves it (writePaycheckSchedules)
+    payDate = getNextDate({
+      op: 'isapprox',
+      value: {
+        ...definition.date,
+        skipWeekend: true,
+        weekendSolveMode: definition.weekendSolveMode,
+        businessCalendarId: clearing?.business_calendar_id ?? undefined,
+      },
+    });
+  } catch {
+    // A half-typed recurrence has no date yet
+  }
+  if (payDate && !/^\d{4}-\d{2}-\d{2}$/.test(payDate)) payDate = null;
+
+  return {
+    netAmount,
+    payDate,
+    employerName,
+    deposits: definition.deposits.map(deposit => {
+      const account = byId.get(deposit.account);
+      const offset =
+        changed.find(c => c.account === deposit.account)?.days ??
+        account?.deposit_days_early ??
+        0;
+      return {
+        id: deposit.id,
+        amount: depositAmounts.get(deposit.id) ?? 0,
+        // As the deposit schedule's relative date (writePaycheckSchedules)
+        date:
+          payDate &&
+          toRelativeDay(payDate, {
+            relativeTo: {
+              scheduleId: '',
+              offset,
+              unit: 'business-days',
+              direction: 'before',
+            },
+            businessCalendarId: account?.business_calendar_id ?? undefined,
+          }),
+        savedDaysEarly: account ? (account.deposit_days_early ?? 0) : null,
+        calendarName:
+          calendars.find(c => c.id === account?.business_calendar_id)?.name ??
+          null,
+      };
+    }),
+    errors,
+  };
+}
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * Saves the native editor's paycheck and its changed days early as one write
+ * that fully applies or changes nothing, and is one undo step (sc-4343,
+ * design Decision 4). Everything is checked before the first write; a later
+ * throw reverts this group's writes, and only if it recorded any.
+ */
+async function paycheckSave(args: {
+  // Absent for a new paycheck
+  id?: string;
+  name: string;
+  definition: PaycheckDefinition;
+  // A new paycheck creates its clearing account with this name
+  newClearingAccountName?: string;
+  // Days early for deposit accounts; unchanged values are skipped
+  daysEarly: Record<string, number>;
+  undoToken: string;
+}): Promise<string> {
+  const { id, name, definition, newClearingAccountName, daysEarly, undoToken } =
+    args ?? ({} as typeof args);
+  if (typeof undoToken !== 'string' || !undoToken) {
+    throw new Error(
+      'native/paycheck-save: a native write needs its undo token',
+    );
+  }
+  if (
+    (id !== undefined && (typeof id !== 'string' || !id)) ||
+    typeof name !== 'string' ||
+    !isObject(definition) ||
+    !Array.isArray(definition.deposits) ||
+    !Array.isArray(definition.deductions) ||
+    (newClearingAccountName !== undefined &&
+      typeof newClearingAccountName !== 'string') ||
+    !isObject(daysEarly)
+  ) {
+    throw new Error('native/paycheck-save: invalid arguments');
+  }
+  const deposited = new Set(definition.deposits.map(d => d.account));
+  for (const [account, days] of Object.entries(daysEarly)) {
+    if (
+      !deposited.has(account) ||
+      !Number.isInteger(days) ||
+      days < 0 ||
+      days > MAX_DEPOSIT_DAYS_EARLY
+    ) {
+      throw new Error(
+        `native/paycheck-save: invalid days early for ${account}`,
+      );
+    }
+  }
+  if (id && !(await getPaychecks()).some(p => p.id === id)) {
+    throw new Error('Paycheck not found');
+  }
+  const isNewAccount = !id && !!newClearingAccountName?.trim();
+  const accounts = await readPaycheckAccounts();
+  const { changed, errors } = checkDraft(
+    {
+      name,
+      definition,
+      isNewAccount,
+      clearingName: newClearingAccountName?.trim() ?? '',
+      daysEarly,
+    },
+    accounts,
+  );
+  if (errors.length > 0) {
+    throw new Error(
+      `native/paycheck-save: invalid draft: ${errors.map(e => e.code).join(', ')}`,
+    );
+  }
+
+  try {
+    // Each runs the server validate() before its first write
+    const saved = id
+      ? (await updatePaycheck({ id, name: name.trim(), definition }), id)
+      : await createPaycheck({
+          name: name.trim(),
+          definition: isNewAccount
+            ? { ...definition, clearingAccount: '' }
+            : definition,
+          newClearingAccountName: isNewAccount
+            ? newClearingAccountName?.trim()
+            : undefined,
+        });
+    // After the paycheck, as the web saves; each rewrites every paycheck
+    // depositing to the account
+    for (const { account, days } of changed) {
+      await setAccountBusinessDays({
+        id: account,
+        businessCalendarId:
+          accounts.find(a => a.id === account)?.business_calendar_id ?? null,
+        depositDaysEarly: days ?? 0,
+      });
+    }
+    return saved;
+  } catch (error) {
+    // Reverting a group that wrote nothing would undo the step before it,
+    // maybe a web edit
+    if (undoGroupHasWrites()) {
+      await undo();
+      dropRedo();
+    }
+    throw error;
+  }
 }
 
 // null: the cell doesn't exist for this budget type or row

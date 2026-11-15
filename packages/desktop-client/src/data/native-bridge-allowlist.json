@@ -7,5 +7,9 @@
   "budget/transfer-available",
   "paycheck-skip-next",
   "native/undo",
+  "native/paycheck-preview",
+  "paycheck-year-to-date",
+  "native/paycheck-save",
+  "paycheck-delete",
   "sync"
 ]

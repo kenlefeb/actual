@@ -142,6 +142,23 @@ export function undoTargetMeta(): unknown {
   return MESSAGE_HISTORY[cursor].meta;
 }
 
+/**
+ * Fork-only (sc-4343). Whether the undo group running now has recorded a
+ * write: withUndo leaves CURSOR on the group's own marker until its first
+ * recorded write. Read only.
+ */
+export function undoGroupHasWrites(): boolean {
+  return MESSAGE_HISTORY[CURSOR].type === 'messages';
+}
+
+/**
+ * Fork-only (sc-4343). Drops every entry after CURSOR, so Redo can't re-apply
+ * a group that was just reverted.
+ */
+export function dropRedo() {
+  MESSAGE_HISTORY = MESSAGE_HISTORY.slice(0, CURSOR + 1);
+}
+
 export async function undo() {
   const end = CURSOR;
   CURSOR = Math.max(CURSOR - 1, 0);

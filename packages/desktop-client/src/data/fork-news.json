@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "id": "fork-release-26.10.1-alpha.38",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.38 — Ken's Actual fork",
+      "date": "2026-11-15",
+      "version": "26.10.1-alpha.38",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.38.md",
+      "body": "**Unofficial fork prerelease.** Based on upstream Actual v26.11.0 (`1766241e3f4b3c578e424c4fa15f1eb83c0da17d`, October 29, 2026); not an official Actual Budget release.\n\nThis release changes how the hosted MCP server (the connector that lets Claude read and change a budget) decides what it may do: the permissions now come from a grants file instead of from which tools exist. Production's assistant can do everything except delete for now.",
+      "details": "#### Features\n\n- The hosted MCP server reads a permissions file (grants) on every call. Each tool needs one or more of six scopes (read, transactions, budget amounts, structure, schedules and paychecks, delete), and a connection can use only the scopes its grant lists. A call outside the grant is refused with a fixed message and recorded as a refused line in the audit log. With no grants file, a connection can only read.\n- A grant can also require a confirmation step for destructive calls and cap how many rows one call may change.\n- Production's assistant has every scope except delete for now; staging's has every scope. The grants files are installed by the deploy.\n\n#### Enhancements\n\n- Every MCP entry now lists every tool, and each tool's description names the scopes it needs.\n- The local (stdio) MCP entry takes its permissions from environment settings and stays read-only unless writes are turned on.\n\n#### Bugfixes\n\n- No bug fixes in this release.\n\n#### Maintenance\n\n- No upstream changes in this release; the fork stays on upstream Actual 26.11.0.\n- The OpenSpec change for MCP permission scopes is proposed and implemented (sc-4477).\n\n#### Known limitations\n\n- Experimental.\n- The hosted MCP cannot delete anything yet, because the delete scope is not granted; adding it is a grants-file change and a deploy.\n- The native Schedules & Paychecks screens are off by default; turn them on in Settings to try them.\n- Tapping a tag in the transaction editor does nothing.\n- Tags are not yet fully accessible on the phone.\n- OpenID sign-out needs the server's address in the identity provider's allowed sign-out addresses; without it the provider shows an error page, though you are already signed out of Actual.\n- Attached documents aren't included in a budget export.\n- Documents removed before alpha.35 are recorded the first time an updated device syncs, and deleted 30 days after that. Removals made on a device that has not been updated are not tracked.\n- HEIC pictures are refused; use the Photos library or a JPEG or PNG copy.\n- Attaching a document needs a connection; there is no offline upload queue.\n- After restoring server data from a backup, pause the cleanup first (`production/RESTORE.md`)."
+    },
+    {
       "id": "fork-release-26.10.1-alpha.37",
       "type": "release",
       "title": "Release 26.10.1-alpha.37 — Ken's Actual fork",

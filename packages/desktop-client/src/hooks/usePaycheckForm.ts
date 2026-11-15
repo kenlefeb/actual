@@ -290,9 +290,12 @@ export function paycheckErrorMessage(
     case 'deposit-to-clearing-account':
       return t('A deposit cannot go to the clearing account.');
     case 'days-early-invalid':
-      return t('Business days early must be a whole number from 0 to {{max}}.', {
-        max: MAX_DEPOSIT_DAYS_EARLY,
-      });
+      return t(
+        'Business days early must be a whole number from 0 to {{max}}.',
+        {
+          max: MAX_DEPOSIT_DAYS_EARLY,
+        },
+      );
     case 'deductions-exceed-gross':
       return t('Deductions exceed gross pay.');
     case 'deposits-exceed-net':

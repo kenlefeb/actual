@@ -6,11 +6,7 @@
         "id": "PAYCHECK_ID"
       }
     ],
-    "selectExpressions": [
-      "id",
-      "name",
-      "definition"
-    ],
+    "selectExpressions": ["id", "name", "definition"],
     "groupExpressions": [],
     "orderExpressions": [],
     "calculation": false,
@@ -24,16 +20,9 @@
   "accounts": {
     "tableOptions": {},
     "filterExpressions": [],
-    "selectExpressions": [
-      "id",
-      "name",
-      "offbudget",
-      "closed"
-    ],
+    "selectExpressions": ["id", "name", "offbudget", "closed"],
     "groupExpressions": [],
-    "orderExpressions": [
-      "sort_order"
-    ],
+    "orderExpressions": ["sort_order"],
     "calculation": false,
     "rawMode": false,
     "withDead": false,
@@ -49,14 +38,9 @@
         "transfer_acct": null
       }
     ],
-    "selectExpressions": [
-      "id",
-      "name"
-    ],
+    "selectExpressions": ["id", "name"],
     "groupExpressions": [],
-    "orderExpressions": [
-      "name"
-    ],
+    "orderExpressions": ["name"],
     "calculation": false,
     "rawMode": false,
     "withDead": false,
@@ -68,16 +52,9 @@
   "categories": {
     "tableOptions": {},
     "filterExpressions": [],
-    "selectExpressions": [
-      "id",
-      "name",
-      "is_income",
-      "hidden"
-    ],
+    "selectExpressions": ["id", "name", "is_income", "hidden"],
     "groupExpressions": [],
-    "orderExpressions": [
-      "sort_order"
-    ],
+    "orderExpressions": ["sort_order"],
     "calculation": false,
     "rawMode": false,
     "withDead": false,

@@ -337,6 +337,7 @@ describe('PaycheckEditModal', () => {
         gross: 300000,
         deductions: [{ name: 'Federal tax', amount: 45000 }],
         net: 255000,
+        hasHistory: true,
       },
       {
         year: 2025,
@@ -346,6 +347,7 @@ describe('PaycheckEditModal', () => {
           { name: 'Health', amount: 288000 },
         ],
         net: 5882000,
+        hasHistory: true,
       },
     ];
     renderModal();

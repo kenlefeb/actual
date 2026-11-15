@@ -2,6 +2,8 @@
 // `native/paycheck-preview` (design Decision 3), the all-or-nothing
 // `native/paycheck-save` (Decision 4) and year-to-date's `hasHistory`
 // (Decision 6).
+import { readFileSync } from 'node:fs';
+
 import { aqlQuery } from '#server/aql';
 import { app as businessCalendarsApp } from '#server/business-calendars/app';
 import * as db from '#server/db';
@@ -186,6 +188,17 @@ describe('native/paycheck-preview', () => {
       ],
       errors: [],
     });
+  });
+
+  it('never gives a pay date before today', async () => {
+    // Sunday the 15th moves back to Friday the 13th, which has passed
+    vi.setSystemTime(new Date(2026, 10, 15));
+    const result = await preview({
+      name: 'Acme',
+      definition: acme(),
+      isNewAccount: false,
+    });
+    expect(result.payDate).toBe('2026-11-30');
   });
 
   it('returns error codes with their fields', async () => {
@@ -586,9 +599,14 @@ describe('native paycheck editor queries', () => {
     const serialized = Object.fromEntries(
       Object.entries(queries).map(([name, query]) => [name, query.serialize()]),
     );
-    await expect(
-      JSON.stringify(serialized, null, 2) + '\n',
-    ).toMatchFileSnapshot('./fixtures/paycheck-editor-queries.json');
+    expect(serialized).toEqual(
+      JSON.parse(
+        readFileSync(
+          new URL('./fixtures/paycheck-editor-queries.json', import.meta.url),
+          'utf8',
+        ),
+      ),
+    );
 
     const id = await handlers['paycheck-create']({
       name: 'Acme',

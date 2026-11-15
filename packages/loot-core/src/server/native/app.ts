@@ -42,6 +42,7 @@ import {
   DEFAULT_UPCOMING_SCHEDULE_DAYS,
   getHasTransactionsQuery,
   getNextDate,
+  getNextDateAfter,
   getScheduledAmount,
   getStatus,
 } from '#shared/schedules';
@@ -557,7 +558,7 @@ async function paycheckPreview({
   let payDate: string | null = null;
   try {
     // As the pay schedule saves it (writePaycheckSchedules)
-    payDate = getNextDate({
+    const dateCond = {
       op: 'isapprox',
       value: {
         ...definition.date,
@@ -565,7 +566,14 @@ async function paycheckPreview({
         weekendSolveMode: definition.weekendSolveMode,
         businessCalendarId: clearing?.business_calendar_id ?? undefined,
       },
-    });
+    };
+    // The clock, not currentDay(), so tests can set it (as the list's read)
+    const today = monthUtils.dayFromDate(new Date());
+    payDate = getNextDate(dateCond, monthUtils.parseDate(today));
+    // An occurrence moved back before today has passed: the next one after
+    if (payDate && payDate < today) {
+      payDate = getNextDateAfter(dateCond, monthUtils.addDays(today, -1));
+    }
   } catch {
     // A half-typed recurrence has no date yet
   }

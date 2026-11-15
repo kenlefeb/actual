@@ -212,8 +212,9 @@ export function validatePaycheckDraft({
   if (deductions.some(d => d.transferAccount === '')) {
     add('transfer-account-missing', 'deductions');
   }
-  if (deposits.some(d => !d.account))
-    {add('deposit-account-missing', 'deposits');}
+  if (deposits.some(d => !d.account)) {
+    add('deposit-account-missing', 'deposits');
+  }
   if (
     deposits.some(d => d.account && d.account === definition.clearingAccount)
   ) {

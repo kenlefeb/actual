@@ -16,7 +16,7 @@ final class NativePaychecksViewController: UIHostingController<PaychecksScreen> 
     // `navigate` asks the page to show a path (the web editor and forms, or back)
     init(client: NativeBridgeClient, backPath: String, navigate: @escaping (String) -> Void) {
         model = PaychecksViewModel(client: client)
-        super.init(rootView: PaychecksScreen(model: model, backPath: backPath, navigate: navigate))
+        super.init(rootView: PaychecksScreen(model: model, client: client, backPath: backPath, navigate: navigate))
     }
 
     @available(*, unavailable)
@@ -77,9 +77,12 @@ enum PaychecksTokens {
 
 struct PaychecksScreen: View {
     @ObservedObject var model: PaychecksViewModel
+    let client: NativeBridgeClient
     let backPath: String
     let navigate: (String) -> Void
     @State private var expanded: Set<String> = []
+    // sc-4343: the native editor sheet, for adding or editing a paycheck
+    @State private var editing: PaycheckEditorRequest?
     @State private var confirmingSkip: SchedulesPaychecks.Paycheck?
     @Environment(\.colorSchemeContrast) private var contrast
 
@@ -100,6 +103,13 @@ struct PaychecksScreen: View {
         }
         .navigationViewStyle(.stack)
         .task { await model.load() }
+        .sheet(item: $editing) { request in
+            if let style = model.state.read?.amountStyle {
+                PaycheckEditorSheet(request: request, client: client, style: style) { offer in
+                    Task { await model.wrote(offer) }
+                }
+            }
+        }
         .safeAreaInset(edge: .bottom) { undoBar }
         // After the inset, so the Undo button takes the accent too
         .tint(PaychecksTokens.skipConfirm)
@@ -189,14 +199,14 @@ struct PaychecksScreen: View {
 
     private func list(_ read: SchedulesPaychecks) -> some View {
         List {
-            Section(header: header(Words.paychecks, add: Words.addPaycheck) { navigate("/paychecks/new") }) {
+            Section(header: header(Words.paychecks, add: Words.addPaycheck) { editing = PaycheckEditorRequest(paycheckId: nil) }) {
                 if read.paychecks.isEmpty {
-                    emptyRow(Words.noPaychecks, action: Words.addPaycheck) { navigate("/paychecks/new") }
+                    emptyRow(Words.noPaychecks, action: Words.addPaycheck) { editing = PaycheckEditorRequest(paycheckId: nil) }
                 }
                 ForEach(read.paychecks) { paycheck in
                     PaycheckRow(
                         paycheck: paycheck, style: read.amountStyle, isExpanded: expanded.contains(paycheck.id),
-                        onEdit: { navigate("/paychecks/\(paycheck.id)") },
+                        onEdit: { editing = PaycheckEditorRequest(paycheckId: paycheck.id) },
                         onToggleMore: {
                             if expanded.contains(paycheck.id) { expanded.remove(paycheck.id) } else { expanded.insert(paycheck.id) }
                         },
@@ -242,10 +252,18 @@ struct PaychecksScreen: View {
         .padding(.vertical, 4)
     }
 
+    private func undoText(_ offer: PaychecksUndoOffer) -> String {
+        switch offer.action {
+        case .skip: String(format: Words.skipped, Dates.long(offer.date))
+        case .create, .save: String(format: Words.saved, offer.paycheckName)
+        case .delete: String(format: Words.deleted, offer.paycheckName)
+        }
+    }
+
     @ViewBuilder private var undoBar: some View {
         if let offer = model.undoOffer {
             HStack {
-                Text(String(format: Words.skipped, Dates.long(offer.date))).fixedSize(horizontal: false, vertical: true)
+                Text(undoText(offer)).fixedSize(horizontal: false, vertical: true)
                 Spacer()
                 Button(Words.undo) { Task { await model.undo() } }
                     .buttonStyle(.borderedProminent)
@@ -457,6 +475,8 @@ private enum Words {
     static let skipIt = NSLocalizedString("Skip it", comment: "Native Paychecks: confirm the skip")
     static let skipped = NSLocalizedString("Skipped the paycheck on %@.", comment: "Native Paychecks: after a skip")
     static let ok = NSLocalizedString("OK", comment: "Native Paychecks: close an error")
+    static let saved = NSLocalizedString("Saved \"%@\".", comment: "Native Paychecks: after the editor saved")
+    static let deleted = NSLocalizedString("Deleted \"%@\".", comment: "Native Paychecks: after the editor deleted")
     static let undo = NSLocalizedString("Undo", comment: "Native Paychecks: undo the skip")
     static let skippedLine = NSLocalizedString("Skipped: %@", comment: "Native Paychecks: a skipped pay date")
     static let warning = NSLocalizedString("Needs attention", comment: "Native Paychecks: VoiceOver prefix of a clearing warning")

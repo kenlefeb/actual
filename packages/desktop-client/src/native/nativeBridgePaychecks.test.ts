@@ -203,9 +203,9 @@ describe('paycheck editor handlers through the page bridge', () => {
     await expect(
       bridge.call('paycheck-delete', { id: 'gone', undoToken: 'D' }),
     ).rejects.toThrow(/paycheck/);
-    await expect(bridge.call('paycheck-delete', { id: 'acme' })).rejects.toThrow(
-      /token/,
-    );
+    await expect(
+      bridge.call('paycheck-delete', { id: 'acme' }),
+    ).rejects.toThrow(/token/);
     expect(calls('paycheck-delete')).toEqual([]);
   });
 
@@ -262,8 +262,16 @@ describe('paycheck editor handlers through the page bridge', () => {
       },
       /account/,
     ],
-    ['days early for an unknown account', { ...saveArgs, daysEarly: { x: 1 } }, /account/],
-    ['a non-integer days early', { ...saveArgs, daysEarly: { checking: 1.5 } }, /days early/],
+    [
+      'days early for an unknown account',
+      { ...saveArgs, daysEarly: { x: 1 } },
+      /account/,
+    ],
+    [
+      'a non-integer days early',
+      { ...saveArgs, daysEarly: { checking: 1.5 } },
+      /days early/,
+    ],
     ['a missing definition', { ...saveArgs, definition: null }, /definition/],
   ])('refuses a save with %s', async (_, args, message) => {
     const { bridge, calls } = editorSetup();

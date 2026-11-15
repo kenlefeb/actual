@@ -209,22 +209,6 @@ export async function planUpdates(updates: Update[]) {
         `Row ${u.id} is one side of a transfer and cannot move into its own other account. Nothing changed.`,
       );
     }
-    // The app's confirm-transaction-edit fields, plus unclearing (stricter than the app)
-    const locked = (['amount', 'date', 'account_id', 'payee_id'] as const).some(
-      f => u[f] !== undefined && u[f] !== t[FIELDS[f]],
-    );
-    if (!u.allow_reconciled) {
-      if (t.reconciled && (locked || u.cleared === false)) {
-        throw new Refusal(
-          `Row ${u.id} is reconciled; set allow_reconciled to change it. Nothing changed.`,
-        );
-      }
-      if (partner?.reconciled && locked) {
-        throw new Refusal(
-          `The other side of row ${u.id}'s transfer is reconciled; set allow_reconciled to change it. Nothing changed.`,
-        );
-      }
-    }
   }
 
   // The rows as they will be after the call
@@ -307,6 +291,35 @@ export async function planUpdates(updates: Update[]) {
         `Changing row ${t.id}'s payee would link or unlink a transfer; do it in the app (sc-4205). Nothing changed.`,
       );
     }
+  }
+
+  // A reconciled row, or a transfer whose other side is reconciled, changes
+  // only with the override: the app's confirm-transaction-edit fields, plus
+  // unclearing (stricter than the app). Split children carry their parent's
+  // edit, so a child's partner is checked too.
+  const overridden: string[] = [];
+  for (const t of after.values()) {
+    const t0 = before.get(t.id)!;
+    const own = updates.find(u => u.id === t.id);
+    const owner = own ?? updates.find(u => u.id === t.parent_id);
+    const locked = (['amount', 'date', 'account', 'payee'] as const).some(
+      c => t[c] !== t0[c],
+    );
+    const unclearing =
+      t.cleared === false && (t0.cleared !== false || own?.cleared === false);
+    const partner = partnerOf(t0);
+    const rowLocked = t0.reconciled && (locked || unclearing);
+    const partnerLocked = Boolean(partner?.reconciled) && locked;
+    if (!rowLocked && !partnerLocked) continue;
+    if (!owner?.allow_reconciled) {
+      throw new Refusal(
+        rowLocked
+          ? `Row ${t.id} is reconciled; set allow_reconciled to change it. Nothing changed.`
+          : `The other side of row ${t.id}'s transfer is reconciled; set allow_reconciled to change it. Nothing changed.`,
+      );
+    }
+    if (rowLocked) overridden.push(t.id);
+    if (partnerLocked && partner) overridden.push(partner.id);
   }
 
   // Transfer partners follow (transfer.updateTransfer, then clearCategory)
@@ -392,16 +405,22 @@ export async function planUpdates(updates: Update[]) {
   if (changes.length === 0) {
     throw new Refusal('No field to change.');
   }
-  for (const u of updates) {
-    if (u.allow_reconciled) {
-      changes.push({
-        id: u.id,
-        field: 'allow_reconciled',
-        before: null,
-        after: true,
-      });
-    }
+  // Each override actually used, on the reconciled row it overrides
+  const reconciledOverridden = unique(overridden);
+  for (const k of reconciledOverridden) {
+    changes.push({
+      id: k,
+      field: 'allow_reconciled',
+      before: null,
+      after: true,
+    });
   }
 
-  return { ids, sends, changes, partners: cascaded };
+  return {
+    ids,
+    sends,
+    changes,
+    partners: cascaded,
+    reconciledOverridden,
+  };
 }

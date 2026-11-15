@@ -78,8 +78,19 @@ async function category(name: string) {
 }
 
 /** A budget with Checking (the fixture's), Savings, Credit Union and an off-budget account. */
-async function setup() {
-  h = await startHarness({ count: 1 }, { writes: true });
+async function setup({ allowReconciled = false } = {}) {
+  h = await startHarness(
+    { count: 1 },
+    allowReconciled
+      ? {
+          grant: {
+            scopes: [...SCOPES],
+            confirm_destructive: false,
+            allow_reconciled: true,
+          },
+        }
+      : { writes: true },
+  );
   const checking = h.fixture.accountId;
   const savings = await api.createAccount({ name: 'Savings' }, 0);
   const creditUnion = await api.createAccount({ name: 'Credit Union' }, 0);
@@ -173,7 +184,7 @@ describe('Transaction amount, date, account and cleared edits', () => {
   });
 
   it('Moving a transaction to another account', async () => {
-    const { checking, savings } = await setup();
+    const { checking, savings } = await setup({ allowReconciled: true });
     const [t] = await rows({ account: checking });
     await api.updateTransaction(t.id, {
       notes: 'rent',
@@ -363,6 +374,22 @@ describe('Transfer edits keep the pair', () => {
   });
 });
 
+describe('Both sides of one transfer', () => {
+  it('Both sides of one transfer in one call', async () => {
+    const { checking, savings } = await setup();
+    const { out, into } = await transfer(checking, savings);
+    await expectRefused(
+      {
+        updates: [
+          { id: out.id, notes: 'a' },
+          { id: into.id, notes: 'b' },
+        ],
+      },
+      /two sides of one transfer/,
+    );
+  });
+});
+
 describe('A payee edit never links or unlinks a transfer', () => {
   // The engine would delete the other side, or insert a new one: a create or
   // delete outside the audit line and the delete scope (until sc-4205)
@@ -418,8 +445,8 @@ describe('A payee edit never links or unlinks a transfer', () => {
 });
 
 describe('Reconciled rows need an explicit override', () => {
-  async function reconciled() {
-    const { checking, savings } = await setup();
+  async function reconciled({ allowReconciled = true } = {}) {
+    const { checking, savings } = await setup({ allowReconciled });
     const [t] = await rows({ account: checking });
     await api.updateTransaction(t.id, { cleared: true, reconciled: true });
     return { checking, savings, t };
@@ -466,6 +493,82 @@ describe('Reconciled rows need an explicit override', () => {
       before: null,
       after: true,
     });
+    expect(res.json.reconciled_overridden).toEqual([t.id]);
+  });
+
+  it("An override the grant doesn't allow is refused", async () => {
+    const { t } = await reconciled({ allowReconciled: false });
+    for (const update of [
+      { id: t.id, amount: -999, allow_reconciled: true },
+      // Even where the row would not need it
+      { id: t.id, notes: 'checked', allow_reconciled: true },
+    ]) {
+      await expectRefused(
+        { updates: [update] },
+        /grant does not allow overriding reconciled/,
+      );
+    }
+  });
+
+  it('The audit line records only an override actually used', async () => {
+    const { checking } = await setup({ allowReconciled: true });
+    const [t] = await rows({ account: checking });
+    const res = await h.call('write_update_transactions', {
+      updates: [{ id: t.id, amount: -999, allow_reconciled: true }],
+    });
+    expect(res.isError).toBe(false);
+    expect(
+      auditLines()[0].changes.filter(
+        (c: { field: string }) => c.field === 'allow_reconciled',
+      ),
+    ).toEqual([]);
+    expect(res.json.reconciled_overridden).toBeUndefined();
+  });
+
+  it("An override of the transfer's other side is recorded on that side", async () => {
+    const { checking, savings } = await setup({ allowReconciled: true });
+    const { out, into } = await transfer(checking, savings);
+    await api.updateTransaction(into.id, { cleared: true, reconciled: true });
+    const res = await h.call('write_update_transactions', {
+      updates: [{ id: out.id, amount: -7500, allow_reconciled: true }],
+    });
+    expect(res.isError).toBe(false);
+    expect(auditLines()[0].changes).toContainEqual({
+      id: into.id,
+      field: 'allow_reconciled',
+      before: null,
+      after: true,
+    });
+    expect(res.json.reconciled_overridden).toEqual([into.id]);
+  });
+
+  it("A split child's reconciled transfer partner needs the override", async () => {
+    const { checking, savings, creditUnion } = await setup();
+    await api.addTransactions(checking, [
+      {
+        date: '2026-11-01',
+        amount: -10000,
+        subtransactions: [{ amount: -6000 }, { amount: -4000 }],
+      },
+    ]);
+    const parent = (await rows({ account: checking, amount: -10000 }))[0];
+    const first = (await rows({ parent_id: parent.id })).find(
+      t => t.amount === -6000,
+    )!;
+    // The engine links the child to Savings
+    await api.updateTransaction(first.id, {
+      payee: await transferPayee(savings),
+    });
+    const child = await row(first.id);
+    expect(child.transfer_id).toBeTruthy();
+    await api.updateTransaction(child.transfer_id!, {
+      cleared: true,
+      reconciled: true,
+    });
+    await expectRefused(
+      { updates: [{ id: parent.id, account_id: creditUnion }] },
+      /is reconciled; set allow_reconciled/,
+    );
   });
 
   it('Unlocking a reconciled row', async () => {
@@ -585,22 +688,36 @@ describe('Cascaded changes are audited', () => {
     );
   });
 
-  it('The row cap counts the rows named in the call', async () => {
-    h = await startHarness(
-      { count: 1 },
-      {
-        grant: { scopes: [...SCOPES], confirm_destructive: false, max_rows: 1 },
-      },
-    );
-    const checking = h.fixture.accountId;
-    const savings = await api.createAccount({ name: 'Savings' }, 0);
-    const { out, into } = await transfer(checking, savings);
-    const res = await h.call('write_update_transactions', {
-      updates: [{ id: out.id, amount: -7500 }],
-    });
-    expect(res.isError).toBe(false);
-    expect((await row(into.id)).amount).toBe(7500);
-  });
+  it.each([
+    [1, true],
+    [2, false],
+  ])(
+    'The row cap counts every row the call changes (max_rows %i)',
+    async (maxRows, refused) => {
+      h = await startHarness(
+        { count: 1 },
+        {
+          grant: {
+            scopes: [...SCOPES],
+            confirm_destructive: false,
+            max_rows: maxRows,
+          },
+        },
+      );
+      const checking = h.fixture.accountId;
+      const savings = await api.createAccount({ name: 'Savings' }, 0);
+      const { out, into } = await transfer(checking, savings);
+      // One named row, two changed: the side and its partner
+      const args = { updates: [{ id: out.id, amount: -7500 }] };
+      if (refused) {
+        await expectRefused(args, /At most 1 rows may change/);
+      } else {
+        const res = await h.call('write_update_transactions', args);
+        expect(res.isError).toBe(false);
+        expect((await row(into.id)).amount).toBe(7500);
+      }
+    },
+  );
 
   // The prediction must match what the engine does
   const COLUMN: Record<string, keyof Tx> = {
@@ -730,6 +847,29 @@ describe('Multi-row updates apply together', () => {
       status: 'failed',
       applied: [out.id],
       partners_not_updated: [into.id],
+    });
+  });
+
+  it("An engine failure whose state can't be read back", async () => {
+    h = await startHarness({ count: 1 }, { writes: true });
+    const [t] = await rows({ account: h.fixture.accountId });
+    vi.spyOn(api, 'updateTransactions').mockImplementation(async () => {
+      // From here on, every read fails too
+      vi.spyOn(api, 'runQuery').mockRejectedValue(new Error('read failed'));
+      throw new Error('engine failed');
+    });
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const res = await h.call('write_update_transactions', {
+      updates: [{ id: t.id, notes: 'changed' }],
+    });
+    expect(res.isError).toBe(false);
+    expect(res.json).toMatchObject({ applied: null, read_back: 'failed' });
+    expect(res.json.failure).toMatch(/Check the budget/);
+    expect(auditLines()[1]).toMatchObject({
+      phase: 'outcome',
+      status: 'failed',
+      applied: null,
+      read_back: 'failed',
     });
   });
 

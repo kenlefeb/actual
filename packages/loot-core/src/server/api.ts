@@ -681,7 +681,9 @@ handlers['api/transaction-update'] = withMutation(async function ({
 
 // Fork: several updates as one batch. The named rows' diff, split children
 // included, is written together; transfer partners follow in the batch
-// update's second step, as for a single update.
+// update's second step, as for a single update. Like api/transaction-update,
+// it does no input validation: `fields` is spread over the row as given, so
+// callers are trusted (the MCP server's planner is the validator).
 handlers['api/transactions-update'] = withMutation(async function ({
   updates,
 }) {

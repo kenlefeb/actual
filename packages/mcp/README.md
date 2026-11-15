@@ -77,7 +77,8 @@ only expense groups can be created.
   moved account's history before its budget start date, or on its offset line (they are already
   in the starting balance), is refused whole; do that in the app. Notes and payee can still change.
 - **50 rows at most** per call, or the grant's lower `max_rows`; more is refused before anything
-  changes.
+  changes. `write_update_transactions` also counts every row the call would change: split children
+  and transfer partners as well as the rows it names.
 - **Before and after.** Each result carries the before and after values of every field it
   changed (`write_create_transactions` returns the new rows and their ids).
 - **Moving on budget needs the preview.** Call `preview_move_on_budget` for the account and start
@@ -99,7 +100,8 @@ only expense groups can be created.
   partners follow in a second step, as in the app. If the engine fails, the tool reads every
   affected row back: the result and the outcome line list the named rows that hold their new
   values in `applied`, the partners still at their old values in `partners_not_updated`, and the
-  call id in `failed`. The engine error goes only to the server's stderr (scrubbed, with the call
+  call id in `failed`. If that read-back fails too, they record `applied: null` and
+  `read_back: "failed"`, and the result says to check the budget. The engine error goes only to the server's stderr (scrubbed, with the call
   id), never to the model or the audit log.
 - **Editing amount, date, account and cleared** (`write_update_transactions`), as in the app:
   - **Splits.** `date`, `account_id` and `cleared` are set on the split parent; its children
@@ -115,8 +117,11 @@ only expense groups can be created.
     Do it in the app until transfer linking lands (sc-4205).
   - **Reconciled rows.** Changing `amount`, `date`, `account_id` or `payee_id` of a reconciled
     row, or of a transfer whose other side is reconciled, or setting `cleared` false on a
-    reconciled row, needs `allow_reconciled: true` on that row. A new account or `cleared` false
-    then un-reconciles it. Category and notes need no override. Unlike the app, which changes
+    reconciled row, needs `allow_reconciled: true` on that row, and the grant's `allow_reconciled`
+    option. A split parent's edit is checked on its children and their transfer partners. A new
+    account or `cleared` false then un-reconciles it. The attempt line records an
+    `allow_reconciled` entry for each reconciled row or partner actually overridden, and the
+    result names them in `reconciled_overridden`. Category and notes need no override. Unlike the app, which changes
     `cleared` without asking, unclearing needs the override, so a row is never left reconciled
     but uncleared.
   - **Accounts.** Moving to an off-budget account clears the category; a closed account is
@@ -124,8 +129,8 @@ only expense groups can be created.
   - **Schedules** keep their link; the edit changes neither the schedule nor a paycheck.
   - **Moved history** is checked on each row as it will be after the call.
   - **Audit.** The attempt line lists every field the call changes, including the transfer
-    partner's and a category an off-budget move clears, plus `allow_reconciled` when set. The
-    result reads back every one of those rows. The row cap counts the rows the call names.
+    partner's and a category an off-budget move clears, plus each reconciled override used. The
+    result reads back every one of those rows.
 - **A read-back failure is not a failed write.** If a write is applied but its result can't be
   read, the call still succeeds, with `applied` and a fixed `read_back` note saying not to retry.
 - **Bounds.** A write is refused, with fixed text and before any audit line, for an `amount` that
@@ -167,6 +172,9 @@ scopes it needs (its description ends `Needs: …`):
   compromised or prompt-injected model can run the dry run itself. Keep destructive tools on
   prompt in your client.
 - **`max_rows`.** Lowers the per-call row cap below 50; it never raises it.
+- **`allow_reconciled`.** Lets `write_update_transactions` take a row's `allow_reconciled` to
+  change a reconciled transaction (below). Off when absent: without it, any row that sets
+  `allow_reconciled` is refused.
 
 **Stdio grants.** Only the `--writes` entry reads these variables, so both entries can share one env
 file; the read entry always grants `budget:read` (its write tools are listed but refused).
@@ -176,6 +184,7 @@ file; the read entry always grants `budget:read` (its write tools are listed but
 | `ACTUAL_MCP_WRITES_SCOPES`              | every scope        | Space-separated scopes; an unknown or empty value stops the entry at start |
 | `ACTUAL_MCP_WRITES_CONFIRM_DESTRUCTIVE` | `0`                | `1` to require the dry run and `confirm` before a delete                   |
 | `ACTUAL_MCP_WRITES_MAX_ROWS`            | 50                 | A lower per-call row cap                                                   |
+| `ACTUAL_MCP_WRITES_ALLOW_RECONCILED`    | `0`                | `1` to let a row's `allow_reconciled` change reconciled transactions       |
 
 Set them in the 1Password Environment "Actual Agents", never in the repo, `.mcp.json` or a shell
 profile. They are read at start. On your own machine this is a guard rail against a confused agent,
@@ -210,7 +219,7 @@ change applies on the next call with no restart or reconnect. The access token k
 - **Strict schema.** `version` is 1; no unknown keys anywhere; `subject` is a literal OAuth subject,
   never a wildcard; `client` is a client id or `*`; `scopes` is a non-empty list of known scopes;
   `max_rows` a positive integer (above 50 counts as 50); `confirm_destructive` a boolean, `true`
-  when absent. No (subject, client) pair may appear twice, and a `*` grant holds `budget:read`
+  when absent; `allow_reconciled` a boolean, off when absent. No (subject, client) pair may appear twice, and a `*` grant holds `budget:read`
   only, so writes go only to named client ids. Any violation makes the whole file invalid.
 - **Matching.** An exact client id wins over `*`; a subject with no matching grant gets no scopes.
   Grants per client do not separate agents that share one sign-in: separating them needs distinct

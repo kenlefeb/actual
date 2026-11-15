@@ -76,6 +76,8 @@ Order inside the tool: row cap → unique ids → `requireIds` (transactions, ca
   - The row has `reconciled` and the call changes `amount`, `date`, `account_id` or `payee_id`, or sets `cleared` false; or
   - the row has a `transfer_id` whose partner is reconciled and the call changes one of those four fields.
   - Without `allow_reconciled`, the call is refused: "Row … is reconciled; set allow_reconciled to change it."
+  - `allow_reconciled` itself needs the grant option of the same name, off when absent (Ken, 2026-11-15, sc-4204).
+  - The check runs on every row the split cascade reaches and on its transfer partner, after children follow their parent.
   - With it, the tool also sends `reconciled: false` when the account changes or `cleared` becomes false, as `onUpdateAfterConfirm` does.
 
 **Balanced splits:**
@@ -84,6 +86,8 @@ Order inside the tool: row cap → unique ids → `requireIds` (transactions, ca
 3. Refuse if the children's sum ≠ the parent amount: "Split … would be off by N cents."
 
 This uses the same arithmetic as `recalculateSplit`, with no engine call, so a refusal writes nothing and no audit line.
+
+**Payee changes that link or unlink a transfer** are refused (Security and Architect review, PR #375): the engine's `removeTransfer` would delete the other side and `addTransfer` would insert one, outside the audit line and the `delete` scope, until sc-4205 predicts them.
 
 **Moved history after the edit:** apply `isMovedHistory` to each row's after-state: its new account, date, and category (new or existing). This reuses the existing `refuseCategorizingMovedHistory`.
 
@@ -123,7 +127,7 @@ The named rows' diff is one `batchMessages` block, so they change together or no
 - **Payee edits on reconciled rows now need the override.** This changes what the assistant can do today. It is the app's rule, and the refusal text says how to proceed.
 - **Atomic only for the named rows.** Transfer updates run in a second `batchMessages` after the first, exactly as in the app's edit, so a failure there leaves the named rows changed and the partner not. The spec promises no more than that, and the result reports the read-back state.
 - **A deliberate departure on `cleared`.** The app changes `cleared` on a reconciled row without asking and offers "unlock" separately. This tool requires `allow_reconciled` to set `cleared` false on a reconciled row, and un-reconciles it, so a row is never left reconciled but uncleared.
-- **Larger calls.** A 50-row call can cascade to about 100 rows (transfers) and to children. The row cap stays on named rows, as the spec says. The batch is one diff, so this costs little.
+- **Larger calls.** A named split parent reaches all its children and their transfer partners. The row cap therefore counts every row the plan changes as well as the named rows (Security review, PR #375).
 
 ## Migration Plan
 

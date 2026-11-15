@@ -177,7 +177,7 @@ export function registerTransactionWriteTools(tool: RegisterWriteTool) {
 
   tool(
     'write_update_transactions',
-    `Change up to ${MAX_WRITE_ROWS} transactions by id: category, payee, notes, amount (integer cents), date, account and cleared. category_id, payee_id and account_id must be ids from the read tools, never names; null clears category, payee or notes. The named rows change together or not at all. Rules, as in the app: date, account and cleared are set on a split parent and its children follow; after the call every split it touches must add up (a split's parent and child amounts can change in one call); a transfer's other side follows (opposite amount, notes, schedule, transfer payee, category cleared) in a second step, keeping its own date; a transfer side cannot move into its other side's account, and a payee change that would link or unlink a transfer is refused; moving to an off-budget account clears the category; a closed account cannot be a target. Changing amount, date, account or payee of a reconciled row (or of a transfer whose other side is reconciled), or setting cleared false on a reconciled row, needs allow_reconciled true on that row; a new account or cleared false then un-reconciles it. Returns each changed field's before and after values, read back, including the cascaded rows.`,
+    `Change up to ${MAX_WRITE_ROWS} transactions by id: category, payee, notes, amount (integer cents), date, account and cleared. category_id, payee_id and account_id must be ids from the read tools, never names; null clears category, payee or notes. The named rows change together or not at all. Rules, as in the app: date, account and cleared are set on a split parent and its children follow; after the call every split it touches must add up (a split's parent and child amounts can change in one call); a transfer's other side follows (opposite amount, notes, schedule, transfer payee, category cleared) in a second step, keeping its own date; a transfer side cannot move into its other side's account, and a payee change that would link or unlink a transfer is refused; moving to an off-budget account clears the category; a closed account cannot be a target. Changing amount, date, account or payee of a reconciled row (or of a transfer whose other side is reconciled), or setting cleared false on a reconciled row, needs allow_reconciled true on that row, which the connection's grant must allow; a new account or cleared false then un-reconciles it. Returns each changed field's before and after values, read back, including the cascaded rows.`,
     {
       updates: z
         .array(
@@ -199,13 +199,22 @@ export function registerTransactionWriteTools(tool: RegisterWriteTool) {
         .max(MAX_WRITE_ROWS),
     },
     async ({ updates }, auditLog) => {
-      // The cap counts the rows the call names, not the rows that follow
       requireRows(auditLog, updates.length);
       const ids = updates.map(u => u.id);
       if (new Set(ids).size !== ids.length) {
         throw new Refusal('Each transaction id may appear only once.');
       }
+      if (
+        updates.some(u => u.allow_reconciled) &&
+        !auditLog.grant.allow_reconciled
+      ) {
+        throw new Refusal(
+          "This connection's grant does not allow overriding reconciled transactions. Change them in the app. Nothing changed.",
+        );
+      }
       const plan = await planUpdates(updates);
+      // The cap also counts the rows that follow: split children and partners
+      requireRows(auditLog, new Set(plan.changes.map(c => c.id)).size);
 
       let failed: string | undefined;
       let partnersNotUpdated: string[] | undefined;
@@ -232,8 +241,10 @@ export function registerTransactionWriteTools(tool: RegisterWriteTool) {
           try {
             now = await readBack(plan.changes);
           } catch {
+            // Unknown, not "nothing applied": a transfer-step failure has
+            // already written the named rows
             unverified = true;
-            return { applied: [], failed };
+            return { applied: null, failed, read_back: 'failed' };
           }
           const holds = (c: AuditChange) => {
             const column = FIELD_COLUMN[c.field];
@@ -264,20 +275,35 @@ export function registerTransactionWriteTools(tool: RegisterWriteTool) {
             partners_not_updated: partnersNotUpdated,
           };
         },
-        outcome =>
-          updateResult(
-            outcome.applied,
+        async outcome => {
+          const overridden =
+            plan.reconciledOverridden.length > 0
+              ? { reconciled_overridden: plan.reconciledOverridden }
+              : {};
+          if (unverified) {
+            return {
+              applied: null,
+              failed,
+              read_back: 'failed',
+              ...overridden,
+              failure:
+                'The engine failed and the rows could not be read back. Check the budget before retrying.',
+            };
+          }
+          return updateResult(
+            outcome.applied ?? [],
             plan.changes,
             failed === undefined
-              ? {}
+              ? overridden
               : {
+                  ...overridden,
                   failed,
                   partners_not_updated: partnersNotUpdated ?? [],
-                  failure: unverified
-                    ? 'The engine failed and the rows could not be read back. Check the budget before retrying.'
-                    : 'The engine failed. Rows in `applied` hold their new values; transfer partners in `partners_not_updated` were not updated. `items` show the values read back.',
+                  failure:
+                    'The engine failed. Rows in `applied` hold their new values; transfer partners in `partners_not_updated` were not updated. `items` show the values read back.',
                 },
-          ),
+          );
+        },
       );
     },
     { scopes: ['transactions:write'] },

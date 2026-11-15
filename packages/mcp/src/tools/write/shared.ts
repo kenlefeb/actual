@@ -50,11 +50,14 @@ export function requireMonth(value: string) {
 
 /** What a write did: the rows applied, the row that failed, and anything created. */
 export type WriteOutcome = {
-  applied: string[];
+  /** null: the write failed and its state could not be read back. */
+  applied: string[] | null;
   failed?: string;
   created?: string[];
   /** Transfer partners still at their old values after a failed write. */
   partners_not_updated?: string[];
+  /** `failed` when a failed write's state could not be read back. */
+  read_back?: 'failed';
 };
 
 /** The scopes a tool needs, and whether it deletes, closes or merges. */
@@ -167,7 +170,7 @@ export async function loggedWrite<R extends object>(
   write: (callId: string) => Promise<WriteOutcome>,
   result: (outcome: WriteOutcome) => Promise<R>,
 ): Promise<
-  | ((R | { applied: string[]; read_back: string }) & {
+  | ((R | { applied: string[] | null; read_back: string }) & {
       audit_outcome?: 'not-logged';
     })
   | { dry_run: true; ids: string[]; confirm: string }
@@ -209,6 +212,7 @@ export async function loggedWrite<R extends object>(
         ...(o.partners_not_updated
           ? { partners_not_updated: o.partners_not_updated }
           : {}),
+        ...(o.read_back ? { read_back: o.read_back } : {}),
       },
       log.identity,
     );
@@ -232,7 +236,7 @@ export async function loggedWrite<R extends object>(
   }
   // A read-back that fails after the write must never look like a failed
   // call: the model may retry (a second skip would skip two pay dates).
-  let out: R | { applied: string[]; read_back: string };
+  let out: R | { applied: string[] | null; read_back: string };
   try {
     out = await result(outcome);
   } catch (error) {

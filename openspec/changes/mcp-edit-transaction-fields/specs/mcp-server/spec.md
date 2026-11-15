@@ -47,7 +47,7 @@ A call SHALL be refused, before any audit line and with fixed text naming the sp
 - **THEN** the parent and every child are dated 2026-11-14
 
 ### Requirement: Transfer edits keep the pair
-Editing a transfer side SHALL update the other side as the app does: the opposite amount, the edited side's notes and schedule, the transfer payee of the edited side's account, and no category on either side when both accounts are on budget or both off. A date change SHALL move only the named side. The result SHALL include the other side's before and after values. Moving a side into the other side's account SHALL be refused.
+Editing a transfer side SHALL update the other side as the app does: the opposite amount, the edited side's notes and schedule, the transfer payee of the edited side's account, and no category on either side when both accounts are on budget or both off. A date change SHALL move only the named side. The result SHALL include the other side's before and after values. Moving a side into the other side's account SHALL be refused, and so SHALL a call that names both sides of one transfer.
 
 #### Scenario: Transfer amount
 - **GIVEN** a transfer of -50.00 from "Checking" to "Savings"
@@ -73,8 +73,25 @@ Editing a transfer side SHALL update the other side as the app does: the opposit
 - **WHEN** a client sets the Checking side's `account_id` to Savings
 - **THEN** the call fails with fixed text and nothing changed
 
+#### Scenario: Both sides of one transfer in one call
+- **GIVEN** that transfer
+- **WHEN** a client names both the Checking side and the Savings side in one call
+- **THEN** the call fails with fixed text and nothing changed, because the engine would update each side from the other in no fixed order
+
+### Requirement: Payee edits never link or unlink a transfer
+A payee change that would link or unlink a transfer SHALL be refused with fixed text before any audit line: a new payee on a transfer side, or a transfer payee on an ordinary row or on a split parent whose children would take it. The engine would create or delete the other side, outside the audit line and the `delete` scope. Linking transfers is sc-4205.
+
+#### Scenario: A payee edit that would unlink a transfer
+- **GIVEN** that transfer
+- **WHEN** a client sets the Checking side's `payee_id` to an ordinary payee
+- **THEN** the call fails with fixed text saying to do it in the app, and the Savings side still exists
+
+#### Scenario: A transfer payee on an ordinary row
+- **WHEN** a client sets an ordinary transaction's `payee_id` to the transfer payee of another account
+- **THEN** the call fails with fixed text, and no transaction is created in that account
+
 ### Requirement: Reconciled rows need an explicit override
-A change to `amount`, `date`, `account_id` or `payee_id` on a reconciled transaction, or on a transfer whose other side is reconciled, and setting `cleared` false on a reconciled transaction, SHALL be refused unless that row sets `allow_reconciled` true. With it, the change SHALL be made as after the app's confirmation: a new account or `cleared` false leaves the row not reconciled.
+A change to `amount`, `date`, `account_id` or `payee_id` on a reconciled transaction, or on a transfer whose other side is reconciled, and setting `cleared` false on a reconciled transaction, SHALL be refused unless that row sets `allow_reconciled` true. A split parent's edit SHALL be checked on each child it reaches, and on each child's transfer partner. With the override, the change SHALL be made as after the app's confirmation: a new account or `cleared` false leaves the row not reconciled.
 
 #### Scenario: Refused without the override
 - **GIVEN** a reconciled transaction
@@ -82,8 +99,14 @@ A change to `amount`, `date`, `account_id` or `payee_id` on a reconciled transac
 - **THEN** the call fails with text naming the row as reconciled, and nothing changed
 
 #### Scenario: Allowed with the override
+- **GIVEN** a grant with `allow_reconciled`
 - **WHEN** a client sets the same row's `amount` with `allow_reconciled` true
-- **THEN** the amount changes, and the audit line records `allow_reconciled`
+- **THEN** the amount changes, and the audit line records `allow_reconciled` for that row
+
+#### Scenario: A split child's reconciled transfer partner
+- **GIVEN** a split whose child is a transfer to "Savings", with the Savings side reconciled
+- **WHEN** a client sets the split parent's `account_id` without `allow_reconciled`
+- **THEN** the call fails with fixed text and nothing changed
 
 #### Scenario: Unlocking a reconciled row
 - **WHEN** a client sets `cleared` false on a reconciled row with `allow_reconciled` true
@@ -92,6 +115,19 @@ A change to `amount`, `date`, `account_id` or `payee_id` on a reconciled transac
 #### Scenario: Category and notes need no override
 - **WHEN** a client sets the `category_id` or `notes` of a reconciled row
 - **THEN** the change is made without `allow_reconciled`
+
+### Requirement: The reconciled override needs the grant
+`allow_reconciled` on a row SHALL be refused unless the connection's grant has the `allow_reconciled` option, which is off when absent (Ken, 2026-11-15). The attempt line SHALL record an `allow_reconciled` entry for each reconciled row or transfer partner actually overridden, and the result SHALL name them in `reconciled_overridden`.
+
+#### Scenario: The grant doesn't allow the override
+- **GIVEN** a grant without `allow_reconciled`
+- **WHEN** a client sets any row's `allow_reconciled` true
+- **THEN** the call fails with fixed text and nothing changed
+
+#### Scenario: An override recorded on the side it overrides
+- **GIVEN** a grant with `allow_reconciled` and a transfer whose Savings side is reconciled
+- **WHEN** a client sets the Checking side's `amount` with `allow_reconciled` true
+- **THEN** the attempt line records `allow_reconciled` for the Savings side, and the result names it in `reconciled_overridden`
 
 ### Requirement: Schedule-linked rows keep their link
 Editing a schedule-linked transaction's amount, date, account or cleared flag SHALL keep its schedule link and SHALL NOT change the schedule or a paycheck definition.
@@ -110,7 +146,7 @@ The moved-history rule SHALL apply to each row as it will be after the call. A c
 - **THEN** the call fails with text saying to do it in the app, and nothing changed
 
 ### Requirement: Cascaded changes are audited
-The attempt line SHALL list every field the call will change, including the other side of a transfer (amount, payee, notes, schedule, category) and a category cleared by an off-budget move, and the result SHALL read back every affected row. The row cap SHALL count the rows the call names, not the rows that follow.
+The attempt line SHALL list every field the call will change, including the other side of a transfer (amount, payee, notes, schedule, category) and a category cleared by an off-budget move, and the result SHALL read back every affected row. The row cap SHALL count both the rows the call names and every row it changes: the named rows, split children and transfer partners.
 
 #### Scenario: The transfer partner is in the audit line
 - **WHEN** a client sets a transfer side's `amount`
@@ -119,6 +155,11 @@ The attempt line SHALL list every field the call will change, including the othe
 #### Scenario: A notes edit on a transfer is audited on both sides
 - **WHEN** a client sets a transfer side's `notes`
 - **THEN** the attempt line lists the notes change for both sides
+
+#### Scenario: The row cap counts the rows that follow
+- **GIVEN** a grant with `max_rows` 1
+- **WHEN** a client sets one transfer side's `amount`
+- **THEN** the call fails with the row-cap text and nothing changed, because it would change two rows
 
 ## RENAMED Requirements
 
@@ -135,7 +176,7 @@ The server SHALL offer the write tools `write_create_transactions`, `write_updat
 - **THEN** every deleting tool is annotated destructive and needs the `delete` scope
 
 ### Requirement: Multi-row updates apply together
-`write_update_transactions` SHALL write its named rows' changes, split children included, in one engine batch, so all of them change or none does; transfer partners follow in a second step, as in the app. When the engine fails, the result and the outcome line SHALL report the state read back: which named rows and partners hold the new values.
+`write_update_transactions` SHALL write its named rows' changes, split children included, in one engine batch, so all of them change or none does; transfer partners follow in a second step, as in the app. When the engine fails, the result and the outcome line SHALL report the state read back: which named rows and partners hold the new values. If that read-back fails too, they SHALL record `applied` as null and `read_back` as `failed`, never an empty list.
 
 #### Scenario: A failure partway
 - **GIVEN** an update of 3 transactions where the engine rejects the second

@@ -311,6 +311,27 @@ describe('Stdio grants come from the environment', () => {
     });
   });
 
+  it('The reconciled override is off unless set', () => {
+    expect(loadConfig(staging, ['--writes']).grant.allow_reconciled).toBe(
+      undefined,
+    );
+    const on = loadConfig(
+      { ...staging, ACTUAL_MCP_WRITES_ALLOW_RECONCILED: '1' },
+      ['--writes'],
+    );
+    expect(on.grant.allow_reconciled).toBe(true);
+    expect(() =>
+      loadConfig({ ...staging, ACTUAL_MCP_WRITES_ALLOW_RECONCILED: 'yes' }, [
+        '--writes',
+      ]),
+    ).toThrow(/ALLOW_RECONCILED must be 1 or 0/);
+    // The read entry never reads it
+    expect(
+      loadConfig({ ...staging, ACTUAL_MCP_WRITES_ALLOW_RECONCILED: '1' }).grant
+        .allow_reconciled,
+    ).toBe(undefined);
+  });
+
   it('The read entry shares the env file', () => {
     const config = loadConfig({
       ...staging,

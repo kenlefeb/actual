@@ -1,3 +1,4 @@
+// Run: yarn workspace @actual-app/core run perf (excluded from `yarn test`).
 // Fork-only (sc-4341). Times `native/schedules-paychecks` on the Architect's
 // seed: 20 paychecks with 4 deposits each, 200 other schedules and a year of
 // pay transactions (the native-bridge latency gate: under 50 ms, median and

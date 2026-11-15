@@ -109,6 +109,125 @@ export function computePaycheck({
   return { netAmount, depositAmounts, errors };
 }
 
+export type PaycheckDraftErrorCode =
+  | 'name-missing'
+  | 'clearing-name-missing'
+  | 'clearing-account-missing'
+  | 'clearing-account-not-open-on-budget'
+  | 'duplicate-deposit-account'
+  | 'transfer-account-missing'
+  | 'deposit-account-missing'
+  | 'deposit-to-clearing-account'
+  | 'days-early-invalid'
+  | PaycheckError;
+
+// The editor section an error shows next to
+export type PaycheckDraftField =
+  | 'name'
+  | 'clearingAccount'
+  | 'deductions'
+  | 'deposits';
+
+export type PaycheckDraftError = {
+  code: PaycheckDraftErrorCode;
+  field: PaycheckDraftField;
+};
+
+// A deposit account's changed days early; null when not a valid number
+export type ChangedDaysEarly = {
+  account: AccountEntity['id'];
+  days: number | null;
+};
+
+export type PaycheckDraft = {
+  name: string;
+  definition: PaycheckDefinition;
+  // Save creates a clearing account named `clearingName`
+  isNewAccount: boolean;
+  clearingName: string;
+  // The existing clearing account, if it is known
+  clearing?: { offbudget: boolean | number; closed: boolean | number };
+  changedDaysEarly: ChangedDaysEarly[];
+};
+
+const AMOUNT_ERROR_FIELD: Record<PaycheckError, PaycheckDraftField> = {
+  'deductions-exceed-gross': 'deductions',
+  'deposits-exceed-net': 'deposits',
+  'percents-exceed-100': 'deposits',
+  'multiple-remainders': 'deposits',
+  'deposits-do-not-add-up': 'deposits',
+  'no-deposits': 'deposits',
+};
+
+/**
+ * The days-early values typed for deposit accounts that differ from the
+ * saved ones, for accounts still deposited to and known (`saved` has them).
+ */
+export function changedDepositDaysEarly(
+  deposits: PaycheckDeposit[],
+  inputs: Record<string, string>,
+  saved: Map<AccountEntity['id'], number>,
+): ChangedDaysEarly[] {
+  return deposits.flatMap(({ account }) => {
+    const input = inputs[account];
+    if (input === undefined || !saved.has(account)) return [];
+    const days = input.trim() === '' ? NaN : Number(input);
+    const isValid =
+      Number.isInteger(days) && days >= 0 && days <= MAX_DEPOSIT_DAYS_EARLY;
+    if (isValid && days === saved.get(account)) return [];
+    return [{ account, days: isValid ? days : null }];
+  });
+}
+
+/**
+ * The paycheck editor's form errors, in the order the web shows them: the
+ * form rules, then computePaycheck's. The web and the native editor (through
+ * native/paycheck-preview) both use this, so they show the same results.
+ */
+export function validatePaycheckDraft({
+  name,
+  definition,
+  isNewAccount,
+  clearingName,
+  clearing,
+  changedDaysEarly,
+}: PaycheckDraft): PaycheckDraftError[] {
+  const errors: PaycheckDraftError[] = [];
+  const add = (code: PaycheckDraftErrorCode, field: PaycheckDraftField) =>
+    errors.push({ code, field });
+  if (!name.trim()) add('name-missing', 'name');
+  if (isNewAccount && !clearingName) {
+    add('clearing-name-missing', 'clearingAccount');
+  }
+  if (!isNewAccount && !definition.clearingAccount) {
+    add('clearing-account-missing', 'clearingAccount');
+  }
+  if (!isNewAccount && clearing && (clearing.offbudget || clearing.closed)) {
+    add('clearing-account-not-open-on-budget', 'clearingAccount');
+  }
+  const { deductions, deposits } = definition;
+  if (new Set(deposits.map(d => d.account)).size !== deposits.length) {
+    add('duplicate-deposit-account', 'deposits');
+  }
+  if (deductions.some(d => d.transferAccount === '')) {
+    add('transfer-account-missing', 'deductions');
+  }
+  if (deposits.some(d => !d.account))
+    {add('deposit-account-missing', 'deposits');}
+  if (
+    deposits.some(d => d.account && d.account === definition.clearingAccount)
+  ) {
+    add('deposit-to-clearing-account', 'deposits');
+  }
+  if (changedDaysEarly.some(d => d.days === null)) {
+    add('days-early-invalid', 'deposits');
+  }
+  for (const code of computePaycheck(definition).errors) {
+    add(code, AMOUNT_ERROR_FIELD[code]);
+  }
+  return errors;
+}
+
 export type PlannedDeposit = {
   id: string;
   account: AccountEntity['id'];

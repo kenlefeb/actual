@@ -7,8 +7,8 @@ Shortcut sc-4437 (priority bug). Saving a schedule or paycheck can store a next 
 ## What Changes
 
 - A save whose dates and account did not change keeps the schedule's next date, and so its skips. This applies to a paycheck's pay schedule and deposit schedules too.
-- A save that needs a new next date (a new schedule, or changed dates or account) picks the same date a budget load would: the earliest occurrence whose moved date is today or later. A date moved back before today is never a next date.
-- When the dates change, a skip of an occurrence that still exists is kept. Skips of occurrences that no longer exist are dropped.
+- A save that needs a new next date (a new schedule, or changed dates or account) picks the earliest occurrence whose moved date is today or later, never a date moved back before today. A budget load leaves that date unchanged. The load's own recompute for a paid schedule is unchanged.
+- When the dates change, a skip of an occurrence that still exists is kept, for the schedule and for schedules dated relative to it (a paycheck's deposits). Skips of occurrences that no longer exist are dropped, and occurrences the edit added show.
 - Web and native saves get the fix together, because both go through loot-core's schedule save.
 
 ## Capabilities
@@ -19,7 +19,7 @@ None.
 
 ### Modified Capabilities
 
-- `schedule-business-days`: adds the rule that the next date after a save equals the next date after a load, and is never a moved date before today.
+- `schedule-business-days`: adds the rules that a save never picks a moved date before today, and that a date change keeps skips that still exist.
 - `paychecks`: adds the rule that saving a paycheck keeps its next dates and skips unless its pay dates change.
 
 ## Mobile scope
@@ -32,4 +32,4 @@ None. The PO settled the rule on sc-4437 (comment 4440).
 
 ## Impact
 
-`packages/loot-core/src/server/schedules/app.ts`: `getNextDateFrom`, `setNextDate`'s reset path, and the condition comparison in `areConditionValuesEqual`. Tests in loot-core.
+`packages/loot-core/src/server/schedules/app.ts`: `createSchedule`, `setNextDate`'s reset path, `refreshRelativeDependents`, and the condition comparison in `areConditionValuesEqual`. Tests in loot-core.

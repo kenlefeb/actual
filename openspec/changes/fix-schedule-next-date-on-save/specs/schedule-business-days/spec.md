@@ -2,9 +2,9 @@
 
 ## ADDED Requirements
 
-### Requirement: Saving a schedule picks the same next date as a load
+### Requirement: A save never picks a moved date before today
 
-A schedule's next date SHALL never be an occurrence moved to a date before today. When a save needs a new next date (a new schedule, or changed dates or account), it SHALL be the earliest occurrence whose moved date is today or later, the same date the next budget load gives. A save whose dates and account did not change SHALL keep the stored next date.
+When a save picks a new next date (a new schedule, or changed dates or account), it SHALL pick the earliest occurrence whose moved date is today or later, never an occurrence moved back before today. A budget load SHALL leave that date unchanged. A save whose dates and account did not change SHALL keep the stored next date.
 
 #### Scenario: Moved back before today
 
@@ -18,14 +18,24 @@ A schedule's next date SHALL never be an occurrence moved to a date before today
 - **WHEN** the user changes only its name or amount and saves
 - **THEN** its next date is still December 15, 2026
 
+### Requirement: Changing a schedule's dates keeps skips that still exist
+
+When a save changes a schedule's dates, its next date SHALL be the earliest occurrence of the new dates, today or later, that either is not an occurrence of the old dates or is on or after the stored next date. Old occurrences before the stored next date stay skipped. Occurrences the edit added show. Schedules dated relative to it SHALL follow the same rule with their own stored next dates.
+
 #### Scenario: Dates changed, the skipped date still exists
 
 - **GIVEN** a twice-monthly schedule on the 15th and the last day of the month, whose next date is December 15, 2026 after November 30 was skipped
-- **WHEN** the user changes it to also stop after December 2027 and saves
+- **WHEN** the user adds an end date of December 2027 and saves
 - **THEN** its next date is still December 15, 2026
 
 #### Scenario: Dates changed, the skipped date no longer exists
 
 - **GIVEN** the same schedule with next date December 15, 2026
 - **WHEN** the user changes it to the 1st and the 20th of each month and saves on November 15, 2026
-- **THEN** its next date is Friday, November 20, 2026, the date a load would give
+- **THEN** its next date is Friday, November 20, 2026
+
+#### Scenario: A pay date added
+
+- **GIVEN** today is Monday, November 16, 2026, and a schedule on the 15th and the last day of the month has next date November 30, 2026, with nothing skipped
+- **WHEN** the user adds the 20th and saves
+- **THEN** its next date is Friday, November 20, 2026

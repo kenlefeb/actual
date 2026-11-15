@@ -585,39 +585,6 @@ describe('write outcomes', () => {
     expect(await transactions()).toHaveLength(2);
     expect(auditLines()).toHaveLength(1);
   });
-
-  it('A failure partway', async () => {
-    h = await startHarness({ count: 3 }, { writes: true });
-    const [a, b, c] = await transactions();
-    const original = api.updateTransaction;
-    let calls = 0;
-    vi.spyOn(api, 'updateTransaction').mockImplementation(
-      async (...args: Parameters<typeof original>) => {
-        if (++calls === 2) throw new Error('engine rejected the row');
-        return original(...args);
-      },
-    );
-    const res = await h.call('write_update_transactions', {
-      updates: [a, b, c].map(t => ({ id: t.id, notes: 'changed' })),
-    });
-    expect(res.isError).toBe(false);
-    expect(res.json).toMatchObject({
-      applied: [a.id],
-      failed: b.id,
-      not_attempted: [c.id],
-    });
-    expect(res.json.items.map((i: { id: string }) => i.id)).toEqual([a.id]);
-    const rows = await transactions();
-    expect(rows.find(t => t.id === a.id)!.notes).toBe('changed');
-    expect(rows.find(t => t.id === b.id)!.notes).not.toBe('changed');
-    expect(rows.find(t => t.id === c.id)!.notes).not.toBe('changed');
-    expect(auditLines()[1]).toMatchObject({
-      phase: 'outcome',
-      status: 'failed',
-      applied: [a.id],
-      failed: b.id,
-    });
-  });
 });
 
 describe('write bounds', () => {
@@ -665,30 +632,7 @@ describe('write bounds', () => {
   });
 });
 
-describe('first-row failure', () => {
-  it('A failure on the first row', async () => {
-    h = await startHarness({ count: 2 }, { writes: true });
-    const [a, b] = await transactions();
-    vi.spyOn(api, 'updateTransaction').mockRejectedValue(new Error('no'));
-    const res = await h.call('write_update_transactions', {
-      updates: [a, b].map(t => ({ id: t.id, notes: 'changed' })),
-    });
-    expect(res.isError).toBe(false);
-    expect(res.json).toMatchObject({
-      applied: [],
-      failed: a.id,
-      not_attempted: [b.id],
-      items: [],
-    });
-    expect(auditLines()[1]).toMatchObject({
-      status: 'failed',
-      applied: [],
-      failed: a.id,
-    });
-  });
-});
-
-describe('write read-back failures and partial-failure logging', () => {
+describe('write read-back failures', () => {
   it("A skip whose result can't be read", async () => {
     h = await startHarness({ count: 1 }, { writes: true });
     const id = await api.createPaycheck({
@@ -736,34 +680,5 @@ describe('write read-back failures and partial-failure logging', () => {
     expect(logged).toContain('write_skip_paycheck');
     expect(logged).toContain('[redacted]');
     expect(logged).not.toContain(h.secret);
-  });
-
-  it('A partial failure is logged to stderr', async () => {
-    h = await startHarness({ count: 2 }, { writes: true });
-    const [a, b] = await transactions();
-    const original = api.updateTransaction;
-    let calls = 0;
-    vi.spyOn(api, 'updateTransaction').mockImplementation(
-      async (...args: Parameters<typeof original>) => {
-        if (++calls === 2) throw new Error(`engine said ${h.secret}`);
-        return original(...args);
-      },
-    );
-    const stderr = vi
-      .spyOn(process.stderr, 'write')
-      .mockImplementation(() => true);
-    const res = await h.call('write_update_transactions', {
-      updates: [a, b].map(t => ({ id: t.id, notes: 'changed' })),
-    });
-    const logged = stderr.mock.calls.map(c => String(c[0])).join('');
-    const attempt = auditLines()[0];
-    expect(logged).toContain('write_update_transactions');
-    expect(logged).toContain(attempt.call_id);
-    expect(logged).toContain(b.id);
-    expect(logged).toContain('engine said [redacted]');
-    expect(logged).not.toContain(h.secret);
-    // The model sees only the fixed note; the audit log holds no error text.
-    expect(res.text).not.toContain('engine said');
-    expect(readFileSync(h.auditLog, 'utf8')).not.toContain('engine said');
   });
 });

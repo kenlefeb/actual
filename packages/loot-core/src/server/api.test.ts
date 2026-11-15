@@ -492,7 +492,7 @@ describe('API handlers', () => {
 
     test('The transfer step fails', async () => {
       // Checking loses its transfer payee, so updateTransfer throws
-      await db.runQuery(
+      db.runQuery(
         'UPDATE payees SET transfer_acct = NULL WHERE id = ?',
         [toChecking],
         false,

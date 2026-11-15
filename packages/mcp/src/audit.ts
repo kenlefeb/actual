@@ -31,6 +31,8 @@ export type OutcomeEntry = {
   applied: string[];
   failed: string | null;
   created: string[];
+  /** Transfer partners still at their old values after a failed write. */
+  partners_not_updated?: string[];
 };
 
 /** A call refused by scope; never its arguments, which can hold budget data. */

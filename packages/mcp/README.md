@@ -52,7 +52,7 @@ and prompt on every write.
 | Tool                          | Needs                       | Changes                                                                       |
 | ----------------------------- | --------------------------- | ----------------------------------------------------------------------------- |
 | `write_create_transactions`   | `transactions:write`        | Adds transactions to one account (date, cents, payee, category, notes)        |
-| `write_update_transactions`   | `transactions:write`        | Sets the category, payee or notes of transactions                             |
+| `write_update_transactions`   | `transactions:write`        | Sets category, payee, notes, amount, date, account or cleared of transactions |
 | `write_set_budget_amount`     | `budget:write`              | Sets one category's budgeted amount for a month                               |
 | `write_skip_paycheck`         | `schedules:write`           | Skips a paycheck's next pay date                                              |
 | `write_move_on_budget`        | `structure:write`           | Moves an off-budget account on budget; needs a `confirm` (below)              |
@@ -73,9 +73,9 @@ only expense groups can be created.
 
 - **Ids only.** Accounts, transactions, payees, categories and paychecks are named by the ids the
   read tools return. A name where an id belongs is refused, never looked up.
-- **Moved history keeps no category.** A call that would set a category on a moved account's
-  transactions before its budget start date, or on its offset line (they are already in the
-  starting balance), is refused whole; do that in the app. Notes and payee can still change.
+- **Moved history keeps no category.** A call that would leave a categorized transaction on a
+  moved account's history before its budget start date, or on its offset line (they are already
+  in the starting balance), is refused whole; do that in the app. Notes and payee can still change.
 - **50 rows at most** per call, or the grant's lower `max_rows`; more is refused before anything
   changes.
 - **Before and after.** Each result carries the before and after values of every field it
@@ -90,14 +90,39 @@ only expense groups can be created.
   the connection held (on the hosted entry also `grant`, below). It never holds a credential. If the line can't be appended, the write doesn't run. A
   `write_create_transactions` line names the account and the new rows.
 - **Outcome line.** After each write the server appends a second line with the same `call_id`:
-  `status` (`ok` or `failed`), the ids `applied`, the row that `failed` and the ids `created`. If
+  `status` (`ok` or `failed`), the ids `applied`, what `failed`, the ids `created` and, after a
+  failed transaction update, `partners_not_updated`. If
   only that line can't be appended, the change stands and the result says
   `audit_outcome: "not-logged"`.
-- **Multi-row updates stop at the first failure.** `write_update_transactions` applies its rows one
-  at a time. If the engine rejects one, the result lists `applied`, the `failed` id and
-  `not_attempted`; the applied rows stay changed (there is no all-or-nothing batch). The engine
-  error goes only to the server's stderr (scrubbed, with the call id and row id), never to the
-  model or the audit log.
+- **Multi-row updates apply together.** `write_update_transactions` writes the rows it names,
+  split children included, in one engine batch: all of them change or none does. Transfer
+  partners follow in a second step, as in the app. If the engine fails, the tool reads every
+  affected row back: the result and the outcome line list the named rows that hold their new
+  values in `applied`, the partners still at their old values in `partners_not_updated`, and the
+  call id in `failed`. The engine error goes only to the server's stderr (scrubbed, with the call
+  id), never to the model or the audit log.
+- **Editing amount, date, account and cleared** (`write_update_transactions`), as in the app:
+  - **Splits.** `date`, `account_id` and `cleared` are set on the split parent; its children
+    follow, and setting them on a child is refused. After the call, every split it touches must
+    have children that add up to the parent amount, or the call is refused naming the parent and
+    the difference in cents. A parent's total and its children's amounts change in one call.
+  - **Transfers.** The other side follows: the opposite amount, the edited side's notes and
+    schedule, the transfer payee of the edited side's account, and no category on either side
+    when both accounts are on budget or both off. Each side keeps its own date. Moving a side into
+    the other side's account is refused, and so is naming both sides in one call.
+  - **Reconciled rows.** Changing `amount`, `date`, `account_id` or `payee_id` of a reconciled
+    row, or of a transfer whose other side is reconciled, or setting `cleared` false on a
+    reconciled row, needs `allow_reconciled: true` on that row. A new account or `cleared` false
+    then un-reconciles it. Category and notes need no override. Unlike the app, which changes
+    `cleared` without asking, unclearing needs the override, so a row is never left reconciled
+    but uncleared.
+  - **Accounts.** Moving to an off-budget account clears the category; a closed account is
+    refused.
+  - **Schedules** keep their link; the edit changes neither the schedule nor a paycheck.
+  - **Moved history** is checked on each row as it will be after the call.
+  - **Audit.** The attempt line lists every field the call changes, including the transfer
+    partner's and a category an off-budget move clears, plus `allow_reconciled` when set. The
+    result reads back every one of those rows. The row cap counts the rows the call names.
 - **A read-back failure is not a failed write.** If a write is applied but its result can't be
   read, the call still succeeds, with `applied` and a fixed `read_back` note saying not to retry.
 - **Bounds.** A write is refused, with fixed text and before any audit line, for an `amount` that

@@ -692,10 +692,8 @@ handlers['api/transactions-update'] = withMutation(async function ({
       .select('*')
       .options({ splits: 'grouped' }),
   );
-  // A parent and its child may both be named: keep each split once
-  const original = ungroupTransactions(
-    [...new Map(data.map(t => [t.id, t])).values()],
-  );
+  // Each split comes back once, whole, even when parent and child are named
+  const original = ungroupTransactions(data);
   let working = original;
   for (const { id, fields } of updates) {
     const existing = working.find(t => t.id === id);

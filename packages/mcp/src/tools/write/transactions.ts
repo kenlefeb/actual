@@ -1,11 +1,9 @@
 import * as api from '@actual-app/api';
-import { isMovedHistory } from '@actual-app/core/shared/moved-history';
 import { z } from 'zod';
 
 import type { AuditChange } from '#audit';
 import { Refusal } from '#refusal';
 import { withText } from '#sanitize';
-import { getBudgetStatus } from '#tools/read/accounts';
 import { date, money } from '#tools/read/shared';
 
 import {
@@ -20,6 +18,13 @@ import {
   stderrLine,
 } from './shared';
 import type { RegisterWriteTool } from './shared';
+import {
+  editRows,
+  FIELD_COLUMN,
+  planUpdates,
+  refuseCategorizingMovedHistory,
+} from './update-plan';
+import type { EditRow, Update } from './update-plan';
 
 const ROW_FIELDS = [
   'id',
@@ -72,38 +77,6 @@ function rowOut(t: Row) {
     { notes: t.notes },
   );
 }
-
-/**
- * Refuses (before any audit line or write) when a category would be set on
- * moved history: a moved account's transactions before its budget start date,
- * and its offset line, are already in the starting balance.
- */
-async function refuseCategorizingMovedHistory(
-  rows: Array<{ id: string; account: string; date: string }>,
-) {
-  const statuses = new Map<
-    string,
-    Awaited<ReturnType<typeof getBudgetStatus>>
-  >();
-  for (const row of rows) {
-    if (!statuses.has(row.account)) {
-      statuses.set(row.account, await getBudgetStatus(row.account));
-    }
-    if (isMovedHistory(row, statuses.get(row.account))) {
-      throw new Refusal(
-        "A category cannot be set on moved history (transactions before an account's budget start date, or its offset line). Do it in the app. Nothing changed.",
-      );
-    }
-  }
-}
-
-// Field in the tool's input -> column in the transactions table
-const FIELDS = {
-  category_id: 'category',
-  payee_id: 'payee',
-  notes: 'notes',
-} as const;
-type Field = keyof typeof FIELDS;
 
 export function registerTransactionWriteTools(tool: RegisterWriteTool) {
   tool(
@@ -204,7 +177,7 @@ export function registerTransactionWriteTools(tool: RegisterWriteTool) {
 
   tool(
     'write_update_transactions',
-    `Set the category, payee or notes of up to ${MAX_WRITE_ROWS} transactions, by transaction id. category_id and payee_id must be ids from the read tools, never names; null clears. Returns each changed field's before and after values.`,
+    `Change up to ${MAX_WRITE_ROWS} transactions by id: category, payee, notes, amount (integer cents), date, account and cleared. category_id, payee_id and account_id must be ids from the read tools, never names; null clears category, payee or notes. The named rows change together or not at all. Rules, as in the app: date, account and cleared are set on a split parent and its children follow; after the call every split it touches must add up (a split's parent and child amounts can change in one call); a transfer's other side follows (opposite amount, notes, schedule, transfer payee, category cleared) in a second step, keeping its own date; a transfer side cannot move into its other side's account; moving to an off-budget account clears the category; a closed account cannot be a target. Changing amount, date, account or payee of a reconciled row (or of a transfer whose other side is reconciled), or setting cleared false on a reconciled row, needs allow_reconciled true on that row; a new account or cleared false then un-reconciles it. Returns each changed field's before and after values, read back, including the cascaded rows.`,
     {
       updates: z
         .array(
@@ -214,6 +187,11 @@ export function registerTransactionWriteTools(tool: RegisterWriteTool) {
               category_id: id.nullable().optional(),
               payee_id: id.nullable().optional(),
               notes: notes.nullable().optional(),
+              amount: z.number().optional(), // bounds: requireAmount, with fixed text
+              date: date.optional(), // bounds: requireDate, with fixed text
+              account_id: id.optional(),
+              cleared: z.boolean().optional(),
+              allow_reconciled: z.boolean().optional(),
             })
             .strict(),
         )
@@ -221,91 +199,111 @@ export function registerTransactionWriteTools(tool: RegisterWriteTool) {
         .max(MAX_WRITE_ROWS),
     },
     async ({ updates }, auditLog) => {
+      // The cap counts the rows the call names, not the rows that follow
       requireRows(auditLog, updates.length);
       const ids = updates.map(u => u.id);
       if (new Set(ids).size !== ids.length) {
         throw new Refusal('Each transaction id may appear only once.');
       }
-      const before = await requireIds('transactions', ids, ROW_FIELDS);
-      const pick = (f: Field) =>
-        updates.flatMap(u => (typeof u[f] === 'string' ? [u[f]] : []));
-      await requireIds('categories', pick('category_id'));
-      await requireIds('payees', pick('payee_id'));
-      await refuseCategorizingMovedHistory(
-        updates
-          .filter(u => u.category_id)
-          .map(u => before.get(u.id) as unknown as Row),
-      );
+      const plan = await planUpdates(updates);
 
-      const changes: AuditChange[] = updates.flatMap(u =>
-        (Object.keys(FIELDS) as Field[])
-          .filter(f => u[f] !== undefined)
-          .map(f => ({
-            id: u.id,
-            field: f,
-            before: before.get(u.id)![FIELDS[f]] ?? null,
-            after: u[f] ?? null,
-          })),
-      );
-      if (changes.length === 0) {
-        throw new Refusal('No field to change.');
-      }
-
-      // Row by row: stop at the first row the engine rejects.
-      const applied: string[] = [];
       let failed: string | undefined;
+      let partnersNotUpdated: string[] | undefined;
+      let unverified = false;
       return loggedWrite(
         auditLog,
         'write_update_transactions',
-        { ids, changes },
+        { ids, changes: plan.changes },
         async callId => {
-          for (const u of updates) {
-            const fields = Object.fromEntries(
-              (Object.keys(FIELDS) as Field[])
-                .filter(f => u[f] !== undefined)
-                .map(f => [FIELDS[f], u[f] ?? null]),
+          try {
+            await api.updateTransactions(plan.sends);
+            return { applied: ids };
+          } catch (error) {
+            stderrLine(
+              auditLog,
+              `write_update_transactions failed (call ${callId})`,
+              error,
             );
-            try {
-              await api.updateTransaction(u.id, fields);
-            } catch (error) {
-              stderrLine(
-                auditLog,
-                `write_update_transactions partial failure (call ${callId}, row ${u.id})`,
-                error,
-              );
-              failed = u.id;
-              break;
-            }
-            applied.push(u.id);
+            failed = callId;
           }
-          return { applied, failed };
+          // The named rows are one batch and transfer partners a second one:
+          // report what the read-back shows, not a blanket "nothing applied".
+          let now: Map<string, EditRow>;
+          try {
+            now = await readBack(plan.changes);
+          } catch {
+            unverified = true;
+            return { applied: [], failed };
+          }
+          const holds = (c: AuditChange) => {
+            const column = FIELD_COLUMN[c.field];
+            const value = now.get(c.id)?.[column];
+            const sent = plan.sends.find(s => s.id === c.id)?.fields;
+            return value === c.after || (sent && value === sent[column]);
+          };
+          const own = (rowId: string) =>
+            plan.changes.filter(
+              c => c.id === rowId && FIELD_COLUMN[c.field] !== undefined,
+            );
+          const applied = ids.filter(rowId =>
+            own(rowId)
+              .filter(c =>
+                updates.some(
+                  u =>
+                    u.id === rowId && u[c.field as keyof Update] !== undefined,
+                ),
+              )
+              .every(holds),
+          );
+          partnersNotUpdated = plan.partners.filter(
+            rowId => !own(rowId).every(holds),
+          );
+          return {
+            applied,
+            failed,
+            partners_not_updated: partnersNotUpdated,
+          };
         },
-        () => updateResult(applied, failed, ids, changes),
+        outcome =>
+          updateResult(
+            outcome.applied,
+            plan.changes,
+            failed === undefined
+              ? {}
+              : {
+                  failed,
+                  partners_not_updated: partnersNotUpdated ?? [],
+                  failure: unverified
+                    ? 'The engine failed and the rows could not be read back. Check the budget before retrying.'
+                    : 'The engine failed. Rows in `applied` hold their new values; transfer partners in `partners_not_updated` were not updated. `items` show the values read back.',
+                },
+          ),
       );
     },
     { scopes: ['transactions:write'] },
   );
 }
 
-/** The update tool's result: before and after for each row applied, plus what failed. */
+/** Every row in `changes`, read back. */
+async function readBack(changes: AuditChange[]) {
+  const rowIds = [...new Set(changes.map(c => c.id))];
+  return new Map(
+    (await editRows({ id: { $oneof: rowIds } })).map(t => [t.id, t]),
+  );
+}
+
+/** The update tool's result: each change's before and after, read back. */
 async function updateResult(
   applied: string[],
-  failed: string | undefined,
-  ids: string[],
   allChanges: AuditChange[],
+  failure: Record<string, unknown>,
 ) {
-  const changes = allChanges.filter(c => applied.includes(c.id));
-  // An empty $oneof is not a safe query: skip it when the first row failed.
-  const after = new Map(
-    (applied.length === 0
-      ? []
-      : await rowsWhere({ id: { $oneof: applied } })
-    ).map(t => [t.id, t]),
-  );
-  const values = [
-    ...changes.map(c => c.before),
-    ...changes.map(c => after.get(c.id)?.[FIELDS[c.field as Field]]),
-  ];
+  // allow_reconciled is in the audit line, not a column to read back
+  const changes = allChanges.filter(c => FIELD_COLUMN[c.field] !== undefined);
+  const now = await readBack(changes);
+  const valueNow = (c: AuditChange) =>
+    now.get(c.id)?.[FIELD_COLUMN[c.field]] ?? null;
+  const values = [...changes.map(c => c.before), ...changes.map(valueNow)];
   const categoryNames = await names('categories', values);
   const payeeNames = await names('payees', values);
   const label = (field: string, value: unknown) =>
@@ -317,28 +315,25 @@ async function updateResult(
 
   return {
     applied,
-    ...(failed === undefined
-      ? {}
-      : {
-          failed,
-          not_attempted: ids.slice(ids.indexOf(failed) + 1),
-          failure:
-            'The engine rejected this row. Later rows were not attempted. Rows in `applied` did change.',
-        }),
-    items: applied.map(txId => ({
+    ...failure,
+    items: [...new Set(changes.map(c => c.id))].map(txId => ({
       id: txId,
       changes: changes
         .filter(c => c.id === txId)
         .map(c => {
-          const now = after.get(txId)?.[FIELDS[c.field as Field]] ?? null;
-          const text = {
-            before: label(c.field, c.before),
-            after: label(c.field, now),
-          };
+          const after = valueNow(c);
           // Notes are free text: only under `text`.
           return c.field === 'notes'
-            ? withText({ field: c.field }, text)
-            : withText({ field: c.field, before: c.before, after: now }, text);
+            ? withText({ field: c.field }, { before: c.before, after })
+            : c.field === 'category_id' || c.field === 'payee_id'
+              ? withText(
+                  { field: c.field, before: c.before, after },
+                  {
+                    before: label(c.field, c.before),
+                    after: label(c.field, after),
+                  },
+                )
+              : { field: c.field, before: c.before, after };
         }),
     })),
   };

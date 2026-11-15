@@ -53,6 +53,8 @@ export type WriteOutcome = {
   applied: string[];
   failed?: string;
   created?: string[];
+  /** Transfer partners still at their old values after a failed write. */
+  partners_not_updated?: string[];
 };
 
 /** The scopes a tool needs, and whether it deletes, closes or merges. */
@@ -204,6 +206,9 @@ export async function loggedWrite<R extends object>(
         applied: o.applied,
         failed: o.failed ?? null,
         created: o.created ?? [],
+        ...(o.partners_not_updated
+          ? { partners_not_updated: o.partners_not_updated }
+          : {}),
       },
       log.identity,
     );
@@ -266,11 +271,13 @@ export async function requireIds(
 ): Promise<Map<string, Record<string, unknown>>> {
   const unique = [...new Set(ids)];
   if (unique.length === 0) return new Map();
+  const query = api
+    .q(table)
+    .filter({ id: { $oneof: unique } })
+    .select(['id', ...select]);
   const { data } = (await api.runQuery(
-    api
-      .q(table)
-      .filter({ id: { $oneof: unique } })
-      .select(['id', ...select]),
+    // Split parents are transactions too
+    table === 'transactions' ? query.options({ splits: 'all' }) : query,
   )) as { data: Array<Record<string, unknown>> };
   if (data.length !== unique.length) {
     throw new Refusal(

@@ -72,7 +72,7 @@ public final class PaychecksViewModel: ObservableObject {
     private var loadGeneration = 0
     private var offerGeneration = 0
 
-    public init(client: NativeBridgeClient, undoInterval: TimeInterval = 5, changeInterval: TimeInterval = 1.0 / 60) {
+    public init(client: NativeBridgeClient, undoInterval: TimeInterval = 10, changeInterval: TimeInterval = 1.0 / 60) {
         self.client = client
         self.undoInterval = undoInterval
         coalescer = ChangeCoalescer(interval: changeInterval) { [weak self] in

@@ -280,11 +280,11 @@ private struct PaycheckRow: View {
                     }
                     ForEach(paycheck.skipped, id: \.self) { date in
                         Label(String(format: Words.skippedLine, Dates.medium(date)), systemImage: "forward.end")
-                            .foregroundColor(.orange)
+                            .foregroundColor(Money.warning)
                     }
                     if let warning = paycheck.clearingWarning {
                         Label(warningText(warning), systemImage: "exclamationmark.triangle.fill")
-                            .foregroundColor(.orange)
+                            .foregroundColor(Money.warning)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     if isExpanded { ForEach(paycheck.later, id: \.date) { planned($0) } }
@@ -402,11 +402,18 @@ private struct ScheduleRow: View {
 }
 
 // Money in is the only coloured money (DESIGN.native.md, money/positive with "+")
-private enum Money {
+enum Money {
     static let positive = Color(UIColor { traits in
         traits.userInterfaceStyle == .dark
             ? UIColor(red: 0x30 / 255, green: 0xD1 / 255, blue: 0x58 / 255, alpha: 1)
             : UIColor(red: 0x1F / 255, green: 0x7A / 255, blue: 0x35 / 255, alpha: 1)
+    })
+
+    // DESIGN.native.md status/warning-text: 5.8:1 on the warning tint in light
+    static let warning = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0xFF / 255, green: 0x9F / 255, blue: 0x0A / 255, alpha: 1)
+            : UIColor(red: 0xA8 / 255, green: 0x2B / 255, blue: 0x00 / 255, alpha: 1)
     })
 
     static func incoming(_ amount: Int, _ style: BudgetAmountStyle) -> String {
@@ -415,7 +422,7 @@ private enum Money {
 }
 
 // loot-core's yyyy-MM-dd days, shown in the user's locale
-private enum Dates {
+enum Dates {
     private static let parser: DateFormatter = {
         let parser = DateFormatter()
         parser.dateFormat = "yyyy-MM-dd"
@@ -432,6 +439,7 @@ private enum Dates {
 
     static func long(_ day: String) -> String { format(day, "EEEEMMMMdyyyy") }
     static func medium(_ day: String) -> String { format(day, "EEEEMMMMd") }
+    static func short(_ day: String) -> String { format(day, "EEEMMMd") }
 }
 
 private enum Words {

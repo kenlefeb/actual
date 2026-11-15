@@ -94,7 +94,7 @@ async function createRent() {
     conditions: [
       { op: 'is', field: 'date', value: '2026-11-12' },
       { op: 'is', field: 'amount', value: -150000 },
-      { op: 'is', field: 'acct', value: 'checking' },
+      { op: 'is', field: 'account', value: 'checking' },
     ],
   });
 }

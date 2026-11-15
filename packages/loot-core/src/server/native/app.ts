@@ -8,9 +8,9 @@ import { getBudgetType } from '#server/budget/base';
 import { app as businessCalendarsApp } from '#server/business-calendars/app';
 import * as db from '#server/db';
 import {
-  app as paychecksApp,
   getPaychecks,
   isPaychecksOn,
+  app as paychecksApp,
 } from '#server/paychecks/app';
 import { refreshScheduleDateLookup } from '#server/schedules/app';
 import * as sheet from '#server/sheet';
@@ -300,7 +300,10 @@ async function schedulesPaychecks(): Promise<NativeSchedulesPaychecks> {
   const clearing = await paychecksApp.handlers['paychecks-clearing-status']();
   const withNames = ({ date, deposits }: PlannedPaycheck) => ({
     date,
-    deposits: deposits.map(d => ({ ...d, accountName: accountName(d.account) })),
+    deposits: deposits.map(d => ({
+      ...d,
+      accountName: accountName(d.account),
+    })),
   });
   const planned: NativePaycheck[] = paychecks
     .map(paycheck => {

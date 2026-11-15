@@ -1,10 +1,3 @@
-import * as monthUtils from './months';
-import {
-  getRelativeOccurrences,
-  isRelativeDate,
-  toRelativeDay,
-} from './relative-dates';
-
 import type {
   AccountEntity,
   PaycheckDefinition,
@@ -12,6 +5,13 @@ import type {
   PaycheckEntity,
   ScheduleEntity,
 } from '#types/models';
+
+import * as monthUtils from './months';
+import {
+  getRelativeOccurrences,
+  isRelativeDate,
+  toRelativeDay,
+} from './relative-dates';
 
 // Most business days early an account's direct deposits can arrive
 export const MAX_DEPOSIT_DAYS_EARLY = 10;

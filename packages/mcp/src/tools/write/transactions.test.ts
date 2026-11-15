@@ -719,6 +719,48 @@ describe('Cascaded changes are audited', () => {
     },
   );
 
+  it('A row named twice is refused before the cap', async () => {
+    h = await startHarness(
+      { count: 1 },
+      {
+        grant: { scopes: [...SCOPES], confirm_destructive: false, max_rows: 2 },
+      },
+    );
+    const [t] = await rows({ account: h.fixture.accountId });
+    await expectRefused(
+      {
+        updates: [
+          { id: t.id, notes: 'a' },
+          { id: t.id, notes: 'b' },
+        ],
+      },
+      /may appear only once/,
+    );
+  });
+
+  it('A split parent and its own child count once each toward the cap', async () => {
+    h = await startHarness(
+      { count: 1 },
+      {
+        grant: { scopes: [...SCOPES], confirm_destructive: false, max_rows: 3 },
+      },
+    );
+    const s = await split(h.fixture.accountId);
+    // Five field changes on three rows: the parent, the named child and the
+    // child that follows the parent's date
+    const res = await h.call('write_update_transactions', {
+      updates: [
+        { id: s.parent.id, amount: 210000, date: '2026-11-14' },
+        { id: s.first.id, amount: 160000 },
+      ],
+    });
+    expect(res.isError).toBe(false);
+    const changes = auditLines()[0].changes as Array<{ id: string }>;
+    expect(changes.length).toBeGreaterThan(3);
+    expect(new Set(changes.map(c => c.id)).size).toBe(3);
+    expect((await row(s.second.id)).date).toBe('2026-11-14');
+  });
+
   // The prediction must match what the engine does
   const COLUMN: Record<string, keyof Tx> = {
     amount: 'amount',

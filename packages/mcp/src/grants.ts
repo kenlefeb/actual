@@ -68,9 +68,13 @@ const grantsFile = z
       f.grants.length,
   )
   // Writes go only to named client ids: `*` covers every future client.
+  // It stays read-only in every respect, so no write option either.
   .refine(f =>
     f.grants.every(
-      g => g.client !== '*' || g.scopes.every(s => s === 'budget:read'),
+      g =>
+        g.client !== '*' ||
+        (g.scopes.every(s => s === 'budget:read') &&
+          g.allow_reconciled === undefined),
     ),
   );
 

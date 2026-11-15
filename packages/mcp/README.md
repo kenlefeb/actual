@@ -219,7 +219,7 @@ change applies on the next call with no restart or reconnect. The access token k
 - **Strict schema.** `version` is 1; no unknown keys anywhere; `subject` is a literal OAuth subject,
   never a wildcard; `client` is a client id or `*`; `scopes` is a non-empty list of known scopes;
   `max_rows` a positive integer (above 50 counts as 50); `confirm_destructive` a boolean, `true`
-  when absent; `allow_reconciled` a boolean, off when absent. No (subject, client) pair may appear twice, and a `*` grant holds `budget:read`
+  when absent; `allow_reconciled` a boolean, off when absent, and never on a `*` grant. No (subject, client) pair may appear twice, and a `*` grant holds `budget:read`
   only, so writes go only to named client ids. Any violation makes the whole file invalid.
 - **Matching.** An exact client id wins over `*`; a subject with no matching grant gets no scopes.
   Grants per client do not separate agents that share one sign-in: separating them needs distinct

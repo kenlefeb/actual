@@ -164,6 +164,17 @@ describe('The grants file schema is strict', () => {
       ]),
     ],
     [
+      'allow_reconciled on the wildcard client',
+      file([
+        {
+          subject: SUB,
+          client: '*',
+          scopes: ['budget:read'],
+          allow_reconciled: true,
+        },
+      ]),
+    ],
+    [
       'a string allow_reconciled',
       file([
         {

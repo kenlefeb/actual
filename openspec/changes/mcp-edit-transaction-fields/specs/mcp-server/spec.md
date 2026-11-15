@@ -187,3 +187,71 @@ The server SHALL offer the write tools `write_create_transactions`, `write_updat
 - **GIVEN** an amount change on a transfer side whose partner update fails in the transfer step
 - **WHEN** a client calls `write_update_transactions`
 - **THEN** the result and the outcome line list the named side as applied and the partner as not updated
+
+### Requirement: Stdio grants come from the environment
+The stdio entry without `--writes` SHALL always grant `budget:read` only and ignore the writes variables. The entry with `--writes` SHALL take its scopes from `ACTUAL_MCP_WRITES_SCOPES` (space-separated), granting every scope when it is unset. It SHALL stop at start with fixed text for an unknown scope, and for a set but empty value, which never counts as unset. `ACTUAL_MCP_WRITES_ALLOW_RECONCILED` SHALL set the grant's `allow_reconciled` option: `1` turns it on, `0` or unset leaves it off, and any other value SHALL stop the writes entry at start with fixed text.
+
+#### Scenario: Today's writes entry keeps its tools
+- **WHEN** the stdio entry starts with `--writes` and no `ACTUAL_MCP_WRITES_SCOPES`
+- **THEN** every write tool offered before this change still succeeds
+
+#### Scenario: A narrowed writes entry
+- **WHEN** the stdio entry starts with `--writes` and `ACTUAL_MCP_WRITES_SCOPES="budget:read transactions:write"`
+- **THEN** `write_update_transactions` succeeds and `write_set_budget_amount` is refused by scope
+
+#### Scenario: The read entry shares the env file
+- **GIVEN** an env file that sets `ACTUAL_MCP_WRITES_SCOPES="budget:read transactions:write"`
+- **WHEN** the stdio entry starts from it without `--writes`
+- **THEN** it starts, read tools succeed and every write tool is refused by scope
+
+#### Scenario: An unknown scope on the writes entry
+- **WHEN** the stdio entry starts with `--writes` and `ACTUAL_MCP_WRITES_SCOPES="budget:read transactions:everything"`
+- **THEN** it exits with a fixed error and opens no budget
+
+#### Scenario: An empty scope list on the writes entry
+- **WHEN** the stdio entry starts with `--writes` and `ACTUAL_MCP_WRITES_SCOPES=""`
+- **THEN** it exits with a fixed error and opens no budget, rather than granting every scope
+
+#### Scenario: The reconciled override on the writes entry
+- **WHEN** the stdio entry starts with `--writes` and `ACTUAL_MCP_WRITES_ALLOW_RECONCILED=1`
+- **THEN** a row's `allow_reconciled` is accepted, and without the variable it is refused
+
+#### Scenario: A bad reconciled override value
+- **WHEN** the stdio entry starts with `--writes` and `ACTUAL_MCP_WRITES_ALLOW_RECONCILED=yes`
+- **THEN** it exits with a fixed error and opens no budget
+
+### Requirement: Hosted grants come from a grants file
+The hosted entry SHALL read grants from the file named by `ACTUAL_MCP_GRANTS_FILE`. Each grant names an OAuth subject, a client id or `*`, its scopes and optional `confirm_destructive`, `max_rows` and `allow_reconciled` (off when absent). The file SHALL be checked on every call, so a change applies on the next call without a restart. An exact client id SHALL take precedence over `*`; a connection with no matching grant SHALL have no scopes.
+
+#### Scenario: A grant change applies on the next call
+- **GIVEN** the assistant's grant includes `transactions:write`
+- **WHEN** the grants file is replaced with one that removes `transactions:write`, and the client calls `write_update_transactions` with its existing token
+- **THEN** the call is refused by scope, without a restart
+
+#### Scenario: A named client gets writes, others read
+- **GIVEN** a grant for the subject with client `*` and `budget:read`, and another for the pre-registered client id with `transactions:write`
+- **WHEN** a dynamically registered client calls `write_update_transactions`
+- **THEN** the call is refused by scope, while the same call from the pre-registered client succeeds
+
+### Requirement: The grants file schema is strict
+A grants file SHALL be valid only when `version` is 1, it has no unknown keys, each `scopes` is a non-empty array of known scope names, `max_rows` is a positive integer, `confirm_destructive` and `allow_reconciled` are booleans, `subject` is a literal subject (never a wildcard), no (subject, client) pair appears twice, and every `*` client grant holds `budget:read` only and no `allow_reconciled`.
+
+#### Scenario: A duplicate pair
+- **WHEN** the grants file has two grants for the same subject and client
+- **THEN** the file is invalid and every connection is treated as granted `budget:read` only
+
+#### Scenario: Writes on the wildcard client
+- **WHEN** the grants file gives client `*` the scope `transactions:write`
+- **THEN** the file is invalid and every write tool is refused by scope
+
+#### Scenario: An unknown key
+- **WHEN** a grant carries a key `admin: true`
+- **THEN** the file is invalid and every write tool is refused by scope
+
+#### Scenario: A non-boolean reconciled override
+- **WHEN** a grant carries `allow_reconciled: "yes"`
+- **THEN** the file is invalid and every write tool is refused by scope
+
+#### Scenario: A reconciled override on the wildcard client
+- **WHEN** the client `*` grant carries `allow_reconciled: true`
+- **THEN** the file is invalid and every write tool is refused by scope

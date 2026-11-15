@@ -66,7 +66,45 @@ function parseSource(source: RecurConfig) {
   return schedule;
 }
 
+// sc-4341: rschedule iteration dominates paycheck plans, and a native read
+// rebuilds the lookups each time, so results are cached by content: the
+// source, the query and the calendar its weekend moves use. The window comes
+// from today, so keys change daily on their own; full means start over.
+const MAX_CACHED_OCCURRENCES = 1000;
+const occurrenceCache = new Map<string, string[]>();
+
+export function clearOccurrenceCache() {
+  occurrenceCache.clear();
+}
+
 function sourceOccurrences(
+  source: string | RecurConfig,
+  query: OccurrenceQuery,
+): string[] {
+  if (typeof source === 'string') {
+    return computeSourceOccurrences(source, query);
+  }
+  const key = JSON.stringify([
+    source,
+    query.start?.getTime(),
+    query.end?.getTime(),
+    query.take,
+    query.reverse,
+    getBusinessCalendar(parseSource(source).data.businessCalendarId) ?? null,
+  ]);
+  let days = occurrenceCache.get(key);
+  if (!days) {
+    days = computeSourceOccurrences(source, query);
+    if (occurrenceCache.size >= MAX_CACHED_OCCURRENCES) {
+      occurrenceCache.clear();
+    }
+    occurrenceCache.set(key, days);
+  }
+  // Callers may change the array
+  return [...days];
+}
+
+function computeSourceOccurrences(
   source: string | RecurConfig,
   query: OccurrenceQuery,
 ): string[] {

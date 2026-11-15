@@ -271,6 +271,27 @@ describe('native/schedules-paychecks', () => {
     expect(result.summary.nextDate).toBe('2026-11-30');
   });
 
+  it('counts only the schedules the list shows by default', async () => {
+    const rent = await createRent();
+    const done = await schedulesApp.handlers['schedule/create']({
+      schedule: { name: 'Old loan' },
+      conditions: [{ op: 'is', field: 'date', value: '2026-01-01' }],
+    });
+    await db.update('schedules', { id: done, completed: 1 });
+
+    const result = await read();
+
+    // Completed schedules come back flagged; the list hides them by default
+    expect(result.schedules.map(s => [s.id, s.completed, s.status])).toEqual(
+      expect.arrayContaining([
+        [rent, false, 'scheduled'],
+        [done, true, 'completed'],
+      ]),
+    );
+    expect(result.schedules).toHaveLength(2);
+    expect(result.summary.scheduleCount).toBe(1);
+  });
+
   it('is empty for a budget with no paychecks or schedules', async () => {
     const result = await read();
     expect(result).toMatchObject({

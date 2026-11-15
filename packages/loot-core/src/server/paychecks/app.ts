@@ -744,22 +744,54 @@ async function getClearingStatus(): Promise<PaycheckClearingStatus[]> {
   const today = monthUtils.dayFromDate(new Date());
   // Deposit dates read the lookup, which the sync listener refreshes async
   await refreshScheduleDateLookup();
+  const paychecks = await getPaychecks();
+  // Batched: one query each for balances, pay dates and deposit links, not
+  // a few per paycheck and deposit (sc-4341's 50 ms gate)
+  const marks = (ids: string[]) => ids.map(() => '?').join(', ');
+  const clearingAccounts = paychecks.map(p => p.definition.clearingAccount);
+  const balances = new Map(
+    (
+      await db.all<{ acct: string; balance: number | null }>(
+        `SELECT acct, sum(amount) as balance FROM transactions
+         WHERE acct IN (${marks(clearingAccounts)}) AND isParent = 0 AND tombstone = 0
+         GROUP BY acct`,
+        clearingAccounts,
+      )
+    ).map(r => [r.acct, r.balance ?? 0]),
+  );
+  const paySchedules = paychecks.flatMap(p => p.definition.paySchedule ?? []);
+  const payDates = new Map<string, string[]>();
+  for (const r of await db.all<{ schedule: string; date: number }>(
+    `SELECT DISTINCT schedule, date FROM v_transactions_internal
+     WHERE schedule IN (${marks(paySchedules)}) AND tombstone = 0 AND is_child = 0
+     ORDER BY date DESC`,
+    paySchedules,
+  )) {
+    payDates.set(r.schedule, [
+      ...(payDates.get(r.schedule) ?? []),
+      db.fromDateRepr(r.date),
+    ]);
+  }
+  const depositSchedules = paychecks.flatMap(p =>
+    p.definition.deposits.flatMap(d => d.schedule ?? []),
+  );
+  // A deposit is linked when its latest transaction is after the cutoff
+  const latestDeposit = new Map(
+    (
+      await db.all<{ schedule: string; date: number }>(
+        `SELECT schedule, max(date) as date FROM v_transactions_internal
+         WHERE schedule IN (${marks(depositSchedules)}) AND tombstone = 0 AND is_child = 0
+         GROUP BY schedule`,
+        depositSchedules,
+      )
+    ).map(r => [r.schedule, r.date]),
+  );
+
   const statuses: PaycheckClearingStatus[] = [];
-  for (const { id, definition } of await getPaychecks()) {
-    const row = await db.first<{ balance: number | null }>(
-      'SELECT sum(amount) as balance FROM transactions WHERE acct = ? AND isParent = 0 AND tombstone = 0',
-      [definition.clearingAccount],
-    );
-    const balance = row?.balance ?? 0;
+  for (const { id, definition } of paychecks) {
+    const balance = balances.get(definition.clearingAccount) ?? 0;
     const [payDate, previousPayDate] = definition.paySchedule
-      ? (
-          await db.all<{ date: number }>(
-            `SELECT DISTINCT date FROM v_transactions_internal
-             WHERE schedule = ? AND tombstone = 0 AND is_child = 0
-             ORDER BY date DESC LIMIT 2`,
-            [definition.paySchedule],
-          )
-        ).map(r => db.fromDateRepr(r.date))
+      ? (payDates.get(definition.paySchedule) ?? [])
       : [];
 
     const deposits = [];
@@ -769,16 +801,13 @@ async function getClearingStatus(): Promise<PaycheckClearingStatus[]> {
         isRelativeDate(config) ? toRelativeDay(day, config) : day;
       const expectedDate = expectedFor(payDate);
       // Deposits for the previous pay date are on or before its expected date
+      const latest = deposit.schedule
+        ? latestDeposit.get(deposit.schedule)
+        : undefined;
       const linked =
-        deposit.schedule &&
-        (await db.first(
-          `SELECT id FROM v_transactions_internal
-           WHERE schedule = ? AND tombstone = 0 AND is_child = 0 AND date > ?`,
-          [
-            deposit.schedule,
-            previousPayDate ? db.toDateRepr(expectedFor(previousPayDate)) : 0,
-          ],
-        ));
+        latest !== undefined &&
+        latest >
+          (previousPayDate ? db.toDateRepr(expectedFor(previousPayDate)) : 0);
       const deadline = toRelativeDay(expectedDate, {
         relativeTo: {
           scheduleId: deposit.schedule ?? '',

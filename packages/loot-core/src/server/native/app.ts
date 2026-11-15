@@ -387,7 +387,9 @@ async function schedulesPaychecks(): Promise<NativeSchedulesPaychecks> {
       hasPaychecks: planned.length > 0,
       nextDate: first?.next?.date ?? null,
       netAmount: first?.next ? first.netAmount : null,
-      scheduleCount: schedules.length,
+      // What the list shows by default: completed ones sit behind "Show
+      // completed schedules", as on the web
+      scheduleCount: schedules.filter(s => !s.completed).length,
       anyWarning: planned.some(p => p.clearingWarning !== null),
     },
     paychecks: planned,

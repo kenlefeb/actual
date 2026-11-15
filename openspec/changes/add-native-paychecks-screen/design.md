@@ -116,7 +116,7 @@ The other names already have lines.
 ## Risks / Trade-offs
 
 - [Moving web code changes behaviour by accident] → the move is mechanical, the web tests stay unchanged, and the native contract test compares the read with `planPaycheck` on the same seed.
-- [`getClearingStatus` runs a few queries per paycheck and per deposit] → the perf gate covers 20 × 4; if it misses, batch the queries in loot-core, never in Swift.
+- [The read is slow on 20 × 4] → most of the time went to `planPaycheck`'s occurrence math (rschedule over its ±366-day window), not queries. `#shared/relative-dates` now caches source occurrences, keyed on content (the source, the query and the calendar its weekend moves use; at most 1,000 entries), so `planPaycheck` itself is unchanged. `getClearingStatus` also batches its queries: one each for balances, pay dates and deposit links. The perf gate covers warm reads and reads with one paycheck changed, and prints the cold read. Any further work stays in loot-core, never in Swift (sc-4341, Architect decision).
 - [Undo undoes someone else's change] → `native/undo` checks the token on the top undo step inside the mutator, so it can only undo the native write it names (Decision 5). The remaining risk is the remote-overwrite case described there.
 - [The save reverts through `undo()`] → covered by an injected late-failure test (task 2.3); the fork-only helpers in `undo.ts` are small and read or trim only.
 - [`native-bridge` deltas from open changes (add-native-budget-screen, native-budget-month-range)] → this delta adds requirements and renames and modifies only the handler-class requirement, which is already in the main spec. Archive after those changes, or rebase the MODIFIED block when they archive.

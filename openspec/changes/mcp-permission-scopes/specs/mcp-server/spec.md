@@ -20,7 +20,7 @@ Every entry SHALL list every tool, with MCP annotations marking read tools read-
 - **THEN** the list includes every `write_` tool, and `write_delete_category` is annotated destructive
 
 ### Requirement: A call outside the grant is refused by scope
-A call whose scopes the connection was not granted SHALL be refused before any validation, read or change, with fixed text naming the tool, the missing scopes and the scopes granted, and ending "Nothing changed." It SHALL never be reported as an unknown tool.
+A call whose scopes the connection was not granted SHALL be refused before any budget read, audit attempt line or change, with fixed text naming the tool, the missing scopes and the scopes granted, and ending "Nothing changed." It SHALL never be reported as an unknown tool.
 
 #### Scenario: Delete without the delete scope
 - **GIVEN** a connection granted `budget:read structure:write`
@@ -40,35 +40,63 @@ A call refused by scope SHALL append one `refused` line to the entry's audit log
 - **THEN** the audit log gains a line with `phase` `refused`, the tool name and `missing` `["transactions:write"]`, and no transaction id
 
 ### Requirement: Stdio grants come from the environment
-A stdio entry SHALL take its scopes from `ACTUAL_MCP_SCOPES` (space-separated). When it is unset, the entry without `--writes` SHALL grant `budget:read`, and the entry with `--writes` SHALL grant every scope. An unknown scope, or a write scope without `--writes`, SHALL stop the entry at start with fixed text.
+The stdio entry without `--writes` SHALL always grant `budget:read` only and ignore the writes variables. The entry with `--writes` SHALL take its scopes from `ACTUAL_MCP_WRITES_SCOPES` (space-separated), granting every scope when it is unset, and SHALL stop at start with fixed text for an unknown scope.
 
 #### Scenario: Today's writes entry keeps its tools
-- **WHEN** the stdio entry starts with `--writes` and no `ACTUAL_MCP_SCOPES`
+- **WHEN** the stdio entry starts with `--writes` and no `ACTUAL_MCP_WRITES_SCOPES`
 - **THEN** every write tool offered before this change still succeeds
 
 #### Scenario: A narrowed writes entry
-- **WHEN** the stdio entry starts with `--writes` and `ACTUAL_MCP_SCOPES="budget:read transactions:write"`
+- **WHEN** the stdio entry starts with `--writes` and `ACTUAL_MCP_WRITES_SCOPES="budget:read transactions:write"`
 - **THEN** `write_update_transactions` succeeds and `write_set_budget_amount` is refused by scope
 
-#### Scenario: Write scopes on the read entry
-- **WHEN** the stdio entry starts without `--writes` and `ACTUAL_MCP_SCOPES` includes `transactions:write`
+#### Scenario: The read entry shares the env file
+- **GIVEN** an env file that sets `ACTUAL_MCP_WRITES_SCOPES="budget:read transactions:write"`
+- **WHEN** the stdio entry starts from it without `--writes`
+- **THEN** it starts, read tools succeed and every write tool is refused by scope
+
+#### Scenario: An unknown scope on the writes entry
+- **WHEN** the stdio entry starts with `--writes` and `ACTUAL_MCP_WRITES_SCOPES="budget:read transactions:everything"`
 - **THEN** it exits with a fixed error and opens no budget
 
 ### Requirement: Hosted grants come from a grants file
-The hosted entry SHALL read grants from the file named by `ACTUAL_MCP_GRANTS_FILE`. Each grant names an OAuth subject, a client id or `*`, its scopes and optional `confirm_destructive` and `max_rows`. The file SHALL be checked on every call, so a change applies on the next call without a restart. A connection with no matching grant SHALL have no scopes.
+The hosted entry SHALL read grants from the file named by `ACTUAL_MCP_GRANTS_FILE`. Each grant names an OAuth subject, a client id or `*`, its scopes and optional `confirm_destructive` and `max_rows`. The file SHALL be checked on every call, so a change applies on the next call without a restart. An exact client id SHALL take precedence over `*`; a connection with no matching grant SHALL have no scopes.
 
 #### Scenario: A grant change applies on the next call
 - **GIVEN** the assistant's grant includes `transactions:write`
 - **WHEN** the grants file is replaced with one that removes `transactions:write`, and the client calls `write_update_transactions` with its existing token
 - **THEN** the call is refused by scope, without a restart
 
-#### Scenario: A client id narrows the grant
-- **GIVEN** a grant for the subject with client `*` and all scopes, and another for client `reader` with `budget:read`
-- **WHEN** client `reader` calls `write_set_budget_amount`
-- **THEN** the call is refused by scope
+#### Scenario: A named client gets writes, others read
+- **GIVEN** a grant for the subject with client `*` and `budget:read`, and another for the pre-registered client id with `transactions:write`
+- **WHEN** a dynamically registered client calls `write_update_transactions`
+- **THEN** the call is refused by scope, while the same call from the pre-registered client succeeds
+
+### Requirement: The grants file schema is strict
+A grants file SHALL be valid only when `version` is 1, it has no unknown keys, each `scopes` is a non-empty array of known scope names, `max_rows` is a positive integer, `confirm_destructive` is a boolean, `subject` is a literal subject (never a wildcard), no (subject, client) pair appears twice, and every `*` client grant holds `budget:read` only.
+
+#### Scenario: A duplicate pair
+- **WHEN** the grants file has two grants for the same subject and client
+- **THEN** the file is invalid and every connection is treated as granted `budget:read` only
+
+#### Scenario: Writes on the wildcard client
+- **WHEN** the grants file gives client `*` the scope `transactions:write`
+- **THEN** the file is invalid and every write tool is refused by scope
+
+#### Scenario: An unknown key
+- **WHEN** a grant carries a key `admin: true`
+- **THEN** the file is invalid and every write tool is refused by scope
+
+### Requirement: Hosted confirm is on by default
+On the hosted entry, a grant without `confirm_destructive` SHALL require confirm before a destructive write; only an explicit `false` turns it off.
+
+#### Scenario: Absent means on
+- **GIVEN** a hosted grant with `structure:write delete` and no `confirm_destructive`
+- **WHEN** the client calls `write_delete_category` without `confirm`
+- **THEN** nothing is deleted and the result is a dry run with a `confirm` value
 
 ### Requirement: Hosted grants fail closed
-When the grants file is missing, cannot be parsed, names an unknown scope or can be written by the server's own process, the hosted entry SHALL treat every connection as granted `budget:read` only and record the reason, without file contents, to stderr.
+The hosted entry SHALL treat every connection as granted `budget:read` only when the grants file is missing, invalid, a symlink, or writable by the server's process, or its directory is writable by that process. It SHALL read and fingerprint the file through one open descriptor, and record each new fail-closed reason, without file contents, once to stderr.
 
 #### Scenario: No grants file
 - **WHEN** the hosted entry runs without a readable grants file
@@ -79,6 +107,16 @@ When the grants file is missing, cannot be parsed, names an unknown scope or can
 - **WHEN** a client calls a write tool
 - **THEN** the call is refused by scope and stderr records that the grants file is writable
 
+#### Scenario: A directory the server can write
+- **GIVEN** a root-owned, mode 0644 grants file in a directory the server's user can write
+- **WHEN** a client calls a write tool
+- **THEN** the call is refused by scope and stderr records that the grants directory is writable
+
+#### Scenario: A symlinked grants file
+- **GIVEN** `ACTUAL_MCP_GRANTS_FILE` names a symlink to a valid grants file
+- **WHEN** a client calls a write tool
+- **THEN** the call is refused by scope
+
 ### Requirement: The token scope admits, the grant permits
 The hosted entry's access tokens SHALL keep the single scope `budget:read`, which admits a connection to the endpoint. What the connection may call SHALL come only from its grant, so a grant change needs no new sign-in.
 
@@ -88,7 +126,7 @@ The hosted entry's access tokens SHALL keep the single scope `budget:read`, whic
 - **THEN** the call succeeds without reconnecting
 
 ### Requirement: Confirm before a destructive write
-When a grant sets `confirm_destructive`, a destructive tool called without `confirm` SHALL change nothing and return what it would change with a `confirm` value. A call with `confirm` SHALL run only if recomputing gives the same changes, and SHALL be refused otherwise.
+With `confirm_destructive` on, a destructive tool called without `confirm` SHALL change nothing and return what it would change with a `confirm` value bound to the caller, valid for 5 minutes. A call with `confirm` SHALL run only if the caller matches, the value has not expired and recomputing gives the same changes.
 
 #### Scenario: Dry run then confirm
 - **GIVEN** a grant with `structure:write delete` and `confirm_destructive`
@@ -100,6 +138,11 @@ When a grant sets `confirm_destructive`, a destructive tool called without `conf
 - **WHEN** a transaction is assigned that category and the client calls with the old `confirm`
 - **THEN** the call is refused and the category still exists
 
+#### Scenario: An expired confirm
+- **GIVEN** a `confirm` from a dry run more than 5 minutes ago, with the budget unchanged
+- **WHEN** the client calls with that `confirm`
+- **THEN** the call is refused and nothing changed
+
 ### Requirement: A grant can lower the row cap
 A grant's `max_rows` SHALL lower the per-call row limit below 50 for that connection, and SHALL never raise it.
 
@@ -108,9 +151,14 @@ A grant's `max_rows` SHALL lower the per-call row limit below 50 for that connec
 - **WHEN** the client calls `write_update_transactions` with 11 ids
 - **THEN** the call fails and no transaction changed
 
+## RENAMED Requirements
+
+- FROM: `### Requirement: Read-only unless writes are turned on`
+- TO: `### Requirement: A grant decides what a connection may do`
+
 ## MODIFIED Requirements
 
-### Requirement: Read-only unless writes are turned on
+### Requirement: A grant decides what a connection may do
 Every entry SHALL list the read tools and the `write_` tools; the connection's grant decides which calls succeed. Write tools SHALL carry the prefix `write_`. The stdio entry started without `--writes` SHALL open the budget with `readOnly` and grant no write scope, so it writes and pushes nothing.
 
 #### Scenario: Reads only by default
@@ -124,6 +172,23 @@ Every entry SHALL list the read tools and the `write_` tools; the connection's g
 #### Scenario: The writes entry runs the engine normally
 - **WHEN** the server is started with `--writes` on a `staging` host
 - **THEN** the budget is opened without `readOnly`, so the engine keeps its normal behavior there, while a server started without `--writes` opens it with `readOnly`
+
+### Requirement: Core read tools
+The server SHALL offer read tools for accounts and balances, category groups and categories, payees, transactions, budget months, schedules, rules, a read-only ActualQL query and `sync_budget`. Every entry SHALL also list the write tools, and the connection's grant decides which calls succeed. The read entry SHALL open the budget read-only (`api-read-only-mode`), so a sync writes nothing locally and pushes nothing.
+
+#### Scenario: Transactions from a fixture budget
+- **GIVEN** a fixture budget with 120 transactions in "Checking"
+- **WHEN** a client calls `list_transactions` with Checking's `account_id` and no limit
+- **THEN** it receives 50 transactions, `has_more` true and a `next_cursor`
+
+#### Scenario: A read entry writes nothing
+- **GIVEN** a budget with an auto-post schedule that is due today and paycheck edits that arrive by sync
+- **WHEN** the server starts without `--writes` and the client calls `sync_budget`
+- **THEN** no transaction was created in the local copy, the sync server received no messages from this client, and no budget file was uploaded
+
+#### Scenario: A query that is not a select
+- **WHEN** a client calls `run_query` with a query that would change data
+- **THEN** the call fails and the budget is unchanged
 
 ### Requirement: Write tools
 The server SHALL offer the write tools `write_create_transactions`, `write_update_transactions` (category, payee, notes), `write_set_budget_amount`, `write_skip_paycheck`, `write_move_on_budget` and the category maintenance tools of "Category maintenance tools", and any write tool added later, each with its declared scopes. A tool SHALL NOT be left out or hidden to limit what an agent may do; that limit is the grant.

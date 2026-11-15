@@ -59,20 +59,36 @@ The hosted entry keeps issuing tokens with `budget:read` only, as an admission s
 {
   "version": 1,
   "grants": [
-    { "subject": "auth0|…", "client": "*", "scopes": ["budget:read", "transactions:write", "budget:write", "structure:write", "schedules:write", "delete"], "confirm_destructive": true, "max_rows": 50 }
+    { "subject": "auth0|…", "client": "*", "scopes": ["budget:read"] },
+    { "subject": "auth0|…", "client": "<pre-registered client id>", "scopes": ["budget:read", "transactions:write", "budget:write", "structure:write", "schedules:write"], "confirm_destructive": true, "max_rows": 10 }
   ]
 }
 ```
 
-**Matching:** an exact client id wins over `*`. No match means no scopes.
+**Schema (strict).** Any violation makes the whole file invalid:
+- `version` is 1, and there are no unknown keys at any level.
+- `subject` is a literal subject, never a wildcard. `client` is a literal client id or `*`.
+- `scopes` is a non-empty array of known scope names. `max_rows` is a positive integer; values above 50 are capped at 50. `confirm_destructive` is a boolean.
+- No (subject, client) pair appears twice. That rules out first-wins versus last-wins ambiguity: a later edit can't silently widen access.
+- A `*` grant holds `budget:read` only.
+  - Why: dynamically registered clients get a fresh server-minted id each time and live in memory only. A `*` entry with write scopes would cover every present and future client.
+  - So writes go only to named client ids. The pre-registered client (`ACTUAL_MCP_CLIENT_ID`, which claude.ai uses) is the one stable id.
 
-**When it is read:** on every call, the entry stats the file and reparses it only when its mtime, size or inode changes (atomic replace changes the inode).
+**Defaults:** on a hosted grant, an absent `confirm_destructive` means `true`.
 
-**Fail closed:**
-- Missing, unparseable or an unknown scope: everyone gets `budget:read`.
-- `access(W_OK)` succeeds for the server's own process (the file is not on a read-only mount and not owned by another user with no write bit): everyone gets `budget:read`.
+**Matching:** an exact client id wins over `*`. A valid file with no match gives no scopes.
 
-The reason goes to stderr, never the file's contents.
+**What per-client grants don't do:** they do not separate agents that share one sign-in. Every agent signed in as Ken's subject through the same client has the same grant. Real separation needs distinct subjects (sc-2004).
+
+**Reading and integrity.** On every call the entry runs these steps:
+1. `lstat` the path. Refuse a symlink or a non-regular file.
+2. Check `access(W_OK)` on the file and on its directory. If either is writable by the server's process, fail closed: replacing a file needs only a writable directory, so the directory check is the defence when a mount differs from the planned `:ro`.
+3. If mtime, size and inode match the last good read, reuse it.
+4. Otherwise `open` the file once, `fstat` that descriptor (it must still be the same regular file), then read and hash from that same descriptor. A swap between the check and the read can't substitute content.
+
+**Fail closed:** missing, invalid, symlinked, or a writable file or directory means every connection gets `budget:read` only.
+
+Each new fail-closed reason goes to stderr once per change of reason, not once per call, and never with the file's contents.
 
 **Where it lives on the VPS:** in `actual-hosting`, the MCP compose mounts `{{mcp_root}}/grants:/run/mcp-grants:ro` (a directory, so an atomic replace on the host is seen) and sets `ACTUAL_MCP_GRANTS_FILE=/run/mcp-grants/grants.json`. The file is owned by root, mode 0644, and holds no secret: subjects and client ids are identifiers, not credentials.
 
@@ -83,21 +99,25 @@ The reason goes to stderr, never the file's contents.
 - Production files reach the VPS only through `deploy.yml`. It bundles files from the hosting repo, and production runs only with Ken's Touch ID-signed approval from `scripts/deploy_prod.py`, checked by the VPS's forced command `production/deploy-command.py`.
 - So the grants file is committed in `actual-hosting` per environment (`production/mcp/grants.json`, plus the staging copy), added to the deploy bundle, and installed by `deploy-command.py` into `{{mcp_root}}/grants/`.
 - A grants change is a hosting PR plus Ken's existing one-button deploy. The server picks it up on the next call, with no container restart.
-- A grants-only deploy mode that skips the image steps would be quicker. It is a later improvement, not needed for this change.
+- The grants files are added to the Security Analyst's row of the review matrix in `docs/agents/team.md`, so widening a grant needs that approval.
+- `actual-hosting` CI validates both files against the schema above (unknown scope, duplicate pair, writes on `*`).
+- A grants-only deploy mode that skips the image steps would be quicker. It is a later improvement, not needed for this change. If built, it must keep the same signed approval and the same `deploy-command.py` validation, so it never becomes a quicker path around Ken's gate.
 
-### D4. Stdio: `ACTUAL_MCP_SCOPES`
+### D4. Stdio: writes-only variables
 
-The stdio entry has no OAuth, so its grant comes from three variables:
-- `ACTUAL_MCP_SCOPES`, plus `ACTUAL_MCP_CONFIRM_DESTRUCTIVE` (`1` or `0`) and `ACTUAL_MCP_MAX_ROWS`.
-- All three are set in the 1Password Environment "Actual Agents" (the mounted `.env` that launchers read with `node --env-file`). They are never set in the repo, `.mcp.json` or a shell profile.
+The stdio entry has no OAuth, so its grant comes from three variables, read **only by the `--writes` entry**:
+- `ACTUAL_MCP_WRITES_SCOPES`, plus `ACTUAL_MCP_WRITES_CONFIRM_DESTRUCTIVE` (`1` or `0`) and `ACTUAL_MCP_WRITES_MAX_ROWS`.
+- They are set in the 1Password Environment "Actual Agents" (the mounted `.env` that both stdio launchers read with `node --env-file`). They are never set in the repo, `.mcp.json` or a shell profile.
 
-**Defaults when unset:**
-- Without `--writes`: `budget:read`.
-- With `--writes`: all six scopes, `confirm_destructive` off and `max_rows` 50. That keeps today's behaviour: both category deletes run today without a dry run.
+**Why the `WRITES_` names:** the read entry loads the same env file. It always grants `budget:read` and ignores these variables, so narrowing the writes entry can't stop the read entry from starting.
+
+**Defaults when unset:** all six scopes, `confirm_destructive` off and `max_rows` 50. That keeps today's behaviour: both category deletes run today without a dry run. An unknown scope stops the writes entry at start.
 
 The grant is read once at start. Stdio entries are restarted per session, which counts as "the next call" for a local process.
 
-`--writes` remains, and still decides the data directory (`<env>-writes`) and the engine mode. A write scope without `--writes` is a startup error, because the read entry's engine is `readOnly` and the write would fail anyway.
+**A guard rail, not a boundary.** Any agent with a shell on Ken's machine, or with access to the 1Password environment tools, can edit the launcher or the variables. The stdio grant stops a confused agent, not a hostile one. The README says so.
+
+`--writes` remains, and still decides the data directory (`<env>-writes`) and the engine mode.
 
 ### D5. Enforcement in the registration wrapper
 
@@ -106,6 +126,8 @@ The grant is read once at start. Stdio entries are restarted per session, which 
 1. Look up the effective grant: the stdio constant, or the hosted per-call lookup passed in through `ServerOptions` as `grant: () => Grant`.
 2. If `scopes ⊄ grant.scopes`, throw `Refusal(<fixed text>)` after appending a `refused` audit line (best effort).
 3. Run `fn`.
+
+The SDK validates arguments against `inputSchema` before the callback runs, so a malformed call to an ungranted tool gets the SDK's validation error. That is acceptable: the guarantee is "refused before any budget read, audit attempt line or change", not "before validation".
 
 The description gets the suffix `Needs: <scopes>.` and the annotations get `readOnlyHint` or `destructiveHint`.
 
@@ -117,8 +139,9 @@ The audit log path is now passed to every entry, because the read stdio entry ne
 
 **Generic dry run.** A destructive tool computes `entry: { ids, changes }` before `loggedWrite`, as every write already does.
 - With `confirm_destructive` on and no `confirm` argument, `loggedWrite` returns `{ dry_run: true, ...entry, confirm }` and writes nothing.
-- `confirm` = an HMAC-SHA256 over `tool ‖ canonical args (minus confirm) ‖ canonical entry`, keyed by a per-process random key.
-- A call with `confirm` recomputes `entry` and compares in constant time. A mismatch is refused with "The budget changed since the dry run, or the call differs. Nothing changed."
+- `confirm` = `<issued-at>.<HMAC-SHA256 over issued-at ‖ subject ‖ client ‖ tool ‖ canonical args (minus confirm) ‖ canonical entry>`, keyed by a per-process random key.
+- A call with `confirm` checks the 5-minute lifetime, recomputes `entry` and compares in constant time. A mismatch is refused with "The budget changed since the dry run, the call differs, or the confirm expired. Nothing changed."
+- Binding the value to the caller and giving it a lifetime stops an old dry run from being replayed later, by another client, when the state happens to match again.
 - Destructive tools gain an optional `confirm` input.
 
 **Why generic:** no per-tool preview code. The comparison covers exactly the values the audit line would record, the same idea as `preview_move_on_budget`.
@@ -141,14 +164,14 @@ A `refused` line holds no arguments, because arguments can carry budget data and
 
 ## Risks / Trade-offs
 
-- **Prompt injection reaches further.** Once deletes and amount edits exist, injected bank, payee or notes text can now steer a destructive call. `confirm_destructive` stops accidents, not a compromised model, which can call the dry run itself. Mitigations:
+- **Prompt injection reaches further.** Once deletes and amount edits exist, injected bank, payee or notes text can now steer a destructive call. `confirm_destructive` protects only against mistakes; a compromised model can run the dry run and the real call in one turn. Mitigations:
   - The `destructiveHint` annotations and the `write_` prefix let clients prompt.
   - Ken's clients must not auto-allow destructive tools.
+  - The day-one production grant (Ken, 2026-11-15) leaves out `delete` until undo (sc-4215) ships, and lowers `max_rows` to 10.
   - Undo (sc-4215) is the recovery path.
-  - The Security Analyst reviews this.
 - **The production assistant loses writes if its grant isn't installed before the release.** The rollout installs the grants file first (tasks group 4). Because of fail-closed, a mistake degrades to read-only, never to "all".
-- **Confused deputy.** Every agent signed in as Ken's subject shares his grant, unless its client id has its own grant. The scopes never exceed the non-admin sync-server user the entry runs as. sc-2004 (separating the dev team from Ken's assistant) gives dev agents their own identity.
-- **Integrity of the grants file.** Whoever is root on the VPS can widen grants, and that is already Ken's gate. The grant fingerprint on every audit line makes a change visible. The server refuses a grants file it could rewrite.
+- **Confused deputy.** Per-client grants do not separate agents sharing one sign-in: every agent signed in as Ken's subject through the same client has the same grant. Writes go only to named client ids, never `*`. The scopes never exceed the non-admin sync-server user the entry runs as. Real separation needs distinct subjects (sc-2004).
+- **Integrity of the grants file.** Whoever is root on the VPS, or can merge to `actual-hosting` and get Ken's signed deploy, can widen grants. That is Ken's gate plus a Security Analyst review. The grant fingerprint on every audit line makes a change visible. The server refuses a file or directory it could rewrite, and a symlink.
 - **Stdio grant changes need a restart.** This is accepted, because a stdio entry lives for one client session.
 - **A dry-run `confirm` is replayable within the same process** for identical args and identical budget state. That is harmless: replaying it performs the change it described, and the state check makes a second delete fail as "not found".
 
@@ -160,9 +183,6 @@ A `refused` line holds no arguments, because arguments can carry budget data and
    - Commit the staging and production grants files.
    - Mount `/run/mcp-grants` read-only and set `ACTUAL_MCP_GRANTS_FILE`.
    - Deploy staging and verify a write on staging.
-4. Production: the grants file content is the day-one grant, **pending Ken's confirmation**. The default is every scope, `confirm_destructive` true and `max_rows` 50. Ken's signed deploy installs it with the release.
+4. Production: the grants file content is the day-one grant **Ken decided on 2026-11-15** (recorded on sc-4477): every scope except `delete` until sc-4215 ships, `confirm_destructive` true and `max_rows` 10, on the pre-registered client id, with `*` holding `budget:read`. Ken's signed deploy installs it with the release.
 5. **Rollback:** promote the previous release. The old image ignores the grants file and serves today's writes.
 
-## Open Questions
-
-- **Ken's day-one production grant (pending).** The default is above. Any answer changes only `production/mcp/grants.json`, not the specs or the tasks.

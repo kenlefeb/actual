@@ -47,12 +47,26 @@ A call SHALL be refused, before any audit line and with fixed text naming the sp
 - **THEN** the parent and every child are dated 2026-11-14
 
 ### Requirement: Transfer edits keep the pair
-Changing a transfer side's amount or date SHALL change the other side to the opposite amount and the same date, as the app does, and the result SHALL include the other side's before and after values. Setting a transfer side's `account_id` to the other side's account SHALL be refused.
+Editing a transfer side SHALL update the other side as the app does: the opposite amount, the edited side's notes and schedule, the transfer payee of the edited side's account, and no category on either side when both accounts are on budget or both off. A date change SHALL move only the named side. The result SHALL include the other side's before and after values. Moving a side into the other side's account SHALL be refused.
 
 #### Scenario: Transfer amount
 - **GIVEN** a transfer of -50.00 from "Checking" to "Savings"
 - **WHEN** a client sets the Checking side's `amount` to -7500
 - **THEN** the Savings side is 75.00, and the result lists both sides' amounts before and after
+
+#### Scenario: Transfer date
+- **GIVEN** that transfer, both sides dated 2026-11-10
+- **WHEN** a client sets the Checking side's `date` to 2026-11-14
+- **THEN** the Checking side is dated 2026-11-14 and the Savings side keeps 2026-11-10
+
+#### Scenario: Moving a transfer side to another account
+- **GIVEN** that transfer and an open account "Credit Union"
+- **WHEN** a client sets the Checking side's `account_id` to Credit Union
+- **THEN** the Savings side's payee becomes the transfer payee for Credit Union, and the result lists that payee change
+
+#### Scenario: Notes follow to the other side
+- **WHEN** a client sets the Checking side's `notes`
+- **THEN** the Savings side has the same notes, and the result lists that change
 
 #### Scenario: A transfer to its own account
 - **GIVEN** that transfer
@@ -96,16 +110,20 @@ The moved-history rule SHALL apply to each row as it will be after the call. A c
 - **THEN** the call fails with text saying to do it in the app, and nothing changed
 
 ### Requirement: Cascaded changes are audited
-The attempt line SHALL list every field the call will change, including the other side of a transfer and a category cleared by an off-budget move, and the result SHALL read back every affected row. The row cap SHALL count the rows the call names, not the rows that follow.
+The attempt line SHALL list every field the call will change, including the other side of a transfer (amount, payee, notes, schedule, category) and a category cleared by an off-budget move, and the result SHALL read back every affected row. The row cap SHALL count the rows the call names, not the rows that follow.
 
 #### Scenario: The transfer partner is in the audit line
 - **WHEN** a client sets a transfer side's `amount`
 - **THEN** the attempt line lists the amount change for both sides
 
+#### Scenario: A notes edit on a transfer is audited on both sides
+- **WHEN** a client sets a transfer side's `notes`
+- **THEN** the attempt line lists the notes change for both sides
+
 ## RENAMED Requirements
 
 - FROM: `### Requirement: Multi-row updates stop at the first failure`
-- TO: `### Requirement: Multi-row updates are all or nothing`
+- TO: `### Requirement: Multi-row updates apply together`
 
 ## MODIFIED Requirements
 
@@ -116,10 +134,15 @@ The server SHALL offer the write tools `write_create_transactions`, `write_updat
 - **WHEN** a client lists the tools of a server started with `--writes`
 - **THEN** every deleting tool is annotated destructive and needs the `delete` scope
 
-### Requirement: Multi-row updates are all or nothing
-`write_update_transactions` SHALL apply all its rows in one engine batch: either every row changes or none does. When the engine rejects the batch, the result and the outcome line SHALL say that nothing was applied.
+### Requirement: Multi-row updates apply together
+`write_update_transactions` SHALL write its named rows' changes, split children included, in one engine batch, so all of them change or none does; transfer partners follow in a second step, as in the app. When the engine fails, the result and the outcome line SHALL report the state read back: which named rows and partners hold the new values.
 
 #### Scenario: A failure partway
 - **GIVEN** an update of 3 transactions where the engine rejects the second
 - **WHEN** a client calls `write_update_transactions`
 - **THEN** none of the 3 transactions changed, and the result and the outcome line list no row as applied
+
+#### Scenario: The transfer step fails
+- **GIVEN** an amount change on a transfer side whose partner update fails in the transfer step
+- **WHEN** a client calls `write_update_transactions`
+- **THEN** the result and the outcome line list the named side as applied and the partner as not updated

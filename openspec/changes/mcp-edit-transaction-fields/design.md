@@ -14,7 +14,8 @@ See proposal.md for the motivation and the specs for the requirements. What the 
 - **`transactions-batch-update`** (`server/transactions/index.ts`):
   - Writes the diff inside `batchMessages`.
   - Clears the category on a parent or on a row in an off-budget account.
-  - Runs `transfer.onUpdate`, which gives the other side the opposite amount and the same date, moves it, or removes the transfer. That is the app's own path.
+  - Then, in a second `batchMessages` after a re-read, runs `transfer.onUpdate`. Its `updateTransfer` sets the partner's account, its payee (the transfer payee of the edited side's account), its notes (copied), its amount (opposite) and its schedule, never its date. `clearCategory` then clears the category on both sides when both accounts are on budget or both are off budget. That is the app's own path.
+  - A throw in the second step leaves the first step applied.
 - **The app's edit rules** (`desktop-client`, `TransactionsTable.tsx`):
   - A change to amount, payee, account or date on a reconciled row, or on a row whose transfer partner is reconciled, asks for confirmation (`confirm-transaction-edit`).
   - Changing the account sets `reconciled` false.
@@ -46,7 +47,7 @@ New optional row fields: `amount` (number, checked by `requireAmount`), `date` (
 
 **Alternative considered:** a new `write_edit_transaction` for one row. Rejected: it can't fix a split (parent plus children) atomically, and it duplicates the id, reconciled and moved-history checks.
 
-### D2. A fork API handler for one atomic batch: `api/transactions-update` / `updateTransactions`
+### D2. A fork API handler for one batch: `api/transactions-update` / `updateTransactions`
 
 The handler follows `api/transaction-update`, but for a list:
 1. Load every named transaction's whole split (`splits: 'grouped'`), ungroup, and keep one working list.
@@ -89,7 +90,13 @@ This uses the same arithmetic as `recalculateSplit`, with no engine call, so a r
 ### D4. Predicting cascaded changes for the audit line
 
 `changes` lists each named field's before and after, plus:
-- **Transfer partner** (the row has a `transfer_id`, is not a parent, and amount or date changes): `amount` → minus the new amount, `date` → the new date, under the partner's id.
+- **Transfer partner** (the row has a `transfer_id` and is not a parent), derived from `updateTransfer` for every edit of a transfer side, under the partner's id:
+  - `amount` → minus the row's after amount;
+  - `notes` → the row's after notes;
+  - `payee_id` → the transfer payee of the row's after account (it changes only when the account changes);
+  - `schedule` → the row's schedule;
+  - `category_id` → null on both sides when the two accounts are both on budget or both off budget.
+  - Only fields whose value differs are listed. The partner's date never changes.
 - **Category cleared:** when `account_id` moves the row to an off-budget account and it has a category, `category_id` → null. For a split parent, the children's categories are cleared too.
 - **Split children** when a parent's date, account or cleared changes: each child's field.
 - `allow_reconciled: true` is recorded as a change entry of its own, so the log shows the override.
@@ -98,13 +105,24 @@ This uses the same arithmetic as `recalculateSplit`, with no engine call, so a r
 
 ### D5. Outcome line and failure
 
-The call is one batch, so the outcome is either `applied` = every named id or `applied` = [] with `failed` set to the call. "Multi-row updates stop at the first failure" is renamed and becomes all or nothing. `not_attempted` goes away. The engine's error still goes only to stderr (scrubbed).
+The named rows' diff is one `batchMessages` block, so they change together or not at all. Transfer partners follow in a second block, as in the app, and nesting both in one outer block would make the transfer step read stale rows.
+
+- **No throw:** `applied` is every named id.
+- **The engine throws:** the tool reads back every id in `changes` and compares it with the predicted after values. The result and outcome line then report:
+  - `applied`: the named rows holding their new values;
+  - `partners_not_updated`: partner ids still at their before values;
+  - `failed`: the call.
+
+  A throw in the first block reads back as nothing applied. A throw in the transfer step reads back as the named rows applied and the partners not updated.
+
+"Multi-row updates stop at the first failure" is renamed "Multi-row updates apply together". `not_attempted` goes away. The engine's error still goes only to stderr (scrubbed).
 
 ## Risks / Trade-offs
 
 - **The prediction can drift from what the engine does,** for example when an upstream change to transfer behaviour adds a cascade. Mitigation: the result is the read-back, not the prediction, and a test compares the predicted change set with the read-back for transfer, off-budget and split cases.
 - **Payee edits on reconciled rows now need the override.** This changes what the assistant can do today. It is the app's rule, and the refusal text says how to proceed.
-- **Batch atomicity is `batchMessages`, not a database transaction across post-processing.** Transfer updates run in a second `batchMessages` after the first, exactly as in the app's edit. This change keeps that and doesn't try to do better than the app.
+- **Atomic only for the named rows.** Transfer updates run in a second `batchMessages` after the first, exactly as in the app's edit, so a failure there leaves the named rows changed and the partner not. The spec promises no more than that, and the result reports the read-back state.
+- **A deliberate departure on `cleared`.** The app changes `cleared` on a reconciled row without asking and offers "unlock" separately. This tool requires `allow_reconciled` to set `cleared` false on a reconciled row, and un-reconciles it, so a row is never left reconciled but uncleared.
 - **Larger calls.** A 50-row call can cascade to about 100 rows (transfers) and to children. The row cap stays on named rows, as the spec says. The batch is one diff, so this costs little.
 
 ## Migration Plan

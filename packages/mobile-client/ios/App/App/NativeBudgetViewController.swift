@@ -10,11 +10,15 @@ import UIKit
 // Budget screen while the switch is on, so the web view stays in the window.
 final class NativeBudgetViewController: UIHostingController<BudgetTabView> {
     private let model: BudgetViewModel
+    // The same read as the list's (sc-4309): the row is the read's `summary`
+    private let paychecks: PaychecksViewModel
     private var lifecycleObservers: [NSObjectProtocol] = []
 
-    init(client: NativeBridgeClient) {
+    init(client: NativeBridgeClient, openPaychecks: @escaping () -> Void) {
         model = BudgetViewModel(client: client)
-        super.init(rootView: BudgetTabView(model: model))
+        paychecks = PaychecksViewModel(client: client)
+        super.init(rootView: BudgetTabView(model: model, paychecks: paychecks, openPaychecks: openPaychecks))
+        syncPaychecksSwitch()
     }
 
     @available(*, unavailable)
@@ -28,9 +32,22 @@ final class NativeBudgetViewController: UIHostingController<BudgetTabView> {
         Task { await model.pageReady() }
     }
 
+    // The page's events for the paycheck row (NativeBridgePlugin.onPaychecksEvent)
+    func paychecksEventReceived(_ event: String, tables: [String]) {
+        if event == "ready" { Task { await paychecks.pageReady() } } else { paychecks.eventReceived(event, tables: tables) }
+    }
+
     // The tab also re-reads each time it shows
     func reload() {
         Task { await model.load() }
+        syncPaychecksSwitch()
+    }
+
+    // Settings flips the switch while this tab is away; the row follows it
+    func syncPaychecksSwitch() {
+        let on = NativeScreenSwitch.isPaychecksNative()
+        paychecks.summaryEnabled = on
+        if on { Task { await paychecks.load() } }
     }
 
     override func viewDidLoad() {
@@ -43,8 +60,11 @@ final class NativeBudgetViewController: UIHostingController<BudgetTabView> {
         for (name, active) in [(UIApplication.didBecomeActiveNotification, true), (UIApplication.willResignActiveNotification, false)] {
             lifecycleObservers.append(
                 center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                    guard let model = self?.model else { return }
-                    Task { await model.setSceneActive(active) }
+                    guard let self else { return }
+                    Task {
+                        await self.model.setSceneActive(active)
+                        await self.paychecks.setSceneActive(active)
+                    }
                 })
         }
     }
@@ -54,6 +74,8 @@ final class NativeBudgetViewController: UIHostingController<BudgetTabView> {
 
 struct BudgetTabView: View {
     @ObservedObject var model: BudgetViewModel
+    @ObservedObject var paychecks: PaychecksViewModel
+    let openPaychecks: () -> Void
     @State private var editing: BudgetMonth.Category?
     // The month the edit was opened on; the save is refused if it changed
     @State private var editingMonth = ""
@@ -96,7 +118,9 @@ struct BudgetTabView: View {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 .accessibilityLabel(Text(Words.loading))
         case .loaded(let month):
-            BudgetMonthList(month: month, onEdit: { (editingMonth, editing) = (month.month, $0) })
+            BudgetMonthList(
+                month: month, paycheckRow: paychecks.summaryRow, openPaychecks: openPaychecks,
+                onEdit: { (editingMonth, editing) = (month.month, $0) })
         case .stale(let month, let error):
             // The last good numbers, dimmed, with the reason and a retry; not editable.
             // After a failed pull, the pull's fixed message, and the retry pulls again.
@@ -107,7 +131,7 @@ struct BudgetTabView: View {
                 .padding()
                 .frame(maxWidth: .infinity)
                 .background(Color(.secondarySystemGroupedBackground))
-                BudgetMonthList(month: month).opacity(contrast == .increased ? 0.75 : 0.5)
+                BudgetMonthList(month: month, paycheckRow: paychecks.summaryRow, openPaychecks: openPaychecks).opacity(contrast == .increased ? 0.75 : 0.5)
             }
         case .failed(let error):
             errorMessage(error)
@@ -277,10 +301,16 @@ private struct AmountRow: View {
 
 private struct BudgetMonthList: View {
     let month: BudgetMonth
+    var paycheckRow: PaycheckSummaryRow?
+    var openPaychecks: (() -> Void)?
     var onEdit: ((BudgetMonth.Category) -> Void)?
 
     var body: some View {
         List {
+            // Scrolls with the content, above To budget (sc-4309)
+            if let paycheckRow, let openPaychecks {
+                Section { PaycheckSummaryRowView(row: paycheckRow, open: openPaychecks) }
+            }
             if let toBudget = month.totals.toBudget {
                 Section {
                     AmountRow(title: Words.toBudget, amount: format(toBudget), tone: BudgetAmountFormat.tone(toBudget), isHeadline: true)
@@ -558,4 +588,121 @@ private struct MoveMoneySheet: View {
         model.clearSaveError()
         presentation.wrappedValue.dismiss()
     }
+}
+
+// The Budget tab's paycheck row (sc-4309, Figma "Budget screen"): the read's
+// summary as loot-core gave it, in the incoming-only colour. One VoiceOver
+// element; a warning is a mark plus words, never colour alone.
+private struct PaycheckSummaryRowView: View {
+    let row: PaycheckSummaryRow
+    let open: () -> Void
+    @Environment(\.sizeCategory) private var sizeCategory
+
+    var body: some View {
+        Button(action: open) {
+            // Fixed-size icons, so at the accessibility sizes the text keeps the width
+            let icon = Image(systemName: "calendar").font(.system(size: 20)).foregroundColor(Color(NativeTabBarController.accent))
+                .accessibilityHidden(true)
+            let chevron = Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold)).foregroundColor(.secondary)
+                .accessibilityHidden(true)
+            Group {
+              if sizeCategory.isAccessibilityCategory {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack { icon; Spacer(); chevron }
+                    title; subtitle; amount
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                HStack(alignment: .top, spacing: 12) {
+                    icon
+                    VStack(alignment: .leading, spacing: 4) { title; subtitle }
+                    Spacer(minLength: 8)
+                    amount
+                    chevron
+                }
+              }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(spoken))
+        .accessibilityHint(Text(PaycheckWords.hint))
+        .accessibilityAddTraits(.isButton)
+    }
+
+    private var title: some View {
+        Group {
+            switch row {
+            case .addPrompt: Text(PaycheckWords.addPaycheck)
+            case .upcoming(let date, _, _, _, _): Text(String(format: PaycheckWords.next, Dates.short(date)))
+            case .noneUpcoming: Text(PaycheckWords.noneUpcoming)
+            }
+        }
+        .font(.headline)
+    }
+
+    @ViewBuilder private var subtitle: some View {
+        Text(verbatim: subtitleText).font(.subheadline).foregroundColor(.secondary)
+        if warning {
+            Label(PaycheckWords.warning, systemImage: "exclamationmark.triangle.fill").font(.subheadline).foregroundColor(.orange)
+        }
+    }
+
+    @ViewBuilder private var amount: some View {
+        if case .upcoming(_, let net, _, _, let style) = row {
+            VStack(alignment: sizeCategory.isAccessibilityCategory ? .leading : .trailing, spacing: 0) {
+                Text(Money.incoming(net, style)).font(.body.weight(.semibold)).monospacedDigit().foregroundColor(Money.positive)
+                Text(PaycheckWords.net).font(.caption).foregroundColor(.secondary)
+            }
+        }
+    }
+
+    private var warning: Bool {
+        switch row {
+        case .upcoming(_, _, _, let warning, _), .noneUpcoming(_, let warning): return warning
+        case .addPrompt: return false
+        }
+    }
+
+    private var countText: String? {
+        switch row {
+        case .upcoming(_, _, let count, _, _), .noneUpcoming(let count, _):
+            return String(format: count == 1 ? PaycheckWords.oneSchedule : PaycheckWords.schedules, count)
+        case .addPrompt: return nil
+        }
+    }
+
+    private var subtitleText: String {
+        if case .addPrompt = row { return PaycheckWords.addHint }
+        return [PaycheckWords.screen, countText].compactMap { $0 }.joined(separator: " \u{B7} ")
+    }
+
+    private var spoken: String {
+        var parts: [String]
+        switch row {
+        case .addPrompt: parts = [PaycheckWords.addPaycheck, PaycheckWords.addHint]
+        case .upcoming(let date, let net, _, _, let style):
+            parts = [String(format: PaycheckWords.spokenNext, Dates.long(date), Money.incoming(net, style))]
+        case .noneUpcoming: parts = [PaycheckWords.noneUpcoming]
+        }
+        if let countText { parts.append(countText) }
+        if warning { parts.append(PaycheckWords.warning) }
+        return parts.joined(separator: ", ")
+    }
+}
+
+private enum PaycheckWords {
+    static let screen = NSLocalizedString("Schedules & Paychecks", comment: "Native Budget tab: paycheck row subtitle")
+    static let next = NSLocalizedString("Next paycheck %@", comment: "Native Budget tab: paycheck row title")
+    static let net = NSLocalizedString("net", comment: "Native Budget tab: paycheck row, under the net pay")
+    static let noneUpcoming = NSLocalizedString("No upcoming paychecks", comment: "Native Budget tab: every paycheck ended")
+    static let addPaycheck = NSLocalizedString("Add a paycheck", comment: "Native Budget tab: no paychecks yet")
+    static let addHint = NSLocalizedString("See what lands in each account, and when.", comment: "Native Budget tab: no paychecks yet")
+    static let warning = NSLocalizedString("A paycheck needs attention", comment: "Native Budget tab: clearing warning on a paycheck")
+    static let hint = NSLocalizedString("Opens Schedules and Paychecks", comment: "Native Budget tab: VoiceOver hint on the paycheck row")
+    static let spokenNext = NSLocalizedString("Next paycheck %1$@, %2$@ net", comment: "Native Budget tab: VoiceOver paycheck row")
+    static let schedules = NSLocalizedString("%d schedules", comment: "Native Budget tab: number of schedules")
+    static let oneSchedule = NSLocalizedString("%d schedule", comment: "Native Budget tab: one schedule")
 }

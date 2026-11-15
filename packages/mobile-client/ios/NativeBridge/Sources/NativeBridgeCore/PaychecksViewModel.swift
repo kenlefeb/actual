@@ -65,6 +65,10 @@ public final class PaychecksViewModel: ObservableObject {
     // As the web's "Show completed schedules"
     @Published public var showCompleted = false
 
+    // The Budget tab's row (sc-4309) follows the per-device switch; the app sets it
+    @Published public var summaryEnabled = false
+    public var summaryRow: PaycheckSummaryRow? { PaycheckSummaryRow(read: state.read, switchOn: summaryEnabled) }
+
     private let client: NativeBridgeClient
     private let undoInterval: TimeInterval
     private var coalescer: ChangeCoalescer?

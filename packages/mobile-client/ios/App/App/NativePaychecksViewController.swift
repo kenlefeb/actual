@@ -402,7 +402,7 @@ private struct ScheduleRow: View {
 }
 
 // Money in is the only coloured money (DESIGN.native.md, money/positive with "+")
-private enum Money {
+enum Money {
     static let positive = Color(UIColor { traits in
         traits.userInterfaceStyle == .dark
             ? UIColor(red: 0x30 / 255, green: 0xD1 / 255, blue: 0x58 / 255, alpha: 1)
@@ -415,7 +415,7 @@ private enum Money {
 }
 
 // loot-core's yyyy-MM-dd days, shown in the user's locale
-private enum Dates {
+enum Dates {
     private static let parser: DateFormatter = {
         let parser = DateFormatter()
         parser.dateFormat = "yyyy-MM-dd"
@@ -432,6 +432,7 @@ private enum Dates {
 
     static func long(_ day: String) -> String { format(day, "EEEEMMMMdyyyy") }
     static func medium(_ day: String) -> String { format(day, "EEEEMMMMd") }
+    static func short(_ day: String) -> String { format(day, "EEEMMMd") }
 }
 
 private enum Words {

@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "id": "fork-release-26.10.1-alpha.37",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.37 — Ken's Actual fork",
+      "date": "2026-11-15",
+      "version": "26.10.1-alpha.37",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.37.md",
+      "body": "**Unofficial fork prerelease.** Based on upstream Actual v26.11.0 (`1766241e3f4b3c578e424c4fa15f1eb83c0da17d`, October 29, 2026); not an official Actual Budget release.\n\nThis release fixes a production problem where saving a schedule or paycheck could reset its next date to a past one or drop a paycheck's skipped dates. It also adds the first native iPhone screens for schedules and paychecks, off by default.",
+      "details": "#### Features\n\n- Native iPhone Schedules & Paychecks list, with skip and a 10-second Undo. It is behind a switch in Settings that is off by default.\n- Native iPhone paycheck row on the Budget tab and a native paycheck editor sheet, behind the same default-off switch.\n\n#### Enhancements\n\n- Paycheck warnings on the native iPhone screens use the warning text colour.\n\n#### Bugfixes\n\n- Saving a schedule or paycheck no longer resets its next date to a date in the past, and no longer drops a paycheck's skipped dates or its deposit skips.\n\n#### Maintenance\n\n- No upstream changes in this release; the fork stays on upstream Actual 26.11.0.\n- The Mac App Store upload now makes the app readable before signing, fixing the failed Mac TestFlight upload.\n- The native performance checks run one at a time, outside the parallel test suite, so they no longer fail on a loaded machine.\n- The native iPhone design decisions are recorded in `DESIGN.native.md`, and agent docs now refer to the Actual Agents environment instead of the retired vault.\n\n#### Known limitations\n\n- Experimental.\n- The native Schedules & Paychecks screens are off by default; turn them on in Settings to try them.\n- Tapping a tag in the transaction editor does nothing.\n- Tags are not yet fully accessible on the phone.\n- OpenID sign-out needs the server's address in the identity provider's allowed sign-out addresses; without it the provider shows an error page, though you are already signed out of Actual.\n- Attached documents aren't included in a budget export.\n- Documents removed before alpha.35 are recorded the first time an updated device syncs, and deleted 30 days after that. Removals made on a device that has not been updated are not tracked.\n- HEIC pictures are refused; use the Photos library or a JPEG or PNG copy.\n- Attaching a document needs a connection; there is no offline upload queue.\n- After restoring server data from a backup, pause the cleanup first (`production/RESTORE.md`)."
+    },
+    {
       "id": "fork-release-26.10.1-alpha.36",
       "type": "release",
       "title": "Release 26.10.1-alpha.36 — Ken's Actual fork",

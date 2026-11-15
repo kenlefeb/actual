@@ -28,9 +28,14 @@ export type OutcomeEntry = {
   call_id: string;
   phase: 'outcome';
   status: 'ok' | 'failed';
-  applied: string[];
+  /** null: the write failed and its state could not be read back. */
+  applied: string[] | null;
   failed: string | null;
   created: string[];
+  /** Transfer partners still at their old values after a failed write. */
+  partners_not_updated?: string[];
+  /** `failed` when a failed write's state could not be read back. */
+  read_back?: 'failed';
 };
 
 /** A call refused by scope; never its arguments, which can hold budget data. */

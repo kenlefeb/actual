@@ -30,6 +30,8 @@ export type Grant = {
   scopes: Scope[];
   confirm_destructive: boolean;
   max_rows?: number;
+  /** A row may set `allow_reconciled` to change a reconciled transaction. Off when absent. */
+  allow_reconciled?: boolean;
   fingerprint?: string;
 };
 
@@ -52,6 +54,7 @@ const row = z
     scopes: z.array(z.enum(SCOPES)).min(1),
     confirm_destructive: z.boolean().optional(),
     max_rows: z.number().int().positive().optional(),
+    allow_reconciled: z.boolean().optional(),
   })
   .strict();
 
@@ -65,9 +68,13 @@ const grantsFile = z
       f.grants.length,
   )
   // Writes go only to named client ids: `*` covers every future client.
+  // It stays read-only in every respect, so no write option either.
   .refine(f =>
     f.grants.every(
-      g => g.client !== '*' || g.scopes.every(s => s === 'budget:read'),
+      g =>
+        g.client !== '*' ||
+        (g.scopes.every(s => s === 'budget:read') &&
+          g.allow_reconciled === undefined),
     ),
   );
 
@@ -190,6 +197,7 @@ export function createGrantsLookup(
       scopes: match?.scopes ?? [],
       confirm_destructive: match?.confirm_destructive ?? true,
       ...(match?.max_rows ? { max_rows: match.max_rows } : {}),
+      ...(match?.allow_reconciled ? { allow_reconciled: true } : {}),
       fingerprint: file.fingerprint,
     };
   };

@@ -163,6 +163,28 @@ describe('The grants file schema is strict', () => {
         },
       ]),
     ],
+    [
+      'allow_reconciled on the wildcard client',
+      file([
+        {
+          subject: SUB,
+          client: '*',
+          scopes: ['budget:read'],
+          allow_reconciled: true,
+        },
+      ]),
+    ],
+    [
+      'a string allow_reconciled',
+      file([
+        {
+          subject: SUB,
+          client: CLIENT,
+          scopes: WRITE,
+          allow_reconciled: 'yes',
+        },
+      ]),
+    ],
   ])('rejects %s', (_, text) => {
     expect(() => parseGrantsFile(text)).toThrow();
   });
@@ -222,6 +244,24 @@ describe('Hosted confirm is on by default', () => {
     );
     const grant = createGrantsLookup(path, () => undefined)(SUB, CLIENT);
     expect(grant.confirm_destructive).toBe(false);
+  });
+});
+
+describe('Hosted reconciled override is off by default', () => {
+  it('Absent means off', () => {
+    const { path } = installed(DAY_ONE);
+    const grant = createGrantsLookup(path, () => undefined)(SUB, CLIENT);
+    expect(grant.allow_reconciled).toBeUndefined();
+  });
+
+  it('only an explicit true turns it on', () => {
+    const { path } = installed(
+      file([
+        { subject: SUB, client: CLIENT, scopes: WRITE, allow_reconciled: true },
+      ]),
+    );
+    const grant = createGrantsLookup(path, () => undefined)(SUB, CLIENT);
+    expect(grant.allow_reconciled).toBe(true);
   });
 });
 

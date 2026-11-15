@@ -222,6 +222,21 @@ export function updateTransaction(
   return send('api/transaction-update', { id, fields });
 }
 
+/**
+ * Updates several transactions as one batch: the named rows, split children
+ * included, change together or not at all. Transfer partners follow in a
+ * second step, as for `updateTransaction`. Like `updateTransaction`, it does
+ * no input validation: `fields` is applied as given.
+ */
+export function updateTransactions(
+  updates: Array<{
+    id: TransactionEntity['id'];
+    fields: Partial<TransactionEntity>;
+  }>,
+) {
+  return send('api/transactions-update', { updates });
+}
+
 export function deleteTransaction(id: TransactionEntity['id']) {
   return send('api/transaction-delete', { id });
 }

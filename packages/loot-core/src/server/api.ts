@@ -21,7 +21,7 @@ import {
   ungroupTransactions,
   updateTransaction,
 } from '#shared/transactions';
-import { integerToAmount } from '#shared/util';
+import { diffItems, integerToAmount } from '#shared/util';
 import type { Handlers } from '#types/handlers';
 import type {
   AccountEntity,
@@ -676,6 +676,36 @@ handlers['api/transaction-update'] = withMutation(async function ({
 
   // `fields` is partial; updateTransaction replaces a split child wholesale
   const { diff } = updateTransaction(transactions, { ...existing, ...fields });
+  return (await handlers['transactions-batch-update'](diff))['updated'];
+});
+
+// Fork: several updates as one batch. The named rows' diff, split children
+// included, is written together; transfer partners follow in the batch
+// update's second step, as for a single update. Like api/transaction-update,
+// it does no input validation: `fields` is spread over the row as given, so
+// callers are trusted (the MCP server's planner is the validator).
+handlers['api/transactions-update'] = withMutation(async function ({
+  updates,
+}) {
+  checkFileOpen();
+  const { data } = await aqlQuery(
+    q('transactions')
+      .filter({ id: { $oneof: updates.map(u => u.id) } })
+      .select('*')
+      .options({ splits: 'grouped' }),
+  );
+  // Each split comes back once, whole, even when parent and child are named
+  const original = ungroupTransactions(data);
+  let working = original;
+  for (const { id, fields } of updates) {
+    const existing = working.find(t => t.id === id);
+    if (!existing) {
+      throw APIError('Transaction not found: ' + id);
+    }
+    // `fields` is partial; updateTransaction replaces a split child wholesale
+    working = updateTransaction(working, { ...existing, ...fields }).data;
+  }
+  const diff = diffItems(original, working);
   return (await handlers['transactions-batch-update'](diff))['updated'];
 });
 

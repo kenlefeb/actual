@@ -156,6 +156,7 @@ export function stdioGrant(env: Env, writes: boolean): Grant {
   const scopes = env.ACTUAL_MCP_WRITES_SCOPES;
   const confirm = env.ACTUAL_MCP_WRITES_CONFIRM_DESTRUCTIVE;
   const maxRows = env.ACTUAL_MCP_WRITES_MAX_ROWS;
+  const allowReconciled = env.ACTUAL_MCP_WRITES_ALLOW_RECONCILED;
   // Set but empty is refused, never read as "unset" (which grants everything).
   if (scopes !== undefined && !scopes.trim()) {
     throw new Error(
@@ -164,6 +165,13 @@ export function stdioGrant(env: Env, writes: boolean): Grant {
   }
   if (confirm !== undefined && confirm !== '0' && confirm !== '1') {
     throw new Error('ACTUAL_MCP_WRITES_CONFIRM_DESTRUCTIVE must be 1 or 0.');
+  }
+  if (
+    allowReconciled !== undefined &&
+    allowReconciled !== '0' &&
+    allowReconciled !== '1'
+  ) {
+    throw new Error('ACTUAL_MCP_WRITES_ALLOW_RECONCILED must be 1 or 0.');
   }
   if (maxRows !== undefined && !/^[1-9]\d*$/.test(maxRows)) {
     throw new Error(
@@ -174,6 +182,7 @@ export function stdioGrant(env: Env, writes: boolean): Grant {
     scopes: scopes === undefined ? [...SCOPES] : parseScopes(scopes),
     confirm_destructive: confirm === '1',
     ...(maxRows ? { max_rows: Number(maxRows) } : {}),
+    ...(allowReconciled === '1' ? { allow_reconciled: true } : {}),
   };
 }
 

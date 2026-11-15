@@ -363,6 +363,60 @@ describe('Transfer edits keep the pair', () => {
   });
 });
 
+describe('A payee edit never links or unlinks a transfer', () => {
+  // The engine would delete the other side, or insert a new one: a create or
+  // delete outside the audit line and the delete scope (until sc-4205)
+  it('Unlinking a transfer side is refused', async () => {
+    const { checking, savings } = await setup();
+    const { out } = await transfer(checking, savings);
+    const landlord = (await api.getPayees()).find(p => p.name === 'Landlord')!;
+    for (const payee_id of [landlord.id, null]) {
+      await expectRefused(
+        { updates: [{ id: out.id, payee_id }] },
+        /link or unlink a transfer; do it in the app/,
+      );
+    }
+  });
+
+  it('Relinking a transfer side to another account is refused', async () => {
+    const { checking, savings, creditUnion } = await setup();
+    const { out } = await transfer(checking, savings);
+    await expectRefused(
+      { updates: [{ id: out.id, payee_id: await transferPayee(creditUnion) }] },
+      /link or unlink a transfer/,
+    );
+  });
+
+  it('A transfer payee on an ordinary row is refused', async () => {
+    const { checking, savings } = await setup();
+    const [t] = await rows({ account: checking });
+    await expectRefused(
+      { updates: [{ id: t.id, payee_id: await transferPayee(savings) }] },
+      /link or unlink a transfer/,
+    );
+  });
+
+  it("A split parent's transfer payee would reach its children", async () => {
+    const { checking, savings } = await setup();
+    const s = await split(checking);
+    await expectRefused(
+      {
+        updates: [{ id: s.parent.id, payee_id: await transferPayee(savings) }],
+      },
+      /link or unlink a transfer/,
+    );
+  });
+
+  it("A transfer side's own transfer payee is fine", async () => {
+    const { checking, savings } = await setup();
+    const { out } = await transfer(checking, savings);
+    const res = await h.call('write_update_transactions', {
+      updates: [{ id: out.id, payee_id: out.payee, notes: 'same payee' }],
+    });
+    expect(res.isError).toBe(false);
+  });
+});
+
 describe('Reconciled rows need an explicit override', () => {
   async function reconciled() {
     const { checking, savings } = await setup();

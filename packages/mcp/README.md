@@ -109,7 +109,10 @@ only expense groups can be created.
   - **Transfers.** The other side follows: the opposite amount, the edited side's notes and
     schedule, the transfer payee of the edited side's account, and no category on either side
     when both accounts are on budget or both off. Each side keeps its own date. Moving a side into
-    the other side's account is refused, and so is naming both sides in one call.
+    the other side's account is refused, and so is naming both sides in one call. A payee change
+    that would link or unlink a transfer (a transfer side's payee, or a transfer payee on an
+    ordinary row or a split parent) is refused: the engine would create or delete the other side.
+    Do it in the app until transfer linking lands (sc-4205).
   - **Reconciled rows.** Changing `amount`, `date`, `account_id` or `payee_id` of a reconciled
     row, or of a transfer whose other side is reconciled, or setting `cleared` false on a
     reconciled row, needs `allow_reconciled: true` on that row. A new account or `cleared` false

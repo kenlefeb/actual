@@ -294,6 +294,21 @@ export async function planUpdates(updates: Update[]) {
     transferPayees.map(p => [p.transfer_acct, p.id]),
   );
 
+  // transfer.onUpdate would delete the other side (removeTransfer) or insert
+  // one (addTransfer): a create or delete this tool must not make (sc-4205)
+  for (const t of after.values()) {
+    const t0 = before.get(t.id)!;
+    if (
+      !t.is_parent &&
+      t.payee !== t0.payee &&
+      (t0.transfer_id || (t.payee && payeeAccount.has(t.payee)))
+    ) {
+      throw new Refusal(
+        `Changing row ${t.id}'s payee would link or unlink a transfer; do it in the app (sc-4205). Nothing changed.`,
+      );
+    }
+  }
+
   // Transfer partners follow (transfer.updateTransfer, then clearCategory)
   const cascaded: string[] = [];
   for (const t of [...after.values()]) {
@@ -303,9 +318,6 @@ export async function planUpdates(updates: Update[]) {
       c => t[c] !== t0[c],
     );
     const transferAccount = t.payee ? payeeAccount.get(t.payee) : undefined;
-    // shortcut: a payee change that unlinks or relinks a transfer is not
-    // predicted here; the result's read-back still reports it. Upgrade with
-    // transfer linking (sc-4205).
     if (!partner || !changed || transferAccount !== partner.account) continue;
     if (!before.has(partner.id)) {
       before.set(partner.id, partner);

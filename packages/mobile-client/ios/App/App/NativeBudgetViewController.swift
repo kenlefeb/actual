@@ -640,13 +640,13 @@ private struct PaycheckSummaryRowView: View {
             case .noneUpcoming: Text(PaycheckWords.noneUpcoming)
             }
         }
-        .font(.headline)
+        .font(.body)
     }
 
     @ViewBuilder private var subtitle: some View {
         Text(verbatim: subtitleText).font(.subheadline).foregroundColor(.secondary)
         if warning {
-            Label(PaycheckWords.warning, systemImage: "exclamationmark.triangle.fill").font(.subheadline).foregroundColor(.orange)
+            Label(PaycheckWords.warning, systemImage: "exclamationmark.triangle.fill").font(.subheadline).foregroundColor(Money.warning)
         }
     }
 

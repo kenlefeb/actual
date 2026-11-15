@@ -1,4 +1,11 @@
-import { mkdtempSync, readFileSync } from 'fs';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from 'fs';
 import http from 'http';
 import type { AddressInfo } from 'net';
 import { tmpdir } from 'os';
@@ -66,6 +73,22 @@ function config(over: Partial<RemoteConfig> = {}): RemoteConfig {
     },
     ...over,
   };
+}
+
+/** A grants file in a read-only directory, as the VPS mounts it; `write` replaces it atomically. */
+function grantsFile(grants: unknown[]) {
+  const dir = join(mkdtempSync(join(tmpdir(), 'actual-mcp-grants-')), 'g');
+  mkdirSync(dir);
+  const path = join(dir, 'grants.json');
+  const write = (next: unknown[]) => {
+    chmodSync(dir, 0o755);
+    writeFileSync(`${path}.new`, JSON.stringify({ version: 1, grants: next }));
+    chmodSync(`${path}.new`, 0o444);
+    renameSync(`${path}.new`, path);
+    chmodSync(dir, 0o555);
+  };
+  write(grants);
+  return { path, write };
 }
 
 let fixture: Awaited<ReturnType<typeof buildFixtureBudget>>;
@@ -175,8 +198,15 @@ describe('a separate hosted entry', () => {
   });
 
   it('A hosted write is audited with its OAuth subject', async () => {
+    const grants = grantsFile([
+      {
+        subject: 'oauth-sub-w',
+        client: 'c1',
+        scopes: ['budget:read', 'transactions:write'],
+      },
+    ]);
     await start(
-      {},
+      { grantsFile: grants.path },
       { authenticate: () => ({ clientId: 'c1', subject: 'oauth-sub-w' }) },
       { count: 1, overrides: { notes: 'old note' } },
     );
@@ -194,7 +224,92 @@ describe('a separate hosted entry', () => {
       .map(l => JSON.parse(l));
     const mine = lines.filter(l => l.subject === 'oauth-sub-w');
     expect(mine.map(l => l.phase)).toEqual(['attempt', 'outcome']);
-    expect(mine[0]).toMatchObject({ tool: 'write_update_transactions' });
+    expect(mine[0]).toMatchObject({
+      tool: 'write_update_transactions',
+      scopes: ['budget:read', 'transactions:write'],
+    });
+    // The grants file's fingerprint, so a changed grant shows in the log.
+    for (const line of mine) expect(line.grant).toMatch(/^[0-9a-f]{12}$/);
+  });
+
+  it('An existing connection gains writes, then loses them, with no restart', async () => {
+    const grants = grantsFile([
+      { subject: 'oauth-sub-g', client: 'c1', scopes: ['budget:read'] },
+    ]);
+    await start(
+      { grantsFile: grants.path },
+      { authenticate: () => ({ clientId: 'c1', subject: 'oauth-sub-g' }) },
+      { count: 1 },
+    );
+    await connect();
+    const { data } = (await api.runQuery(
+      api.q('transactions').select(['id']),
+    )) as { data: Array<{ id: string }> };
+    const update = () =>
+      callTool('write_update_transactions', {
+        updates: [{ id: data[0].id, notes: `n${Math.random()}` }],
+      });
+    expect((await update()).text).toMatch(/missing transactions:write/);
+
+    grants.write([
+      {
+        subject: 'oauth-sub-g',
+        client: 'c1',
+        scopes: ['budget:read', 'transactions:write'],
+      },
+    ]);
+    expect((await update()).isError).toBe(false);
+
+    grants.write([
+      { subject: 'oauth-sub-g', client: 'c1', scopes: ['budget:read'] },
+    ]);
+    expect((await update()).text).toMatch(/missing transactions:write/);
+  });
+
+  it('A named client gets writes, others read', async () => {
+    const grants = grantsFile([
+      { subject: 'oauth-sub-n', client: '*', scopes: ['budget:read'] },
+      {
+        subject: 'oauth-sub-n',
+        client: 'pre-registered',
+        scopes: ['budget:read', 'transactions:write'],
+      },
+    ]);
+    let clientId = 'dynamic-1';
+    await start(
+      { grantsFile: grants.path },
+      { authenticate: () => ({ clientId, subject: 'oauth-sub-n' }) },
+      { count: 1 },
+    );
+    await connect();
+    const { data } = (await api.runQuery(
+      api.q('transactions').select(['id']),
+    )) as { data: Array<{ id: string }> };
+    const update = () =>
+      callTool('write_update_transactions', {
+        updates: [{ id: data[0].id, notes: 'x' }],
+      });
+    expect((await update()).text).toMatch(/missing transactions:write/);
+    clientId = 'pre-registered';
+    expect((await update()).isError).toBe(false);
+  });
+
+  it('No grants file', async () => {
+    await start(
+      {},
+      { authenticate: () => ({ clientId: 'c1', subject: 'oauth-sub-x' }) },
+      { count: 1 },
+    );
+    await connect();
+    expect((await callTool('list_accounts')).isError).toBe(false);
+    const res = await callTool('write_create_category_group', { name: 'X' });
+    expect(res.text).toMatch(/missing structure:write/);
+    expect(records).toContainEqual(
+      expect.objectContaining({
+        event: 'grants',
+        reason: expect.stringMatching(/not set/),
+      }),
+    );
   });
 
   it('No authentication, no public listener', async () => {

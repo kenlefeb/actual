@@ -2,6 +2,9 @@ import { mkdirSync, readFileSync, realpathSync, rmdirSync, statSync } from 'fs';
 import { homedir } from 'os';
 import { basename, dirname, join, resolve, sep } from 'path';
 
+import { parseScopes, SCOPES } from './grants';
+import type { Grant } from './grants';
+
 // Staging lives on the tailnet; see actual-hosting (compose.tailnet.yaml).
 const STAGING_HOST = 'actual-staging.owl-becrux.ts.net';
 const LOCAL_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
@@ -53,7 +56,7 @@ export type McpConfig = {
   encryptionPassword?: string;
   dataDir: string;
   env: EnvLabel;
-  /** Register the write tools: `--writes` on stdio, always on the hosted entry. */
+  /** The stdio `--writes` entry (its own data directory, engine not read-only); always true on the hosted entry. */
   writes: boolean;
   /** Write audit log, beside the data directory: `<dataDir>.audit.jsonl`. */
   auditLog: string;
@@ -144,10 +147,44 @@ export function resolveCredential(
 }
 
 /**
+ * The stdio grant (design D4). Only the `--writes` entry reads the
+ * `ACTUAL_MCP_WRITES_*` variables, so the read entry can share their env file;
+ * it always grants `budget:read`. Unset, the writes entry keeps today's set.
+ */
+export function stdioGrant(env: Env, writes: boolean): Grant {
+  if (!writes) return { scopes: ['budget:read'], confirm_destructive: false };
+  const scopes = env.ACTUAL_MCP_WRITES_SCOPES;
+  const confirm = env.ACTUAL_MCP_WRITES_CONFIRM_DESTRUCTIVE;
+  const maxRows = env.ACTUAL_MCP_WRITES_MAX_ROWS;
+  // Set but empty is refused, never read as "unset" (which grants everything).
+  if (scopes !== undefined && !scopes.trim()) {
+    throw new Error(
+      'ACTUAL_MCP_WRITES_SCOPES is empty: name at least one scope.',
+    );
+  }
+  if (confirm !== undefined && confirm !== '0' && confirm !== '1') {
+    throw new Error('ACTUAL_MCP_WRITES_CONFIRM_DESTRUCTIVE must be 1 or 0.');
+  }
+  if (maxRows !== undefined && !/^[1-9]\d*$/.test(maxRows)) {
+    throw new Error(
+      'ACTUAL_MCP_WRITES_MAX_ROWS must be a positive whole number.',
+    );
+  }
+  return {
+    scopes: scopes === undefined ? [...SCOPES] : parseScopes(scopes),
+    confirm_destructive: confirm === '1',
+    ...(maxRows ? { max_rows: Number(maxRows) } : {}),
+  };
+}
+
+/**
  * Reads config from the environment only. Secrets are never accepted on
  * argv: the only flag is `--writes`, and anything else is a fixed usage error.
  */
-export function loadConfig(env: Env, argv: string[] = []): McpConfig {
+export function loadConfig(
+  env: Env,
+  argv: string[] = [],
+): McpConfig & { grant: Grant } {
   const unknown = argv.filter(a => a !== '--writes');
   if (unknown.length > 0) {
     throw new Error(
@@ -191,6 +228,7 @@ export function loadConfig(env: Env, argv: string[] = []): McpConfig {
     env: label,
     dataDir,
     writes,
+    grant: stdioGrant(env, writes),
     auditLog: `${dataDir}.audit.jsonl`,
     secrets: [password, sessionToken, encryptionPassword].filter(
       (s): s is string => Boolean(s),

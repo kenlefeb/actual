@@ -24,6 +24,8 @@ export type RemoteConfig = McpConfig & {
   oauth: OAuthConfig;
   /** True when the production guard was met; the entry then validates the token at start. */
   production?: boolean;
+  /** The grants file (`ACTUAL_MCP_GRANTS_FILE`); without one every connection is read-only. */
+  grantsFile?: string;
 };
 
 type Env = Record<string, string | undefined>;
@@ -218,6 +220,7 @@ export function loadRemoteConfig(env: Env, argv: string[] = []): RemoteConfig {
     dataDir,
     writes: true,
     production,
+    grantsFile: env.ACTUAL_MCP_GRANTS_FILE || undefined,
     auditLog: `${dataDir}.audit.jsonl`,
     secrets: [
       password,

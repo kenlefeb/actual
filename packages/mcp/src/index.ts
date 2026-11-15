@@ -13,10 +13,10 @@ async function main() {
   ensurePrivateDir(config.dataDir);
   await openBudget(config);
 
-  const server = createServer(
-    config.secrets,
-    config.writes ? { auditLog: config.auditLog } : {},
-  );
+  const server = createServer(config.secrets, {
+    auditLog: config.auditLog,
+    grant: () => config.grant,
+  });
   server.server.onclose = registerShutdown(closeBudget);
   await server.connect(new StdioServerTransport());
 }

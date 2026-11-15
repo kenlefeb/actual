@@ -4,20 +4,16 @@ import { z } from 'zod';
 import { Refusal } from '#refusal';
 import { getBudgetStatus, moveConfirm } from '#tools/read/accounts';
 import { date } from '#tools/read/shared';
-import type { RegisterTool } from '#tools/read/shared';
 
-import type { WriteLog } from './shared';
+import type { RegisterWriteTool } from './shared';
 import { id, loggedWrite, requireDate } from './shared';
 
-export function registerAccountWriteTools(
-  tool: RegisterTool,
-  auditLog: WriteLog,
-) {
+export function registerAccountWriteTools(tool: RegisterWriteTool) {
   tool(
     'write_move_on_budget',
     'Move an off-budget account on budget at a start date (YYYY-MM-DD), by account id (never a name). Call preview_move_on_budget first and pass its `confirm`: the move is refused when a fresh preview for the same account and date differs. Returns the account status before and after.',
     { account_id: id, start_date: date, confirm: z.string().max(128) },
-    async ({ account_id, start_date, confirm }) => {
+    async ({ account_id, start_date, confirm }, auditLog) => {
       requireDate(start_date);
       const account = (await api.getAccounts()).find(a => a.id === account_id);
       if (!account) {
@@ -75,5 +71,6 @@ export function registerAccountWriteTools(
         },
       );
     },
+    { scopes: ['structure:write'] },
   );
 }

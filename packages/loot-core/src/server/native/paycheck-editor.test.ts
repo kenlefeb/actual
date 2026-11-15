@@ -253,6 +253,28 @@ describe('native/paycheck-preview', () => {
     ).toEqual([{ code: 'clearing-name-missing', field: 'clearingAccount' }]);
   });
 
+  it("shows an unedited paycheck's stored next date, as the list does", async () => {
+    const id = await handlers['paycheck-create']({
+      name: 'Acme',
+      definition: acme(),
+    });
+    await handlers['paycheck-skip-next']({ id });
+    const [{ definition }] = await handlers['paychecks-get']();
+    const draft = { name: 'Acme', definition, isNewAccount: false, id };
+
+    // Skipped the 13th: the schedule's next date, not the recurrence's
+    expect((await preview(draft)).payDate).toBe('2026-11-30');
+    // An edited pay date has no stored next date yet
+    expect(
+      (
+        await preview({
+          ...draft,
+          definition: { ...definition, weekendSolveMode: 'after' },
+        })
+      ).payDate,
+    ).toBe('2026-11-16');
+  });
+
   it('gives no dates for a pay schedule it cannot read', async () => {
     const result = await preview({
       name: 'Acme',
@@ -323,6 +345,60 @@ describe('native/paycheck-save', () => {
     await nativeUndo('U');
 
     expect(await liveSnapshot()).toEqual(before);
+  });
+
+  // PR 366 review: an older native app decodes the definition with a typed
+  // model, so fields a newer loot-core added would be lost on its save
+  it('keeps definition fields the native draft left out', async () => {
+    const id = await handlers['paycheck-create']({
+      name: 'Acme',
+      definition: acme(),
+    });
+    const [{ definition: stored }] = await handlers['paychecks-get']();
+    const withExtras = {
+      ...stored,
+      futureTop: 'top',
+      date: { ...stored.date, futureDate: 'date' },
+      deductions: stored.deductions.map(d => ({ ...d, futureDeduction: 1 })),
+      deposits: stored.deposits.map(d => ({ ...d, futureDeposit: true })),
+    };
+    await db.update('paychecks', {
+      id,
+      definition: JSON.stringify(withExtras),
+    });
+
+    // What an older app sends: the known fields, one deposit changed, one
+    // deposit added, the deduction removed
+    await save({
+      id,
+      name: 'Acme',
+      definition: {
+        ...stored,
+        grossAmount: 310000,
+        deductions: [],
+        deposits: [
+          { ...stored.deposits[0], value: 50000 },
+          stored.deposits[1],
+          { id: 'new', account: 'retirement', kind: 'fixed', value: 100 },
+        ],
+      },
+      daysEarly: {},
+      undoToken: 'M',
+    });
+
+    const [{ definition }] = (await handlers['paychecks-get']()) as never as [
+      { definition: Record<string, unknown> & typeof withExtras },
+    ];
+    expect(definition.futureTop).toBe('top');
+    expect(definition.grossAmount).toBe(310000);
+    expect(definition.date).toMatchObject({ futureDate: 'date' });
+    expect(definition.deductions).toEqual([]);
+    expect(definition.deposits).toMatchObject([
+      { id: 'savings', value: 50000, futureDeposit: true },
+      { id: 'checking', futureDeposit: true },
+      { id: 'new', account: 'retirement' },
+    ]);
+    expect(definition.deposits[2]).not.toHaveProperty('futureDeposit');
   });
 
   it('skips days early that did not change', async () => {

@@ -174,10 +174,24 @@ function readDefinition(value: unknown): DraftDefinition {
 
 // sc-4343: the editor's draft fields, and nothing else
 function readDraft(args: unknown) {
-  const { name, definition, isNewAccount, newClearingAccountName, daysEarly } =
-    (args ?? {}) as Record<string, unknown>;
+  const {
+    id,
+    name,
+    definition,
+    isNewAccount,
+    newClearingAccountName,
+    daysEarly,
+  } = (args ?? {}) as Record<string, unknown>;
   readDefinition(definition);
-  return { name, definition, isNewAccount, newClearingAccountName, daysEarly };
+  // A read: loot-core only looks the id up
+  return {
+    ...(id !== undefined && { id }),
+    name,
+    definition,
+    isNewAccount,
+    newClearingAccountName,
+    daysEarly,
+  };
 }
 
 // sc-4343: a save names live accounts only (the clearing account unless it

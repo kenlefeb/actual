@@ -158,6 +158,7 @@ describe('paycheck editor handlers through the page bridge', () => {
   it('forwards a preview with only the draft fields', async () => {
     const { bridge, calls } = editorSetup();
     await bridge.call('native/paycheck-preview', {
+      id: 'acme',
       name: 'Acme',
       definition,
       isNewAccount: false,
@@ -169,6 +170,7 @@ describe('paycheck editor handlers through the page bridge', () => {
       [
         'native/paycheck-preview',
         {
+          id: 'acme',
           name: 'Acme',
           definition,
           isNewAccount: false,

@@ -513,12 +513,15 @@ function checkDraft(
  * name and the web form's error codes. Read-only.
  */
 async function paycheckPreview({
+  id,
   name,
   definition,
   isNewAccount,
   newClearingAccountName = '',
   daysEarly = {},
 }: {
+  // The saved paycheck being edited, if any
+  id?: string;
   name: string;
   definition: PaycheckDefinition;
   isNewAccount: boolean;
@@ -556,26 +559,48 @@ async function paycheckPreview({
     : byId.get(definition.clearingAccount);
 
   let payDate: string | null = null;
-  try {
-    // As the pay schedule saves it (writePaycheckSchedules)
-    const dateCond = {
-      op: 'isapprox',
-      value: {
-        ...definition.date,
-        skipWeekend: true,
-        weekendSolveMode: definition.weekendSolveMode,
-        businessCalendarId: clearing?.business_calendar_id ?? undefined,
-      },
-    };
-    // The clock, not currentDay(), so tests can set it (as the list's read)
-    const today = monthUtils.dayFromDate(new Date());
-    payDate = getNextDate(dateCond, monthUtils.parseDate(today));
-    // An occurrence moved back before today has passed: the next one after
-    if (payDate && payDate < today) {
-      payDate = getNextDateAfter(dateCond, monthUtils.addDays(today, -1));
+  // While its pay dates are unedited, the pay schedule's stored next date
+  // (skips included), so the editor and the list agree
+  const stored = id && (await getPaychecks()).find(p => p.id === id);
+  if (
+    stored &&
+    stored.definition.paySchedule &&
+    stored.definition.clearingAccount === definition.clearingAccount &&
+    stored.definition.weekendSolveMode === definition.weekendSolveMode &&
+    sameJSON(stored.definition.date, {
+      ...stored.definition.date,
+      ...definition.date,
+    })
+  ) {
+    const { data } = (await aqlQuery(
+      q('schedules')
+        .filter({ id: stored.definition.paySchedule })
+        .select(['next_date']),
+    )) as { data: { next_date: string | null }[] };
+    payDate = data[0]?.next_date ?? null;
+  }
+  if (!payDate) {
+    try {
+      // As the pay schedule saves it (writePaycheckSchedules)
+      const dateCond = {
+        op: 'isapprox',
+        value: {
+          ...definition.date,
+          skipWeekend: true,
+          weekendSolveMode: definition.weekendSolveMode,
+          businessCalendarId: clearing?.business_calendar_id ?? undefined,
+        },
+      };
+      // The clock, not currentDay(), so tests can set it (as the list's read)
+      const today = monthUtils.dayFromDate(new Date());
+      payDate = getNextDate(dateCond, monthUtils.parseDate(today));
+      // An occurrence moved back before today has passed: the next one after
+      if (payDate && payDate < today) {
+        payDate = getNextDateAfter(dateCond, monthUtils.addDays(today, -1));
+      }
+    } catch {
+      // A half-typed recurrence has no date yet
     }
-  } catch {
-    // A half-typed recurrence has no date yet
   }
   if (payDate && !/^\d{4}-\d{2}-\d{2}$/.test(payDate)) payDate = null;
 
@@ -611,6 +636,44 @@ async function paycheckPreview({
       };
     }),
     errors,
+  };
+}
+
+// Equal as JSON whatever the key order
+function sameJSON(a: unknown, b: unknown): boolean {
+  const sorted = (value: unknown): unknown =>
+    Array.isArray(value)
+      ? value.map(sorted)
+      : isObject(value)
+        ? Object.fromEntries(
+            Object.keys(value)
+              .sort()
+              .map(key => [key, sorted(value[key])]),
+          )
+        : value;
+  return JSON.stringify(sorted(a)) === JSON.stringify(sorted(b));
+}
+
+/**
+ * The native draft laid over the stored definition (PR 366 review): the app
+ * and loot-core ship separately, and an older app's typed model drops fields
+ * a newer loot-core added. Lists merge item by item by id; items the draft
+ * left out stay removed, and a field the draft sends (null included) wins.
+ */
+function mergeDefinition(
+  stored: PaycheckDefinition,
+  draft: PaycheckDefinition,
+): PaycheckDefinition {
+  const merged = <T extends { id: string }>(old: T[], next: T[]) => {
+    const byId = new Map(old.map(item => [item.id, item]));
+    return next.map(item => ({ ...byId.get(item.id), ...item }));
+  };
+  return {
+    ...stored,
+    ...draft,
+    date: { ...stored.date, ...draft.date },
+    deductions: merged(stored.deductions, draft.deductions),
+    deposits: merged(stored.deposits, draft.deposits),
   };
 }
 
@@ -689,8 +752,14 @@ async function paycheckSave(args: {
 
   try {
     // Each runs the server validate() before its first write
-    const saved = id
-      ? (await updatePaycheck({ id, name: name.trim(), definition }), id)
+    const stored = id && (await getPaychecks()).find(p => p.id === id);
+    const saved = stored
+      ? (await updatePaycheck({
+          id: stored.id,
+          name: name.trim(),
+          definition: mergeDefinition(stored.definition, definition),
+        }),
+        stored.id)
       : await createPaycheck({
           name: name.trim(),
           definition: isNewAccount

@@ -139,7 +139,7 @@ struct PaycheckEditorSheet: View {
     // the accessibility sizes, so the amount never breaks across lines.
     @ViewBuilder private var netPay: some View {
         let label = Text(EditorWords.netPay).font(.headline)
-        let amount = Text(model.preview.map { BudgetAmountFormat.string($0.netAmount, style: style) } ?? "—")
+        let amount = Text(model.preview.map { PaycheckDateText.incoming($0.netAmount, style: style) } ?? "—")
             .font(.headline).monospacedDigit().foregroundColor(EditorMoney.positive)
             .lineLimit(1).minimumScaleFactor(0.5)
         Group {
@@ -276,6 +276,10 @@ struct PaycheckEditorSheet: View {
         if let next = model.preview?.payDate {
             Text(String(format: EditorWords.nextPaycheck, EditorDates.long(next))).font(.body.weight(.semibold))
         }
+        // Ends are edited on the web; shown so a paycheck that ends never looks open-ended
+        if let end = PaycheckDateText.end(model.draft.definition.date) {
+            Text(end).font(.subheadline).foregroundColor(.secondary)
+        }
     }
 
     // A monthly paycheck's days: the web's day patterns. Other patterns (a
@@ -304,7 +308,7 @@ struct PaycheckEditorSheet: View {
                     .accessibilityLabel(Text(String(format: EditorWords.removePayDay, index + 1)))
                 }
             } else {
-                Text(String(format: EditorWords.otherPattern, pattern.type, pattern.value)).foregroundColor(.secondary)
+                Text(PaycheckDateText.pattern(pattern) ?? "").foregroundColor(.secondary)
             }
         }
         Button(EditorWords.addPayDay) {
@@ -397,13 +401,13 @@ struct PaycheckEditorSheet: View {
                     HStack {
                         Text(answer.date.map(EditorDates.medium) ?? "")
                         Spacer()
-                        Text(BudgetAmountFormat.string(answer.amount, style: style)).monospacedDigit()
+                        Text(PaycheckDateText.incoming(answer.amount, style: style)).monospacedDigit()
                             .foregroundColor(EditorMoney.positive)
                     }
                     .font(.subheadline)
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel(
-                        Text(String(format: EditorWords.depositAmount, number) + ", " + BudgetAmountFormat.string(answer.amount, style: style)))
+                        Text(String(format: EditorWords.depositAmount, number) + ", " + PaycheckDateText.incoming(answer.amount, style: style)))
                 }
                 Toggle(
                     EditorWords.postAutomatically,
@@ -669,7 +673,6 @@ private enum EditorWords {
     static let lastDay = NSLocalizedString("Last day", comment: "Paycheck editor: last day of the month")
     static let removePayDay = NSLocalizedString("Remove pay day %d", comment: "Paycheck editor")
     static let addPayDay = NSLocalizedString("Add pay day", comment: "Paycheck editor")
-    static let otherPattern = NSLocalizedString("Also: %1$@ %2$d", comment: "Paycheck editor: a pay date pattern edited on the web")
     static let weekendMove = NSLocalizedString(
         "Move from the clearing account's non-business days", comment: "Paycheck editor: weekend solve mode")
     static let before = NSLocalizedString("before", comment: "Paycheck editor: move before")

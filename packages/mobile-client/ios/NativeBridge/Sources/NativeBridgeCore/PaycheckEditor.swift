@@ -40,6 +40,23 @@ public struct PaycheckDefinition: Codable, Equatable {
         public var transferAccount: String?
 
         public var isTransfer: Bool { transferAccount != nil }
+
+        public init(id: String, name: String, amount: Int, category: String?, transferAccount: String? = nil) {
+            (self.id, self.name, self.amount, self.category, self.transferAccount) = (id, name, amount, category, transferAccount)
+        }
+
+        private enum Keys: String, CodingKey { case id, name, amount, category, transferAccount }
+
+        // Cleared fields go as null: the save lays the draft over the stored
+        // definition, where a missing key would keep the old value (PR 366)
+        public func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: Keys.self)
+            try c.encode(id, forKey: .id)
+            try c.encode(name, forKey: .name)
+            try c.encode(amount, forKey: .amount)
+            try c.encode(category, forKey: .category)
+            try c.encode(transferAccount, forKey: .transferAccount)
+        }
     }
 
     public struct Deposit: Codable, Equatable, Identifiable {
@@ -119,6 +136,9 @@ public struct PaycheckDefinition: Codable, Equatable {
 
 // The draft the editor sends to native/paycheck-preview, and the base of a save
 public struct PaycheckDraft: Encodable, Equatable {
+    // The saved paycheck it edits; nil for a new one. The preview shows its
+    // stored next date while the pay dates are unedited.
+    public var id: String?
     public var name: String
     public var definition: PaycheckDefinition
     public var isNewAccount: Bool
@@ -128,9 +148,10 @@ public struct PaycheckDraft: Encodable, Equatable {
     public var daysEarly: [String: Int]
 
     public init(
-        name: String, definition: PaycheckDefinition, isNewAccount: Bool, newClearingAccountName: String = "",
+        id: String? = nil, name: String, definition: PaycheckDefinition, isNewAccount: Bool, newClearingAccountName: String = "",
         daysEarly: [String: Int] = [:]
     ) {
+        self.id = id
         (self.name, self.definition, self.isNewAccount) = (name, definition, isNewAccount)
         (self.newClearingAccountName, self.daysEarly) = (newClearingAccountName, daysEarly)
     }
@@ -380,5 +401,57 @@ extension NativeBridgeClient {
             categories: try decoder.decode(
                 QueryRows<PaycheckEditorOptions.Category>.self, from: await call("query", args: PaycheckEditorQuery.categories)
             ).data)
+    }
+}
+
+// Words for what the editor shows read-only, as the web schedule editor puts
+// them (desktop-client util/schedule.ts), and money in with its "+"
+// (DESIGN.native.md). Formatting only: every value is loot-core's.
+public enum PaycheckDateText {
+    private static let weekdays = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"]
+
+    // A monthly weekday pattern: "Also paid: last Friday", "Also paid: 2nd Tuesday"
+    public static func pattern(_ pattern: PaycheckDefinition.Pattern, locale: Locale = .current) -> String? {
+        guard let index = weekdays.firstIndex(of: pattern.type) else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = locale
+        let day = calendar.standaloneWeekdaySymbols[index]
+        let which: String
+        if pattern.value == -1 {
+            which = String(format: NSLocalizedString("last %@", comment: "Paycheck editor: e.g. last Friday"), day)
+        } else {
+            let ordinal = NumberFormatter()
+            ordinal.locale = locale
+            ordinal.numberStyle = .ordinal
+            which = "\(ordinal.string(from: NSNumber(value: pattern.value)) ?? String(pattern.value)) \(day)"
+        }
+        return String(format: NSLocalizedString("Also paid: %@", comment: "Paycheck editor: a weekday pay date"), which)
+    }
+
+    // "Ends on Dec 31, 2027" or "Ends after 26 paychecks"; nil when it never ends
+    public static func end(_ config: PaycheckDefinition.RecurConfig, locale: Locale = .current) -> String? {
+        switch config.endMode {
+        case "on_date":
+            guard let day = config.endDate else { return nil }
+            let parser = DateFormatter()
+            parser.locale = Locale(identifier: "en_US_POSIX")
+            parser.dateFormat = "yyyy-MM-dd"
+            guard let date = parser.date(from: day) else { return nil }
+            let formatter = DateFormatter()
+            formatter.locale = locale
+            formatter.dateStyle = .medium
+            return String(format: NSLocalizedString("Ends on %@", comment: "Paycheck editor: end date"), formatter.string(from: date))
+        case "after_n_occurrences":
+            guard let count = config.endOccurrences else { return nil }
+            return count == 1
+                ? NSLocalizedString("Ends after 1 paycheck", comment: "Paycheck editor: end after one")
+                : String(format: NSLocalizedString("Ends after %d paychecks", comment: "Paycheck editor: end after N"), count)
+        default:
+            return nil
+        }
+    }
+
+    public static func incoming(_ amount: Int, style: BudgetAmountStyle) -> String {
+        (amount > 0 ? "+" : "") + BudgetAmountFormat.string(amount, style: style)
     }
 }

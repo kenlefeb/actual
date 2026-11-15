@@ -73,7 +73,7 @@ public final class PaycheckEditorViewModel: ObservableObject {
                     state = .gone
                     return
                 }
-                draft = PaycheckDraft(name: stored.name, definition: stored.definition, isNewAccount: false)
+                draft = PaycheckDraft(id: id, name: stored.name, definition: stored.definition, isNewAccount: false)
                 original = draft
                 yearToDate = try? await client.paycheckYearToDate(id)
             }

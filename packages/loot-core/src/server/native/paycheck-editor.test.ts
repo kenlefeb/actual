@@ -2,6 +2,7 @@
 // `native/paycheck-preview` (design Decision 3), the all-or-nothing
 // `native/paycheck-save` (Decision 4) and year-to-date's `hasHistory`
 // (Decision 6).
+import { aqlQuery } from '#server/aql';
 import { app as businessCalendarsApp } from '#server/business-calendars/app';
 import * as db from '#server/db';
 import { loadMappings } from '#server/db/mappings';
@@ -11,6 +12,7 @@ import { app as schedulesApp } from '#server/schedules/app';
 import { loadRules } from '#server/transactions/transaction-rules';
 import { clearUndo, redo, undo } from '#server/undo';
 import { businessCalendarPresets } from '#shared/business-calendar-presets';
+import { q } from '#shared/query';
 import type { PaycheckDefinition } from '#types/models';
 
 import { app } from './app';
@@ -156,6 +158,10 @@ describe('native/paycheck-preview', () => {
       // Savings is two business days early; November 11 is a holiday
       daysEarly: { savings: 2 },
     });
+    // The Swift tests decode this fixture
+    await expect(JSON.stringify(result, null, 2) + '\n').toMatchFileSnapshot(
+      './fixtures/paycheck-preview.json',
+    );
 
     expect(result).toEqual({
       netAmount: 240000,
@@ -547,8 +553,73 @@ describe('paycheck-year-to-date hasHistory', () => {
       schedule: definition.paySchedule,
     });
 
-    expect(
-      (await handlers['paycheck-year-to-date']({ id })).map(y => y.hasHistory),
-    ).toEqual([false, true]);
+    const yearToDate = await handlers['paycheck-year-to-date']({ id });
+    expect(yearToDate.map(y => y.hasHistory)).toEqual([false, true]);
+    // The Swift tests decode this fixture
+    await expect(
+      JSON.stringify(yearToDate, null, 2) + '\n',
+    ).toMatchFileSnapshot('./fixtures/paycheck-year-to-date.json');
+  });
+});
+
+// The pickers' and the stored paycheck's AQL, as Swift sends them through
+// `query` (PaycheckEditorQuery); the Swift tests check their encoding
+// against this fixture
+describe('native paycheck editor queries', () => {
+  const queries = {
+    paycheck: q('paychecks')
+      .filter({ id: 'PAYCHECK_ID' })
+      .select(['id', 'name', 'definition']),
+    accounts: q('accounts')
+      .select(['id', 'name', 'offbudget', 'closed'])
+      .orderBy('sort_order'),
+    payees: q('payees')
+      .filter({ transfer_acct: null })
+      .select(['id', 'name'])
+      .orderBy('name'),
+    categories: q('categories')
+      .select(['id', 'name', 'is_income', 'hidden'])
+      .orderBy('sort_order'),
+  };
+
+  it('match the fixture and read what the editor needs', async () => {
+    const serialized = Object.fromEntries(
+      Object.entries(queries).map(([name, query]) => [name, query.serialize()]),
+    );
+    await expect(
+      JSON.stringify(serialized, null, 2) + '\n',
+    ).toMatchFileSnapshot('./fixtures/paycheck-editor-queries.json');
+
+    const id = await handlers['paycheck-create']({
+      name: 'Acme',
+      definition: acme(),
+    });
+    const read = async (name: keyof typeof queries) =>
+      (
+        (await aqlQuery(
+          JSON.parse(
+            JSON.stringify(serialized[name]).replace('PAYCHECK_ID', id),
+          ),
+        )) as { data: Record<string, unknown>[] }
+      ).data;
+
+    const [paycheck] = await read('paycheck');
+    expect(paycheck).toMatchObject({ id, name: 'Acme' });
+    expect((paycheck.definition as PaycheckDefinition).deposits).toHaveLength(
+      2,
+    );
+    expect(await read('accounts')).toContainEqual({
+      id: 'closed',
+      name: 'Old',
+      offbudget: false,
+      closed: true,
+    });
+    expect(await read('payees')).toEqual([{ id: 'acme', name: 'Acme' }]);
+    expect(await read('categories')).toContainEqual({
+      id: 'income',
+      name: 'Income',
+      is_income: true,
+      hidden: false,
+    });
   });
 });

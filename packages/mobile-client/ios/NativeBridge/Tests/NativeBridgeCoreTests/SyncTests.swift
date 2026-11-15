@@ -52,9 +52,12 @@ final class SyncAllowlistTests: XCTestCase {
 
     // "Sync is the only handler outside reads and named writes" (sc-4341)
     func testEveryHandlerIsAReadAWriteOrSync() {
-        XCTAssertEqual(NativeBridgeAllowlist.reads, ["native/budget-month", "native/schedules-paychecks", "query"])
+        XCTAssertEqual(
+            NativeBridgeAllowlist.reads,
+            ["native/budget-month", "native/schedules-paychecks", "query", "native/paycheck-preview", "paycheck-year-to-date"])
         XCTAssertEqual(NativeBridgeAllowlist.writes, ["budget/budget-amount", "budget/transfer-category", "budget/transfer-available"])
-        XCTAssertEqual(NativeBridgeAllowlist.paycheckWrites, ["paycheck-skip-next", "native/undo"])
+        XCTAssertEqual(
+            NativeBridgeAllowlist.paycheckWrites, ["paycheck-skip-next", "native/undo", "native/paycheck-save", "paycheck-delete"])
         XCTAssertEqual(NativeBridgeAllowlist.sync, ["sync"])
         XCTAssertEqual(
             NativeBridgeAllowlist.handlers,

@@ -7,10 +7,15 @@ import Foundation
 public enum NativeBridgeAllowlist {
     // Sent only as their typed value (BudgetAmountWrite, Transfer), never as loose arguments
     public static let writes: Set<String> = ["budget/budget-amount", "budget/transfer-category", "budget/transfer-available"]
-    public static let reads: Set<String> = ["native/budget-month", "native/schedules-paychecks", "query"]
-    // sc-4341: sent only as PaycheckSkip and NativeUndo. The bare undo and redo
-    // stay off: they would reverse whatever is on top, maybe a web edit.
-    public static let paycheckWrites: Set<String> = ["paycheck-skip-next", "native/undo"]
+    public static let reads: Set<String> = [
+        "native/budget-month", "native/schedules-paychecks", "query",
+        // sc-4343: the paycheck editor's draft preview and year-to-date
+        "native/paycheck-preview", "paycheck-year-to-date",
+    ]
+    // sc-4341 and sc-4343: sent only as PaycheckSkip, NativeUndo, PaycheckSave
+    // and PaycheckDelete. The bare undo and redo stay off: they would reverse
+    // whatever is on top, maybe a web edit.
+    public static let paycheckWrites: Set<String> = ["paycheck-skip-next", "native/undo", "native/paycheck-save", "paycheck-delete"]
     // loot-core's server sync (sc-3884), the one handler that is neither a read
     // nor a budget write. Only NativeBridgeClient.sync() reaches it: the generic
     // call refuses it, so its result is always decoded and its deadline applies.
@@ -208,6 +213,7 @@ public struct NativeBridgeClient {
         let isTyped =
             (args is BudgetAmountWrite && name == "budget/budget-amount") || (args as? Transfer)?.handler == name
             || (args is PaycheckSkip && name == "paycheck-skip-next") || (args is NativeUndo && name == "native/undo")
+            || (args is PaycheckSave && name == "native/paycheck-save") || (args is PaycheckDelete && name == "paycheck-delete")
         let isWrite = NativeBridgeAllowlist.writes.contains(name) || NativeBridgeAllowlist.paycheckWrites.contains(name)
         guard !isWrite || isTyped else {
             throw NativeBridgeError.invalidWrite(name)

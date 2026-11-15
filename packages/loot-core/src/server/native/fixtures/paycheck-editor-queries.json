@@ -1,0 +1,89 @@
+{
+  "paycheck": {
+    "tableOptions": {},
+    "filterExpressions": [
+      {
+        "id": "PAYCHECK_ID"
+      }
+    ],
+    "selectExpressions": [
+      "id",
+      "name",
+      "definition"
+    ],
+    "groupExpressions": [],
+    "orderExpressions": [],
+    "calculation": false,
+    "rawMode": false,
+    "withDead": false,
+    "validateRefs": true,
+    "limit": null,
+    "offset": null,
+    "table": "paychecks"
+  },
+  "accounts": {
+    "tableOptions": {},
+    "filterExpressions": [],
+    "selectExpressions": [
+      "id",
+      "name",
+      "offbudget",
+      "closed"
+    ],
+    "groupExpressions": [],
+    "orderExpressions": [
+      "sort_order"
+    ],
+    "calculation": false,
+    "rawMode": false,
+    "withDead": false,
+    "validateRefs": true,
+    "limit": null,
+    "offset": null,
+    "table": "accounts"
+  },
+  "payees": {
+    "tableOptions": {},
+    "filterExpressions": [
+      {
+        "transfer_acct": null
+      }
+    ],
+    "selectExpressions": [
+      "id",
+      "name"
+    ],
+    "groupExpressions": [],
+    "orderExpressions": [
+      "name"
+    ],
+    "calculation": false,
+    "rawMode": false,
+    "withDead": false,
+    "validateRefs": true,
+    "limit": null,
+    "offset": null,
+    "table": "payees"
+  },
+  "categories": {
+    "tableOptions": {},
+    "filterExpressions": [],
+    "selectExpressions": [
+      "id",
+      "name",
+      "is_income",
+      "hidden"
+    ],
+    "groupExpressions": [],
+    "orderExpressions": [
+      "sort_order"
+    ],
+    "calculation": false,
+    "rawMode": false,
+    "withDead": false,
+    "validateRefs": true,
+    "limit": null,
+    "offset": null,
+    "table": "categories"
+  }
+}

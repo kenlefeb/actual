@@ -39,13 +39,20 @@ public enum PaychecksActionError: Equatable {
     }
 }
 
-// What the brief Undo after a skip would reverse: loot-core undoes it only if
-// its latest undo step still carries `token` (native/undo)
+// What the brief Undo after a skip, save or delete would reverse: loot-core
+// undoes it only if its latest undo step still carries `token` (native/undo)
 public struct PaychecksUndoOffer: Equatable {
+    public enum Action: Equatable { case skip, create, save, delete }
+
     public let token: String
     public let paycheckName: String
-    // The pay date that was skipped, as the list showed it
+    // The pay date that was skipped, as the list showed it; empty otherwise
     public let date: String
+    public let action: Action
+
+    public init(token: String, paycheckName: String, date: String, action: Action = .skip) {
+        (self.token, self.paycheckName, self.date, self.action) = (token, paycheckName, date, action)
+    }
 }
 
 @MainActor
@@ -171,16 +178,41 @@ public final class PaychecksViewModel: ObservableObject {
             return
         }
         await load()
-        announcement = NSLocalizedString("Skip undone.", comment: "Native Paychecks: VoiceOver after Undo")
+        announcement =
+            switch offer.action {
+            case .skip: NSLocalizedString("Skip undone.", comment: "Native Paychecks: VoiceOver after Undo")
+            case .create, .save, .delete: NSLocalizedString("Undone.", comment: "Native Paychecks: VoiceOver after Undo of a save or delete")
+            }
+    }
+
+    // sc-4343: the editor saved or deleted a paycheck; read again and offer
+    // Undo, as after a skip
+    public func wrote(_ offer: PaychecksUndoOffer) async {
+        withdrawOffer()
+        await load()
+        self.offer(offer)
     }
 
     private func offer(_ offer: PaychecksUndoOffer) {
         offerGeneration += 1
         let generation = offerGeneration
         undoOffer = offer
-        announcement = String(
-            format: NSLocalizedString("Skipped the paycheck on %@. Undo is available.", comment: "Native Paychecks: VoiceOver after a skip"),
-            offer.date)
+        announcement =
+            switch offer.action {
+            case .skip:
+                String(
+                    format: NSLocalizedString(
+                        "Skipped the paycheck on %@. Undo is available.", comment: "Native Paychecks: VoiceOver after a skip"),
+                    offer.date)
+            case .create, .save:
+                String(
+                    format: NSLocalizedString("Saved %@. Undo is available.", comment: "Native Paychecks: VoiceOver after a save"),
+                    offer.paycheckName)
+            case .delete:
+                String(
+                    format: NSLocalizedString("Deleted %@. Undo is available.", comment: "Native Paychecks: VoiceOver after a delete"),
+                    offer.paycheckName)
+            }
         let nanoseconds = UInt64(undoInterval * 1_000_000_000)
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: nanoseconds)

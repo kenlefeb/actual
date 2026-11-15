@@ -1,0 +1,16 @@
+[
+  {
+    "year": 2026,
+    "gross": 0,
+    "deductions": [],
+    "net": 0,
+    "hasHistory": false
+  },
+  {
+    "year": 2025,
+    "gross": 240000,
+    "deductions": [],
+    "net": 240000,
+    "hasHistory": true
+  }
+]

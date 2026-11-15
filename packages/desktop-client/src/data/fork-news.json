@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "id": "fork-release-26.10.1-alpha.39",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.39 — Ken's Actual fork",
+      "date": "2026-11-16",
+      "version": "26.10.1-alpha.39",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.39.md",
+      "body": "**Unofficial fork prerelease.** Based on upstream Actual v26.11.0 (`1766241e3f4b3c578e424c4fa15f1eb83c0da17d`, October 29, 2026); not an official Actual Budget release.\n\nThis release lets the MCP server (the connector that lets Claude read and change a budget) edit a transaction's amount, date, account and cleared status. It also closes a gap where editing a payee could silently create or delete the other side of a transfer.",
+      "details": "#### Features\n\n- The MCP can edit a transaction's amount, date, account and cleared status. A split transaction's parent and children are edited in one call, and a transfer's other side follows the change while keeping its own date.\n- Changing a reconciled transaction through the MCP needs the `allow_reconciled` option in the connection's grant. It is off in production.\n- The Actual API can update several transactions as one batch.\n\n#### Enhancements\n\n- The MCP's per-call row cap is wider for these edits, with extra guards on what a single call may change.\n\n#### Bugfixes\n\n- Editing a payee through the MCP in a way that would link or unlink a transfer is now refused. Before, it silently deleted or created the transfer's other side, which bypassed the rule that production's assistant may not delete.\n\n#### Maintenance\n\n- No upstream changes in this release; the fork stays on upstream Actual 26.11.0.\n- The OpenSpec records for the MCP permission scopes and the remote read-write MCP are archived, and the transaction-edit change is specified (sc-4204, sc-4477).\n\n#### Known limitations\n\n- Experimental.\n- The hosted MCP cannot delete anything yet, because the delete scope is not granted; adding it is a grants-file change and a deploy.\n- The native Schedules & Paychecks screens are off by default; turn them on in Settings to try them.\n- Tapping a tag in the transaction editor does nothing.\n- Tags are not yet fully accessible on the phone.\n- OpenID sign-out needs the server's address in the identity provider's allowed sign-out addresses; without it the provider shows an error page, though you are already signed out of Actual.\n- Attached documents aren't included in a budget export.\n- Documents removed before alpha.35 are recorded the first time an updated device syncs, and deleted 30 days after that. Removals made on a device that has not been updated are not tracked.\n- HEIC pictures are refused; use the Photos library or a JPEG or PNG copy.\n- Attaching a document needs a connection; there is no offline upload queue.\n- After restoring server data from a backup, pause the cleanup first (`production/RESTORE.md`)."
+    },
+    {
       "id": "fork-release-26.10.1-alpha.38",
       "type": "release",
       "title": "Release 26.10.1-alpha.38 — Ken's Actual fork",

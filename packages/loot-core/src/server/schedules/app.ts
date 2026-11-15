@@ -85,8 +85,13 @@ export function areConditionValuesEqual(left, right) {
   }
 
   if (typeof left === 'object' && typeof right === 'object') {
-    const leftKeys = Object.keys(left).sort();
-    const rightKeys = Object.keys(right).sort();
+    // A key holding `undefined` is missing once stored as JSON
+    const definedKeys = value =>
+      Object.keys(value)
+        .filter(key => value[key] !== undefined)
+        .sort();
+    const leftKeys = definedKeys(left);
+    const rightKeys = definedKeys(right);
 
     return (
       leftKeys.length === rightKeys.length &&
@@ -236,17 +241,72 @@ function getNextDateFrom(dateCond, today: Date) {
     : nextDate;
 }
 
+// A save never picks a date moved back before today. The load's recompute
+// (`getNextDateFrom`) still may, so a just-passed unpaid date shows as missed.
+// An ended schedule keeps its last date.
+function getNextDateOnSave(dateCond, today: string) {
+  return (
+    getNextDateAfter(dateCond, subDays(today, 1)) ??
+    getNextDate(dateCond, parseDate(today))
+  );
+}
+
+// Moved dates from `today` through `until`
+function getMovedDatesUntil(dateCond, today: string, until: string | null) {
+  const dates: string[] = [];
+  let date = until ? getNextDateAfter(dateCond, subDays(today, 1)) : null;
+  while (date != null && date <= until) {
+    dates.push(date);
+    date = getNextDateAfter(dateCond, date);
+  }
+  return dates;
+}
+
+// The stored next date has passed every old date before it, paid or skipped.
+// After a date change those stay passed, and dates the change added show.
+function getNextDateAfterDateChange(
+  dateCond,
+  oldDates: string[],
+  storedNextDate: string | null,
+  today: string,
+) {
+  if (!storedNextDate || storedNextDate < today) {
+    return getNextDateOnSave(dateCond, today);
+  }
+  return (
+    getMovedDatesUntil(dateCond, today, storedNextDate).find(
+      date => date >= storedNextDate || !oldDates.includes(date),
+    ) ??
+    getNextDateAfter(dateCond, subDays(storedNextDate, 1)) ??
+    getNextDate(dateCond, parseDate(storedNextDate))
+  );
+}
+
+// A schedule's moved dates up to its stored next date, read before its dates
+// (or its source's) change
+async function getDatesBeforeChange(id: string, dateCond) {
+  const { data: nextDate } = await aqlQuery(
+    q('schedules').filter({ id }).calculate('next_date'),
+  );
+  return dateCond
+    ? getMovedDatesUntil(dateCond, dayFromDate(new Date()), nextDate)
+    : [];
+}
+
 export async function setNextDate({
   id,
   conditions,
   reset,
   advance,
   clearIfNone,
+  oldDates,
 }: {
   id: string;
   conditions?;
   reset?: boolean;
   advance?: boolean;
+  // From `getDatesBeforeChange`: keeps skips through a date change
+  oldDates?: string[];
   // Store an empty next date when there is none (a relative schedule whose
   // source was deleted) instead of keeping the old one
   clearIfNone?: boolean;
@@ -267,9 +327,14 @@ export async function setNextDate({
 
   // Only do this if a date condition exists
   if (dateCond) {
+    const today = dayFromDate(new Date());
     const newNextDate = advance
       ? getNextDateAfter(dateCond, nextDate)
-      : getNextDateFrom(dateCond, new Date());
+      : oldDates
+        ? getNextDateAfterDateChange(dateCond, oldDates, nextDate, today)
+        : reset
+          ? getNextDateOnSave(dateCond, today)
+          : getNextDateFrom(dateCond, new Date());
 
     if (
       (newNextDate != null || (clearIfNone && nextDate != null)) &&
@@ -375,9 +440,13 @@ export async function loadScheduleDateLookup() {
 // the caller's undoable mutation, so undo restores both.
 // Dependents completed after a one-time source passed reopen once the source
 // starts repeating; ones completed by hand stay completed otherwise.
+// After a date change, `oldDates` (by dependent id) keeps their skips.
 async function refreshRelativeDependents(
   sourceId: string,
-  { startsRepeating = false } = {},
+  {
+    startsRepeating = false,
+    oldDates,
+  }: { startsRepeating?: boolean; oldDates?: Map<string, string[]> } = {},
 ) {
   await refreshScheduleDateLookup();
   for (const { id, completed } of await getRelativeDependents(sourceId, {
@@ -386,7 +455,7 @@ async function refreshRelativeDependents(
     if (completed) {
       await db.updateWithSchema('schedules', { id, completed: false });
     }
-    await setNextDate({ id, clearIfNone: true });
+    await setNextDate({ id, clearIfNone: true, oldDates: oldDates?.get(id) });
   }
 }
 
@@ -463,7 +532,7 @@ export async function createSchedule({
   await refreshScheduleDateLookup();
   await assertValidRelativeDate(dateCond, scheduleId);
 
-  const nextDate = getNextDateFrom(dateCond, parseDate(currentDay()));
+  const nextDate = getNextDateOnSave(dateCond, currentDay());
   const nextDateRepr = nextDate ? toDateRepr(nextDate) : null;
   const scheduleFields = schedule && {
     ...schedule,
@@ -532,6 +601,8 @@ export async function updateSchedule({
   let rule;
   let isDateChanged = false;
   let startsRepeating = false;
+  let oldDates: string[] | undefined;
+  const dependentOldDates = new Map<string, string[]>();
 
   // This must be outside the `batchMessages` call because we change
   // and then read data
@@ -553,6 +624,18 @@ export async function updateSchedule({
       // generate a new rule because schedules have to have a rule
       // attached to them.
       rule = await fixRuleForSchedule(schedule.id);
+    }
+
+    // Read before the rule changes: dependents' dates come from this one's
+    const { date: oldDateCond } = extractScheduleConds(
+      rule.serialize().conditions,
+    );
+    oldDates = await getDatesBeforeChange(schedule.id, oldDateCond);
+    for (const { id } of await getRelativeDependents(schedule.id)) {
+      const { date } = extractScheduleConds(
+        (await getRuleForSchedule(id))?.serialize().conditions ?? [],
+      );
+      dependentOldDates.set(id, await getDatesBeforeChange(id, date));
     }
   }
 
@@ -597,6 +680,8 @@ export async function updateSchedule({
           id: schedule.id,
           conditions: newConditions,
           reset: true,
+          // A forced reset recomputes from today
+          oldDates: resetNextDate ? undefined : oldDates,
         });
       }
     } else if (resetNextDate) {
@@ -609,7 +694,10 @@ export async function updateSchedule({
   // Relative schedules depend only on their source's dates, so other edits
   // keep their next dates (and any skips)
   if (isDateChanged) {
-    await refreshRelativeDependents(schedule.id, { startsRepeating });
+    await refreshRelativeDependents(schedule.id, {
+      startsRepeating,
+      oldDates: dependentOldDates,
+    });
   }
   const postsTransaction =
     scheduleFields.posts_transaction ??

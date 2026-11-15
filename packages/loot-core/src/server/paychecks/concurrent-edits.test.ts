@@ -440,9 +440,9 @@ describe('Edits on two devices', () => {
 });
 
 describe('Edits on two devices, with schedules due', () => {
-  // The schedules service's "today", and the next dates it computes, are
-  // pinned to 2017-01-01 in tests. Pay on the 1st, moved before weekends:
-  // Sunday, January 1, 2017 moves to Friday, December 30, which is overdue.
+  // The schedules service's "today" is pinned to 2017-01-01 in tests. Pay is
+  // on the 1st; a save never picks a date moved back before today (sc-4437),
+  // so the Savings deposit is made due today by hand.
   beforeAll(() => {
     today = new Date(2016, 11, 29);
   });
@@ -457,6 +457,7 @@ describe('Edits on two devices, with schedules due', () => {
       frequency: 'monthly',
       patterns: [{ type: 'day', value: 1 }],
     });
+    await dueToday('savings');
     await editOnTwoDevices(
       async () => {
         await saveAcme([

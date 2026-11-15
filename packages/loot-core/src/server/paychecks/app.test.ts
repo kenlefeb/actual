@@ -762,6 +762,7 @@ describe('editor additions', () => {
           { name: '401(k)', amount: 18000 },
         ],
         net: 225000,
+        hasHistory: true,
       },
       {
         year: 2025,
@@ -772,6 +773,7 @@ describe('editor additions', () => {
           { name: '401(k)', amount: 432000 },
         ],
         net: 5450000,
+        hasHistory: true,
       },
     ]);
   });

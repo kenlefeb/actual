@@ -3,10 +3,12 @@ import { useTranslation } from 'react-i18next';
 
 import { currentDay } from '@actual-app/core/shared/months';
 import {
+  changedDepositDaysEarly,
   computePaycheck,
   MAX_DEPOSIT_DAYS_EARLY,
+  validatePaycheckDraft,
 } from '@actual-app/core/shared/paychecks';
-import type { PaycheckError } from '@actual-app/core/shared/paychecks';
+import type { PaycheckDraftErrorCode } from '@actual-app/core/shared/paychecks';
 import { q } from '@actual-app/core/shared/query';
 import type {
   PaycheckDeduction,
@@ -105,7 +107,7 @@ export function usePaycheckForm(paycheck?: PaycheckEntity) {
     setDaysEarlyInputs(current => ({ ...current, [account]: value }));
   };
 
-  const { netAmount, depositAmounts, errors } = computePaycheck(definition);
+  const { netAmount, depositAmounts } = computePaycheck(definition);
   const accountById = new Map(accounts.map(a => [a.id, a]));
   const clearing = accountById.get(definition.clearingAccount);
   // Shown as moved, the way the pay schedule saves it
@@ -132,50 +134,19 @@ export function usePaycheckForm(paycheck?: PaycheckEntity) {
   const savedDaysEarly = (accountId: string) =>
     accountById.get(accountId)?.deposit_days_early ?? 0;
   // Changed values for accounts still deposited to; null when not a valid number
-  const changedDaysEarly = definition.deposits.flatMap(({ account }) => {
-    const input = daysEarlyInput[account];
-    if (input === undefined || !accountById.has(account)) return [];
-    const days = input.trim() === '' ? NaN : Number(input);
-    const isValid =
-      Number.isInteger(days) && days >= 0 && days <= MAX_DEPOSIT_DAYS_EARLY;
-    if (isValid && days === savedDaysEarly(account)) return [];
-    return [{ account, days: isValid ? days : null }];
-  });
-  const formErrors = [
-    ...(!name.trim() ? [t('Enter a name for the paycheck.')] : []),
-    ...(isNewAccount && !clearingName
-      ? [t('Enter a name for the new clearing account.')]
-      : []),
-    ...(!isNewAccount && !definition.clearingAccount
-      ? [t('Choose the clearing account.')]
-      : []),
-    ...(!isNewAccount && clearing && (clearing.offbudget || clearing.closed)
-      ? [t('The clearing account must be an open on-budget account.')]
-      : []),
-    ...(new Set(definition.deposits.map(d => d.account)).size !==
-    definition.deposits.length
-      ? [t('Each deposit must go to a different account.')]
-      : []),
-    ...(definition.deductions.some(d => d.transferAccount === '')
-      ? [t('Choose an account for each transfer deduction.')]
-      : []),
-    ...(definition.deposits.some(d => !d.account)
-      ? [t('Choose an account for each deposit.')]
-      : []),
-    ...(definition.deposits.some(
-      d => d.account && d.account === definition.clearingAccount,
-    )
-      ? [t('A deposit cannot go to the clearing account.')]
-      : []),
-    ...(changedDaysEarly.some(d => d.days === null)
-      ? [
-          t('Business days early must be a whole number from 0 to {{max}}.', {
-            max: MAX_DEPOSIT_DAYS_EARLY,
-          }),
-        ]
-      : []),
-    ...errors.map(error => errorMessage(error, t)),
-  ];
+  const changedDaysEarly = changedDepositDaysEarly(
+    definition.deposits,
+    daysEarlyInput,
+    new Map(accounts.map(a => [a.id, a.deposit_days_early ?? 0])),
+  );
+  const formErrors = validatePaycheckDraft({
+    name,
+    definition,
+    isNewAccount,
+    clearingName,
+    clearing,
+    changedDaysEarly,
+  }).map(({ code }) => paycheckErrorMessage(code, t));
 
   const save = async (close: () => void) => {
     try {
@@ -294,11 +265,37 @@ export function usePaycheckForm(paycheck?: PaycheckEntity) {
   };
 }
 
-function errorMessage(
-  error: PaycheckError,
-  t: ReturnType<typeof useTranslation>['t'],
+// The web's message for each draft error code. The native editor shows the
+// same text from the fixture src/data/paycheck-error-messages.json, which a
+// test checks against this.
+export function paycheckErrorMessage(
+  code: PaycheckDraftErrorCode,
+  t: (key: string, options?: Record<string, unknown>) => string,
 ) {
-  switch (error) {
+  switch (code) {
+    case 'name-missing':
+      return t('Enter a name for the paycheck.');
+    case 'clearing-name-missing':
+      return t('Enter a name for the new clearing account.');
+    case 'clearing-account-missing':
+      return t('Choose the clearing account.');
+    case 'clearing-account-not-open-on-budget':
+      return t('The clearing account must be an open on-budget account.');
+    case 'duplicate-deposit-account':
+      return t('Each deposit must go to a different account.');
+    case 'transfer-account-missing':
+      return t('Choose an account for each transfer deduction.');
+    case 'deposit-account-missing':
+      return t('Choose an account for each deposit.');
+    case 'deposit-to-clearing-account':
+      return t('A deposit cannot go to the clearing account.');
+    case 'days-early-invalid':
+      return t(
+        'Business days early must be a whole number from 0 to {{max}}.',
+        {
+          max: MAX_DEPOSIT_DAYS_EARLY,
+        },
+      );
     case 'deductions-exceed-gross':
       return t('Deductions exceed gross pay.');
     case 'deposits-exceed-net':
@@ -312,6 +309,6 @@ function errorMessage(
     case 'no-deposits':
       return t('Add at least one direct deposit.');
     default:
-      return error satisfies never;
+      return code satisfies never;
   }
 }

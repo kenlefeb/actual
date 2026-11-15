@@ -136,15 +136,102 @@ function readToken(value: unknown) {
   return value;
 }
 
-// sc-4341: a skip names a live paycheck, checked against a fresh
-// paychecks-get, and carries its undo token. Returns only those fields.
-async function validatePaycheckSkip(forward: Send, args: unknown) {
-  const { id, undoToken } = (args ?? {}) as Record<string, unknown>;
+// A live paycheck's id, checked against a fresh paychecks-get
+async function readPaycheckId(forward: Send, id: unknown) {
   const paychecks = (await forward('paychecks-get')) as { id: string }[];
   if (typeof id !== 'string' || !paychecks.some(p => p.id === id)) {
     throw new Error('native bridge: no such paycheck');
   }
-  return { id, undoToken: readToken(undoToken) };
+  return id;
+}
+
+// sc-4341 (skip) and sc-4343 (delete): a write that names a live paycheck
+// and carries its undo token. Returns only those fields.
+async function validatePaycheckWrite(forward: Send, args: unknown) {
+  const { id, undoToken } = (args ?? {}) as Record<string, unknown>;
+  const token = readToken(undoToken);
+  return { id: await readPaycheckId(forward, id), undoToken: token };
+}
+
+type DraftDefinition = {
+  clearingAccount?: unknown;
+  deposits: { account?: unknown }[];
+  deductions: { transferAccount?: unknown }[];
+};
+
+function readDefinition(value: unknown): DraftDefinition {
+  const definition = value as Partial<DraftDefinition> | null;
+  if (
+    typeof definition !== 'object' ||
+    definition === null ||
+    !Array.isArray(definition.deposits) ||
+    !Array.isArray(definition.deductions)
+  ) {
+    throw new Error('native bridge: a paycheck needs its definition');
+  }
+  return definition as DraftDefinition;
+}
+
+// sc-4343: the editor's draft fields, and nothing else
+function readDraft(args: unknown) {
+  const {
+    id,
+    name,
+    definition,
+    isNewAccount,
+    newClearingAccountName,
+    daysEarly,
+  } = (args ?? {}) as Record<string, unknown>;
+  readDefinition(definition);
+  // A read: loot-core only looks the id up
+  return {
+    ...(id !== undefined && { id }),
+    name,
+    definition,
+    isNewAccount,
+    newClearingAccountName,
+    daysEarly,
+  };
+}
+
+// sc-4343: a save names live accounts only (the clearing account unless it
+// creates one, each deposit's, each transfer deduction's and each days-early
+// one's) and, when it edits, a live paycheck. Returns only its fields.
+async function validatePaycheckSave(forward: Send, args: unknown) {
+  const { id, name, definition, newClearingAccountName, daysEarly, undoToken } =
+    (args ?? {}) as Record<string, unknown>;
+  const token = readToken(undoToken);
+  const draft = readDefinition(definition);
+  if (id !== undefined) await readPaycheckId(forward, id);
+  const days = daysEarly ?? {};
+  if (typeof days !== 'object' || Array.isArray(days)) {
+    throw new Error('native bridge: days early must be by account');
+  }
+  if (Object.values(days).some(d => !Number.isInteger(d))) {
+    throw new Error('native bridge: days early must be whole numbers');
+  }
+  const accounts = new Set(
+    ((await forward('accounts-get')) as { id: string }[]).map(a => a.id),
+  );
+  const named = [
+    ...(newClearingAccountName ? [] : [draft.clearingAccount]),
+    ...draft.deposits.map(d => d.account),
+    ...draft.deductions
+      .map(d => d.transferAccount)
+      .filter(account => account != null),
+    ...Object.keys(days),
+  ];
+  if (named.some(account => !accounts.has(account as string))) {
+    throw new Error('native bridge: no such account');
+  }
+  return {
+    ...(id !== undefined && { id }),
+    name,
+    definition,
+    ...(newClearingAccountName !== undefined && { newClearingAccountName }),
+    daysEarly: days,
+    undoToken: token,
+  };
 }
 
 // loot-core's sync reasons that native code tells apart (sc-3884); a Map, so a
@@ -199,8 +286,15 @@ export function createNativeBridge({
         args = await validateBudgetAmount(forward, args);
       } else if (name.startsWith('budget/transfer-')) {
         args = await validateTransfer(forward, name, args);
-      } else if (name === 'paycheck-skip-next') {
-        args = await validatePaycheckSkip(forward, args);
+      } else if (name === 'paycheck-skip-next' || name === 'paycheck-delete') {
+        args = await validatePaycheckWrite(forward, args);
+      } else if (name === 'paycheck-year-to-date') {
+        const { id } = (args ?? {}) as Record<string, unknown>;
+        args = { id: await readPaycheckId(forward, id) };
+      } else if (name === 'native/paycheck-preview') {
+        args = readDraft(args);
+      } else if (name === 'native/paycheck-save') {
+        args = await validatePaycheckSave(forward, args);
       } else if (name === 'native/undo') {
         const { token } = (args ?? {}) as Record<string, unknown>;
         args = { token: readToken(token) };

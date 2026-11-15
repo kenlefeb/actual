@@ -55,6 +55,9 @@ export type PaycheckYearToDate = {
   // Positive totals, by the deduction split's notes
   deductions: { name: string; amount: number }[];
   net: number;
+  // Whether any pay transaction counted, so a reader can tell "no posted
+  // pay" from zero totals (sc-4343)
+  hasHistory: boolean;
 };
 
 // A clearing account after its paycheck's latest posted pay date

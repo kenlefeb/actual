@@ -1,0 +1,22 @@
+{
+  "netAmount": 240000,
+  "payDate": "2026-11-13",
+  "employerName": "Acme",
+  "deposits": [
+    {
+      "id": "savings",
+      "amount": 40000,
+      "date": "2026-11-10",
+      "savedDaysEarly": 0,
+      "calendarName": "U.S. Federal Holidays"
+    },
+    {
+      "id": "checking",
+      "amount": 200000,
+      "date": "2026-11-13",
+      "savedDaysEarly": 0,
+      "calendarName": null
+    }
+  ],
+  "errors": []
+}

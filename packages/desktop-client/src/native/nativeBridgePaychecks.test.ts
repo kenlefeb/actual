@@ -91,3 +91,195 @@ describe('paycheck handlers through the page bridge', () => {
     expect(send).not.toHaveBeenCalled();
   });
 });
+
+// sc-4343: the editor's reads and writes
+function editorSetup() {
+  const send = vi.fn(async (name: string) => {
+    if (name === 'paychecks-get') {
+      return [{ id: 'acme', name: 'Acme', definition: {} }];
+    }
+    if (name === 'accounts-get') {
+      return ['clearing', 'checking', 'savings', 'retirement'].map(id => ({
+        id,
+      }));
+    }
+    return 'ok';
+  });
+  const bridge = createNativeBridge({
+    send,
+    listen: vi.fn(() => vi.fn()),
+    notify: vi.fn(),
+  });
+  const calls = (handler: string) =>
+    send.mock.calls.filter(([name]) => name === handler);
+  return { bridge, send, calls };
+}
+
+const definition = {
+  payee: 'acme-payee',
+  clearingAccount: 'clearing',
+  date: { start: '2026-11-01', frequency: 'monthly' },
+  weekendSolveMode: 'before',
+  grossAmount: 300000,
+  incomeCategory: null,
+  deductions: [
+    { id: 'k', name: '401k', amount: 100, transferAccount: 'retirement' },
+  ],
+  deposits: [{ id: 'd', account: 'checking', kind: 'remainder', value: 0 }],
+};
+
+const saveArgs = {
+  id: 'acme',
+  name: 'Acme',
+  definition,
+  daysEarly: { checking: 2 },
+  undoToken: 'S',
+};
+
+describe('paycheck editor handlers through the page bridge', () => {
+  it('lists the preview, year-to-date, save and delete', () => {
+    expect(allowlist).toEqual(
+      expect.arrayContaining([
+        'native/paycheck-preview',
+        'paycheck-year-to-date',
+        'native/paycheck-save',
+        'paycheck-delete',
+      ]),
+    );
+    for (const name of [
+      'paycheck-create',
+      'paycheck-update',
+      'account-set-business-days',
+    ]) {
+      expect(allowlist).not.toContain(name);
+    }
+  });
+
+  it('forwards a preview with only the draft fields', async () => {
+    const { bridge, calls } = editorSetup();
+    await bridge.call('native/paycheck-preview', {
+      id: 'acme',
+      name: 'Acme',
+      definition,
+      isNewAccount: false,
+      newClearingAccountName: '',
+      daysEarly: {},
+      extra: 'x',
+    });
+    expect(calls('native/paycheck-preview')).toEqual([
+      [
+        'native/paycheck-preview',
+        {
+          id: 'acme',
+          name: 'Acme',
+          definition,
+          isNewAccount: false,
+          newClearingAccountName: '',
+          daysEarly: {},
+        },
+      ],
+    ]);
+  });
+
+  it('reads year-to-date only for a live paycheck', async () => {
+    const { bridge, calls } = editorSetup();
+    await bridge.call('paycheck-year-to-date', { id: 'acme', extra: 1 });
+    await expect(
+      bridge.call('paycheck-year-to-date', { id: 'gone' }),
+    ).rejects.toThrow(/paycheck/);
+    expect(calls('paycheck-year-to-date')).toEqual([
+      ['paycheck-year-to-date', { id: 'acme' }],
+    ]);
+  });
+
+  it('forwards a delete of a live paycheck with only its id and token', async () => {
+    const { bridge, calls } = editorSetup();
+    await bridge.call('paycheck-delete', { id: 'acme', undoToken: 'D', x: 1 });
+    expect(calls('paycheck-delete')).toEqual([
+      ['paycheck-delete', { id: 'acme', undoToken: 'D' }],
+    ]);
+  });
+
+  it('refuses a delete of an unknown id or without a token', async () => {
+    const { bridge, calls } = editorSetup();
+    await expect(
+      bridge.call('paycheck-delete', { id: 'gone', undoToken: 'D' }),
+    ).rejects.toThrow(/paycheck/);
+    await expect(
+      bridge.call('paycheck-delete', { id: 'acme' }),
+    ).rejects.toThrow(/token/);
+    expect(calls('paycheck-delete')).toEqual([]);
+  });
+
+  it('forwards a save with only its fields', async () => {
+    const { bridge, calls } = editorSetup();
+    await bridge.call('native/paycheck-save', { ...saveArgs, extra: 'x' });
+    expect(calls('native/paycheck-save')).toEqual([
+      ['native/paycheck-save', saveArgs],
+    ]);
+  });
+
+  it('forwards a new paycheck that creates its clearing account', async () => {
+    const { bridge, calls } = editorSetup();
+    const args = {
+      name: 'Acme',
+      definition: { ...definition, clearingAccount: '' },
+      newClearingAccountName: 'Acme Paycheck',
+      daysEarly: {},
+      undoToken: 'N',
+    };
+    await bridge.call('native/paycheck-save', args);
+    expect(calls('native/paycheck-save')).toEqual([
+      ['native/paycheck-save', args],
+    ]);
+  });
+
+  it.each([
+    ['an unknown paycheck', { ...saveArgs, id: 'gone' }, /paycheck/],
+    ['no token', { ...saveArgs, undoToken: '' }, /token/],
+    [
+      'an unknown clearing account',
+      { ...saveArgs, definition: { ...definition, clearingAccount: 'x' } },
+      /account/,
+    ],
+    [
+      'an unknown deposit account',
+      {
+        ...saveArgs,
+        definition: {
+          ...definition,
+          deposits: [{ id: 'd', account: 'x', kind: 'remainder', value: 0 }],
+        },
+      },
+      /account/,
+    ],
+    [
+      'an unknown transfer account',
+      {
+        ...saveArgs,
+        definition: {
+          ...definition,
+          deductions: [{ id: 'k', name: 'k', amount: 1, transferAccount: 'x' }],
+        },
+      },
+      /account/,
+    ],
+    [
+      'days early for an unknown account',
+      { ...saveArgs, daysEarly: { x: 1 } },
+      /account/,
+    ],
+    [
+      'a non-integer days early',
+      { ...saveArgs, daysEarly: { checking: 1.5 } },
+      /days early/,
+    ],
+    ['a missing definition', { ...saveArgs, definition: null }, /definition/],
+  ])('refuses a save with %s', async (_, args, message) => {
+    const { bridge, calls } = editorSetup();
+    await expect(bridge.call('native/paycheck-save', args)).rejects.toThrow(
+      message,
+    );
+    expect(calls('native/paycheck-save')).toEqual([]);
+  });
+});

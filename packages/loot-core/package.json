@@ -190,6 +190,7 @@
     "test": "npm-run-all -cp 'test:*'",
     "mutation-report": "stryker run",
     "test:node": "ENV=node vitest --run",
+    "perf": "PERF=1 ENV=node vitest --run --no-file-parallelism --maxWorkers=1 src/server/native",
     "test:web": "ENV=web vitest --run -c vitest.web.config.ts",
     "typecheck": "tsgo -b && tsc-strict --noEmit --incremental false --composite false",
     "build": "tsgo -b",

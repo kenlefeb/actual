@@ -11,18 +11,21 @@ Shortcut sc-4309 (umbrella), with sc-4341, sc-4343 and sc-4352. Schedules and Pa
   - The paycheck editor as a full-height sheet (sc-4343).
   - The Budget-tab summary row and its per-screen switch with web fallback (sc-4309).
   - The Mac window and editor sheet (sc-4352).
-  - Scenarios come from the stories' acceptance criteria and Ken's decisions of 2026-11-14: the summary row sits on the Budget tab, the Skip confirm button is teal, the editor is a full-height sheet with cancel and save, and money uses the incoming-only colour.
+  - Scenarios come from the stories' acceptance criteria and Ken's decisions of 2026-11-14: the summary row sits on the Budget tab, the Skip confirm button is teal, the editor is a full-height sheet with ✕ (cancel) and ✓ (save), and money uses the incoming-only colour.
 - **The paycheck plan and draft checks move into loot-core.** The web's `planPaycheck` and the paycheck form's error rules move unchanged into loot-core's shared paycheck module. The web imports them from there, so the web and native screens run the same code.
 - **Three new fork-only native handlers:**
   - `native/schedules-paychecks`: one batched read for the list and the summary row.
   - `native/paycheck-preview`: a read-only check of a draft (net pay, deposit amounts, dates, error codes).
   - `native/paycheck-save`: one all-or-nothing write, with one undo step, for the paycheck and its days-early changes.
+  - `native/undo`: undoes a native write only when the top undo step carries that write's token.
   - `paycheck-year-to-date` gains an additive `hasHistory` flag.
 - **Delta to `native-bridge`:**
   - The allowlist gains the paycheck handlers (`native/schedules-paychecks`, `native/paycheck-preview`, `paycheck-year-to-date`, `native/paycheck-save`, `paycheck-skip-next`, `paycheck-delete`).
-  - It also gains `undo`, which takes no arguments and is offered only right after a native write.
-  - The handler-class requirement is modified to allow these.
+  - It also gains `native/undo({token})`; the bare `undo` and `redo` stay off the list.
+  - The handler-class requirement is renamed and modified to allow these.
   - A latency gate is added for the new read.
+
+Duplicate-latest: the web phone editor has no "duplicate the latest paycheck" action. The only spec text is paycheck-planning's "Duplicate of the latest paycheck", which is about a pay transaction imported twice. The native list covers that by running the same `planPaycheck`, and has a scenario for it.
 
 Out of scope: editing a single schedule (stays on the web), schedule forms beyond what the web phone UI does, Android, and any change to the web screens' behaviour. Each story writes its own code; this change writes none.
 
@@ -34,7 +37,7 @@ Out of scope: editing a single schedule (stays on the web), schedule forms beyon
 
 ### Modified Capabilities
 
-- `native-bridge`: allowlists the paycheck handlers and `undo`, modifies the handler-class rule, and adds the batched paycheck read with its latency gate.
+- `native-bridge`: allowlists the paycheck handlers and `native/undo`, renames and modifies the handler-class rule, and adds the batched paycheck read with its latency gate.
 
 ## Mobile scope
 
@@ -49,7 +52,8 @@ None. Ken's design decisions (2026-11-14) are recorded on sc-4309. The PO settle
 - loot-core:
   - `src/shared/paychecks.ts` gains the plan and the draft checks.
   - `src/server/native/app.ts` gains the three handlers.
-  - `src/server/paychecks/app.ts`: year-to-date reports `hasHistory`, and the create, update and business-days functions are exported for the save handler.
+  - `src/server/paychecks/app.ts`: year-to-date reports `hasHistory`, skip and delete record an optional undo token, and the create, update and business-days functions are exported for the save handler.
+  - `src/server/undo.ts`: two small fork-only helpers, one that reads the top undo step's marker meta and one that drops a reverted group from the redo history.
 - desktop-client:
   - `PaycheckRow.tsx`, `PaychecksSection.tsx` and `usePaycheckForm.ts` import the moved functions.
   - `src/data/native-bridge-allowlist.json` and the page bridge's write checks change.

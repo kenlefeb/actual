@@ -39,55 +39,60 @@ One `native/schedules-paychecks` round trip SHALL complete in under 50 ms, media
 The allowlist, on the Swift and the page side, SHALL hold the following, and the two lists SHALL stay equal:
 
 - the reads `native/schedules-paychecks`, `native/paycheck-preview` and `paycheck-year-to-date`;
-- the writes `native/paycheck-save`, `paycheck-skip-next` and `paycheck-delete`.
+- the writes `native/paycheck-save`, `paycheck-skip-next`, `paycheck-delete` and `native/undo`.
 
-Swift SHALL send each write from a typed value, and both sides SHALL refuse an id that is not a paycheck in the last read before loot-core runs it.
+Swift SHALL send each write from a typed value. Before `send`, the page SHALL check each paycheck id against a fresh `paychecks-get`, and each account a save names against the accounts.
 
 #### Scenario: A skip
 
-- **GIVEN** "Acme" is in the last `native/schedules-paychecks` read
+- **GIVEN** "Acme" is a live paycheck
 - **WHEN** native code calls `paycheck-skip-next` for Acme's id
 - **THEN** loot-core skips it and native code receives the result
 
 #### Scenario: An unknown id
 
-- **WHEN** native code calls `paycheck-delete` with an id not in the last read
-- **THEN** the call is refused before loot-core receives it
+- **WHEN** native code calls `paycheck-delete` with an id that a fresh `paychecks-get` does not list
+- **THEN** the page refuses the call, and loot-core never runs the delete
 
 #### Scenario: Other paycheck handlers stay off the list
 
-- **WHEN** native code calls `paycheck-create`, `paycheck-update` or `account-set-business-days`
+- **WHEN** native code calls `paycheck-create`, `paycheck-update`, `account-set-business-days`, `undo` or `redo`
 - **THEN** the call is refused with an error naming the handler
 
-### Requirement: Undo is allowlisted as a call with no arguments
+### Requirement: Native Undo reverses only the native write it names
 
-The allowlist SHALL hold `undo`. Swift SHALL send it only through one typed method with no arguments, and only while a screen offers Undo for its own last write; the generic `call` SHALL refuse `undo` in every shape. The page SHALL refuse `undo` with arguments. `redo` SHALL stay off the list.
+Each native paycheck write SHALL record a token that Swift generates as its undo marker's meta. `native/undo({token})` SHALL undo only when the latest undo step's marker carries that token, checked and undone in the same sequential mutator. Otherwise it SHALL refuse and change nothing. Swift SHALL call it only from a user's tap on an offered Undo.
 
-#### Scenario: Undo after a native write
+#### Scenario: Undo right after a native skip
 
-- **GIVEN** a native skip succeeded and no change event has arrived since
-- **WHEN** native code calls its typed undo method
+- **GIVEN** a native skip with token T succeeded, and nothing undoable ran since
+- **WHEN** native code calls `native/undo` with T
 - **THEN** loot-core undoes the skip
 
-#### Scenario: Generic call
+#### Scenario: Something undoable ran in between
 
-- **WHEN** native code calls `call("undo")`
-- **THEN** the call is refused, and loot-core never receives it
+- **GIVEN** a native skip with token T succeeded, and then the web page saved a budget amount
+- **WHEN** native code calls `native/undo` with T
+- **THEN** it refuses with an error, and neither the skip nor the budget amount is undone
 
-#### Scenario: No write to undo
+#### Scenario: A made-up token
 
-- **GIVEN** no Undo is on offer
-- **WHEN** native code calls its typed undo method
-- **THEN** the method refuses without calling the page
+- **WHEN** the page or native code calls `native/undo` with a token no write recorded
+- **THEN** it refuses and changes nothing
+
+## RENAMED Requirements
+
+- FROM: `### Requirement: Sync is the only handler outside reads and budget writes`
+- TO: `### Requirement: Sync is the only handler outside reads and named writes`
 
 ## MODIFIED Requirements
 
-### Requirement: Sync is the only handler outside reads and budget writes
+### Requirement: Sync is the only handler outside reads and named writes
 
-`sync` and `undo` SHALL be the only handlers on the allowlist that are none of the following: a batched read, `query`, a named budget write, or a named paycheck read or write. Every `sync` and `undo` call SHALL still go through the origin-checked path.
+`sync` SHALL be the only handler on the allowlist that is neither a batched read, `query`, a named budget write, nor a named paycheck read or write (`native/undo` among them). The bare `undo` and `redo` handlers SHALL stay off the list. Every `sync` call SHALL still go through the origin-checked path.
 
 #### Scenario: Another handler off the classes
 
 - **GIVEN** the Swift allowlist
-- **WHEN** a handler is added that is not a batched read, `query`, a named budget write, a named paycheck read or write, `sync` or `undo`
+- **WHEN** a handler is added that is not a batched read, `query`, a named budget write, a named paycheck read or write, or `sync`
 - **THEN** the allowlist tests fail

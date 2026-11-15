@@ -45,10 +45,10 @@ Alternative: keep them in desktop-client and port them to Swift. Rejected, becau
 In `server/native/app.ts`, with no arguments, the handler:
 
 1. Calls `refreshScheduleDateLookup()`, then sets the business-calendar and schedule lookups that `withScheduleLookups` sets on the web.
-2. Calls `getPaychecks()` and runs one SQL query for the posted dates of every pay schedule.
+2. Calls `getPaychecks()`, then reads the posted pay dates with the web's own AQL query (`q('transactions').filter({schedule: {$oneof: paySchedules}}).select(['schedule', 'date'])`, moved from `PaychecksSection.tsx`). Reading through AQL keeps split and tombstoned rows handled as the web handles them.
 3. Runs `planPaycheck` for each paycheck, sorted as the web sorts them.
 4. Joins on `getClearingStatus()`.
-5. Reads the schedules, minus the ids in `paycheck_schedules`, each with `getStatus` (honouring each schedule's upcoming length and the `upcomingScheduledTransactionLength` pref).
+5. Reads the schedules through AQL (`q('schedules')`, as `useSchedules` does, so `_date`, `next_date` and `completed` match), minus the ids in `paycheck_schedules`, each with `getStatus` (honouring each schedule's upcoming length and the `upcomingScheduledTransactionLength` pref).
 6. Builds the currency block, from a helper shared with `native/budget-month`.
 7. Returns `enabled: isPaychecksOn()`.
 8. Builds the `summary`: the earliest next date, that paycheck's `netAmount`, the listed schedule count, `anyWarning` and `hasPaychecks`.
@@ -63,7 +63,7 @@ A read-only handler that takes a draft (name, definition, whether the clearing a
 
 - `netAmount` and the deposit amounts;
 - the pay date and each deposit's date, moved for business days;
-- the default name for a new clearing account;
+- the employer (payee) name, from which Swift formats the default name for a new clearing account ("{employer} Paycheck"), since that text is translated on the web;
 - `errors: [{code, field}]` from `validatePaycheckDraft`.
 
 The editor calls it debounced (about 250 ms after the last edit) and shows only the latest answer. Swift maps codes to English text. The table is a fixture that a vitest test checks against the web's messages, so "same messages" is tested.
@@ -72,24 +72,26 @@ Alternative: send translated strings. Rejected, because loot-core has no i18n.
 
 ### 4. `native/paycheck-save`: one write, all or nothing, one undo step
 
-`mutator(undoable(save))`, where `save` does the following:
+`mutator()` has no rollback: each db write is applied as it is made. Deferring them with `batchMessages` is not an option either, because the save reads its own writes (`recordGenerated` reads `paycheck_schedules`; `setAccountBusinessDays` rewrites schedules from the updated account). So all or nothing comes from two steps.
 
-1. Validates its arguments at the boundary. The page side and Swift check them too, as in add-native-budget-screen Decision 4.
-2. Runs `validatePaycheckDraft` and the server `validate()`, and refuses any error before writing.
-3. Calls the create or update function directly, not through a handler, so no nested undo group is made.
-4. Applies each changed days-early value, using `setAccountBusinessDays` exported as a function.
+1. **Validate everything before the first write.** This covers the arguments at the boundary (the page and Swift check them too, as in add-native-budget-screen Decision 4), `validatePaycheckDraft`, the server `validate()`, each days-early value's range, and that every account it touches exists and is open. Any error refuses the save with nothing written.
+2. **Revert on a later throw.** The handler is `mutator(undoable(save, metaFromToken))`. Inside it, `save` calls the create or update function and then each days-early change directly, not through handlers, so the whole save is one undo group (`withUndo` does not nest while `undoListening` is set). If any step after the first write throws, `save` calls `undo()` in a `catch`. That reverts to the group's marker inside the same mutator. Then it drops the reverted group from the redo history (a small fork-only helper in `undo.ts`, so the web's Redo can't re-apply a half save) and rethrows.
 
-A throw at any step rolls back the whole write: the mutator's messages are not applied. Native saves therefore never half-succeed, unlike the web's two-step save, which stays as it is.
+Example of a late failure: another paycheck also deposits to Savings, and one of its transfer deductions points at a transfer payee that has gone missing. Rewriting it in step 4 throws after "Acme" is written. The catch reverts "Acme" and the Savings days-early value. Task 2.3 injects exactly this failure.
 
-Alternative: call the existing handlers one by one, as the web does. Rejected: several 5 s round trips, and a half-saved state when one fails.
+Alternative: call the existing handlers one by one, as the web does. Rejected: several 5 s round trips, and a half-saved state when one fails. The web's two-step save stays as it is.
 
-### 5. Undo
+### 5. Undo is token-checked in loot-core
 
-Native offers Undo for about 5 s after a successful `native/paycheck-save`, `paycheck-skip-next` or `paycheck-delete`. It withdraws the offer on timeout, on any change event other than the write's own `applied` event, on another write, or when the user leaves the screen.
+`undo` is one global stack shared with the hidden web page, and change events can't tell native which write is on top: a write's own `applied` events all arrive before its result, one per db write, and the follow-up full sync sends `start` and `success` events with `tables: []`. So the check sits in loot-core, not in Swift:
 
-`undo` is global, so the guard is in Swift. The typed `undo()` method refuses unless a screen holds an Undo offer, and the offer is single-use. The page refuses `undo` with arguments. `redo` is not allowlisted. A write's own `applied` event is recognised as the first event after the write's result, whose tables are only the ones that write touches.
+- Each native write sends an `undoToken`, a nonce Swift makes for that write. `native/paycheck-save` and the existing `paycheck-skip-next` and `paycheck-delete` registrations become `undoable(fn, args => args.undoToken ? { nativeUndoToken: args.undoToken } : undefined)`. Web calls pass no token, so their undo meta is unchanged.
+- `native/undo({token})` is a mutator. It reads the meta of the marker that `undo()` would revert to (a small read-only helper in `undo.ts`). It calls `undo()` only if that meta's `nativeUndoToken` equals `token`, and otherwise throws a fixed "nothing to undo" error. Mutators run one at a time, so nothing undoable can slip in between the check and the undo.
+- The bare `undo` and `redo` stay off the allowlist.
 
-Residual risk: a mutation from the web side in the same moment could be the one undone. Withdrawing the offer on any other event narrows that window to under one frame.
+Swift offers Undo for about 5 s, armed when the write's result arrives. Events before the result are the write's own. It withdraws the offer on timeout, on another write, when the user leaves the screen, or on a `sync-event` with non-empty `tables` (or an `undo-event`) after the result. That withdrawal is for the user's sake. Safety comes from the token: a stale tap is refused.
+
+Residual risk: a remote change to the same rows that is applied after the offer's last event and before the user taps Undo is overwritten by the undo's old values. The web's own Undo has the same behaviour. The window is the time from a remote sync landing to the next coalesced event reaching Swift.
 
 ### 6. Year-to-date `hasHistory`
 
@@ -115,8 +117,9 @@ The other names already have lines.
 
 - [Moving web code changes behaviour by accident] → the move is mechanical, the web tests stay unchanged, and the native contract test compares the read with `planPaycheck` on the same seed.
 - [`getClearingStatus` runs a few queries per paycheck and per deposit] → the perf gate covers 20 × 4; if it misses, batch the queries in loot-core, never in Swift.
-- [Undo undoes someone else's change] → the single-use offer, withdrawn on any other event (Decision 5).
-- [`native-bridge` deltas from open changes (add-native-budget-screen, native-budget-month-range)] → this delta adds requirements and modifies only the handler-class requirement, which is already in the main spec. Archive after those changes, or rebase the MODIFIED block when they archive.
+- [Undo undoes someone else's change] → `native/undo` checks the token on the top undo step inside the mutator, so it can only undo the native write it names (Decision 5). The remaining risk is the remote-overwrite case described there.
+- [The save reverts through `undo()`] → covered by an injected late-failure test (task 2.3); the fork-only helpers in `undo.ts` are small and read or trim only.
+- [`native-bridge` deltas from open changes (add-native-budget-screen, native-budget-month-range)] → this delta adds requirements and renames and modifies only the handler-class requirement, which is already in the main spec. Archive after those changes, or rebase the MODIFIED block when they archive.
 - [Debounced preview and a stale answer] → only the latest request's answer is shown, and save uses `native/paycheck-save`'s own validation, never the preview's.
 
 ## Migration Plan

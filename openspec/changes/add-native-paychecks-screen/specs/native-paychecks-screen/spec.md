@@ -74,13 +74,14 @@ When any paycheck has an active clearing-account warning, the summary row SHALL 
 
 ### Requirement: The native list shows paychecks then schedules
 
-The native list SHALL show the paychecks first, in the web's order. Each paycheck SHALL show its next date, net pay, deposits with their dates, any skipped dates, and any clearing warning. The schedules follow, each with a status word. A paycheck's own schedules SHALL NOT appear among the schedules. Values SHALL equal the web screens' for the same budget.
+The native list SHALL show the paychecks first, in the web's order. Each paycheck SHALL show its next date, net pay, deposits with their dates, any skipped dates, and any clearing warning. The schedules follow, each with a status word. A paycheck's own schedules SHALL NOT appear among the schedules. Values SHALL equal the web screens' for the same budget. Net pay and deposit amounts SHALL use the incoming-only money colour.
 
 #### Scenario: A paycheck row
 
 - **GIVEN** "Acme" deposits 400.00 to Savings and the rest to Checking, the next pay date is Saturday November 28, the clearing account's calendar is weekends only, and the paycheck moves weekend dates earlier
 - **WHEN** the user opens the native list
 - **THEN** the "Acme" row shows Friday November 27, the net pay, and each deposit with its amount and expected date, as the web row does
+- **AND** the net pay and deposit amounts use the incoming-only money colour
 
 #### Scenario: Generated schedules are hidden
 
@@ -93,6 +94,12 @@ The native list SHALL show the paychecks first, in the web's order. Each paychec
 - **GIVEN** the user skipped Acme's November 14 pay date
 - **WHEN** the user opens the native list
 - **THEN** the "Acme" row shows a skipped line for November 14 and the next date after it
+
+#### Scenario: A pay transaction imported twice
+
+- **GIVEN** Acme's November 14 pay posted, and the bank import brought it in twice
+- **WHEN** the user opens the native list
+- **THEN** the duplicate pays the next occurrence, as the paycheck-planning spec's "Duplicate of the latest paycheck" says, and the row shows the same dates as the web row
 
 #### Scenario: Show more
 
@@ -133,7 +140,7 @@ The native list SHALL show the paychecks first, in the web's order. Each paychec
 
 ### Requirement: Native writes offer Undo briefly
 
-After a successful skip, save or delete, the screen SHALL offer Undo briefly. Undo SHALL reverse that write as one step, through loot-core's undo. The offer SHALL be withdrawn when it times out, on any change event, on any other write, or when the user leaves the screen. Undo SHALL never be offered at any other time.
+After a successful skip, save or delete, the screen SHALL offer Undo briefly. Undo SHALL reverse exactly that write as one step, through loot-core. The offer SHALL be withdrawn when it times out, on another write, when the user leaves the screen, or on a change event with changed tables that arrives after the write's result. Undo SHALL never be offered at any other time.
 
 #### Scenario: Undo a skip
 
@@ -146,15 +153,33 @@ After a successful skip, save or delete, the screen SHALL offer Undo briefly. Un
 - **WHEN** they tap Undo while it is offered
 - **THEN** the paycheck, its schedules and the account's days-early value are all back as they were
 
+#### Scenario: Undo a delete
+
+- **GIVEN** the user deleted "Acme"
+- **WHEN** they tap Undo while it is offered
+- **THEN** "Acme" and its schedules are back
+
+#### Scenario: Background sync with nothing new
+
+- **GIVEN** Undo is offered after a skip on a budget synced to a server
+- **WHEN** the follow-up sync starts and finishes with no changed tables
+- **THEN** the Undo offer stays
+
 #### Scenario: Something else changed first
 
 - **GIVEN** Undo is offered after a skip
-- **WHEN** a sync brings in a change before the user taps it
+- **WHEN** a sync brings in a change to the schedules before the user taps it
 - **THEN** the Undo offer is gone, and nothing is undone
+
+#### Scenario: A failed Undo
+
+- **GIVEN** Undo is offered after a skip
+- **WHEN** the user taps it and loot-core refuses (something else was done since) or does not answer in time
+- **THEN** an error shows, the list keeps its values, and the offer is gone
 
 ### Requirement: The paycheck editor is a full-height sheet
 
-On iPhone, creating or editing a paycheck SHALL open a full-height sheet with cancel and save. The sheet SHALL have the web editor's sections in the same order, each collapsible, with a days-early stepper and a "post automatically" switch. Net pay stays pinned and visible at every Dynamic Type size. On Mac, the editor SHALL be a sheet attached to the window.
+On iPhone, creating or editing a paycheck SHALL open a full-height sheet with ✕ (cancel) and ✓ (save), like Add transaction. The sheet SHALL have the web editor's sections in the same order, each collapsible, with a days-early stepper and a "post automatically" switch. Net pay stays pinned and visible at every Dynamic Type size, in the incoming-only money colour. On Mac, the editor SHALL be a sheet attached to the window.
 
 #### Scenario: Net pay stays visible
 
@@ -164,8 +189,14 @@ On iPhone, creating or editing a paycheck SHALL open a full-height sheet with ca
 #### Scenario: Cancel with changes
 
 - **GIVEN** the user changed a deduction
-- **WHEN** they tap cancel
+- **WHEN** they tap ✕
 - **THEN** the sheet asks before discarding, and keeps the edit if they decline
+
+#### Scenario: A paycheck's own schedules
+
+- **GIVEN** "Acme" is open in the editor
+- **WHEN** the user looks at its pay schedule and deposits
+- **THEN** none of its own schedules is offered for separate edit or delete; removing a deposit in the editor is the only way to remove its schedule
 
 #### Scenario: Keyboard on Mac
 
@@ -188,6 +219,27 @@ The editor SHALL show the same validation results as the web form for the same d
 - **WHEN** the user picks the clearing account as a deposit account
 - **THEN** the deposit shows "A deposit cannot go to the clearing account."
 
+### Requirement: Deleting a paycheck asks first
+
+The editor SHALL offer Delete for a saved paycheck. Delete SHALL ask first, with the web's message that the clearing account and transactions are kept. Confirming SHALL delete the paycheck and its generated schedules through loot-core, close the sheet and re-read the list. Cancelling SHALL change nothing. A failed delete SHALL show an error and leave the paycheck and the list unchanged.
+
+#### Scenario: Confirm a delete
+
+- **GIVEN** "Acme" with a pay schedule and two deposit schedules
+- **WHEN** the user taps Delete in the editor and confirms
+- **THEN** "Acme" and its three schedules are gone from the list, and the "Acme Paycheck" clearing account and its transactions remain
+
+#### Scenario: Cancel a delete
+
+- **WHEN** the user taps Delete and cancels
+- **THEN** nothing changes and the editor stays open
+
+#### Scenario: A failed delete
+
+- **GIVEN** the engine does not answer within the bridge timeout
+- **WHEN** the user confirms a delete
+- **THEN** an error shows, the editor stays open, and the list keeps "Acme"
+
 ### Requirement: Saving a paycheck is all or nothing
 
 Save SHALL write the paycheck, its schedules and every changed days-early value in one loot-core write that either fully applies or changes nothing. The sheet SHALL close only on success. A rejected save SHALL show loot-core's message and keep the draft.
@@ -197,6 +249,12 @@ Save SHALL write the paycheck, its schedules and every changed days-early value 
 - **GIVEN** another schedule is already named "Acme → Savings"
 - **WHEN** the user saves "Acme" with a Savings deposit and a new days-early value for Savings
 - **THEN** the sheet stays open with the message, and neither the paycheck nor Savings' days-early value changed
+
+#### Scenario: A later step fails
+
+- **GIVEN** another paycheck also deposits to Savings, and rewriting its schedules fails
+- **WHEN** the user saves "Acme" with a new days-early value for Savings
+- **THEN** the sheet stays open with an error, and "Acme", its schedules and Savings' days-early value are exactly as before the save
 
 #### Scenario: Saved on two devices
 

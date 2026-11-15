@@ -10,8 +10,9 @@ type ChromeMessage =
   | { type: 'haptic' }
   | { type: 'nativeScreen'; screen: NativeScreenName; on: boolean };
 
-// The tabs that have a native screen behind a per-screen switch (sc-3751)
-export type NativeScreenName = 'budget';
+// The screens that have a native version behind a per-screen switch: the
+// Budget tab (sc-3751) and Schedules & Paychecks (sc-4341)
+export type NativeScreenName = 'budget' | 'paychecks';
 
 type NativeChrome = {
   navigate: (path: string) => void;
@@ -47,6 +48,7 @@ const SECTIONS = [
   'transactions',
   'categories',
   'schedules',
+  'paychecks',
   'payees',
   'rules',
   'tags',

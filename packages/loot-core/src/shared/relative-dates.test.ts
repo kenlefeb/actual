@@ -3,7 +3,7 @@ import type { RecurConfig, RelativeDateConfig } from '#types/models';
 import { setBusinessCalendars } from './business-calendar-lookup';
 import { businessCalendarPresets } from './business-calendar-presets';
 import * as monthUtils from './months';
-import { getRelativeOccurrences } from './relative-dates';
+import { clearOccurrenceCache, getRelativeOccurrences } from './relative-dates';
 import { setScheduleDates } from './schedule-date-lookup';
 import { getNextDate } from './schedules';
 
@@ -169,5 +169,68 @@ describe('relative dates', () => {
         new Date(2026, 10, 13),
       ),
     ).toBe('2026-11-19');
+  });
+});
+
+// sc-4341: source occurrences are cached by content, so a read that rebuilds
+// the lookups still hits, and a changed calendar or schedule never goes stale
+describe('occurrence cache', () => {
+  const sameDay: RelativeDateConfig = {
+    relativeTo: {
+      scheduleId: 'payday',
+      offset: 0,
+      unit: 'days',
+      direction: 'after',
+    },
+  };
+
+  beforeEach(() => {
+    clearOccurrenceCache();
+    setBusinessCalendars([federal]);
+    setScheduleDates([['payday', payday]]);
+  });
+
+  afterEach(() => {
+    setBusinessCalendars([]);
+    setScheduleDates([]);
+  });
+
+  it('gives the uncached result again', () => {
+    for (const config of [sameDay, deposit]) {
+      clearOccurrenceCache();
+      const uncached = between(config, '2026-01-01', '2026-12-31');
+      expect(between(config, '2026-01-01', '2026-12-31')).toEqual(uncached);
+    }
+  });
+
+  it('gives the new dates after a calendar change', () => {
+    // Sun Nov 15 moves to Fri Nov 13
+    expect(between(sameDay, '2026-11-01', '2026-11-30')).toEqual([
+      '2026-11-13',
+    ]);
+    // Fridays off too, as a rebuilt lookup brings it: Thu Nov 12
+    setBusinessCalendars([
+      { ...federal, nonWorkingDays: [...federal.nonWorkingDays, 5] },
+    ]);
+    expect(between(sameDay, '2026-11-01', '2026-11-30')).toEqual([
+      '2026-11-12',
+    ]);
+  });
+
+  it('gives the new dates after a schedule change', () => {
+    expect(between(sameDay, '2026-10-01', '2026-10-31')).toEqual([
+      '2026-10-15',
+    ]);
+    setScheduleDates([['payday', { ...payday, start: '2026-01-20' }]]);
+    expect(between(sameDay, '2026-10-01', '2026-10-31')).toEqual([
+      '2026-10-20',
+    ]);
+  });
+
+  it('hits for an equal config rebuilt by a lookup refresh', () => {
+    const first = between(sameDay, '2026-01-01', '2026-12-31');
+    setScheduleDates([['payday', { ...payday }]]);
+    setBusinessCalendars([{ ...federal }]);
+    expect(between(sameDay, '2026-01-01', '2026-12-31')).toEqual(first);
   });
 });

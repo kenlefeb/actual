@@ -48,6 +48,9 @@ final class PageCallTests: XCTestCase {
         for url in Self.foreignPages {
             await refused(FakePage(url)) { try await _ = $0.bridgeCall(name: "native/budget-month", argsJSON: #"{"month":"2026-11"}"#) }
             await refused(FakePage(url)) { try await _ = $0.bridgeCall(name: "budget/budget-amount", argsJSON: #"{"amount":1}"#) }
+            await refused(FakePage(url)) { try await _ = $0.bridgeCall(name: "native/schedules-paychecks", argsJSON: "{}") }
+            await refused(FakePage(url)) { try await _ = $0.bridgeCall(name: "paycheck-skip-next", argsJSON: #"{"id":"a","undoToken":"t"}"#) }
+            await refused(FakePage(url)) { try await _ = $0.bridgeCall(name: "native/undo", argsJSON: #"{"token":"t"}"#) }
             await refused(FakePage(url)) { try await _ = $0.run("window.__actualNativeChrome?.navigate(path)", arguments: ["path": "/budget"]) }
         }
     }

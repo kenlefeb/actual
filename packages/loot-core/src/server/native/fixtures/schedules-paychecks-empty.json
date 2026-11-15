@@ -1,0 +1,19 @@
+{
+  "currencyCode": "",
+  "currencyDecimalPlaces": 2,
+  "currencySymbol": "",
+  "currencySymbolPosition": "before",
+  "currencySpace": false,
+  "numberFormat": "comma-dot",
+  "hideFraction": false,
+  "enabled": true,
+  "summary": {
+    "hasPaychecks": false,
+    "nextDate": null,
+    "netAmount": null,
+    "scheduleCount": 0,
+    "anyWarning": false
+  },
+  "paychecks": [],
+  "schedules": []
+}

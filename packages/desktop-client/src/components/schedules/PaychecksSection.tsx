@@ -6,6 +6,7 @@ import { Text } from '@actual-app/components/text';
 import { theme } from '@actual-app/components/theme';
 import { View } from '@actual-app/components/view';
 import { currentDay } from '@actual-app/core/shared/months';
+import { planPaycheck } from '@actual-app/core/shared/paychecks';
 import { q } from '@actual-app/core/shared/query';
 import type {
   PaycheckEntity,
@@ -21,7 +22,7 @@ import {
 } from '#hooks/useScheduleDateLookup';
 import { useTouchTargetStyle } from '#hooks/useTouchTargetStyle';
 
-import { PaycheckRow, planPaycheck, useOpenPaycheck } from './PaycheckRow';
+import { PaycheckRow, useOpenPaycheck } from './PaycheckRow';
 
 // Stable while loading, so the transactions query isn't rebuilt every render
 const NO_PAYCHECKS: PaycheckEntity[] = [];

@@ -95,6 +95,23 @@ describe('installNativeChrome', () => {
     ]);
   });
 
+  // sc-4341: the native Schedules & Paychecks list opens the web paycheck editor
+  it('navigates to the paycheck editor and the schedule form', () => {
+    const { win } = iosApp();
+    const navigate = vi.fn();
+    installNativeChrome(win, navigate, vi.fn());
+
+    win.__actualNativeChrome?.navigate('/paychecks/new');
+    win.__actualNativeChrome?.navigate('/paychecks/0b6c-4f');
+    win.__actualNativeChrome?.navigate('/schedules/new');
+
+    expect(navigate.mock.calls).toEqual([
+      ['/paychecks/new'],
+      ['/paychecks/0b6c-4f'],
+      ['/schedules/new'],
+    ]);
+  });
+
   it.each([
     'https://example.com/budget',
     '//example.com/budget',

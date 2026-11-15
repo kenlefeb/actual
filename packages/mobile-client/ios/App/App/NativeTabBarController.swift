@@ -13,6 +13,9 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
     // The native Budget tab (sc-3751) lies over the web Budget screen while the
     // switch is on and the page shows /budget with the tab bar; otherwise the web screen below shows as before
     private var budgetOverlay: NativeBudgetViewController?
+    // The native Schedules & Paychecks list (sc-4341) lies over the web
+    // Schedules screen the same way, in whichever tab shows it
+    private var paychecksOverlay: (screen: NativePaychecksViewController, container: TabContainerViewController)?
     private var pagePath = NativeTab.budget.rootPath
     private var tabBarShown = false
     private static let addIdentifier = "add"
@@ -62,8 +65,8 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
         chrome.onClosed = { [weak self] in
             self?.setTabBarVisible(false)
         }
-        chrome.onNativeScreenChanged = { [weak self] _ in
-            self?.updateBudgetOverlay()
+        chrome.onNativeScreenChanged = { [weak self] in
+            self?.updateOverlays()
         }
         // Hidden until a budget is open (sign-in and the budget list have none)
         setTabBarVisible(false)
@@ -92,8 +95,9 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
     // transaction) and while a sheet shows, as iOS apps do
     private func pageDidRoute(to path: String, tabBar: Bool) {
         pagePath = path
+        let tab = router.pageDidRoute(to: path)
         setTabBarVisible(tabBar)
-        guard let tab = router.pageDidRoute(to: path) else { return }
+        guard let tab else { return }
         show(tab)
     }
 
@@ -120,7 +124,35 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
         }
         containers.values.forEach { $0.tabBarVisible = visible }
         tabBarShown = visible
+        updateOverlays()
+    }
+
+    // The Budget overlay first: it clears its container's slot, which the
+    // paychecks overlay may take next
+    private func updateOverlays() {
         updateBudgetOverlay()
+        updatePaychecksOverlay()
+    }
+
+    private func updatePaychecksOverlay() {
+        let container = containers[router.selected]!
+        let wanted = NativeScreenSwitch.isPaychecksNative() && tabBarShown && pagePath == "/schedules"
+            && !container.hostsNativeScreen
+        if let current = paychecksOverlay, !wanted || current.container !== container {
+            paychecksOverlay = nil
+            bridgeController.nativeBridge.onPaychecksEvent = nil
+            current.container.setOverlay(nil)
+        }
+        guard wanted, paychecksOverlay == nil else { return }
+        let chrome = bridgeController.nativeChrome
+        let screen = NativePaychecksViewController(
+            client: bridgeController.nativeBridge.client, backPath: router.selected.rootPath,
+            navigate: { [weak chrome] in chrome?.navigate(to: $0) })
+        paychecksOverlay = (screen, container)
+        bridgeController.nativeBridge.onPaychecksEvent = { [weak screen] event, tables in
+            screen?.eventReceived(event, tables: tables)
+        }
+        container.setOverlay(screen)
     }
 
     private func updateBudgetOverlay() {

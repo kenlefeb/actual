@@ -14,6 +14,13 @@ public enum NativeScreenSwitch {
     public static func screen(for tab: NativeTab, defaults: UserDefaults = .standard) -> NativeScreen {
         nativeTabs.contains(tab) && defaults.bool(forKey: key(for: tab)) ? .native : .web
     }
+
+    // sc-4341: Schedules & Paychecks is not a tab, so it has its own key
+    public static let paychecksKey = "NativeScreen.paychecks"
+
+    public static func isPaychecksNative(defaults: UserDefaults = .standard) -> Bool {
+        defaults.bool(forKey: paychecksKey)
+    }
 }
 
 // The script that tells the page which native screens are on, at the start of
@@ -26,7 +33,7 @@ public enum NativeScreensScript {
         guard let origin = expectedOrigin, let literal = try? JSONEncoder().encode(origin) else { return "" }
         let screens = NativeTab.allCases.filter(NativeScreenSwitch.nativeTabs.contains).map {
             "\"\($0.rawValue)\": \(NativeScreenSwitch.screen(for: $0, defaults: defaults) == .native)"
-        }
+        } + ["\"paychecks\": \(NativeScreenSwitch.isPaychecksNative(defaults: defaults))"]
         return "if (location.origin === \(String(decoding: literal, as: UTF8.self))) { window.__actualNativeScreens = {\(screens.joined(separator: ", "))}; }"
     }
 }

@@ -128,6 +128,20 @@ async function applyUndoAction(messages, meta, undoTag) {
   });
 }
 
+/**
+ * Fork-only (sc-4341). The meta of the marker `undo()` would revert to, found
+ * by `undo()`'s own walk, without changing anything. A write that recorded
+ * nothing leaves its marker at CURSOR, which the walk passes, so its meta is
+ * never returned for the previous group's undo.
+ */
+export function undoTargetMeta(): unknown {
+  let cursor = Math.max(CURSOR - 1, 0);
+  while (cursor > 0 && MESSAGE_HISTORY[cursor].type !== 'marker') {
+    cursor--;
+  }
+  return MESSAGE_HISTORY[cursor].meta;
+}
+
 export async function undo() {
   const end = CURSOR;
   CURSOR = Math.max(CURSOR - 1, 0);

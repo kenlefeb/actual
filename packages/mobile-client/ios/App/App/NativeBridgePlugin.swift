@@ -15,6 +15,9 @@ public class NativeBridgePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
 
     // Every forwarded event, then one coalesced re-read per burst; main queue
     var onEvent: ((String) -> Void)?
+    // The Schedules & Paychecks overlay (sc-4341): each event with a
+    // sync-event's changed table names; it coalesces its own re-reads
+    var onPaychecksEvent: ((String, [String]) -> Void)?
     var onChange: (() -> Void)?
     private lazy var coalescer = ChangeCoalescer { [weak self] in self?.onChange?() }
 
@@ -35,6 +38,7 @@ public class NativeBridgePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
         guard PageOriginGuard.accepts(isMainFrame: message.frameInfo.isMainFrame, scheme: origin.protocol, host: origin.host, port: origin.port, serverURL: bridge?.config.serverURL),
               let event = NativeBridgeEvent.name(of: message.body) else { return }
         onEvent?(event)
+        onPaychecksEvent?(event, NativeBridgeEvent.tables(of: message.body))
         coalescer.notify()
     }
 

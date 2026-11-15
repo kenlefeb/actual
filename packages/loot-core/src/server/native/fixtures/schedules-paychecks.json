@@ -1,0 +1,133 @@
+{
+  "currencyCode": "",
+  "currencyDecimalPlaces": 2,
+  "currencySymbol": "",
+  "currencySymbolPosition": "before",
+  "currencySpace": false,
+  "numberFormat": "comma-dot",
+  "hideFraction": false,
+  "enabled": true,
+  "summary": {
+    "hasPaychecks": true,
+    "nextDate": "2026-11-13",
+    "netAmount": 240000,
+    "scheduleCount": 1,
+    "anyWarning": true
+  },
+  "paychecks": [
+    {
+      "id": "acme",
+      "name": "Acme",
+      "netAmount": 240000,
+      "next": {
+        "date": "2026-11-13",
+        "deposits": [
+          {
+            "id": "savings",
+            "account": "savings",
+            "amount": 40000,
+            "date": "2026-11-13",
+            "accountName": "Savings"
+          },
+          {
+            "id": "checking",
+            "account": "checking",
+            "amount": 200000,
+            "date": "2026-11-13",
+            "accountName": "Checking"
+          }
+        ]
+      },
+      "skipped": [],
+      "later": [
+        {
+          "date": "2026-11-30",
+          "deposits": [
+            {
+              "id": "savings",
+              "account": "savings",
+              "amount": 40000,
+              "date": "2026-11-30",
+              "accountName": "Savings"
+            },
+            {
+              "id": "checking",
+              "account": "checking",
+              "amount": 200000,
+              "date": "2026-11-30",
+              "accountName": "Checking"
+            }
+          ]
+        },
+        {
+          "date": "2026-12-15",
+          "deposits": [
+            {
+              "id": "savings",
+              "account": "savings",
+              "amount": 40000,
+              "date": "2026-12-15",
+              "accountName": "Savings"
+            },
+            {
+              "id": "checking",
+              "account": "checking",
+              "amount": 200000,
+              "date": "2026-12-15",
+              "accountName": "Checking"
+            }
+          ]
+        },
+        {
+          "date": "2026-12-31",
+          "deposits": [
+            {
+              "id": "savings",
+              "account": "savings",
+              "amount": 40000,
+              "date": "2026-12-31",
+              "accountName": "Savings"
+            },
+            {
+              "id": "checking",
+              "account": "checking",
+              "amount": 200000,
+              "date": "2026-12-31",
+              "accountName": "Checking"
+            }
+          ]
+        }
+      ],
+      "clearingWarning": {
+        "clearingAccount": "clearing",
+        "clearingAccountName": "Acme Paycheck",
+        "balance": 480000,
+        "missingDeposits": [
+          {
+            "id": "savings",
+            "account": "savings",
+            "accountName": "Savings"
+          },
+          {
+            "id": "checking",
+            "account": "checking",
+            "accountName": "Checking"
+          }
+        ]
+      }
+    }
+  ],
+  "schedules": [
+    {
+      "id": "rent",
+      "name": "Rent",
+      "payeeName": null,
+      "accountName": "Checking",
+      "nextDate": "2026-11-12",
+      "amount": -150000,
+      "isApprox": false,
+      "completed": false,
+      "status": "scheduled"
+    }
+  ]
+}

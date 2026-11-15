@@ -272,3 +272,78 @@ describe('the writes entry has its own data directory', () => {
     expect(write.auditLog).toBe('/tmp/x/y-writes.audit.jsonl');
   });
 });
+
+describe('Stdio grants come from the environment', () => {
+  const staging = {
+    ...base,
+    ACTUAL_SERVER_URL: 'https://actual-staging.owl-becrux.ts.net',
+  };
+  const ALL = [
+    'budget:read',
+    'transactions:write',
+    'budget:write',
+    'structure:write',
+    'schedules:write',
+    'delete',
+  ];
+
+  it("Today's writes entry keeps its tools", () => {
+    expect(loadConfig(staging, ['--writes']).grant).toEqual({
+      scopes: ALL,
+      confirm_destructive: false,
+    });
+  });
+
+  it('A narrowed writes entry', () => {
+    const config = loadConfig(
+      {
+        ...staging,
+        ACTUAL_MCP_WRITES_SCOPES: 'budget:read transactions:write',
+        ACTUAL_MCP_WRITES_CONFIRM_DESTRUCTIVE: '1',
+        ACTUAL_MCP_WRITES_MAX_ROWS: '10',
+      },
+      ['--writes'],
+    );
+    expect(config.grant).toEqual({
+      scopes: ['budget:read', 'transactions:write'],
+      confirm_destructive: true,
+      max_rows: 10,
+    });
+  });
+
+  it('The read entry shares the env file', () => {
+    const config = loadConfig({
+      ...staging,
+      ACTUAL_MCP_WRITES_SCOPES: 'budget:read transactions:everything',
+      ACTUAL_MCP_WRITES_CONFIRM_DESTRUCTIVE: 'maybe',
+      ACTUAL_MCP_WRITES_MAX_ROWS: '-1',
+    });
+    expect(config.grant).toEqual({
+      scopes: ['budget:read'],
+      confirm_destructive: false,
+    });
+  });
+
+  it('An unknown scope on the writes entry', () => {
+    expect(() =>
+      loadConfig(
+        {
+          ...staging,
+          ACTUAL_MCP_WRITES_SCOPES: 'budget:read transactions:everything',
+        },
+        ['--writes'],
+      ),
+    ).toThrow(/Unknown scope/);
+  });
+
+  it.each([
+    ['ACTUAL_MCP_WRITES_SCOPES', ''],
+    ['ACTUAL_MCP_WRITES_CONFIRM_DESTRUCTIVE', 'yes'],
+    ['ACTUAL_MCP_WRITES_MAX_ROWS', '0'],
+    ['ACTUAL_MCP_WRITES_MAX_ROWS', 'ten'],
+  ])('refuses %s=%j on the writes entry', (name, value) => {
+    expect(() =>
+      loadConfig({ ...staging, [name]: value }, ['--writes']),
+    ).toThrow(new RegExp(name));
+  });
+});

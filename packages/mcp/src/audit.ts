@@ -3,6 +3,9 @@ import { closeSync, fchmodSync, openSync, writeSync } from 'fs';
 /** Who acted: the sync-server user id and the OAuth subject (`local` for stdio). Never a token. */
 export type Identity = { user_id: string; subject: string };
 
+/** Written on every line: who acted, the scopes the connection held and, on the hosted entry, the grants file fingerprint. */
+export type AuditIdentity = Identity & { scopes: string[]; grant?: string };
+
 export type AuditChange = {
   id: string;
   field: string;
@@ -30,6 +33,13 @@ export type OutcomeEntry = {
   created: string[];
 };
 
+/** A call refused by scope; never its arguments, which can hold budget data. */
+export type RefusedEntry = {
+  tool: string;
+  phase: 'refused';
+  missing: string[];
+};
+
 /**
  * Appends one JSON line (time, identity, tool, call id, ids or outcome) to the
  * write audit log, mode 0600. Callers log the attempt before they write, so a throw
@@ -38,8 +48,8 @@ export type OutcomeEntry = {
  */
 export function appendAudit(
   path: string,
-  entry: AuditEntry | OutcomeEntry,
-  identity: Identity,
+  entry: AuditEntry | OutcomeEntry | RefusedEntry,
+  identity: AuditIdentity,
 ) {
   const line = `${JSON.stringify({ time: new Date().toISOString(), ...identity, ...entry })}\n`;
   const fd = openSync(path, 'a', 0o600); // O_APPEND | O_CREAT

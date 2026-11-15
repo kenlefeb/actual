@@ -5,6 +5,7 @@ import net from 'net';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 
 import { actingUserId } from './connection';
+import { createGrantsLookup } from './grants';
 import { OAUTH_ENDPOINTS } from './oauth';
 import type { OAuthServer } from './oauth';
 import type { RemoteConfig } from './remote-config';
@@ -241,6 +242,10 @@ export function createRemoteHttpServer(
   }
 
   const record = createRecorder(config, log);
+  // Checked on every call, so a grant change applies without a restart.
+  const grantFor = createGrantsLookup(config.grantsFile, reason =>
+    record({ event: 'grants', reason }),
+  );
   // Per source and endpoint, so one caller cannot use up the limit for Ken.
   const perEndpoint = createLimiter(
     config.rate.perEndpoint,
@@ -367,6 +372,9 @@ export function createRemoteHttpServer(
       registerExtra: registerSyncStatusTool,
       auditLog: config.auditLog,
       identity: { user_id: actingUserId(), subject },
+      // The token admits (`budget:read`); the grant decides what a call may do.
+      grant: () => grantFor(subject, client),
+      client,
       // Name and outcome only: arguments and results can hold budget data.
       onToolCall: (tool, status) =>
         record({

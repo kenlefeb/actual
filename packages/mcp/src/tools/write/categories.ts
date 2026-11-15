@@ -3,10 +3,15 @@ import { z } from 'zod';
 
 import { Refusal } from '#refusal';
 import { withText } from '#sanitize';
-import type { RegisterTool } from '#tools/read/shared';
 
-import type { WriteLog } from './shared';
-import { id, loggedWrite, MAX_WRITE_ROWS } from './shared';
+import type { RegisterWriteTool } from './shared';
+import {
+  confirm,
+  id,
+  loggedWrite,
+  MAX_WRITE_ROWS,
+  requireRows,
+} from './shared';
 
 type Cat = { id: string; name: string; is_income: boolean; hidden: boolean };
 type Group = Cat & { categories: Cat[] };
@@ -98,15 +103,12 @@ function diff<T>(before: T, after: T) {
   return before === after ? {} : { before, after };
 }
 
-export function registerCategoryWriteTools(
-  tool: RegisterTool,
-  auditLog: WriteLog,
-) {
+export function registerCategoryWriteTools(tool: RegisterWriteTool) {
   tool(
     'write_create_category_group',
     'Create an expense category group by name (income groups cannot be created). Returns the new group id.',
     { name: z.string() },
-    async ({ name: raw }) => {
+    async ({ name: raw }, auditLog) => {
       const groups = await load();
       const name = requireName(raw, groups, undefined, 'group');
       let created = '';
@@ -124,13 +126,14 @@ export function registerCategoryWriteTools(
         async () => withText({ group_id: created }, { name }),
       );
     },
+    { scopes: ['structure:write'] },
   );
 
   tool(
     'write_create_category',
     'Create a category in a category group, by group id (never a name). It is income or expense as its group is. Returns the new category id.',
     { name: z.string(), group_id: id },
-    async ({ name: raw, group_id }) => {
+    async ({ name: raw, group_id }, auditLog) => {
       const groups = await load();
       const group = findGroup(groups, group_id);
       const name = requireName(raw, group.categories);
@@ -160,6 +163,7 @@ export function registerCategoryWriteTools(
           ),
       );
     },
+    { scopes: ['structure:write'] },
   );
 
   tool(
@@ -170,7 +174,7 @@ export function registerCategoryWriteTools(
       name: z.string().optional(),
       hidden: z.boolean().optional(),
     },
-    async ({ group_id, name: raw, hidden }) => {
+    async ({ group_id, name: raw, hidden }, auditLog) => {
       requireChange({ name: raw, hidden });
       const groups = await load();
       const group = findGroup(groups, group_id);
@@ -213,6 +217,7 @@ export function registerCategoryWriteTools(
         },
       );
     },
+    { scopes: ['structure:write'] },
   );
 
   tool(
@@ -223,7 +228,7 @@ export function registerCategoryWriteTools(
       name: z.string().optional(),
       hidden: z.boolean().optional(),
     },
-    async ({ category_id, name: raw, hidden }) => {
+    async ({ category_id, name: raw, hidden }, auditLog) => {
       requireChange({ name: raw, hidden });
       const groups = await load();
       const { group, category } = findCategory(groups, category_id);
@@ -273,6 +278,7 @@ export function registerCategoryWriteTools(
         },
       );
     },
+    { scopes: ['structure:write'] },
   );
 
   tool(
@@ -283,7 +289,7 @@ export function registerCategoryWriteTools(
       group_id: id,
       before_category_id: id.optional(),
     },
-    async ({ category_id, group_id, before_category_id }) => {
+    async ({ category_id, group_id, before_category_id }, auditLog) => {
       const groups = await load();
       const { group: from, category } = findCategory(groups, category_id);
       const to = findGroup(groups, group_id);
@@ -348,13 +354,14 @@ export function registerCategoryWriteTools(
         },
       );
     },
+    { scopes: ['structure:write'] },
   );
 
   tool(
     'write_move_category_group',
     'Move a category group before another group, or last when before_group_id is omitted. Ids, never names. Returns its position before and after.',
     { group_id: id, before_group_id: id.optional() },
-    async ({ group_id, before_group_id }) => {
+    async ({ group_id, before_group_id }, auditLog) => {
       const groups = await load();
       findGroup(groups, group_id);
       if (before_group_id !== undefined) {
@@ -393,13 +400,18 @@ export function registerCategoryWriteTools(
         }),
       );
     },
+    { scopes: ['structure:write'] },
   );
 
   tool(
     'write_delete_category',
-    'Delete a category, by category id (never a name). When it has transactions or budgeted amounts, transfer_category_id (another category of the same kind) is required and receives them; without it the call is refused with the counts. There is no dry run and no undo.',
-    { category_id: id, transfer_category_id: id.optional() },
-    async ({ category_id, transfer_category_id }) => {
+    'Delete a category, by category id (never a name). When it has transactions or budgeted amounts, transfer_category_id (another category of the same kind) is required and receives them; without it the call is refused with the counts. When this connection must confirm deletes, the first call changes nothing and returns a dry run with `confirm`; call again with it within 5 minutes. There is no undo.',
+    {
+      category_id: id,
+      transfer_category_id: id.optional(),
+      confirm,
+    },
+    async ({ category_id, transfer_category_id }, auditLog) => {
       const groups = await load();
       const { category } = findCategory(groups, category_id);
       if (transfer_category_id !== undefined) {
@@ -462,23 +474,20 @@ export function registerCategoryWriteTools(
           ),
       );
     },
+    { scopes: ['structure:write', 'delete'], destructive: true },
   );
 
   tool(
     'write_delete_category_group',
-    `Delete an expense category group and its categories (hidden ones too), by group id (never a name). When any category has transactions or budgeted amounts, transfer_category_id (an expense category outside the group) is required and receives them all; without it the call is refused naming the categories in use. At most ${MAX_WRITE_ROWS} categories. There is no dry run and no undo.`,
-    { group_id: id, transfer_category_id: id.optional() },
-    async ({ group_id, transfer_category_id }) => {
+    `Delete an expense category group and its categories (hidden ones too), by group id (never a name). When any category has transactions or budgeted amounts, transfer_category_id (an expense category outside the group) is required and receives them all; without it the call is refused naming the categories in use. At most ${MAX_WRITE_ROWS} categories. When this connection must confirm deletes, the first call changes nothing and returns a dry run with \`confirm\`; call again with it within 5 minutes. There is no undo.`,
+    { group_id: id, transfer_category_id: id.optional(), confirm },
+    async ({ group_id, transfer_category_id }, auditLog) => {
       const groups = await load();
       const group = findGroup(groups, group_id);
       if (group.is_income) {
         throw new Refusal(`The income group cannot be deleted. ${NOTHING}`);
       }
-      if (group.categories.length > MAX_WRITE_ROWS) {
-        throw new Refusal(
-          `A group of more than ${MAX_WRITE_ROWS} categories cannot be deleted in one call. Move or delete some first. ${NOTHING}`,
-        );
-      }
+      requireRows(auditLog, group.categories.length);
       if (transfer_category_id !== undefined) {
         const target = findCategory(
           groups,
@@ -548,5 +557,6 @@ export function registerCategoryWriteTools(
           ),
       );
     },
+    { scopes: ['structure:write', 'delete'], destructive: true },
   );
 }

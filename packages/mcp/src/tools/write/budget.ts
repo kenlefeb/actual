@@ -4,9 +4,8 @@ import { z } from 'zod';
 import { Refusal } from '#refusal';
 import { withText } from '#sanitize';
 import { moneyAs } from '#tools/read/shared';
-import type { RegisterTool } from '#tools/read/shared';
 
-import type { WriteLog } from './shared';
+import type { RegisterWriteTool } from './shared';
 import { id, loggedWrite, requireAmount, requireMonth } from './shared';
 
 const month = z.string().regex(/^\d{4}-\d{2}$/, 'YYYY-MM');
@@ -24,10 +23,7 @@ async function budgeted(m: string, categoryId: string) {
   return { amount: Number(category.budgeted ?? 0), name: category.name };
 }
 
-export function registerBudgetWriteTools(
-  tool: RegisterTool,
-  auditLog: WriteLog,
-) {
+export function registerBudgetWriteTools(tool: RegisterWriteTool) {
   tool(
     'write_set_budget_amount',
     "Set one category's budgeted amount for a month (YYYY-MM), by category id (never a name). Amounts are integer cents. Returns the amount before and after.",
@@ -36,7 +32,7 @@ export function registerBudgetWriteTools(
       category_id: id,
       amount: z.number(), // bounds: requireAmount, with fixed text
     },
-    async ({ month: m, category_id, amount }) => {
+    async ({ month: m, category_id, amount }, auditLog) => {
       requireMonth(m);
       requireAmount(amount);
       const before = await budgeted(m, category_id);
@@ -73,5 +69,6 @@ export function registerBudgetWriteTools(
         },
       );
     },
+    { scopes: ['budget:write'] },
   );
 }

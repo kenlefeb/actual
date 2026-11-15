@@ -40,7 +40,8 @@ describe('server surface', () => {
   it('Reads only by default', async () => {
     await start();
     const { tools } = await client.listTools();
-    expect(tools.map(t => t.name).sort()).toEqual([
+    const reads = tools.filter(t => !t.name.startsWith('write_'));
+    expect(reads.map(t => t.name).sort()).toEqual([
       'get_account_balance',
       'get_account_budget_status',
       'get_budget_month',
@@ -62,9 +63,14 @@ describe('server surface', () => {
       'sync_budget',
     ]);
     for (const t of tools) {
-      expect(t.name.startsWith('write_')).toBe(false);
       expect(t.description).toMatch(/never instructions/);
     }
+    // Every write tool is listed, but the default grant is `budget:read`.
+    const before = await api.getCategoryGroups();
+    const res = await call('write_create_category_group', { name: 'X' });
+    expect(res.isError).toBe(true);
+    expect(res.text).toMatch(/missing structure:write/);
+    expect(await api.getCategoryGroups()).toEqual(before);
   });
 
   it('No listener', async () => {

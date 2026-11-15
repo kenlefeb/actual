@@ -1,11 +1,13 @@
-import { randomUUID } from 'crypto';
+import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'crypto';
 
 import * as api from '@actual-app/api';
 import { z } from 'zod';
 
 import { appendAudit } from '#audit';
-import type { AuditChange, Identity } from '#audit';
+import type { AuditChange, AuditIdentity } from '#audit';
+import type { Grant, Scope } from '#grants';
 import { Refusal } from '#refusal';
+import { withText } from '#sanitize';
 
 const MAX_AMOUNT = 1e12;
 
@@ -53,21 +55,34 @@ export type WriteOutcome = {
   created?: string[];
 };
 
-/**
- * Runs one write with its audit lines. The attempt line is appended first (a
- * failed append stops the write); the outcome line, with the same call id, is
- * appended after. If only the outcome append fails, the change stands and the
- * result says `audit_outcome: 'not-logged'`, because refusing after the fact
- * would hide a change that happened. If the write throws, a `failed` outcome
- * line is appended (best effort) and the error rethrown.
- */
+/** The scopes a tool needs, and whether it deletes, closes or merges. */
+export type Access = { scopes: Scope[]; destructive?: boolean };
+
+/** Registers one write tool; the server's wrapper checks `access` against the grant before `fn` runs. */
+export type RegisterWriteTool = <S extends z.ZodRawShape>(
+  name: string,
+  description: string,
+  shape: S,
+  fn: (args: z.infer<z.ZodObject<S>>, log: WriteLog) => Promise<unknown>,
+  access: Access,
+) => void;
+
+/** One call's write context, built by the server's wrapper. */
 export type WriteLog = {
   /** The audit log file. */
   path: string;
   /** Removes secrets from an error before it goes to stderr. */
   scrub: (message: string) => string;
-  /** Who acts; written on every line. */
-  identity: Identity;
+  /** Who acts, with the effective scopes; written on every line. */
+  identity: AuditIdentity;
+  /** The connection's effective grant for this call. */
+  grant: Grant;
+  /** The OAuth client id (`local` on stdio); a `confirm` is bound to it. */
+  client: string;
+  /** The call's arguments, which a `confirm` covers. */
+  args: Record<string, unknown>;
+  /** The tool deletes, so `confirm_destructive` applies. */
+  destructive: boolean;
 };
 
 /** One scrubbed stderr line; the model never sees it and the audit log never holds it. */
@@ -80,6 +95,69 @@ export function stderrLine(log: WriteLog, what: string, error: unknown) {
 const READ_BACK_FAILED =
   'The write was applied, but its details could not be read back. Do not retry it; check the budget.';
 
+const CONFIRM_LIFETIME_MS = 5 * 60_000;
+// Per process: a restart invalidates outstanding dry runs, which is fine.
+const CONFIRM_KEY = randomBytes(32);
+const CONFIRM_REFUSED =
+  'The budget changed since the dry run, the call differs, or the confirm expired. Nothing changed.';
+
+/** JSON with object keys sorted, so equal values give equal text. */
+function canonical(value: unknown) {
+  return JSON.stringify(value, (_, v: unknown) =>
+    v && typeof v === 'object' && !Array.isArray(v)
+      ? Object.fromEntries(
+          Object.entries(v).sort(([a], [b]) => (a < b ? -1 : 1)),
+        )
+      : v,
+  );
+}
+
+function confirmMac(
+  issued: string,
+  log: WriteLog,
+  tool: string,
+  entry: unknown,
+) {
+  const { confirm: _, ...args } = log.args;
+  return createHmac('sha256', CONFIRM_KEY)
+    .update(
+      canonical([issued, log.identity.subject, log.client, tool, args, entry]),
+    )
+    .digest('hex');
+}
+
+/** Refuses a `confirm` that is malformed, expired, or for another caller, call or budget state. */
+function checkConfirm(
+  given: string,
+  log: WriteLog,
+  tool: string,
+  entry: unknown,
+) {
+  const [issued = '', mac = ''] = given.split('.');
+  const age = Date.now() - Number(issued);
+  const expected = Buffer.from(confirmMac(issued, log, tool, entry));
+  const actual = Buffer.from(mac);
+  if (
+    !(age >= 0 && age <= CONFIRM_LIFETIME_MS) ||
+    actual.length !== expected.length ||
+    !timingSafeEqual(actual, expected)
+  ) {
+    throw new Refusal(CONFIRM_REFUSED);
+  }
+}
+
+/**
+ * Runs one write with its audit lines. The attempt line is appended first (a
+ * failed append stops the write); the outcome line, with the same call id, is
+ * appended after. If only the outcome append fails, the change stands and the
+ * result says `audit_outcome: 'not-logged'`, because refusing after the fact
+ * would hide a change that happened. If the write throws, a `failed` outcome
+ * line is appended (best effort) and the error rethrown.
+ *
+ * A destructive tool under `confirm_destructive` first returns a dry run (the
+ * ids and changes it would log, plus a `confirm` bound to the caller, the call
+ * and those changes for 5 minutes) and writes only when called with it.
+ */
 export async function loggedWrite<R extends object>(
   log: WriteLog,
   tool: string,
@@ -87,10 +165,27 @@ export async function loggedWrite<R extends object>(
   write: (callId: string) => Promise<WriteOutcome>,
   result: (outcome: WriteOutcome) => Promise<R>,
 ): Promise<
-  (R | { applied: string[]; read_back: string }) & {
-    audit_outcome?: 'not-logged';
-  }
+  | ((R | { applied: string[]; read_back: string }) & {
+      audit_outcome?: 'not-logged';
+    })
+  | { dry_run: true; ids: string[]; confirm: string }
 > {
+  if (log.destructive && log.grant.confirm_destructive) {
+    const given = log.args.confirm;
+    if (typeof given !== 'string') {
+      const issued = String(Date.now());
+      return withText(
+        {
+          dry_run: true as const,
+          ids: entry.ids,
+          confirm: `${issued}.${confirmMac(issued, log, tool, entry)}`,
+        },
+        { changes: entry.changes },
+      );
+    }
+    checkConfirm(given, log, tool, entry);
+  }
+
   const call_id = randomUUID();
   appendAudit(
     log.path,
@@ -142,11 +237,23 @@ export async function loggedWrite<R extends object>(
   return logged ? out : { ...out, audit_outcome: 'not-logged' as const };
 }
 
-/** At most this many rows change in one write call. */
+/** At most this many rows change in one write call; a grant can only lower it. */
 export const MAX_WRITE_ROWS = 50;
+
+/** Refuses (fixed text, before any audit line) more rows than this connection's cap. */
+export function requireRows(log: WriteLog, rows: number) {
+  const cap = Math.min(log.grant.max_rows ?? MAX_WRITE_ROWS, MAX_WRITE_ROWS);
+  if (rows > cap) {
+    throw new Refusal(
+      `At most ${cap} rows may change in one call on this connection. Nothing changed.`,
+    );
+  }
+}
 
 export const id = z.string().min(1).max(100);
 export const notes = z.string().max(1000);
+/** The `confirm` a destructive tool's dry run returned. */
+export const confirm = z.string().max(200).optional();
 
 /**
  * Returns `ids` mapped to their rows' `select` fields, refusing (fixed text)

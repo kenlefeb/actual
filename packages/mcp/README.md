@@ -2,8 +2,9 @@
 
 An [MCP](https://modelcontextprotocol.io) server for Actual Budget, built on this fork's own
 `@actual-app/api` (never the npm one: it runs upstream's engine and can't open fork budgets; see
-ADR 4). It talks to the MCP client over stdio only and opens no network listener. It is read-only
-unless started with `--writes` (see [Write tools](#write-tools)).
+ADR 4). It talks to the MCP client over stdio only and opens no network listener. Every entry
+lists every tool; a connection's grant of [scopes](#permissions-scopes-and-grants) decides which
+calls succeed. The stdio entry grants only `budget:read` unless started with `--writes`.
 
 ## Tools
 
@@ -43,37 +44,40 @@ Fork read tools (all take ids, never names):
 
 ## Write tools
 
-Write tools exist on a separate server entry started with `actual-mcp --writes`, and on the hosted
-entry (below). Their names start with `write_`, so a client can auto-allow reads and prompt on every
-write.
+Every entry lists the write tools; the connection's grant decides which calls succeed (see
+[Permissions](#permissions-scopes-and-grants)). Their names start with `write_` and their MCP
+annotations mark them as writes (`destructiveHint` on deletes), so a client can auto-allow reads
+and prompt on every write.
 
-| Tool                          | Changes                                                                       |
-| ----------------------------- | ----------------------------------------------------------------------------- |
-| `write_create_transactions`   | Adds transactions to one account (date, cents, payee, category, notes)        |
-| `write_update_transactions`   | Sets the category, payee or notes of transactions                             |
-| `write_set_budget_amount`     | Sets one category's budgeted amount for a month                               |
-| `write_skip_paycheck`         | Skips a paycheck's next pay date                                              |
-| `write_move_on_budget`        | Moves an off-budget account on budget; needs a `confirm` (below)              |
-| `write_create_category_group` | Creates an expense category group                                             |
-| `write_create_category`       | Creates a category in a group (income or expense as the group is)             |
-| `write_update_category_group` | Renames, hides or unhides a group                                             |
-| `write_update_category`       | Renames, hides or unhides a category                                          |
-| `write_move_category`         | Moves a category to a group and place (reorders within a group)               |
-| `write_move_category_group`   | Moves a group to a place among the groups                                     |
-| `write_delete_category`       | Deletes a category; `transfer_category_id` is required when it is in use      |
-| `write_delete_category_group` | Deletes a group and its categories; one `transfer_category_id` for all in use |
+| Tool                          | Needs                       | Changes                                                                       |
+| ----------------------------- | --------------------------- | ----------------------------------------------------------------------------- |
+| `write_create_transactions`   | `transactions:write`        | Adds transactions to one account (date, cents, payee, category, notes)        |
+| `write_update_transactions`   | `transactions:write`        | Sets the category, payee or notes of transactions                             |
+| `write_set_budget_amount`     | `budget:write`              | Sets one category's budgeted amount for a month                               |
+| `write_skip_paycheck`         | `schedules:write`           | Skips a paycheck's next pay date                                              |
+| `write_move_on_budget`        | `structure:write`           | Moves an off-budget account on budget; needs a `confirm` (below)              |
+| `write_create_category_group` | `structure:write`           | Creates an expense category group                                             |
+| `write_create_category`       | `structure:write`           | Creates a category in a group (income or expense as the group is)             |
+| `write_update_category_group` | `structure:write`           | Renames, hides or unhides a group                                             |
+| `write_update_category`       | `structure:write`           | Renames, hides or unhides a category                                          |
+| `write_move_category`         | `structure:write`           | Moves a category to a group and place (reorders within a group)               |
+| `write_move_category_group`   | `structure:write`           | Moves a group to a place among the groups                                     |
+| `write_delete_category`       | `structure:write`, `delete` | Deletes a category; `transfer_category_id` is required when it is in use      |
+| `write_delete_category_group` | `structure:write`, `delete` | Deletes a group and its categories; one `transfer_category_id` for all in use |
 
-Category delete and category group delete are the only deletes: there are no bulk-edit, import,
-rule, account-close or budget-reset tools. Neither delete has a dry run or an undo; the transfer
-category is the guard. A category never moves between an income and an expense group, and only
-expense groups can be created.
+Every read tool needs `budget:read`. Category delete and category group delete are the only
+deletes: there are no bulk-edit, import, rule, account-close or budget-reset tools. Neither delete
+has an undo; the transfer category is the guard, and a grant can require a dry run first
+(`confirm_destructive`, below). A category never moves between an income and an expense group, and
+only expense groups can be created.
 
 - **Ids only.** Accounts, transactions, payees, categories and paychecks are named by the ids the
   read tools return. A name where an id belongs is refused, never looked up.
 - **Moved history keeps no category.** A call that would set a category on a moved account's
   transactions before its budget start date, or on its offset line (they are already in the
   starting balance), is refused whole; do that in the app. Notes and payee can still change.
-- **50 rows at most** per call; more is refused before anything changes.
+- **50 rows at most** per call, or the grant's lower `max_rows`; more is refused before anything
+  changes.
 - **Before and after.** Each result carries the before and after values of every field it
   changed (`write_create_transactions` returns the new rows and their ids).
 - **Moving on budget needs the preview.** Call `preview_move_on_budget` for the account and start
@@ -82,8 +86,8 @@ expense groups can be created.
   between calls.
 - **Audit log, written first.** Before each write runs, the server appends one JSON line to
   `<data dir>.audit.jsonl` (by default `~/Library/Application Support/actual-mcp/<env>-writes.audit.jsonl`),
-  mode 0600: the time, tool, ids and each field's before and after values. It never holds a
-  credential. If the line can't be appended, the write doesn't run. A
+  mode 0600: the time, tool, ids and each field's before and after values, and `scopes`, the scopes
+  the connection held (on the hosted entry also `grant`, below). It never holds a credential. If the line can't be appended, the write doesn't run. A
   `write_create_transactions` line names the account and the new rows.
 - **Outcome line.** After each write the server appends a second line with the same `call_id`:
   `status` (`ok` or `failed`), the ids `applied`, the row that `failed` and the ids `created`. If
@@ -108,6 +112,92 @@ expense groups can be created.
   `rm -r "$HOME/Library/Application Support/actual-mcp/staging"`; the next read start downloads a
   clean copy.
 - Writes are pushed to the server by the engine's next sync, as in the app.
+
+## Permissions: scopes and grants
+
+What an agent may do comes from its grant, never from which tools exist. Each tool declares the
+scopes it needs (its description ends `Needs: …`):
+
+| Scope                | Allows                                                                               |
+| -------------------- | ------------------------------------------------------------------------------------ |
+| `budget:read`        | Every read tool, `sync_budget`, `get_sync_status` and previews                       |
+| `transactions:write` | Creating and editing transactions                                                    |
+| `budget:write`       | Budgeted amounts                                                                     |
+| `structure:write`    | Accounts, categories and groups, payees, tags and rules                              |
+| `schedules:write`    | Schedules, paychecks and business calendars                                          |
+| `delete`             | With the area's write scope, a tool that deletes, closes or merges (both are needed) |
+
+- **Refused by scope.** A call outside the grant fails before any budget read or change with fixed
+  text, for example `write_delete_category needs structure:write delete; missing delete; this
+  connection was granted budget:read structure:write. Nothing changed.` It is never reported as an
+  unknown tool. The refusal appends a `refused` line to the audit log (time, identity, tool,
+  `missing`, `scopes`; never the arguments), best effort.
+- **`confirm_destructive`.** A deleting tool called without `confirm` changes nothing and returns a
+  dry run: the ids and changes it would log, and a `confirm` value. Calling it again with that
+  value within 5 minutes deletes, if the caller (subject and client), the call and the budget's
+  values are unchanged; otherwise it is refused. This protects against mistakes only: a
+  compromised or prompt-injected model can run the dry run itself. Keep destructive tools on
+  prompt in your client.
+- **`max_rows`.** Lowers the per-call row cap below 50; it never raises it.
+
+**Stdio grants.** Only the `--writes` entry reads these variables, so both entries can share one env
+file; the read entry always grants `budget:read` (its write tools are listed but refused).
+
+| Variable                                | Default when unset | Meaning                                                                    |
+| --------------------------------------- | ------------------ | -------------------------------------------------------------------------- |
+| `ACTUAL_MCP_WRITES_SCOPES`              | every scope        | Space-separated scopes; an unknown or empty value stops the entry at start |
+| `ACTUAL_MCP_WRITES_CONFIRM_DESTRUCTIVE` | `0`                | `1` to require the dry run and `confirm` before a delete                   |
+| `ACTUAL_MCP_WRITES_MAX_ROWS`            | 50                 | A lower per-call row cap                                                   |
+
+Set them in the 1Password Environment "Actual Agents", never in the repo, `.mcp.json` or a shell
+profile. They are read at start. On your own machine this is a guard rail against a confused agent,
+not a security boundary: any agent with a shell or access to the environment can change it.
+
+**Hosted grants** come from the file named by `ACTUAL_MCP_GRANTS_FILE`, checked on every call, so a
+change applies on the next call with no restart or reconnect. The access token keeps the one scope
+`budget:read`, which only admits a connection; the grant decides what it may call.
+
+```json
+{
+  "version": 1,
+  "grants": [
+    { "subject": "auth0|…", "client": "*", "scopes": ["budget:read"] },
+    {
+      "subject": "auth0|…",
+      "client": "<ACTUAL_MCP_CLIENT_ID>",
+      "scopes": [
+        "budget:read",
+        "transactions:write",
+        "budget:write",
+        "structure:write",
+        "schedules:write"
+      ],
+      "confirm_destructive": true,
+      "max_rows": 10
+    }
+  ]
+}
+```
+
+- **Strict schema.** `version` is 1; no unknown keys anywhere; `subject` is a literal OAuth subject,
+  never a wildcard; `client` is a client id or `*`; `scopes` is a non-empty list of known scopes;
+  `max_rows` a positive integer (above 50 counts as 50); `confirm_destructive` a boolean, `true`
+  when absent. No (subject, client) pair may appear twice, and a `*` grant holds `budget:read`
+  only, so writes go only to named client ids. Any violation makes the whole file invalid.
+- **Matching.** An exact client id wins over `*`; a subject with no matching grant gets no scopes.
+  Grants per client do not separate agents that share one sign-in: separating them needs distinct
+  subjects.
+- **Fails closed.** A missing, invalid or symlinked file, or one the server's process could write
+  (the file or its directory), makes every connection `budget:read` only. Each new reason is logged
+  once to stderr as an access record (`event: "grants"`), never with the file's contents. Mount the
+  directory read-only and keep the file root-owned, mode 0644.
+- **Fingerprint.** Hosted audit lines carry `grant`, the first 12 hex characters of the file's
+  SHA-256 (`none` when failing closed), so a changed grant shows in the log.
+
+**Migration.** The stdio entry without `--writes` behaves as before (reads only; write tools are
+listed but refused). With `--writes` and no variables it keeps every tool it had, with no dry run.
+The hosted entry without a grants file is read-only: install the grants file before, or with, the
+release that carries this change.
 
 Register the write entry beside the read entry, so a session can load reads without writes:
 
@@ -164,7 +254,9 @@ directory. At start it validates the token against the sync server and exits if 
 administrator or it cannot be validated. A loopback server needs a loopback listener.
 
 - **Read-write, production included.** The engine runs as the app does and the `write_` tools are
-  registered, with the same limits as the `--writes` entry. Each write is logged first to
+  registered, with the same limits as the `--writes` entry. What each connection may call comes
+  from the grants file (`ACTUAL_MCP_GRANTS_FILE`, see [Permissions](#permissions-scopes-and-grants));
+  without one every connection is read-only. Each write is logged first to
   `<data dir>.audit.jsonl` (`production-remote.audit.jsonl` on production) with the caller's OAuth
   subject. The entry takes no arguments, so `--writes` is a usage error. A production host is
   served only under the production guard above; `ACTUAL_MCP_ALLOW_PRODUCTION=1` never lifts it.

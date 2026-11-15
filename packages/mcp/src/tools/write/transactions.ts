@@ -7,7 +7,6 @@ import { Refusal } from '#refusal';
 import { withText } from '#sanitize';
 import { getBudgetStatus } from '#tools/read/accounts';
 import { date, money } from '#tools/read/shared';
-import type { RegisterTool } from '#tools/read/shared';
 
 import {
   id,
@@ -17,9 +16,10 @@ import {
   requireAmount,
   requireDate,
   requireIds,
+  requireRows,
   stderrLine,
 } from './shared';
-import type { WriteLog } from './shared';
+import type { RegisterWriteTool } from './shared';
 
 const ROW_FIELDS = [
   'id',
@@ -105,10 +105,7 @@ const FIELDS = {
 } as const;
 type Field = keyof typeof FIELDS;
 
-export function registerTransactionWriteTools(
-  tool: RegisterTool,
-  auditLog: WriteLog,
-) {
+export function registerTransactionWriteTools(tool: RegisterWriteTool) {
   tool(
     'write_create_transactions',
     `Create up to ${MAX_WRITE_ROWS} transactions in one account. account_id, payee_id and category_id must be ids from the read tools, never names. Amounts are integer cents (negative for spending). Returns the created rows.`,
@@ -129,7 +126,8 @@ export function registerTransactionWriteTools(
         .min(1)
         .max(MAX_WRITE_ROWS),
     },
-    async ({ account_id, transactions }) => {
+    async ({ account_id, transactions }, auditLog) => {
+      requireRows(auditLog, transactions.length);
       for (const t of transactions) {
         requireAmount(t.amount);
         requireDate(t.date);
@@ -201,6 +199,7 @@ export function registerTransactionWriteTools(
         }),
       );
     },
+    { scopes: ['transactions:write'] },
   );
 
   tool(
@@ -221,7 +220,8 @@ export function registerTransactionWriteTools(
         .min(1)
         .max(MAX_WRITE_ROWS),
     },
-    async ({ updates }) => {
+    async ({ updates }, auditLog) => {
+      requireRows(auditLog, updates.length);
       const ids = updates.map(u => u.id);
       if (new Set(ids).size !== ids.length) {
         throw new Refusal('Each transaction id may appear only once.');
@@ -283,6 +283,7 @@ export function registerTransactionWriteTools(
         () => updateResult(applied, failed, ids, changes),
       );
     },
+    { scopes: ['transactions:write'] },
   );
 }
 

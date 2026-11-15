@@ -134,6 +134,12 @@
   "updateTransaction": {
     "tool": "write_update_transactions"
   },
+  "updateTransactions": {
+    "tool": "write_update_transactions"
+  },
+  "api/transactions-update": {
+    "tool": "write_update_transactions"
+  },
   "setBudgetAmount": {
     "tool": "write_set_budget_amount"
   },

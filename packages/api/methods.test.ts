@@ -1884,6 +1884,40 @@ describe('API fork handlers', () => {
     });
   });
 
+  test("A split's parent and children update together", async () => {
+    await api.loadBudget(budgetName);
+    const account = await api.createAccount({ name: 'Checking' }, 0);
+    await api.addTransactions(account, [
+      {
+        date: '2026-11-01',
+        amount: 200000,
+        subtransactions: [{ amount: 150000 }, { amount: 50000 }],
+      },
+    ]);
+    const [parent] = await api.getTransactions(
+      account,
+      '2026-11-01',
+      '2026-11-01',
+    );
+    const [first, second] = parent.subtransactions ?? [];
+
+    await api.updateTransactions([
+      { id: parent.id, fields: { amount: 210000 } },
+      { id: first.id, fields: { amount: 160000 } },
+    ]);
+
+    const [after] = await api.getTransactions(
+      account,
+      '2026-11-01',
+      '2026-11-01',
+    );
+    expect(after.amount).toBe(210000);
+    expect(after.subtransactions?.map(t => [t.id, t.amount])).toEqual([
+      [first.id, 160000],
+      [second.id, 50000],
+    ]);
+  });
+
   test('An off-budget account is previewed and moved on budget', async () => {
     await api.loadBudget(budgetName);
     const account = await api.createAccount(
@@ -1931,6 +1965,7 @@ const FORK_HANDLER_METHODS = {
   'api/category-move': 'moveCategory',
   'api/category-group-move': 'moveCategoryGroup',
   'api/category-usage-get': 'getCategoryUsage',
+  'api/transactions-update': 'updateTransactions',
 } as const;
 
 describe('API fork handler coverage', () => {

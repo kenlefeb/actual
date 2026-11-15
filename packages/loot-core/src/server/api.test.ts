@@ -10,6 +10,7 @@ import { app as accountsApp } from './accounts/app';
 import { installAPI } from './api';
 import { createBudget } from './budget/base';
 import * as prefs from './prefs';
+import { app as transactionsApp } from './transactions/app';
 
 vi.mock('#shared/errors', () => ({
   getBankSyncError: vi.fn(error => `Bank sync error: ${error.message}`),
@@ -383,7 +384,129 @@ describe('API handlers', () => {
     );
   });
 
-  // Runs after the describe above, in file order
+  describe('api/transactions-update', () => {
+    beforeEach(global.emptyDatabase());
+
+    afterEach(() => {
+      handlers['transactions-batch-update'] = originalBatchUpdate;
+    });
+
+    let toChecking = '';
+    beforeEach(async () => {
+      await prefs.loadPrefs();
+      // The engine's own batch update, so transfers and splits run for real
+      handlers['transactions-batch-update'] =
+        transactionsApp.handlers['transactions-batch-update'];
+      await db.insertAccount({ id: 'checking', name: 'Checking' });
+      await db.insertAccount({ id: 'savings', name: 'Savings' });
+      toChecking = await db.insertPayee({
+        name: '',
+        transfer_acct: 'checking',
+      });
+      const toSavings = await db.insertPayee({
+        name: '',
+        transfer_acct: 'savings',
+      });
+      // A transfer of -50.00 from Checking to Savings, both dated 2026-11-10
+      await db.insertTransaction({
+        id: 'out',
+        account: 'checking',
+        date: '2026-11-10',
+        amount: -5000,
+        payee: toSavings,
+        transfer_id: 'in',
+      });
+      await db.insertTransaction({
+        id: 'in',
+        account: 'savings',
+        date: '2026-11-10',
+        amount: 5000,
+        payee: toChecking,
+        transfer_id: 'out',
+      });
+      // A split of -100.00 with children -60.00 and -40.00
+      await db.insertTransaction({
+        id: 'parent',
+        account: 'checking',
+        date: '2026-11-01',
+        amount: -10000,
+        is_parent: true,
+      });
+      for (const [id, amount] of [
+        ['child1', -6000],
+        ['child2', -4000],
+      ] as const) {
+        await db.insertTransaction({
+          id,
+          account: 'checking',
+          date: '2026-11-01',
+          amount,
+          is_child: true,
+          parent_id: 'parent',
+        });
+      }
+    });
+
+    async function amounts(...ids: string[]) {
+      return Promise.all(
+        ids.map(async id => (await db.getTransaction(id))?.amount),
+      );
+    }
+
+    test("A split's parent and children together", async () => {
+      await handlers['api/transactions-update']({
+        updates: [
+          { id: 'parent', fields: { amount: -12000 } },
+          { id: 'child1', fields: { amount: -8000 } },
+        ],
+      });
+      expect(await amounts('parent', 'child1', 'child2')).toEqual([
+        -12000, -8000, -4000,
+      ]);
+      expect((await db.getTransaction('parent'))?.error).toBeFalsy();
+    });
+
+    test('One update fails', async () => {
+      await expect(
+        handlers['api/transactions-update']({
+          updates: [
+            { id: 'out', fields: { notes: 'changed' } },
+            { id: 'missing', fields: { notes: 'changed' } },
+          ],
+        }),
+      ).rejects.toThrow();
+      expect((await db.getTransaction('out'))?.notes).toBeNull();
+    });
+
+    test('A transfer follows', async () => {
+      await handlers['api/transactions-update']({
+        updates: [{ id: 'out', fields: { amount: -7500, date: '2026-11-14' } }],
+      });
+      const [out, inside] = await Promise.all([
+        db.getTransaction('out'),
+        db.getTransaction('in'),
+      ]);
+      expect(out).toMatchObject({ amount: -7500, date: '2026-11-14' });
+      expect(inside).toMatchObject({ amount: 7500, date: '2026-11-10' });
+    });
+
+    test('The transfer step fails', async () => {
+      // Checking loses its transfer payee, so updateTransfer throws
+      await db.runQuery(
+        'UPDATE payees SET transfer_acct = NULL WHERE id = ?',
+        [toChecking],
+        false,
+      );
+      await expect(
+        handlers['api/transactions-update']({
+          updates: [{ id: 'out', fields: { amount: -7500 } }],
+        }),
+      ).rejects.toThrow();
+      expect(await amounts('out', 'in')).toEqual([-7500, 5000]);
+    });
+  });
+
+  // Runs after the describes above, in file order
   test('leaves the batch-update handler as it was for later tests', () => {
     expect(handlers['transactions-batch-update']).toBe(originalBatchUpdate);
   });

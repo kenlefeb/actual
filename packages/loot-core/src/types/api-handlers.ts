@@ -133,6 +133,13 @@ export type ApiHandlers = {
     fields: Partial<TransactionEntity>;
   }) => Promise<Awaited<ReturnType<typeof batchUpdateTransactions>>['updated']>;
 
+  'api/transactions-update': (arg: {
+    updates: Array<{
+      id: TransactionEntity['id'];
+      fields: Partial<TransactionEntity>;
+    }>;
+  }) => Promise<Awaited<ReturnType<typeof batchUpdateTransactions>>['updated']>;
+
   'api/transaction-delete': (arg: {
     id: TransactionEntity['id'];
   }) => Promise<Awaited<ReturnType<typeof batchUpdateTransactions>>['deleted']>;

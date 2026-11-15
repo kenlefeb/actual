@@ -172,7 +172,7 @@ jobs:
           find "$EXPANDED" ! -type l ! -perm -o=r -print | tee "$RUNNER_TEMP/unreadable.txt"
           for BOM in $(find "$EXPANDED" -name Bom); do
             echo "Bom: $BOM"
-            lsbom -p MUGf "$BOM" | awk -F'\t' 'substr($1, 1, 1) != "l" && substr($1, 8, 1) != "r"' | tee -a "$RUNNER_TEMP/unreadable.txt"
+            lsbom -p MUGf "$BOM" | awk -F'\t' '$NF != "." && substr($1, 1, 1) != "l" && substr($1, 8, 1) != "r"' | tee -a "$RUNNER_TEMP/unreadable.txt"
           done
           if [ -s "$RUNNER_TEMP/unreadable.txt" ]; then
             echo "::error::The package has files that non-root users can't read"

@@ -23,10 +23,12 @@ See `proposal.md`. Facts about the code, measured on `development` on 2026-11-14
 ## Goals / Non-Goals
 
 **Goals**
+
 - Native and web show the same numbers and messages because they run the same loot-core functions, not because two copies match.
 - No paycheck rule in Swift: Swift formats values and maps error codes to text, and nothing more.
 
 **Non-Goals**
+
 - No change to paycheck behaviour. The `paychecks` and `paycheck-planning` specs stay as they are.
 - No native single-schedule editor.
 
@@ -41,6 +43,7 @@ Alternative: keep them in desktop-client and port them to Swift. Rejected, becau
 ### 2. `native/schedules-paychecks`: one batched read for the list and the row
 
 In `server/native/app.ts`, with no arguments, the handler:
+
 1. Calls `refreshScheduleDateLookup()`, then sets the business-calendar and schedule lookups that `withScheduleLookups` sets on the web.
 2. Calls `getPaychecks()` and runs one SQL query for the posted dates of every pay schedule.
 3. Runs `planPaycheck` for each paycheck, sorted as the web sorts them.
@@ -57,6 +60,7 @@ Alternative: allowlist `paychecks-get`, `paychecks-clearing-status` and `query`,
 ### 3. `native/paycheck-preview` for live editing
 
 A read-only handler that takes a draft (name, definition, whether the clearing account is new, the new clearing account's name, and the days-early inputs). It returns:
+
 - `netAmount` and the deposit amounts;
 - the pay date and each deposit's date, moved for business days;
 - the default name for a new clearing account;
@@ -69,6 +73,7 @@ Alternative: send translated strings. Rejected, because loot-core has no i18n.
 ### 4. `native/paycheck-save`: one write, all or nothing, one undo step
 
 `mutator(undoable(save))`, where `save` does the following:
+
 1. Validates its arguments at the boundary. The page side and Swift check them too, as in add-native-budget-screen Decision 4.
 2. Runs `validatePaycheckDraft` and the server `validate()`, and refuses any error before writing.
 3. Calls the create or update function directly, not through a handler, so no nested undo group is made.
@@ -100,6 +105,7 @@ Residual risk: a mutation from the web side in the same moment could be the one 
 ### 8. MCP coverage
 
 `packages/mcp/coverage.json` gets `skip` lines:
+
 - `native/schedules-paychecks` and `native/paycheck-preview`: MCP reads the same data through `list_paychecks` and `get_paychecks_clearing_status`.
 - `native/paycheck-save`: paychecks are not in the MCP v1 write set.
 

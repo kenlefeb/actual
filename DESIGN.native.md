@@ -3,7 +3,8 @@
 Fork-only. This file covers the native apps only: "Home Economics" on iPhone (Capacitor, `packages/mobile-client`) and on Mac (Electron, `packages/desktop-electron`), bundle id `app.homeeconomics.budget`. The web app in a browser keeps upstream Actual's design system in [DESIGN.md](DESIGN.md), and nothing here changes it, with one exception: the app icon (section 2) is shared by every platform (web, Electron on Mac and Windows, Android, iOS). Behaviour is specified in `openspec/specs/native-appearance/` (proposed in `openspec/changes/add-native-design-system/`).
 
 - **Figma:** [Home Economics — Native Design System](https://www.figma.com/design/2Ts4fUoFzCWfvubD9vgTWx). The tokens there are Figma variables: "HE Color" (Light/Dark) and "HE Space & Radius" (iPhone/Mac).
-- **Decisions:** Ken, 2026-11-11, on Shortcut sc-3483.
+- **Decisions:** Ken, 2026-11-11, on Shortcut sc-3483; 2026-11-14 on sc-4300 (Mac Settings window), sc-4309 (paycheck row) and sc-4327 (register money colour).
+- **Screens:** the Figma pages "Screen map (native apps)" and "Accounts — iPhone & Mac" hold the screen map and the Accounts designs. Each screen's Notes block holds its behaviour details.
 
 ## 1. Overview
 
@@ -107,15 +108,28 @@ Corners inside sheets are concentric with the sheet. Content respects the safe a
   - **Balance pill:** tinted green, red or neutral.
   - **Overspent:** a minus sign and the word "Overspent" in the detail line.
   - **Gestures:** a leading swipe moves money, and a trailing swipe hides the category. A tap opens the category sheet.
-- **Money cell:** right-aligned with tabular digits. The colour comes from the sign, and the sign is always shown.
+- **Money cell:** right-aligned with tabular digits, and the sign is always shown.
+  - **Balances and budget amounts:** the colour comes from the sign. Negative balances and overspending use `money/negative`.
+  - **Register amounts (money in and out):** only money in is coloured: `money/positive` with a "+". Money out uses `label/primary` with a "−", so a register is not a wall of red. Scheduled amounts use `label/secondary`. (Ken, 2026-11-14.)
+- **Account row (iPhone):** account name in Body, a detail line in Subheadline secondary (last bank sync, how many transactions to review), the balance (Body, tabular) and a chevron. A negative balance uses `money/negative` with a minus sign. The name wraps at accessibility sizes, and the balance moves under it rather than truncate. Rows sit in inset-grouped sections (On budget, Off budget) whose headers show the section total; Net worth sits below them, and closed accounts sit behind one row. Every total comes from loot-core.
+- **Transaction row (iPhone):** payee in Body, category in Subheadline secondary, then the amount (see Money cell) above a status word in Footnote: Pending, Cleared (with a check-circle symbol), Scheduled or Reconciled. "Uncategorized" is written out in `status/warning-text`. Status is a word and a symbol, never colour alone. A leading swipe clears or unclears; a trailing swipe deletes, and asks first when the transaction is reconciled. A tap opens the transaction sheet.
+- **Register row (Mac):** a 28 pt row of the money table with the columns cleared (✓ cleared, R reconciled, blank uncleared), date, payee, category, notes, amount and running balance. Amounts follow the Money cell rule. Alternate rows tint `bg/grouped`; the selected row uses the accent with `brand/on-accent` text. The iPhone form of the same data is the Transaction row.
+- **Sidebar item (Mac):** a 28 pt row with a label and an optional trailing value (an account balance) in secondary text; a negative balance uses `money/negative`. The system draws selection in the user's accent. The iPhone form is the Account row.
+- **Paycheck summary row (iPhone):** the first row of the Budget tab, under the large title and above Available to budget. It shows a calendar symbol, the next paycheck date, "Schedules & Paychecks" with the number of schedules in the shown month, the net amount (`money/positive` with "+") over the word "net", and a chevron. A tap pushes the Schedules & Paychecks screen, paychecks first. On a past month it reads "Last paycheck"; with no paycheck defined it shows only the schedule count. VoiceOver reads it as one button. On Mac, Schedules & Paychecks is a sidebar destination instead (sc-4309).
 - **Form row:** label on the left, value on the right in secondary text, then a chevron. Rows sit in inset-grouped sections.
 - **Toolbar buttons:** 44 pt circles drawn by the system. At most one prominent accent button, such as Save.
 - **Sheets:**
   - **iPhone:** medium and large detents and a grabber. They dismiss by swipe, with a Cancel ✕ on the left and a prominent ✓ on the right.
   - **Mac:** a window-attached sheet.
 - **Navigation:**
-  - **iPhone:** a native tab bar with Budget, Accounts, Reports and Settings, plus an Add item pinned at the trailing end. On iOS 27 the system draws Add inside the same glass bar as the tabs, not as a separate circle, and VoiceOver reads it as "Add". Tapping it opens the new-transaction screen instead of selecting a tab. Tapping the selected tab again returns to its first screen. The bar hides on a pushed form (new or edit transaction) and while a sheet shows. Every screen has a large title.
-  - **Mac:** a sidebar with the same four destinations, a unified toolbar with the view's title (never the app name), and a menu bar that holds every command with its keyboard shortcut.
+  - **iPhone:** a native tab bar with Budget, Accounts, Reports and Settings, plus an Add item pinned at the trailing end. On iOS 27 the system draws Add inside the same glass bar as the tabs, not as a separate circle, and VoiceOver reads it as "Add". Tapping it opens the new-transaction screen instead of selecting a tab. Tapping the selected tab again returns to its first screen. The bar hides on a pushed form (new or edit transaction) and while a sheet shows. A tab's first screen has a large title; a pushed screen, such as an account register, has an inline title and the system back button.
+  - **Mac:** a sidebar, a unified toolbar with the view's title (never the app name), and a menu bar that holds every command with its keyboard shortcut.
+    - **Sidebar:** Budget, Reports, and Schedules & Paychecks, then every account under On budget and Off budget headers, each with its balance (Sidebar item). The sync status sits at the bottom.
+    - **Settings:** not in the sidebar. It opens as its own Settings window from the app menu with ⌘, (Ken, 2026-11-14, sc-4300).
+    - **Toolbar title:** an account window is titled with the account name, with the balances (working, cleared, uncleared) as the subtitle.
+- **Sync status:**
+  - **iPhone:** the navigation subtitle under a tab's large title, such as "Synced just now", "Offline — changes saved on this iPhone" or "Sync failed — tap to retry". Tapping it syncs. It replaces the web sync pill.
+  - **Mac:** a line at the bottom of the sidebar, with Sync Now in the menu bar.
 - **Feedback:** on iPhone, haptics confirm saving a transaction and moving money. They respect the system's haptics settings.
 
 ## 8. iPhone versus Mac
@@ -123,6 +137,7 @@ Corners inside sheets are concentric with the sheet. Content respects the safe a
 | Concern    | iPhone                                 | Mac                                                                   |
 | ---------- | -------------------------------------- | --------------------------------------------------------------------- |
 | Navigation | Native tab bar with a pinned Add item  | Sidebar, unified toolbar, menu bar                                    |
+| Settings   | Settings tab                           | Settings window from the app menu (⌘,)                                |
 | Density    | 44 pt rows, one column                 | Dense money table kept (DESIGN.md "Money Table"), 28 pt controls      |
 | Type       | Dynamic Type                           | Fixed macOS sizes                                                     |
 | Accent     | Hearth Teal                            | Hearth Teal, unless the user picked a system accent                   |

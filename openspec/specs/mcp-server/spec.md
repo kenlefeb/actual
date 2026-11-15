@@ -197,7 +197,7 @@ A write SHALL NOT set a category on moved history: a transaction of an account m
 - **THEN** the call fails and the account is still off budget
 
 ### Requirement: Write audit log
-The server SHALL append one JSON line per write to `~/Library/Application Support/actual-mcp/<env>.audit.jsonl` (`<env>-writes.audit.jsonl` for the `--writes` entry, `<env>-remote.audit.jsonl` for the hosted entry), mode 0600, with the time, the acting identity (`user_id` and `subject`), the effective scopes, on the hosted entry a fingerprint of the grants file, tool, ids and the fields changed with their before and after values, and never a secret or token. A write SHALL NOT run when its audit line cannot be appended.
+The server SHALL append one JSON line per write to its audit log with the time, the acting identity (`user_id` and `subject`), the effective scopes, on the hosted entry a fingerprint of the grants file, the tool, the ids and the fields changed with their before and after values, and never a secret or token.
 
 #### Scenario: An audit line names its identity
 - **WHEN** a write tool records an attempt and its outcome
@@ -206,6 +206,16 @@ The server SHALL append one JSON line per write to `~/Library/Application Suppor
 #### Scenario: A write is logged
 - **WHEN** a client updates one transaction's notes
 - **THEN** the log gains one line naming the tool, the transaction id and the notes before and after, and the file mode is 0600
+
+### Requirement: Where the audit log lives
+The audit log SHALL be `~/Library/Application Support/actual-mcp/<env>.audit.jsonl`, `<env>-writes.audit.jsonl` for the `--writes` entry and `<env>-remote.audit.jsonl` for the hosted entry, with file mode 0600.
+
+#### Scenario: The writes entry's log
+- **WHEN** the stdio entry started with `--writes` on a `staging` host records a write
+- **THEN** the line is appended to `staging-writes.audit.jsonl`, whose mode is 0600
+
+### Requirement: A write needs its audit line
+A write SHALL NOT run when its audit line cannot be appended.
 
 #### Scenario: The log can't be written
 - **GIVEN** the audit log's directory is read-only

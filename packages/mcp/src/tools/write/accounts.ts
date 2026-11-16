@@ -11,15 +11,15 @@ import type { RegisterWriteTool } from './shared';
 import { confirm, id, loggedWrite, requireAmount, requireDate } from './shared';
 
 /** The scope that account and account group deletes need besides structure:write (one place to swap in `accounts:delete`). */
-const ACCOUNT_DELETE_SCOPE: Scope = 'accounts:delete';
+export const ACCOUNT_DELETE_SCOPE: Scope = 'accounts:delete';
 
 const MAX_NAME = 100;
-const NOTHING = 'Nothing changed.';
+export const NOTHING = 'Nothing changed.';
 
 type Account = Awaited<ReturnType<typeof api.getAccounts>>[number];
 type AccountGroup = Awaited<ReturnType<typeof api.getAccountGroups>>[number];
 
-function findAccount(accounts: Account[], accountId: string) {
+export function findAccount(accounts: Account[], accountId: string) {
   const found = accounts.find(a => a.id === accountId);
   if (!found) {
     throw new Refusal(

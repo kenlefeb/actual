@@ -50,30 +50,33 @@ Every entry lists the write tools; the connection's grant decides which calls su
 annotations mark them as writes (`destructiveHint` on deletes), so a client can auto-allow reads
 and prompt on every write.
 
-| Tool                          | Needs                                | Changes                                                                                                              |
-| ----------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
-| `write_create_transactions`   | `transactions:write`                 | Adds transactions to one account (date, cents, payee, category, notes)                                               |
-| `write_update_transactions`   | `transactions:write`                 | Sets category, payee, notes, amount, date, account or cleared of transactions                                        |
-| `write_set_budget_amount`     | `budget:write`                       | Sets one category's budgeted amount for a month                                                                      |
-| `write_skip_paycheck`         | `schedules:write`                    | Skips a paycheck's next pay date                                                                                     |
-| `write_move_on_budget`        | `structure:write`                    | Moves an off-budget account on budget; needs a `confirm` (below)                                                     |
-| `write_create_account`        | `structure:write`                    | Creates an account (on or off budget, optional opening balance in cents); a duplicate name is allowed with a warning |
-| `write_update_account`        | `structure:write`                    | Renames an account or sets its account group; never closes it or changes its off-budget flag or opening balance      |
-| `write_reopen_account`        | `structure:write`                    | Reopens a closed account                                                                                             |
-| `write_create_account_group`  | `structure:write`                    | Creates an account group (a name another group has is refused)                                                       |
-| `write_update_account_group`  | `structure:write`                    | Renames an account group                                                                                             |
-| `write_delete_account_group`  | `structure:write`, `accounts:delete` | Deletes a group; its accounts become ungrouped; needs a `confirm` when the grant requires a dry run                  |
-| `write_create_category_group` | `structure:write`                    | Creates an expense category group                                                                                    |
-| `write_create_category`       | `structure:write`                    | Creates a category in a group (income or expense as the group is)                                                    |
-| `write_update_category_group` | `structure:write`                    | Renames, hides or unhides a group                                                                                    |
-| `write_update_category`       | `structure:write`                    | Renames, hides or unhides a category                                                                                 |
-| `write_move_category`         | `structure:write`                    | Moves a category to a group and place (reorders within a group)                                                      |
-| `write_move_category_group`   | `structure:write`                    | Moves a group to a place among the groups                                                                            |
-| `write_delete_category`       | `structure:write`, `delete`          | Deletes a category; `transfer_category_id` is required when it is in use                                             |
-| `write_delete_category_group` | `structure:write`, `delete`          | Deletes a group and its categories; one `transfer_category_id` for all in use                                        |
+| Tool                              | Needs                                                      | Changes                                                                                                                                                                                                                                   |
+| --------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `write_create_transactions`       | `transactions:write`                                       | Adds transactions to one account (date, cents, payee, category, notes)                                                                                                                                                                    |
+| `write_update_transactions`       | `transactions:write`                                       | Sets category, payee, notes, amount, date, account or cleared of transactions                                                                                                                                                             |
+| `write_set_budget_amount`         | `budget:write`                                             | Sets one category's budgeted amount for a month                                                                                                                                                                                           |
+| `write_skip_paycheck`             | `schedules:write`                                          | Skips a paycheck's next pay date                                                                                                                                                                                                          |
+| `write_move_on_budget`            | `structure:write`                                          | Moves an off-budget account on budget; needs a `confirm` (below)                                                                                                                                                                          |
+| `write_create_account`            | `structure:write`                                          | Creates an account (on or off budget, optional opening balance in cents); a duplicate name is allowed with a warning                                                                                                                      |
+| `write_update_account`            | `structure:write`                                          | Renames an account or sets its account group; never closes it or changes its off-budget flag or opening balance                                                                                                                           |
+| `write_reopen_account`            | `structure:write`                                          | Reopens a closed account                                                                                                                                                                                                                  |
+| `write_create_account_group`      | `structure:write`                                          | Creates an account group (a name another group has is refused)                                                                                                                                                                            |
+| `write_update_account_group`      | `structure:write`                                          | Renames an account group                                                                                                                                                                                                                  |
+| `write_delete_account_group`      | `structure:write`, `accounts:delete`                       | Deletes a group; its accounts become ungrouped; needs a `confirm` when the grant requires a dry run                                                                                                                                       |
+| `write_close_account`             | `structure:write`, `accounts:delete`                       | Closes an account, moving its balance to `transfer_account_id` (with `transfer_category_id` when the transfer crosses the on-budget line); unlinks bank sync, which cannot be undone; needs a `confirm` when the grant requires a dry run |
+| `write_delete_account`            | `structure:write`, `accounts:delete`, `transactions:write` | Deletes an open account and all its transactions; refused over reconciled rows (unless `allow_reconciled`) or the row cap; unlinks bank sync, which cannot be undone                                                                      |
+| `write_set_account_business_days` | `structure:write`, `schedules:write`                       | Sets an account's business calendar and days early and regenerates the paychecks that deposit into it; refused over a skipped date or a deleted schedule unless `allow_regenerate` (recreating a deleted schedule also needs `delete`)    |
+| `write_create_category_group`     | `structure:write`                                          | Creates an expense category group                                                                                                                                                                                                         |
+| `write_create_category`           | `structure:write`                                          | Creates a category in a group (income or expense as the group is)                                                                                                                                                                         |
+| `write_update_category_group`     | `structure:write`                                          | Renames, hides or unhides a group                                                                                                                                                                                                         |
+| `write_update_category`           | `structure:write`                                          | Renames, hides or unhides a category                                                                                                                                                                                                      |
+| `write_move_category`             | `structure:write`                                          | Moves a category to a group and place (reorders within a group)                                                                                                                                                                           |
+| `write_move_category_group`       | `structure:write`                                          | Moves a group to a place among the groups                                                                                                                                                                                                 |
+| `write_delete_category`           | `structure:write`, `delete`                                | Deletes a category; `transfer_category_id` is required when it is in use                                                                                                                                                                  |
+| `write_delete_category_group`     | `structure:write`, `delete`                                | Deletes a group and its categories; one `transfer_category_id` for all in use                                                                                                                                                             |
 
-Every read tool needs `budget:read`. Category delete and category group delete are the only
-deletes: there are no bulk-edit, import, rule, account-close or budget-reset tools. Neither delete
+Every read tool needs `budget:read`. The category, category group, account group and account deletes (and account close) are the only
+deletes: there are no bulk-edit, import, rule or budget-reset tools. Account close and delete have no undo and cannot restore a bank link; the opening balance, off-budget flag and account order are not editable through them (use `write_update_transactions` and `write_move_on_budget`). Neither delete
 has an undo; the transfer category is the guard, and a grant can require a dry run first
 (`confirm_destructive`, below). A category never moves between an income and an expense group, and
 only expense groups can be created.
@@ -158,15 +161,15 @@ only expense groups can be created.
 What an agent may do comes from its grant, never from which tools exist. Each tool declares the
 scopes it needs (its description ends `Needs: …`):
 
-| Scope                | Allows                                                                                                                     |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `budget:read`        | Every read tool, `sync_budget`, `get_sync_status` and previews                                                             |
-| `transactions:write` | Creating and editing transactions                                                                                          |
-| `budget:write`       | Budgeted amounts                                                                                                           |
-| `structure:write`    | Accounts, categories and groups, payees, tags and rules                                                                    |
-| `schedules:write`    | Schedules, paychecks and business calendars                                                                                |
-| `accounts:delete`    | With `structure:write`, deleting an account group (and, later, closing or deleting an account); `delete` does not imply it |
-| `delete`             | With the area's write scope, a tool that deletes, closes or merges (both are needed)                                       |
+| Scope                | Allows                                                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `budget:read`        | Every read tool, `sync_budget`, `get_sync_status` and previews                                                            |
+| `transactions:write` | Creating and editing transactions                                                                                         |
+| `budget:write`       | Budgeted amounts                                                                                                          |
+| `structure:write`    | Accounts, categories and groups, payees, tags and rules                                                                   |
+| `schedules:write`    | Schedules, paychecks and business calendars                                                                               |
+| `accounts:delete`    | With `structure:write`, deleting an account group, closing an account and deleting an account; `delete` does not imply it |
+| `delete`             | With the area's write scope, a tool that deletes, closes or merges (both are needed)                                      |
 
 - **Refused by scope.** A call outside the grant fails before any budget read or change with fixed
   text, for example `write_delete_category needs structure:write delete; missing delete; this

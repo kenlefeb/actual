@@ -58,6 +58,8 @@ export type WriteOutcome = {
   partners_not_updated?: string[];
   /** `failed` when a failed write's state could not be read back. */
   read_back?: 'failed';
+  /** Extra non-secret fields for the outcome line. */
+  detail?: Record<string, unknown>;
 };
 
 /** The scopes a tool needs, and whether it deletes, closes or merges. */
@@ -171,7 +173,7 @@ function checkConfirm(
 export async function loggedWrite<R extends object>(
   log: WriteLog,
   tool: string,
-  entry: { ids: string[]; changes: AuditChange[] },
+  entry: { ids: string[]; changes: AuditChange[] } & Record<string, unknown>,
   write: (callId: string) => Promise<WriteOutcome>,
   result: (outcome: WriteOutcome) => Promise<R>,
 ): Promise<
@@ -218,6 +220,7 @@ export async function loggedWrite<R extends object>(
           ? { partners_not_updated: o.partners_not_updated }
           : {}),
         ...(o.read_back ? { read_back: o.read_back } : {}),
+        ...(o.detail ?? {}),
       },
       log.identity,
     );

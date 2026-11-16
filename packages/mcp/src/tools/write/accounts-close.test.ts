@@ -293,6 +293,62 @@ describe('write_close_account', () => {
   });
 });
 
+describe('write_close_account balance', () => {
+  beforeEach(async () => start());
+  const future = () =>
+    new Date(Date.now() + 40 * 86400000).toISOString().slice(0, 10);
+
+  it('A future-dated balance needs a transfer account, before anything is unlinked', async () => {
+    const acct = await api.createAccount({ name: 'Later', offbudget: false });
+    await api.addTransactions(acct, [{ date: future(), amount: 5000 }]);
+    const spy = vi.spyOn(api, 'closeAccount');
+    await expectRefused(
+      'write_close_account',
+      { account_id: acct },
+      /transfer_account_id/,
+    );
+    expect(spy).not.toHaveBeenCalled();
+    const checking = (await account('Checking'))!;
+    const ok = await h.call('write_close_account', {
+      account_id: acct,
+      transfer_account_id: checking.id,
+    });
+    expect(ok.isError).toBe(false);
+    expect((await account('Later'))!.closed).toBe(true);
+  });
+
+  it('A balance that is zero over all dates closes without a transfer', async () => {
+    const acct = await api.createAccount({ name: 'Net', offbudget: false });
+    await api.addTransactions(acct, [
+      { date: '2026-01-02', amount: 5000 },
+      { date: future(), amount: -5000 },
+    ]);
+    const res = await h.call('write_close_account', { account_id: acct });
+    expect(res.isError).toBe(false);
+    expect((await account('Net'))!.closed).toBe(true);
+  });
+
+  it('created lists only this call\'s closing row', async () => {
+    const checking = (await account('Checking'))!;
+    const acct = await funded('Twice', 1000);
+    await h.call('write_close_account', {
+      account_id: acct,
+      transfer_account_id: checking.id,
+    });
+    await api.reopenAccount(acct);
+    await api.addTransactions(acct, [{ date: today(), amount: 700 }]);
+    const res = await h.call('write_close_account', {
+      account_id: acct,
+      transfer_account_id: checking.id,
+    });
+    expect(res.isError).toBe(false);
+    const created = auditLines().at(-1).created;
+    expect(created).toHaveLength(1);
+    const row = (await rows(acct)).find(r => r.id === created[0])!;
+    expect(row.amount).toBe(-700);
+  });
+});
+
 describe('write_delete_account', () => {
   beforeEach(async () => start());
 

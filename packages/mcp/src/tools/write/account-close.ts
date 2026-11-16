@@ -28,6 +28,8 @@ type Facts = {
 
 type TxRow = {
   id: string;
+  amount: number;
+  is_parent: boolean;
   reconciled: boolean;
   transfer_id: string | null;
 };
@@ -39,7 +41,7 @@ async function factsOf(accountId: string): Promise<Facts> {
     api
       .q('transactions')
       .filter({ account: accountId })
-      .select(['id', 'reconciled', 'transfer_id'])
+      .select(['id', 'amount', 'is_parent', 'reconciled', 'transfer_id'])
       .options({ splits: 'all' }),
   )) as { data: TxRow[] };
   const partner_ids = data.flatMap(r => (r.transfer_id ? [r.transfer_id] : []));
@@ -70,7 +72,8 @@ async function factsOf(accountId: string): Promise<Facts> {
     offbudget: Boolean(account.offbudget),
     account_group_id: account.account_group_id ?? null,
     closed: Boolean(account.closed),
-    balance: await api.getAccountBalance(accountId),
+    // As the engine sums it: every date, split parents left out (getAccountBalance stops at today)
+    balance: data.reduce((sum, r) => sum + (r.is_parent ? 0 : r.amount), 0),
     transactions: data.length,
     reconciled: data.filter(r => r.reconciled).length,
     partner_ids,
@@ -79,6 +82,16 @@ async function factsOf(accountId: string): Promise<Facts> {
     bank_provider: link[0]?.account_sync_source ?? null,
   };
 }
+
+const closingRows = async (accountId: string) =>
+  (
+    (await api.runQuery(
+      api
+        .q('transactions')
+        .filter({ account: accountId, notes: 'Closing account' })
+        .select(['id']),
+    )) as { data: Array<{ id: string }> }
+  ).data.map(r => r.id);
 
 const exists = async (accountId: string) =>
   (await api.getAccounts()).find(a => a.id === accountId);
@@ -159,6 +172,7 @@ export function registerAccountCloseTools(tool: RegisterWriteTool) {
           unlinks_bank_sync: facts.bank_linked,
         },
         async () => {
+          const earlier = await closingRows(account_id);
           await api.closeAccount(
             account_id,
             transfer_account_id,
@@ -169,13 +183,11 @@ export function registerAccountCloseTools(tool: RegisterWriteTool) {
             return { applied: [], failed: account_id };
           }
           if (!after) return { applied: [account_id] };
-          const { data } = (await api.runQuery(
-            api
-              .q('transactions')
-              .filter({ account: account_id, notes: 'Closing account' })
-              .select(['id']),
-          )) as { data: Array<{ id: string }> };
-          return { applied: [account_id], created: data.map(r => r.id) };
+          // Only the row this call made, not one from an earlier close
+          const made = (await closingRows(account_id)).filter(
+            x => !earlier.includes(x),
+          );
+          return { applied: [account_id], created: made };
         },
         async () => {
           const after = await exists(account_id);

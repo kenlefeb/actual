@@ -335,7 +335,7 @@ describe('write_set_account_business_days', () => {
     });
     expect(flagged.isError).toBe(false);
     const strip = (o: Record<string, unknown>) => {
-      const { account_id: _a, paychecks: _p, ...rest } = o;
+      const { account_id: _a, paychecks: _p, write_id: _w, ...rest } = o;
       return rest;
     };
     expect(strip(flagged.json)).toEqual(strip(plain.json));

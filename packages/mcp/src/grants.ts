@@ -13,7 +13,7 @@ import { dirname } from 'path';
 
 import { z } from 'zod';
 
-/** What a connection may do, by area. A deleting tool needs its area's write scope and `delete`. */
+/** What a connection may do, by area. A deleting tool needs its area's write scope and `delete`; account close and delete need `accounts:delete` instead (independent of `delete`). */
 export const SCOPES = [
   'budget:read',
   'transactions:write',

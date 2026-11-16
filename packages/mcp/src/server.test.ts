@@ -59,6 +59,7 @@ describe('server surface', () => {
       'list_schedules',
       'list_transaction_attachments',
       'list_transactions',
+      'list_writes',
       'preview_move_on_budget',
       'run_query',
       'sync_budget',

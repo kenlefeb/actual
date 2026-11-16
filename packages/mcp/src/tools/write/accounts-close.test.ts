@@ -475,3 +475,24 @@ describe('write_delete_account', () => {
     });
   });
 });
+
+describe('account writes and undo', () => {
+  it('Close and delete return a write_id and are not undoable', async () => {
+    await start();
+    const empty = await api.createAccount({ name: 'Empty', offbudget: false });
+    const doomed = await funded('Doomed', 0);
+    const closed = await h.call('write_close_account', { account_id: empty });
+    const deleted = await h.call('write_delete_account', {
+      account_id: doomed,
+    });
+    for (const res of [closed, deleted]) {
+      expect(res.json.write_id).toEqual(expect.any(String));
+      const line = auditLines().find(l => l.call_id === res.json.write_id);
+      expect(line.schema).toBe(2);
+      const undo = await h.call('write_undo', { write_id: res.json.write_id });
+      expect(undo.isError).toBe(true);
+    }
+    const listed = (await h.call('list_writes')).json.writes;
+    expect(listed.filter((x: { undoable: boolean }) => x.undoable)).toEqual([]);
+  });
+});

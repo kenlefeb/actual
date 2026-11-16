@@ -90,6 +90,42 @@ describe('scope names', () => {
   });
 });
 
+describe('Account deletes have their own scope', () => {
+  it('the grants file accepts accounts:delete on a named client', () => {
+    const rows = parseGrantsFile(
+      file([
+        {
+          subject: SUB,
+          client: CLIENT,
+          scopes: ['budget:read', 'structure:write', 'accounts:delete'],
+        },
+      ]),
+    );
+    expect(rows[0].scopes).toContain('accounts:delete');
+  });
+
+  it('a * client with accounts:delete is invalid', () => {
+    expect(() =>
+      parseGrantsFile(
+        file([
+          {
+            subject: SUB,
+            client: '*',
+            scopes: ['budget:read', 'accounts:delete'],
+          },
+        ]),
+      ),
+    ).toThrow();
+  });
+
+  it('the stdio environment accepts accounts:delete', () => {
+    expect(parseScopes('budget:read accounts:delete')).toEqual([
+      'budget:read',
+      'accounts:delete',
+    ]);
+  });
+});
+
 describe('The grants file schema is strict', () => {
   it('accepts the day-one grant', () => {
     expect(parseGrantsFile(DAY_ONE)).toHaveLength(2);

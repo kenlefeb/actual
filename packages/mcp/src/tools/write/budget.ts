@@ -10,7 +10,7 @@ import { id, loggedWrite, requireAmount, requireMonth } from './shared';
 
 const month = z.string().regex(/^\d{4}-\d{2}$/, 'YYYY-MM');
 
-async function budgeted(m: string, categoryId: string) {
+export async function budgeted(m: string, categoryId: string) {
   const { categoryGroups } = await api.getBudgetMonth(m);
   const category = categoryGroups
     .flatMap(g => g.categories ?? [])

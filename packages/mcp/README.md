@@ -50,34 +50,68 @@ Every entry lists the write tools; the connection's grant decides which calls su
 annotations mark them as writes (`destructiveHint` on deletes), so a client can auto-allow reads
 and prompt on every write.
 
-| Tool                          | Needs                                | Changes                                                                                                              |
-| ----------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
-| `write_create_transactions`   | `transactions:write`                 | Adds transactions to one account (date, cents, payee, category, notes)                                               |
-| `write_update_transactions`   | `transactions:write`                 | Sets category, payee, notes, amount, date, account or cleared of transactions                                        |
-| `write_set_budget_amount`     | `budget:write`                       | Sets one category's budgeted amount for a month                                                                      |
-| `write_skip_paycheck`         | `schedules:write`                    | Skips a paycheck's next pay date                                                                                     |
-| `write_move_on_budget`        | `structure:write`                    | Moves an off-budget account on budget; needs a `confirm` (below)                                                     |
-| `write_create_account`        | `structure:write`                    | Creates an account (on or off budget, optional opening balance in cents); a duplicate name is allowed with a warning |
-| `write_update_account`        | `structure:write`                    | Renames an account or sets its account group; never closes it or changes its off-budget flag or opening balance      |
-| `write_reopen_account`        | `structure:write`                    | Reopens a closed account                                                                                             |
-| `write_create_account_group`  | `structure:write`                    | Creates an account group (a name another group has is refused)                                                       |
-| `write_update_account_group`  | `structure:write`                    | Renames an account group                                                                                             |
-| `write_delete_account_group`  | `structure:write`, `accounts:delete` | Deletes a group; its accounts become ungrouped; needs a `confirm` when the grant requires a dry run                  |
-| `write_create_category_group` | `structure:write`                    | Creates an expense category group                                                                                    |
-| `write_create_category`       | `structure:write`                    | Creates a category in a group (income or expense as the group is)                                                    |
-| `write_update_category_group` | `structure:write`                    | Renames, hides or unhides a group                                                                                    |
-| `write_update_category`       | `structure:write`                    | Renames, hides or unhides a category                                                                                 |
-| `write_move_category`         | `structure:write`                    | Moves a category to a group and place (reorders within a group)                                                      |
-| `write_move_category_group`   | `structure:write`                    | Moves a group to a place among the groups                                                                            |
-| `write_delete_category`       | `structure:write`, `delete`          | Deletes a category; `transfer_category_id` is required when it is in use                                             |
-| `write_delete_category_group` | `structure:write`, `delete`          | Deletes a group and its categories; one `transfer_category_id` for all in use                                        |
+<<<<<<< HEAD
+
+| Tool                          | Needs                                           | Changes                                                                                                              |
+| ----------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `write_create_transactions`   | `transactions:write`                            | Adds transactions to one account (date, cents, payee, category, notes)                                               |
+| `write_update_transactions`   | `transactions:write`                            | Sets category, payee, notes, amount, date, account or cleared of transactions                                        |
+| `write_set_budget_amount`     | `budget:write`                                  | Sets one category's budgeted amount for a month                                                                      |
+| `write_skip_paycheck`         | `schedules:write`                               | Skips a paycheck's next pay date                                                                                     |
+| `write_move_on_budget`        | `structure:write`                               | Moves an off-budget account on budget; needs a `confirm` (below)                                                     |
+| `write_create_category_group` | `structure:write`                               | Creates an expense category group                                                                                    |
+| `write_create_category`       | `structure:write`                               | Creates a category in a group (income or expense as the group is)                                                    |
+| `write_update_category_group` | `structure:write`                               | Renames, hides or unhides a group                                                                                    |
+| `write_update_category`       | `structure:write`                               | Renames, hides or unhides a category                                                                                 |
+| `write_move_category`         | `structure:write`                               | Moves a category to a group and place (reorders within a group)                                                      |
+| `write_move_category_group`   | `structure:write`                               | Moves a group to a place among the groups                                                                            |
+| `write_undo`                  | `budget:read`, then the reversed write's scopes | Undoes one of your earlier writes by `write_id` (below)                                                              |
+| `write_delete_category`       | `structure:write`, `delete`                     | Deletes a category; `transfer_category_id` is required when it is in use                                             |
+| `write_delete_category_group` | `structure:write`, `delete`                     | Deletes a group and its categories; one `transfer_category_id` for all in use                                        |
+| =======                       |
+| Tool                          | Needs                                           | Changes                                                                                                              |
+| ----------------------------- | ------------------------------------            | -------------------------------------------------------------------------------------------------------------------- |
+| `write_create_transactions`   | `transactions:write`                            | Adds transactions to one account (date, cents, payee, category, notes)                                               |
+| `write_update_transactions`   | `transactions:write`                            | Sets category, payee, notes, amount, date, account or cleared of transactions                                        |
+| `write_set_budget_amount`     | `budget:write`                                  | Sets one category's budgeted amount for a month                                                                      |
+| `write_skip_paycheck`         | `schedules:write`                               | Skips a paycheck's next pay date                                                                                     |
+| `write_move_on_budget`        | `structure:write`                               | Moves an off-budget account on budget; needs a `confirm` (below)                                                     |
+| `write_create_account`        | `structure:write`                               | Creates an account (on or off budget, optional opening balance in cents); a duplicate name is allowed with a warning |
+| `write_update_account`        | `structure:write`                               | Renames an account or sets its account group; never closes it or changes its off-budget flag or opening balance      |
+| `write_reopen_account`        | `structure:write`                               | Reopens a closed account                                                                                             |
+| `write_create_account_group`  | `structure:write`                               | Creates an account group (a name another group has is refused)                                                       |
+| `write_update_account_group`  | `structure:write`                               | Renames an account group                                                                                             |
+| `write_delete_account_group`  | `structure:write`, `accounts:delete`            | Deletes a group; its accounts become ungrouped; needs a `confirm` when the grant requires a dry run                  |
+| `write_create_category_group` | `structure:write`                               | Creates an expense category group                                                                                    |
+| `write_create_category`       | `structure:write`                               | Creates a category in a group (income or expense as the group is)                                                    |
+| `write_update_category_group` | `structure:write`                               | Renames, hides or unhides a group                                                                                    |
+| `write_update_category`       | `structure:write`                               | Renames, hides or unhides a category                                                                                 |
+| `write_move_category`         | `structure:write`                               | Moves a category to a group and place (reorders within a group)                                                      |
+| `write_move_category_group`   | `structure:write`                               | Moves a group to a place among the groups                                                                            |
+| `write_delete_category`       | `structure:write`, `delete`                     | Deletes a category; `transfer_category_id` is required when it is in use                                             |
+| `write_delete_category_group` | `structure:write`, `delete`                     | Deletes a group and its categories; one `transfer_category_id` for all in use                                        |
+
+> > > > > > > origin/development
 
 Every read tool needs `budget:read`. Category delete and category group delete are the only
 deletes: there are no bulk-edit, import, rule, account-close or budget-reset tools. Neither delete
-has an undo; the transfer category is the guard, and a grant can require a dry run first
+has an undo (`write_undo` covers creates and updates only); the transfer category is the guard, and a grant can require a dry run first
 (`confirm_destructive`, below). A category never moves between an income and an expense group, and
 only expense groups can be created.
 
+- **Write ids and undo.** Every write result carries `write_id` (the `call_id` of its audit lines).
+  `list_writes` (`budget:read`) lists your own recent writes, newest first (20, at most 50, from the
+  last 2 MB of the audit log), with whether each is `undone` and `undoable`. `write_undo { write_id }`
+  restores the values the write logged, in the caller's own writes only, and needs the scopes the
+  reversed write needed (taken from the tool, not the log). It is refused, changing nothing, if any
+  logged field no longer holds the value the write left, a created row is in use, or a row is now
+  reconciled (pass `allow_reconciled` if the grant allows), a transfer or a split. A write is undone
+  once; an undo applies row by row, and an engine failure midway is logged with `applied` and
+  `failed`. Undoable: transaction creates (deleted) and updates, budget amounts, category and group
+  updates, and category and group creates (deleted while unused). **Not undoable:** category and
+  group moves, paycheck skip, `write_move_on_budget`, deletes, account tools, an undo, and any
+  line written before audit `schema: 2`. Writes (and undos) run one at a time per process.
+  Under `confirm_destructive`, undoing a create goes through the dry run and `confirm` like a delete.
 - **Ids only.** Accounts, transactions, payees, categories and paychecks are named by the ids the
   read tools return. A name where an id belongs is refused, never looked up.
 - **Moved history keeps no category.** A call that would leave a categorized transaction on a
@@ -96,7 +130,8 @@ only expense groups can be created.
   `<data dir>.audit.jsonl` (by default `~/Library/Application Support/actual-mcp/<env>-writes.audit.jsonl`),
   mode 0600: the time, tool, ids and each field's before and after values, and `scopes`, the scopes
   the connection held (on the hosted entry also `grant`, below). It never holds a credential. If the line can't be appended, the write doesn't run. A
-  `write_create_transactions` line names the account and the new rows.
+  `write_create_transactions` line names the account and the new rows. Attempt lines carry
+  `schema: 2` (a line without it is version 1 and not undoable); an undo's lines carry `undoes`.
 - **Outcome line.** After each write the server appends a second line with the same `call_id`:
   `status` (`ok` or `failed`), the ids `applied`, what `failed`, the ids `created` and, after a
   failed transaction update, `partners_not_updated`. If
@@ -158,6 +193,18 @@ only expense groups can be created.
 What an agent may do comes from its grant, never from which tools exist. Each tool declares the
 scopes it needs (its description ends `Needs: …`):
 
+<<<<<<< HEAD
+
+| Scope                | Allows                                                                                                                     |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `budget:read`        | Every read tool, `sync_budget`, `get_sync_status` and previews                                                             |
+| `transactions:write` | Creating and editing transactions                                                                                          |
+| `budget:write`       | Budgeted amounts                                                                                                           |
+| `structure:write`    | Accounts, categories and groups, payees, tags and rules                                                                    |
+| `schedules:write`    | Schedules, paychecks and business calendars                                                                                |
+| `delete`             | With the area's write scope, a tool that deletes, closes or merges (both are needed)                                       |
+| `accounts:delete`    | With `structure:write`, closing or deleting an account or account group; independent of `delete`                           |
+| =======              |
 | Scope                | Allows                                                                                                                     |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `budget:read`        | Every read tool, `sync_budget`, `get_sync_status` and previews                                                             |
@@ -167,6 +214,8 @@ scopes it needs (its description ends `Needs: …`):
 | `schedules:write`    | Schedules, paychecks and business calendars                                                                                |
 | `accounts:delete`    | With `structure:write`, deleting an account group (and, later, closing or deleting an account); `delete` does not imply it |
 | `delete`             | With the area's write scope, a tool that deletes, closes or merges (both are needed)                                       |
+
+> > > > > > > origin/development
 
 - **Refused by scope.** A call outside the grant fails before any budget read or change with fixed
   text, for example `write_delete_category needs structure:write delete; missing delete; this
@@ -179,6 +228,12 @@ scopes it needs (its description ends `Needs: …`):
   values are unchanged; otherwise it is refused. This protects against mistakes only: a
   compromised or prompt-injected model can run the dry run itself. Keep destructive tools on
   prompt in your client.
+- **`accounts:delete` and `delete` are independent.** `delete` does not imply `accounts:delete` and
+  the reverse: a grant with `delete` gains no account deletes, and one with `accounts:delete` gains
+  no transaction, category or group deletes. A grants file that names `accounts:delete` is invalid
+  for a server image that does not know it (every connection then falls back to `budget:read`), so
+  ship the image before the grant. The stdio default (`ACTUAL_MCP_WRITES_SCOPES` unset) is every
+  scope and so includes it, and the account tools (sc-4478) will need it.
 - **`max_rows`.** Lowers the per-call row cap below 50; it never raises it.
 - **`allow_reconciled`.** Lets `write_update_transactions` take a row's `allow_reconciled` to
   change a reconciled transaction (below). Off when absent: without it, any row that sets

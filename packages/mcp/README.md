@@ -159,6 +159,7 @@ scopes it needs (its description ends `Needs: …`):
 | `structure:write`    | Accounts, categories and groups, payees, tags and rules                              |
 | `schedules:write`    | Schedules, paychecks and business calendars                                          |
 | `delete`             | With the area's write scope, a tool that deletes, closes or merges (both are needed) |
+| `accounts:delete`    | With `structure:write`, closing or deleting an account or account group; independent of `delete` |
 
 - **Refused by scope.** A call outside the grant fails before any budget read or change with fixed
   text, for example `write_delete_category needs structure:write delete; missing delete; this
@@ -171,6 +172,12 @@ scopes it needs (its description ends `Needs: …`):
   values are unchanged; otherwise it is refused. This protects against mistakes only: a
   compromised or prompt-injected model can run the dry run itself. Keep destructive tools on
   prompt in your client.
+- **`accounts:delete` and `delete` are independent.** `delete` does not imply `accounts:delete` and
+  the reverse: a grant with `delete` gains no account deletes, and one with `accounts:delete` gains
+  no transaction, category or group deletes. A grants file that names `accounts:delete` is invalid
+  for a server image that does not know it (every connection then falls back to `budget:read`), so
+  ship the image before the grant. The stdio default (`ACTUAL_MCP_WRITES_SCOPES` unset) is every
+  scope and so includes it, and the account tools (sc-4478) will need it.
 - **`max_rows`.** Lowers the per-call row cap below 50; it never raises it.
 - **`allow_reconciled`.** Lets `write_update_transactions` take a row's `allow_reconciled` to
   change a reconciled transaction (below). Off when absent: without it, any row that sets

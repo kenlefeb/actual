@@ -184,6 +184,39 @@ describe('A call outside the grant is refused by scope', () => {
     expect(await exists(vet)).toBe(true);
   });
 
+  it('accounts:delete alone does not allow a category delete', async () => {
+    h = await startHarness(
+      { count: 1 },
+      {
+        grant: grant(['budget:read', 'structure:write', 'accounts:delete']),
+      },
+    );
+    const vet = await unusedCategory();
+    const res = await h.call('write_delete_category', { category_id: vet });
+    expect(res.isError).toBe(true);
+    expect(res.text).toMatch(/missing delete;/);
+    expect(await exists(vet)).toBe(true);
+  });
+
+  it('delete and accounts:delete are independent scopes', () => {
+    expect(SCOPES).toContain('delete');
+    expect(SCOPES).toContain('accounts:delete');
+  });
+
+  it('every destructive tool needs delete or accounts:delete', async () => {
+    h = await startHarness({ count: 1 });
+    const { tools } = await h.client.listTools();
+    const destructive = tools.filter(t => t.annotations?.destructiveHint);
+    expect(destructive.length).toBeGreaterThan(0);
+    for (const t of destructive) {
+      // write_undo checks the reversed write's scopes in its handler (design D2)
+      if (t.name === 'write_undo') continue;
+      expect(t.description, t.name).toMatch(
+        /Needs: [a-z: ]*\b(delete|accounts:delete)\b/,
+      );
+    }
+  });
+
   it('The same call with the scope', async () => {
     h = await startHarness(
       { count: 1 },

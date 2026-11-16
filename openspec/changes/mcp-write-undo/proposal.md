@@ -28,7 +28,7 @@ None.
 
 ### Modified Capabilities
 
-- `mcp-server`: new requirements "Writes return their id", "List my writes", "Undo a write", "What undo reverses" and "Account deletes have their own scope"; "Every tool declares a scope" and "Write audit log" are modified.
+- `mcp-server`: new requirements "Writes return their id", "List my writes", "Undo a write", "Undo annotations and confirm", "Writes are serialized", "Undo refuses on any conflict", "Undo reads current state", "What undo reverses", "An undo is used once it applied", "Undo reads the audit log safely" and "Account deletes have their own scope"; "Every tool declares a scope" and "Write audit log" are modified.
 
 ## Impact
 

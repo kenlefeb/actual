@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "id": "fork-release-26.10.1-alpha.40",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.40 — Ken's Actual fork",
+      "date": "2026-11-16",
+      "version": "26.10.1-alpha.40",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.40.md",
+      "body": "**Unofficial fork prerelease.** Based on upstream Actual v26.11.0 (`1766241e3f4b3c578e424c4fa15f1eb83c0da17d`, October 29, 2026); not an official Actual Budget release.\n\nThis release lets the MCP server (the connector that lets Claude read and change a budget) manage accounts and account groups, undo its own earlier changes, and keeps deleting accounts behind its own permission.",
+      "details": "#### Features\n\n- The MCP can create, rename, reopen, close and delete accounts, set an account's business days, and create, rename and delete account groups.\n- The MCP can undo its own earlier budget changes, and list what it changed (`write_undo` and `list_writes`).\n- Deleting an account needs the new `accounts:delete` permission, separate from the other account permissions. It is not granted in production.\n\n#### Enhancements\n\n- Undo checks that restored names and references still exist, and matches more of a created row before reversing it.\n- Closing an account checks its balance over all dates, the same way the app does.\n\n#### Bugfixes\n\n- None in this release.\n\n#### Maintenance\n\n- No upstream changes in this release; the fork stays on upstream Actual 26.11.0.\n- The transaction-edit OpenSpec change is archived (sc-4204); the account-management and undo changes are specified (sc-4478, sc-4215, sc-4695).\n\n#### Known limitations\n\n- Experimental.\n- The hosted MCP still cannot delete anything, because no delete scope (including `accounts:delete`) is granted; adding it is a grants-file change and a deploy.\n- The native Schedules & Paychecks screens are off by default; turn them on in Settings to try them.\n- Tapping a tag in the transaction editor does nothing.\n- Tags are not yet fully accessible on the phone.\n- OpenID sign-out needs the server's address in the identity provider's allowed sign-out addresses; without it the provider shows an error page, though you are already signed out of Actual.\n- Attached documents aren't included in a budget export.\n- Documents removed before alpha.35 are recorded the first time an updated device syncs, and deleted 30 days after that. Removals made on a device that has not been updated are not tracked.\n- HEIC pictures are refused; use the Photos library or a JPEG or PNG copy.\n- Attaching a document needs a connection; there is no offline upload queue.\n- After restoring server data from a backup, pause the cleanup first (`production/RESTORE.md`)."
+    },
+    {
       "id": "fork-release-26.10.1-alpha.39",
       "type": "release",
       "title": "Release 26.10.1-alpha.39 — Ken's Actual fork",

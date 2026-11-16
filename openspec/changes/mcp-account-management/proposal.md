@@ -11,7 +11,7 @@ Story sc-4478, part of the sc-4203 parity umbrella. Ken's rule (2026-11-15): an 
   - `write_update_account` (`structure:write`): rename, and assign to an account group or take out of one.
   - `write_close_account` (`structure:write` + `delete`, destructive): closes an account, moving any balance to a named account.
   - `write_reopen_account` (`structure:write`): reopens a closed account.
-  - `write_delete_account` (`structure:write` + `delete`, destructive): deletes a closed account and its transactions, as the app's delete does.
+  - `write_delete_account` (`structure:write` + `delete` + `transactions:write`, destructive): deletes an open account and its transactions, as the app's forced close does; refused over reconciled rows without `allow_reconciled`, and capped by the row limit.
   - `write_set_account_business_days` (`structure:write` + `schedules:write`): the account's business calendar and days early; regenerates the deposit dates of the paychecks that deposit into it, as the app does.
   - `write_create_account_group`, `write_update_account_group` (rename) (`structure:write`).
   - `write_delete_account_group` (`structure:write` + `delete`, destructive): the accounts in it become ungrouped.
@@ -22,7 +22,7 @@ Story sc-4478, part of the sc-4203 parity umbrella. Ken's rule (2026-11-15): an 
 
 Mobile scope: none. The MCP server and the API have no UI, so this change is exempt from the desktop and mobile rule.
 
-Not in this change (each its own story, or a decision recorded in the design): reordering accounts and moving them between groups by position (`account-move`); editing an opening balance (a starting-balance transaction edit, sc-4204); flipping an account off budget (the app does not offer it); paycheck create and delete and schedule delete (sc-4650); business calendars (backlog); the Undo tool (sc-4215).
+Not in this change (each its own story, or a decision recorded in the design): reordering accounts and moving them between groups by position (`account-move`, sc-4653); linking and unlinking an account's bank sync as a standalone action (the app's account menu offers it; the Product Owner files the story); editing an opening balance (a starting-balance transaction edit, sc-4204); flipping an account off budget (the app does not offer it); paycheck create and delete and schedule delete (sc-4650); business calendars (backlog); the Undo tool (sc-4215).
 
 ## Capabilities
 
@@ -45,4 +45,4 @@ None.
 
 ## Decisions for Ken
 
-None. The calls made in the design (D2 scopes of the business-days tool, D3 delete needs a closed account) are Architect decisions and can be overturned in review.
+None. The calls made in the design (D2 scopes, D3 delete's reconciled and row-cap rules, D6 business-days refusals) are Architect decisions and can be overturned in review.

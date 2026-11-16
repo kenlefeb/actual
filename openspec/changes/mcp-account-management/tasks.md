@@ -3,10 +3,10 @@
 ## 1. Account and group tools (sc-4478)
 
 - [ ] 1.1 Read tools: add `account_group_id` to `list_accounts` and add `list_account_groups` (`budget:read`) in `packages/mcp/src/tools/read/accounts.ts`. Failing tests first for "Account and group reads" (groups listed, ungrouped null, names sanitized)
-- [ ] 1.2 `write_create_account`, `write_update_account` and `write_reopen_account` in `packages/mcp/src/tools/write/accounts.ts`, scope `structure:write` (design D1, D4, D5). Failing tests first for every scenario of "Account maintenance tools", including a check that the result matches the app's own `account-create` and `account-update` on the same budget
+- [ ] 1.2 `write_create_account`, `write_update_account` and `write_reopen_account` in `packages/mcp/src/tools/write/accounts.ts`, scope `structure:write` (design D1, D4, D5): strict schemas, field-by-field call to the engine, `warnings` on a duplicate name. Failing tests first for every scenario of "Account maintenance tools", including extra keys refused with `closed` and `offbudget` unchanged on read-back, and a check that the result matches the app's own `account-create` and `account-update` on the same budget
 - [ ] 1.3 `write_create_account_group`, `write_update_account_group` and `write_delete_account_group` (design D3). Failing tests first for every scenario of "Account group tools", including the dry run and the scope refusal
-- [ ] 1.4 `write_close_account` and `write_delete_account` (design D3): `structure:write` + `delete`, destructive annotation, dry run and `confirm`, bank-sync note in the description, dry run and audit line. Failing tests first for every scenario of "Account close and delete", including a stale `confirm` and the transfer's other side losing its payee
-- [ ] 1.5 `write_set_account_business_days` (design D6), scopes `structure:write` + `schedules:write`. Failing tests first for every scenario of "Account business days tool", comparing paycheck deposit dates with the app's `account-set-business-days` result
+- [ ] 1.4 `write_close_account` and `write_delete_account` (design D3, D8): scopes per D2, destructive annotation, all validation before the audit line and the engine call, counts and ids in `entry.changes`, `allow_reconciled`, `requireRows`, read-back that fails the outcome if the account remains, bank-sync note in the description, dry run and audit line. Failing tests first for every scenario of "Account close and delete", including a refused close that does not unlink, an account really gone after delete, stale `confirm` for close, delete and group delete, and the transfer's other side losing its payee
+- [ ] 1.5 `write_set_account_business_days` (design D6), scopes `structure:write` + `schedules:write`: deposit-only counting, refusal over a missing schedule or a skip, per-paycheck dates in result and entry. Failing tests first for every scenario of "Account business days tool", comparing paycheck deposit dates with the app's `account-set-business-days` result
 - [ ] 1.6 Verify the server's registration test fails for a tool without a scope and passes for the eleven new tools, and that the `delete` tools are annotated destructive in the listing
 
 ## 2. Coverage, docs and checks (sc-4478)
@@ -18,4 +18,4 @@
 
 ## Workflow follow-up
 
-- File a Backlog story for account order and position (`account-move`) tools; it needs a fork API handler. Other Non-Goals are other stories already.
+- Account order and position is sc-4653. The Product Owner files the story for standalone bank-sync link and unlink. Other Non-Goals are other stories already.

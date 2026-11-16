@@ -105,8 +105,9 @@ describe('write entry', () => {
     const { tools } = await h.client.listTools();
     const writes = tools.filter(t => t.name.startsWith('write_'));
     expect(writes.map(t => t.name).sort()).toEqual(WRITE_TOOLS);
-    // Only the category and group deletes of sc-2598 may delete.
+    // Only the category and group deletes of sc-2598 and the account group delete may delete.
     expect(writes.map(t => t.name).filter(n => /delete/.test(n))).toEqual([
+      'write_delete_account_group',
       'write_delete_category',
       'write_delete_category_group',
     ]);

@@ -34,7 +34,7 @@ const group = async (name: string) =>
   (await groups()).find(g => g.name === name)!;
 
 /** Runs a call that must be refused: error, matching text, nothing changed, no audit line. */
-async function refused(
+async function expectRefused(
   tool: string,
   args: Record<string, unknown>,
   text?: RegExp,
@@ -157,16 +157,19 @@ describe('account maintenance tools', () => {
   });
 
   it('An empty name is refused', async () => {
-    await refused('write_create_account', { name: '   ' });
+    await expectRefused('write_create_account', { name: '   ' });
   });
 
   it('Create cannot be closed', async () => {
-    await refused('write_create_account', { name: 'Nope', closed: true });
+    await expectRefused('write_create_account', { name: 'Nope', closed: true });
     expect((await accounts()).some(a => a.name === 'Nope')).toBe(false);
   });
 
   it('An opening balance must be a sane integer of cents', async () => {
-    await refused('write_create_account', { name: 'X', opening_balance: 1.5 });
+    await expectRefused('write_create_account', {
+      name: 'X',
+      opening_balance: 1.5,
+    });
   });
 
   it('Rename and group, then ungroup', async () => {
@@ -216,7 +219,7 @@ describe('account maintenance tools', () => {
       { off_budget: true },
       { offbudget: true },
     ]) {
-      await refused('write_update_account', {
+      await expectRefused('write_update_account', {
         account_id: checking.id,
         name: 'Changed',
         ...extra,
@@ -229,8 +232,8 @@ describe('account maintenance tools', () => {
 
   it('Update needs a name or a group', async () => {
     const checking = await account('Checking');
-    await refused('write_update_account', { account_id: checking.id });
-    await refused('write_update_account', {
+    await expectRefused('write_update_account', { account_id: checking.id });
+    await expectRefused('write_update_account', {
       account_id: checking.id,
       name: ' ',
     });
@@ -238,16 +241,19 @@ describe('account maintenance tools', () => {
 
   it('An unknown id, a name or an unknown group is refused', async () => {
     const checking = await account('Checking');
-    await refused('write_update_account', { account_id: 'nope', name: 'X' });
-    await refused('write_update_account', {
+    await expectRefused('write_update_account', {
+      account_id: 'nope',
+      name: 'X',
+    });
+    await expectRefused('write_update_account', {
       account_id: 'Checking',
       name: 'X',
     });
-    await refused('write_update_account', {
+    await expectRefused('write_update_account', {
       account_id: checking.id,
       account_group_id: 'nope',
     });
-    await refused('write_reopen_account', { account_id: 'Checking' });
+    await expectRefused('write_reopen_account', { account_id: 'Checking' });
   });
 
   it('Reopen a closed account', async () => {
@@ -260,7 +266,7 @@ describe('account maintenance tools', () => {
   });
 
   it('Reopening an open account is refused', async () => {
-    await refused('write_reopen_account', {
+    await expectRefused('write_reopen_account', {
       account_id: (await account('Checking')).id,
     });
   });
@@ -313,13 +319,17 @@ describe('account group tools', () => {
   it('A duplicate or empty group name is refused', async () => {
     await api.createAccountGroup({ name: 'Cash' });
     const other = await api.createAccountGroup({ name: 'Other' });
-    await refused('write_create_account_group', { name: 'cash' }, /already/);
-    await refused(
+    await expectRefused(
+      'write_create_account_group',
+      { name: 'cash' },
+      /already/,
+    );
+    await expectRefused(
       'write_update_account_group',
       { account_group_id: other, name: 'CASH' },
       /already/,
     );
-    await refused('write_create_account_group', { name: '  ' });
+    await expectRefused('write_create_account_group', { name: '  ' });
   });
 
   it('Renaming a group to its own name differently cased is allowed', async () => {
@@ -333,15 +343,20 @@ describe('account group tools', () => {
 
   it('An unknown id or a name is refused', async () => {
     await api.createAccountGroup({ name: 'Cash' });
-    await refused('write_update_account_group', {
+    await expectRefused('write_update_account_group', {
       account_group_id: 'Cash',
       name: 'X',
     });
-    await refused('write_delete_account_group', { account_group_id: 'Cash' });
+    await expectRefused('write_delete_account_group', {
+      account_group_id: 'Cash',
+    });
   });
 
   it('Extra keys are refused', async () => {
-    await refused('write_create_account_group', { name: 'X', hidden: true });
+    await expectRefused('write_create_account_group', {
+      name: 'X',
+      hidden: true,
+    });
   });
 
   it('Delete a group with accounts leaves them ungrouped', async () => {
@@ -370,7 +385,7 @@ describe('account group tools', () => {
     expect(attempt.ids).toEqual(expect.arrayContaining([gid, wallet]));
   });
 
-  it('Delete needs the delete scope', async () => {
+  it('Delete needs the accounts:delete scope', async () => {
     await h.close();
     h = await startHarness(
       { count: 1 },
@@ -381,7 +396,7 @@ describe('account group tools', () => {
       account_group_id: gid,
     });
     expect(res.isError).toBe(true);
-    expect(res.text).toMatch(/missing delete/);
+    expect(res.text).toMatch(/missing accounts:delete/);
     expect(await groups()).toHaveLength(1);
   });
 
@@ -415,7 +430,7 @@ describe('account group tools', () => {
       h = await startHarness(
         { count: 1 },
         {
-          grant: grant(['budget:read', 'structure:write', 'delete'], {
+          grant: grant(['budget:read', 'structure:write', 'accounts:delete'], {
             confirm_destructive: true,
           }),
         },

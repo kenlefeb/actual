@@ -11,7 +11,7 @@ import type { RegisterWriteTool } from './shared';
 import { confirm, id, loggedWrite, requireAmount, requireDate } from './shared';
 
 /** The scope that account and account group deletes need besides structure:write (one place to swap in `accounts:delete`). */
-const ACCOUNT_DELETE_SCOPE: Scope = 'delete';
+const ACCOUNT_DELETE_SCOPE: Scope = 'accounts:delete';
 
 const MAX_NAME = 100;
 const NOTHING = 'Nothing changed.';

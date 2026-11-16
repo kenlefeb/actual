@@ -328,7 +328,7 @@ describe('write_close_account balance', () => {
     expect((await account('Net'))!.closed).toBe(true);
   });
 
-  it('created lists only this call\'s closing row', async () => {
+  it("created lists only this call's closing row", async () => {
     const checking = (await account('Checking'))!;
     const acct = await funded('Twice', 1000);
     await h.call('write_close_account', {

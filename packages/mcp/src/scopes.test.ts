@@ -63,6 +63,12 @@ const NEEDS: Record<string, Scope[]> = {
   write_undo: ['budget:read'],
   write_delete_category: ['structure:write', 'delete'],
   write_delete_category_group: ['structure:write', 'delete'],
+  write_create_account: ['structure:write'],
+  write_update_account: ['structure:write'],
+  write_reopen_account: ['structure:write'],
+  write_create_account_group: ['structure:write'],
+  write_update_account_group: ['structure:write'],
+  write_delete_account_group: ['structure:write', 'accounts:delete'],
 };
 
 describe('Every tool declares a scope', () => {
@@ -208,7 +214,13 @@ describe('A call outside the grant is refused by scope', () => {
     h = await startHarness({ count: 1 });
     const { tools } = await h.client.listTools();
     const destructive = tools.filter(t => t.annotations?.destructiveHint);
-    expect(destructive.length).toBeGreaterThan(0);
+    expect(destructive.map(t => t.name)).toEqual(
+      expect.arrayContaining([
+        'write_delete_category',
+        'write_delete_category_group',
+        'write_delete_account_group',
+      ]),
+    );
     for (const t of destructive) {
       // write_undo checks the reversed write's scopes in its handler (design D2)
       if (t.name === 'write_undo') continue;

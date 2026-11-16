@@ -49,6 +49,7 @@ export function registerCoreTools(tool: RegisterTool) {
               id: a.id,
               off_budget: a.offbudget,
               closed: a.closed,
+              account_group_id: a.account_group_id ?? null,
               ...money(await api.getAccountBalance(a.id)),
             },
             { name: a.name },

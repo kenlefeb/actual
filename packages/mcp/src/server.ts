@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ToolCallback } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { z } from 'zod';
+import { z } from 'zod';
 
 import type { RegisterTool } from '#tools/read/shared';
 
@@ -150,7 +150,7 @@ export function createServer(
         name,
         {
           description: `${description}${suffix} Needs: ${access.scopes.join(' ')}.`,
-          inputSchema: shape,
+          inputSchema: (access.strict ? z.object(shape).strict() : shape) as S,
           annotations: {
             readOnlyHint: access === READ,
             destructiveHint: Boolean(access.destructive),

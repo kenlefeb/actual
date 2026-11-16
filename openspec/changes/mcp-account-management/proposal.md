@@ -9,15 +9,15 @@ Story sc-4478, part of the sc-4203 parity umbrella. Ken's rule (2026-11-15): an 
 - **Ten write tools**, each one app action, each declaring its scope at registration, each with its `packages/mcp/coverage.json` line:
   - `write_create_account` (`structure:write`): name, off-budget flag, optional opening balance in cents.
   - `write_update_account` (`structure:write`): rename, and assign to an account group or take out of one.
-  - `write_close_account` (`structure:write` + `delete`, destructive): closes an account, moving any balance to a named account.
+  - `write_close_account` (`structure:write` + `accounts:delete`, destructive): closes an account, moving any balance to a named account.
   - `write_reopen_account` (`structure:write`): reopens a closed account.
-  - `write_delete_account` (`structure:write` + `delete` + `transactions:write`, destructive): deletes an open account and its transactions, as the app's forced close does; refused over reconciled rows without `allow_reconciled`, and capped by the row limit.
+  - `write_delete_account` (`structure:write` + `accounts:delete` + `transactions:write`, destructive): deletes an open account and its transactions, as the app's forced close does; refused over reconciled rows without `allow_reconciled`, and capped by the row limit.
   - `write_set_account_business_days` (`structure:write` + `schedules:write`): the account's business calendar and days early; regenerates the deposit dates of the paychecks that deposit into it, as the app does.
   - `write_create_account_group`, `write_update_account_group` (rename) (`structure:write`).
-  - `write_delete_account_group` (`structure:write` + `delete`, destructive): the accounts in it become ungrouped.
+  - `write_delete_account_group` (`structure:write` + `accounts:delete`, destructive): the accounts in it become ungrouped.
 - **One new read tool**, `list_account_groups` (`budget:read`), and `list_accounts` gains `account_group_id`, so an agent can find the ids the writes need.
 - **Same results as the app.** Each tool calls the app's own handler through the existing `@actual-app/api` methods (`createAccount`, `updateAccount`, `closeAccount`, `reopenAccount`, `deleteAccount`, the group methods and `setAccountBusinessDays`), so validation, undo registration and sync are the engine's.
-- **Destructive tools follow the existing pattern.** Close, delete and group delete need `delete` plus `structure:write`, are annotated destructive, write an attempt and an outcome audit line, and under `confirm_destructive` return a dry run (what would change, with counts) and a `confirm` first.
+- **Destructive tools follow the existing pattern.** Close, delete and group delete need `accounts:delete` plus `structure:write` (the narrower account-area delete scope of mcp-write-undo, not `delete`), are annotated destructive, write an attempt and an outcome audit line, and under `confirm_destructive` return a dry run (what would change, with counts) and a `confirm` first.
 - **coverage.json.** The skips for `account-set-business-days` and `setAccountBusinessDays` become tool lines, and lines for the account and group handlers are added. No skip cites safety.
 
 Mobile scope: none. The MCP server and the API have no UI, so this change is exempt from the desktop and mobile rule.

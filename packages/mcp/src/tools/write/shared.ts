@@ -61,7 +61,12 @@ export type WriteOutcome = {
 };
 
 /** The scopes a tool needs, and whether it deletes, closes or merges. */
-export type Access = { scopes: Scope[]; destructive?: boolean };
+export type Access = {
+  scopes: Scope[];
+  destructive?: boolean;
+  /** Refuse any input key the tool does not define (the default strips it). */
+  strict?: boolean;
+};
 
 /** Registers one write tool; the server's wrapper checks `access` against the grant before `fn` runs. */
 export type RegisterWriteTool = <S extends z.ZodRawShape>(

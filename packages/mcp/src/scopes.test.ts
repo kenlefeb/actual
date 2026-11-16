@@ -60,6 +60,7 @@ const NEEDS: Record<string, Scope[]> = {
   write_update_category: ['structure:write'],
   write_move_category_group: ['structure:write'],
   write_move_category: ['structure:write'],
+  write_undo: ['budget:read'],
   write_delete_category: ['structure:write', 'delete'],
   write_delete_category_group: ['structure:write', 'delete'],
 };

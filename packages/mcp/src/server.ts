@@ -18,7 +18,9 @@ import { registerCoreTools } from './tools/read/core';
 import { registerPaycheckTools } from './tools/read/paychecks';
 import { registerWriteTools } from './tools/write/register';
 import type { Access, WriteLog } from './tools/write/shared';
+import { registerUndoTools } from './tools/write/undo';
 import { version } from './version';
+import { withWriteLock } from './write-lock';
 
 const READ_NOTE = ` Read-only. ${DATA_NOTE}`;
 const WRITE_NOTE = ` Changes the budget; ids only, at most 50 rows, every write is audit-logged first. ${DATA_NOTE}`;
@@ -96,16 +98,22 @@ export function createServer(
               `${name} needs ${access.scopes.join(' ')}; missing ${missing.join(' ')}; this connection was granted ${grant.scopes.join(' ') || 'nothing'}. Nothing changed.`,
             );
           }
-          const result = await fn(args, {
-            // No audit log means no write can run: appending to '' fails.
-            path: auditLog ?? '',
-            scrub,
-            identity: audited,
-            grant,
-            client,
-            args,
-            destructive: Boolean(access.destructive),
-          });
+          const run = () =>
+            fn(args, {
+              // No audit log means no write can run: appending to '' fails.
+              path: auditLog ?? '',
+              scrub,
+              identity: audited,
+              grant,
+              client,
+              args,
+              destructive: Boolean(access.destructive),
+            });
+          // One write at a time per process: the before-read, the attempt line
+          // and the write sit inside one lock, so a logged before is never stale.
+          const result = await (suffix === WRITE_NOTE
+            ? withWriteLock(run)
+            : run());
           onToolCall?.(name, 'ok');
           return {
             content: [
@@ -164,7 +172,11 @@ export function createServer(
   registerExtra?.(tool);
 
   // Write tools on every entry; the grant decides which calls succeed (tools/write/*)
-  registerWriteTools(register(WRITE_NOTE));
+  const writeTool = register(WRITE_NOTE);
+  registerWriteTools(writeTool);
+  registerUndoTools(writeTool, (name, description, shape, fn) =>
+    read(name, description, shape, fn, READ),
+  );
 
   return server;
 }

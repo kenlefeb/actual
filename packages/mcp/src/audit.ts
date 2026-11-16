@@ -18,8 +18,12 @@ export type AuditEntry = {
   tool: string;
   call_id: string;
   phase: 'attempt';
+  /** Lines without `schema` are version 1 and not undoable. */
+  schema: 2;
   ids: string[];
   changes: AuditChange[];
+  /** On a `write_undo` line: the `call_id` of the write it reverses. */
+  undoes?: string;
 };
 
 /** The outcome line, appended after a write; shares `call_id` with the attempt. */
@@ -36,13 +40,17 @@ export type OutcomeEntry = {
   partners_not_updated?: string[];
   /** `failed` when a failed write's state could not be read back. */
   read_back?: 'failed';
+  undoes?: string;
 };
 
 /** A call refused by scope; never its arguments, which can hold budget data. */
 export type RefusedEntry = {
   tool: string;
   phase: 'refused';
-  missing: string[];
+  missing?: string[];
+  /** A fixed code for a refused `write_undo`; never budget data. */
+  reason?: string;
+  undoes?: string;
 };
 
 /**

@@ -16,6 +16,7 @@ const WRITE_TOOLS = [
   'write_move_on_budget',
   'write_set_budget_amount',
   'write_skip_paycheck',
+  'write_undo',
   'write_update_category',
   'write_update_category_group',
   'write_update_transactions',

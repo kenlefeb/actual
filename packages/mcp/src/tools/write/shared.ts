@@ -169,13 +169,18 @@ export async function loggedWrite<R extends object>(
   entry: { ids: string[]; changes: AuditChange[] },
   write: (callId: string) => Promise<WriteOutcome>,
   result: (outcome: WriteOutcome) => Promise<R>,
+  /** `destructive` is per call (an undo deletes only when it reverses a create); `undoes` marks an undo's lines. */
+  options: { destructive?: boolean; undoes?: string } = {},
 ): Promise<
   | ((R | { applied: string[] | null; read_back: string }) & {
       audit_outcome?: 'not-logged';
+      write_id: string;
     })
   | { dry_run: true; ids: string[]; confirm: string }
 > {
-  if (log.destructive && log.grant.confirm_destructive) {
+  const destructive = options.destructive ?? log.destructive;
+  const undoes = options.undoes ? { undoes: options.undoes } : {};
+  if (destructive && log.grant.confirm_destructive) {
     const given = log.args.confirm;
     if (typeof given !== 'string') {
       const issued = String(Date.now());
@@ -194,7 +199,7 @@ export async function loggedWrite<R extends object>(
   const call_id = randomUUID();
   appendAudit(
     log.path,
-    { tool, call_id, phase: 'attempt', ...entry },
+    { tool, call_id, phase: 'attempt', schema: 2, ...entry, ...undoes },
     log.identity,
   );
 
@@ -213,6 +218,7 @@ export async function loggedWrite<R extends object>(
           ? { partners_not_updated: o.partners_not_updated }
           : {}),
         ...(o.read_back ? { read_back: o.read_back } : {}),
+        ...undoes,
       },
       log.identity,
     );
@@ -243,7 +249,8 @@ export async function loggedWrite<R extends object>(
     stderrLine(log, `${tool} result read-back failed (call ${call_id})`, error);
     out = { applied: outcome.applied, read_back: READ_BACK_FAILED };
   }
-  return logged ? out : { ...out, audit_outcome: 'not-logged' as const };
+  const named = { ...out, write_id: call_id };
+  return logged ? named : { ...named, audit_outcome: 'not-logged' as const };
 }
 
 /** At most this many rows change in one write call; a grant can only lower it. */

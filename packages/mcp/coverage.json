@@ -174,7 +174,7 @@
     "skip": "Native iOS bridge read (sc-4341, ADR 11); MCP reads the same data through list_paychecks and get_paychecks_clearing_status"
   },
   "native/undo": {
-    "skip": "Native iOS bridge undo of a native write by its token (sc-4341); MCP writes record no native token"
+    "skip": "Native iOS bridge undo of a native write by its token (sc-4341); MCP writes record no native token; MCP undoes its own writes by audit id with write_undo (sc-4215)"
   },
   "native/paycheck-preview": {
     "skip": "Native iOS bridge read of an editor draft (sc-4343, ADR 11); MCP reads paychecks through list_paychecks"

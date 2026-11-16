@@ -285,6 +285,7 @@ describe('Stdio grants come from the environment', () => {
     'structure:write',
     'schedules:write',
     'delete',
+    'accounts:delete',
   ];
 
   it("Today's writes entry keeps its tools", () => {

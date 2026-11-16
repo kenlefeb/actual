@@ -13,14 +13,19 @@ import {
   requireRows,
 } from './shared';
 
-type Cat = { id: string; name: string; is_income: boolean; hidden: boolean };
-type Group = Cat & { categories: Cat[] };
+export type Cat = {
+  id: string;
+  name: string;
+  is_income: boolean;
+  hidden: boolean;
+};
+export type Group = Cat & { categories: Cat[] };
 
 const MAX_NAME = 100;
 const NOTHING = 'Nothing changed.';
 
 /** Every group (hidden ones too) with its categories, in the budget's order. */
-async function load(): Promise<Group[]> {
+export async function load(): Promise<Group[]> {
   return (await api.getCategoryGroups()).map(g => ({
     id: g.id,
     name: g.name,

@@ -574,7 +574,7 @@ The server SHALL label the environment from the server URL's host: `actual-stagi
 - **THEN** it is labelled `production` and refused
 
 ### Requirement: Every tool declares a scope
-Every tool SHALL declare the scopes it needs, chosen from: `budget:read` (every read tool, `sync_budget`, `get_sync_status`, previews), `transactions:write`, `budget:write`, `structure:write` (accounts, categories, payees, tags, rules), `schedules:write` (schedules, paychecks, business calendars), `delete` and `accounts:delete`.
+Every tool SHALL declare the scopes it needs, chosen from: `budget:read` (every read tool, `sync_budget`, `get_sync_status`, previews), `transactions:write`, `budget:write`, `structure:write` (accounts, categories, payees, tags, rules), `schedules:write` (schedules, paychecks, business calendars), `delete` and `accounts:delete`. Its description SHALL name the scopes it needs.
 
 #### Scenario: A tool without a scope fails the build
 - **WHEN** a tool is registered without a declared scope
@@ -584,9 +584,8 @@ Every tool SHALL declare the scopes it needs, chosen from: `budget:read` (every 
 - **WHEN** a client lists the tools
 - **THEN** `write_create_transactions` and `write_update_transactions` need `transactions:write`, `write_set_budget_amount` needs `budget:write`, `write_skip_paycheck` needs `schedules:write`, `write_move_on_budget` and the category create, update and move tools need `structure:write`, and `write_delete_category` and `write_delete_category_group` need `structure:write` and `delete`
 
-
 ### Requirement: Deleting tools need a delete scope
-A tool that deletes, closes or merges SHALL need its area's write scope and `delete`, except account close, delete and group delete, which need `accounts:delete`. Its description SHALL name the scopes it needs.
+A tool that deletes, closes or merges SHALL need its area's write scope and `delete`, except account close, delete and group delete, which need `accounts:delete`.
 
 #### Scenario: A deleting tool needs its delete scope
 - **WHEN** a grant lacks the delete scope of a deleting tool

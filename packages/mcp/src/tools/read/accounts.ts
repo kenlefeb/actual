@@ -53,6 +53,29 @@ export function moveConfirm(
 
 export function registerAccountTools(tool: RegisterTool) {
   tool(
+    'list_account_groups',
+    "List account groups with the ids of the accounts in each, in order. list_accounts gives each account's account_group_id (null when ungrouped).",
+    pageShape,
+    async p => {
+      const accounts = await api.getAccounts();
+      return pageList(
+        (await api.getAccountGroups()).map(g =>
+          withText(
+            {
+              id: g.id,
+              account_ids: accounts
+                .filter(a => a.account_group_id === g.id)
+                .map(a => a.id),
+            },
+            { name: g.name },
+          ),
+        ),
+        p,
+      );
+    },
+  );
+
+  tool(
     'get_account_budget_status',
     "Get an account's business calendar, days early for deposits, and the budget start date and offset line set when it was moved on budget (null when never moved).",
     { account_id: z.string() },

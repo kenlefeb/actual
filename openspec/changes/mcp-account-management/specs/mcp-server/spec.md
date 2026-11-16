@@ -1,25 +1,11 @@
 ## ADDED Requirements
 
 ### Requirement: Account maintenance tools
-With writes on, the server SHALL offer `write_create_account`, `write_update_account` and `write_reopen_account`, each needing `structure:write`. Each SHALL take ids (never a name) for what it changes, write one audit attempt line and one outcome line, and return the before and after of every field it changed, with the same result as the same action in the app. `write_create_account` SHALL take a name, `off_budget` and an optional opening balance in cents, SHALL refuse an empty name, and SHALL NOT refuse a name another account has, as in the app; the result SHALL then carry a `warnings` note naming that account. `write_update_account` SHALL rename an account and assign it to an account group or take it out of one (`account_group_id` null). The input of every tool here SHALL refuse a key it does not define, so `closed` and the off-budget flag cannot be set through `write_update_account` and `closed` cannot be set through `write_create_account`.
+With writes on, the server SHALL offer `write_create_account`, `write_update_account` and `write_reopen_account`, each needing `structure:write`. Each SHALL take ids (never a name) for what it changes, write one audit attempt line and one outcome line, and return the before and after of every field it changed, with the same result as the same action in the app.
 
 #### Scenario: Create an account with an opening balance
 - **WHEN** a client calls `write_create_account` with the name "Holiday Fund", `off_budget` false and `opening_balance` 50000
 - **THEN** `list_accounts` lists "Holiday Fund" on budget with balance 500.00, and the call left audit lines
-
-#### Scenario: A duplicate account name is allowed
-- **GIVEN** an account "Checking"
-- **WHEN** a client calls `write_create_account` with the name "Checking"
-- **THEN** a second account "Checking" exists, and the result carries a `warnings` note naming the first account's id
-
-#### Scenario: Update cannot close or move off budget
-- **GIVEN** an open on-budget account
-- **WHEN** a client calls `write_update_account` with its id and `closed` true, or `off_budget` true
-- **THEN** the call is refused, and the account stays open and on budget
-
-#### Scenario: Create cannot be closed
-- **WHEN** a client calls `write_create_account` with `closed` true
-- **THEN** the call is refused and no account was created
 
 #### Scenario: Rename and group
 - **GIVEN** an account "Checking" and an account group "Cash"
@@ -35,8 +21,28 @@ With writes on, the server SHALL offer `write_create_account`, `write_update_acc
 - **WHEN** a client passes an account id that no account has, or an account's name where an id is required
 - **THEN** the call is refused and nothing changed
 
-### Requirement: Account close and delete
-`write_close_account` SHALL need `structure:write` and `delete`; `write_delete_account` SHALL need `structure:write`, `delete` and `transactions:write`; both SHALL be annotated destructive. `write_close_account` SHALL close an open account, require `transfer_account_id` when its balance is not zero (an open account other than itself), require `transfer_category_id` exactly when the transfer crosses the on-budget line as the app does, and SHALL refuse an account that is already closed. It SHALL validate everything, including that `transfer_category_id` is an existing category, before the audit attempt line and before the engine call, because the engine unlinks bank sync first and that cannot be undone. `write_delete_account` SHALL delete an open account and all its transactions, as the app's forced close does, and SHALL refuse a closed account ("A closed account can't be deleted; reopen it first"); its outcome SHALL be `failed` unless a read-back shows the account gone. `write_delete_account` SHALL refuse when the account holds a reconciled transaction, or a transfer partner in another account is reconciled, unless the grant allows `allow_reconciled` and the call passes `allow_reconciled: true`, and SHALL refuse when the transactions it deletes plus the partner rows it unlinks exceed the row cap. Descriptions, dry runs and audit lines SHALL say that closing or deleting unlinks the account from bank sync and that the unlink cannot be undone.
+### Requirement: Account create and update inputs
+`write_create_account` SHALL take a name, `off_budget` and an optional opening balance in cents. It SHALL refuse an empty name and SHALL NOT refuse a name another account has, as in the app; the result SHALL then carry a `warnings` note naming that account. `write_update_account` SHALL rename an account and assign it to an account group or take it out of one (`account_group_id` null).
+
+#### Scenario: A duplicate account name is allowed
+- **GIVEN** an account "Checking"
+- **WHEN** a client calls `write_create_account` with the name "Checking"
+- **THEN** a second account "Checking" exists, and the result carries a `warnings` note naming the first account's id
+
+### Requirement: Account tool inputs are strict
+The input of every account and account-group tool SHALL refuse a key it does not define. `closed` and the off-budget flag SHALL NOT be settable through `write_update_account`, and `closed` SHALL NOT be settable through `write_create_account`.
+
+#### Scenario: Update cannot close or move off budget
+- **GIVEN** an open on-budget account
+- **WHEN** a client calls `write_update_account` with its id and `closed` true, or `off_budget` true
+- **THEN** the call is refused, and the account stays open and on budget
+
+#### Scenario: Create cannot be closed
+- **WHEN** a client calls `write_create_account` with `closed` true
+- **THEN** the call is refused and no account was created
+
+### Requirement: Account close
+`write_close_account` SHALL need `structure:write` and `delete` and be annotated destructive. It SHALL close an open account and refuse one already closed. It SHALL require `transfer_account_id` (an open account other than itself) when the balance is not zero, and `transfer_category_id` exactly when the transfer crosses the on-budget line, as the app does.
 
 #### Scenario: Close with a balance
 - **GIVEN** an open account "Old Savings" with balance 120.00 and an open account "Checking"
@@ -52,10 +58,16 @@ With writes on, the server SHALL offer `write_create_account`, `write_update_acc
 - **WHEN** the client calls `write_close_account`
 - **THEN** the call fails naming `delete` as missing, and the account is open
 
+### Requirement: Account close validates before it unlinks
+`write_close_account` SHALL validate everything, including that `transfer_category_id` is an existing category, before the audit attempt line and before the engine call, because the engine unlinks bank sync first and that cannot be undone.
+
 #### Scenario: A refused close does not unlink
 - **GIVEN** a bank-linked account with a balance and a transfer account on the other side of the on-budget line
 - **WHEN** a client calls `write_close_account` with a `transfer_category_id` that no category has, or with one when the transfer does not cross the line
 - **THEN** the call is refused before any audit line, the account is open, and it is still linked to its bank
+
+### Requirement: Account delete
+`write_delete_account` SHALL need `structure:write`, `delete` and `transactions:write` and be annotated destructive. It SHALL delete an open account and all its transactions, as the app's forced close does, and refuse a closed account ("A closed account can't be deleted; reopen it first"). Its outcome SHALL be `failed` unless a read-back shows the account gone.
 
 #### Scenario: Delete a closed account
 - **WHEN** a client calls `write_delete_account` for a closed account
@@ -70,6 +82,9 @@ With writes on, the server SHALL offer `write_create_account`, `write_update_acc
 - **GIVEN** a connection granted `budget:read structure:write delete`
 - **WHEN** the client calls `write_delete_account`
 - **THEN** the call fails naming `transactions:write` as missing, and the account is unchanged
+
+### Requirement: Account delete limits
+`write_delete_account` SHALL refuse when the account holds a reconciled transaction, or a transfer partner in another account is reconciled, unless the grant allows `allow_reconciled` and the call passes `allow_reconciled: true`. It SHALL refuse when the transactions it deletes plus the partner rows it unlinks exceed the row cap.
 
 #### Scenario: Delete over reconciled rows
 - **GIVEN** an open account with a reconciled transaction, and a grant without `allow_reconciled`
@@ -91,6 +106,9 @@ With writes on, the server SHALL offer `write_create_account`, `write_update_acc
 - **WHEN** a client calls `write_delete_account` for it
 - **THEN** the call is refused and nothing changed
 
+### Requirement: Account close and delete are confirmed and audited
+Under `confirm_destructive`, close and delete SHALL follow "Confirm before a destructive write", their dry run giving the balance, transaction and reconciled counts. Descriptions, dry runs and audit lines SHALL say that the call unlinks the account from bank sync and that the unlink cannot be undone. The attempt line SHALL carry what is needed to reconstruct the account, and the outcome line SHALL record the closing transfer's id in `created`.
+
 #### Scenario: Dry run then confirm
 - **GIVEN** a grant with `structure:write delete transactions:write` and `confirm_destructive`
 - **WHEN** the client calls `write_delete_account` for an open account without `confirm`, then again with the returned `confirm`
@@ -106,11 +124,19 @@ With writes on, the server SHALL offer `write_create_account`, `write_update_acc
 - **THEN** the attempt line records the account's name, off-budget flag, group id, balance, transaction count, bank-link state with the provider name and no token, and the partner transaction ids, and the outcome line records the closing transfer's id in `created`
 
 ### Requirement: Account group tools
-With writes on, the server SHALL offer `write_create_account_group`, `write_update_account_group` (rename) and `write_delete_account_group`. The first two SHALL need `structure:write`; the delete SHALL need `structure:write` and `delete` and be annotated destructive. A group delete SHALL leave its accounts ungrouped and SHALL follow "Confirm before a destructive write", its dry run listing the accounts it ungroups. An empty group name SHALL be refused, and so SHALL a name another group has (case-insensitive), because the app refuses it. The attempt line of a group delete SHALL record the group's name and the ids of the accounts it ungroups.
+With writes on, the server SHALL offer `write_create_account_group`, `write_update_account_group` (rename) and `write_delete_account_group`. The first two SHALL need `structure:write`; the delete SHALL need `structure:write` and `delete` and be annotated destructive.
 
 #### Scenario: Create and rename
 - **WHEN** a client calls `write_create_account_group` with the name "Cash" and then `write_update_account_group` to rename it "Everyday"
 - **THEN** `list_account_groups` lists "Everyday", and each call left audit lines
+
+#### Scenario: Delete a group without the delete scope
+- **GIVEN** a connection granted `budget:read structure:write`
+- **WHEN** the client calls `write_delete_account_group`
+- **THEN** the call fails naming `delete` as missing, and the group still exists
+
+### Requirement: Account group names and delete
+An empty group name SHALL be refused, and so SHALL a name another group has (case-insensitive), because the app refuses it. A group delete SHALL leave its accounts ungrouped, follow "Confirm before a destructive write" with a dry run listing those accounts, and record the group's name and their ids in the attempt line.
 
 #### Scenario: A duplicate group name
 - **GIVEN** a group "Cash"
@@ -122,23 +148,33 @@ With writes on, the server SHALL offer `write_create_account_group`, `write_upda
 - **WHEN** a client calls `write_delete_account_group` for "Cash"
 - **THEN** "Cash" is gone and "Checking" and "Wallet" are open and have no group
 
-#### Scenario: Delete a group without the delete scope
-- **GIVEN** a connection granted `budget:read structure:write`
-- **WHEN** the client calls `write_delete_account_group`
-- **THEN** the call fails naming `delete` as missing, and the group still exists
-
 ### Requirement: Account business days tool
-`write_set_account_business_days` SHALL need `structure:write` and `schedules:write`. It SHALL take an account id, a business calendar id (or null for Saturday and Sunday) and `deposit_days_early` (a whole number from 0 to 10), set them as the app does, and return the before and after of both. It SHALL report only the paychecks that deposit into the account as affected (with their ids and their next pay and deposit dates before and after, also in the audit line), listing any other paycheck the engine regenerates because it names the account elsewhere as also regenerated. It SHALL refuse, before the engine call and naming the paycheck and the flag `allow_regenerate`, when a paycheck the engine would regenerate has a recorded schedule that no longer exists (so a deleted schedule is not recreated), or when an affected paycheck has a skipped pay date (so a skip is not dropped), unless the call passes `allow_regenerate: true` (default false), which gives the app's own result. A call with `allow_regenerate` that would recreate a missing schedule SHALL also need the `delete` scope, refused as a scope refusal naming `delete` when the grant lacks it; one that only clears a skipped date needs no further scope. The audit line SHALL record `allow_regenerate`, the paychecks and skipped dates affected, and the schedule ids recreated. A call that changes neither value SHALL be refused.
+`write_set_account_business_days` SHALL need `structure:write` and `schedules:write`. It SHALL take an account id, a business calendar id (or null for Saturday and Sunday) and `deposit_days_early` (a whole number from 0 to 10), set them as the app does, and return the before and after of both. A call that changes neither value SHALL be refused.
 
 #### Scenario: Two business days early
 - **GIVEN** an account "Checking" with no calendar, and the calendar "U.S. Federal Reserve"
 - **WHEN** a client calls `write_set_account_business_days` with that calendar and `deposit_days_early` 2
 - **THEN** `get_account_budget_status` shows the calendar and 2 days early, and the deposit dates of the paychecks depositing into "Checking" match those the app shows after the same edit
 
+#### Scenario: Out of range
+- **WHEN** a client calls it with `deposit_days_early` 11, or with a calendar id that no calendar has
+- **THEN** the call is refused and nothing changed
+
+#### Scenario: Both scopes are needed
+- **GIVEN** a connection granted `budget:read structure:write`
+- **WHEN** the client calls `write_set_account_business_days`
+- **THEN** the call fails naming `schedules:write` as missing, and the account is unchanged
+
+### Requirement: Business days report the affected paychecks
+`write_set_account_business_days` SHALL report as affected only the paychecks that deposit into the account, with their ids and their next pay and deposit dates before and after, also in the audit line. Any other paycheck the engine regenerates because it names the account elsewhere SHALL be listed as also regenerated.
+
 #### Scenario: Only deposit paychecks are counted
 - **GIVEN** one paycheck depositing into "Checking" and another that names "Checking" only as its clearing account
 - **WHEN** a client sets "Checking"'s days early
 - **THEN** the result lists the first as affected with its dates before and after, and the second as also regenerated
+
+### Requirement: Business days do not drop skips or recreate schedules by default
+Before the engine call, `write_set_account_business_days` SHALL refuse, naming the paycheck and the flag `allow_regenerate`, when a paycheck the engine would regenerate has a recorded schedule that no longer exists, or when an affected paycheck has a skipped pay date.
 
 #### Scenario: A deleted schedule is not recreated
 - **GIVEN** a paycheck depositing into "Checking" whose deposit schedule was deleted
@@ -149,6 +185,9 @@ With writes on, the server SHALL offer `write_create_account_group`, `write_upda
 - **GIVEN** a paycheck depositing into "Checking" whose next pay date is skipped
 - **WHEN** a client calls `write_set_account_business_days` for "Checking"
 - **THEN** the call is refused naming the paycheck, and the skip and the account are unchanged
+
+### Requirement: Business days override
+A call to `write_set_account_business_days` with `allow_regenerate: true` (default false) SHALL give the app's own result over a skipped date or a missing schedule. If it would recreate a missing schedule it SHALL also need the `delete` scope, refused as a scope refusal naming `delete` when the grant lacks it; clearing only a skipped date needs no further scope. The audit line SHALL record `allow_regenerate`, the paychecks and skipped dates affected, and the schedule ids recreated.
 
 #### Scenario: Overriding a skip
 - **GIVEN** a paycheck depositing into "Checking" whose next pay date is skipped, and a grant with `structure:write schedules:write`
@@ -164,15 +203,6 @@ With writes on, the server SHALL offer `write_create_account_group`, `write_upda
 - **GIVEN** the same paycheck and a grant that also has `delete`
 - **WHEN** a client calls it with `allow_regenerate: true`
 - **THEN** the schedule is recreated as in the app, and the outcome line records its id in `created`
-
-#### Scenario: Out of range
-- **WHEN** a client calls it with `deposit_days_early` 11, or with a calendar id that no calendar has
-- **THEN** the call is refused and nothing changed
-
-#### Scenario: Both scopes are needed
-- **GIVEN** a connection granted `budget:read structure:write`
-- **WHEN** the client calls `write_set_account_business_days`
-- **THEN** the call fails naming `schedules:write` as missing, and the account is unchanged
 
 ### Requirement: Account and group reads
 `list_accounts` SHALL include each account's `account_group_id` (null when ungrouped), and the server SHALL offer `list_account_groups` (`budget:read`), returning each group's id, name and the ids of its accounts in order. Names SHALL be returned as budget text under "Text from the budget is data".

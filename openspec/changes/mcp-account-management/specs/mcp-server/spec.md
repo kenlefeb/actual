@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Account maintenance tools
-With writes on, the server SHALL offer `write_create_account`, `write_update_account` and `write_reopen_account`, each needing `structure:write`. Each SHALL take ids (never a name) for what it changes, write one audit attempt line and one outcome line, and return the before and after of every field it changed, with the same result as the same action in the app.
+With writes on, the server SHALL offer `write_create_account`, `write_update_account` and `write_reopen_account`, each needing `structure:write`. Each SHALL take ids (never a name) for what it changes, write one audit attempt line and one outcome line, and return the before and after of every field it changed, with the same result as the same action in the app. `write_reopen_account` SHALL refuse an account that is already open.
 
 #### Scenario: Create an account with an opening balance
 - **WHEN** a client calls `write_create_account` with the name "Holiday Fund", `off_budget` false and `opening_balance` 50000
@@ -42,7 +42,7 @@ The input of every account and account-group tool SHALL refuse a key it does not
 - **THEN** the call is refused and no account was created
 
 ### Requirement: Account close
-`write_close_account` SHALL need `structure:write` and `delete` and be annotated destructive. It SHALL close an open account and refuse one already closed. It SHALL require `transfer_account_id` (an open account other than itself) when the balance is not zero, and `transfer_category_id` exactly when the transfer crosses the on-budget line, as the app does.
+`write_close_account` SHALL need `structure:write` and `accounts:delete` and be annotated destructive. It SHALL close an open account and refuse one already closed. It SHALL require `transfer_account_id` (an open account other than itself) when the balance is not zero, and `transfer_category_id` exactly when the transfer crosses the on-budget line, as the app does.
 
 #### Scenario: Close with a balance
 - **GIVEN** an open account "Old Savings" with balance 120.00 and an open account "Checking"
@@ -56,7 +56,7 @@ The input of every account and account-group tool SHALL refuse a key it does not
 #### Scenario: Close needs the delete scope
 - **GIVEN** a connection granted `budget:read structure:write`
 - **WHEN** the client calls `write_close_account`
-- **THEN** the call fails naming `delete` as missing, and the account is open
+- **THEN** the call fails naming `accounts:delete` as missing, and the account is open
 
 ### Requirement: Account close validates before it unlinks
 `write_close_account` SHALL validate everything, including that `transfer_category_id` is an existing category, before the audit attempt line and before the engine call, because the engine unlinks bank sync first and that cannot be undone.
@@ -67,19 +67,19 @@ The input of every account and account-group tool SHALL refuse a key it does not
 - **THEN** the call is refused before any audit line, the account is open, and it is still linked to its bank
 
 ### Requirement: Account delete
-`write_delete_account` SHALL need `structure:write`, `delete` and `transactions:write` and be annotated destructive. It SHALL delete an open account and all its transactions, as the app's forced close does, and refuse a closed account ("A closed account can't be deleted; reopen it first"). Its outcome SHALL be `failed` unless a read-back shows the account gone.
+`write_delete_account` SHALL need `structure:write`, `accounts:delete` and `transactions:write` and be annotated destructive. It SHALL delete an open account and all its transactions, as the app's forced close does, and refuse a closed account ("A closed account can't be deleted; reopen it first"). Its outcome SHALL be `failed` unless a read-back shows the account gone.
 
 #### Scenario: Delete a closed account
 - **WHEN** a client calls `write_delete_account` for a closed account
 - **THEN** the call is refused saying to reopen it first, and nothing changed
 
 #### Scenario: Delete an open account
-- **GIVEN** an open account with 40 unreconciled transactions, one a transfer to "Checking", and a grant with `structure:write delete transactions:write` and `confirm_destructive` off
+- **GIVEN** an open account with 40 unreconciled transactions, one a transfer to "Checking", and a grant with `structure:write accounts:delete transactions:write` and `confirm_destructive` off
 - **WHEN** a client calls `write_delete_account` for it
 - **THEN** the account and its 40 transactions are gone, the transfer's other side in "Checking" remains with no transfer payee, and the audit line records the count 40 and the partner transaction id
 
 #### Scenario: Delete needs transactions:write
-- **GIVEN** a connection granted `budget:read structure:write delete`
+- **GIVEN** a connection granted `budget:read structure:write accounts:delete`
 - **WHEN** the client calls `write_delete_account`
 - **THEN** the call fails naming `transactions:write` as missing, and the account is unchanged
 
@@ -110,7 +110,7 @@ The input of every account and account-group tool SHALL refuse a key it does not
 Under `confirm_destructive`, close and delete SHALL follow "Confirm before a destructive write", their dry run giving the balance, transaction and reconciled counts. Descriptions, dry runs and audit lines SHALL say that the call unlinks the account from bank sync and that the unlink cannot be undone. The attempt line SHALL carry what is needed to reconstruct the account, and the outcome line SHALL record the closing transfer's id in `created`.
 
 #### Scenario: Dry run then confirm
-- **GIVEN** a grant with `structure:write delete transactions:write` and `confirm_destructive`
+- **GIVEN** a grant with `structure:write accounts:delete transactions:write` and `confirm_destructive`
 - **WHEN** the client calls `write_delete_account` for an open account without `confirm`, then again with the returned `confirm`
 - **THEN** the first call changes nothing and returns the balance, transaction counts, reconciled counts and `confirm`, and the second deletes the account
 
@@ -124,7 +124,7 @@ Under `confirm_destructive`, close and delete SHALL follow "Confirm before a des
 - **THEN** the attempt line records the account's name, off-budget flag, group id, balance, transaction count, bank-link state with the provider name and no token, and the partner transaction ids, and the outcome line records the closing transfer's id in `created`
 
 ### Requirement: Account group tools
-With writes on, the server SHALL offer `write_create_account_group`, `write_update_account_group` (rename) and `write_delete_account_group`. The first two SHALL need `structure:write`; the delete SHALL need `structure:write` and `delete` and be annotated destructive.
+With writes on, the server SHALL offer `write_create_account_group`, `write_update_account_group` (rename) and `write_delete_account_group`. The first two SHALL need `structure:write`; the delete SHALL need `structure:write` and `accounts:delete` and be annotated destructive.
 
 #### Scenario: Create and rename
 - **WHEN** a client calls `write_create_account_group` with the name "Cash" and then `write_update_account_group` to rename it "Everyday"
@@ -133,7 +133,7 @@ With writes on, the server SHALL offer `write_create_account_group`, `write_upda
 #### Scenario: Delete a group without the delete scope
 - **GIVEN** a connection granted `budget:read structure:write`
 - **WHEN** the client calls `write_delete_account_group`
-- **THEN** the call fails naming `delete` as missing, and the group still exists
+- **THEN** the call fails naming `accounts:delete` as missing, and the group still exists
 
 ### Requirement: Account group names and delete
 An empty group name SHALL be refused, and so SHALL a name another group has (case-insensitive), because the app refuses it. A group delete SHALL leave its accounts ungrouped, follow "Confirm before a destructive write" with a dry run listing those accounts, and record the group's name and their ids in the attempt line.
@@ -144,7 +144,7 @@ An empty group name SHALL be refused, and so SHALL a name another group has (cas
 - **THEN** the call is refused saying the name exists, as the app does, and nothing changed
 
 #### Scenario: Delete a group with accounts
-- **GIVEN** a group "Cash" holding "Checking" and "Wallet", and a grant with `structure:write delete` and `confirm_destructive` off
+- **GIVEN** a group "Cash" holding "Checking" and "Wallet", and a grant with `structure:write accounts:delete` and `confirm_destructive` off
 - **WHEN** a client calls `write_delete_account_group` for "Cash"
 - **THEN** "Cash" is gone and "Checking" and "Wallet" are open and have no group
 

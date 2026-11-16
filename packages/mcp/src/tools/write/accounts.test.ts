@@ -43,7 +43,7 @@ async function expectRefused(
   const logged = auditLines().length;
   const res = await h.call(tool, args);
   expect(res.isError).toBe(true);
-  if (text) expect(res.text).toMatch(text);
+  expect(res.text).toMatch(text ?? /failed|validation|unrecognized/i);
   expect(JSON.stringify([await accounts(), await groups()])).toBe(before);
   expect(auditLines().length).toBe(logged);
 }

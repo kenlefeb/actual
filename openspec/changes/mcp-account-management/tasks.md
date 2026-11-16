@@ -11,7 +11,7 @@
   - The in-handler `delete` check reads the call's effective grant scopes (`log.grant`, `log.identity`), not the registered scopes, and runs after the paychecks are read and before the audit attempt line and the engine call. Test: a grant lacking `delete` is refused with a `refused` line and no engine call
   - "Would recreate" is computed over every paycheck the engine regenerates, including the "also regenerated" ones that only name the account. Test: a deduction-transfer paycheck with a deleted schedule, flagged call, grant without `delete`: refused, no schedule created
   - A flagged call whose paychecks need neither a recreation nor a skip clear behaves as if the flag were absent, and no other tool accepts `allow_regenerate`. Tests: same result and audit fields as the unflagged call; every other tool refuses the key
-- [ ] 1.6 Verify the server's registration test fails for a tool without a scope and passes for the eleven new tools, and that the `delete` tools are annotated destructive in the listing
+- [ ] 1.6 Verify the server's registration test fails for a tool without a scope and passes for the eleven new tools, and that the delete tools (`accounts:delete`) are annotated destructive in the listing
 
 ## 2. Coverage, docs and checks (sc-4478)
 

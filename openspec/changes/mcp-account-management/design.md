@@ -67,7 +67,7 @@ All validation runs before the audit attempt line and before any engine call, an
 - **Delete** (the forced path) takes `account_id` and `allow_reconciled`. It is refused when:
   - the account is unknown, or **closed** ("A closed account can't be deleted; reopen it first"), because the engine does nothing for a closed account and the tool would report success without deleting. The app has the same rule: its delete is the forced close of an open account;
   - the account holds a reconciled transaction, or a transfer partner in another account is reconciled, unless the grant's `allow_reconciled` is on and the call passes `allow_reconciled: true`, as in `write_update_transactions`. The dry run and audit line give both reconciled counts;
-  - the transactions it deletes plus the partner rows it unlinks exceed the row cap (`requireRows`). An account over the cap cannot be deleted through the MCP; that is the grant's limit, as for a category group.
+  - the transactions it deletes plus the partner rows it unlinks exceed the row cap (`requireRows`), counted from `v_transactions` (the engine's own query), so split children count; An account over the cap cannot be deleted through the MCP; that is the grant's limit, as for a category group.
 - After the call the tool reads the account back; if it still exists the outcome is `failed`, never `ok`. A test shows the account and its transactions are really gone.
 - **Account with no transactions:** close deletes it. The dry run says so and the outcome reports `deleted: true`.
 - **Group delete** takes `account_group_id`. The accounts in the group become ungrouped (ids listed in the dry run, entry and result), as the app does.
@@ -92,8 +92,12 @@ Takes `account_id`, `business_calendar_id` (an id, or null for Saturday and Sund
 
 The engine regenerates the schedules of every paycheck that mentions the account anywhere in its definition, and it recreates a schedule deleted elsewhere. The tool guards what the engine does not:
 - **Which paychecks:** the tool reads the paychecks first and takes those that deposit into the account (a deposit's account is this account). The count and ids reported are these, not every paycheck the engine's `LIKE` touches. A paycheck that only names the account elsewhere (a deduction transfer or the clearing account) is listed separately as also regenerated.
-- **A missing schedule is refused.** If any paycheck the engine would regenerate has a recorded schedule that no longer exists, the call is refused naming the paycheck, so the tool never undoes a schedule delete (a `delete` scope action) with only `schedules:write`.
-- **Skips are not dropped.** If an affected paycheck has a skipped pay date as `list_paychecks` reports it, the call is refused naming the paycheck, because regenerating dates would clear the skip. A test covers a paycheck in the middle of a skip.
+- **A missing schedule is refused by default.** If any paycheck the engine would regenerate has a recorded schedule that no longer exists, the call is refused naming the paycheck and the flag `allow_regenerate`, so the tool never undoes a schedule delete (a `delete` scope action) with only `schedules:write`.
+- **Skips are not dropped by default.** If an affected paycheck has a skipped pay date as `list_paychecks` reports it, the call is refused naming the paycheck and `allow_regenerate`, because regenerating dates would clear the skip. A test covers a paycheck in the middle of a skip.
+- **`allow_regenerate`** (boolean, default false, like `allow_reconciled`) lets the call proceed over either case, giving the app's own result, which is what the app does when the same edit is saved.
+  - Over a skipped date only, it needs the tool's existing scopes.
+  - If it would recreate a missing schedule, the call also needs the `delete` scope, because recreating undoes a delete. The tool checks the grant for `delete` inside the handler, after reading the paychecks (the set of scopes a call needs depends on the data, so it cannot be declared once at registration). A grant without it is refused with the fixed text of a scope refusal naming `delete` as missing, writes the `refused` audit line, and changes nothing. The tool's registered scopes and annotations are unchanged.
+  - The audit attempt line records `allow_regenerate: true`, whether it recreates schedules, which paycheck ids, and the skipped dates cleared; the outcome line records the recreated schedule ids in `created`.
 - **Result and entry:** the old and new calendar and days, and for each affected paycheck its id and next pay and deposit dates before and after, read back; the audit entry records the same.
 
 ### D7. Reads
@@ -115,5 +119,6 @@ Row cap: close and group delete name one account or group, so the cap does not a
 - **Delete is the most destructive tool in the server.** Mitigations: `delete`, `structure:write` and `transactions:write` scopes, `allow_reconciled` for reconciled history, the row cap, the dry run with counts under `confirm_destructive`, and an audit line that records what was deleted.
 - **A big account cannot be deleted by an agent.** The row cap refuses it; the user deletes it in the app. A grant cannot raise the cap above 50.
 - **Bank unlink on close and delete is irreversible.** Surfaced in the description, dry run and audit line; the same as the app. A standalone link or unlink tool is a separate story.
-- **Business days is stricter than the app** (it refuses over a missing schedule or a skip). The refusal text says what to do.
+- **Business days is stricter than the app by default** (it refuses over a missing schedule or a skip). `allow_regenerate` gives the app's result; recreating a deleted schedule also needs `delete`.
+- **Delete row count:** the rows a delete counts against the cap come from `v_transactions`, so split children count as the engine deletes them.
 - **Opening balance and the off-budget flag are not editable through `write_update_account`.** The description and README point an agent at `write_update_transactions` and `write_move_on_budget`.

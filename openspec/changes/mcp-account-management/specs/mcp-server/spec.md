@@ -128,7 +128,7 @@ With writes on, the server SHALL offer `write_create_account_group`, `write_upda
 - **THEN** the call fails naming `delete` as missing, and the group still exists
 
 ### Requirement: Account business days tool
-`write_set_account_business_days` SHALL need `structure:write` and `schedules:write`. It SHALL take an account id, a business calendar id (or null for Saturday and Sunday) and `deposit_days_early` (a whole number from 0 to 10), set them as the app does, and return the before and after of both. It SHALL report only the paychecks that deposit into the account as affected (with their ids and their next pay and deposit dates before and after, also in the audit line), listing any other paycheck the engine regenerates because it names the account elsewhere as also regenerated. It SHALL refuse, before the engine call and naming the paycheck, when a paycheck the engine would regenerate has a recorded schedule that no longer exists (so a deleted schedule is not recreated), or when an affected paycheck has a skipped pay date (so a skip is not dropped). A call that changes neither value SHALL be refused.
+`write_set_account_business_days` SHALL need `structure:write` and `schedules:write`. It SHALL take an account id, a business calendar id (or null for Saturday and Sunday) and `deposit_days_early` (a whole number from 0 to 10), set them as the app does, and return the before and after of both. It SHALL report only the paychecks that deposit into the account as affected (with their ids and their next pay and deposit dates before and after, also in the audit line), listing any other paycheck the engine regenerates because it names the account elsewhere as also regenerated. It SHALL refuse, before the engine call and naming the paycheck and the flag `allow_regenerate`, when a paycheck the engine would regenerate has a recorded schedule that no longer exists (so a deleted schedule is not recreated), or when an affected paycheck has a skipped pay date (so a skip is not dropped), unless the call passes `allow_regenerate: true` (default false), which gives the app's own result. A call with `allow_regenerate` that would recreate a missing schedule SHALL also need the `delete` scope, refused as a scope refusal naming `delete` when the grant lacks it; one that only clears a skipped date needs no further scope. The audit line SHALL record `allow_regenerate`, the paychecks and skipped dates affected, and the schedule ids recreated. A call that changes neither value SHALL be refused.
 
 #### Scenario: Two business days early
 - **GIVEN** an account "Checking" with no calendar, and the calendar "U.S. Federal Reserve"
@@ -149,6 +149,21 @@ With writes on, the server SHALL offer `write_create_account_group`, `write_upda
 - **GIVEN** a paycheck depositing into "Checking" whose next pay date is skipped
 - **WHEN** a client calls `write_set_account_business_days` for "Checking"
 - **THEN** the call is refused naming the paycheck, and the skip and the account are unchanged
+
+#### Scenario: Overriding a skip
+- **GIVEN** a paycheck depositing into "Checking" whose next pay date is skipped, and a grant with `structure:write schedules:write`
+- **WHEN** a client calls `write_set_account_business_days` for "Checking" with `allow_regenerate: true`
+- **THEN** the account and the paycheck's schedules are exactly as after the same edit in the app, and the audit line records `allow_regenerate` and the skipped date cleared
+
+#### Scenario: Overriding a missing schedule needs delete
+- **GIVEN** a paycheck depositing into "Checking" whose deposit schedule was deleted, and a grant with `structure:write schedules:write` and no `delete`
+- **WHEN** a client calls `write_set_account_business_days` with `allow_regenerate: true`
+- **THEN** the call is refused naming `delete` as missing, a `refused` audit line is written, and no schedule was created
+
+#### Scenario: Overriding a missing schedule with delete
+- **GIVEN** the same paycheck and a grant that also has `delete`
+- **WHEN** a client calls it with `allow_regenerate: true`
+- **THEN** the schedule is recreated as in the app, and the outcome line records its id in `created`
 
 #### Scenario: Out of range
 - **WHEN** a client calls it with `deposit_days_early` 11, or with a calendar id that no calendar has

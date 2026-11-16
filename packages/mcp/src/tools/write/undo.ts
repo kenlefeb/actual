@@ -246,6 +246,29 @@ async function planUpdateTransactions(ctx: Ctx): Promise<Plan> {
       if (norm(now) !== norm(c.after)) stale.push(`${rowId} (${c.field})`);
     }
   }
+  // What an update put back must still exist (a deleted or merged-away id is gone from the table)
+  const REFS = {
+    category_id: 'categories',
+    payee_id: 'payees',
+    account_id: 'accounts',
+  } as const;
+  for (const [field, table] of Object.entries(REFS)) {
+    const wantedIds = [...wanted.entries()].flatMap(([rowId, fields]) => {
+      const before = fields.get(field)?.before;
+      return typeof before === 'string' ? [{ rowId, before }] : [];
+    });
+    if (wantedIds.length === 0) continue;
+    const { data } = (await api.runQuery(
+      api
+        .q(table)
+        .filter({ id: { $oneof: [...new Set(wantedIds.map(w => w.before))] } })
+        .select(['id']),
+    )) as { data: Array<{ id: string }> };
+    const alive = new Set(data.map(r => r.id));
+    for (const w of wantedIds) {
+      if (!alive.has(w.before)) stale.push(`${w.rowId} (${field})`);
+    }
+  }
   if (stale.length > 0) throw conflict(stale);
   return {
     ids,
@@ -274,22 +297,30 @@ async function planUpdateTransactions(ctx: Ctx): Promise<Plan> {
   };
 }
 
-const rowKey = (r: Record<string, unknown>) =>
+const rowKey = (
+  r: Record<string, unknown>,
+  account: unknown,
+  cleared: unknown,
+) =>
   JSON.stringify([
+    account,
     r.date,
     r.amount,
     norm(r.payee),
     norm(r.category),
     norm(r.notes),
+    Boolean(cleared),
   ]);
 
 async function planCreateTransactions(ctx: Ctx): Promise<Plan> {
   const created = strings(ctx.entry.outcome?.created);
+  // the engine creates API rows cleared
+  const account = strings(ctx.entry.attempt?.ids)[0];
   const logged = changesOf(ctx.entry)
     .filter(
       c => c.field === 'transaction' && c.after && typeof c.after === 'object',
     )
-    .map(c => rowKey(c.after as Record<string, unknown>));
+    .map(c => rowKey(c.after as Record<string, unknown>, account, true));
   if (created.length === 0 || created.length !== logged.length) {
     throw notUndoable('Its created rows were not fully recorded.');
   }
@@ -297,7 +328,7 @@ async function planCreateTransactions(ctx: Ctx): Promise<Plan> {
   const pool = [...logged];
   const stale: string[] = [];
   for (const row of rows.values()) {
-    const at = pool.indexOf(rowKey(row));
+    const at = pool.indexOf(rowKey(row, row.account, row.cleared));
     if (at < 0) stale.push(`${row.id} (transaction)`);
     else pool.splice(at, 1);
   }
@@ -308,7 +339,11 @@ async function planCreateTransactions(ctx: Ctx): Promise<Plan> {
     changes: created.map(rowId => ({
       id: rowId,
       field: 'transaction',
-      before: rowKey(rows.get(rowId)!),
+      before: rowKey(
+        rows.get(rowId)!,
+        rows.get(rowId)!.account,
+        rows.get(rowId)!.cleared,
+      ),
       after: null,
     })),
     steps: created.map(rowId => ({
@@ -367,6 +402,21 @@ async function planCategoryUpdate(ctx: Ctx, group: boolean): Promise<Plan> {
   const stale = wanted
     .filter(c => !now || now[c.field as 'name' | 'hidden'] !== c.after)
     .map(c => `${rowId} (${c.field})`);
+  // The restored name must not now belong to another sibling (the write tools' requireName rule)
+  const restored = wanted.find(c => c.field === 'name')?.before;
+  if (typeof restored === 'string') {
+    const siblings = group
+      ? groups
+      : (groups.find(g => g.categories.some(c => c.id === rowId))?.categories ??
+        []);
+    if (
+      siblings.some(
+        o => o.id !== rowId && o.name.toLowerCase() === restored.toLowerCase(),
+      )
+    ) {
+      stale.push(`${rowId} (name)`);
+    }
+  }
   if (stale.length > 0) throw conflict(stale);
   const fields = Object.fromEntries(wanted.map(c => [c.field, c.before]));
   return {

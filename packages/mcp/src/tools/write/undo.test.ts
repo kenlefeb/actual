@@ -192,6 +192,211 @@ describe('Writes return their id', () => {
   });
 });
 
+describe('Writes return their id (skip and move on budget)', () => {
+  it('write_skip_paycheck and write_move_on_budget return their call_id', async () => {
+    await start(1);
+    const paycheck = await api.createPaycheck({
+      name: 'Acme',
+      newClearingAccountName: 'Acme Paycheck',
+      definition: {
+        payee: null,
+        clearingAccount: '',
+        date: { start: '2027-01-01', frequency: 'monthly' },
+        weekendSolveMode: 'before',
+        grossAmount: 300000,
+        incomeCategory: null,
+        deductions: [],
+        deposits: [
+          {
+            id: 'checking',
+            account: h.fixture.accountId,
+            kind: 'remainder',
+            value: 0,
+          },
+        ],
+      },
+    });
+    const skip = await write('write_skip_paycheck', { paycheck_id: paycheck });
+    const account = await api.createAccount(
+      { name: 'Vanguard 401k', offbudget: true },
+      10000,
+    );
+    await api.addTransactions(account, [{ date: '2026-09-01', amount: 100 }]);
+    const preview = await h.call('preview_move_on_budget', {
+      account_id: account,
+      start_date: '2026-10-01',
+    });
+    const move = await write('write_move_on_budget', {
+      account_id: account,
+      start_date: '2026-10-01',
+      confirm: preview.json.confirm,
+    });
+    for (const [tool, w] of [
+      ['write_skip_paycheck', skip],
+      ['write_move_on_budget', move],
+    ] as const) {
+      expect(
+        lines().find(l => l.phase === 'attempt' && l.call_id === w.write_id)
+          ?.tool,
+      ).toBe(tool);
+    }
+  });
+});
+
+describe('Undo checks what it restores still exists', () => {
+  it('refuses restoring a name another category now holds', async () => {
+    await start(1);
+    const food = await cat('Food');
+    const w = await write('write_update_category', {
+      category_id: food,
+      name: 'Dining',
+    });
+    await cat('Food');
+    const res = await h.call('write_undo', { write_id: w.write_id });
+    expect(res.isError).toBe(true);
+    expect(res.text).toContain(food);
+    expect(res.text).toContain('name');
+    expect((await api.getCategories()).find(c => c.id === food)!.name).toBe(
+      'Dining',
+    );
+  });
+
+  it('refuses restoring a group name another group now holds', async () => {
+    await start(1);
+    const group = await write('write_create_category_group', { name: 'Fun' });
+    const w = await write('write_update_category_group', {
+      group_id: group.group_id,
+      name: 'Games',
+    });
+    await api.createCategoryGroup({ name: 'Fun' });
+    const res = await h.call('write_undo', { write_id: w.write_id });
+    expect(res.isError).toBe(true);
+    expect(res.text).toContain(group.group_id as string);
+  });
+
+  it('refuses restoring a category that was deleted', async () => {
+    await start(1);
+    const [t] = await rows();
+    const a = await cat('Rent');
+    const b = await cat('Utilities');
+    await setCategory([t.id], a);
+    const w = await setCategory([t.id], b);
+    await api.deleteCategory(a, b);
+    // the delete moved the row to b, so put it back where the write left it
+    const res = await h.call('write_undo', { write_id: w.write_id });
+    expect(res.isError).toBe(true);
+    expect(res.text).toContain('category_id');
+    expect((await rows())[0].category).toBe(b);
+  });
+
+  it('refuses restoring a payee that was deleted', async () => {
+    await start(1);
+    const [t] = await rows();
+    const first = await api.createPayee({ name: 'First' });
+    const second = await api.createPayee({ name: 'Second' });
+    await write('write_update_transactions', {
+      updates: [{ id: t.id, payee_id: first }],
+    });
+    const w = await write('write_update_transactions', {
+      updates: [{ id: t.id, payee_id: second }],
+    });
+    await api.deletePayee(first);
+    const res = await h.call('write_undo', { write_id: w.write_id });
+    expect(res.isError).toBe(true);
+    expect(res.text).toContain('payee_id');
+    expect((await rows())[0].payee).toBe(second);
+  });
+});
+
+describe('A create undo matches account and cleared too', () => {
+  it('refuses when a created row was unmarked cleared since', async () => {
+    await start(1);
+    const w = await write('write_create_transactions', {
+      account_id: h.fixture.accountId,
+      transactions: [{ date: '2026-03-01', amount: -10 }],
+    });
+    const made = (await rows()).find(t => t.date === '2026-03-01')!;
+    await api.updateTransaction(made.id, { cleared: false });
+    const res = await h.call('write_undo', { write_id: w.write_id });
+    expect(res.isError).toBe(true);
+    expect(res.text).toContain(made.id);
+    expect(await rows()).toHaveLength(2);
+  });
+
+  it('refuses when a created row moved account', async () => {
+    await start(1);
+    const w = await write('write_create_transactions', {
+      account_id: h.fixture.accountId,
+      transactions: [{ date: '2026-03-01', amount: -10 }],
+    });
+    const made = (await rows()).find(t => t.date === '2026-03-01')!;
+    const other = await api.createAccount({ name: 'Other' }, 0);
+    await api.updateTransaction(made.id, { account: other });
+    const res = await h.call('write_undo', { write_id: w.write_id });
+    expect(res.isError).toBe(true);
+    expect(await rows()).toHaveLength(2);
+  });
+});
+
+describe('A category is in use by anything that refers to it', () => {
+  async function created() {
+    const group = (await api.getCategoryGroups()).find(
+      g => g.name === 'Bills',
+    )!;
+    return write('write_create_category', {
+      name: 'Games',
+      group_id: group.id,
+    });
+  }
+  /** True when the undo was refused and the category is still there. */
+  const refusedAndKept = async (w: { write_id: string }) => {
+    const res = await h.call('write_undo', { write_id: w.write_id });
+    return (
+      res.isError && (await api.getCategories()).some(c => c.name === 'Games')
+    );
+  };
+
+  it('only by a rule', async () => {
+    await start(1);
+    const w = await created();
+    const landlord = (await api.getPayees()).find(p => p.name === 'Landlord')!;
+    await api.createRule({
+      stage: null,
+      conditionsOp: 'and',
+      conditions: [{ field: 'payee', op: 'is', value: landlord.id }],
+      actions: [{ op: 'set', field: 'category', value: w.category_id }],
+    } as never);
+    expect(await refusedAndKept(w)).toBe(true);
+  });
+
+  it('only by a schedule', async () => {
+    await start(1);
+    const w = await created();
+    const schedule = await api.createSchedule({
+      name: 'Rent day',
+      date: { start: '2027-01-01', frequency: 'monthly' },
+      amount: -100,
+      amountOp: 'is',
+    } as never);
+    const sched = (await api.getSchedules()).find(x => x.id === schedule)!;
+    await api.updateRule({
+      id: sched.rule!,
+      stage: null,
+      conditionsOp: 'and',
+      conditions: [],
+      actions: [{ op: 'set', field: 'category', value: w.category_id }],
+    } as never);
+    expect(await refusedAndKept(w)).toBe(true);
+  });
+
+  it('only by a budget amount', async () => {
+    await start(1);
+    const w = await created();
+    await api.setBudgetAmount('2026-02', w.category_id as string, 500);
+    expect(await refusedAndKept(w)).toBe(true);
+  });
+});
+
 describe('List my writes', () => {
   it('lists the caller own writes newest first, not another identity', async () => {
     await start(3);

@@ -1,3 +1,5 @@
+import { registerAccountBusinessDaysTool } from './account-business-days';
+import { registerAccountCloseTools } from './account-close';
 import { registerAccountWriteTools } from './accounts';
 import { registerBudgetWriteTools } from './budget';
 import { registerCategoryWriteTools } from './categories';
@@ -14,5 +16,7 @@ export function registerWriteTools(tool: RegisterWriteTool) {
   registerBudgetWriteTools(tool);
   registerPaycheckWriteTools(tool);
   registerAccountWriteTools(tool);
+  registerAccountCloseTools(tool);
+  registerAccountBusinessDaysTool(tool);
   registerCategoryWriteTools(tool);
 }

@@ -17,6 +17,11 @@ With writes on, the server SHALL offer `write_create_account`, `write_update_acc
 - **WHEN** a client calls `write_reopen_account` with its id
 - **THEN** the account is open and the result shows `closed` true before and false after
 
+#### Scenario: Reopen an open account
+- **GIVEN** an open account
+- **WHEN** a client calls `write_reopen_account` with its id
+- **THEN** the call is refused saying the account is already open, and nothing changed
+
 #### Scenario: An unknown id or a name
 - **WHEN** a client passes an account id that no account has, or an account's name where an id is required
 - **THEN** the call is refused and nothing changed

@@ -54,10 +54,10 @@
     "tool": "write_skip_paycheck"
   },
   "account-set-business-days": {
-    "skip": "Not in the v1 write set (mcp-server \"Write tools\"): an account's business days are edited in the app"
+    "tool": "write_set_account_business_days"
   },
   "setAccountBusinessDays": {
-    "skip": "Not in the v1 write set (mcp-server \"Write tools\"): an account's business days are edited in the app"
+    "tool": "write_set_account_business_days"
   },
   "account-move-on-budget": {
     "tool": "write_move_on_budget"

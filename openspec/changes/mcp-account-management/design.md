@@ -37,18 +37,19 @@ Ten write tools and one read tool, named in the proposal. Each validates its ids
 
 **Why:** "same results as the app" is met by calling the handlers the app calls. No `loot-core` change means no new fork handler and no change to the fork-handler count.
 
-**Alternative considered:** one `write_manage_account` with an `action` field. Rejected: scopes and the destructive annotation are per tool, and a single tool would need `delete` for its harmless actions or hide deletes behind a harmless-looking name.
+**Alternative considered:** one `write_manage_account` with an `action` field. Rejected: scopes and the destructive annotation are per tool, and a single tool would need `accounts:delete` for its harmless actions or hide deletes behind a harmless-looking name.
 
 ### D2. Scopes
 
 | Tool | Scopes | Destructive |
 |---|---|---|
 | `write_create_account`, `write_update_account`, `write_reopen_account`, `write_create_account_group`, `write_update_account_group` | `structure:write` | no |
-| `write_close_account`, `write_delete_account_group` | `structure:write`, `delete` | yes |
-| `write_delete_account` | `structure:write`, `delete`, `transactions:write` | yes |
+| `write_close_account`, `write_delete_account_group` | `structure:write`, `accounts:delete` | yes |
+| `write_delete_account` | `structure:write`, `accounts:delete`, `transactions:write` | yes |
 | `write_set_account_business_days` | `structure:write`, `schedules:write` | no |
 | `list_account_groups` | `budget:read` | n/a |
 
+- `accounts:delete` is the account area's delete scope (mcp-write-undo, design D6): it lets a grant hold account close and delete without the transaction, category and group deletes that need `delete`. Neither implies the other. The business-days schedule-recreate check (D6 below) stays `delete`.
 - Business days need both write scopes because the call edits an account and rewrites paycheck dates.
 - Delete also needs `transactions:write` because it deletes every transaction in the account; a grant without it cannot erase history through an account delete.
 - Close needs no `transactions:write`: the one transaction it posts is the app's own balance transfer, an effect of closing and not a transaction edit. Close is destructive because it ends bank sync and moves money.
@@ -116,7 +117,7 @@ Row cap: close and group delete name one account or group, so the cap does not a
 
 ## Risks / Trade-offs
 
-- **Delete is the most destructive tool in the server.** Mitigations: `delete`, `structure:write` and `transactions:write` scopes, `allow_reconciled` for reconciled history, the row cap, the dry run with counts under `confirm_destructive`, and an audit line that records what was deleted.
+- **Delete is the most destructive tool in the server.** Mitigations: `accounts:delete`, `structure:write` and `transactions:write` scopes, `allow_reconciled` for reconciled history, the row cap, the dry run with counts under `confirm_destructive`, and an audit line that records what was deleted.
 - **A big account cannot be deleted by an agent.** The row cap refuses it; the user deletes it in the app. A grant cannot raise the cap above 50.
 - **Bank unlink on close and delete is irreversible.** Surfaced in the description, dry run and audit line; the same as the app. A standalone link or unlink tool is a separate story.
 - **Business days is stricter than the app by default** (it refuses over a missing schedule or a skip). `allow_regenerate` gives the app's result; recreating a deleted schedule also needs `delete`.

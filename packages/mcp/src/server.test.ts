@@ -48,6 +48,7 @@ describe('server surface', () => {
       'get_paycheck_year_to_date',
       'get_paychecks_clearing_status',
       'get_schedule_next_dates',
+      'list_account_groups',
       'list_accounts',
       'list_business_calendars',
       'list_category_groups',

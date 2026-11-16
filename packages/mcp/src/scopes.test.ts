@@ -62,6 +62,12 @@ const NEEDS: Record<string, Scope[]> = {
   write_move_category: ['structure:write'],
   write_delete_category: ['structure:write', 'delete'],
   write_delete_category_group: ['structure:write', 'delete'],
+  write_create_account: ['structure:write'],
+  write_update_account: ['structure:write'],
+  write_reopen_account: ['structure:write'],
+  write_create_account_group: ['structure:write'],
+  write_update_account_group: ['structure:write'],
+  write_delete_account_group: ['structure:write', 'accounts:delete'],
 };
 
 describe('Every tool declares a scope', () => {

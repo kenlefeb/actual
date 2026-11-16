@@ -6,16 +6,22 @@ import { startHarness } from '#client-harness';
 import { loadConfig } from '#config';
 
 const WRITE_TOOLS = [
+  'write_create_account',
+  'write_create_account_group',
   'write_create_category',
   'write_create_category_group',
   'write_create_transactions',
+  'write_delete_account_group',
   'write_delete_category',
   'write_delete_category_group',
   'write_move_category',
   'write_move_category_group',
   'write_move_on_budget',
+  'write_reopen_account',
   'write_set_budget_amount',
   'write_skip_paycheck',
+  'write_update_account',
+  'write_update_account_group',
   'write_update_category',
   'write_update_category_group',
   'write_update_transactions',
@@ -99,8 +105,9 @@ describe('write entry', () => {
     const { tools } = await h.client.listTools();
     const writes = tools.filter(t => t.name.startsWith('write_'));
     expect(writes.map(t => t.name).sort()).toEqual(WRITE_TOOLS);
-    // Only the category and group deletes of sc-2598 may delete.
+    // Only the category and group deletes of sc-2598 and the account group delete may delete.
     expect(writes.map(t => t.name).filter(n => /delete/.test(n))).toEqual([
+      'write_delete_account_group',
       'write_delete_category',
       'write_delete_category_group',
     ]);

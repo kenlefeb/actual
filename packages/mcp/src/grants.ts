@@ -21,6 +21,7 @@ export const SCOPES = [
   'structure:write',
   'schedules:write',
   'delete',
+  'accounts:delete',
 ] as const;
 
 export type Scope = (typeof SCOPES)[number];

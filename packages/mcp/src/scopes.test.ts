@@ -70,6 +70,7 @@ const NEEDS: Record<string, Scope[]> = {
   write_undo: ['budget:read'],
   write_delete_category: ['structure:write', 'delete'],
   write_delete_category_group: ['structure:write', 'delete'],
+  write_delete_transactions: ['transactions:write', 'delete'],
   write_create_account: ['structure:write'],
   write_update_account: ['structure:write'],
   write_reopen_account: ['structure:write'],

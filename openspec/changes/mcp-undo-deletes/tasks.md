@@ -2,12 +2,12 @@
 
 ## 1. Delete transactions (sc-4485)
 
-- [ ] 1.1 Failing tests first for "Delete transactions" and "Transaction delete refusals": transfer pair, split parent with children (delete-limit count), partner that is a split child (unlinked), attachments, split child refused, reconciled row, reconciled partner, a child's reconciled partner and a reconciled partner child refused without the override and allowed with it and the grant's option, unknown or deleted id, dry run and `confirm`, missing `delete` scope
-- [ ] 1.2 `write_delete_transactions` in `packages/mcp/src/tools/write/transactions.ts` (design D7), scopes `transactions:write delete`, annotated destructive, deleting through `api.deleteTransaction`
-- [ ] 1.3 `budget_id` on every schema 2 audit line and the `write_undo` refusal on a mismatch ("Audit lines name the budget"), failing tests first
-- [ ] 1.3a Its attempt line per "Deletes log what their undo needs" (design D3) and the size check of "A delete must be undoable", sizing the undo's line too (design D4), with failing tests first
-- [ ] 1.4 `packages/mcp/coverage.json`: `api/transaction-delete` and `deleteTransaction` point at `write_delete_transactions`; README tool table. `yarn check:mcp-coverage` passes
-- [ ] 1.5 Run `yarn typecheck`, `yarn lint` and the `@actual-app/mcp` tests; all pass
+- [x] 1.1 Failing tests first for "Delete transactions" and "Transaction delete refusals": transfer pair, split parent with children (delete-limit count), partner that is a split child (unlinked), attachments, split child refused, reconciled row, reconciled partner, a child's reconciled partner and a reconciled partner child refused without the override and allowed with it and the grant's option, unknown or deleted id, dry run and `confirm`, missing `delete` scope
+- [x] 1.2 `write_delete_transactions` in `packages/mcp/src/tools/write/transactions.ts` (design D7), scopes `transactions:write delete`, annotated destructive, deleting through `api.deleteTransaction`
+- [x] 1.3 `budget_id` on every schema 2 audit line and the `write_undo` refusal on a mismatch ("Audit lines name the budget"), failing tests first
+- [x] 1.3a Its attempt line per "Deletes log what their undo needs" (design D3) and the size check of "A delete must be undoable", sizing the undo's line too (design D4), with failing tests first
+- [x] 1.4 `packages/mcp/coverage.json`: `api/transaction-delete` and `deleteTransaction` point at `write_delete_transactions`; README tool table. `yarn check:mcp-coverage` passes
+- [x] 1.5 Run `yarn typecheck`, `yarn lint` and the `@actual-app/mcp` tests; all pass
 
 ## 2. Undo of deletes (sc-4692)
 

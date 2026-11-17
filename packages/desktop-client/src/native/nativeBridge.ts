@@ -234,6 +234,29 @@ async function validatePaycheckSave(forward: Send, args: unknown) {
   };
 }
 
+// sc-4801: each reconcile handler's own fields. loot-core checks the values
+// (native-reconcile-flow D5); a save never carries who, loot-core derives it.
+const RECONCILE_FIELDS = new Map([
+  ['native/reconcile-rows', ['account_id', 'scope']],
+  ['native/reconcile-tick', ['account_id', 'ids', 'cleared', 'undoToken']],
+  ['native/reconcile-list-set', ['excluded']],
+  ['account-statement-balance-prefill', ['account_id']],
+  ['account-statement-balance-get', ['account_id']],
+  [
+    'account-statement-balance-save',
+    ['account_id', 'amount', 'source', 'as_of'],
+  ],
+]);
+
+function pickFields(args: unknown, fields: string[]) {
+  const given = (args ?? {}) as Record<string, unknown>;
+  return Object.fromEntries(
+    fields
+      .filter(key => Object.hasOwn(given, key))
+      .map(key => [key, given[key]]),
+  );
+}
+
 // loot-core's sync reasons that native code tells apart (sc-3884); a Map, so a
 // reason like "constructor" never reads the prototype
 const SYNC_REASONS = new Map([
@@ -298,6 +321,13 @@ export function createNativeBridge({
       } else if (name === 'native/undo') {
         const { token } = (args ?? {}) as Record<string, unknown>;
         args = { token: readToken(token) };
+      } else if (name === 'native/reconcile-month') {
+        args = undefined;
+      } else if (RECONCILE_FIELDS.has(name)) {
+        if (name === 'native/reconcile-tick') {
+          readToken((args as Record<string, unknown> | null)?.undoToken);
+        }
+        args = pickFields(args, RECONCILE_FIELDS.get(name) ?? []);
       }
       // A write resolves to undefined, which JSON.stringify does not make a string
       return JSON.stringify((await forward(name, args)) ?? null);

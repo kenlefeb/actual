@@ -107,7 +107,7 @@ async function readPref(id: string) {
 }
 
 /** Cleared rows, split children left out: the number the MCP reports and the register shows. */
-async function clearedBalanceOf(accountId: string): Promise<number> {
+export async function clearedBalanceOf(accountId: string): Promise<number> {
   const { data } = await aqlQuery(
     q('transactions')
       .filter({ account: accountId, cleared: true })

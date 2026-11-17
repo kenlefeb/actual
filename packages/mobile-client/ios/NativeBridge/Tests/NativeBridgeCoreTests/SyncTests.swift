@@ -59,10 +59,18 @@ final class SyncAllowlistTests: XCTestCase {
         XCTAssertEqual(
             NativeBridgeAllowlist.paycheckWrites, ["paycheck-skip-next", "native/undo", "native/paycheck-save", "paycheck-delete"])
         XCTAssertEqual(NativeBridgeAllowlist.sync, ["sync"])
+        // sc-4801
+        XCTAssertEqual(
+            NativeBridgeAllowlist.reconcileReads,
+            ["native/reconcile-month", "native/reconcile-rows", "account-statement-balance-prefill", "account-statement-balance-get"])
+        XCTAssertEqual(
+            NativeBridgeAllowlist.reconcileWrites,
+            ["native/reconcile-tick", "native/reconcile-list-set", "account-statement-balance-save"])
         XCTAssertEqual(
             NativeBridgeAllowlist.handlers,
             NativeBridgeAllowlist.reads.union(NativeBridgeAllowlist.writes).union(NativeBridgeAllowlist.paycheckWrites)
-                .union(NativeBridgeAllowlist.sync))
+                .union(NativeBridgeAllowlist.sync).union(NativeBridgeAllowlist.reconcileReads)
+                .union(NativeBridgeAllowlist.reconcileWrites))
         XCTAssertFalse(NativeBridgeAllowlist.handlers.contains("undo"))
         XCTAssertFalse(NativeBridgeAllowlist.handlers.contains("redo"))
     }

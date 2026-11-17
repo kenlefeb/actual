@@ -2282,7 +2282,19 @@ const FORK_HANDLER_METHODS = {
   'api/budget-copy-month': 'copyBudgetMonth',
   'api/budget-average-plan': 'planBudgetToAverage',
   'api/budget-average': 'setBudgetToAverage',
+  'api/account-statement-balance-get': 'getAccountStatementBalance',
+  'api/account-statement-balance-consume': 'consumeAccountStatementBalance',
 } as const;
+
+describe('Statement balance record methods', () => {
+  test('The API reads and consumes a record and exports no saver', () => {
+    const names = Object.keys(api).filter(n => /statementbalance/i.test(n));
+    expect(names.sort()).toEqual([
+      'consumeAccountStatementBalance',
+      'getAccountStatementBalance',
+    ]);
+  });
+});
 
 describe('API fork handler coverage', () => {
   test('A handler without a method', async () => {

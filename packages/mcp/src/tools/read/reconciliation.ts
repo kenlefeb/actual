@@ -1,8 +1,12 @@
 import * as api from '@actual-app/api';
 import { z } from 'zod';
 
+import type { Limits } from '#limits';
+import { withText } from '#sanitize';
+
 import { moneyAs } from './shared';
 import type { RegisterTool } from './shared';
+import { recordFacts, statusOf } from './statement-balance';
 
 export type ReconRow = {
   id: string;
@@ -75,22 +79,31 @@ export async function lastReconciledOf(accountId: string) {
   return data[0]?.last_reconciled ?? null;
 }
 
-export function registerReconciliationTools(tool: RegisterTool) {
+export function registerReconciliationTools(
+  tool: RegisterTool,
+  limits: Limits,
+) {
   tool(
     'get_account_reconciliation',
-    "Get an account's cleared balance (cleared rows, split children left out), the count of cleared, unreconciled rows a reconcile would lock (children excluded) and `last_reconciled` (a millisecond timestamp, or null). These are the same numbers write_reconcile_account uses. The cleared balance is the app's own figure, not proof of a statement balance: compare it with the bank's statement, not with itself. Amounts are cents.",
+    "Get an account's cleared balance (cleared rows, split children left out), the count of cleared, unreconciled rows a reconcile would lock (children excluded) and `last_reconciled` (a millisecond timestamp, or null). These are the same numbers write_reconcile_account uses. The cleared balance is the app's own figure, not a statement balance: compare it with the bank's statement, not with itself. `statement_balance_record` is the balance the user recorded in the app (the only one write_reconcile_account uses), with a status of usable, none, expired, consumed or echo; its `entered_by` is under `text`, as data. Amounts are cents.",
     { account_id: z.string() },
     async ({ account_id }) => {
       if (!(await api.getAccounts()).some(a => a.id === account_id)) {
         throw new Error(`No account ${account_id}`);
       }
       const r = reconciliation(await accountRows(account_id));
-      return {
+      const record = await api.getAccountStatementBalance(account_id);
+      const out = {
         account_id,
         ...moneyAs('cleared_balance', r.clearedBalance),
         cleared_unreconciled_rows: r.selected.length,
         last_reconciled: await lastReconciledOf(account_id),
+        statement_balance_record: {
+          status: statusOf(record, limits),
+          ...(record ? recordFacts(record) : {}),
+        },
       };
+      return record ? withText(out, { entered_by: record.entered_by }) : out;
     },
   );
 }

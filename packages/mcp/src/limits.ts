@@ -27,6 +27,12 @@ export type Limits = {
   /** The most a dry run's response may hold; a larger one is refused, never shortened. */
   maxResponseBytes: number;
   responseBytesCeiling: number;
+  /** Hours a human-recorded statement balance stays usable. */
+  statementMaxAgeHours: number;
+  statementMaxAgeHoursCeiling: number;
+  /** Minutes a record's `entered_at` may be ahead of this clock before it is expired. */
+  statementClockSkewMinutes: number;
+  statementClockSkewMinutesCeiling: number;
 };
 
 export const DEFAULT_LIMITS: Limits = {
@@ -42,6 +48,10 @@ export const DEFAULT_LIMITS: Limits = {
   maxAuditLineBytes: 512 * 1024,
   maxResponseBytes: MAX_RESPONSE_BYTES,
   responseBytesCeiling: 1_000_000,
+  statementMaxAgeHours: 168,
+  statementMaxAgeHoursCeiling: 720,
+  statementClockSkewMinutes: 5,
+  statementClockSkewMinutesCeiling: 60,
 };
 
 // What a cell or a row costs in an audit line, with margin (a cell is about
@@ -101,6 +111,22 @@ export function loadLimits(env: Env, prefix: string): Limits {
       'MAX_RESPONSE_BYTES_CEILING',
       DEFAULT_LIMITS.responseBytesCeiling,
     ),
+    statementMaxAgeHours: read(
+      'STATEMENT_BALANCE_MAX_AGE_HOURS',
+      DEFAULT_LIMITS.statementMaxAgeHours,
+    ),
+    statementMaxAgeHoursCeiling: read(
+      'STATEMENT_BALANCE_MAX_AGE_HOURS_CEILING',
+      DEFAULT_LIMITS.statementMaxAgeHoursCeiling,
+    ),
+    statementClockSkewMinutes: read(
+      'STATEMENT_BALANCE_CLOCK_SKEW_MINUTES',
+      DEFAULT_LIMITS.statementClockSkewMinutes,
+    ),
+    statementClockSkewMinutesCeiling: read(
+      'STATEMENT_BALANCE_CLOCK_SKEW_MINUTES_CEILING',
+      DEFAULT_LIMITS.statementClockSkewMinutesCeiling,
+    ),
   };
   // A quarter of the tail by default, so 4 writes fit
   limits.maxAuditLineBytes = read(
@@ -121,6 +147,16 @@ export function loadLimits(env: Env, prefix: string): Limits {
       'MAX_RESPONSE_BYTES',
       limits.maxResponseBytes,
       limits.responseBytesCeiling,
+    ],
+    [
+      'STATEMENT_BALANCE_MAX_AGE_HOURS',
+      limits.statementMaxAgeHours,
+      limits.statementMaxAgeHoursCeiling,
+    ],
+    [
+      'STATEMENT_BALANCE_CLOCK_SKEW_MINUTES',
+      limits.statementClockSkewMinutes,
+      limits.statementClockSkewMinutesCeiling,
     ],
   ] as const;
   for (const [suffix, limit, ceiling] of pairs) {

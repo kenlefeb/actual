@@ -24,6 +24,10 @@ describe('Limits are configurable defaults', () => {
       maxAuditLineBytes: 512 * 1024,
       maxResponseBytes: 100_000,
       responseBytesCeiling: 1_000_000,
+      statementMaxAgeHours: 168,
+      statementMaxAgeHoursCeiling: 720,
+      statementClockSkewMinutes: 5,
+      statementClockSkewMinutesCeiling: 60,
     });
     expect(DEFAULT_LIMITS).toEqual(loadLimits({}, STDIO));
   });
@@ -157,6 +161,53 @@ describe('Limits are configurable defaults', () => {
         STDIO,
       ).reconcileCeiling,
     ).toBe(6000);
+  });
+
+  it('The statement balance expiry and clock skew are settings with ceilings', () => {
+    const l = loadLimits(
+      {
+        [`${STDIO}STATEMENT_BALANCE_MAX_AGE_HOURS`]: '24',
+        [`${STDIO}STATEMENT_BALANCE_CLOCK_SKEW_MINUTES`]: '10',
+      },
+      STDIO,
+    );
+    expect([l.statementMaxAgeHours, l.statementClockSkewMinutes]).toEqual([
+      24, 10,
+    ]);
+    const wide = loadLimits(
+      {
+        [`${STDIO}STATEMENT_BALANCE_MAX_AGE_HOURS`]: '800',
+        [`${STDIO}STATEMENT_BALANCE_MAX_AGE_HOURS_CEILING`]: '900',
+      },
+      STDIO,
+    );
+    expect(wide.statementMaxAgeHours).toBe(800);
+    for (const suffix of [
+      'STATEMENT_BALANCE_MAX_AGE_HOURS',
+      'STATEMENT_BALANCE_CLOCK_SKEW_MINUTES',
+    ]) {
+      for (const bad of ['0', '1.5', 'x', '-1']) {
+        expect(() => loadLimits({ [`${STDIO}${suffix}`]: bad }, STDIO)).toThrow(
+          new RegExp(`${suffix} must be a positive whole number`),
+        );
+      }
+    }
+    expect(() =>
+      loadLimits({ [`${STDIO}STATEMENT_BALANCE_MAX_AGE_HOURS`]: '721' }, STDIO),
+    ).toThrow(/STATEMENT_BALANCE_MAX_AGE_HOURS is above .*_CEILING/);
+    expect(() =>
+      loadLimits(
+        { [`${STDIO}STATEMENT_BALANCE_CLOCK_SKEW_MINUTES`]: '61' },
+        STDIO,
+      ),
+    ).toThrow(/STATEMENT_BALANCE_CLOCK_SKEW_MINUTES is above .*_CEILING/);
+    // The hosted prefix
+    expect(
+      loadLimits(
+        { ACTUAL_MCP_STATEMENT_BALANCE_MAX_AGE_HOURS: '12' },
+        'ACTUAL_MCP_',
+      ).statementMaxAgeHours,
+    ).toBe(12);
   });
 
   it('The writes entry reads the settings; the read entry never does', () => {

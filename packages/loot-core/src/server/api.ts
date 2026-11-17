@@ -858,6 +858,22 @@ handlers['api/account-balance'] = withMutation(async function ({
   return handlers['account-balance']({ id, cutoff });
 });
 
+handlers['api/account-statement-balance-get'] = async function ({ accountId }) {
+  checkFileOpen();
+  return handlers['account-statement-balance-get']({ account_id: accountId });
+};
+
+handlers['api/account-statement-balance-consume'] = async function ({
+  accountId,
+  id,
+}) {
+  checkFileOpen();
+  return handlers['account-statement-balance-consume']({
+    account_id: accountId,
+    id,
+  });
+};
+
 handlers['api/account-groups-get'] = async function () {
   checkFileOpen();
   const groups = await handlers['account-groups-get']();

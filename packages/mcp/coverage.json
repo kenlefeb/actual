@@ -20,6 +20,27 @@
   "business-calendars-get": {
     "tool": "list_business_calendars"
   },
+  "api/account-statement-balance-get": {
+    "tool": "get_account_reconciliation"
+  },
+  "getAccountStatementBalance": {
+    "tool": "get_account_reconciliation"
+  },
+  "api/account-statement-balance-consume": {
+    "tool": "write_reconcile_account"
+  },
+  "consumeAccountStatementBalance": {
+    "tool": "write_reconcile_account"
+  },
+  "account-statement-balance-get": {
+    "skip": "App-only handler: the human records and reads their statement balance in the app; the MCP reaches it through the api/ read"
+  },
+  "account-statement-balance-save": {
+    "skip": "Never reachable by MCP: only a person in the app records a statement balance (reconcile-recorded-statement-balance)"
+  },
+  "account-statement-balance-consume": {
+    "skip": "App-only handler: the MCP consumes through api/account-statement-balance-consume"
+  },
   "getBusinessCalendars": {
     "tool": "list_business_calendars"
   },

@@ -1,5 +1,6 @@
 import * as asyncStorage from '#platform/server/asyncStorage';
 import * as fs from '#platform/server/fs';
+import { STATEMENT_BALANCE_PREFIX } from '#server/accounts/statement-balance';
 import { createApp } from '#server/app';
 import * as db from '#server/db';
 import { PostError } from '#server/errors';
@@ -53,6 +54,12 @@ async function saveSyncedPrefs({
 }) {
   if (!id) {
     return;
+  }
+
+  if (id.startsWith(STATEMENT_BALANCE_PREFIX)) {
+    throw new Error(
+      'A statement balance record can only be saved by account-statement-balance-save.',
+    );
   }
 
   await db.update('preferences', {

@@ -1,5 +1,6 @@
 import { send } from '@actual-app/core/platform/client/connection';
 import type { MoveOnBudgetPreview } from '@actual-app/core/server/accounts/move-on-budget';
+import type { StatementBalanceRecord } from '@actual-app/core/server/accounts/statement-balance';
 import type {
   APIAccountEntity,
   APIAccountGroupEntity,
@@ -633,6 +634,24 @@ export function moveAccountOnBudget(
   startDate: string,
 ) {
   return send('account-move-on-budget', { id, startDate });
+}
+
+/**
+ * The account's human-recorded statement balance, or null. There is no method
+ * that saves one: only the app records it.
+ */
+export function getAccountStatementBalance(
+  accountId: AccountEntity['id'],
+): Promise<StatementBalanceRecord | null> {
+  return send('api/account-statement-balance-get', { accountId });
+}
+
+/** Consumes the record with this id once; `consumed` is false when it is not the current, unconsumed record. */
+export function consumeAccountStatementBalance(
+  accountId: AccountEntity['id'],
+  id: string,
+): Promise<{ consumed: boolean }> {
+  return send('api/account-statement-balance-consume', { accountId, id });
 }
 
 export function getBusinessCalendars(): Promise<BusinessCalendarEntity[]> {

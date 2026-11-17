@@ -5,7 +5,7 @@ An account SHALL have at most one statement balance record, a synced value with 
 
 #### Scenario: The app records a balance
 - **WHEN** the app saves 12,345 cents from the bank-sync source for an account
-- **THEN** reading the account returns that amount and source, an `id` and `entered_at` set by the server, and `consumed_at` null
+- **THEN** reading the account returns that amount and source, an `id` and `entered_at` set by the saving device's engine, and `consumed_at` null
 
 #### Scenario: A malformed record
 - **WHEN** the stored value is not a valid record

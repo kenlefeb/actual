@@ -9,6 +9,8 @@ import { appendAudit } from './audit';
 import type { AuditIdentity, Identity } from './audit';
 import { actingUserId } from './connection';
 import type { Grant } from './grants';
+import { DEFAULT_LIMITS } from './limits';
+import type { Limits } from './limits';
 import { Refusal } from './refusal';
 import { DATA_NOTE, scrubSecrets } from './sanitize';
 import { registerAccountTools } from './tools/read/accounts';
@@ -23,7 +25,8 @@ import { version } from './version';
 import { withWriteLock } from './write-lock';
 
 const READ_NOTE = ` Read-only. ${DATA_NOTE}`;
-const WRITE_NOTE = ` Changes the budget; ids only, at most 50 rows, every write is audit-logged first. ${DATA_NOTE}`;
+const writeNote = (limits: Limits) =>
+  ` Changes the budget; ids only, at most ${limits.maxRows} rows (budget cells: ${limits.maxCells}) by default, every write is audit-logged first. ${DATA_NOTE}`;
 const READ: Access = { scopes: ['budget:read'] };
 const READ_ONLY: Grant = { scopes: ['budget:read'], confirm_destructive: true };
 
@@ -36,6 +39,8 @@ export type ServerOptions = {
   grant?: () => Grant;
   /** The OAuth client id, which a destructive tool's `confirm` is bound to; `local` on stdio. */
   client?: string;
+  /** The write limits (server settings); the defaults when not given. */
+  limits?: Limits;
   /** Called with a tool's name and outcome, never its arguments or result (the hosted entry's access record). */
   onToolCall?: (tool: string, status: 'ok' | 'error') => void;
   /** Extra read tools, for an entry that adds its own (the hosted entry's `get_sync_status`). */
@@ -49,6 +54,7 @@ export function createServer(
     identity,
     grant: grantOf = () => READ_ONLY,
     client = 'local',
+    limits = DEFAULT_LIMITS,
     onToolCall,
     registerExtra,
   }: ServerOptions = {},
@@ -56,6 +62,7 @@ export function createServer(
   const server = new McpServer({ name: 'actual-budget', version });
   const who = identity ?? { user_id: actingUserId(), subject: 'local' };
   const scrub = (m: string) => scrubSecrets(m, secrets);
+  const WRITE_NOTE = writeNote(limits);
 
   // Every tool goes through here: the grant is checked before `fn` runs.
   // Amounts are integer minor units (cents).
@@ -106,6 +113,7 @@ export function createServer(
               identity: audited,
               grant,
               client,
+              limits,
               args,
               destructive: Boolean(access.destructive),
             });
@@ -173,7 +181,7 @@ export function createServer(
 
   // Write tools on every entry; the grant decides which calls succeed (tools/write/*)
   const writeTool = register(WRITE_NOTE);
-  registerWriteTools(writeTool);
+  registerWriteTools(writeTool, limits);
   registerUndoTools(writeTool, (name, description, shape, fn) =>
     read(name, description, shape, fn, READ),
   );

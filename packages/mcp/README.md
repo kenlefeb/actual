@@ -55,6 +55,7 @@ and prompt on every write.
 | `write_create_transactions`       | `transactions:write`                                       | Adds transactions to one account (date, cents, payee, category, notes)                                                                                                                                                                 |
 | `write_update_transactions`       | `transactions:write`                                       | Sets category, payee, notes, amount, date, account or cleared of transactions                                                                                                                                                          |
 | `write_set_budget_amount`         | `budget:write`                                             | Sets one category's budgeted amount for a month                                                                                                                                                                                        |
+| `write_set_budget_amounts`        | `budget:write`                                             | Sets up to the cell limit (500 by default) of category-and-month amounts in one call; a bad cell refuses all, and a stop names applied, failed and not-written cells                                                                   |
 | `write_skip_paycheck`             | `schedules:write`                                          | Skips a paycheck's next pay date                                                                                                                                                                                                       |
 | `write_move_on_budget`            | `structure:write`                                          | Moves an off-budget account on budget; needs a `confirm` (below)                                                                                                                                                                       |
 | `write_create_account`            | `structure:write`                                          | Creates an account (on or off budget, optional opening balance in cents); a duplicate name is allowed with a warning                                                                                                                   |
@@ -83,13 +84,15 @@ only expense groups can be created.
 
 - **Write ids and undo.** Every write result carries `write_id` (the `call_id` of its audit lines).
   `list_writes` (`budget:read`) lists your own recent writes, newest first (20, at most 50, from the
-  last 2 MB of the audit log), with whether each is `undone` and `undoable`. `write_undo { write_id }`
+  last `AUDIT_TAIL_BYTES` of the audit log, 2 MB by default), with whether each is `undone` and `undoable`. `write_undo { write_id }`
   restores the values the write logged, in the caller's own writes only, and needs the scopes the
   reversed write needed (taken from the tool, not the log). It is refused, changing nothing, if any
   logged field no longer holds the value the write left, a created row is in use, or a row is now
   reconciled (pass `allow_reconciled` if the grant allows), a transfer or a split. A write is undone
   once; an undo applies row by row, and an engine failure midway is logged with `applied` and
-  `failed`. Undoable: transaction creates (deleted) and updates, budget amounts, category and group
+  `failed`. Undoable: transaction creates (deleted) and updates, budget amounts (single and many; a many-amounts
+  undo is counted against the cell limit and matches cells by category and month, and one that
+  stopped midway restores only its applied cells), category and group
   updates, and category and group creates (deleted while unused). **Not undoable:** category and
   group moves, paycheck skip, `write_move_on_budget`, deletes, account tools, an undo, and any
   line written before audit `schema: 2`. Writes (and undos) run one at a time per process.
@@ -99,8 +102,8 @@ only expense groups can be created.
 - **Moved history keeps no category.** A call that would leave a categorized transaction on a
   moved account's history before its budget start date, or on its offset line (they are already
   in the starting balance), is refused whole; do that in the app. Notes and payee can still change.
-- **50 rows at most** per call, or the grant's lower `max_rows`; more is refused before anything
-  changes. `write_update_transactions` also counts every row the call would change: split children
+- **Row, cell and delete limits** per call (defaults 50 rows, 500 budget cells, 50 deleted rows; see
+  Limits below); more is refused before anything changes. `write_update_transactions` also counts every row the call would change: split children
   and transfer partners as well as the rows it names.
 - **Before and after.** Each result carries the before and after values of every field it
   changed (`write_create_transactions` returns the new rows and their ids).
@@ -202,7 +205,13 @@ scopes it needs (its description ends `Needs: …`):
   for a server image that does not know it (every connection then falls back to `budget:read`), so
   ship the image before the grant. The stdio default (`ACTUAL_MCP_WRITES_SCOPES` unset) is every
   scope and so includes it, and the account tools need it.
-- **`max_rows`.** Lowers the per-call row cap below 50; it never raises it.
+- **`max_rows`, `max_cells`, `max_delete_rows`.** Replace the server's row, budget-cell and
+  delete limits for this connection, up to the operator's ceilings (below); a value above its
+  ceiling makes the whole file invalid. Rows are transactions, categories and the like; cells are a
+  category in a month (`write_set_budget_amounts`, and its undo). A delete, an account close and
+  the undo of a create (which deletes) count against the delete limit, the lower of
+  `max_delete_rows` and the row limit in force: raising `max_rows` or `max_cells` never widens
+  them, lowering `max_rows` still lowers them.
 - **`allow_reconciled`.** Lets `write_update_transactions` take a row's `allow_reconciled` to
   change a reconciled transaction (below). Off when absent: without it, any row that sets
   `allow_reconciled` is refused.
@@ -210,12 +219,24 @@ scopes it needs (its description ends `Needs: …`):
 **Stdio grants.** Only the `--writes` entry reads these variables, so both entries can share one env
 file; the read entry always grants `budget:read` (its write tools are listed but refused).
 
-| Variable                                | Default when unset | Meaning                                                                    |
-| --------------------------------------- | ------------------ | -------------------------------------------------------------------------- |
-| `ACTUAL_MCP_WRITES_SCOPES`              | every scope        | Space-separated scopes; an unknown or empty value stops the entry at start |
-| `ACTUAL_MCP_WRITES_CONFIRM_DESTRUCTIVE` | `0`                | `1` to require the dry run and `confirm` before a delete                   |
-| `ACTUAL_MCP_WRITES_MAX_ROWS`            | 50                 | A lower per-call row cap                                                   |
-| `ACTUAL_MCP_WRITES_ALLOW_RECONCILED`    | `0`                | `1` to let a row's `allow_reconciled` change reconciled transactions       |
+| Variable                                    | Default when unset | Meaning                                                                    |
+| ------------------------------------------- | ------------------ | -------------------------------------------------------------------------- |
+| `ACTUAL_MCP_WRITES_SCOPES`                  | every scope        | Space-separated scopes; an unknown or empty value stops the entry at start |
+| `ACTUAL_MCP_WRITES_CONFIRM_DESTRUCTIVE`     | `0`                | `1` to require the dry run and `confirm` before a delete                   |
+| `ACTUAL_MCP_WRITES_MAX_ROWS`                | 50                 | Default per-call row limit (a grant's `max_rows` replaces it)              |
+| `ACTUAL_MCP_WRITES_MAX_CELLS`               | 500                | Default per-call budget-cell limit                                         |
+| `ACTUAL_MCP_WRITES_MAX_DELETE_ROWS`         | 50                 | Default per-call delete limit                                              |
+| `ACTUAL_MCP_WRITES_MAX_ROWS_CEILING`        | 1000               | The most a row limit may be (also bounds the tool schemas)                 |
+| `ACTUAL_MCP_WRITES_MAX_CELLS_CEILING`       | 2000               | The most a cell limit may be                                               |
+| `ACTUAL_MCP_WRITES_MAX_DELETE_ROWS_CEILING` | 1000               | The most a delete limit may be                                             |
+| `ACTUAL_MCP_WRITES_AUDIT_TAIL_BYTES`        | 2097152 (2 MB)     | How much of the audit log's end an undo reads                              |
+| `ACTUAL_MCP_WRITES_ALLOW_RECONCILED`        | `0`                | `1` to let a row's `allow_reconciled` change reconciled transactions       |
+
+**Limits** are settings only the operator sets (a grant never sets a ceiling). The hosted entry reads
+the same names without `WRITES_` (`ACTUAL_MCP_MAX_CELLS` and so on). A setting above its ceiling, or
+ceilings the audit tail cannot hold (4 writes of ceiling size, 150 bytes a cell and 250 a row; 1.2 MB of
+the 2 MB default), stop the entry at start with fixed text naming the settings. Raise the tail
+before raising a ceiling. The limit in force is the grant's value, else the setting.
 
 Set them in the 1Password Environment "Actual Agents", never in the repo, `.mcp.json` or a shell
 profile. They are read at start. On your own machine this is a guard rail against a confused agent,
@@ -249,7 +270,7 @@ change applies on the next call with no restart or reconnect. The access token k
 
 - **Strict schema.** `version` is 1; no unknown keys anywhere; `subject` is a literal OAuth subject,
   never a wildcard; `client` is a client id or `*`; `scopes` is a non-empty list of known scopes;
-  `max_rows` a positive integer (above 50 counts as 50); `confirm_destructive` a boolean, `true`
+  `max_rows`, `max_cells` and `max_delete_rows` positive integers not above the server's ceilings; `confirm_destructive` a boolean, `true`
   when absent; `allow_reconciled` a boolean, off when absent, and never on a `*` grant. No (subject, client) pair may appear twice, and a `*` grant holds `budget:read`
   only, so writes go only to named client ids. Any violation makes the whole file invalid.
 - **Matching.** An exact client id wins over `*`; a subject with no matching grant gets no scopes.

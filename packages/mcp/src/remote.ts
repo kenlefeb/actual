@@ -243,8 +243,10 @@ export function createRemoteHttpServer(
 
   const record = createRecorder(config, log);
   // Checked on every call, so a grant change applies without a restart.
-  const grantFor = createGrantsLookup(config.grantsFile, reason =>
-    record({ event: 'grants', reason }),
+  const grantFor = createGrantsLookup(
+    config.grantsFile,
+    reason => record({ event: 'grants', reason }),
+    config.limits,
   );
   // Per source and endpoint, so one caller cannot use up the limit for Ken.
   const perEndpoint = createLimiter(
@@ -371,6 +373,7 @@ export function createRemoteHttpServer(
     const mcp = createServer(config.secrets, {
       registerExtra: registerSyncStatusTool,
       auditLog: config.auditLog,
+      limits: config.limits,
       identity: { user_id: actingUserId(), subject },
       // The token admits (`budget:read`); the grant decides what a call may do.
       grant: () => grantFor(subject, client),

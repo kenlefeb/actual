@@ -25,7 +25,7 @@ A call, or an undo, that would change more budget cells (category and month) tha
 - **THEN** the call succeeds
 
 ### Requirement: Limits are configurable defaults
-The row limit (50), cell limit (500), delete limit (50) and their ceilings (1,000, 2,000, 1,000) SHALL be server settings only the operator sets; a grant's `max_rows`, `max_cells` and `max_delete_rows` set that connection's value up to the ceiling. The audit tail is a setting (default 2 MB); the server SHALL refuse to start when 4 times the cell ceiling at 150 bytes a cell exceeds it. A value over its ceiling SHALL be invalid.
+The row limit (50), cell limit (500), delete limit (50) and their ceilings (1,000, 2,000, 1,000) SHALL be server settings only the operator sets; a grant's `max_rows`, `max_cells` and `max_delete_rows` set that connection's value up to the ceiling. The audit tail is a setting (default 2 MB); the server SHALL refuse to start when it cannot hold 4 writes of ceiling size (150 bytes a cell, 250 a row). A value over its ceiling SHALL be invalid.
 
 #### Scenario: A grant overrides the setting
 - **GIVEN** the cell setting is 200 and the grant has `max_cells` 300
@@ -43,7 +43,7 @@ The row limit (50), cell limit (500), delete limit (50) and their ceilings (1,00
 - **THEN** it exits with fixed text naming the two settings
 
 ### Requirement: Delete tools have their own limit
-Tools that delete or close (category group delete, account close and delete, and undo of a create) SHALL count rows against the delete limit, the lower of the grant's `max_delete_rows` (default 50, at most the ceiling) and its `max_rows`. Raising `max_rows` or `max_cells` SHALL NOT raise it.
+Tools that delete or close (category group delete, account close and delete, and undo of a create) SHALL count rows against the delete limit, the lower of the delete limit (the grant's `max_delete_rows`, else the setting, at most the ceiling) and the row limit in force (the grant's `max_rows`, else the setting), and a refusal SHALL say it is the delete limit, including for an undo of a create. Raising `max_rows` or `max_cells` SHALL NOT raise it.
 
 #### Scenario: A raised row limit does not widen a delete
 - **GIVEN** a grant with `max_rows` 1000 and no `max_delete_rows`

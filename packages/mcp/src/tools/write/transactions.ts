@@ -2,6 +2,7 @@ import * as api from '@actual-app/api';
 import { z } from 'zod';
 
 import type { AuditChange } from '#audit';
+import type { Limits } from '#limits';
 import { Refusal } from '#refusal';
 import { withText } from '#sanitize';
 import { date, money } from '#tools/read/shared';
@@ -9,7 +10,6 @@ import { date, money } from '#tools/read/shared';
 import {
   id,
   loggedWrite,
-  MAX_WRITE_ROWS,
   notes,
   requireAmount,
   requireDate,
@@ -78,10 +78,13 @@ function rowOut(t: Row) {
   );
 }
 
-export function registerTransactionWriteTools(tool: RegisterWriteTool) {
+export function registerTransactionWriteTools(
+  tool: RegisterWriteTool,
+  limits: Limits,
+) {
   tool(
     'write_create_transactions',
-    `Create up to ${MAX_WRITE_ROWS} transactions in one account. account_id, payee_id and category_id must be ids from the read tools, never names. Amounts are integer cents (negative for spending). Returns the created rows.`,
+    `Create up to ${limits.maxRows} transactions in one account. account_id, payee_id and category_id must be ids from the read tools, never names. Amounts are integer cents (negative for spending). Returns the created rows.`,
     {
       account_id: id,
       transactions: z
@@ -97,7 +100,7 @@ export function registerTransactionWriteTools(tool: RegisterWriteTool) {
             .strict(),
         )
         .min(1)
-        .max(MAX_WRITE_ROWS),
+        .max(limits.rowsCeiling),
     },
     async ({ account_id, transactions }, auditLog) => {
       requireRows(auditLog, transactions.length);
@@ -177,7 +180,7 @@ export function registerTransactionWriteTools(tool: RegisterWriteTool) {
 
   tool(
     'write_update_transactions',
-    `Change up to ${MAX_WRITE_ROWS} transactions by id: category, payee, notes, amount (integer cents), date, account and cleared. category_id, payee_id and account_id must be ids from the read tools, never names; null clears category, payee or notes. The named rows change together or not at all. Rules, as in the app: date, account and cleared are set on a split parent and its children follow; after the call every split it touches must add up (a split's parent and child amounts can change in one call); a transfer's other side follows (opposite amount, notes, schedule, transfer payee, category cleared) in a second step, keeping its own date; a transfer side cannot move into its other side's account, and a payee change that would link or unlink a transfer is refused; moving to an off-budget account clears the category; a closed account cannot be a target. Changing amount, date, account or payee of a reconciled row (or of a transfer whose other side is reconciled), or setting cleared false on a reconciled row, needs allow_reconciled true on that row, which the connection's grant must allow; a new account or cleared false then un-reconciles it. Returns each changed field's before and after values, read back, including the cascaded rows.`,
+    `Change up to ${limits.maxRows} transactions by id: category, payee, notes, amount (integer cents), date, account and cleared. category_id, payee_id and account_id must be ids from the read tools, never names; null clears category, payee or notes. The named rows change together or not at all. Rules, as in the app: date, account and cleared are set on a split parent and its children follow; after the call every split it touches must add up (a split's parent and child amounts can change in one call); a transfer's other side follows (opposite amount, notes, schedule, transfer payee, category cleared) in a second step, keeping its own date; a transfer side cannot move into its other side's account, and a payee change that would link or unlink a transfer is refused; moving to an off-budget account clears the category; a closed account cannot be a target. Changing amount, date, account or payee of a reconciled row (or of a transfer whose other side is reconciled), or setting cleared false on a reconciled row, needs allow_reconciled true on that row, which the connection's grant must allow; a new account or cleared false then un-reconciles it. Returns each changed field's before and after values, read back, including the cascaded rows.`,
     {
       updates: z
         .array(
@@ -196,7 +199,7 @@ export function registerTransactionWriteTools(tool: RegisterWriteTool) {
             .strict(),
         )
         .min(1)
-        .max(MAX_WRITE_ROWS),
+        .max(limits.rowsCeiling),
     },
     async ({ updates }, auditLog) => {
       requireRows(auditLog, updates.length);

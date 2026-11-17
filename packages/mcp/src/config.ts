@@ -4,6 +4,8 @@ import { basename, dirname, join, resolve, sep } from 'path';
 
 import { parseScopes, SCOPES } from './grants';
 import type { Grant } from './grants';
+import { DEFAULT_LIMITS, loadLimits } from './limits';
+import type { Limits } from './limits';
 
 // Staging lives on the tailnet; see actual-hosting (compose.tailnet.yaml).
 const STAGING_HOST = 'actual-staging.owl-becrux.ts.net';
@@ -58,6 +60,8 @@ export type McpConfig = {
   env: EnvLabel;
   /** The stdio `--writes` entry (its own data directory, engine not read-only); always true on the hosted entry. */
   writes: boolean;
+  /** The write limits (server settings); the defaults on the read entry. */
+  limits: Limits;
   /** Write audit log, beside the data directory: `<dataDir>.audit.jsonl`. */
   auditLog: string;
   /** Every secret the server holds, for scrubbing. */
@@ -155,7 +159,6 @@ export function stdioGrant(env: Env, writes: boolean): Grant {
   if (!writes) return { scopes: ['budget:read'], confirm_destructive: false };
   const scopes = env.ACTUAL_MCP_WRITES_SCOPES;
   const confirm = env.ACTUAL_MCP_WRITES_CONFIRM_DESTRUCTIVE;
-  const maxRows = env.ACTUAL_MCP_WRITES_MAX_ROWS;
   const allowReconciled = env.ACTUAL_MCP_WRITES_ALLOW_RECONCILED;
   // Set but empty is refused, never read as "unset" (which grants everything).
   if (scopes !== undefined && !scopes.trim()) {
@@ -173,15 +176,9 @@ export function stdioGrant(env: Env, writes: boolean): Grant {
   ) {
     throw new Error('ACTUAL_MCP_WRITES_ALLOW_RECONCILED must be 1 or 0.');
   }
-  if (maxRows !== undefined && !/^[1-9]\d*$/.test(maxRows)) {
-    throw new Error(
-      'ACTUAL_MCP_WRITES_MAX_ROWS must be a positive whole number.',
-    );
-  }
   return {
     scopes: scopes === undefined ? [...SCOPES] : parseScopes(scopes),
     confirm_destructive: confirm === '1',
-    ...(maxRows ? { max_rows: Number(maxRows) } : {}),
     ...(allowReconciled === '1' ? { allow_reconciled: true } : {}),
   };
 }
@@ -237,6 +234,7 @@ export function loadConfig(
     env: label,
     dataDir,
     writes,
+    limits: writes ? loadLimits(env, 'ACTUAL_MCP_WRITES_') : DEFAULT_LIMITS,
     grant: stdioGrant(env, writes),
     auditLog: `${dataDir}.audit.jsonl`,
     secrets: [password, sessionToken, encryptionPassword].filter(

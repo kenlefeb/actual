@@ -17,6 +17,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 
 import { buildFixtureBudget } from './fixture';
+import { DEFAULT_LIMITS } from './limits';
 import {
   createLimiter,
   createRemoteHttpServer,
@@ -42,6 +43,7 @@ function config(over: Partial<RemoteConfig> = {}): RemoteConfig {
     dataDir: '/tmp/actual-mcp-remote-test',
     env: 'staging',
     writes: true,
+    limits: DEFAULT_LIMITS,
     auditLog: AUDIT,
     secrets: [SECRET],
     listen: { host: '127.0.0.1', port: 0 },

@@ -3,6 +3,7 @@ import { basename, join, resolve } from 'path';
 
 import { labelHost, readSecretFile, resolveCredential } from './config';
 import type { McpConfig } from './config';
+import { loadLimits } from './limits';
 import { isLoopbackUri } from './oauth';
 import type { OAuthConfig } from './oauth';
 
@@ -219,6 +220,7 @@ export function loadRemoteConfig(env: Env, argv: string[] = []): RemoteConfig {
     env: label,
     dataDir,
     writes: true,
+    limits: loadLimits(env, 'ACTUAL_MCP_'),
     production,
     grantsFile: env.ACTUAL_MCP_GRANTS_FILE || undefined,
     auditLog: `${dataDir}.audit.jsonl`,

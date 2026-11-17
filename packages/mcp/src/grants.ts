@@ -13,6 +13,9 @@ import { dirname } from 'path';
 
 import { z } from 'zod';
 
+import { DEFAULT_LIMITS } from './limits';
+import type { Limits } from './limits';
+
 /** What a connection may do, by area. A deleting tool needs its area's write scope and `delete`; account close and delete need `accounts:delete` instead (independent of `delete`). */
 export const SCOPES = [
   'budget:read',
@@ -30,7 +33,10 @@ export type Scope = (typeof SCOPES)[number];
 export type Grant = {
   scopes: Scope[];
   confirm_destructive: boolean;
+  /** Replace the server's row, cell and delete limits for this connection, up to the ceilings. */
   max_rows?: number;
+  max_cells?: number;
+  max_delete_rows?: number;
   /** A row may set `allow_reconciled` to change a reconciled transaction. Off when absent. */
   allow_reconciled?: boolean;
   fingerprint?: string;
@@ -45,45 +51,55 @@ export function parseScopes(text: string): Scope[] {
   return names as Scope[];
 }
 
-const row = z
-  .object({
-    subject: z
-      .string()
-      .min(1)
-      .refine(s => !s.includes('*')),
-    client: z.string().min(1),
-    scopes: z.array(z.enum(SCOPES)).min(1),
-    confirm_destructive: z.boolean().optional(),
-    max_rows: z.number().int().positive().optional(),
-    allow_reconciled: z.boolean().optional(),
-  })
-  .strict();
+const limit = (ceiling: number) =>
+  z.number().int().positive().max(ceiling).optional();
 
-const grantsFile = z
-  .object({ version: z.literal(1), grants: z.array(row) })
-  .strict()
-  // No pair twice, so a later edit can't silently widen an earlier one.
-  .refine(
-    f =>
-      new Set(f.grants.map(g => JSON.stringify([g.subject, g.client]))).size ===
-      f.grants.length,
-  )
-  // Writes go only to named client ids: `*` covers every future client.
-  // It stays read-only in every respect, so no write option either.
-  .refine(f =>
-    f.grants.every(
-      g =>
-        g.client !== '*' ||
-        (g.scopes.every(s => s === 'budget:read') &&
-          g.allow_reconciled === undefined),
-    ),
-  );
+const rowSchema = (limits: Limits) =>
+  z
+    .object({
+      subject: z
+        .string()
+        .min(1)
+        .refine(s => !s.includes('*')),
+      client: z.string().min(1),
+      scopes: z.array(z.enum(SCOPES)).min(1),
+      confirm_destructive: z.boolean().optional(),
+      max_rows: limit(limits.rowsCeiling),
+      max_cells: limit(limits.cellsCeiling),
+      max_delete_rows: limit(limits.deleteCeiling),
+      allow_reconciled: z.boolean().optional(),
+    })
+    .strict();
 
-export type GrantRow = z.infer<typeof row>;
+const grantsFile = (limits: Limits) =>
+  z
+    .object({ version: z.literal(1), grants: z.array(rowSchema(limits)) })
+    .strict()
+    // No pair twice, so a later edit can't silently widen an earlier one.
+    .refine(
+      f =>
+        new Set(f.grants.map(g => JSON.stringify([g.subject, g.client])))
+          .size === f.grants.length,
+    )
+    // Writes go only to named client ids: `*` covers every future client.
+    // It stays read-only in every respect, so no write option either.
+    .refine(f =>
+      f.grants.every(
+        g =>
+          g.client !== '*' ||
+          (g.scopes.every(s => s === 'budget:read') &&
+            g.allow_reconciled === undefined),
+      ),
+    );
 
-/** Validates a grants file (design D3); throws on any violation. */
-export function parseGrantsFile(text: string | Buffer): GrantRow[] {
-  return grantsFile.parse(JSON.parse(String(text))).grants;
+export type GrantRow = z.infer<ReturnType<typeof rowSchema>>;
+
+/** Validates a grants file against the server's ceilings (design D3); throws on any violation. */
+export function parseGrantsFile(
+  text: string | Buffer,
+  limits: Limits = DEFAULT_LIMITS,
+): GrantRow[] {
+  return grantsFile(limits).parse(JSON.parse(String(text))).grants;
 }
 
 const FAIL_CLOSED: Grant = {
@@ -113,6 +129,7 @@ class Closed extends Error {}
 export function createGrantsLookup(
   path: string | undefined,
   warn: (reason: string) => void,
+  limits: Limits = DEFAULT_LIMITS,
 ) {
   let last: { stat: Stats; rows: GrantRow[]; fingerprint: string } | undefined;
   let lastReason: string | undefined;
@@ -159,7 +176,7 @@ export function createGrantsLookup(
       const bytes = readFileSync(fd);
       let rows: GrantRow[];
       try {
-        rows = parseGrantsFile(bytes);
+        rows = parseGrantsFile(bytes, limits);
       } catch {
         throw new Closed('the grants file is invalid');
       }
@@ -198,6 +215,10 @@ export function createGrantsLookup(
       scopes: match?.scopes ?? [],
       confirm_destructive: match?.confirm_destructive ?? true,
       ...(match?.max_rows ? { max_rows: match.max_rows } : {}),
+      ...(match?.max_cells ? { max_cells: match.max_cells } : {}),
+      ...(match?.max_delete_rows
+        ? { max_delete_rows: match.max_delete_rows }
+        : {}),
       ...(match?.allow_reconciled ? { allow_reconciled: true } : {}),
       fingerprint: file.fingerprint,
     };

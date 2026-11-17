@@ -5,7 +5,13 @@ import { Refusal } from '#refusal';
 
 import { ACCOUNT_DELETE_SCOPE, findAccount, NOTHING } from './accounts';
 import type { RegisterWriteTool } from './shared';
-import { confirm, id, loggedWrite, requireIds, requireRows } from './shared';
+import {
+  confirm,
+  id,
+  loggedWrite,
+  requireDeleteRows,
+  requireIds,
+} from './shared';
 
 const BANK_SYNC =
   'Closing or deleting an account unlinks it from bank sync first, and that cannot be undone.';
@@ -238,7 +244,10 @@ export function registerAccountCloseTools(tool: RegisterWriteTool) {
           `The account or a transfer partner holds reconciled transactions (${facts.reconciled} here, ${facts.partners_reconciled} in other accounts). Pass allow_reconciled true if the connection allows it. ${NOTHING}`,
         );
       }
-      requireRows(auditLog, facts.transactions + facts.partner_ids.length);
+      requireDeleteRows(
+        auditLog,
+        facts.transactions + facts.partner_ids.length,
+      );
 
       return loggedWrite(
         auditLog,

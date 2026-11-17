@@ -6,6 +6,8 @@ import { z } from 'zod';
 import { appendAudit } from '#audit';
 import type { AuditChange, AuditIdentity } from '#audit';
 import type { Grant, Scope } from '#grants';
+import { cellLimit, deleteLimit, rowLimit } from '#limits';
+import type { Limits } from '#limits';
 import { Refusal } from '#refusal';
 import { withText } from '#sanitize';
 
@@ -89,6 +91,8 @@ export type WriteLog = {
   identity: AuditIdentity;
   /** The connection's effective grant for this call. */
   grant: Grant;
+  /** The server's write limits; a grant replaces them per connection. */
+  limits: Limits;
   /** The OAuth client id (`local` on stdio); a `confirm` is bound to it. */
   client: string;
   /** The call's arguments, which a `confirm` covers. */
@@ -261,15 +265,36 @@ export async function loggedWrite<R extends object>(
   return logged ? named : { ...named, audit_outcome: 'not-logged' as const };
 }
 
-/** At most this many rows change in one write call; a grant can only lower it. */
-export const MAX_WRITE_ROWS = 50;
-
-/** Refuses (fixed text, before any audit line) more rows than this connection's cap. */
+/** Refuses (fixed text, before any audit line) more rows than this connection's row limit. */
 export function requireRows(log: WriteLog, rows: number) {
-  const cap = Math.min(log.grant.max_rows ?? MAX_WRITE_ROWS, MAX_WRITE_ROWS);
+  const cap = rowLimit(log.grant, log.limits);
   if (rows > cap) {
     throw new Refusal(
       `At most ${cap} rows may change in one call on this connection. Nothing changed.`,
+    );
+  }
+}
+
+/** Refuses more budget cells (category and month) than this connection's cell limit. */
+export function requireCells(log: WriteLog, cells: number) {
+  const cap = cellLimit(log.grant, log.limits);
+  if (cells > cap) {
+    throw new Refusal(
+      `At most ${cap} budget cells may change in one call on this connection; this call would change ${cells}. Nothing changed.`,
+    );
+  }
+}
+
+/**
+ * Refuses more rows than this connection's delete limit, for a delete, an
+ * account close and the undo of a create (which deletes). Raising the row or
+ * cell limit never raises it.
+ */
+export function requireDeleteRows(log: WriteLog, rows: number) {
+  const cap = deleteLimit(log.grant, log.limits);
+  if (rows > cap) {
+    throw new Refusal(
+      `At most ${cap} rows may be deleted or closed in one call on this connection (the delete limit, which a higher row limit does not raise; an undo of a create deletes too). Nothing changed.`,
     );
   }
 }

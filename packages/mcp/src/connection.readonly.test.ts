@@ -2,6 +2,7 @@ import * as api from '@actual-app/api';
 
 import type { McpConfig } from './config';
 import { openBudget } from './connection';
+import { DEFAULT_LIMITS } from './limits';
 
 vi.mock('@actual-app/api', () => ({
   init: vi.fn(async () => undefined),
@@ -18,6 +19,7 @@ const config = (writes: boolean): McpConfig => ({
   dataDir: '/tmp/actual-mcp-test',
   env: 'local',
   writes,
+  limits: DEFAULT_LIMITS,
   auditLog: '',
   secrets: ['pw'],
 });

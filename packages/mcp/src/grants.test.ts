@@ -10,6 +10,8 @@ import {
 import { tmpdir } from 'os';
 import { join } from 'path';
 
+import { DEFAULT_LIMITS } from '#limits';
+
 import { createGrantsLookup, parseGrantsFile, parseScopes } from './grants';
 
 const SUB = 'auth0|ken';
@@ -369,5 +371,66 @@ describe('Hosted grants fail closed', () => {
     replace(dir, path, '{');
     lookup(SUB, CLIENT);
     expect(warnings).toHaveLength(2);
+  });
+});
+
+describe('Grant limits', () => {
+  const grant = (extra: Record<string, unknown>) =>
+    file([{ subject: SUB, client: CLIENT, scopes: WRITE, ...extra }]);
+
+  it('accepts max_cells and max_delete_rows up to the ceilings', () => {
+    const rows = parseGrantsFile(
+      grant({ max_rows: 1000, max_cells: 2000, max_delete_rows: 1000 }),
+    );
+    expect(rows[0]).toMatchObject({
+      max_rows: 1000,
+      max_cells: 2000,
+      max_delete_rows: 1000,
+    });
+  });
+
+  it.each([
+    ['max_rows', 1001],
+    ['max_cells', 2001],
+    ['max_delete_rows', 1001],
+    ['max_cells', 0],
+    ['max_delete_rows', 1.5],
+  ])('Above the ceiling: %s %s is invalid', (key, value) => {
+    expect(() => parseGrantsFile(grant({ [key]: value }))).toThrow();
+  });
+
+  it('A raised ceiling admits a higher grant', () => {
+    expect(() => parseGrantsFile(grant({ max_cells: 3000 }))).toThrow();
+    const limits = { ...DEFAULT_LIMITS, cellsCeiling: 3000 };
+    expect(
+      parseGrantsFile(grant({ max_cells: 3000 }), limits)[0],
+    ).toMatchObject({ max_cells: 3000 });
+  });
+
+  it('A grant overrides the setting; the lookup carries every limit', () => {
+    const { path } = installed(
+      grant({ max_rows: 7, max_cells: 8, max_delete_rows: 9 }),
+    );
+    const got = createGrantsLookup(path, () => undefined)(SUB, CLIENT);
+    expect(got).toMatchObject({
+      max_rows: 7,
+      max_cells: 8,
+      max_delete_rows: 9,
+    });
+  });
+
+  it('The lookup validates against the ceilings it was given', () => {
+    const { path } = installed(grant({ max_cells: 3000 }));
+    const warned: string[] = [];
+    const strict = createGrantsLookup(path, r => warned.push(r));
+    expect(strict(SUB, CLIENT).scopes).toEqual(['budget:read']);
+    expect(warned).toEqual([
+      'the grants file is invalid; every connection is read-only',
+    ]);
+    const raised = createGrantsLookup(path, () => undefined, {
+      ...DEFAULT_LIMITS,
+      cellsCeiling: 3000,
+    });
+    expect(raised(SUB, CLIENT)).toMatchObject({ max_cells: 3000 });
   });
 });

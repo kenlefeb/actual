@@ -34,16 +34,20 @@ The dry run and the audit line SHALL carry the record's amount, source, `as_of`,
 - **WHEN** the app saves a new record after the dry run
 - **THEN** the confirm is refused and nothing changed
 
-### Requirement: A verified lock consumes the record
-After a lock whose balance is verified the tool SHALL consume the record by id and say so in the result and the outcome line. An unverified lock SHALL leave it unconsumed, and a failed consume SHALL be reported with the rows still locked.
+### Requirement: A lock consumes the record
+Inside the write lock the tool SHALL require the record to be unconsumed, unexpired, not `cleared` and equal to the confirmed one. It SHALL consume the record by id whenever rows were locked, even when `verified` is false, and say so in the outcome line; a failed consume SHALL be reported with the rows still locked.
 
 #### Scenario: One entry locks once
 - **WHEN** a client reconciles successfully and then calls the tool again
 - **THEN** the second call is refused as consumed
 
 #### Scenario: An unverified lock
-- **WHEN** the balance no longer matches after the lock
-- **THEN** the result says `verified: false` and the record stays unconsumed
+- **WHEN** the balance no longer matches after rows were locked
+- **THEN** the result says `verified: false` and the record is consumed
+
+#### Scenario: Two confirms of one dry run
+- **WHEN** a client confirms the same zero-row dry run twice
+- **THEN** the second is refused as consumed and nothing changed
 
 ### Requirement: The reconciliation read reports the record
 `get_account_reconciliation` SHALL return `statement_balance_record` with a `status` of `usable`, `none`, `expired`, `consumed` or `echo`, and the record's source, amount, dates and age when there is one.

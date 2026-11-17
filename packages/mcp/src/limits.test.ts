@@ -18,6 +18,8 @@ describe('Limits are configurable defaults', () => {
       rowsCeiling: 1000,
       cellsCeiling: 2000,
       deleteCeiling: 1000,
+      maxReconcileRows: 500,
+      reconcileCeiling: 1000,
       auditTailBytes: 2 * 1024 * 1024,
       maxAuditLineBytes: 512 * 1024,
       maxResponseBytes: 100_000,
@@ -129,6 +131,32 @@ describe('Limits are configurable defaults', () => {
     expect(() =>
       loadLimits({ [`${STDIO}MAX_ROWS_CEILING`]: '5000' }, STDIO),
     ).toThrow(/MAX_ROWS_CEILING.*AUDIT_TAIL_BYTES/);
+  });
+
+  it('The reconcile limit is a setting with a ceiling and a tail term', () => {
+    expect(
+      loadLimits({ [`${STDIO}MAX_RECONCILE_ROWS`]: '700' }, STDIO)
+        .maxReconcileRows,
+    ).toBe(700);
+    expect(() =>
+      loadLimits({ [`${STDIO}MAX_RECONCILE_ROWS`]: '1001' }, STDIO),
+    ).toThrow(/MAX_RECONCILE_ROWS is above .*MAX_RECONCILE_ROWS_CEILING/);
+    expect(() =>
+      loadLimits({ [`${STDIO}MAX_RECONCILE_ROWS`]: 'x' }, STDIO),
+    ).toThrow(/MAX_RECONCILE_ROWS must be a positive whole number/);
+    // 4 writes of 6,000 rows at 100 bytes is 2.4 MB: above the 2 MB tail
+    expect(() =>
+      loadLimits({ [`${STDIO}MAX_RECONCILE_ROWS_CEILING`]: '6000' }, STDIO),
+    ).toThrow(/MAX_RECONCILE_ROWS_CEILING.*AUDIT_TAIL_BYTES/);
+    expect(
+      loadLimits(
+        {
+          [`${STDIO}MAX_RECONCILE_ROWS_CEILING`]: '6000',
+          [`${STDIO}AUDIT_TAIL_BYTES`]: String(4 * 6000 * 100),
+        },
+        STDIO,
+      ).reconcileCeiling,
+    ).toBe(6000);
   });
 
   it('The writes entry reads the settings; the read entry never does', () => {

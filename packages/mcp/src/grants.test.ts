@@ -399,6 +399,42 @@ describe('Grant limits', () => {
     expect(() => parseGrantsFile(grant({ [key]: value }))).toThrow();
   });
 
+  it('max_reconcile_rows: within the ceiling, else invalid, and carried by the lookup', () => {
+    expect(
+      parseGrantsFile(grant({ max_reconcile_rows: 1000 }))[0],
+    ).toMatchObject({ max_reconcile_rows: 1000 });
+    for (const bad of [1001, 0, 1.5]) {
+      expect(() =>
+        parseGrantsFile(grant({ max_reconcile_rows: bad })),
+      ).toThrow();
+    }
+    const { path } = installed(grant({ max_reconcile_rows: 12 }));
+    expect(
+      createGrantsLookup(path, () => undefined)(SUB, CLIENT),
+    ).toMatchObject({ max_reconcile_rows: 12 });
+  });
+
+  it('A * client cannot hold transactions:reconcile', () => {
+    expect(() =>
+      parseGrantsFile(
+        file([
+          { subject: SUB, client: '*', scopes: ['transactions:reconcile'] },
+        ]),
+      ),
+    ).toThrow();
+    expect(
+      parseGrantsFile(
+        file([
+          {
+            subject: SUB,
+            client: CLIENT,
+            scopes: ['budget:read', 'transactions:reconcile'],
+          },
+        ]),
+      )[0].scopes,
+    ).toContain('transactions:reconcile');
+  });
+
   it('A raised ceiling admits a higher grant', () => {
     expect(() => parseGrantsFile(grant({ max_cells: 3000 }))).toThrow();
     const limits = { ...DEFAULT_LIMITS, cellsCeiling: 3000 };

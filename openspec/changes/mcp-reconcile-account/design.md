@@ -46,7 +46,7 @@ That change modifies "Write limits", the grant requirements and "What undo rever
 
 ## D9. `last_reconciled`
 
-`AccountEntity.last_reconciled` is a ms timestamp string. `api/account-update` spreads fields through `accountModel.fromExternal`, `db.updateAccount` validates only name, offbudget and closed, and the column is in the schema, so it should persist; the typed `APIAccountEntity` does not list it. Task 1.1 proves it with a failing test first. If it persists, widen the typed fields and add no handler. If dropped, add one fork handler `api/account-last-reconciled-set` with a typed method, a `coverage.json` line and a delta to `api-fork-handlers` (the Product Owner asks that they go together). The audit line holds before and after, including when no row locks.
+`AccountEntity.last_reconciled` is a ms timestamp string. `api/account-update` spreads fields through `accountModel.fromExternal`, `db.updateAccount` validates only name, offbudget and closed, and the column is in the schema, so it should persist; the typed `APIAccountEntity` does not list it. Task 1.1 proved it: the test (`last-reconciled.test.ts`) passed on first run, so it persists and no handler is added; the typed field was widened. The audit `changes` entry records `after: 'now'` because the stamp is set at lock time and the confirm hashes the entry; the outcome line holds the stamped value. If it persists, widen the typed fields and add no handler. If dropped, add one fork handler `api/account-last-reconciled-set` with a typed method, a `coverage.json` line and a delta to `api-fork-handlers` (the Product Owner asks that they go together). The audit line holds before and after, including when no row locks.
 
 ## D10. Reads, undo
 

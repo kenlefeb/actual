@@ -6,6 +6,7 @@ import { registerAccountWriteTools } from './accounts';
 import { registerBudgetWriteTools } from './budget';
 import { registerCategoryWriteTools } from './categories';
 import { registerPaycheckWriteTools } from './paychecks';
+import { registerReconcileTool } from './reconcile';
 import type { RegisterWriteTool } from './shared';
 import { registerTransactionWriteTools } from './transactions';
 
@@ -21,4 +22,5 @@ export function registerWriteTools(tool: RegisterWriteTool, limits: Limits) {
   registerAccountCloseTools(tool);
   registerAccountBusinessDaysTool(tool);
   registerCategoryWriteTools(tool, limits);
+  registerReconcileTool(tool);
 }

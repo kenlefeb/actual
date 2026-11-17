@@ -22,6 +22,8 @@ export type APIAccountEntity = Pick<AccountEntity, 'id' | 'name'> & {
   // Read-only: set in the app, which also updates paycheck deposit dates
   business_calendar_id?: string | null;
   deposit_days_early?: number;
+  // Writable (ms timestamp string): an MCP reconcile stamps it
+  last_reconciled?: string | null;
 };
 
 export const accountModel = {

@@ -53,6 +53,7 @@ const NEEDS: Record<string, Scope[]> = {
   write_update_transactions: ['transactions:write'],
   write_set_budget_amount: ['budget:write'],
   write_set_budget_amounts: ['budget:write'],
+  write_apply_budget_templates: ['budget:write'],
   write_copy_budget_month: ['budget:write'],
   write_set_budget_to_average: ['budget:write'],
   write_set_budget_carryover: ['budget:write'],
@@ -238,7 +239,11 @@ describe('A call outside the grant is refused by scope', () => {
       // write_undo checks the reversed write's scopes in its handler (design D2)
       if (t.name === 'write_undo') continue;
       // Whole-month overwrites delete nothing: budget:write, with a dry run (sc-4487)
-      if (/^write_(copy_budget_month|set_budget_to_average)$/.test(t.name)) {
+      if (
+        /^write_(copy_budget_month|set_budget_to_average|apply_budget_templates)$/.test(
+          t.name,
+        )
+      ) {
         continue;
       }
       expect(t.description, t.name).toMatch(

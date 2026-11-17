@@ -15,7 +15,9 @@ import type {
   APIScheduleEntity,
   APITagEntity,
 } from '#server/api-models';
+import type { TemplatePlan } from '#server/budget/goal-template';
 import type { BudgetCellPlan } from '#server/budget/month-plans';
+import type { TemplateNotification } from '#server/budget/template-notification';
 import type { BudgetFileHandlers } from '#server/budgetfiles/app';
 import type { batchUpdateTransactions } from '#server/transactions';
 import type { QueryState } from '#shared/query';
@@ -117,6 +119,18 @@ export type ApiHandlers = {
     month: string;
     months: 3 | 6 | 12;
   }) => Promise<void>;
+
+  'api/budget-templates-plan': (arg: {
+    month: string;
+    overwrite?: boolean;
+    categoryIds?: string[];
+  }) => Promise<TemplatePlan>;
+
+  'api/budget-templates-apply': (arg: {
+    month: string;
+    overwrite?: boolean;
+    categoryIds?: string[];
+  }) => Promise<TemplateNotification>;
 
   'api/transactions-export': (arg: {
     transactions: TransactionEntity[];

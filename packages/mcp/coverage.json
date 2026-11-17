@@ -185,6 +185,18 @@
   "setBudgetToAverage": {
     "tool": "write_set_budget_to_average"
   },
+  "api/budget-templates-plan": {
+    "tool": "write_apply_budget_templates"
+  },
+  "planBudgetTemplates": {
+    "tool": "write_apply_budget_templates"
+  },
+  "api/budget-templates-apply": {
+    "tool": "write_apply_budget_templates"
+  },
+  "applyBudgetTemplates": {
+    "tool": "write_apply_budget_templates"
+  },
   "amazon-orders-parse": {
     "skip": "Reads a file the user picked in the app (sc-926); the export stays on the device"
   },

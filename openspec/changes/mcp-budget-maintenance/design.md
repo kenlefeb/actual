@@ -38,6 +38,8 @@ Copy skips hidden categories and, in an envelope budget, income; average skips h
 
 Templates: the one unknown. `processTemplate` writes budgets and goals while it runs, so the plan needs a refactor that returns the cells and goals first. If it is larger than a day, part C ships later as its own story; A and B do not wait. `applyTemplate` also stores note templates into the automation store; the plan lists those entries so the `confirm` covers them. No AI: templates are parsed notes.
 
+Done in sc-4487 part 2C, well inside the time-box: `computeTemplates` already computed without writing, so the refactor only split `processTemplate`'s write lists out (`templateWrites`) and added `planTemplates`, which overlays the templates the notes would store (and the ones they would clear) on the stored ones and runs the same computation. The engine applies a template run as one batch, so the write step recomputes the plan inside the lock, requires it to equal the confirmed plan, applies once and reads the cells back, rather than checking cell by cell.
+
 ## D5. Carryover and hold
 
 Both are one-cell actions, no dry run. Carryover: the engine sets the flag on the start month and every later month, so the audit logs `carryover:YYYY-MM` for the start month and the count of months, and the description says so. Hold and reset hold are envelope-only and refused in a tracking budget with fixed text; hold changes nothing when to-budget is not positive, so the result reads back `forNextMonth` and says whether it held. They are audited with before and after and not undoable here (sc-4741).

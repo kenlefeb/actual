@@ -26,6 +26,6 @@ Backlog stories to file before the PRs merge: undo of templates (goals and the a
 
 ### 2C. Templates
 
-- [ ] 2.6 Time-box the plan refactor of `processTemplate` to return cells before writing (design D4); if over a day, stop and file a Backlog story for 2C
-- [ ] 2.7 Handlers, typed methods and `write_apply_budget_templates` (apply or overwrite, optional categories). Failing tests first: result equals the app's apply and overwrite on one fixture, dry run then confirm, a `confirm` refused after a template line changes a goal with the same budgeted cells, the audit line holds goals before and after, undo refused as not undoable, cap, no AI path
-- [ ] 2.8 `coverage.json`, `README.md`, typecheck, lint, tests
+- [x] 2.6 Time-box the plan refactor of `processTemplate` to return cells before writing (design D4); if over a day, stop and file a Backlog story for 2C
+- [x] 2.7 Handlers, typed methods and `write_apply_budget_templates` (apply or overwrite, optional categories). Failing tests first: result equals the app's apply and overwrite on one fixture, dry run then confirm, a `confirm` refused after a template line changes a goal with the same budgeted cells, the audit line holds goals before and after, undo refused as not undoable, cap, no AI path
+- [x] 2.8 `coverage.json`, `README.md`, typecheck, lint, tests

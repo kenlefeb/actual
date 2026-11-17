@@ -3,6 +3,14 @@ import type { DbSchedule } from '#server/db';
 
 import { GOAL_PREFIX, TEMPLATE_PREFIX } from './template-notes';
 
+// Categories whose automations came from notes that no longer hold a template
+const NO_TEMPLATE_NOTE = `
+      id NOT IN (SELECT n.id
+                 FROM notes n
+                 WHERE lower(note) LIKE '%${TEMPLATE_PREFIX}%'
+                    OR lower(note) LIKE '%${GOAL_PREFIX}%')
+        AND COALESCE(JSON_EXTRACT(template_settings, '$.source'), 'notes') <> 'ui'`;
+
 export async function resetCategoryGoalDefsWithNoTemplates(
   categoryIds?: string[],
 ): Promise<void> {
@@ -14,14 +22,19 @@ export async function resetCategoryGoalDefsWithNoTemplates(
     `
       UPDATE categories
       SET goal_def = NULL
-      WHERE id NOT IN (SELECT n.id
-                       FROM notes n
-                       WHERE lower(note) LIKE '%${TEMPLATE_PREFIX}%'
-                          OR lower(note) LIKE '%${GOAL_PREFIX}%')
-        AND COALESCE(JSON_EXTRACT(template_settings, '$.source'), 'notes') <> 'ui'
+      WHERE ${NO_TEMPLATE_NOTE}
         ${scopeClause}
     `,
     categoryIds ?? [],
+  );
+}
+
+/** The automations `resetCategoryGoalDefsWithNoTemplates` would clear, without clearing them. */
+export function getGoalDefsToReset(): Promise<
+  Array<{ id: string; goal_def: string }>
+> {
+  return db.all(
+    `SELECT id, goal_def FROM categories WHERE goal_def IS NOT NULL AND ${NO_TEMPLATE_NOTE}`,
   );
 }
 

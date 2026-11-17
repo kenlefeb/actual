@@ -24,7 +24,7 @@ export async function storeNoteTemplates(
   await resetCategoryGoalDefsWithNoTemplates(categoryIds);
 }
 
-type CategoryWithTemplateNotes = {
+export type CategoryWithTemplateNotes = {
   id: string;
   name: string;
   templates: Template[];
@@ -69,7 +69,7 @@ export async function checkTemplateNotes(): Promise<TemplateNotification> {
   };
 }
 
-async function getCategoriesWithTemplates(
+export async function getCategoriesWithTemplates(
   categoryIds?: string[],
 ): Promise<CategoryWithTemplateNotes[]> {
   const templatesForCategory: CategoryWithTemplateNotes[] = [];

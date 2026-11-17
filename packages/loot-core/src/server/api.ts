@@ -49,6 +49,7 @@ import {
 import type { AmountOPType, APIScheduleEntity } from './api-models';
 import { aqlQuery } from './aql';
 import { isTrackingBudget } from './budget/actions';
+import { planTemplates } from './budget/goal-template';
 import { planAverage, planCopyPreviousMonth } from './budget/month-plans';
 import * as cloudStorage from './cloud-storage';
 import type { RemoteFile } from './cloud-storage';
@@ -628,6 +629,41 @@ handlers['api/budget-average'] = withMutation(async function ({
   checkFileOpen();
   await validateAverage(month, months);
   return handlers[`budget/set-${months}month-avg`]({ month });
+});
+
+async function validateTemplates(
+  month: string,
+  categoryIds: string[] | undefined,
+) {
+  await validateMonth(month);
+  if (categoryIds && categoryIds.length === 0) {
+    throw APIError('categoryIds must list at least one category');
+  }
+}
+
+handlers['api/budget-templates-plan'] = async function ({
+  month,
+  overwrite,
+  categoryIds,
+}) {
+  checkFileOpen();
+  await validateTemplates(month, categoryIds);
+  return planTemplates({ month, overwrite: !!overwrite, categoryIds });
+};
+
+handlers['api/budget-templates-apply'] = withMutation(async function ({
+  month,
+  overwrite,
+  categoryIds,
+}) {
+  checkFileOpen();
+  await validateTemplates(month, categoryIds);
+  if (categoryIds) {
+    return handlers['budget/apply-multiple-templates']({ month, categoryIds });
+  }
+  return overwrite
+    ? handlers['budget/overwrite-goal-template']({ month })
+    : handlers['budget/apply-goal-template']({ month });
 });
 
 handlers['api/transactions-export'] = async function ({

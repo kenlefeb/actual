@@ -1,0 +1,17 @@
+# Tasks
+
+## 1. The human-recorded statement balance and its handlers (sc-4793)
+
+- [ ] 1.1 The record (design D1): the pref key type, a helper that validates and reads a record, the internal `account-statement-balance-save`, `-get` and `-consume` handlers in loot-core. Failing tests first: save sets id and `entered_at` from the saving engine's clock, a future-dated `entered_at` reads as expired, the generic `preferences/save` refuses a `statement-balance-*` id, consume and save are mutators and an older-timestamp save message applied after a consume does not un-consume, a new save replaces and unconsumes, malformed value reads as none, `entered_by` over 100 characters refused, consume is compare-and-set (older id, repeat), save is not undoable
+- [ ] 1.2 API handlers (design D2): `api/account-statement-balance-get` and `-consume` in `api.ts` with `checkFileOpen`, typed methods `getAccountStatementBalance` and `consumeAccountStatementBalance` in `methods.ts`, the API test's fixed handler list (count 18 to 20), `coverage.json` lines. Failing tests first: both work through the API, no `api/` handler saves a record and no typed method does, and a behavioural test: with a record present the `api/` handlers that write accounts or preferences, called with a payload naming the record's key, leave it unchanged
+- [ ] 1.3 Expiry and skew settings (design D3): `STATEMENT_BALANCE_MAX_AGE_HOURS` (168, ceiling 720) and `STATEMENT_BALANCE_CLOCK_SKEW_MINUTES` (5, ceiling 60) for the stdio and hosted prefixes. Failing tests first: defaults, a setting changes each (a record 6 minutes ahead is expired at 5, usable at 10), zero, a non-integer and above-ceiling stop the server with fixed text
+- [ ] 1.4 `README.md` for the record, the setting and the handler contract the app screens use (sc-4801, sc-4802), typecheck, lint, tests
+
+## 2. write_reconcile_account uses only the record (sc-4800)
+
+- [ ] 2.1 Remove `statement_balance` from the tool (design D4); the strict input refuses it. Failing tests first: a passed balance is refused with no confirm, a model that reads the cleared balance and passes it back is refused, the recorded balance locks as the old argument did
+- [ ] 2.2 Refusals (design D4). Failing tests first: none, expired (including a future-dated record), consumed and echo each refuse with their fixed text before any audit line, a non-zero difference leaves the record unconsumed
+- [ ] 2.3 Provenance (design D5): the dry run, the audit attempt line and `plan_digest` carry the record; the record is re-read inside the write lock. Failing tests first: the dry run names source, time and who, a record replaced between the two steps refuses the confirm, a second confirm of one dry run (including a zero-row reconcile) is refused as consumed because the in-lock re-check requires unconsumed, unexpired and non-`cleared`, `entered_by` with injected text is returned as data
+- [ ] 2.4 Consume (design D5). Failing tests first: a lock consumes and the outcome line says so, a second call is refused as consumed, `verified: false` after locked rows still consumes, a zero-row `verified: false` consumes nothing, a failed consume reports locked rows and an unconsumed record
+- [ ] 2.5 The read (design D6): `statement_balance_record` with each status. Failing tests first for every status
+- [ ] 2.6 `coverage.json`, `README.md`, the tool description, `yarn check:mcp-coverage`, typecheck, lint, tests; when `mcp-reconcile-account` is archived, fold the argument-free wording into "Reconcile an account" (design D7)

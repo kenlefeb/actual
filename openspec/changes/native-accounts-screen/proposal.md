@@ -7,13 +7,13 @@ Stories sc-4386 (batched reads), sc-4931 (writes, switch, view models) and sc-36
 ## What Changes
 
 - **Group 1, sc-4386:** two batched read-only handlers, `native/accounts-list` (every account with balance, detail and section, the section totals and net worth, in one call) and `native/account-register` (one keyset page of one account's register per call, with scope, search, header and upcoming schedules), with contract fixtures and perf gates.
-- **Group 2, sc-4931:** four native writes with undo tokens (`native/transactions-categorize`, `native/transactions-delete`, `native/account-reopen`, `native/account-move`); the `NativeScreen.accounts` switch, which **ships on** and is turned off in Settings; the overlay on the Accounts tab; the Swift view models.
+- **Group 2, sc-4931:** four native writes with undo tokens, scoped and capped, with an Undo that refuses when the rows changed since, (`native/transactions-categorize`, `native/transactions-delete`, `native/account-reopen`, `native/account-move`); the `NativeScreen.accounts` switch, which **ships on** and is turned off in Settings; the overlay on the Accounts tab; the web hand-off message for add, link, account settings and bank sync; the Swift view models.
 - **Group 3, sc-3611:** the SwiftUI Accounts list, closed accounts, register, search and scope chips, swipes, category picker and empty, loading and error states, plus the reconcile entry from the native screens. Dynamic Type, Dark Mode and VoiceOver.
 - **Mac:** the same screens on the same handlers once the Mac app exists (sc-3629), as native-reconcile-flow did. No work in this change until then.
 
 Mobile scope: this change is the iPhone app's Accounts tab (the phone). The web Accounts screens (desktop and phone web) do not change, except that the web reconcile banner hides while the native Accounts screen is on. The Mac native screens wait for sc-3629 (design D9).
 
-Not in this change: account settings, rename and close (sc-4385); the all-accounts register (sc-4387); the native add and edit transaction form (sc-3602; until it ships a row opens the web editor); add account and bank sync setup (sc-4619); bank sync on pull (sc-3899); rules (sc-4618); the schedule editor and Make recurring (sc-4617); attachments.
+Not in this change: account settings, rename and close (sc-4385); the all-accounts register (sc-4387); the native add and edit transaction form (sc-3602; until it ships a row opens the web editor); native add and link account (sc-4949) and bank sync setup (sc-4619), which hand off to the web until then, as Account settings and Sync now do until sc-4385; bank sync on pull (sc-3899); rules (sc-4618); the schedule editor and Make recurring (sc-4617); attachments.
 
 ## Capabilities
 

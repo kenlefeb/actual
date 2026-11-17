@@ -29,12 +29,12 @@ While the switch is on, the page showing `/accounts` SHALL show the native list,
 - **THEN** the web editor shows, and back returns to the register at the same scroll position
 
 ### Requirement: The accounts list shows loot-core's numbers by section
-The list SHALL show "All accounts", then On budget and Off budget with their totals, then a "Closed accounts" row with its count. A row SHALL show name, detail line and signed balance, negatives in the negative colour, all from `native/accounts-list`. The subtitle SHALL carry sync status in words. Pull-down SHALL sync and re-read.
+The list SHALL show "All accounts", On budget and Off budget with totals, a "Closed accounts" row with its count, and a Net worth footer. A row SHALL show name, detail line and signed balance, negatives in the negative colour, all from `native/accounts-list`. The subtitle SHALL carry sync status in words. Pull-down SHALL sync and re-read.
 
 #### Scenario: Matching the web
 - **GIVEN** a budget open on the web and on iPhone
 - **WHEN** the native list shows
-- **THEN** every balance and total equals the web's
+- **THEN** every balance and total equals the web's, and the footer shows net worth
 
 #### Scenario: A paycheck clearing account
 - **WHEN** an account is a paycheck clearing account
@@ -43,6 +43,21 @@ The list SHALL show "All accounts", then On budget and Off budget with their tot
 #### Scenario: Sync failed
 - **WHEN** a budget sync fails
 - **THEN** the subtitle reads "Sync failed — tap to retry" in warning text until a sync completes
+
+### Requirement: Web account actions stay reachable
+Until their native stories ship, the + menu and the no-accounts state SHALL offer Add account and Link bank account (sc-4949), and the register's ••• menu SHALL offer Account settings and Sync now (sc-4385), each opening the existing web flow over the tab, returning to the native screen, which re-reads, when it closes.
+
+#### Scenario: Add an account
+- **WHEN** the user taps + › Add account
+- **THEN** the web add-account dialog opens, and after saving the new account shows in the native list
+
+#### Scenario: No accounts
+- **GIVEN** a budget with no accounts
+- **THEN** "Add your first account" shows with Add account and Link bank account, each opening the web flow
+
+#### Scenario: Account settings
+- **WHEN** the user picks ••• › Account settings in a register
+- **THEN** the web account settings for that account open, and closing them returns to the register
 
 ### Requirement: Closed accounts can be reopened
 Closed accounts SHALL list by name in secondary text. A trailing swipe and the context menu SHALL offer Reopen in teal, undoable through native Undo; the account then returns to its section. Tapping a closed account SHALL open its register read-only.
@@ -81,11 +96,19 @@ The system search field SHALL search payee, category, notes and amount; Cancel S
 - **THEN** the centred secondary text says no transactions match
 
 ### Requirement: Register rows can be cleared, categorized and deleted
-A leading swipe SHALL toggle cleared with a haptic; a long-press SHALL offer Categorize through a picker of the budget's categories; a trailing swipe SHALL offer Delete. A reconciled row SHALL ask first, and only then send `confirmedReconciled`. Each change SHALL go through loot-core and be undoable.
+A leading swipe SHALL toggle cleared with a haptic; a long-press SHALL offer Categorize through a picker of the budget's categories; a trailing swipe SHALL offer Delete. A reconciled row, or a transfer whose partner is reconciled, SHALL ask first, then send `confirmedReconciled`. Deleting a transfer SHALL name the partner account. Changes SHALL go through loot-core and be undoable.
 
 #### Scenario: Categorize
 - **WHEN** the user picks Groceries for an uncategorized row
 - **THEN** the row and the web show Groceries, and Undo restores it
+
+#### Scenario: Delete a transfer
+- **WHEN** the user swipes to delete a transfer to Savings
+- **THEN** the confirmation says the Savings row is deleted too
+
+#### Scenario: Undo after a synced edit
+- **WHEN** the user taps Undo after another device changed the same rows
+- **THEN** "Changed since — can't undo" shows and nothing changes
 
 #### Scenario: Delete a reconciled row
 - **WHEN** the user swipes to delete a reconciled row

@@ -14,27 +14,46 @@ ADR 11 rule 3 allows paging through `query` or a keyset. Upcoming rows, names, s
 - `native/accounts-list` returns the currency fields `native/budget-month` carries; `sections` on-budget and off-budget (open accounts in the web's sort order) and `closed`, each `{total, accounts}`; and `netWorth`. An account is `{id, name, balance, offbudget, closed, lastSync, lastTransactionDate, bankSync, clearingFor}`. `clearingFor` is the paycheck name when the account is a paycheck clearing account (paychecks spec). Totals use the same sums as the web bindings. Swift adds nothing up.
 - `native/account-register {account_id, scope, search, cursor, limit}` returns `{rows, nextCursor}`. When `cursor` is null it also returns `header {balance, cleared, uncleared}` and `upcoming`.
   - `scope`: `all`, `uncleared` or `uncategorized`.
-  - Rows are split parents and plain rows: `{id, date, payee, category, splitCount, notes, amount, cleared, reconciled, transfer, runningBalance}`, with names resolved. Search runs over payee, category, notes and amount, as `useTransactionsSearch` does, and a matching child returns its parent.
+  - Rows are split parents and plain rows: `{id, date, payee, category, splitCount, notes, amount, cleared, reconciled, transferAccount, transferReconciled, runningBalance}`, with names resolved. Search runs over payee, category, notes and amount, as `useTransactionsSearch` does, and a matching child returns its parent.
   - `upcoming` holds the account's scheduled rows inside the synced upcoming window, from the schedule helpers `native/schedules-paychecks` already uses.
 
 ## D2. Keyset paging and configurable limits
 
 The cursor is opaque to Swift and encodes the last row's (date, sort_order, id). A sync that inserts rows mid-scroll then neither repeats nor skips a page.
 
-- `limit` defaults to 50 with a ceiling of 200; a value that is not an integer from 1 to 200 uses the default.
-- The search debounce (default 250 ms) and the page size are constants in one place in `NativeBridgeCore`, not literals.
+- The page size is the synced preference `accounts-register-page-size`: default 50, ceiling 200, read with `readLimit` from `server/native/reconcile-lock.ts` (a value that is not a whole number from 1 to the ceiling uses the default). Swift sends no size. The ceiling is a code constant beside the default, as for the reconcile limits.
+- The search debounce (250 ms) is a named constant in `NativeBridgeCore`.
+- Inputs are checked in loot-core (Security, PR #408):
+  - `search` is text of at most 100 characters, as in `native/reconcile-rows`.
+  - `%`, `_` and `\` are escaped before a LIKE match.
+  - The cursor is decoded strictly: base64 of JSON with exactly `date` (integer), `sort_order` (number) and `id` (string). Anything else fails the call.
+  - Every value is a bound parameter; no input is spliced into SQL.
 - `runningBalance` is filled only for scope `all` with no search and the account's `show-balances-<id>` preference on. Elsewhere it is null, as the web hides it when filtering. For each page loot-core computes it from one sum over the rows older than the page.
 
 ## D3. Four writes, each a native write
 
 `native/undo` reverses only a write carrying a native token, so the existing `account-reopen` and `account-move` are wrapped rather than allowlisted raw. Every write takes `undoToken`, is one undo step and is all-or-nothing:
 
-- `native/transactions-categorize {account_id, ids, category, confirmedReconciled}`: every id must be a live row of `account_id`. A split parent or a child is refused (splits change in the editor). `category` must be an existing, non-hidden expense or income category, or null. A reconciled row is refused unless `confirmedReconciled` is true (the design asks first).
-- `native/transactions-delete {account_id, ids, confirmedReconciled}`: the same ownership and reconciled rules. A parent takes its children with it.
+- `native/transactions-categorize {account_id, ids, category, confirmedReconciled}`: every id must be a live row of `account_id`, an open account.
+  - A split parent or a child is refused (splits change in the editor).
+  - Rows of an off-budget account are refused, and so is a transfer between two on-budget accounts; the web gives neither a category.
+  - `category` must be an existing, non-hidden category, or null.
+  - A reconciled row is refused unless `confirmedReconciled === true` (the design asks first).
+- `native/transactions-delete {account_id, ids, confirmedReconciled}`: the same ownership, open-account and reconciled rules. A parent takes its children with it.
+  - A transfer's delete also removes its partner row in the other account, as loot-core's transfer handling does.
+  - The register row carries `transferAccount` and `transferReconciled`, so the confirmation names the partner account before anything is sent.
+  - A reconciled partner needs the same `confirmedReconciled === true`.
+- `ids` is capped by the synced preference `accounts-write-max-ids` (default 100, ceiling 500, `readLimit`). Children and transfer partners count toward the cap, and a call over it fails whole.
 - `native/account-reopen {id}`: the id must be a closed account.
 - `native/account-move {id, targetId}`: both must be open accounts in the same section, or `targetId` is null (end of that section).
 
 Cleared and uncleared reuse `native/reconcile-tick`, which already refuses reconciled rows. The category picker reads the groups from `native/budget-month` for the current month, so there is no new read.
+
+`confirmedReconciled` is a flag the page passes, so injected same-origin script could set it without a tap. That is the same class of risk as sc-4877 (a Swift-minted one-shot nonce for reconcile adjust and lock). It is accepted until production hardening, as the Director accepted sc-4877's, and sc-4877 is to be extended so these writes need the nonce for a reconciled row (task 2.8).
+
+## D3a. Native Undo checks for later changes
+
+`native/undo` is last-write-wins today: it would put back the old values over an edit that synced in after the native write. For the accounts writes, the write records, in its undo metadata, the state it left for each row or account it touched: category, tombstone and sort order. `native/undo` then refuses, changing nothing, when any of them now differs, and the screen says "Changed since — can't undo." Rejected: undoing anyway. That silently loses another device's edit, and the check costs one read of the touched rows.
 
 ## D4. The switch ships on
 
@@ -61,7 +80,8 @@ The native Accounts screen lies over the Accounts container while the page shows
   - Each account row shows its name, a detail line (`clearingFor` note, else "Synced …" from `lastSync`, else "Updated …" from `lastTransactionDate`) and the signed balance; negatives in the negative colour.
   - Long-press offers Reconcile.
   - Reorder is through Edit mode with drag handles.
-  - The + menu is out of scope (add account has no native story yet; filed as a follow-up).
+  - A Net worth footer shows `netWorth`.
+  - The + menu offers Add account and Link bank account. Both hand off to the web's existing flows until sc-4949 makes them native (D7a).
 - **Closed accounts:** names in secondary text. A trailing swipe and the context menu offer Reopen in teal (undoable). Tap opens a read-only register.
 - **Register:** inline title (the account name) with the system back button.
   - Header: working balance, then cleared and uncleared. The paycheck clearing note shows when it applies.
@@ -71,8 +91,15 @@ The native Accounts screen lies over the Accounts container while the page shows
   - Rows are `NativeTransactionRow`: payee, category (Uncategorized in warning text, "Split (n)"), the signed amount with incoming in green and +, and a status word (Pending, Cleared, Scheduled, Reconciled).
   - Leading swipe: Clear or Unclear, with a haptic. Trailing swipe: Delete, which asks first for a reconciled row. Long-press: Categorize, which opens the category picker.
   - While searching, the header hides and a footer shows the results' total. No results reads "No transactions match “…”." in secondary text.
-- **States:** no accounts ("Add your first account" with the explanation); loading redacted with no shimmer under Reduce Motion; sync errors in words, never colour alone.
+- **Register ••• menu:** Reconcile (native); Account settings and Sync now hand off to the web until sc-4385 (D7a).
+- **States:** no accounts ("Add your first account" with the explanation, and Add account and Link bank account buttons that hand off as the + menu does); loading redacted with no shimmer under Reduce Motion; sync errors in words, never colour alone.
 - **Accessibility:** Dynamic Type to AX5 wraps names and moves the amount under the name, never truncating it. VoiceOver reads rows whole and offers the swipes as custom actions. Colours come from the HE variables; numbers use tabular digits; all text is localized.
+
+## D7a. Web hand-offs while the screen is on by default
+
+The screen ships on, so nothing the web Accounts screens offer may be lost. Native sends the chrome message `webAccountAction {action, account_id?}`, where `action` is one of `add-account`, `link-account`, `account-settings` or `bank-sync`. The page then opens the existing mobile web flow: the add-account and link-account dialogs, the account menu, or the account's bank sync. The overlay steps aside while that flow is open and re-reads when it closes.
+
+The chrome checks the message: only from the app's own page side, `action` from the closed set, and `account_id` required for the last two and a known open account. Anything else is ignored. These are stepping stones: sc-4949 makes add and link native, and sc-4385 makes settings native.
 
 The Figma "to review" count and per-account "Bank sync failed · Reconnect" have no source the native app can read today: the web keeps bank-sync failures in client state after a bank sync, and no "review" concept exists. They are left out until sc-3899 and sc-4619 give them one. That is not an invented rule; there is simply no data.
 
@@ -92,7 +119,8 @@ There is no Mac app. The Mac Accounts window, sidebar, register table and inspec
 
 - A long register with running balances costs one extra sum per page; the perf gate covers a page 10,000 rows deep.
 - The editor stays web until sc-3602, so a tap leaves the native screen; back returns to it.
-- Unset reads as on, so every iPhone user gets the native screen on update; Settings turns it off.
+- Unset reads as on, so every iPhone user gets the native screen on update; Settings turns it off, and the web hand-offs (D7a) keep every web action reachable.
+- Accepted: page script can pass `confirmedReconciled` (D3); sc-4877's nonce will close it.
 
 ## Decisions for Ken
 

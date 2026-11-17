@@ -14,7 +14,7 @@
 - **THEN** the vitest contract test fails, and the Swift decode test fails against the regenerated fixture
 
 ### Requirement: A register page is one read with a keyset cursor
-`native/account-register` SHALL return one page of one account's rows per call, newest first, with an opaque cursor for the next page. The first page SHALL add the working, cleared and uncleared header and the upcoming schedules. `limit` SHALL default to 50 with a ceiling of 200; any other value SHALL use the default.
+`native/account-register` SHALL return one page of one account's rows per call, newest first, with an opaque cursor for the next page. The first page SHALL add the header and upcoming schedules. The page size SHALL be the synced preference `accounts-register-page-size`, default 50, ceiling 200; a value that is not a whole number from 1 to the ceiling SHALL use the default.
 
 #### Scenario: Paging through a long register
 - **GIVEN** an account with 2,000 rows
@@ -26,9 +26,22 @@
 - **WHEN** a newer row is inserted and the next page is read with the cursor
 - **THEN** no row of the next page repeats or is skipped
 
-#### Scenario: A bad limit
-- **WHEN** `limit` is 0, 500 or a string
+#### Scenario: The default page size
+- **GIVEN** `accounts-register-page-size` is unset
+- **WHEN** native code reads a page of a 2,000-row register
 - **THEN** the page holds 50 rows
+
+#### Scenario: A changed page size
+- **GIVEN** `accounts-register-page-size` is 120
+- **THEN** a page holds 120 rows
+
+#### Scenario: A page size over the ceiling or malformed
+- **WHEN** the preference is 500, 0, `1e2` or `abc`
+- **THEN** a page holds 50 rows
+
+#### Scenario: A forged cursor
+- **WHEN** the cursor is not base64 JSON with exactly an integer `date`, a numeric `sort_order` and a string `id`
+- **THEN** the call fails and returns no rows
 
 ### Requirement: Register scope and search match the web
 The register read SHALL filter by scope `all`, `uncleared` or `uncategorized`, and SHALL search payee, category, notes and amount as the web register does, a matching split child returning its parent. A running balance SHALL be filled only for scope `all` with no search while the account shows balances, and be null otherwise.
@@ -41,6 +54,10 @@ The register read SHALL filter by scope `all`, `uncleared` or `uncategorized`, a
 #### Scenario: Uncategorized
 - **WHEN** the scope is `uncategorized`
 - **THEN** only rows the web's Uncategorized filter shows are returned
+
+#### Scenario: Search text is data
+- **WHEN** the search is `50%_off` or longer than 100 characters
+- **THEN** `%` and `_` match literally, every value is a bound parameter, and over 100 characters the call fails
 
 #### Scenario: Running balance while filtered
 - **WHEN** the scope is `uncleared` or a search is set
@@ -65,7 +82,7 @@ The bridge allowlist SHALL add `native/accounts-list`, `native/account-register`
 - **THEN** the call is refused before it reaches the page
 
 ### Requirement: Accounts writes are scoped, confirmed and undoable
-Each accounts write SHALL require an undo token, be one undo step and change nothing unless every argument is valid. Categorize and delete SHALL refuse an id not in `account_id`, and a reconciled row unless `confirmedReconciled` is true; categorize SHALL refuse a split row. Reopen SHALL take only a closed account; move only open accounts in one section.
+Each accounts write SHALL need an undo token, be one undo step, and change nothing unless all is valid. Categorize and delete SHALL refuse a closed account, an id not in it, more ids than `accounts-write-max-ids` (default 100, ceiling 500), and a reconciled row unless `confirmedReconciled === true`. Categorize SHALL refuse splits and off-budget rows. Reopen takes a closed account; move, open ones in a section.
 
 #### Scenario: Another account's row
 - **WHEN** a categorize call names one id from another account
@@ -78,3 +95,51 @@ Each accounts write SHALL require an undo token, be one undo step and change not
 #### Scenario: Undo
 - **WHEN** native Undo is called with a categorize call's token
 - **THEN** every row it changed returns to its category in one step
+
+#### Scenario: Too many ids
+- **GIVEN** `accounts-write-max-ids` is unset
+- **WHEN** a delete names 80 rows whose children and transfer partners make 120
+- **THEN** the whole call fails and nothing is deleted
+
+#### Scenario: A changed limit
+- **GIVEN** `accounts-write-max-ids` is 300, or 900 (over the ceiling)
+- **THEN** the cap is 300, or the default of 100
+
+#### Scenario: Off-budget or closed
+- **WHEN** a categorize call names rows of an off-budget account, or any write names a closed account's rows
+- **THEN** it is refused and nothing changes
+
+#### Scenario: A truthy flag
+- **WHEN** `confirmedReconciled` is `"true"` or `1`
+- **THEN** a reconciled row is refused as if it were false
+
+### Requirement: Deleting a transfer covers its partner
+Deleting a transfer row SHALL also delete its partner row in the other account. The register row SHALL name the partner account and whether it is reconciled, so the confirmation names it first. A reconciled partner SHALL need `confirmedReconciled === true`, and partners SHALL count toward `accounts-write-max-ids`.
+
+#### Scenario: A transfer to savings
+- **WHEN** the user deletes a transfer from Checking to Savings
+- **THEN** the confirmation names Savings, and after confirming both rows are gone; Undo restores both
+
+#### Scenario: A reconciled partner
+- **GIVEN** the Savings partner is reconciled and the Checking row is not
+- **WHEN** the delete is sent without `confirmedReconciled`
+- **THEN** it is refused and neither row changes
+
+### Requirement: Native Undo refuses after later changes
+Undoing an accounts write SHALL first check that every row or account it touched still has the category, tombstone and order the write left. If any differs, as after an edit synced from another device, the undo SHALL change nothing and say it can't undo.
+
+#### Scenario: An edit synced in since
+- **GIVEN** a native categorize to Groceries, then another device sets one of those rows to Dining and it syncs
+- **WHEN** native Undo is called with the categorize token
+- **THEN** it is refused, the row stays Dining and no other row changes
+
+#### Scenario: Nothing changed since
+- **WHEN** native Undo is called right after the write
+- **THEN** every row returns to its earlier state
+
+### Requirement: Web hand-offs are a closed set of messages
+The native chrome SHALL accept `webAccountAction` only from the app's own page side, with `action` one of `add-account`, `link-account`, `account-settings` or `bank-sync`, and an `account_id` that is a known open account for the last two. It SHALL ignore anything else, and the page SHALL open only its existing flow for that action.
+
+#### Scenario: An unknown action
+- **WHEN** native receives `webAccountAction` with action `delete-account`, or `account-settings` with an unknown id
+- **THEN** it is ignored and nothing opens

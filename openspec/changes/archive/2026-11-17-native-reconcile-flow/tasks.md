@@ -24,7 +24,7 @@ Test-first: write the tests, see them fail, then write the code. One story per g
 - [x] 2.7 Dynamic Type to AX5, VoiceOver (step announcement, difference live region, row labels and custom actions), localization of all text; notes on the story; UX Designer review
 - [x] 2.8 File the Backlog story for the assistant nudge (design D6)
 
-## 3. Reconcile on Mac (sc-4801)
+## 3. Reconcile on Mac, moved out of sc-4801 and blocked by the Mac app (sc-4872)
 
 - [ ] 3.1 Once the Mac app (sc-3629) exists: sidebar destination with badge and ⇧⌘R, checklist, step 1 in the content area, step 2 register table with Space to tick and the keyboard flow of the frames, on the same handlers. Failing tests first; with the switch off the sidebar item opens the web dialog
 - [ ] 3.2 Keyboard-only use end to end, Dark Mode, VoiceOver and minimum window size; notes on the story

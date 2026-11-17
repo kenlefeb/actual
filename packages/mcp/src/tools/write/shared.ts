@@ -50,6 +50,61 @@ export function requireMonth(value: string) {
   }
 }
 
+/** The loaded budget's sync id (its local id when it was never synced); every schema 2 audit line carries it. */
+export async function budgetId() {
+  const prefs = (await api.internal?.send('load-prefs')) as
+    | { groupId?: string; id?: string }
+    | undefined;
+  const found = prefs?.groupId ?? prefs?.id;
+  if (!found) {
+    throw new Refusal('The loaded budget has no id. Nothing changed.');
+  }
+  return found;
+}
+
+/** The fields every attempt line gains when written (time, call id, phase, schema), so a size check counts the real line. */
+const LINE_FIELDS = () => ({
+  time: new Date().toISOString(),
+  call_id: randomUUID(),
+  phase: 'attempt',
+  schema: 2,
+});
+
+/**
+ * Refuses (fixed text, before any audit line) a delete whose own attempt line
+ * or whose undo's attempt line would exceed the audit line limit, so every
+ * delete that runs can be undone. The undo's line holds the same ids and
+ * values with before and after swapped, plus `undoes` and its own tool name.
+ */
+export async function requireUndoableLine(
+  log: WriteLog,
+  tool: string,
+  entry: { ids: string[]; changes: AuditChange[] },
+) {
+  const budget_id = await budgetId();
+  const size = (line: object) =>
+    Buffer.byteLength(JSON.stringify({ ...LINE_FIELDS(), ...line }));
+  const own = size({ ...log.identity, tool, budget_id, ...entry });
+  const undo = size({
+    ...log.identity,
+    tool: 'write_undo',
+    budget_id,
+    ids: entry.ids,
+    changes: entry.changes.map(c => ({
+      ...c,
+      before: c.after,
+      after: c.before,
+    })),
+    undoes: randomUUID(),
+  });
+  const cap = log.limits.maxAuditLineBytes;
+  if (own > cap || undo > cap) {
+    throw new Refusal(
+      `This delete or its undo would make an audit line of ${Math.max(own, undo)} bytes, above the limit of ${cap}; a delete must be undoable. Nothing changed. Split it into smaller calls.`,
+    );
+  }
+}
+
 /** What a write did: the rows applied, the row that failed, and anything created. */
 export type WriteOutcome = {
   /** null: the write failed and its state could not be read back. */
@@ -200,8 +255,16 @@ export async function loggedWrite<R extends object>(
 > {
   // One write may not fill the audit tail an undo reads (it would evict the
   // undo history and its own line); refused before anything is written.
+  const budget_id = await budgetId();
   const lineBytes = Buffer.byteLength(
-    JSON.stringify({ ...log.identity, tool, ...entry }),
+    JSON.stringify({
+      ...LINE_FIELDS(),
+      ...log.identity,
+      tool,
+      budget_id,
+      ...entry,
+      ...(options.undoes ? { undoes: options.undoes } : {}),
+    }),
   );
   if (lineBytes > log.limits.maxAuditLineBytes) {
     throw new Refusal(
@@ -230,7 +293,15 @@ export async function loggedWrite<R extends object>(
   const call_id = randomUUID();
   appendAudit(
     log.path,
-    { tool, call_id, phase: 'attempt', schema: 2, ...entry, ...undoes },
+    {
+      tool,
+      call_id,
+      phase: 'attempt',
+      schema: 2,
+      budget_id,
+      ...entry,
+      ...undoes,
+    },
     log.identity,
   );
 

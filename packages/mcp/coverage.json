@@ -164,6 +164,12 @@
   "api/transactions-update": {
     "tool": "write_update_transactions"
   },
+  "api/transaction-delete": {
+    "tool": "write_delete_transactions"
+  },
+  "deleteTransaction": {
+    "tool": "write_delete_transactions"
+  },
   "setBudgetAmount": {
     "tool": "write_set_budget_amount"
   },

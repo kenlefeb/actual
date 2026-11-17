@@ -18,6 +18,7 @@ const WRITE_TOOLS = [
   'write_delete_account_group',
   'write_delete_category',
   'write_delete_category_group',
+  'write_delete_transactions',
   'write_hold_budget_for_next_month',
   'write_move_category',
   'write_move_category_group',
@@ -117,7 +118,7 @@ describe('write entry', () => {
     const { tools } = await h.client.listTools();
     const writes = tools.filter(t => t.name.startsWith('write_'));
     expect(writes.map(t => t.name).sort()).toEqual(WRITE_TOOLS);
-    // Only the category and group deletes of sc-2598 and the account deletes (sc-4478) may delete.
+    // Only the category and group deletes of sc-2598 and the account deletes (sc-4478) and the transaction delete (sc-4485) may delete.
     expect(
       writes
         .map(t => t.name)
@@ -128,6 +129,7 @@ describe('write entry', () => {
       'write_delete_account_group',
       'write_delete_category',
       'write_delete_category_group',
+      'write_delete_transactions',
     ]);
     for (const t of writes) {
       // reset: only the budget hold (sc-4487) clears a held amount, nothing else

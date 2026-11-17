@@ -12,6 +12,8 @@ import { startHarness } from '#client-harness';
 import { SCOPES } from '#grants';
 import type { Grant, Scope } from '#grants';
 
+import { budgetId } from './shared';
+
 const ME = { user_id: 'u1', subject: 'sub1' };
 const UNDO_REFUSAL = /cannot be undone/;
 
@@ -21,6 +23,7 @@ type Change = { field: string; before: unknown; after: unknown };
 
 let h: Awaited<ReturnType<typeof startHarness>>;
 let grant: Grant;
+let loadedBudget = '';
 
 afterEach(async () => {
   vi.restoreAllMocks();
@@ -34,6 +37,7 @@ async function start(
 ) {
   grant = { scopes: [...SCOPES], confirm_destructive: false, ...over };
   h = await startHarness({ count }, { grant, identity });
+  loadedBudget = await budgetId();
   return h;
 }
 
@@ -64,6 +68,7 @@ function plantWrite(
     call_id,
     phase: 'attempt',
     schema: 2,
+    budget_id: loadedBudget,
     ids: [],
     changes: [],
     ...over,
@@ -148,6 +153,31 @@ describe('Audit schema 2', () => {
     const res = await h.call('write_undo', { write_id: 'v1-line' });
     expect(res.isError).toBe(true);
     expect(res.text).toMatch(UNDO_REFUSAL);
+  });
+});
+
+describe('Audit lines name the budget', () => {
+  it('every attempt line carries the loaded budget id', async () => {
+    await start(1);
+    const [t] = await rows();
+    await write('write_update_transactions', {
+      updates: [{ id: t.id, notes: 'x' }],
+    });
+    const attempt = lines().find(l => l.phase === 'attempt');
+    expect(loadedBudget).not.toBe('');
+    expect(attempt.budget_id).toBe(loadedBudget);
+  });
+
+  it('refuses an undo of a line without budget_id or with another budget as unknown', async () => {
+    await start(1);
+    const [t] = await rows();
+    plantWrite('no-budget', { ids: [t.id], budget_id: undefined });
+    plantWrite('other-budget', { ids: [t.id], budget_id: 'some-other-budget' });
+    for (const id of ['no-budget', 'other-budget']) {
+      const res = await h.call('write_undo', { write_id: id });
+      expect(res.isError, id).toBe(true);
+      expect(res.text, id).toMatch(UNDO_REFUSAL);
+    }
   });
 });
 

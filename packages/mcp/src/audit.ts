@@ -20,6 +20,8 @@ export type AuditEntry = {
   phase: 'attempt';
   /** Lines without `schema` are version 1 and not undoable. */
   schema: 2;
+  /** The sync id of the loaded budget; an undo refuses a line for another budget. */
+  budget_id: string;
   ids: string[];
   changes: AuditChange[];
   /** On a `write_undo` line: the `call_id` of the write it reverses. */

@@ -8,13 +8,16 @@ import { withText } from '#sanitize';
 import { date, money } from '#tools/read/shared';
 
 import {
+  confirm,
   id,
   loggedWrite,
   notes,
   requireAmount,
   requireDate,
+  requireDeleteRows,
   requireIds,
   requireRows,
+  requireUndoableLine,
   stderrLine,
 } from './shared';
 import type { RegisterWriteTool } from './shared';
@@ -310,6 +313,179 @@ export function registerTransactionWriteTools(
       );
     },
     { scopes: ['transactions:write'] },
+  );
+
+  tool(
+    'write_delete_transactions',
+    `Delete transactions by id, as the app does, at most ${limits.maxDeleteRows} rows by default counting every row it removes. Deleting a split parent deletes its children; deleting a transfer deletes its other side (when that side is a split child it is unlinked, not deleted); attachments go with their rows. A split child cannot be deleted on its own. A reconciled row, or a row whose transfer partner, child's partner or unlinked partner child is reconciled, needs allow_reconciled true, which the connection's grant must allow. When this connection must confirm deletes, the first call changes nothing and returns a dry run listing every row, with \`confirm\`; call again with it within 5 minutes. Not undoable yet.`,
+    {
+      ids: z.array(id).min(1).max(limits.rowsCeiling),
+      allow_reconciled: z.boolean().optional(),
+      confirm,
+    },
+    async ({ ids, allow_reconciled }, auditLog) => {
+      if (new Set(ids).size !== ids.length) {
+        throw new Refusal('Each transaction id may appear only once.');
+      }
+      if (allow_reconciled && !auditLog.grant.allow_reconciled) {
+        throw new Refusal(
+          "This connection's grant does not allow overriding reconciled transactions. Change them in the app. Nothing changed.",
+        );
+      }
+      const named = await editRows({ id: { $oneof: ids } });
+      const known = new Set(named.map(t => t.id));
+      const unknown = ids.filter(x => !known.has(x));
+      if (unknown.length > 0) {
+        throw new Refusal(
+          `Every id must be an existing transaction (unknown or already deleted: ${unknown.join(', ')}). Nothing changed.`,
+        );
+      }
+      const child = named.find(t => t.is_child);
+      if (child) {
+        throw new Refusal(
+          `Row ${child.id} is a split child of ${child.parent_id}. Delete the split parent, or edit the child with write_update_transactions. Nothing changed.`,
+        );
+      }
+
+      // Everything the app deletes: the named rows, a parent's children, and
+      // each transfer partner (a partner that is a split child is unlinked)
+      const parentIds = named.filter(t => t.is_parent).map(t => t.id);
+      const deleted = new Map(named.map(t => [t.id, t]));
+      if (parentIds.length > 0) {
+        for (const c of await editRows({ parent_id: { $oneof: parentIds } })) {
+          deleted.set(c.id, c);
+        }
+      }
+      const partnerIds = [
+        ...new Set(
+          [...deleted.values()].flatMap(t =>
+            !t.is_parent && t.transfer_id && !deleted.has(t.transfer_id)
+              ? [t.transfer_id]
+              : [],
+          ),
+        ),
+      ];
+      const unlinked = new Map<string, EditRow>();
+      if (partnerIds.length > 0) {
+        for (const p of await editRows({ id: { $oneof: partnerIds } })) {
+          (p.is_child ? unlinked : deleted).set(p.id, p);
+        }
+      }
+
+      const locked = [...deleted.values(), ...unlinked.values()].filter(
+        t => t.reconciled,
+      );
+      if (locked.length > 0 && !allow_reconciled) {
+        throw new Refusal(
+          `Reconciled: ${locked.map(t => t.id).join(', ')}. Set allow_reconciled to delete reconciled rows (and rows linked to them). Nothing changed.`,
+        );
+      }
+      requireDeleteRows(auditLog, deleted.size);
+
+      const { data: attachments } = (await api.runQuery(
+        api
+          .q('transaction_attachments')
+          .filter({ transaction_id: { $oneof: [...deleted.keys()] } })
+          .select(['id', 'transaction_id']),
+      )) as { data: Array<{ id: string; transaction_id: string }> };
+
+      // Ids and values only: everything an undo needs to put the rows back
+      const changes: AuditChange[] = [
+        ...[...deleted.values()].map(t => ({
+          id: t.id,
+          field: 'transaction',
+          before: {
+            account: t.account,
+            date: t.date,
+            payee: t.payee,
+            transfer_id: t.transfer_id,
+            parent_id: t.parent_id,
+            reconciled: t.reconciled,
+          },
+          after: null,
+        })),
+        ...[...unlinked.values()].map(t => ({
+          id: t.id,
+          field: 'unlink',
+          before: {
+            account: t.account,
+            date: t.date,
+            transfer_id: t.transfer_id,
+            payee: t.payee,
+            reconciled: t.reconciled,
+          },
+          after: { transfer_id: null, payee: null },
+        })),
+        ...attachments.map(a => ({
+          id: a.id,
+          field: 'attachment',
+          before: { transaction_id: a.transaction_id },
+          after: null,
+        })),
+        ...locked.map(t => ({
+          id: t.id,
+          field: 'allow_reconciled',
+          before: null,
+          after: true,
+        })),
+      ];
+      const entry = {
+        ids: [...deleted.keys(), ...unlinked.keys()],
+        changes,
+      };
+      await requireUndoableLine(auditLog, 'write_delete_transactions', entry);
+
+      // The partner children actually unlinked, read back after a failure
+      const unlinkedDone = new Set<string>();
+      return loggedWrite(
+        auditLog,
+        'write_delete_transactions',
+        entry,
+        async callId => {
+          try {
+            for (const rowId of ids) await api.deleteTransaction(rowId);
+            for (const k of unlinked.keys()) unlinkedDone.add(k);
+            return { applied: [...deleted.keys()] };
+          } catch (error) {
+            stderrLine(
+              auditLog,
+              `write_delete_transactions failed (call ${callId})`,
+              error,
+            );
+          }
+          // Report what the read-back shows, not a blanket "nothing deleted"
+          const left = new Set(
+            (await editRows({ id: { $oneof: [...deleted.keys()] } })).map(
+              t => t.id,
+            ),
+          );
+          if (unlinked.size > 0) {
+            for (const t of await editRows({
+              id: { $oneof: [...unlinked.keys()] },
+            })) {
+              if (t.transfer_id === null) unlinkedDone.add(t.id);
+            }
+          }
+          return {
+            applied: [...deleted.keys()].filter(x => !left.has(x)),
+            failed: callId,
+          };
+        },
+        async outcome => ({
+          deleted: outcome.applied ?? [],
+          unlinked: [...unlinkedDone],
+          attachments: attachments.length,
+          ...(outcome.failed
+            ? {
+                failed: outcome.failed,
+                failure:
+                  'The engine failed partway. Rows in `deleted` are gone; the rest are unchanged. Check the budget before retrying.',
+              }
+            : {}),
+        }),
+      );
+    },
+    { scopes: ['transactions:write', 'delete'], destructive: true },
   );
 }
 

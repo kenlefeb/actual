@@ -12,6 +12,7 @@ import { Refusal } from '#refusal';
 import { budgeted } from './budget';
 import { load } from './categories';
 import {
+  budgetId,
   confirm,
   id,
   loggedWrite,
@@ -43,6 +44,7 @@ const UNDOABLE: Record<string, Scope[]> = {
   write_create_category: ['structure:write'],
   write_create_category_group: ['structure:write'],
 };
+// write_delete_transactions is not listed: undoing it ships with sc-4692 (it logs what that undo needs)
 
 /** Tools whose writes are budget cells (`category:month`), undone against the cell limit. */
 const CELL_TOOLS = [
@@ -626,7 +628,13 @@ export function registerUndoTools(
       };
 
       const entry = readEntries(log).byId.get(write_id);
-      if (!entry?.attempt || !isMine(entry, log) || whyNot(entry)) {
+      // A line for another budget, or from before lines named theirs, reads as unknown
+      if (
+        !entry?.attempt ||
+        !isMine(entry, log) ||
+        whyNot(entry) ||
+        entry.attempt.budget_id !== (await budgetId())
+      ) {
         refuse(new UndoRefusal(NOT_UNDOABLE, 'unknown'));
       }
       const tool = entry!.attempt!.tool as string;

@@ -37,6 +37,8 @@ export type SyncedPrefs = Partial<
     // @deprecated: superseded by `transaction-table-columns-${string}`; only
     // read as a fallback for budgets that never used the column manager
     | `show-balances-${string}`
+    // The human-recorded statement balance, written only by the app's own handlers
+    | `statement-balance-${string}`
     | `show-extra-balances-${string}`
     // @deprecated: superseded by `transaction-table-columns-${string}`; only
     // read as a fallback for budgets that never used the column manager

@@ -177,7 +177,7 @@ export function createServer(
   registerPaycheckTools(tool);
   registerCalendarTools(tool);
   registerAccountTools(tool);
-  registerReconciliationTools(tool);
+  registerReconciliationTools(tool, limits);
   registerAttachmentTools(tool);
   registerExtra?.(tool);
 

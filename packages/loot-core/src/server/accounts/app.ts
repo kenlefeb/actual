@@ -44,6 +44,11 @@ import type {
 import * as link from './link';
 import { moveOnBudget, previewMoveOnBudget } from './move-on-budget';
 import { getStartingBalancePayee } from './payees';
+import {
+  consumeStatementBalance,
+  getStatementBalance,
+  saveStatementBalance,
+} from './statement-balance';
 import * as bankSync from './sync';
 
 // Shared base type for link account parameters
@@ -67,6 +72,9 @@ export type AccountHandlers = {
   'account-create': typeof createAccount;
   'account-move-on-budget-preview': typeof previewMoveOnBudget;
   'account-move-on-budget': typeof moveOnBudget;
+  'account-statement-balance-save': typeof saveStatementBalance;
+  'account-statement-balance-get': typeof getStatementBalance;
+  'account-statement-balance-consume': typeof consumeStatementBalance;
   'account-close': typeof closeAccount;
   'account-reopen': typeof reopenAccount;
   'account-move': typeof moveAccount;
@@ -1814,6 +1822,13 @@ app.method('enablebanking-accounts-link', linkEnableBankingAccount);
 app.method('account-create', mutator(undoable(createAccount)));
 app.method('account-move-on-budget-preview', previewMoveOnBudget);
 app.method('account-move-on-budget', mutator(undoable(moveOnBudget)));
+// Not undoable: an undo must never revive a consumed record
+app.method('account-statement-balance-save', mutator(saveStatementBalance));
+app.method('account-statement-balance-get', getStatementBalance);
+app.method(
+  'account-statement-balance-consume',
+  mutator(consumeStatementBalance),
+);
 app.method('account-close', mutator(closeAccount));
 app.method('account-reopen', mutator(undoable(reopenAccount)));
 app.method('account-move', mutator(undoable(moveAccount)));

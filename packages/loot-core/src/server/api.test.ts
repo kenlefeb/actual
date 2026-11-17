@@ -225,6 +225,98 @@ describe('API handlers', () => {
     });
   });
 
+  describe('api/account-statement-balance', () => {
+    beforeEach(global.emptyDatabase());
+
+    beforeEach(async () => {
+      await prefs.loadPrefs();
+      for (const name of [
+        'account-statement-balance-save',
+        'account-statement-balance-get',
+        'account-statement-balance-consume',
+        'account-create',
+        'account-close',
+        'account-reopen',
+        'accounts-get',
+      ] as const) {
+        // @ts-expect-error - tests wire real handlers into the API's table
+        handlers[name] = accountsApp.handlers[name];
+      }
+    });
+
+    it('The API offers a read and a consume and no way to save', () => {
+      const names = Object.keys(handlers).filter(
+        name => name.startsWith('api/') && /statement-balance/.test(name),
+      );
+      expect(names.sort()).toEqual([
+        'api/account-statement-balance-consume',
+        'api/account-statement-balance-get',
+      ]);
+    });
+
+    it('Reads and consumes by id, compare-and-set', async () => {
+      await db.insertAccount({ id: 'acct1', name: 'Checking' });
+      const rec = await handlers['account-statement-balance-save']({
+        account_id: 'acct1',
+        amount: 500,
+        source: 'entered',
+        entered_by: 'app',
+      });
+      await expect(
+        handlers['api/account-statement-balance-get']({ accountId: 'acct1' }),
+      ).resolves.toEqual(rec);
+      await expect(
+        handlers['api/account-statement-balance-consume']({
+          accountId: 'acct1',
+          id: 'not-it',
+        }),
+      ).resolves.toEqual({ consumed: false });
+      await expect(
+        handlers['api/account-statement-balance-consume']({
+          accountId: 'acct1',
+          id: rec.id,
+        }),
+      ).resolves.toEqual({ consumed: true });
+    });
+
+    it('The api/ handlers that write accounts or preferences leave a record unchanged', async () => {
+      await db.insertAccount({ id: 'acct1', name: 'Checking' });
+      const rec = await handlers['account-statement-balance-save']({
+        account_id: 'acct1',
+        amount: 500,
+        source: 'entered',
+        entered_by: 'app',
+      });
+      const key = 'statement-balance-acct1';
+      const attempts: Array<() => Promise<unknown>> = [
+        () =>
+          handlers['api/account-update']({
+            id: key,
+            fields: { name: JSON.stringify({ ...rec, amount: 1 }) },
+          }),
+        () =>
+          handlers['api/account-update']({
+            id: 'acct1',
+            // @ts-expect-error - a hostile payload naming the record's key
+            fields: { [key]: JSON.stringify({ ...rec, amount: 1 }), value: 1 },
+          }),
+        () =>
+          handlers['api/account-create']({
+            account: { name: key, offbudget: false, closed: false },
+          }),
+        () => handlers['api/account-close']({ id: key }),
+        () => handlers['api/account-reopen']({ id: key }),
+        () => handlers['api/account-delete']({ id: key }),
+      ];
+      for (const attempt of attempts) {
+        await attempt().catch(() => undefined);
+      }
+      await expect(
+        handlers['api/account-statement-balance-get']({ accountId: 'acct1' }),
+      ).resolves.toEqual(rec);
+    });
+  });
+
   describe('api/budget-month', () => {
     beforeEach(global.emptyDatabase());
 

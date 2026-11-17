@@ -3,6 +3,7 @@ import type {
   ImportTransactionsResult,
   SyncResponse,
 } from '#server/accounts/app';
+import type { StatementBalanceRecord } from '#server/accounts/statement-balance';
 import type { PayeeNameNormalization } from '#server/accounts/sync';
 import type {
   APIAccountEntity,
@@ -211,6 +212,16 @@ export type ApiHandlers = {
     id: APIAccountEntity['id'];
     cutoff?: Date;
   }) => Promise<number>;
+
+  // Read and consume only: no api/ handler saves a statement balance record
+  'api/account-statement-balance-get': (arg: {
+    accountId: APIAccountEntity['id'];
+  }) => Promise<StatementBalanceRecord | null>;
+
+  'api/account-statement-balance-consume': (arg: {
+    accountId: APIAccountEntity['id'];
+    id: string;
+  }) => Promise<{ consumed: boolean }>;
 
   'api/account-groups-get': () => Promise<APIAccountGroupEntity[]>;
 

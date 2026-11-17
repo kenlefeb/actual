@@ -25,7 +25,7 @@ A call that would change more budget cells (category-month) than the connection'
 - **THEN** the call succeeds
 
 ### Requirement: Limits are configurable defaults
-The row limit (default 50) and cell limit (default 500) SHALL come from server settings; a grant's `max_rows` or `max_cells` SHALL set that connection's value, above or below the default, up to 1,000 rows and 5,000 cells. A setting or grant above a ceiling SHALL be invalid.
+The row limit (default 50) and cell limit (default 500) SHALL come from server settings; a grant's `max_rows` or `max_cells` SHALL set that connection's value, above or below the default, but never above the server's ceilings, which are settings too (defaults 1,000 rows and 5,000 cells) only the operator sets. A setting or grant above a ceiling SHALL be invalid.
 
 #### Scenario: A setting changes the default
 - **GIVEN** the cell setting is 200 and the grant has no `max_cells`
@@ -37,9 +37,15 @@ The row limit (default 50) and cell limit (default 500) SHALL come from server s
 - **WHEN** a client changes 250 cells
 - **THEN** the call succeeds
 
-#### Scenario: Above a ceiling
+#### Scenario: Above the ceiling
+- **GIVEN** the cell ceiling is its default 5,000
 - **WHEN** the grants file has `max_cells` 6000
 - **THEN** the file is invalid and every write tool is refused by scope
+
+#### Scenario: A raised ceiling
+- **GIVEN** the operator sets the cell ceiling to 8,000
+- **WHEN** the grants file has `max_cells` 6000
+- **THEN** the file is valid and 6,000 cells may change in one call
 
 ### Requirement: Budget carryover and hold
 `write_set_budget_carryover`, `write_hold_budget_for_next_month` and `write_reset_budget_hold` (`budget:write`) SHALL change the same state as the app. Hold SHALL be refused in a tracking budget and SHALL say when nothing was held; each SHALL audit its before and after.

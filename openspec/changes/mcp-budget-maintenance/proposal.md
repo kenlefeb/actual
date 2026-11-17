@@ -13,7 +13,7 @@ Ken decided on 2026-11-16 (sc-4487 comment 4739): budget cells get their own per
   - **A:** `write_set_budget_carryover`, `write_hold_budget_for_next_month`, `write_reset_budget_hold`. Existing API methods.
   - **B:** `write_copy_budget_month` and `write_set_budget_to_average` (3, 6 or 12 months), with a dry run. New fork handlers and typed API methods.
   - **C:** `write_apply_budget_templates` (apply or overwrite, optionally for listed categories), with a dry run. Templates are deterministic note rules, no AI.
-- **Limits are settings.** The per-call row cap (default 50) and the new budget-cell cap (default 500) are server settings; a grant's `max_rows` and new `max_cells` set a connection's own values, and may be above or below the default.
+- **Limits are settings.** The per-call row cap (default 50) and the new budget-cell cap (default 500) are server settings; a grant's `max_rows` and new `max_cells` set a connection's own values, and may be above or below the default, up to ceilings (1,000 rows, 5,000 cells) that are also operator settings.
 - **Undo:** `write_undo` also reverses `write_set_budget_amounts`, copy, average and templates (cells only). Carryover and hold are audited but not undoable here; sc-4741 covers them.
 - All budget tools need `budget:write`. No new scope: they overwrite values and delete nothing.
 

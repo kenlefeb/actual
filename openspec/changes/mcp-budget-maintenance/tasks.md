@@ -2,7 +2,7 @@
 
 ## 1. Set many budget amounts and configurable limits (sc-4209)
 
-- [ ] 1.1 Limits (design D1, D2): server settings for the row and cell defaults, the grant's `max_cells`, ceilings, and `requireCells` beside `requireRows` in `packages/mcp/src/tools/write/shared.ts`, `grants.ts`, `config.ts`. Failing tests first: defaults 50 and 500, a setting changes them, a grant raises or lowers them, a value above a ceiling is refused, an invalid `max_cells` makes the grants file invalid
+- [ ] 1.1 Limits (design D1, D2): server settings for the row and cell defaults, the grant's `max_cells`, ceilings, and `requireCells` beside `requireRows` in `packages/mcp/src/tools/write/shared.ts`, `grants.ts`, `config.ts`. Failing tests first: defaults 50 and 500, a setting changes them, a grant raises or lowers them, the ceilings are server settings (`ACTUAL_MCP_MAX_ROWS_CEILING` and `ACTUAL_MCP_MAX_CELLS_CEILING` on hosted, `ACTUAL_MCP_WRITES_MAX_ROWS_CEILING` and `_CELLS_CEILING` on stdio; defaults 1,000 and 5,000), a setting or grant above its ceiling is refused or invalid, a raised ceiling admits a higher grant, an invalid `max_cells` makes the grants file invalid
 - [ ] 1.2 `write_set_budget_amounts` (`budget:write`) in `budget.ts` (design D3). Failing tests first: over the cell limit, a bad row in the middle changes nothing, a duplicate cell, scope refusal, audit before and after per cell, stop at first engine failure
 - [ ] 1.3 Extend `UNDOABLE` in `undo.ts` for the new tool. Failing tests first: undo round trip, refused after a later change to a cell
 - [ ] 1.4 `coverage.json` line, `README.md` (limits table, `max_cells`, new tool), `yarn check:mcp-coverage`

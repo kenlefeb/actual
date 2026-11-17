@@ -20,9 +20,9 @@ Backlog stories to file before the PRs merge: undo of templates (goals and the a
 
 ### 2B. Copy and average
 
-- [ ] 2.3 Fork handlers and typed methods in `packages/loot-core/src/server/api.ts` and `packages/api/methods.ts` for copy previous month and the 3, 6, 12-month average, with a plan that does not write. Failing tests first against the app's own action on one fixture (envelope and tracking)
-- [ ] 2.4 `write_copy_budget_month` and `write_set_budget_to_average` (design D4). Failing tests first: dry run then confirm, a dry run too large for the response cap is refused with no confirm, stale confirm after a cell changes, a cell changed between recompute and write aborts the rest, cell cap, hidden and income skipped, audit before and after, undo round trip (extend `UNDOABLE`)
-- [ ] 2.5 `coverage.json`, `README.md`, typecheck, lint, tests
+- [x] 2.3 Fork handlers and typed methods in `packages/loot-core/src/server/api.ts` and `packages/api/methods.ts` for copy previous month and the 3, 6, 12-month average, with a plan that does not write. Failing tests first against the app's own action on one fixture (envelope and tracking)
+- [x] 2.4 `write_copy_budget_month` and `write_set_budget_to_average` (design D4). Failing tests first: dry run then confirm, a dry run too large for the response cap is refused with no confirm, stale confirm after a cell changes, a cell changed between recompute and write aborts the rest, cell cap, hidden and income skipped, audit before and after, undo round trip (extend `UNDOABLE`)
+- [x] 2.5 `coverage.json`, `README.md`, typecheck, lint, tests
 
 ### 2C. Templates
 

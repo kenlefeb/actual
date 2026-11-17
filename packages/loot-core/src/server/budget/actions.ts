@@ -42,7 +42,7 @@ function calcBufferedAmount(
 
 type BudgetTable = 'reflect_budgets' | 'zero_budgets';
 
-function getBudgetTable(): BudgetTable {
+export function getBudgetTable(): BudgetTable {
   return isTrackingBudget() ? 'reflect_budgets' : 'zero_budgets';
 }
 
@@ -73,7 +73,7 @@ type BudgetData = {
   amount: number;
 };
 
-function getBudgetData<T extends BudgetTable>(
+export function getBudgetData<T extends BudgetTable>(
   table: T,
   month: string,
 ): Promise<BudgetData[]> {

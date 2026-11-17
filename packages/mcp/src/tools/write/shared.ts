@@ -275,6 +275,15 @@ export async function loggedWrite<R extends object>(
   return logged ? named : { ...named, audit_outcome: 'not-logged' as const };
 }
 
+/** Whether `loggedWrite` will answer this call with a dry run and a `confirm` instead of writing. */
+export function isDryRun(log: WriteLog, destructive = log.destructive) {
+  return (
+    destructive &&
+    log.grant.confirm_destructive &&
+    typeof log.args.confirm !== 'string'
+  );
+}
+
 /** Refuses (fixed text, before any audit line) more rows than this connection's row limit. */
 export function requireRows(log: WriteLog, rows: number) {
   const cap = rowLimit(log.grant, log.limits);

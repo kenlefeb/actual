@@ -2,7 +2,7 @@ export const DEFAULT_LIMIT = 50;
 export const MAX_LIMIT = 200;
 export const MAX_RESPONSE_BYTES = 100_000;
 // Room for the envelope (note, has_more, next_cursor) around the rows.
-const ENVELOPE_BYTES = 1_000;
+export const ENVELOPE_BYTES = 1_000;
 
 export type PageInput = { limit?: number; cursor?: string };
 

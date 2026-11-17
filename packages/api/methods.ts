@@ -459,6 +459,26 @@ export function resetBudgetHold(month: string) {
   return send('api/budget-reset-hold', { month });
 }
 
+/** The cells copying the previous month into `month` would change (YYYY-MM); writes nothing. */
+export function planCopyBudgetMonth(month: string) {
+  return send('api/budget-copy-month-plan', { month });
+}
+
+/** Copies the previous month's budgeted amounts into `month`, as the budget menu does. */
+export function copyBudgetMonth(month: string) {
+  return send('api/budget-copy-month', { month });
+}
+
+/** The cells setting `month` to the 3, 6 or 12 month average would change; writes nothing. */
+export function planBudgetToAverage(month: string, months: 3 | 6 | 12) {
+  return send('api/budget-average-plan', { month, months });
+}
+
+/** Sets `month`'s budgeted amounts to the 3, 6 or 12 month average, as the budget menu does. */
+export function setBudgetToAverage(month: string, months: 3 | 6 | 12) {
+  return send('api/budget-average', { month, months });
+}
+
 export function createSchedule(schedule: Omit<APIScheduleEntity, 'id'>) {
   return send('api/schedule-create', schedule);
 }

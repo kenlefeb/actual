@@ -59,6 +59,8 @@ and prompt on every write.
 | `write_set_budget_carryover`       | `budget:write`                                             | Turns a category's rollover on or off from a month onward; audited with the months it covers; not undoable yet                                                                                                                         |
 | `write_hold_budget_for_next_month` | `budget:write`                                             | Holds part of a month's to-budget for next month (envelope budgets only); reads back what the engine held, or says nothing was; not undoable yet                                                                                       |
 | `write_reset_budget_hold`          | `budget:write`                                             | Clears a month's held amount (envelope budgets only); not undoable yet                                                                                                                                                                 |
+| `write_copy_budget_month`          | `budget:write`                                             | Copies last month's budgeted amounts into a month (the budget menu's action: not hidden categories, not income in an envelope budget); counts only changed cells against the cell limit; a dry run lists every cell; undoable          |
+| `write_set_budget_to_average`      | `budget:write`                                             | Sets a month to the 3, 6 or 12 month average (the budget menu's action); counts only changed cells; a dry run lists every cell; undoable                                                                                               |
 | `write_skip_paycheck`              | `schedules:write`                                          | Skips a paycheck's next pay date                                                                                                                                                                                                       |
 | `write_move_on_budget`             | `structure:write`                                          | Moves an off-budget account on budget; needs a `confirm` (below)                                                                                                                                                                       |
 | `write_create_account`             | `structure:write`                                          | Creates an account (on or off budget, optional opening balance in cents); a duplicate name is allowed with a warning                                                                                                                   |
@@ -93,7 +95,7 @@ only expense groups can be created.
   logged field no longer holds the value the write left, a created row is in use, or a row is now
   reconciled (pass `allow_reconciled` if the grant allows), a transfer or a split. A write is undone
   once; an undo applies row by row, and an engine failure midway is logged with `applied` and
-  `failed`. Undoable: transaction creates (deleted) and updates, budget amounts (single and many; a many-amounts
+  `failed`. Undoable: transaction creates (deleted) and updates, budget amounts (single and many, copy last month and set to average; a many-cell
   undo is counted against the cell limit and matches cells by category and month, and one that
   stopped midway restores only its applied cells), category and group
   updates, and category and group creates (deleted while unused). **Not undoable:** category and
@@ -105,6 +107,14 @@ only expense groups can be created.
 - **Moved history keeps no category.** A call that would leave a categorized transaction on a
   moved account's history before its budget start date, or on its offset line (they are already
   in the starting balance), is refused whole; do that in the app. Notes and payee can still change.
+- **Whole-month budget actions.** `write_copy_budget_month` and `write_set_budget_to_average` give
+  the cells the app's own actions give, count only the cells that would change against the cell
+  limit, and are destructive (a `budget:write` overwrite): under `confirm_destructive` the first
+  call lists every cell as `category_id:month` with before and after and returns a `confirm` bound to
+  all of them. A dry run that cannot list every cell within the 100 KB response size is refused, with no
+  `confirm`; use `write_set_budget_amounts` in smaller batches instead. Each cell is re-checked as it is
+  written, inside the write lock, and a change since the plan stops the rest (the result names applied,
+  failed and not-written cells). Audit lines name cells `category_id:month`.
 - **Row, cell and delete limits** per call (defaults 50 rows, 500 budget cells, 50 deleted rows; see
   Limits below); more is refused before anything changes. `write_update_transactions` also counts every row the call would change: split children
   and transfer partners as well as the rows it names.

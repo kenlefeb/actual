@@ -49,6 +49,7 @@ import {
 import type { AmountOPType, APIScheduleEntity } from './api-models';
 import { aqlQuery } from './aql';
 import { isTrackingBudget } from './budget/actions';
+import { planAverage, planCopyPreviousMonth } from './budget/month-plans';
 import * as cloudStorage from './cloud-storage';
 import type { RemoteFile } from './cloud-storage';
 import * as db from './db';
@@ -593,6 +594,40 @@ handlers['api/budget-reset-hold'] = withMutation(async function ({ month }) {
   checkFileOpen();
   await validateMonth(month);
   return handlers['budget/reset-hold']({ month });
+});
+
+handlers['api/budget-copy-month-plan'] = async function ({ month }) {
+  checkFileOpen();
+  await validateMonth(month);
+  return planCopyPreviousMonth({ month });
+};
+
+handlers['api/budget-copy-month'] = withMutation(async function ({ month }) {
+  checkFileOpen();
+  await validateMonth(month);
+  return handlers['budget/copy-previous-month']({ month });
+});
+
+async function validateAverage(month: string, months: number) {
+  await validateMonth(month);
+  if (![3, 6, 12].includes(months)) {
+    throw APIError('Months to average must be 3, 6 or 12: ' + months);
+  }
+}
+
+handlers['api/budget-average-plan'] = async function ({ month, months }) {
+  checkFileOpen();
+  await validateAverage(month, months);
+  return planAverage({ month, months });
+};
+
+handlers['api/budget-average'] = withMutation(async function ({
+  month,
+  months,
+}) {
+  checkFileOpen();
+  await validateAverage(month, months);
+  return handlers[`budget/set-${months}month-avg`]({ month });
 });
 
 handlers['api/transactions-export'] = async function ({

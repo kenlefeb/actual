@@ -4,8 +4,9 @@ Test-first: write the tests, see them fail, then write the code. One story per g
 
 ## 1. Pre-fill, source and recorded confirmation on web and Electron (sc-4802)
 
-- [ ] 1.1 `account-statement-balance-prefill` in loot-core (design D2) with failing tests first: recent bank balance is the prefill, a stale one is an alternative, no source is empty, the cleared balance is never the prefill and is always an alternative, credit and loan sign, the max-age preference. Add it to the API-free internal handlers
+- [ ] 1.1 `account-statement-balance-prefill` in loot-core (design D2) with failing tests first: recent bank balance is the prefill, a stale one is an alternative, no source is empty, the cleared balance is never the prefill and is always an alternative, credit and loan sign, the max-age preference (default 7, ceiling 30, bad values fall back to 7). Add it to the API-free internal handlers
 - [ ] 1.2 Desktop `ReconcileMenu` and phone `AccountReconcileModal`: stop pre-filling the cleared balance; render the prefill and its source line (tooltip and "Bank Sync Settings…" link on desktop, tap note on phone), "Entered by you" and "Restore bank balance", "Use cleared balance", empty with a hint and Confirm off. Failing component tests first; copy through `Trans`, numbers through `FinancialText`
+- [ ] 1.2a Web Settings (desktop and phone web, under Bank Sync): the "Use the bank balance if synced within … days" field for `reconcile-bank-balance-max-age-days`, validated to 1 to 30. Failing tests first; `Trans` copy
 - [ ] 1.3 Save the sc-4793 record on confirm with the right source; the cleared-source note (design D3); nothing saved on leave. Failing tests first for each source and for leaving
 - [ ] 1.4 VRT snapshots for the changed dialogs, in Docker and scoped to the changed tests; release note for the web behaviour change
 - [ ] 1.5 Run `yarn typecheck`, `yarn lint`, `openspec validate --all --strict` and the tests; UX Designer reviews against the frames

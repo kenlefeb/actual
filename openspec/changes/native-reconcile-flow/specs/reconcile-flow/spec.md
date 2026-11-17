@@ -1,12 +1,20 @@
 ## ADDED Requirements
 
 ### Requirement: The statement balance is never pre-filled with the cleared balance
-The reconcile statement-balance field SHALL start with the first of: the account's bank-sync balance when `last_sync` is within the max age (7 days by default), a statement-derived balance, or empty with a hint. It SHALL never start with the cleared balance, which SHALL stay one tap away as "Use cleared balance". One loot-core resolver SHALL supply this to web and native.
+The reconcile statement-balance field SHALL start with the first of: the account's bank-sync balance when `last_sync` is within the freshness window, a statement-derived balance, or empty with a hint. The window SHALL be a synced preference, 7 days by default, at most 30. It SHALL never start with the cleared balance, which SHALL stay one tap away as "Use cleared balance". One loot-core resolver SHALL supply this to web and native.
 
 #### Scenario: A recent bank balance
 - **GIVEN** an account synced yesterday with a bank balance of 465,413 cents
 - **WHEN** a person opens Reconcile on desktop web, phone web or iPhone
 - **THEN** the field holds that balance and its source line, not the cleared balance
+
+#### Scenario: A changed window
+- **GIVEN** the window is set to 14 days and the account last synced 12 days ago
+- **THEN** the bank balance is the pre-fill
+
+#### Scenario: A bad window
+- **WHEN** the preference is zero, not a whole number or above 30
+- **THEN** the default of 7 days applies
 
 #### Scenario: A stale bank balance
 - **GIVEN** an account last synced 12 days ago

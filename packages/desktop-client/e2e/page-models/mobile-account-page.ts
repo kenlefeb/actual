@@ -92,6 +92,8 @@ export class MobileAccountPage {
     await amountInput.waitFor();
     if (amount != null) {
       await amountInput.fill(amount);
+      // The amount is committed on blur, which is what enables Reconcile
+      await amountInput.blur();
     }
     await reconcileModal.getByRole('button', { name: 'Reconcile' }).click();
     await this.reconcilingBanner.waitFor();

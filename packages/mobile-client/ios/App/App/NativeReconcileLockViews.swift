@@ -234,6 +234,7 @@ struct ReconcileAdjustSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var categories: [BudgetMonth.Category] = []
     @State private var categoryId: String?
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private var signed: String {
         let difference = model.difference ?? 0
@@ -259,15 +260,15 @@ struct ReconcileAdjustSheet: View {
                     Text(String(format: ReconcileWords.budgetChanges, BudgetAmountFormat.string(abs(model.difference ?? 0), style: style)))
                 }
                 if let error = model.error { Text(error.message).foregroundColor(.secondary) }
+                // At accessibility sizes the button ends the form, so it never hides the details
+                if typeSize.isAccessibilitySize {
+                    confirm.listRowBackground(Color.clear).listRowInsets(EdgeInsets())
+                }
             }
             .safeAreaInset(edge: .bottom) {
-                ReconcilePrimaryButton(title: String(format: ReconcileWords.addSignedAdjustment, signed), isEnabled: model.difference != 0) {
-                    Task {
-                        if await model.adjust(categoryId: categoryId, label: ReconcileWords.adjustmentLabel) { dismiss() }
-                    }
+                if !typeSize.isAccessibilitySize {
+                    confirm.padding().background(NativeReconcileTokens.background)
                 }
-                .padding()
-                .background(NativeReconcileTokens.background)
             }
             .navigationTitle(ReconcileWords.addAdjustmentTitle)
             .navigationBarTitleDisplayMode(.inline)
@@ -278,8 +279,16 @@ struct ReconcileAdjustSheet: View {
             }
         }
         .tint(NativeReconcileTokens.accent)
-        .mediumDetent()
+        .mediumDetent(large: typeSize.isAccessibilitySize)
         .task { categories = await loadCategories() }
+    }
+
+    private var confirm: some View {
+        ReconcilePrimaryButton(title: String(format: ReconcileWords.addSignedAdjustment, signed), isEnabled: model.difference != 0) {
+            Task {
+                if await model.adjust(categoryId: categoryId, label: ReconcileWords.adjustmentLabel) { dismiss() }
+            }
+        }
     }
 }
 
@@ -298,13 +307,14 @@ private struct LabeledRow: View {
 }
 
 extension View {
-    // A medium-detent sheet on iOS 16 and later; full height before
-    @ViewBuilder func mediumDetent() -> some View {
+    // A medium-detent sheet on iOS 16 and later (large only, at accessibility
+    // sizes); full height before
+    @ViewBuilder func mediumDetent(large: Bool = false) -> some View {
         if #available(iOS 16.4, *) {
             // Opaque, so the page behind never shows through the sheet
-            presentationDetents([.medium, .large]).presentationBackground(NativeReconcileTokens.background)
+            presentationDetents(large ? [.large] : [.medium, .large]).presentationBackground(NativeReconcileTokens.background)
         } else if #available(iOS 16, *) {
-            presentationDetents([.medium, .large])
+            presentationDetents(large ? [.large] : [.medium, .large])
         } else {
             self
         }
@@ -362,18 +372,39 @@ struct ReconcileLockView: View {
             } else if case .failed(let error) = model.state {
                 ReconcileErrorView(message: error.message) { Task { await model.load() } }
             }
-            if typeSize.isAccessibilitySize {
-                lockNote.listRowBackground(Color.clear).listRowInsets(EdgeInsets())
-            }
             if let error = model.error { Text(error.message).foregroundColor(.secondary) }
+            // At accessibility sizes the note and the actions end the list, so they hide nothing
+            if typeSize.isAccessibilitySize {
+                lockActions.listRowBackground(Color.clear).listRowInsets(EdgeInsets())
+            }
         }
         .listStyle(.insetGrouped)
         .safeAreaInset(edge: .top) {
             if !typeSize.isAccessibilitySize { ReconcilePinnedHeader(step: 4, name: ReconcileWords.lockStep, summary: summary, style: style) }
         }
         .safeAreaInset(edge: .bottom) {
+            if !typeSize.isAccessibilitySize {
+                lockActions.padding().background(NativeReconcileTokens.background)
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button(action: back) { Image(systemName: "chevron.left") }.accessibilityLabel(Text(ReconcileWords.backToTick))
+            }
+            ToolbarItem(placement: .principal) {
+                Text(String(format: ReconcileWords.reconcileAccount, accountName)).font(.headline).accessibilityAddTraits(.isHeader)
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: close) { Image(systemName: "xmark") }.accessibilityLabel(Text(ReconcileWords.closeKeepTicks))
+            }
+        }
+        .task { await model.load() }
+    }
+
+    // The unlock note, immediately before Lock, then Not now
+    private var lockActions: some View {
             VStack(spacing: 8) {
-                if !typeSize.isAccessibilitySize { lockNote }
+                lockNote
                 ReconcilePrimaryButton(
                     title: String(format: ReconcileWords.lockCount, model.state.read?.count ?? 0),
                     isEnabled: model.state.read != nil && !model.isLocking
@@ -389,21 +420,6 @@ struct ReconcileLockView: View {
                 }
                 .font(.headline).frame(minHeight: 44)
             }
-            .padding()
-            .background(NativeReconcileTokens.background)
-        }
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button(action: back) { Image(systemName: "chevron.left") }.accessibilityLabel(Text(ReconcileWords.backToTick))
-            }
-            ToolbarItem(placement: .principal) {
-                Text(String(format: ReconcileWords.reconcileAccount, accountName)).font(.headline).accessibilityAddTraits(.isHeader)
-            }
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: close) { Image(systemName: "xmark") }.accessibilityLabel(Text(ReconcileWords.closeKeepTicks))
-            }
-        }
-        .task { await model.load() }
     }
 
     // Words and a lock symbol on its tint, never colour alone
@@ -452,6 +468,8 @@ struct ReconcileDoneView: View {
     let close: () -> Void
     let review: () -> Void
 
+    @Environment(\.dynamicTypeSize) private var typeSize
+
     private var verified: Bool { model.result?.verified ?? true }
     private var lockedCount: Int { model.state.read?.count ?? 0 }
 
@@ -466,24 +484,16 @@ struct ReconcileDoneView: View {
                 Text(title).font(.title2.weight(.bold)).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                 Text(detail).font(.subheadline).foregroundColor(.secondary).multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
+                // At accessibility sizes the actions follow the detail, so they hide nothing
+                if typeSize.isAccessibilitySize { actions.padding(.top, 24) }
             }
             .padding()
             .frame(maxWidth: .infinity)
         }
         .safeAreaInset(edge: .bottom) {
-            VStack(spacing: 8) {
-                if verified {
-                    if let next { ReconcilePrimaryButton(title: String(format: ReconcileWords.nextAccount, next.name)) { open(next.id) } }
-                } else {
-                    ReconcilePrimaryButton(title: String(format: ReconcileWords.reviewAccount, accountName), action: review)
-                }
-                Button(action: checklist) {
-                    Text(ReconcileWords.backToChecklist).fixedSize(horizontal: false, vertical: true).multilineTextAlignment(.center)
-                }
-                .font(.headline).frame(minHeight: 44)
+            if !typeSize.isAccessibilitySize {
+                actions.padding().background(NativeReconcileTokens.background)
             }
-            .padding()
-            .background(NativeReconcileTokens.background)
         }
         .background(NativeReconcileTokens.background.ignoresSafeArea())
         .navigationBarBackButtonHidden(true)
@@ -495,6 +505,20 @@ struct ReconcileDoneView: View {
         .onAppear {
             UIAccessibility.post(notification: .announcement, argument: verified ? title : title + ". " + String(format: ReconcileWords.reviewAccount, accountName))
         }
+    }
+
+    private var actions: some View {
+            VStack(spacing: 8) {
+                if verified {
+                    if let next { ReconcilePrimaryButton(title: String(format: ReconcileWords.nextAccount, next.name)) { open(next.id) } }
+                } else {
+                    ReconcilePrimaryButton(title: String(format: ReconcileWords.reviewAccount, accountName), action: review)
+                }
+                Button(action: checklist) {
+                    Text(ReconcileWords.backToChecklist).fixedSize(horizontal: false, vertical: true).multilineTextAlignment(.center)
+                }
+                .font(.headline).frame(minHeight: 44)
+            }
     }
 
     private var title: String {

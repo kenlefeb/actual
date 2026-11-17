@@ -52,6 +52,7 @@ const NEEDS: Record<string, Scope[]> = {
   write_create_transactions: ['transactions:write'],
   write_update_transactions: ['transactions:write'],
   write_set_budget_amount: ['budget:write'],
+  write_set_budget_amounts: ['budget:write'],
   write_skip_paycheck: ['schedules:write'],
   write_move_on_budget: ['structure:write'],
   write_create_category_group: ['structure:write'],
@@ -417,7 +418,7 @@ describe('Confirm before a destructive write', () => {
   });
 });
 
-describe('A grant can lower the row cap', () => {
+describe('A grant sets the row and cell limits', () => {
   it('Lowered cap', async () => {
     h = await startHarness(
       { count: 11 },
@@ -438,14 +439,13 @@ describe('A grant can lower the row cap', () => {
     expect(ok.isError).toBe(false);
   });
 
-  it('never raises the cap above 50', async () => {
+  it('the input schema stops at the row ceiling, not the grant', async () => {
     h = await startHarness(
       { count: 1 },
       { grant: grant(SCOPES.slice(), { max_rows: 500 }) },
     );
     const { tools } = await h.client.listTools();
-    // The input schema still stops at 50 rows whatever the grant says.
     const update = tools.find(t => t.name === 'write_update_transactions')!;
-    expect(JSON.stringify(update.inputSchema)).toContain('"maxItems":50');
+    expect(JSON.stringify(update.inputSchema)).toContain('"maxItems":1000');
   });
 });

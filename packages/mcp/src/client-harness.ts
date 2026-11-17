@@ -9,6 +9,8 @@ import type { Identity } from './audit';
 import { buildFixtureBudget } from './fixture';
 import { SCOPES } from './grants';
 import type { Grant } from './grants';
+import { DEFAULT_LIMITS } from './limits';
+import type { Limits } from './limits';
 import { createServer } from './server';
 
 const SECRET = 'harness-secret-password';
@@ -25,11 +27,14 @@ export async function startHarness(
     identity,
     grant,
     client: clientId,
+    limits,
   }: {
     writes?: boolean;
     identity?: Identity;
     grant?: Grant;
     client?: string;
+    /** Server settings to change from their defaults. */
+    limits?: Partial<Limits>;
   } = {},
 ) {
   const fixture = await buildFixtureBudget(options);
@@ -49,6 +54,7 @@ export async function startHarness(
       identity,
       grant: () => effective,
       client: as,
+      limits: { ...DEFAULT_LIMITS, ...limits },
     }).connect(serverT);
     const client = new Client({ name: 'test', version: '0' });
     await client.connect(clientT);

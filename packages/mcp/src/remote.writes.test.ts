@@ -1,6 +1,7 @@
 import * as api from '@actual-app/api';
 
 import { openBudget } from './connection';
+import { DEFAULT_LIMITS } from './limits';
 import type { RemoteConfig } from './remote-config';
 
 vi.mock('@actual-app/api', () => ({
@@ -18,6 +19,7 @@ const config: RemoteConfig = {
   dataDir: '/tmp/actual-mcp-remote-test',
   env: 'staging',
   writes: true,
+  limits: DEFAULT_LIMITS,
   auditLog: '/tmp/actual-mcp-remote-test.audit.jsonl',
   secrets: ['pw'],
   listen: { host: '127.0.0.1', port: 0 },

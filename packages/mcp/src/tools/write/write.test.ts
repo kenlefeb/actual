@@ -22,6 +22,7 @@ const WRITE_TOOLS = [
   'write_reopen_account',
   'write_set_account_business_days',
   'write_set_budget_amount',
+  'write_set_budget_amounts',
   'write_skip_paycheck',
   'write_undo',
   'write_update_account',

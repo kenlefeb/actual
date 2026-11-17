@@ -301,14 +301,12 @@ describe('Stdio grants come from the environment', () => {
         ...staging,
         ACTUAL_MCP_WRITES_SCOPES: 'budget:read transactions:write',
         ACTUAL_MCP_WRITES_CONFIRM_DESTRUCTIVE: '1',
-        ACTUAL_MCP_WRITES_MAX_ROWS: '10',
       },
       ['--writes'],
     );
     expect(config.grant).toEqual({
       scopes: ['budget:read', 'transactions:write'],
       confirm_destructive: true,
-      max_rows: 10,
     });
   });
 
@@ -363,6 +361,7 @@ describe('Stdio grants come from the environment', () => {
     ['ACTUAL_MCP_WRITES_CONFIRM_DESTRUCTIVE', 'yes'],
     ['ACTUAL_MCP_WRITES_MAX_ROWS', '0'],
     ['ACTUAL_MCP_WRITES_MAX_ROWS', 'ten'],
+    ['ACTUAL_MCP_WRITES_MAX_CELLS', '0'],
   ])('refuses %s=%j on the writes entry', (name, value) => {
     expect(() =>
       loadConfig({ ...staging, [name]: value }, ['--writes']),

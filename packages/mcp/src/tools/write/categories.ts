@@ -1,17 +1,12 @@
 import * as api from '@actual-app/api';
 import { z } from 'zod';
 
+import type { Limits } from '#limits';
 import { Refusal } from '#refusal';
 import { withText } from '#sanitize';
 
 import type { RegisterWriteTool } from './shared';
-import {
-  confirm,
-  id,
-  loggedWrite,
-  MAX_WRITE_ROWS,
-  requireRows,
-} from './shared';
+import { confirm, id, loggedWrite, requireDeleteRows } from './shared';
 
 export type Cat = {
   id: string;
@@ -108,7 +103,10 @@ function diff<T>(before: T, after: T) {
   return before === after ? {} : { before, after };
 }
 
-export function registerCategoryWriteTools(tool: RegisterWriteTool) {
+export function registerCategoryWriteTools(
+  tool: RegisterWriteTool,
+  limits: Limits,
+) {
   tool(
     'write_create_category_group',
     'Create an expense category group by name (income groups cannot be created). Returns the new group id.',
@@ -484,7 +482,7 @@ export function registerCategoryWriteTools(tool: RegisterWriteTool) {
 
   tool(
     'write_delete_category_group',
-    `Delete an expense category group and its categories (hidden ones too), by group id (never a name). When any category has transactions or budgeted amounts, transfer_category_id (an expense category outside the group) is required and receives them all; without it the call is refused naming the categories in use. At most ${MAX_WRITE_ROWS} categories. When this connection must confirm deletes, the first call changes nothing and returns a dry run with \`confirm\`; call again with it within 5 minutes. There is no undo.`,
+    `Delete an expense category group and its categories (hidden ones too), by group id (never a name). When any category has transactions or budgeted amounts, transfer_category_id (an expense category outside the group) is required and receives them all; without it the call is refused naming the categories in use. At most ${limits.maxDeleteRows} categories by default. When this connection must confirm deletes, the first call changes nothing and returns a dry run with \`confirm\`; call again with it within 5 minutes. There is no undo.`,
     { group_id: id, transfer_category_id: id.optional(), confirm },
     async ({ group_id, transfer_category_id }, auditLog) => {
       const groups = await load();
@@ -492,7 +490,7 @@ export function registerCategoryWriteTools(tool: RegisterWriteTool) {
       if (group.is_income) {
         throw new Refusal(`The income group cannot be deleted. ${NOTHING}`);
       }
-      requireRows(auditLog, group.categories.length);
+      requireDeleteRows(auditLog, group.categories.length);
       if (transfer_category_id !== undefined) {
         const target = findCategory(
           groups,

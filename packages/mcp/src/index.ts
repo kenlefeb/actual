@@ -15,6 +15,7 @@ async function main() {
 
   const server = createServer(config.secrets, {
     auditLog: config.auditLog,
+    limits: config.limits,
     grant: () => config.grant,
   });
   server.server.onclose = registerShutdown(closeBudget);

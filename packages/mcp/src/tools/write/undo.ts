@@ -16,15 +16,14 @@ import {
   id,
   loggedWrite,
   requireAmount,
+  requireCells,
+  requireDeleteRows,
   requireMonth,
   requireRows,
   stderrLine,
 } from './shared';
 import type { Access, WriteLog } from './shared';
 import { editRows, FIELD_COLUMN } from './update-plan';
-
-/** At most this much of the audit log's end is read per call (design D5). */
-const MAX_TAIL_BYTES = 2 * 1024 * 1024;
 
 /** One text for every failure of the first checks, so ids cannot be probed. */
 const NOT_UNDOABLE =
@@ -36,11 +35,15 @@ const UNDOABLE: Record<string, Scope[]> = {
   write_update_transactions: ['transactions:write'],
   write_create_transactions: ['transactions:write'],
   write_set_budget_amount: ['budget:write'],
+  write_set_budget_amounts: ['budget:write'],
   write_update_category: ['structure:write'],
   write_update_category_group: ['structure:write'],
   write_create_category: ['structure:write'],
   write_create_category_group: ['structure:write'],
 };
+
+/** Tools whose writes are budget cells (`category:month`), undone against the cell limit. */
+const CELL_TOOLS = ['write_set_budget_amount', 'write_set_budget_amounts'];
 
 /** Transaction fields an undo may put back. */
 const TRANSACTION_FIELDS = [
@@ -60,8 +63,8 @@ type Line = Record<string, unknown>;
 type Change = { id: string; field: string; before: unknown; after: unknown };
 type Entry = { attempt?: Line; outcome?: Line; undos: Entry[] };
 
-/** The last 2 MB of the audit log as parsed lines; the cut first line and any damaged line are dropped. */
-function readTail(path: string): Line[] {
+/** The audit tail setting's worth (2 MB by default) of the audit log's end as parsed lines; the cut first line and any damaged line are dropped. */
+function readTail(path: string, tailBytes: number): Line[] {
   let fd: number;
   try {
     fd = openSync(path, 'r');
@@ -70,7 +73,7 @@ function readTail(path: string): Line[] {
   }
   try {
     const { size } = fstatSync(fd);
-    const length = Math.min(size, MAX_TAIL_BYTES);
+    const length = Math.min(size, tailBytes);
     const buffer = Buffer.alloc(length);
     readSync(fd, buffer, 0, length, size - length);
     const text = buffer.toString('utf8').split('\n');
@@ -93,7 +96,7 @@ function readTail(path: string): Line[] {
 }
 
 /** Attempt and outcome lines joined by call id (file order kept), with the undo attempts of each write. */
-function readEntries(path: string) {
+function readEntries(log: WriteLog) {
   const byId = new Map<string, Entry>();
   const order: string[] = [];
   const entry = (callId: string) => {
@@ -104,7 +107,7 @@ function readEntries(path: string) {
     }
     return found;
   };
-  for (const line of readTail(path)) {
+  for (const line of readTail(log.path, log.limits.auditTailBytes)) {
     if (typeof line.call_id !== 'string' || typeof line.tool !== 'string') {
       continue;
     }
@@ -159,7 +162,16 @@ function whyNot(e: Entry) {
   if (!(tool in UNDOABLE)) return 'this kind of write is not undoable yet';
   const o = e.outcome;
   if (!o) return 'no outcome was logged';
-  if (o.status !== 'ok') return 'it did not complete';
+  // A budget-cell write that stopped midway recorded only its applied cells
+  const partial =
+    CELL_TOOLS.includes(tool) &&
+    o.status === 'failed' &&
+    Array.isArray(o.applied) &&
+    o.applied.length > 0;
+  if (o.status !== 'ok' && !partial) return 'it did not complete';
+  if (o.maybe_written) {
+    return 'a cell may have been written but is not recorded';
+  }
   if (!Array.isArray(o.applied) || o.read_back === 'failed') {
     return 'its result is unknown';
   }
@@ -182,7 +194,7 @@ function conflict(items: string[]) {
   const shown = items.slice(0, 20).join(', ');
   const more = items.length > 20 ? ` and ${items.length - 20} more` : '';
   return new UndoRefusal(
-    `A later change means this write can no longer be undone safely: ${shown}${more} no longer hold what it left. Nothing changed. ${BY_HAND}`,
+    `A later change means this write can no longer be undone safely: ${shown}${more} no longer ${items.length === 1 ? 'holds' : 'hold'} what it left. Nothing changed. ${BY_HAND}`,
     'conflict',
   );
 }
@@ -193,6 +205,8 @@ type Plan = {
   ids: string[];
   changes: AuditChange[];
   deletes: boolean;
+  /** Budget cells, counted against the cell limit rather than the row limit. */
+  cells?: boolean;
   steps: Array<{ id: string; run: () => Promise<void> }>;
 };
 
@@ -355,31 +369,51 @@ async function planCreateTransactions(ctx: Ctx): Promise<Plan> {
   };
 }
 
-async function planBudgetAmount(ctx: Ctx): Promise<Plan> {
+/**
+ * Budget cells by `category:month`. A single-amount line names the category
+ * alone in `applied`; a many-amounts line names `category:month`. Only applied
+ * cells are compared and restored (design D6).
+ */
+async function planBudgetCells(ctx: Ctx): Promise<Plan> {
   const applied = appliedOf(ctx.entry);
-  const c = changesOf(ctx.entry).find(
-    x => applied.has(x.id) && /^budgeted:\d{4}-\d{2}$/.test(x.field),
-  );
-  if (!c || typeof c.before !== 'number' || typeof c.after !== 'number') {
-    throw notUndoable('There is nothing to put back.');
+  const wanted = new Map<string, Change & { month: string }>();
+  for (const c of changesOf(ctx.entry)) {
+    if (!/^budgeted:\d{4}-\d{2}$/.test(c.field)) continue;
+    const month = c.field.slice('budgeted:'.length);
+    const key = `${c.id}:${month}`;
+    if (!applied.has(key) && !applied.has(c.id)) continue;
+    wanted.set(key, { ...c, month });
   }
-  const month = c.field.slice('budgeted:'.length);
-  requireMonth(month);
-  requireAmount(c.before);
-  const now = await budgeted(month, c.id).catch(() => undefined);
-  if (!now || now.amount !== c.after) throw conflict([`${c.id} (${c.field})`]);
+  if (wanted.size === 0) throw notUndoable('There is nothing to put back.');
+  const stale: string[] = [];
+  const now = new Map<string, Awaited<ReturnType<typeof budgeted>>>();
+  for (const [key, c] of wanted) {
+    if (typeof c.before !== 'number' || typeof c.after !== 'number') {
+      throw notUndoable('There is nothing to put back.');
+    }
+    requireMonth(c.month);
+    requireAmount(c.before);
+    const found = await budgeted(c.month, c.id).catch(() => undefined);
+    if (!found || found.amount !== c.after) stale.push(`${key} (${c.field})`);
+    else now.set(key, found);
+  }
+  if (stale.length > 0) throw conflict(stale);
   return {
-    ids: [c.id],
+    ids: [...wanted.keys()],
     deletes: false,
-    changes: [{ id: c.id, field: c.field, before: c.after, after: c.before }],
-    steps: [
-      {
-        id: c.id,
-        run: async () => {
-          await api.setBudgetAmount(month, c.id, c.before as number);
-        },
+    cells: true,
+    changes: [...wanted.values()].map(c => ({
+      id: c.id,
+      field: c.field,
+      before: c.after,
+      after: c.before,
+    })),
+    steps: [...wanted].map(([key, c]) => ({
+      id: key,
+      run: async () => {
+        await api.setBudgetAmount(c.month, c.id, c.before as number);
       },
-    ],
+    })),
   };
 }
 
@@ -498,7 +532,8 @@ async function planCategoryCreate(ctx: Ctx, group: boolean): Promise<Plan> {
 const PLANNERS: Record<string, (ctx: Ctx) => Promise<Plan>> = {
   write_update_transactions: planUpdateTransactions,
   write_create_transactions: planCreateTransactions,
-  write_set_budget_amount: planBudgetAmount,
+  write_set_budget_amount: planBudgetCells,
+  write_set_budget_amounts: planBudgetCells,
   write_update_category: ctx => planCategoryUpdate(ctx, false),
   write_update_category_group: ctx => planCategoryUpdate(ctx, true),
   write_create_category: ctx => planCategoryCreate(ctx, false),
@@ -528,7 +563,7 @@ export function registerUndoTools(
     "List this identity's own recent writes (not another's), newest first: write_id, time, tool, rows, status, whether undone and whether undoable (with a fixed reason when not). Use it to find a write_id after losing context. Reads the end of the audit log only.",
     { limit: z.number().int().min(1).max(50).optional() },
     async ({ limit = 20 }, log) => {
-      const { byId, order } = readEntries(log.path);
+      const { byId, order } = readEntries(log);
       const writes = [];
       for (const callId of [...order].reverse()) {
         const e = byId.get(callId)!;
@@ -581,7 +616,7 @@ export function registerUndoTools(
         throw error;
       };
 
-      const entry = readEntries(log.path).byId.get(write_id);
+      const entry = readEntries(log).byId.get(write_id);
       if (!entry?.attempt || !isMine(entry, log) || whyNot(entry)) {
         refuse(new UndoRefusal(NOT_UNDOABLE, 'unknown'));
       }
@@ -625,7 +660,10 @@ export function registerUndoTools(
           log,
           allowReconciled: Boolean(allow_reconciled),
         });
-        requireRows(log, plan.steps.length);
+        // Undoing a create deletes: the delete limit, never a raised row limit
+        if (plan.deletes) requireDeleteRows(log, plan.steps.length);
+        else if (plan.cells) requireCells(log, plan.steps.length);
+        else requireRows(log, plan.steps.length);
       } catch (error) {
         if (error instanceof Refusal) refuse(error, own);
         throw error;

@@ -45,6 +45,15 @@ describe('hosted entry configuration', () => {
     ).toThrow(/ACTUAL_MCP_RATE_PER_PREFIX/);
   });
 
+  it('The write limits are settings with hosted names', () => {
+    expect(loadRemoteConfig(env(), []).limits.maxCells).toBe(500);
+    const config = loadRemoteConfig(env({ ACTUAL_MCP_MAX_CELLS: '300' }), []);
+    expect(config.limits.maxCells).toBe(300);
+    expect(() =>
+      loadRemoteConfig(env({ ACTUAL_MCP_MAX_CELLS_CEILING: '5000' }), []),
+    ).toThrow(/ACTUAL_MCP_MAX_CELLS_CEILING.*ACTUAL_MCP_AUDIT_TAIL_BYTES/);
+  });
+
   it('Arguments are refused; writes need no flag', () => {
     expect(() => loadRemoteConfig(env(), ['--writes'])).toThrow(/Usage/);
     expect(() => loadRemoteConfig(env(), ['--anything'])).toThrow(/Usage/);

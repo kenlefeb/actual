@@ -5,6 +5,7 @@ import type { AddressInfo } from 'net';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
+import { DEFAULT_LIMITS } from './limits';
 import { createOAuthServer } from './oauth';
 import type { OAuthConfig, OAuthServer } from './oauth';
 import { createRemoteHttpServer } from './remote';
@@ -79,6 +80,7 @@ function remoteConfig(
     dataDir: dir,
     env: 'staging',
     writes: false,
+    limits: DEFAULT_LIMITS,
     auditLog: '',
     secrets: ['pw', SIGNING_KEY, CLIENT_SECRET, IDP_SECRET],
     listen: { host: '0.0.0.0', port: 0 },

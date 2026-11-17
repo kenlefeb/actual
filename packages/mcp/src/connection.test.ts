@@ -6,6 +6,7 @@ import * as api from '@actual-app/api';
 
 import { loadConfig } from './config';
 import { closeBudget, lookupUserId, openBudget } from './connection';
+import { DEFAULT_LIMITS } from './limits';
 
 afterEach(async () => {
   await closeBudget();
@@ -23,6 +24,7 @@ describe('openBudget', () => {
       dataDir: mkdtempSync(join(tmpdir(), 'actual-mcp-')),
       env: 'local',
       writes: false,
+      limits: DEFAULT_LIMITS,
       auditLog: '',
       secrets: [password, encryptionPassword],
     }).then(

@@ -1893,7 +1893,7 @@ describe('API fork handlers', () => {
         for (const m of await api.getBudgetMonths()) {
           const { categoryGroups } = await api.getBudgetMonth(m);
           for (const c of categoryGroups.flatMap(g => g.categories ?? [])) {
-            out.set(`${c.id}:${m}`, Number(c.budgeted ?? 0));
+            out.set(`${String(c.id)}:${m}`, Number(c.budgeted ?? 0));
           }
         }
         return out;

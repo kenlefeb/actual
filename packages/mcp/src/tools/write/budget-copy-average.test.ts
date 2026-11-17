@@ -6,10 +6,11 @@ import { startHarness } from '#client-harness';
 import { SCOPES } from '#grants';
 import type { Grant } from '#grants';
 import type { Limits } from '#limits';
+import type * as Paging from '#paging';
 
 // A small response cap, so a dry run too large to show needs a few dozen cells
 vi.mock('#paging', async importOriginal => ({
-  ...(await importOriginal<typeof import('#paging')>()),
+  ...(await importOriginal<typeof Paging>()),
   MAX_RESPONSE_BYTES: 3000,
 }));
 

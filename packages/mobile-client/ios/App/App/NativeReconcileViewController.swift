@@ -96,7 +96,8 @@ struct ReconcileFlowView: View {
                 case .stepOne(let id):
                     if let model = flow.stepOne {
                         ReconcileStepOneView(
-                            model: model, accountName: flow.name(of: id), lastReconciled: lastReconciled(id),
+                            model: model, accountName: flow.name(of: id), provider: account(id)?.providerName,
+                            lastReconciled: account(id)?.lastReconciled,
                             close: close, confirmed: { flow.confirmed(id) },
                             openBankSync: { closeAndOpen("/settings/bank-sync") })
                     }
@@ -115,8 +116,8 @@ struct ReconcileFlowView: View {
         .task { if month.state.read == nil { await month.load() } }
     }
 
-    private func lastReconciled(_ id: String) -> String? {
-        month.state.read?.accounts.first { $0.id == id }?.lastReconciled
+    private func account(_ id: String) -> ReconcileMonth.Account? {
+        month.state.read?.accounts.first { $0.id == id }
     }
 }
 
@@ -125,7 +126,8 @@ enum NativeReconcileTokens {
     // Money in, as the register tints it
     static let positive = Color(UIColor { $0.userInterfaceStyle == .dark ? .systemGreen : UIColor(red: 0.1, green: 0.5, blue: 0.2, alpha: 1) })
     // A difference still to find: worded too, never colour alone
-    static let attention = Color(UIColor.systemOrange)
+    // Light: a dark orange (about 5:1 on its pale tint); dark: the system orange
+    static let attention = Color(UIColor { $0.userInterfaceStyle == .dark ? .systemOrange : UIColor(red: 0.62, green: 0.27, blue: 0, alpha: 1) })
     static let card = Color(UIColor.secondarySystemGroupedBackground)
     // Text on the accent: the dark-mode teal is light, so its text is dark
     static let onAccent = Color(UIColor { $0.userInterfaceStyle == .dark ? .black : .white })
@@ -325,7 +327,7 @@ struct ReconcileStepHeader: View {
             }
             .accessibilityHidden(true)
             Text(String(format: ReconcileWords.stepOf, step, 4) + " · " + name)
-                .font(.footnote.weight(.semibold)).foregroundColor(.secondary)
+                .font(.footnote.weight(.semibold)).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
                 .accessibilityLabel(Text(String(format: ReconcileWords.stepSpoken, step, 4, name)))
                 .accessibilityAddTraits(.isHeader)
         }
@@ -340,6 +342,8 @@ struct ReconcileStepHeader: View {
 struct ReconcileStepOneView: View {
     @ObservedObject var model: ReconcileStepOneViewModel
     let accountName: String
+    // The bank sync provider (SimpleFIN), as the web dialog names it
+    let provider: String?
     let lastReconciled: String?
     let close: () -> Void
     let confirmed: () -> Void
@@ -401,17 +405,7 @@ struct ReconcileStepOneView: View {
     private var balanceCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(ReconcileWords.closingBalance).font(.subheadline).foregroundColor(.secondary)
-            HStack(spacing: 2) {
-                // The budget's symbol beside the field; the field holds only the number
-                if model.style.symbolPosition == .before, !model.style.currencySymbol.isEmpty {
-                    Text(model.style.currencySymbol).accessibilityHidden(true)
-                }
-                amountField
-                if model.style.symbolPosition == .after, !model.style.currencySymbol.isEmpty {
-                    Text(model.style.currencySymbol).accessibilityHidden(true)
-                }
-            }
-            .font(.largeTitle.weight(.bold).monospacedDigit())
+            amountField.font(.largeTitle.weight(.bold).monospacedDigit())
             sourceLine
             if showsNote, case .bankSync = model.source {
                 VStack(alignment: .leading, spacing: 8) {
@@ -456,8 +450,12 @@ struct ReconcileStepOneView: View {
     private var sourceText: String {
         switch model.source {
         case .bankSync(let asOf):
-            if let asOf { return String(format: ReconcileWords.fromBank, Dates.short(asOf)) }
-            return ReconcileWords.fromBankUnknown
+            switch (provider, asOf) {
+            case (let provider?, let asOf?): return String(format: ReconcileWords.fromProvider, provider, Dates.short(asOf))
+            case (let provider?, nil): return String(format: ReconcileWords.fromProviderUnknown, provider)
+            case (nil, let asOf?): return String(format: ReconcileWords.fromBank, Dates.short(asOf))
+            case (nil, nil): return ReconcileWords.fromBankUnknown
+            }
         case .entered: return ReconcileWords.enteredByYou
         case .cleared: return ReconcileWords.fromCleared
         case .none: return model.staleBank == nil ? ReconcileWords.noSource : ReconcileWords.noRecentSource
@@ -499,22 +497,26 @@ struct ReconcileTickView: View {
     let close: () -> Void
     let closeAndOpen: (String) -> Void
     @State private var search = ""
+    @Environment(\.dynamicTypeSize) private var typeSize
     private let haptics = UIImpactFeedbackGenerator(style: .light)
 
     var body: some View {
-        VStack(spacing: 12) {
-            ReconcileStepHeader(step: 2, name: ReconcileWords.tickOff).padding(.horizontal)
-            summary.padding(.horizontal)
-            Picker(ReconcileWords.show, selection: $model.scope) {
-                Text(ReconcileWords.toTick).tag(ReconcileScope.toTick)
-                Text(ReconcileWords.all).tag(ReconcileScope.all)
+        list
+            .safeAreaInset(edge: .top) {
+                VStack(spacing: 12) {
+                    if typeSize.isAccessibilitySize {
+                        difference.padding(.horizontal)
+                    } else {
+                        ReconcileStepHeader(step: 2, name: ReconcileWords.tickOff).padding(.horizontal)
+                        summary.padding(.horizontal)
+                        scopePicker.padding(.horizontal)
+                    }
+                }
+                .padding(.vertical, 8)
+                .background(NativeReconcileTokens.background)
             }
-            .pickerStyle(.segmented)
-            .padding(.horizontal)
             .onChange(of: model.scope) { _ in Task { await model.load() } }
-            list
-        }
-        .background(NativeReconcileTokens.background.ignoresSafeArea())
+            .background(NativeReconcileTokens.background.ignoresSafeArea())
         .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .automatic), prompt: Text(ReconcileWords.findAmount))
         .safeAreaInset(edge: .bottom) { exitButton }
         .toolbar {
@@ -538,21 +540,33 @@ struct ReconcileTickView: View {
         value.map { BudgetAmountFormat.string($0, style: style) } ?? "—"
     }
 
+    private var scopePicker: some View {
+        Picker(ReconcileWords.show, selection: $model.scope) {
+            Text(ReconcileWords.toTick).tag(ReconcileScope.toTick)
+            Text(ReconcileWords.all).tag(ReconcileScope.all)
+        }
+        .pickerStyle(.segmented)
+    }
+
+    // Three columns; at accessibility sizes one, so no number breaks mid-digit
     private var summary: some View {
-        let difference = model.summary?.difference
-        return HStack(alignment: .top, spacing: 12) {
+        let columns = typeSize.isAccessibilitySize ? [GridItem(.flexible())] : Array(repeating: GridItem(.flexible(), alignment: .top), count: 3)
+        return LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
             figure(ReconcileWords.statement, amount(model.summary?.statement))
             figure(ReconcileWords.cleared, amount(model.summary?.cleared))
-            figure(
-                difference == 0 ? ReconcileWords.balanced : ReconcileWords.difference, amount(difference),
-                tint: difference == 0 ? NativeReconcileTokens.accent : NativeReconcileTokens.attention
-            )
-            .padding(8)
-            .background(RoundedRectangle(cornerRadius: 10).fill((difference == 0 ? NativeReconcileTokens.accent : NativeReconcileTokens.attention).opacity(0.12)))
-            .accessibilityAddTraits(.updatesFrequently)
+            if !typeSize.isAccessibilitySize { difference }
         }
         .padding()
         .background(RoundedRectangle(cornerRadius: 16).fill(NativeReconcileTokens.card))
+    }
+
+    private var difference: some View {
+        let difference = model.summary?.difference
+        let tint = difference == 0 ? NativeReconcileTokens.accent : NativeReconcileTokens.attention
+        return figure(difference == 0 ? ReconcileWords.balanced : ReconcileWords.difference, amount(difference), tint: tint)
+            .padding(8)
+            .background(RoundedRectangle(cornerRadius: 10).fill(tint.opacity(0.12)))
+            .accessibilityAddTraits(.updatesFrequently)
     }
 
     private func figure(_ label: String, _ value: String, tint: Color = .primary) -> some View {
@@ -574,6 +588,14 @@ struct ReconcileTickView: View {
 
     private var list: some View {
         List {
+            if typeSize.isAccessibilitySize {
+                Section {
+                    ReconcileStepHeader(step: 2, name: ReconcileWords.tickOff)
+                    figure(ReconcileWords.statement, amount(model.summary?.statement))
+                    figure(ReconcileWords.cleared, amount(model.summary?.cleared))
+                    scopePicker
+                }
+            }
             Section(header: Text(ReconcileWords.tapHint)) {
                 ForEach(shownRows) { row in
                     NativeTransactionRow(
@@ -702,6 +724,9 @@ enum ReconcileWords {
     static let amountPlaceholder = NSLocalizedString("0.00", comment: "Native Reconcile: empty amount field")
     static let fromBank = NSLocalizedString("From your bank balance, synced %@", comment: "Native Reconcile: source line")
     static let fromBankUnknown = NSLocalizedString("From your bank balance, balance date unknown", comment: "Native Reconcile: source line")
+    static let fromProvider = NSLocalizedString("From %@ balance, synced %@", comment: "Native Reconcile: source line, the provider and day")
+    static let fromProviderUnknown = NSLocalizedString(
+        "From %@ balance, balance date unknown", comment: "Native Reconcile: source line, the provider")
     static let enteredByYou = NSLocalizedString("Entered by you", comment: "Native Reconcile: source line after an edit")
     static let fromCleared = NSLocalizedString("Your cleared balance", comment: "Native Reconcile: source line, cleared chosen")
     static let noSource = NSLocalizedString("No bank sync for this account", comment: "Native Reconcile: source line, no source")

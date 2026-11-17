@@ -35,6 +35,8 @@ export type NativeReconcileMonth = {
     detail: { cleared: number; statement: number | null };
     // ms, as the account stores it
     last_reconciled: string | null;
+    // The bank sync provider (e.g. simpleFin), named by the source line
+    sync_source: string | null;
   }[];
 };
 
@@ -121,8 +123,9 @@ export async function reconcileMonth(): Promise<NativeReconcileMonth> {
     id: string;
     name: string;
     last_reconciled: string | null;
+    account_sync_source: string | null;
   }>(
-    'SELECT id, name, last_reconciled FROM accounts WHERE tombstone = 0 AND closed = 0 ORDER BY sort_order, name',
+    'SELECT id, name, last_reconciled, account_sync_source FROM accounts WHERE tombstone = 0 AND closed = 0 ORDER BY sort_order, name',
   );
   return {
     month,
@@ -151,6 +154,7 @@ export async function reconcileMonth(): Promise<NativeReconcileMonth> {
                   : 'due',
             detail: { cleared: summary.cleared, statement: summary.statement },
             last_reconciled: a.last_reconciled ?? null,
+            sync_source: a.account_sync_source ?? null,
           };
         }),
     ),

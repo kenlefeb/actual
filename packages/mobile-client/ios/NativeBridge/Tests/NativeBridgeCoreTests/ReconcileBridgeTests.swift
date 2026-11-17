@@ -52,6 +52,21 @@ final class ReconcileContractTests: XCTestCase {
         XCTAssertTrue(try roundTrips(ReconcileRows.self, data))
     }
 
+    // The source line names the provider as the web dialog does (statementBalance.ts)
+    func testNamesTheBankSyncProvider() throws {
+        let month = try JSONDecoder().decode(ReconcileMonth.self, from: fixture("reconcile-month"))
+        XCTAssertNil(month.accounts[0].syncSource)
+        XCTAssertNil(month.accounts[0].providerName)
+        var json = try JSONSerialization.jsonObject(with: fixture("reconcile-month")) as! [String: Any]
+        var accounts = json["accounts"] as! [[String: Any]]
+        accounts[0]["sync_source"] = "simpleFin"
+        accounts[1]["sync_source"] = "somethingNew"
+        json["accounts"] = accounts
+        let named = try JSONDecoder().decode(ReconcileMonth.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertEqual(named.accounts[0].providerName, "SimpleFIN")
+        XCTAssertNil(named.accounts[1].providerName)
+    }
+
     func testAStatusAddedLaterStillDecodes() throws {
         var json = try JSONSerialization.jsonObject(with: fixture("reconcile-month")) as! [String: Any]
         var accounts = json["accounts"] as! [[String: Any]]

@@ -64,16 +64,18 @@ struct NativeTransactionRow: View {
     }
 
     @ViewBuilder private var statusLabel: some View {
-        switch status {
-        case .cleared:
-            Label(NativeTransactionRowWords.cleared, systemImage: "checkmark.circle")
-                .font(.footnote).foregroundColor(NativeReconcileTokens.accent)
-        case .notCleared:
-            Text(NativeTransactionRowWords.notCleared).font(.footnote).foregroundColor(.secondary)
-        case .locked:
-            Label(NativeTransactionRowWords.locked, systemImage: "lock.fill")
-                .font(.footnote).foregroundColor(.secondary)
+        let (word, symbol, tint): (String, String, Color) =
+            switch status {
+            case .cleared: (NativeTransactionRowWords.cleared, "checkmark.circle.fill", NativeReconcileTokens.accent)
+            case .notCleared: (NativeTransactionRowWords.notCleared, "circle", .secondary)
+            case .locked: (NativeTransactionRowWords.locked, "lock.fill", .secondary)
+            }
+        HStack(spacing: 4) {
+            Image(systemName: symbol).imageScale(.small)
+            Text(word)
         }
+        .font(.footnote)
+        .foregroundColor(tint)
     }
 
     private var accessibilityText: String {

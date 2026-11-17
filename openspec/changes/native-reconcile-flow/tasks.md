@@ -21,7 +21,7 @@ Test-first: write the tests, see them fail, then write the code. One story per g
 - [x] 2.4 Page side: the ••• › Reconcile… item and the Accounts banner send `presentReconcile` when the switch is on and fall back to the dialog otherwise; banner states (due, collapsed, hidden). Failing tests first
 - [x] 2.5 Swift view models (`ReconcileMonthViewModel`, `ReconcileStepOneViewModel`, `ReconcileTickViewModel`) against a fake transport and fixtures: loaded, error and timeout keep the last values, coalesced re-reads, Edit List, tick and difference. Failing tests first
 - [x] 2.6 SwiftUI screens: checklist with Edit List, step 1 in its three states, step 2 with the pinned summary, `NativeTransactionRow` (new, reused later by Accounts), tap and swipe ticks, haptic, "To tick" and "All", full-screen large detent. Verify in the Simulator against the Figma frames, light and dark
-- [ ] 2.7 Dynamic Type to AX5, VoiceOver (step announcement, difference live region, row labels and custom actions), localization of all text; notes on the story; UX Designer review
+- [x] 2.7 Dynamic Type to AX5, VoiceOver (step announcement, difference live region, row labels and custom actions), localization of all text; notes on the story; UX Designer review
 - [x] 2.8 File the Backlog story for the assistant nudge (design D6)
 
 ## 3. Reconcile on Mac (sc-4801)

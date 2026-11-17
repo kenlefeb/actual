@@ -41,10 +41,21 @@ public struct ReconcileMonth: Codable, Equatable {
         public let detail: Detail
         // ms, as the account stores it
         public let lastReconciled: String?
+        // The bank sync provider's id, e.g. simpleFin
+        public let syncSource: String?
+
+        // As the web dialog names it (statementBalance.ts); an unknown one is unnamed
+        public var providerName: String? { syncSource.flatMap { Self.providers[$0] } }
+
+        static let providers = [
+            "simpleFin": "SimpleFIN", "goCardless": "GoCardless", "pluggyai": "Pluggy.ai", "enableBanking": "Enable Banking",
+            "akahu": "Akahu",
+        ]
 
         enum CodingKeys: String, CodingKey {
             case id, name, status, detail
             case lastReconciled = "last_reconciled"
+            case syncSource = "sync_source"
         }
     }
 

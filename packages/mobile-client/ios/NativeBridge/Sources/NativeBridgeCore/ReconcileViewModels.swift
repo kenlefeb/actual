@@ -163,7 +163,8 @@ public final class ReconcileStepOneViewModel: ObservableObject {
     public var staleBank: StatementBalancePrefill.Source? { state.read?.alternatives.first { $0.source == "bank-sync" } }
 
     public func string(_ amount: Int) -> String { BudgetAmountFormat.string(amount, style: style) }
-    private func edit(_ amount: Int) -> String { BudgetAmountFormat.editString(amount, style: style) }
+    // As the app shows amounts elsewhere ($4,654.13); minorUnits reads it back
+    private func edit(_ amount: Int) -> String { BudgetAmountFormat.string(amount, style: style) }
 
     public var amount: Int? { BudgetAmountFormat.minorUnits(from: text, style: style) }
 

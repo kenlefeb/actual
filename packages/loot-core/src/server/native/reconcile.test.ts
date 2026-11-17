@@ -172,6 +172,19 @@ describe('native/reconcile-month', () => {
     expect((await month()).accounts[0].status).toBe('due');
   });
 
+  it('names the bank sync source, for the source line', async () => {
+    await db.update('accounts', {
+      id: 'checking',
+      account_sync_source: 'simpleFin',
+    });
+    const result = await month();
+    expect(result.accounts.map(a => a.sync_source)).toEqual([
+      'simpleFin',
+      null,
+      null,
+    ]);
+  });
+
   it('leaves out excluded accounts and keeps the list', async () => {
     await setPref('reconcile-excluded-accounts', '["savings"]');
     const result = await month();

@@ -150,6 +150,27 @@ final class ReconcileStepOneViewModelTests: XCTestCase {
         XCTAssertNil(model.staleBank)
     }
 
+    // UX review (PR 399): the field shows the amount as the app does elsewhere
+    func testTheFieldUsesTheBudgetsFormat() async throws {
+        let page = try FakeReconcilePage()
+        var prefill = try object("statement-balance-prefill")
+        prefill["prefill"] = ["amount": 465413, "source": "bank-sync", "as_of": "2016-12-31", "link": "bank-sync"]
+        page.results["account-statement-balance-prefill"] = encode(prefill)
+        let usd = BudgetAmountStyle(
+            currencyCode: "USD", currencySymbol: "$", decimalPlaces: 2, symbolPosition: .before, symbolSpace: false,
+            numberFormat: .commaDot, hideFraction: false)
+        let model = ReconcileStepOneViewModel(client: page.client, accountId: "checking", style: usd)
+        await model.load()
+        XCTAssertEqual(model.text, "$4,654.13")
+        XCTAssertEqual(model.source, .bankSync(asOf: "2016-12-31"))
+        model.text = "-$1,288.40"
+        XCTAssertEqual(model.amount, -128840)
+        XCTAssertEqual(model.source, .entered)
+        model.useCleared()
+        XCTAssertEqual(model.text, "$1,050.00")
+        XCTAssertEqual(model.source, .cleared)
+    }
+
     func testAnEditReadsEnteredByYouAndRestores() async throws {
         let model = try await model(FakeReconcilePage())
         model.text = "465.00"

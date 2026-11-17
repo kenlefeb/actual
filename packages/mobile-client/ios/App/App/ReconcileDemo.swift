@@ -28,7 +28,8 @@ enum ReconcileDemo {
     private static let style = #""currencyCode":"USD","currencyDecimalPlaces":2,"currencySymbol":"$","currencySymbolPosition":"before","currencySpace":false,"numberFormat":"comma-dot","hideFraction":false"#
 
     private static func account(_ id: String, _ name: String, _ status: String, _ cleared: Int, _ statement: String = "null", _ reconciled: String = "null") -> String {
-        #"{"id":"\#(id)","name":"\#(name)","status":"\#(status)","detail":{"cleared":\#(cleared),"statement":\#(statement)},"last_reconciled":\#(reconciled)}"#
+        let source = id == "checking" ? #""simpleFin""# : "null"
+        return #"{"id":"\#(id)","name":"\#(name)","status":"\#(status)","detail":{"cleared":\#(cleared),"statement":\#(statement)},"last_reconciled":\#(reconciled),"sync_source":\#(source)}"#
     }
 
     private static let month = "{\(style),\"month\":\"2026-11\",\"excluded\":[],\"hidden\":[],\"accounts\":[" + [

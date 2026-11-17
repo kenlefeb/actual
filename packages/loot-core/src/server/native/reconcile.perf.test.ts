@@ -70,5 +70,37 @@ describe('native reconcile reads', () => {
         }),
       ),
     ).toBeLessThan(50);
+    // sc-4825: step 3's matches and search, and step 4's preview
+    await db.update('preferences', {
+      id: 'statement-balance-a0',
+      value: JSON.stringify({
+        id: 'r',
+        amount: 123457,
+        source: 'entered',
+        as_of: null,
+        entered_at: Date.now(),
+        entered_by: 'perf',
+        consumed_at: null,
+      }),
+    });
+    expect(
+      await time('native/reconcile-matches', () =>
+        app.handlers['native/reconcile-matches']({ account_id: 'a0' }),
+      ),
+    ).toBeLessThan(50);
+    expect(
+      await time('native/reconcile-rows search', () =>
+        app.handlers['native/reconcile-rows']({
+          account_id: 'a0',
+          scope: 'all',
+          search: '41.80',
+        }),
+      ),
+    ).toBeLessThan(50);
+    expect(
+      await time('native/reconcile-lock-preview', () =>
+        app.handlers['native/reconcile-lock-preview']({ account_id: 'a0' }),
+      ),
+    ).toBeLessThan(50);
   });
 });

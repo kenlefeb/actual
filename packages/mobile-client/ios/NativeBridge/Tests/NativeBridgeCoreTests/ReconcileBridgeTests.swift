@@ -116,6 +116,36 @@ final class ReconcileWriteTests: XCTestCase {
         XCTAssertEqual(seen.first?.1, #"{"account_id":"a","cleared":true,"ids":["t"],"undoToken":"T"}"#)
     }
 
+    // sc-4825: the adjustment and the lock cross only as their typed values
+    func testAnAdjustmentNeedsALabelAndAToken() throws {
+        XCTAssertThrowsError(try ReconcileAdjust(accountId: "a", amount: 0, categoryId: nil, label: "x"))
+        XCTAssertThrowsError(try ReconcileAdjust(accountId: "a", amount: 1, categoryId: nil, label: ""))
+        XCTAssertThrowsError(try ReconcileAdjust(accountId: "a", amount: 1, categoryId: nil, label: String(repeating: "x", count: 101)))
+        XCTAssertThrowsError(try ReconcileAdjust(accountId: "a", amount: 1, categoryId: nil, label: "x", undoToken: ""))
+        let adjust = try ReconcileAdjust(accountId: "a", amount: 4180, categoryId: nil, label: "Adjustment", undoToken: "T")
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        XCTAssertEqual(
+            String(decoding: try encoder.encode(adjust), as: UTF8.self),
+            #"{"account_id":"a","amount":4180,"label":"Adjustment","undoToken":"T"}"#)
+    }
+
+    func testALockCarriesOnlyTheAccountAndTheDigest() async throws {
+        XCTAssertThrowsError(try ReconcileLock(accountId: "a", planDigest: ""))
+        var seen: [String] = []
+        let client = NativeBridgeClient { name, args in
+            seen.append(name + " " + args)
+            return #"{"locked_ids":["t"],"linked_ids":[],"verified":true,"cleared":5,"difference":0}"#
+        }
+        do {
+            _ = try await client.call("native/reconcile-lock", args: ["account_id": "a", "plan_digest": "d"])
+            XCTFail("expected a refusal")
+        } catch NativeBridgeError.invalidWrite {}
+        let result = try await client.reconcileLock(try ReconcileLock(accountId: "a", planDigest: "d"))
+        XCTAssertTrue(result.verified)
+        XCTAssertEqual(seen, [#"native/reconcile-lock {"account_id":"a","plan_digest":"d"}"#])
+    }
+
     func testTheConsumeIsNeverAllowlisted() {
         XCTAssertFalse(NativeBridgeAllowlist.handlers.contains("account-statement-balance-consume"))
         XCTAssertTrue(NativeBridgeAllowlist.handlers.isSuperset(of: [

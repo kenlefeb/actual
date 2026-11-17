@@ -1,0 +1,107 @@
+{
+  "difference": 4180,
+  "matches": [
+    {
+      "kind": "tick-one",
+      "ids": [
+        "one-new"
+      ],
+      "amounts": [
+        4180
+      ],
+      "rows": [
+        {
+          "id": "one-new",
+          "date": "2016-12-20",
+          "payee": "Grocer",
+          "category": null,
+          "notes": null,
+          "amount": 4180,
+          "cleared": false,
+          "reconciled": false,
+          "isParent": false
+        }
+      ]
+    },
+    {
+      "kind": "tick-one",
+      "ids": [
+        "one-old"
+      ],
+      "amounts": [
+        4180
+      ],
+      "rows": [
+        {
+          "id": "one-old",
+          "date": "2016-12-01",
+          "payee": null,
+          "category": null,
+          "notes": null,
+          "amount": 4180,
+          "cleared": false,
+          "reconciled": false,
+          "isParent": false
+        }
+      ]
+    },
+    {
+      "kind": "tick-two",
+      "ids": [
+        "pair-b",
+        "pair-a"
+      ],
+      "amounts": [
+        1180,
+        3000
+      ],
+      "rows": [
+        {
+          "id": "pair-b",
+          "date": "2016-12-11",
+          "payee": null,
+          "category": null,
+          "notes": null,
+          "amount": 1180,
+          "cleared": false,
+          "reconciled": false,
+          "isParent": false
+        },
+        {
+          "id": "pair-a",
+          "date": "2016-12-10",
+          "payee": null,
+          "category": null,
+          "notes": null,
+          "amount": 3000,
+          "cleared": false,
+          "reconciled": false,
+          "isParent": false
+        }
+      ]
+    },
+    {
+      "kind": "untick-one",
+      "ids": [
+        "wrong"
+      ],
+      "amounts": [
+        -4180
+      ],
+      "rows": [
+        {
+          "id": "wrong",
+          "date": "2016-12-05",
+          "payee": null,
+          "category": null,
+          "notes": null,
+          "amount": -4180,
+          "cleared": true,
+          "reconciled": false,
+          "isParent": false
+        }
+      ]
+    }
+  ],
+  "add_amount_param": "-41.80"
+}

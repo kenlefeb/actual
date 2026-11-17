@@ -23,9 +23,15 @@ public enum NativeBridgeAllowlist {
     // sc-4801 (native-reconcile-flow D5). The consume stays off: only a lock consumes a record.
     public static let reconcileReads: Set<String> = [
         "native/reconcile-month", "native/reconcile-rows", "account-statement-balance-prefill", "account-statement-balance-get",
+        // sc-4825
+        "native/reconcile-matches", "native/reconcile-lock-preview",
     ]
-    // Sent only as ReconcileTick, ReconcileListSet and StatementBalanceSave
-    public static let reconcileWrites: Set<String> = ["native/reconcile-tick", "native/reconcile-list-set", "account-statement-balance-save"]
+    // Sent only as ReconcileTick, ReconcileListSet, StatementBalanceSave,
+    // ReconcileAdjust and ReconcileLock (sc-4825)
+    public static let reconcileWrites: Set<String> = [
+        "native/reconcile-tick", "native/reconcile-list-set", "account-statement-balance-save", "native/reconcile-adjust",
+        "native/reconcile-lock",
+    ]
     public static let handlers: Set<String> = reads.union(writes).union(paycheckWrites).union(sync).union(reconcileReads)
         .union(reconcileWrites)
 }
@@ -223,6 +229,7 @@ public struct NativeBridgeClient {
             || (args is PaycheckSave && name == "native/paycheck-save") || (args is PaycheckDelete && name == "paycheck-delete")
             || (args is ReconcileTick && name == "native/reconcile-tick") || (args is ReconcileListSet && name == "native/reconcile-list-set")
             || (args is StatementBalanceSave && name == "account-statement-balance-save")
+            || (args is ReconcileAdjust && name == "native/reconcile-adjust") || (args is ReconcileLock && name == "native/reconcile-lock")
         let isWrite =
             NativeBridgeAllowlist.writes.contains(name) || NativeBridgeAllowlist.paycheckWrites.contains(name)
             || NativeBridgeAllowlist.reconcileWrites.contains(name)

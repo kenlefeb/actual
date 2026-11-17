@@ -12,6 +12,8 @@ import { batchUpdateTransactions } from '#server/transactions';
 import * as monthUtils from '#shared/months';
 import { q } from '#shared/query';
 
+import { searchIds } from './reconcile-lock';
+
 export const EXCLUDED_PREF = 'reconcile-excluded-accounts';
 const MAX_EXCLUDED = 500;
 const MAX_TICK_IDS = 500;
@@ -87,13 +89,15 @@ async function storedExcluded(): Promise<string[]> {
   }
 }
 
-function isUsable(record: StatementBalanceRecord | null) {
+export function isUsable(record: StatementBalanceRecord | null) {
   if (!record || record.consumed_at !== null) return false;
   const age = Date.now() - record.entered_at;
   return age <= RECORD_MAX_AGE_MS && age >= -RECORD_SKEW_MS;
 }
 
-async function summaryOf(accountId: string): Promise<NativeReconcileSummary> {
+export async function summaryOf(
+  accountId: string,
+): Promise<NativeReconcileSummary> {
   const record = await getStatementBalance({ account_id: accountId });
   const statement = record && isUsable(record) ? record.amount : null;
   const cleared = await clearedBalanceOf(accountId);
@@ -104,7 +108,7 @@ async function summaryOf(accountId: string): Promise<NativeReconcileSummary> {
   };
 }
 
-async function openAccount(id: unknown) {
+export async function openAccount(id: unknown) {
   const account =
     typeof id === 'string'
       ? await db.first<{ id: string }>(
@@ -169,9 +173,12 @@ export async function reconcileMonth(): Promise<NativeReconcileMonth> {
 export async function reconcileRows({
   account_id,
   scope,
+  search,
 }: {
   account_id: string;
   scope: 'to-tick' | 'all';
+  // sc-4825 (D2): an amount (with digit swaps), payee or notes; replaces the scope's rows
+  search?: string;
 }): Promise<NativeReconcileRows> {
   const account = await openAccount(account_id);
   if (scope !== 'to-tick' && scope !== 'all') {
@@ -179,14 +186,16 @@ export async function reconcileRows({
   }
   const today = monthUtils.currentDay();
   const filter =
-    scope === 'to-tick'
-      ? { cleared: false }
-      : {
-          $or: [
-            { reconciled: false },
-            { date: { $gte: monthUtils.firstDayOfMonth(today) } },
-          ],
-        };
+    search !== undefined
+      ? { id: { $oneof: await searchIds(account, search) } }
+      : scope === 'to-tick'
+        ? { cleared: false }
+        : {
+            $or: [
+              { reconciled: false },
+              { date: { $gte: monthUtils.firstDayOfMonth(today) } },
+            ],
+          };
   const { data } = (await aqlQuery(
     q('transactions')
       .filter({ account, date: { $lte: today }, ...filter })

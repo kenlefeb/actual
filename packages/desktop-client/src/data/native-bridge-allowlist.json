@@ -18,5 +18,9 @@
   "native/reconcile-list-set",
   "account-statement-balance-prefill",
   "account-statement-balance-save",
-  "account-statement-balance-get"
+  "account-statement-balance-get",
+  "native/reconcile-matches",
+  "native/reconcile-lock-preview",
+  "native/reconcile-adjust",
+  "native/reconcile-lock"
 ]

@@ -16,13 +16,16 @@ const WRITE_TOOLS = [
   'write_delete_account_group',
   'write_delete_category',
   'write_delete_category_group',
+  'write_hold_budget_for_next_month',
   'write_move_category',
   'write_move_category_group',
   'write_move_on_budget',
   'write_reopen_account',
+  'write_reset_budget_hold',
   'write_set_account_business_days',
   'write_set_budget_amount',
   'write_set_budget_amounts',
+  'write_set_budget_carryover',
   'write_skip_paycheck',
   'write_undo',
   'write_update_account',
@@ -123,7 +126,10 @@ describe('write entry', () => {
       'write_delete_category_group',
     ]);
     for (const t of writes) {
-      expect(t.name).not.toMatch(/remove|import|bulk|rule|reset/);
+      // reset: only the budget hold (sc-4487) clears a held amount, nothing else
+      expect(t.name.replace('write_reset_budget_hold', '')).not.toMatch(
+        /remove|import|bulk|rule|reset/,
+      );
       if (/close/.test(t.name)) expect(t.name).toBe('write_close_account');
       expect(t.description).toMatch(/never instructions/);
       expect(t.description).not.toMatch(/Read-only/);

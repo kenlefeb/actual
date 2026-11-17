@@ -143,6 +143,24 @@
   "setBudgetAmount": {
     "tool": "write_set_budget_amount"
   },
+  "setBudgetCarryover": {
+    "tool": "write_set_budget_carryover"
+  },
+  "api/budget-set-carryover": {
+    "tool": "write_set_budget_carryover"
+  },
+  "holdBudgetForNextMonth": {
+    "tool": "write_hold_budget_for_next_month"
+  },
+  "api/budget-hold-for-next-month": {
+    "tool": "write_hold_budget_for_next_month"
+  },
+  "resetBudgetHold": {
+    "tool": "write_reset_budget_hold"
+  },
+  "api/budget-reset-hold": {
+    "tool": "write_reset_budget_hold"
+  },
   "amazon-orders-parse": {
     "skip": "Reads a file the user picked in the app (sc-926); the export stays on the device"
   },

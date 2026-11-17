@@ -44,6 +44,40 @@ async function budgetedMonth(m: string) {
 const NOT_A_CATEGORY =
   'category_id must be the id of an existing category, never a name.';
 
+async function carryoverFlag(m: string, categoryId: string) {
+  const { categoryGroups } = await api.getBudgetMonth(m);
+  const category = categoryGroups
+    .flatMap(g => g.categories ?? [])
+    .find(c => c.id === categoryId);
+  if (!category) throw new Refusal(NOT_A_CATEGORY);
+  return { flag: Boolean(category.carryover), name: category.name };
+}
+
+/** Hold is an envelope-budget feature; a tracking budget has no to-budget to hold. */
+async function requireEnvelope() {
+  const prefs = (await api.internal?.send('preferences/get')) as
+    | { budgetType?: string }
+    | undefined;
+  if (prefs?.budgetType === 'tracking') {
+    throw new Refusal(
+      'Hold and reset hold work only in an envelope budget; this is a tracking budget. Nothing changed.',
+    );
+  }
+}
+
+function moneyResult(m: string, before: number, after: number, note: string) {
+  return {
+    month: m,
+    ...moneyAs('for_next_month_before', before),
+    ...moneyAs('for_next_month', after),
+    ...(note ? { note } : {}),
+  };
+}
+
+async function heldFor(m: string) {
+  return Number((await api.getBudgetMonth(m)).forNextMonth ?? 0);
+}
+
 export function registerBudgetWriteTools(
   tool: RegisterWriteTool,
   limits: Limits,
@@ -256,6 +290,121 @@ export function registerBudgetWriteTools(
               : {}),
           };
         },
+      );
+    },
+    { scopes: ['budget:write'] },
+  );
+
+  tool(
+    'write_set_budget_carryover',
+    "Turn rollover (carryover) of a category's balance on or off, by category id (never a name). The engine applies it from the given month (YYYY-MM) onward, to every later month. Returns the flag before and after and how many months it covers. Not undoable.",
+    { month, category_id: id, flag: z.boolean() },
+    async ({ month: m, category_id, flag }, auditLog) => {
+      requireMonth(m);
+      const before = await carryoverFlag(m, category_id);
+      const months = (await api.getBudgetMonths()).filter(x => x >= m).length;
+      return loggedWrite(
+        auditLog,
+        'write_set_budget_carryover',
+        {
+          ids: [category_id],
+          months,
+          changes: [
+            {
+              id: category_id,
+              field: `carryover:${m}`,
+              before: before.flag,
+              after: flag,
+            },
+          ],
+        },
+        async () => {
+          await api.setBudgetCarryover(m, category_id, flag);
+          return { applied: [category_id] };
+        },
+        async () => {
+          const after = await carryoverFlag(m, category_id);
+          return withText(
+            {
+              month: m,
+              category_id,
+              carryover_before: before.flag,
+              carryover: after.flag,
+              months_covered: months,
+            },
+            { category: after.name },
+          );
+        },
+      );
+    },
+    { scopes: ['budget:write'] },
+  );
+
+  tool(
+    'write_hold_budget_for_next_month',
+    "Hold an amount (integer cents, above 0) of a month's to-budget for next month (envelope budgets only). The engine holds nothing when to-budget is not above 0 and holds at most the to-budget, so the result reads the held amount back and says whether anything was held. Not undoable; write_reset_budget_hold clears it.",
+    { month, amount: z.number() },
+    async ({ month: m, amount }, auditLog) => {
+      requireMonth(m);
+      requireAmount(amount);
+      if (amount <= 0) {
+        throw new Refusal('amount must be above 0. Nothing changed.');
+      }
+      await requireEnvelope();
+      const before = await heldFor(m);
+      let after = before;
+      return loggedWrite(
+        auditLog,
+        'write_hold_budget_for_next_month',
+        {
+          ids: [m],
+          changes: [
+            { id: m, field: `hold:${m}`, before, after: before + amount },
+          ],
+        },
+        async () => {
+          await api.holdBudgetForNextMonth(m, amount);
+          after = await heldFor(m);
+          return { applied: after === before ? [] : [m] };
+        },
+        async () => ({
+          held: after !== before,
+          ...moneyResult(
+            m,
+            before,
+            after,
+            after === before
+              ? 'Nothing was held: to-budget is not above 0.'
+              : '',
+          ),
+        }),
+      );
+    },
+    { scopes: ['budget:write'] },
+  );
+
+  tool(
+    'write_reset_budget_hold',
+    'Clear the amount held for next month in a month (envelope budgets only). Returns the held amount before and after. Not undoable.',
+    { month },
+    async ({ month: m }, auditLog) => {
+      requireMonth(m);
+      await requireEnvelope();
+      const before = await heldFor(m);
+      let after = before;
+      return loggedWrite(
+        auditLog,
+        'write_reset_budget_hold',
+        {
+          ids: [m],
+          changes: [{ id: m, field: `hold:${m}`, before, after: 0 }],
+        },
+        async () => {
+          await api.resetBudgetHold(m);
+          after = await heldFor(m);
+          return { applied: [m] };
+        },
+        async () => moneyResult(m, before, after, ''),
       );
     },
     { scopes: ['budget:write'] },

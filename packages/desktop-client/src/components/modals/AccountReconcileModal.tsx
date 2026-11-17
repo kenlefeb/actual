@@ -50,6 +50,8 @@ export function AccountReconcileModal({
   const [amount, setAmount] = useState<number | null>(null);
   const [applied, setApplied] = useState<BalanceSource | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
+  // The field is open but nothing is typed yet: `amount` stays null, so Reconcile stays off
+  const [isEntering, setIsEntering] = useState(false);
   const [amountInputKey, setAmountInputKey] = useState(0);
 
   function apply(source: BalanceSource | null) {
@@ -102,7 +104,7 @@ export function AccountReconcileModal({
                 'Enter the current balance of your bank account that you want to reconcile with:',
               )}
             />
-            {prefill && amount == null && (
+            {prefill && amount == null && !isEntering && (
               <Button
                 style={{
                   ...styles.veryLargeText,
@@ -110,15 +112,12 @@ export function AccountReconcileModal({
                   height: styles.mobileMinHeight,
                 }}
                 variant="bare"
-                onPress={() => {
-                  setAmount(0);
-                  setAmountInputKey(key => key + 1);
-                }}
+                onPress={() => setIsEntering(true)}
               >
                 <Trans>Enter amount</Trans>
               </Button>
             )}
-            {prefill && amount != null && (
+            {prefill && (amount != null || isEntering) && (
               <View
                 style={{
                   justifyContent: 'center',
@@ -127,7 +126,7 @@ export function AccountReconcileModal({
               >
                 <AmountInput
                   key={amountInputKey}
-                  value={integerToAmount(amount)}
+                  value={integerToAmount(amount ?? 0)}
                   onChange={newAmount => setAmount(amountToInteger(newAmount))}
                   autoFocus
                   autoFocusDelay={150}

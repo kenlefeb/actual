@@ -192,6 +192,12 @@ describe('AccountReconcileModal on phone web (native-reconcile-flow 1.2, 1.3)', 
       await screen.findByRole('button', { name: 'Enter amount' }),
     );
     expect(screen.getByLabelText('Statement balance')).toBeInTheDocument();
+    // one tap never records a balance of 0.00
+    expect(screen.getByRole('button', { name: 'Reconcile' })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Statement balance'), {
+      target: { value: '12.50' },
+    });
+    expect(screen.getByRole('button', { name: 'Reconcile' })).toBeEnabled();
   });
 
   it('the info button is at least 44 points square', async () => {

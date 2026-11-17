@@ -20,6 +20,8 @@ describe('Limits are configurable defaults', () => {
       deleteCeiling: 1000,
       auditTailBytes: 2 * 1024 * 1024,
       maxAuditLineBytes: 512 * 1024,
+      maxResponseBytes: 100_000,
+      responseBytesCeiling: 1_000_000,
     });
     expect(DEFAULT_LIMITS).toEqual(loadLimits({}, STDIO));
   });
@@ -56,6 +58,25 @@ describe('Limits are configurable defaults', () => {
     expect(() =>
       loadLimits({ [`${STDIO}MAX_AUDIT_LINE_BYTES`]: '600000' }, STDIO),
     ).toThrow(/MAX_AUDIT_LINE_BYTES.*AUDIT_TAIL_BYTES/);
+  });
+
+  it('The response size is a setting with a ceiling', () => {
+    expect(
+      loadLimits({ [`${STDIO}MAX_RESPONSE_BYTES`]: '300000' }, STDIO)
+        .maxResponseBytes,
+    ).toBe(300000);
+    expect(() =>
+      loadLimits({ [`${STDIO}MAX_RESPONSE_BYTES`]: '1000001' }, STDIO),
+    ).toThrow(/MAX_RESPONSE_BYTES is above .*MAX_RESPONSE_BYTES_CEILING/);
+    expect(
+      loadLimits(
+        {
+          [`${STDIO}MAX_RESPONSE_BYTES`]: '2000000',
+          [`${STDIO}MAX_RESPONSE_BYTES_CEILING`]: '2000000',
+        },
+        STDIO,
+      ).maxResponseBytes,
+    ).toBe(2000000);
   });
 
   it('The hosted entry uses its own names', () => {

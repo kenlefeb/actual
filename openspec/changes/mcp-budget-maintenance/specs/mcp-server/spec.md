@@ -25,7 +25,7 @@ A call, or an undo, that would change more budget cells (category and month) tha
 - **THEN** the call succeeds
 
 ### Requirement: Limits are configurable defaults
-The row limit (50), cell limit (500), delete limit (50) and their ceilings (1,000, 2,000, 1,000) SHALL be server settings only the operator sets; a grant's `max_rows`, `max_cells` and `max_delete_rows` set that connection's value up to the ceiling. The audit tail is a setting (default 2 MB); the server SHALL refuse to start when it cannot hold 4 writes of ceiling size (150 bytes a cell, 250 a row). A value over its ceiling SHALL be invalid.
+The row limit (50), cell limit (500), delete limit (50), dry-run response size (100 KB) and their ceilings (1,000, 2,000, 1,000, 1 MB) SHALL be server settings only the operator sets; a grant's `max_rows`, `max_cells` and `max_delete_rows` set that connection's value up to the ceiling. The audit tail is a setting (default 2 MB); the server SHALL refuse to start when it cannot hold 4 writes of ceiling size (150 bytes a cell, 250 a row). A value over its ceiling SHALL be invalid.
 
 #### Scenario: A grant overrides the setting
 - **GIVEN** the cell setting is 200 and the grant has `max_cells` 300
@@ -82,7 +82,7 @@ Tools that delete or close (category group delete, account close and delete, and
 - **THEN** the call is refused with fixed text and nothing changed
 
 ### Requirement: Copy and average a budget month
-`write_copy_budget_month` and `write_set_budget_to_average` (3, 6 or 12 months) (`budget:write`) SHALL give the cells the app's action gives and count only cells that change. Under `confirm_destructive` the first call SHALL list every cell's before and after with a `confirm`, and SHALL be refused, issuing no `confirm`, when the list does not fit the response cap.
+`write_copy_budget_month` and `write_set_budget_to_average` (3, 6 or 12 months) (`budget:write`) SHALL give the cells the app's action gives and count only cells that change. Under `confirm_destructive` the first call SHALL list every cell's before and after, with its category and group name, and a `confirm`, and SHALL be refused, issuing no `confirm`, when the list does not fit the response size setting.
 
 #### Scenario: Dry run then confirm
 - **GIVEN** `confirm_destructive` on

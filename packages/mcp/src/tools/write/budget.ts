@@ -2,7 +2,7 @@ import * as api from '@actual-app/api';
 import { z } from 'zod';
 
 import type { Limits } from '#limits';
-import { ENVELOPE_BYTES, MAX_RESPONSE_BYTES } from '#paging';
+import { ENVELOPE_BYTES } from '#paging';
 import { Refusal } from '#refusal';
 import { withText } from '#sanitize';
 import { moneyAs } from '#tools/read/shared';
@@ -239,16 +239,33 @@ async function runMonthAction(
     month,
     ...extra,
   };
+  // Names beside each cell, so a person can read the dry run
+  const names = new Map<string, { category: string; group: string }>();
+  for (const g of (await api.getBudgetMonth(month)).categoryGroups) {
+    for (const c of g.categories ?? []) {
+      names.set(String(c.id), {
+        category: String(c.name),
+        group: String(g.name),
+      });
+    }
+  }
+  const cells = plan.map(c => ({
+    cell: c.key,
+    category: names.get(c.category_id)?.category,
+    group: names.get(c.category_id)?.group,
+    before: c.before,
+    after: c.amount,
+  }));
   if (
     isDryRun(log) &&
     Buffer.byteLength(
-      JSON.stringify({ ids: entry.ids, changes: entry.changes }),
+      JSON.stringify({ ids: entry.ids, changes: entry.changes, cells }),
     ) +
       ENVELOPE_BYTES >
-      MAX_RESPONSE_BYTES
+      log.limits.maxResponseBytes
   ) {
     throw new Refusal(
-      `The dry run would list ${plan.length} cells, more than fits in one response (${MAX_RESPONSE_BYTES} bytes), and it is never shortened, so no confirm is issued. Nothing changed. Set the cells in smaller batches with write_set_budget_amounts.`,
+      `The dry run would list ${plan.length} cells, more than fits in one response (${log.limits.maxResponseBytes} bytes), and it is never shortened, so no confirm is issued. Nothing changed. Set the cells in smaller batches with write_set_budget_amounts.`,
     );
   }
   return loggedWrite(
@@ -262,6 +279,7 @@ async function runMonthAction(
       changed: plan.length,
       ...(await cellsResult(plan, outcome)),
     }),
+    { preview: { cells } },
   );
 }
 

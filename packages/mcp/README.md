@@ -232,19 +232,21 @@ scopes it needs (its description ends `Needs: …`):
 **Stdio grants.** Only the `--writes` entry reads these variables, so both entries can share one env
 file; the read entry always grants `budget:read` (its write tools are listed but refused).
 
-| Variable                                    | Default when unset    | Meaning                                                                    |
-| ------------------------------------------- | --------------------- | -------------------------------------------------------------------------- |
-| `ACTUAL_MCP_WRITES_SCOPES`                  | every scope           | Space-separated scopes; an unknown or empty value stops the entry at start |
-| `ACTUAL_MCP_WRITES_CONFIRM_DESTRUCTIVE`     | `0`                   | `1` to require the dry run and `confirm` before a delete                   |
-| `ACTUAL_MCP_WRITES_MAX_ROWS`                | 50                    | Default per-call row limit (a grant's `max_rows` replaces it)              |
-| `ACTUAL_MCP_WRITES_MAX_CELLS`               | 500                   | Default per-call budget-cell limit                                         |
-| `ACTUAL_MCP_WRITES_MAX_DELETE_ROWS`         | 50                    | Default per-call delete limit                                              |
-| `ACTUAL_MCP_WRITES_MAX_ROWS_CEILING`        | 1000                  | The most a row limit may be (also bounds the tool schemas)                 |
-| `ACTUAL_MCP_WRITES_MAX_CELLS_CEILING`       | 2000                  | The most a cell limit may be                                               |
-| `ACTUAL_MCP_WRITES_MAX_DELETE_ROWS_CEILING` | 1000                  | The most a delete limit may be                                             |
-| `ACTUAL_MCP_WRITES_AUDIT_TAIL_BYTES`        | 2097152 (2 MB)        | How much of the audit log's end an undo reads                              |
-| `ACTUAL_MCP_WRITES_MAX_AUDIT_LINE_BYTES`    | a quarter of the tail | The most one write's audit line may hold; a larger write is refused        |
-| `ACTUAL_MCP_WRITES_ALLOW_RECONCILED`        | `0`                   | `1` to let a row's `allow_reconciled` change reconciled transactions       |
+| Variable                                       | Default when unset    | Meaning                                                                                    |
+| ---------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------ |
+| `ACTUAL_MCP_WRITES_SCOPES`                     | every scope           | Space-separated scopes; an unknown or empty value stops the entry at start                 |
+| `ACTUAL_MCP_WRITES_CONFIRM_DESTRUCTIVE`        | `0`                   | `1` to require the dry run and `confirm` before a delete                                   |
+| `ACTUAL_MCP_WRITES_MAX_ROWS`                   | 50                    | Default per-call row limit (a grant's `max_rows` replaces it)                              |
+| `ACTUAL_MCP_WRITES_MAX_CELLS`                  | 500                   | Default per-call budget-cell limit                                                         |
+| `ACTUAL_MCP_WRITES_MAX_DELETE_ROWS`            | 50                    | Default per-call delete limit                                                              |
+| `ACTUAL_MCP_WRITES_MAX_ROWS_CEILING`           | 1000                  | The most a row limit may be (also bounds the tool schemas)                                 |
+| `ACTUAL_MCP_WRITES_MAX_CELLS_CEILING`          | 2000                  | The most a cell limit may be                                                               |
+| `ACTUAL_MCP_WRITES_MAX_DELETE_ROWS_CEILING`    | 1000                  | The most a delete limit may be                                                             |
+| `ACTUAL_MCP_WRITES_AUDIT_TAIL_BYTES`           | 2097152 (2 MB)        | How much of the audit log's end an undo reads                                              |
+| `ACTUAL_MCP_WRITES_MAX_AUDIT_LINE_BYTES`       | a quarter of the tail | The most one write's audit line may hold; a larger write is refused                        |
+| `ACTUAL_MCP_WRITES_MAX_RESPONSE_BYTES`         | 100000 (100 KB)       | The most a whole-month dry run's response may hold; a larger one is refused, not shortened |
+| `ACTUAL_MCP_WRITES_MAX_RESPONSE_BYTES_CEILING` | 1000000 (1 MB)        | The most that setting may be                                                               |
+| `ACTUAL_MCP_WRITES_ALLOW_RECONCILED`           | `0`                   | `1` to let a row's `allow_reconciled` change reconciled transactions                       |
 
 **Limits** are settings only the operator sets (a grant never sets a ceiling). The hosted entry reads
 the same names without `WRITES_` (`ACTUAL_MCP_MAX_CELLS` and so on). A setting above its ceiling, or

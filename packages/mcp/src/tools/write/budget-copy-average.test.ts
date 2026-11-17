@@ -6,13 +6,6 @@ import { startHarness } from '#client-harness';
 import { SCOPES } from '#grants';
 import type { Grant } from '#grants';
 import type { Limits } from '#limits';
-import type * as Paging from '#paging';
-
-// A small response cap, so a dry run too large to show needs a few dozen cells
-vi.mock('#paging', async importOriginal => ({
-  ...(await importOriginal<typeof Paging>()),
-  MAX_RESPONSE_BYTES: 3000,
-}));
 
 let h: Awaited<ReturnType<typeof startHarness>>;
 
@@ -199,6 +192,23 @@ describe('Copy last month', () => {
         { id: b, field: `budgeted:${MONTH}`, before: 0, after: 200 },
         { id: c, field: `budgeted:${MONTH}`, before: 0, after: 300 },
       ]);
+      // Readable for a person: the names beside each cell
+      expect(dry.json.text.cells).toMatchObject([
+        {
+          cell: `${b}:${MONTH}`,
+          category: 'B',
+          group: 'Bills',
+          before: 0,
+          after: 200,
+        },
+        {
+          cell: `${c}:${MONTH}`,
+          category: 'C',
+          group: 'Bills',
+          before: 0,
+          after: 300,
+        },
+      ]);
       expect(await budgetedNow(MONTH, b)).toBe(0);
       expect(lines()).toEqual([]);
 
@@ -214,7 +224,7 @@ describe('Copy last month', () => {
     it('Refuses a dry run too large to show, with no confirm', async () => {
       await start(
         { confirm_destructive: true },
-        { maxCells: 100, cellsCeiling: 100 },
+        { maxCells: 100, cellsCeiling: 100, maxResponseBytes: 4000 },
       );
       const ids = await cats(Array.from({ length: 40 }, (_, i) => `K${i}`));
       for (const id of ids) await api.setBudgetAmount(PREV, id, 10);

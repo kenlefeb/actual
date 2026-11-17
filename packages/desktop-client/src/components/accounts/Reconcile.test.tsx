@@ -1,18 +1,24 @@
 import React from 'react';
+import { MemoryRouter } from 'react-router';
 
 import { generateAccount } from '@actual-app/core/mocks';
+import { send } from '@actual-app/core/platform/client/connection';
 import { q } from '@actual-app/core/shared/query';
 import type { AccountEntity } from '@actual-app/core/types/models';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { useSheetValue } from '#hooks/useSheetValue';
-import { TestProviders } from '#mocks';
+import { createTestAppStore, TestProviders } from '#mocks';
 
 import { ReconcileMenu, ReconcilingMessage } from './Reconcile';
 
 vi.mock('#hooks/useSheetValue', () => ({
   useSheetValue: vi.fn(),
+}));
+
+vi.mock('@actual-app/core/platform/client/connection', () => ({
+  send: vi.fn(),
 }));
 
 // Use actual arithmetic and util functions for real math behavior
@@ -115,148 +121,233 @@ describe('ReconcilingMessage math & UI', () => {
   });
 });
 
-describe('ReconcileMenu arithmetic evaluation', () => {
-  // useSheetValue is mocked above via relative path
+type Resolved = {
+  prefill: unknown;
+  alternatives: unknown[];
+  cleared_balance: number;
+  record: null;
+  account_type: string | null;
+};
 
+const BANK = {
+  amount: 46541,
+  source: 'bank-sync',
+  as_of: '2026-11-14',
+  link: 'bank-sync',
+} as const;
+const cleared = (amount: number) =>
+  ({ amount, source: 'cleared', as_of: null, link: null }) as const;
+
+function mockResolver(over: Partial<Resolved> = {}) {
+  const resolved: Resolved = {
+    prefill: BANK,
+    alternatives: [cleared(1000)],
+    cleared_balance: 1000,
+    record: null,
+    account_type: 'checking',
+    ...over,
+  };
+  vi.mocked(send).mockImplementation((async (name: string) =>
+    name === 'account-statement-balance-prefill'
+      ? resolved
+      : undefined) as never);
+}
+
+const saveCalls = () =>
+  vi
+    .mocked(send)
+    .mock.calls.filter(([name]) => name === 'account-statement-balance-save');
+
+describe('ReconcileMenu source and recorded balance (native-reconcile-flow 1.2, 1.3)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(useSheetValue).mockReturnValue(1000);
+    mockResolver();
   });
 
-  // Create a valid offline account entity
-  const baseAccount: AccountEntity = generateAccount('Checking', false, false);
+  const account = generateAccount('Checking', true, false) as AccountEntity;
+  account.account_sync_source = 'simpleFin';
 
-  test('defaults input to cleared balance and submits evaluated integer amount', async () => {
-    // clearedBalance = 123.45
-    vi.mocked(useSheetValue).mockReturnValue(12345);
+  function open() {
     const onReconcile = vi.fn();
     const onClose = vi.fn();
-
+    const store = createTestAppStore();
     render(
-      <TestProviders>
-        <ReconcileMenu
-          account={baseAccount as AccountEntity}
-          onReconcile={onReconcile}
-          onClose={onClose}
-        />
+      <TestProviders store={store}>
+        <MemoryRouter>
+          <ReconcileMenu
+            account={account}
+            onReconcile={onReconcile}
+            onClose={onClose}
+          />
+        </MemoryRouter>
       </TestProviders>,
     );
+    return { onReconcile, onClose, store };
+  }
 
-    const input = screen.getByRole('textbox');
-    // Replace with arithmetic expression
+  test('pre-fills the recent bank balance, never the cleared balance, with an always-visible source line', async () => {
+    open();
+    expect(await screen.findByRole('textbox')).toHaveValue('465.41');
+    expect(
+      screen.getByText(/From SimpleFIN balance, synced/),
+    ).toBeInTheDocument();
+    // not hidden behind hover or focus
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+  });
+
+  test('focusing the icon adds the explanation and Bank Sync Settings', async () => {
+    open();
+    await screen.findByRole('textbox');
+    act(() => {
+      screen.getByRole('button', { name: 'About this balance' }).focus();
+    });
+    expect(screen.getByRole('note')).toHaveTextContent(
+      'May include pending items. Compare with your statement.',
+    );
+    expect(
+      screen.getByRole('button', { name: 'Bank Sync Settings…' }),
+    ).toBeInTheDocument();
+  });
+
+  test('confirming the unedited bank balance records bank-sync and reconciles', async () => {
+    const { onReconcile, onClose } = open();
+    await screen.findByRole('textbox');
+    await userEvent.click(screen.getByRole('button', { name: 'Reconcile' }));
+    expect(saveCalls()).toEqual([
+      [
+        'account-statement-balance-save',
+        {
+          account_id: account.id,
+          amount: 46541,
+          source: 'bank-sync',
+          as_of: '2026-11-14',
+        },
+      ],
+    ]);
+    expect(onReconcile).toHaveBeenCalledWith(46541);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('editing reads Entered by you, and confirming records entered with the evaluated amount', async () => {
+    const { onReconcile } = open();
+    const input = await screen.findByRole('textbox');
     await userEvent.clear(input);
     await userEvent.type(input, '100+25.50-10');
-
-    // Submit
+    expect(screen.getByText('Entered by you')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Reconcile' }));
-
-    // 100 + 25.50 - 10 = 115.50 -> 11550 integer
+    expect(saveCalls()[0][1]).toMatchObject({
+      amount: 11550,
+      source: 'entered',
+    });
     expect(onReconcile).toHaveBeenCalledWith(11550);
+  });
+
+  test('Restore bank balance puts the pre-fill back', async () => {
+    open();
+    const input = await screen.findByRole('textbox');
+    await userEvent.clear(input);
+    await userEvent.type(input, '5');
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Restore bank balance' }),
+    );
+    expect(input).toHaveValue('465.41');
+    expect(screen.queryByText('Entered by you')).not.toBeInTheDocument();
+    expect(screen.getByText(/From SimpleFIN balance/)).toBeInTheDocument();
+  });
+
+  test('a stale bank balance is offered, not pre-filled, and saves bank-sync with its own date', async () => {
+    mockResolver({
+      prefill: null,
+      alternatives: [{ ...BANK, as_of: '2026-11-02' }, cleared(1000)],
+    });
+    const { onReconcile } = open();
+    const input = await screen.findByRole('textbox');
+    expect(input).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Reconcile' })).toBeDisabled();
+    await userEvent.click(
+      screen.getByRole('button', { name: /Use bank balance from/ }),
+    );
+    expect(input).toHaveValue('465.41');
+    await userEvent.click(screen.getByRole('button', { name: 'Reconcile' }));
+    expect(saveCalls()[0][1]).toMatchObject({
+      source: 'bank-sync',
+      as_of: '2026-11-02',
+    });
+    expect(onReconcile).toHaveBeenCalledWith(46541);
+  });
+
+  test('with no source the field is empty with a hint, and the cleared balance is a choice with its caveat', async () => {
+    mockResolver({ prefill: null });
+    open();
+    expect(await screen.findByRole('textbox')).toHaveValue('');
+    expect(
+      screen.getByText(/Type the balance from your statement/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reconcile' })).toBeDisabled();
+    expect(
+      screen.getByText('Your own cleared total — not an independent check'),
+    ).toBeInTheDocument();
+  });
+
+  test('Use cleared balance records cleared, says why the assistant cannot use it, and still reconciles', async () => {
+    mockResolver({ prefill: null });
+    const { onReconcile, onClose, store } = open();
+    await screen.findByRole('textbox');
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Use cleared balance' }),
+    );
+    expect(screen.getByRole('textbox')).toHaveValue('10.00');
+    await userEvent.click(screen.getByRole('button', { name: 'Reconcile' }));
+    expect(saveCalls()[0][1]).toMatchObject({
+      amount: 1000,
+      source: 'cleared',
+    });
+    expect(store.getState().notifications.notifications[0].message).toMatch(
+      /not a statement, so an assistant cannot use it/,
+    );
+    expect(onReconcile).toHaveBeenCalledWith(1000);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  test('defaults input to cleared balance and submits evaluated invalid amount & use cleared balance', async () => {
-    // clearedBalance = 1234.56
-    vi.mocked(useSheetValue).mockReturnValue(123456);
-    const onReconcile = vi.fn();
-    const onClose = vi.fn();
+  test('no note after an unedited bank balance', async () => {
+    const { store } = open();
+    await screen.findByRole('textbox');
+    await userEvent.click(screen.getByRole('button', { name: 'Reconcile' }));
+    expect(store.getState().notifications.notifications).toHaveLength(0);
+  });
 
-    render(
-      <TestProviders>
-        <ReconcileMenu
-          account={baseAccount as AccountEntity}
-          onReconcile={onReconcile}
-          onClose={onClose}
-        />
-      </TestProviders>,
-    );
+  test('leaving without confirming saves nothing', async () => {
+    open();
+    await screen.findByRole('textbox');
+    expect(saveCalls()).toHaveLength(0);
+  });
 
-    const input = screen.getByRole('textbox');
-    // Replace with arithmetic expression
+  test('a failed save still reconciles', async () => {
+    vi.mocked(send).mockImplementation((async (name: string) => {
+      if (name === 'account-statement-balance-save') throw new Error('no');
+      return {
+        prefill: BANK,
+        alternatives: [cleared(1000)],
+        cleared_balance: 1000,
+        record: null,
+        account_type: null,
+      };
+    }) as never);
+    const { onReconcile } = open();
+    await screen.findByRole('textbox');
+    await userEvent.click(screen.getByRole('button', { name: 'Reconcile' }));
+    expect(onReconcile).toHaveBeenCalledWith(46541);
+  });
+
+  test('text with no digits does not reconcile', async () => {
+    const { onReconcile, onClose } = open();
+    const input = await screen.findByRole('textbox');
     await userEvent.clear(input);
     await userEvent.type(input, 'abcd');
-
-    // Submit
-    await userEvent.click(screen.getByRole('button', { name: 'Reconcile' }));
-
-    // Input has no digits, so it should use cleared balance for reconciliation
-    expect(onReconcile).toHaveBeenCalledWith(123456);
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  test('clicking "Use last synced total" fills and submits that amount', async () => {
-    // clearedBalance present so input renders
-    vi.mocked(useSheetValue).mockReturnValue(1000);
-
-    const onReconcile = vi.fn();
-    const onClose = vi.fn();
-
-    // Ensure the account is the connected variant so balance_current is a number
-    const connectedAccount = generateAccount(
-      'Checking',
-      true,
-      false,
-    ) as AccountEntity;
-    connectedAccount.balance_current = 4321;
-
-    render(
-      <TestProviders>
-        <ReconcileMenu
-          account={connectedAccount}
-          onReconcile={onReconcile}
-          onClose={onClose}
-        />
-      </TestProviders>,
-    );
-
-    // Fill from last synced value (43.21)
-    await userEvent.click(screen.getByText('Use last synced total'));
-
-    await userEvent.click(screen.getByRole('button', { name: 'Reconcile' }));
-    expect(onReconcile).toHaveBeenCalledWith(4321);
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  test('submitting with empty input does not reconcile', async () => {
-    vi.mocked(useSheetValue).mockReturnValue(2222);
-
-    const onReconcile = vi.fn();
-    const onClose = vi.fn();
-    render(
-      <TestProviders>
-        <ReconcileMenu
-          account={baseAccount as AccountEntity}
-          onReconcile={onReconcile}
-          onClose={onClose}
-        />
-      </TestProviders>,
-    );
-
-    const input = screen.getByRole('textbox');
-    await userEvent.clear(input);
-
     await userEvent.click(screen.getByRole('button', { name: 'Reconcile' }));
     expect(onReconcile).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
-  });
-
-  test('when cleared balance is not available, submits null', async () => {
-    // No cleared balance -> input is not rendered
-    vi.mocked(useSheetValue).mockReturnValue(null);
-
-    const onReconcile = vi.fn();
-    const onClose = vi.fn();
-    render(
-      <TestProviders>
-        <ReconcileMenu
-          account={baseAccount as AccountEntity}
-          onReconcile={onReconcile}
-          onClose={onClose}
-        />
-      </TestProviders>,
-    );
-
-    await userEvent.click(screen.getByRole('button', { name: 'Reconcile' }));
-    expect(onReconcile).toHaveBeenCalledWith(null);
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(saveCalls()).toHaveLength(0);
   });
 });

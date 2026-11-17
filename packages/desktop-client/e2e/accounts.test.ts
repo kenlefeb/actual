@@ -198,10 +198,13 @@ test.describe('Accounts', () => {
       .click();
 
     await page.getByRole('button', { name: 'Reconcile' }).click();
-    // The reconciliation amount is pre-filled with the cleared balance,
-    // so submitting right away results in a zero difference.
+    // This account has no bank sync, so the amount starts empty; choosing the
+    // cleared balance makes the difference zero.
     const reconcilePopover = page.locator('[data-popover]');
     await reconcilePopover.getByRole('textbox').waitFor();
+    await reconcilePopover
+      .getByRole('button', { name: 'Use cleared balance' })
+      .click();
     await reconcilePopover.getByRole('button', { name: 'Reconcile' }).click();
     await page.getByRole('button', { name: 'Lock transactions' }).click();
 

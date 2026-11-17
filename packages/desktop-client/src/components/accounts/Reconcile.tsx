@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Form } from 'react-aria-components';
 import { Trans } from 'react-i18next';
@@ -22,7 +22,15 @@ import { useDateFormat } from '#hooks/useDateFormat';
 import { useFormat } from '#hooks/useFormat';
 import { useLocale } from '#hooks/useLocale';
 import { useSheetValue } from '#hooks/useSheetValue';
-import * as bindings from '#spreadsheet/bindings';
+import { addNotification } from '#notifications/notificationsSlice';
+import { useDispatch } from '#redux';
+
+import { ReconcileBalanceChoices } from './ReconcileBalanceChoices';
+import {
+  recordStatementBalance,
+  useStatementBalancePrefill,
+} from './statementBalance';
+import type { BalanceSource } from './statementBalance';
 
 type ReconcilingMessageProps = {
   balanceQuery: { name: `balance-query-${string}`; query: Query };
@@ -132,37 +140,63 @@ export function ReconcileMenu({
   onReconcile,
   onClose,
 }: ReconcileMenuProps) {
-  const balanceQuery = bindings.accountBalance(account.id);
-  const clearedBalance = useSheetValue<'account', `balance-${string}-cleared`>({
-    name: (balanceQuery.name + '-cleared') as `balance-${string}-cleared`,
-    value: null,
-    query: balanceQuery.query.filter({ cleared: true }),
-  });
-  const lastSyncedBalance = account.balance_current;
   const format = useFormat();
   const dateFormat = useDateFormat() || 'MM/dd/yyyy';
   const locale = useLocale();
+  const dispatch = useDispatch();
+  const prefill = useStatementBalancePrefill(account.id);
 
-  const [inputValue, setInputValue] = useState<string | null>();
-  // useEffect is needed here. clearedBalance does not work as a default value for inputValue and
-  // to use a button to update inputValue we can't use defaultValue in the input form below
-  useEffect(() => {
-    if (clearedBalance != null) {
-      setInputValue(format(clearedBalance, 'financial'));
-    }
-  }, [clearedBalance, format]);
+  // The source the field was last set from, and the text in it ('' until it loads)
+  const [applied, setApplied] = useState<BalanceSource | null>(null);
+  const [inputValue, setInputValue] = useState<string | null>(null);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
-  function onSubmit(e: FormEvent<HTMLFormElement>) {
+  function apply(source: BalanceSource | null) {
+    setApplied(source);
+    setInputValue(source ? format(source.amount, 'financial') : '');
+  }
+
+  // The resolver answers once; the pre-fill is its recent bank balance, never the cleared balance
+  if (prefill && !hasLoaded) {
+    setHasLoaded(true);
+    apply(prefill.prefill);
+  }
+
+  const appliedText = applied ? format(applied.amount, 'financial') : '';
+  const edited = inputValue != null && inputValue !== appliedText;
+
+  async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
-    if (inputValue === '') {
+    if (!inputValue) {
       return;
     }
 
-    const amount =
-      inputValue != null
-        ? format.fromEdit(inputValue, clearedBalance)
-        : clearedBalance;
+    const amount = edited
+      ? format.fromEdit(inputValue, null)
+      : (applied?.amount ?? null);
+    if (amount == null) {
+      return;
+    }
+
+    const source = await recordStatementBalance(
+      account.id,
+      amount,
+      applied,
+      edited,
+    );
+    if (source === 'cleared') {
+      dispatch(
+        addNotification({
+          notification: {
+            type: 'message',
+            message: t(
+              "The cleared balance is the app's own figure, not a statement, so an assistant cannot use it to reconcile. Enter your statement's balance to let it.",
+            ),
+          },
+        }),
+      );
+    }
 
     onReconcile(amount);
     onClose();
@@ -177,32 +211,29 @@ export function ReconcileMenu({
             reconcile with:
           </Trans>
         </Text>
-        {inputValue != null && (
-          <InitialFocus>
-            <Input
-              value={inputValue}
-              onChangeValue={setInputValue}
-              style={{ margin: '7px 0', textAlign: 'right' }}
+        {inputValue != null && prefill && (
+          <>
+            <InitialFocus>
+              <Input
+                value={inputValue}
+                onChangeValue={setInputValue}
+                style={{ margin: '7px 0', textAlign: 'right' }}
+              />
+            </InitialFocus>
+            <ReconcileBalanceChoices
+              variant="desktop"
+              accountSyncSource={account.account_sync_source}
+              prefill={prefill}
+              applied={applied}
+              edited={edited}
+              isEmpty={inputValue === ''}
+              onChoose={apply}
+              onRestore={() => apply(prefill.prefill)}
+              onNavigate={onClose}
             />
-          </InitialFocus>
+          </>
         )}
-        {lastSyncedBalance != null && (
-          <View>
-            <Text style={{ margin: '0 6px 8px 0', textAlign: 'right' }}>
-              <Trans>Last Balance from Bank: </Trans>
-              {format(lastSyncedBalance, 'financial')}
-            </Text>
-            <Button
-              onPress={() =>
-                setInputValue(format(lastSyncedBalance, 'financial'))
-              }
-              style={{ marginBottom: 7 }}
-            >
-              <Trans>Use last synced total</Trans>
-            </Button>
-          </View>
-        )}
-        <Button type="submit" variant="primary">
+        <Button type="submit" variant="primary" isDisabled={!inputValue}>
           <Trans>Reconcile</Trans>
         </Button>
         <Text

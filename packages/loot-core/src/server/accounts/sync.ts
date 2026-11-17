@@ -36,6 +36,7 @@ import type {
 } from '#types/models';
 
 import { getStartingBalancePayee } from './payees';
+import { bankBalanceKey } from './statement-balance';
 import { title } from './title';
 
 function BankSyncError(type: string, code: string, details?: object) {
@@ -70,6 +71,11 @@ function getAccountBalance(account) {
 
 async function updateAccountBalance(id: AccountEntity['id'], balance: number) {
   await db.update('accounts', { id, balance_current: balance });
+  // When the balance itself was written: `last_sync` moves on every sync (D2)
+  await db.update('preferences', {
+    id: bankBalanceKey(id),
+    value: String(Date.now()),
+  });
 }
 
 async function getAccountOldestTransaction(id): Promise<TransactionEntity> {

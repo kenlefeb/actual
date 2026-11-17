@@ -1048,6 +1048,57 @@ describe('SimpleFin batch sync', () => {
     },
   );
 
+  describe('bank-balance-at stamp (native-reconcile-flow 1.0)', () => {
+    const stampOf = (id: string) =>
+      db.first<{ value: string }>(
+        'SELECT value FROM preferences WHERE id = ?',
+        [`bank-balance-at-${id}`],
+      );
+    const syncWith = async (balance: number | undefined) => {
+      const acctId = await db.insertAccount({
+        id: 'acct-stamp',
+        account_id: 'sf-stamp',
+        name: 'Stamp',
+        account_sync_source: 'simpleFin',
+      });
+      // An account with history, so this is not the initial sync
+      await db.insertTransaction({
+        account: acctId,
+        date: '2017-10-01',
+        amount: 100,
+      });
+      mockSimpleFinTransactions({
+        'sf-stamp': {
+          transactions: { all: [], booked: [], pending: [] },
+          balances: [],
+          startingBalance: balance,
+        },
+        errors: {},
+      });
+      await accountsApp.handlers['simplefin-batch-sync']({ ids: [acctId] });
+      return acctId;
+    };
+
+    test('is written with the balance', async () => {
+      expect(await stampOf('acct-stamp')).toBeFalsy();
+      const before = Date.now();
+      const id = await syncWith(46541);
+      const row = await stampOf(id);
+      expect(row?.value).toMatch(/^\d+$/);
+      expect(Number(row?.value)).toBeGreaterThanOrEqual(before);
+      const acct = await db.first<{ balance_current: number }>(
+        'SELECT balance_current FROM accounts WHERE id = ?',
+        [id],
+      );
+      expect(acct?.balance_current).toBe(46541);
+    });
+
+    test('is not written when the bank returns no balance', async () => {
+      const id = await syncWith(undefined);
+      expect(await stampOf(id)).toBeFalsy();
+    });
+  });
+
   test('does not emit transaction CRDT messages when provider category appears later', async () => {
     const providerAccountId = 'sf-account-1';
     const acctId = await db.insertAccount({
@@ -1107,17 +1158,16 @@ describe('SimpleFin batch sync', () => {
         [crdtMessageCount],
       );
 
-      expect(secondSyncMessages).toHaveLength(3);
-      expect(secondSyncMessages.map(message => message.dataset)).toEqual([
-        'accounts',
-        'accounts',
-        'accounts',
-      ]);
-      expect(secondSyncMessages.map(message => message.column).sort()).toEqual([
-        'balance_current',
-        'bank_sync_status',
-        'last_sync',
-      ]);
+      expect(secondSyncMessages).toHaveLength(4);
+      expect(secondSyncMessages.map(message => message.dataset).sort()).toEqual(
+        ['accounts', 'accounts', 'accounts', 'preferences'],
+      );
+      expect(
+        secondSyncMessages
+          .filter(message => message.dataset === 'accounts')
+          .map(message => message.column)
+          .sort(),
+      ).toEqual(['balance_current', 'bank_sync_status', 'last_sync']);
       expect(
         secondSyncMessages.some(message => message.dataset === 'transactions'),
       ).toBe(false);

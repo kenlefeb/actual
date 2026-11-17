@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { Button } from '@actual-app/components/button';
@@ -13,18 +13,22 @@ import {
 } from '@actual-app/core/shared/util';
 import { format as formatDate } from 'date-fns';
 
+import { ReconcileBalanceChoices } from '#components/accounts/ReconcileBalanceChoices';
+import {
+  recordStatementBalance,
+  useStatementBalancePrefill,
+} from '#components/accounts/statementBalance';
+import type { BalanceSource } from '#components/accounts/statementBalance';
 import { Modal, ModalCloseButton, ModalHeader } from '#components/common/Modal';
-import { FinancialText } from '#components/FinancialText';
 import { FieldLabel } from '#components/mobile/MobileForms';
 import { AmountInput } from '#components/mobile/transactions/AmountInput';
 import { useAccount } from '#hooks/useAccount';
 import { useDateFormat } from '#hooks/useDateFormat';
 import { useFeatureFlag } from '#hooks/useFeatureFlag';
-import { useFormat } from '#hooks/useFormat';
 import { useLocale } from '#hooks/useLocale';
-import { useSheetValue } from '#hooks/useSheetValue';
 import type { Modal as ModalType } from '#modals/modalsSlice';
-import * as bindings from '#spreadsheet/bindings';
+import { addNotification } from '#notifications/notificationsSlice';
+import { useDispatch } from '#redux';
 
 type AccountReconcileModalProps = Extract<
   ModalType,
@@ -38,31 +42,55 @@ export function AccountReconcileModal({
   const { t } = useTranslation();
   const account = useAccount(accountId);
   const mobileCalculatorEnabled = useFeatureFlag('mobileCalculator');
-  const clearedBalance = useSheetValue<'account', 'balanceCleared'>(
-    bindings.accountBalanceCleared(accountId),
-  );
-  const format = useFormat();
+  const dispatch = useDispatch();
+  const prefill = useStatementBalancePrefill(accountId);
   const dateFormat = useDateFormat() || 'MM/dd/yyyy';
   const locale = useLocale();
 
+  // `amount` stays null until the field has a value; the pre-fill is the recent bank balance, never the cleared balance
   const [amount, setAmount] = useState<number | null>(null);
+  const [applied, setApplied] = useState<BalanceSource | null>(null);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [amountInputKey, setAmountInputKey] = useState(0);
 
-  useEffect(() => {
-    if (amount == null && clearedBalance != null) {
-      setAmount(clearedBalance);
-    }
-  }, [amount, clearedBalance]);
+  function apply(source: BalanceSource | null) {
+    setApplied(source);
+    setAmount(source?.amount ?? null);
+    setAmountInputKey(key => key + 1);
+  }
 
-  const lastSyncedBalance = account?.balance_current;
+  if (prefill && !hasLoaded) {
+    setHasLoaded(true);
+    apply(prefill.prefill);
+  }
+
+  const edited = amount != null && amount !== applied?.amount;
 
   if (!account) {
     return null;
   }
 
-  const onSubmit = (newAmount: number | null) => {
+  const onSubmit = async (newAmount: number | null) => {
     if (newAmount == null) {
       return;
+    }
+    const source = await recordStatementBalance(
+      accountId,
+      newAmount,
+      applied,
+      edited,
+    );
+    if (source === 'cleared') {
+      dispatch(
+        addNotification({
+          notification: {
+            type: 'message',
+            message: t(
+              "The cleared balance is the app's own figure, not a statement, so an assistant cannot use it to reconcile. Enter your statement's balance to let it.",
+            ),
+          },
+        }),
+      );
     }
     onReconcile(newAmount);
   };
@@ -86,7 +114,7 @@ export function AccountReconcileModal({
                 'Enter the current balance of your bank account that you want to reconcile with:',
               )}
             />
-            {amount != null && (
+            {prefill && (
               <View
                 style={{
                   justifyContent: 'center',
@@ -95,7 +123,7 @@ export function AccountReconcileModal({
               >
                 <AmountInput
                   key={amountInputKey}
-                  value={integerToAmount(amount)}
+                  value={integerToAmount(amount ?? 0)}
                   onChange={newAmount => setAmount(amountToInteger(newAmount))}
                   autoFocus
                   autoFocusDelay={150}
@@ -104,33 +132,18 @@ export function AccountReconcileModal({
               </View>
             )}
           </View>
-          {lastSyncedBalance != null && (
-            <View
-              style={{
-                alignItems: 'center',
-                paddingTop: 10,
-              }}
-            >
-              <Text>
-                <Trans>Last Balance from Bank: </Trans>
-                <FinancialText>
-                  {format(lastSyncedBalance, 'financial')}
-                </FinancialText>
-              </Text>
-              <Button
-                style={{
-                  height: styles.mobileMinHeight,
-                  marginTop: 5,
-                  marginLeft: styles.mobileEditingPadding,
-                  marginRight: styles.mobileEditingPadding,
-                }}
-                onPress={() => {
-                  setAmount(lastSyncedBalance);
-                  setAmountInputKey(key => key + 1);
-                }}
-              >
-                <Trans>Use last synced total</Trans>
-              </Button>
+          {prefill && (
+            <View style={{ padding: `0 ${styles.mobileEditingPadding}px` }}>
+              <ReconcileBalanceChoices
+                variant="mobile"
+                accountSyncSource={account.account_sync_source}
+                prefill={prefill}
+                applied={applied}
+                edited={edited}
+                isEmpty={amount == null}
+                onChoose={apply}
+                onRestore={() => apply(prefill.prefill)}
+              />
             </View>
           )}
           <View
@@ -149,7 +162,7 @@ export function AccountReconcileModal({
                 marginRight: styles.mobileEditingPadding,
               }}
               onPress={() => {
-                onSubmit(amount);
+                void onSubmit(amount);
                 state.close();
               }}
             >

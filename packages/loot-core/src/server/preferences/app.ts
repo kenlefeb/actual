@@ -1,6 +1,9 @@
 import * as asyncStorage from '#platform/server/asyncStorage';
 import * as fs from '#platform/server/fs';
-import { STATEMENT_BALANCE_PREFIX } from '#server/accounts/statement-balance';
+import {
+  BANK_BALANCE_AT_PREFIX,
+  STATEMENT_BALANCE_PREFIX,
+} from '#server/accounts/statement-balance';
 import { createApp } from '#server/app';
 import * as db from '#server/db';
 import { PostError } from '#server/errors';
@@ -60,6 +63,10 @@ async function saveSyncedPrefs({
     throw new Error(
       'A statement balance record can only be saved by account-statement-balance-save.',
     );
+  }
+
+  if (id.startsWith(BANK_BALANCE_AT_PREFIX)) {
+    throw new Error('A bank balance time can only be written by bank sync.');
   }
 
   await db.update('preferences', {

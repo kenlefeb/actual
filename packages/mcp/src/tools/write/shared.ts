@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { appendAudit } from '#audit';
 import type { AuditChange, AuditIdentity } from '#audit';
 import type { Grant, Scope } from '#grants';
-import { cellLimit, deleteLimit, rowLimit } from '#limits';
+import { cellLimit, deleteLimit, reconcileLimit, rowLimit } from '#limits';
 import type { Limits } from '#limits';
 import { Refusal } from '#refusal';
 import { withText } from '#sanitize';
@@ -186,6 +186,10 @@ export async function loggedWrite<R extends object>(
     undoes?: string;
     /** Extra text fields for a dry run only (names beside ids); not bound by the confirm. */
     preview?: Record<string, unknown>;
+    /** Always answer the first call with a dry run, whatever `confirm_destructive` says. */
+    alwaysConfirm?: boolean;
+    /** Plain fields for a dry run only (the facts the call was built from); not bound by the confirm, which covers the entry. */
+    dryRun?: Record<string, unknown>;
   } = {},
 ): Promise<
   | ((R | { applied: string[] | null; read_back: string }) & {
@@ -206,13 +210,14 @@ export async function loggedWrite<R extends object>(
   }
   const destructive = options.destructive ?? log.destructive;
   const undoes = options.undoes ? { undoes: options.undoes } : {};
-  if (destructive && log.grant.confirm_destructive) {
+  if (options.alwaysConfirm || (destructive && log.grant.confirm_destructive)) {
     const given = log.args.confirm;
     if (typeof given !== 'string') {
       const issued = String(Date.now());
       return withText(
         {
           dry_run: true as const,
+          ...options.dryRun,
           ids: entry.ids,
           confirm: `${issued}.${confirmMac(issued, log, tool, entry)}`,
         },
@@ -281,10 +286,13 @@ export async function loggedWrite<R extends object>(
 }
 
 /** Whether `loggedWrite` will answer this call with a dry run and a `confirm` instead of writing. */
-export function isDryRun(log: WriteLog, destructive = log.destructive) {
+export function isDryRun(
+  log: WriteLog,
+  destructive = log.destructive,
+  alwaysConfirm = false,
+) {
   return (
-    destructive &&
-    log.grant.confirm_destructive &&
+    (alwaysConfirm || (destructive && log.grant.confirm_destructive)) &&
     typeof log.args.confirm !== 'string'
   );
 }
@@ -295,6 +303,16 @@ export function requireRows(log: WriteLog, rows: number) {
   if (rows > cap) {
     throw new Refusal(
       `At most ${cap} rows may change in one call on this connection. Nothing changed.`,
+    );
+  }
+}
+
+/** Refuses (fixed text, before any audit line) more rows than this connection's reconcile limit; `max_rows` neither limits nor widens it. */
+export function requireReconcileRows(log: WriteLog, rows: number) {
+  const cap = reconcileLimit(log.grant, log.limits);
+  if (rows > cap) {
+    throw new Refusal(
+      `A reconcile may lock at most ${cap} rows (split children included) on this connection; this one would lock ${rows}. Nothing changed.`,
     );
   }
 }

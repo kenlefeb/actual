@@ -44,6 +44,7 @@ describe('server surface', () => {
     expect(reads.map(t => t.name).sort()).toEqual([
       'get_account_balance',
       'get_account_budget_status',
+      'get_account_reconciliation',
       'get_budget_month',
       'get_paycheck_year_to_date',
       'get_paychecks_clearing_status',

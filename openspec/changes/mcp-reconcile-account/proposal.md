@@ -26,11 +26,11 @@ None.
 
 ### Modified Capabilities
 
-- `mcp-server`: new requirements "Reconcile an account", "Reconciliation reads", "Reconciling has its own row limit" and "A reconcile is audited". Additions only: the active change `mcp-budget-maintenance` modifies "Write limits" and the grant requirements, and this change leaves those texts alone so the two archive in either order.
+- `mcp-server`: new requirements "Reconcile an account", "Reconciliation reads", "Reconciling has its own row limit" and "A reconcile is audited". Additions only: the active change `mcp-budget-maintenance` modifies "Write limits" and the grant requirements, and this change leaves those texts alone: it adds requirements only and no requirement header appears in both deltas, so the two archive in either order (design D8), and the grant key text is folded in when both are archived.
 
 ## Impact
 
 - **Code:** new `packages/mcp/src/tools/write/reconcile.ts`; `shared.ts` (`requireReconcileRows`), `limits.ts`, `grants.ts`, `config.ts` (the limit, its ceiling, the grant key, the tail check); `update-plan.ts` or a small plan helper for the lock with split children; the read tools (`reconciled`, cleared balance); typed `updateAccount` field `last_reconciled`; tests, `coverage.json`, `README.md`.
-- **api-fork-handlers:** none expected (design D4). If the first failing test shows `api/account-update` drops `last_reconciled`, add one handler and a delta then.
+- **api-fork-handlers:** none (design D9). The first test showed `api/account-update` keeps `last_reconciled`, so only the typed `APIAccountEntity` field was added.
 - **Hosting (own story after the image ships):** `GRANT_SCOPES` accepts `transactions:reconcile`, and the setting names and grant key pass through, in the order image, allowlist and env, then grants.
 - **Reviews:** Tester; Solution Architect; Security Analyst (a bulk flag write behind a confirm); Product Owner reviews intent.

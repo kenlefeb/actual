@@ -83,6 +83,7 @@ const NEEDS: Record<string, Scope[]> = {
     'transactions:write',
   ],
   write_set_account_business_days: ['structure:write', 'schedules:write'],
+  write_reconcile_account: ['transactions:reconcile'],
 };
 
 describe('Every tool declares a scope', () => {

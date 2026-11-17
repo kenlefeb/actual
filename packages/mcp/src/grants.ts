@@ -16,7 +16,7 @@ import { z } from 'zod';
 import { DEFAULT_LIMITS } from './limits';
 import type { Limits } from './limits';
 
-/** What a connection may do, by area. A deleting tool needs its area's write scope and `delete`; account close and delete need `accounts:delete` instead (independent of `delete`). */
+/** What a connection may do, by area. A deleting tool needs its area's write scope and `delete`; account close and delete need `accounts:delete` instead (independent of `delete`). Locking rows needs `transactions:reconcile`, which `transactions:write` does not imply. */
 export const SCOPES = [
   'budget:read',
   'transactions:write',
@@ -25,6 +25,7 @@ export const SCOPES = [
   'schedules:write',
   'delete',
   'accounts:delete',
+  'transactions:reconcile',
 ] as const;
 
 export type Scope = (typeof SCOPES)[number];
@@ -37,6 +38,8 @@ export type Grant = {
   max_rows?: number;
   max_cells?: number;
   max_delete_rows?: number;
+  /** Replaces the server's reconcile row limit for this connection, up to its ceiling. */
+  max_reconcile_rows?: number;
   /** A row may set `allow_reconciled` to change a reconciled transaction. Off when absent. */
   allow_reconciled?: boolean;
   fingerprint?: string;
@@ -67,6 +70,7 @@ const rowSchema = (limits: Limits) =>
       max_rows: limit(limits.rowsCeiling),
       max_cells: limit(limits.cellsCeiling),
       max_delete_rows: limit(limits.deleteCeiling),
+      max_reconcile_rows: limit(limits.reconcileCeiling),
       allow_reconciled: z.boolean().optional(),
     })
     .strict();
@@ -218,6 +222,9 @@ export function createGrantsLookup(
       ...(match?.max_cells ? { max_cells: match.max_cells } : {}),
       ...(match?.max_delete_rows
         ? { max_delete_rows: match.max_delete_rows }
+        : {}),
+      ...(match?.max_reconcile_rows
+        ? { max_reconcile_rows: match.max_reconcile_rows }
         : {}),
       ...(match?.allow_reconciled ? { allow_reconciled: true } : {}),
       fingerprint: file.fingerprint,

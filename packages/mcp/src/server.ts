@@ -18,6 +18,7 @@ import { registerAttachmentTools } from './tools/read/attachments';
 import { registerCalendarTools } from './tools/read/calendars';
 import { registerCoreTools } from './tools/read/core';
 import { registerPaycheckTools } from './tools/read/paychecks';
+import { registerReconciliationTools } from './tools/read/reconciliation';
 import { registerWriteTools } from './tools/write/register';
 import type { Access, WriteLog } from './tools/write/shared';
 import { registerUndoTools } from './tools/write/undo';
@@ -176,6 +177,7 @@ export function createServer(
   registerPaycheckTools(tool);
   registerCalendarTools(tool);
   registerAccountTools(tool);
+  registerReconciliationTools(tool);
   registerAttachmentTools(tool);
   registerExtra?.(tool);
 

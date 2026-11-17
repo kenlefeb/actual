@@ -31,17 +31,18 @@ List tools take `limit` (default 50, at most 200) and `cursor`, and return `has_
 
 Fork read tools (all take ids, never names):
 
-| Tool                            | Returns                                                                                                                                                |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `list_paychecks`                | Paychecks with clearing account, gross amount and deposits (ids that aren't plain identifiers move under `text`; unknown deposit kinds read `unknown`) |
-| `get_paycheck_year_to_date`     | A paycheck's gross, deductions and net for this year and last                                                                                          |
-| `get_paychecks_clearing_status` | Clearing balance, latest pay date, missing deposits and warning                                                                                        |
-| `list_business_calendars`       | Non-working days, holiday rules and exceptions                                                                                                         |
-| `get_schedule_next_dates`       | Upcoming dates for a day, a repeat rule or a relative date; "No matching date" for a rule that never matches                                           |
-| `get_account_budget_status`     | Business calendar, days early, budget start date and offset line                                                                                       |
-| `list_moved_history`            | A moved account's transactions before its start date, and offset line                                                                                  |
-| `preview_move_on_budget`        | What moving an account on budget would change (transfers paged), and its `confirm` for the whole preview                                               |
-| `list_transaction_attachments`  | A transaction's attached documents: name, type, size and created time; never the content                                                               |
+| Tool                            | Returns                                                                                                                                                 |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_paychecks`                | Paychecks with clearing account, gross amount and deposits (ids that aren't plain identifiers move under `text`; unknown deposit kinds read `unknown`)  |
+| `get_paycheck_year_to_date`     | A paycheck's gross, deductions and net for this year and last                                                                                           |
+| `get_paychecks_clearing_status` | Clearing balance, latest pay date, missing deposits and warning                                                                                         |
+| `list_business_calendars`       | Non-working days, holiday rules and exceptions                                                                                                          |
+| `get_schedule_next_dates`       | Upcoming dates for a day, a repeat rule or a relative date; "No matching date" for a rule that never matches                                            |
+| `get_account_budget_status`     | Business calendar, days early, budget start date and offset line                                                                                        |
+| `get_account_reconciliation`    | Cleared balance, count of cleared unreconciled rows and `last_reconciled`; the numbers `write_reconcile_account` uses, not proof of a statement balance |
+| `list_moved_history`            | A moved account's transactions before its start date, and offset line                                                                                   |
+| `preview_move_on_budget`        | What moving an account on budget would change (transfers paged), and its `confirm` for the whole preview                                                |
+| `list_transaction_attachments`  | A transaction's attached documents: name, type, size and created time; never the content                                                                |
 
 ## Write tools
 
@@ -72,6 +73,7 @@ and prompt on every write.
 | `write_delete_account_group`       | `structure:write`, `accounts:delete`                       | Deletes a group; its accounts become ungrouped; needs a `confirm` when the grant requires a dry run                                                                                                                                                                    |
 | `write_close_account`              | `structure:write`, `accounts:delete`                       | Closes an account, moving its balance to `transfer_account_id` (with `transfer_category_id` when it crosses the on-budget line); unlinks bank sync, which cannot be undone                                                                                             |
 | `write_delete_account`             | `structure:write`, `accounts:delete`, `transactions:write` | Deletes an open account and all its transactions; refused over reconciled rows (unless `allow_reconciled`) or the row cap; unlinks bank sync, which cannot be undone                                                                                                   |
+| `write_reconcile_account`          | `transactions:reconcile`                                   | Reconciles an account to a statement balance (cents): on a zero difference locks the cleared rows and stamps `last_reconciled`. Always a dry run first, then `confirm`; MCP cannot unlock the rows (only the app can)                                                  |
 | `write_set_account_business_days`  | `structure:write`, `schedules:write`                       | Sets an account's business calendar and days early and regenerates the paychecks that deposit into it; refused over a skipped date or a deleted schedule unless `allow_regenerate` (recreating a deleted schedule also needs `delete`)                                 |
 | `write_create_category_group`      | `structure:write`                                          | Creates an expense category group                                                                                                                                                                                                                                      |
 | `write_create_category`            | `structure:write`                                          | Creates a category in a group (income or expense as the group is)                                                                                                                                                                                                      |
@@ -199,15 +201,16 @@ only expense groups can be created.
 What an agent may do comes from its grant, never from which tools exist. Each tool declares the
 scopes it needs (its description ends `Needs: …`):
 
-| Scope                | Allows                                                                                           |
-| -------------------- | ------------------------------------------------------------------------------------------------ |
-| `budget:read`        | Every read tool, `sync_budget`, `get_sync_status` and previews                                   |
-| `transactions:write` | Creating and editing transactions                                                                |
-| `budget:write`       | Budgeted amounts                                                                                 |
-| `structure:write`    | Accounts, categories and groups, payees, tags and rules                                          |
-| `schedules:write`    | Schedules, paychecks and business calendars                                                      |
-| `delete`             | With the area's write scope, a tool that deletes, closes or merges (both are needed)             |
-| `accounts:delete`    | With `structure:write`, closing or deleting an account or account group; independent of `delete` |
+| Scope                    | Allows                                                                                                                    |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `budget:read`            | Every read tool, `sync_budget`, `get_sync_status` and previews                                                            |
+| `transactions:write`     | Creating and editing transactions                                                                                         |
+| `budget:write`           | Budgeted amounts                                                                                                          |
+| `structure:write`        | Accounts, categories and groups, payees, tags and rules                                                                   |
+| `schedules:write`        | Schedules, paychecks and business calendars                                                                               |
+| `delete`                 | With the area's write scope, a tool that deletes, closes or merges (both are needed)                                      |
+| `accounts:delete`        | With `structure:write`, closing or deleting an account or account group; independent of `delete`                          |
+| `transactions:reconcile` | Locking an account's cleared rows (`write_reconcile_account`); not implied by `transactions:write`, never on a `*` client |
 
 - **Refused by scope.** A call outside the grant fails before any budget read or change with fixed
   text, for example `write_delete_category needs structure:write delete; missing delete; this
@@ -233,6 +236,8 @@ scopes it needs (its description ends `Needs: …`):
   the undo of a create (which deletes) count against the delete limit, the lower of
   `max_delete_rows` and the row limit in force: raising `max_rows` or `max_cells` never widens
   them, lowering `max_rows` still lowers them.
+- **`max_reconcile_rows`.** Replaces the reconcile row limit (default 500, ceiling 1000) for this connection; a value above the ceiling makes the whole file invalid. Locking flips a flag, so it has its own limit and is not limited by `max_rows`.
+- **`transactions:reconcile`.** Needed by `write_reconcile_account` alone; a `*` client that lists it makes the file invalid. A grants file that names it is invalid for an image that does not know it, so ship the image before the grant. A reconcile cannot be undone through MCP (`write_undo` refuses it): unlock in the app.
 - **`allow_reconciled`.** Lets `write_update_transactions` take a row's `allow_reconciled` to
   change a reconciled transaction (below). Off when absent: without it, any row that sets
   `allow_reconciled` is refused.
@@ -240,21 +245,23 @@ scopes it needs (its description ends `Needs: …`):
 **Stdio grants.** Only the `--writes` entry reads these variables, so both entries can share one env
 file; the read entry always grants `budget:read` (its write tools are listed but refused).
 
-| Variable                                       | Default when unset    | Meaning                                                                                    |
-| ---------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------ |
-| `ACTUAL_MCP_WRITES_SCOPES`                     | every scope           | Space-separated scopes; an unknown or empty value stops the entry at start                 |
-| `ACTUAL_MCP_WRITES_CONFIRM_DESTRUCTIVE`        | `0`                   | `1` to require the dry run and `confirm` before a delete                                   |
-| `ACTUAL_MCP_WRITES_MAX_ROWS`                   | 50                    | Default per-call row limit (a grant's `max_rows` replaces it)                              |
-| `ACTUAL_MCP_WRITES_MAX_CELLS`                  | 500                   | Default per-call budget-cell limit                                                         |
-| `ACTUAL_MCP_WRITES_MAX_DELETE_ROWS`            | 50                    | Default per-call delete limit                                                              |
-| `ACTUAL_MCP_WRITES_MAX_ROWS_CEILING`           | 1000                  | The most a row limit may be (also bounds the tool schemas)                                 |
-| `ACTUAL_MCP_WRITES_MAX_CELLS_CEILING`          | 2000                  | The most a cell limit may be                                                               |
-| `ACTUAL_MCP_WRITES_MAX_DELETE_ROWS_CEILING`    | 1000                  | The most a delete limit may be                                                             |
-| `ACTUAL_MCP_WRITES_AUDIT_TAIL_BYTES`           | 2097152 (2 MB)        | How much of the audit log's end an undo reads                                              |
-| `ACTUAL_MCP_WRITES_MAX_AUDIT_LINE_BYTES`       | a quarter of the tail | The most one write's audit line may hold; a larger write is refused                        |
-| `ACTUAL_MCP_WRITES_MAX_RESPONSE_BYTES`         | 100000 (100 KB)       | The most a whole-month dry run's response may hold; a larger one is refused, not shortened |
-| `ACTUAL_MCP_WRITES_MAX_RESPONSE_BYTES_CEILING` | 1000000 (1 MB)        | The most that setting may be                                                               |
-| `ACTUAL_MCP_WRITES_ALLOW_RECONCILED`           | `0`                   | `1` to let a row's `allow_reconciled` change reconciled transactions                       |
+| Variable                                       | Default when unset    | Meaning                                                                                                                          |
+| ---------------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `ACTUAL_MCP_WRITES_SCOPES`                     | every scope           | Space-separated scopes; an unknown or empty value stops the entry at start                                                       |
+| `ACTUAL_MCP_WRITES_CONFIRM_DESTRUCTIVE`        | `0`                   | `1` to require the dry run and `confirm` before a delete                                                                         |
+| `ACTUAL_MCP_WRITES_MAX_ROWS`                   | 50                    | Default per-call row limit (a grant's `max_rows` replaces it)                                                                    |
+| `ACTUAL_MCP_WRITES_MAX_CELLS`                  | 500                   | Default per-call budget-cell limit                                                                                               |
+| `ACTUAL_MCP_WRITES_MAX_DELETE_ROWS`            | 50                    | Default per-call delete limit                                                                                                    |
+| `ACTUAL_MCP_WRITES_MAX_ROWS_CEILING`           | 1000                  | The most a row limit may be (also bounds the tool schemas)                                                                       |
+| `ACTUAL_MCP_WRITES_MAX_CELLS_CEILING`          | 2000                  | The most a cell limit may be                                                                                                     |
+| `ACTUAL_MCP_WRITES_MAX_DELETE_ROWS_CEILING`    | 1000                  | The most a delete limit may be                                                                                                   |
+| `ACTUAL_MCP_WRITES_MAX_RECONCILE_ROWS`         | 500                   | Default per-reconcile row limit, split children included (a grant's `max_reconcile_rows` replaces it; `max_rows` does not apply) |
+| `ACTUAL_MCP_WRITES_MAX_RECONCILE_ROWS_CEILING` | 1000                  | The most a reconcile limit may be; the audit tail must hold 4 writes of it at 100 bytes a row                                    |
+| `ACTUAL_MCP_WRITES_AUDIT_TAIL_BYTES`           | 2097152 (2 MB)        | How much of the audit log's end an undo reads                                                                                    |
+| `ACTUAL_MCP_WRITES_MAX_AUDIT_LINE_BYTES`       | a quarter of the tail | The most one write's audit line may hold; a larger write is refused                                                              |
+| `ACTUAL_MCP_WRITES_MAX_RESPONSE_BYTES`         | 100000 (100 KB)       | The most a whole-month dry run's response may hold; a larger one is refused, not shortened                                       |
+| `ACTUAL_MCP_WRITES_MAX_RESPONSE_BYTES_CEILING` | 1000000 (1 MB)        | The most that setting may be                                                                                                     |
+| `ACTUAL_MCP_WRITES_ALLOW_RECONCILED`           | `0`                   | `1` to let a row's `allow_reconciled` change reconciled transactions                                                             |
 
 **Limits** are settings only the operator sets (a grant never sets a ceiling). The hosted entry reads
 the same names without `WRITES_` (`ACTUAL_MCP_MAX_CELLS` and so on). A setting above its ceiling, or

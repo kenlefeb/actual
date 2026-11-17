@@ -286,6 +286,7 @@ describe('Stdio grants come from the environment', () => {
     'schedules:write',
     'delete',
     'accounts:delete',
+    'transactions:reconcile',
   ];
 
   it("Today's writes entry keeps its tools", () => {
@@ -293,6 +294,17 @@ describe('Stdio grants come from the environment', () => {
       scopes: ALL,
       confirm_destructive: false,
     });
+  });
+
+  it('A narrowed writes entry must name transactions:reconcile to reconcile', () => {
+    const config = loadConfig(
+      {
+        ...staging,
+        ACTUAL_MCP_WRITES_SCOPES: 'budget:read transactions:write',
+      },
+      ['--writes'],
+    );
+    expect(config.grant.scopes).not.toContain('transactions:reconcile');
   });
 
   it('A narrowed writes entry', () => {

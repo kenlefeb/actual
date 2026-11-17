@@ -17,6 +17,9 @@ export type Limits = {
   rowsCeiling: number;
   cellsCeiling: number;
   deleteCeiling: number;
+  /** Rows (split children included) one reconcile may lock. */
+  maxReconcileRows: number;
+  reconcileCeiling: number;
   /** How much of the audit log's end an undo reads. */
   auditTailBytes: number;
   /** The most one write's attempt line may hold, so one write cannot fill the tail. */
@@ -33,6 +36,8 @@ export const DEFAULT_LIMITS: Limits = {
   rowsCeiling: 1000,
   cellsCeiling: 2000,
   deleteCeiling: 1000,
+  maxReconcileRows: 500,
+  reconcileCeiling: 1000,
   auditTailBytes: 2 * 1024 * 1024,
   maxAuditLineBytes: 512 * 1024,
   maxResponseBytes: MAX_RESPONSE_BYTES,
@@ -44,6 +49,8 @@ export const DEFAULT_LIMITS: Limits = {
 // measure a worst-case row if the row ceiling is ever raised past 5,000.
 const CELL_BYTES = 150;
 const ROW_BYTES = 250;
+// A reconcile line holds ids only: the id in `ids` and again in `applied`
+const RECONCILE_ROW_BYTES = 100;
 // One ceiling-size write, its undo and a neighbour must stay in the tail.
 const WRITES_IN_TAIL = 4;
 
@@ -76,6 +83,14 @@ export function loadLimits(env: Env, prefix: string): Limits {
       'MAX_DELETE_ROWS_CEILING',
       DEFAULT_LIMITS.deleteCeiling,
     ),
+    maxReconcileRows: read(
+      'MAX_RECONCILE_ROWS',
+      DEFAULT_LIMITS.maxReconcileRows,
+    ),
+    reconcileCeiling: read(
+      'MAX_RECONCILE_ROWS_CEILING',
+      DEFAULT_LIMITS.reconcileCeiling,
+    ),
     auditTailBytes: read('AUDIT_TAIL_BYTES', DEFAULT_LIMITS.auditTailBytes),
     maxAuditLineBytes: 0,
     maxResponseBytes: read(
@@ -101,6 +116,7 @@ export function loadLimits(env: Env, prefix: string): Limits {
     ['MAX_ROWS', limits.maxRows, limits.rowsCeiling],
     ['MAX_CELLS', limits.maxCells, limits.cellsCeiling],
     ['MAX_DELETE_ROWS', limits.maxDeleteRows, limits.deleteCeiling],
+    ['MAX_RECONCILE_ROWS', limits.maxReconcileRows, limits.reconcileCeiling],
     [
       'MAX_RESPONSE_BYTES',
       limits.maxResponseBytes,
@@ -122,6 +138,11 @@ export function loadLimits(env: Env, prefix: string): Limits {
   tail('MAX_CELLS_CEILING', CELL_BYTES, limits.cellsCeiling);
   tail('MAX_ROWS_CEILING', ROW_BYTES, limits.rowsCeiling);
   tail('MAX_DELETE_ROWS_CEILING', ROW_BYTES, limits.deleteCeiling);
+  tail(
+    'MAX_RECONCILE_ROWS_CEILING',
+    RECONCILE_ROW_BYTES,
+    limits.reconcileCeiling,
+  );
   return limits;
 }
 
@@ -142,3 +163,7 @@ export const deleteLimit = (grant: Grant, limits: Limits) =>
     grant.max_delete_rows ?? limits.maxDeleteRows,
     rowLimit(grant, limits),
   );
+
+/** The reconcile limit in force: the grant's, else the setting. */
+export const reconcileLimit = (grant: Grant, limits: Limits) =>
+  grant.max_reconcile_rows ?? limits.maxReconcileRows;

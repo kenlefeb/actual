@@ -22,6 +22,7 @@ const WRITE_TOOLS = [
   'write_move_category',
   'write_move_category_group',
   'write_move_on_budget',
+  'write_reconcile_account',
   'write_reopen_account',
   'write_reset_budget_hold',
   'write_set_account_business_days',

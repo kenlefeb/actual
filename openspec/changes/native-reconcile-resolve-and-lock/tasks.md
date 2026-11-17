@@ -19,7 +19,7 @@ Test-first: write the tests, see them fail, then write the code. One group per P
 - [x] 2.2 Step 3 screen: likely match, search, add the missing transaction (closes to the checklist, opens the add form), back to tick off, and the adjustment group last; the medium-detent adjustment sheet with the amount in its button and the budget line, category optional. Replace B1's "finish in the register" exit with Continue to step 4
 - [x] 2.3 Step 4 screen: summary, What locks with exact counts, linked transfers not locked, balance on record, the lock note, "Lock N transactions" and "Not now — keep my ticks"; remove-adjustment through `native/undo`
 - [x] 2.4 Reopen In progress at step 2 with the recorded balance; step 2's "Continue to lock" at zero (haptic, "Difference zero" announcement, no auto-advance); step 3's auto-advance at zero; "Untick it" label. Done screen, haptic and announcement, next due account, the checklist's Done; handle an unverified result
-- [ ] 2.6 File the deferred Backlog story: a Swift-minted one-shot confirmation nonce for native adjust and lock (design D9), for production hardening
+- [x] 2.6 File the deferred Backlog story: a Swift-minted one-shot confirmation nonce for native adjust and lock (design D9), for production hardening (story 4877)
 - [x] 2.5 Dynamic Type to AX5, VoiceOver order and announcements (step, difference as a live region, "Joint Checking is reconciled"), Dark Mode, localization; verify in the Simulator against the Figma frames once the Designer has corrected frames 54:406 and the adjustment date; UX Designer review
 
 ## Workflow follow-up

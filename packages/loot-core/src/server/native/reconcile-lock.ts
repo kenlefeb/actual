@@ -70,10 +70,52 @@ export function addAmountParam(difference: number, places: number): string {
 
 type Candidate = { id: string; date: string; amount: number; cleared: boolean };
 
+/** B1's row shape for `ids`, in that order (the shared Transaction row's fields). */
+async function loadRows(ids: string[]): Promise<NativeReconcileRow[]> {
+  if (ids.length === 0) return [];
+  const { data } = (await aqlQuery(
+    q('transactions')
+      .filter({ id: { $oneof: ids } })
+      .options({ splits: 'none' })
+      .select([
+        'id',
+        'date',
+        { payee: 'payee.name' },
+        { category: 'category.name' },
+        'notes',
+        'amount',
+        'cleared',
+        'reconciled',
+        'is_parent',
+      ]),
+  )) as {
+    data: (Omit<NativeReconcileRow, 'isParent'> & { is_parent: boolean })[];
+  };
+  const byId = new Map(data.map(r => [r.id, r]));
+  return ids.flatMap(id => {
+    const r = byId.get(id);
+    if (!r) return [];
+    const { is_parent, ...rest } = r;
+    return [
+      {
+        ...rest,
+        payee: rest.payee ?? null,
+        category: rest.category ?? null,
+        notes: rest.notes ?? null,
+        cleared: Boolean(rest.cleared),
+        reconciled: Boolean(rest.reconciled),
+        isParent: Boolean(is_parent),
+      },
+    ];
+  });
+}
+
 export type NativeReconcileMatch = {
   kind: 'tick-one' | 'tick-two' | 'untick-one';
   ids: string[];
   amounts: number[];
+  // The rows themselves, for the shared Transaction row (PR 403 review)
+  rows: NativeReconcileRow[];
 };
 
 /**
@@ -126,17 +168,22 @@ export async function reconcileMatches({
   }
   const unticks = data.filter(r => r.cleared && r.amount === -difference);
 
-  const matches: NativeReconcileMatch[] = [
+  const found = [
     ...singles.map(r => ({ kind: 'tick-one' as const, rows: [r] })),
     ...pairs.map(rows => ({ kind: 'tick-two' as const, rows })),
     ...unticks.map(r => ({ kind: 'untick-one' as const, rows: [r] })),
-  ]
-    .slice(0, max)
-    .map(({ kind, rows }) => ({
-      kind,
-      ids: rows.map(r => r.id),
-      amounts: rows.map(r => r.amount),
-    }));
+  ].slice(0, max);
+  const details = new Map(
+    (
+      await loadRows([...new Set(found.flatMap(m => m.rows.map(r => r.id)))])
+    ).map(r => [r.id, r]),
+  );
+  const matches: NativeReconcileMatch[] = found.map(({ kind, rows }) => ({
+    kind,
+    ids: rows.map(r => r.id),
+    amounts: rows.map(r => r.amount),
+    rows: rows.flatMap(r => details.get(r.id) ?? []),
+  }));
 
   return {
     difference,
@@ -177,8 +224,9 @@ export async function searchIds(
   const today = toDateRepr(monthUtils.currentDay());
   const places = await decimalPlaces();
   const numeric = text.replace(/^[^\d.-]+/, '').replace(/,/g, '');
+  // A 0-place currency (JPY) takes no fraction, so "41.8" is not 418
   const pattern = new RegExp(
-    `^-?\\d{1,12}(\\.\\d{1,${Math.max(places, 1)}})?$`,
+    places > 0 ? `^-?\\d{1,12}(\\.\\d{1,${places}})?$` : '^-?\\d{1,12}$',
   );
   const base = `SELECT t.id FROM v_transactions_internal_alive t
     LEFT JOIN payees p ON p.id = t.payee
@@ -260,42 +308,8 @@ export async function reconcileLockPreview({
   const cleared = await clearedBalanceOf(account);
   const max = await readLimit('reconcile-lock-list-max-rows');
   const listed = plan.rows.slice(0, max).map(r => r.id);
-  const { data } = (await aqlQuery(
-    q('transactions')
-      .filter({ id: { $oneof: listed } })
-      .options({ splits: 'none' })
-      .select([
-        'id',
-        'date',
-        { payee: 'payee.name' },
-        { category: 'category.name' },
-        'notes',
-        'amount',
-        'cleared',
-        'reconciled',
-        'is_parent',
-      ]),
-  )) as {
-    data: (Omit<NativeReconcileRow, 'isParent'> & { is_parent: boolean })[];
-  };
-  const byId = new Map(data.map(r => [r.id, r]));
   return {
-    rows: listed.flatMap(id => {
-      const r = byId.get(id);
-      if (!r) return [];
-      const { is_parent, ...rest } = r;
-      return [
-        {
-          ...rest,
-          payee: rest.payee ?? null,
-          category: rest.category ?? null,
-          notes: rest.notes ?? null,
-          cleared: Boolean(rest.cleared),
-          reconciled: Boolean(rest.reconciled),
-          isParent: Boolean(is_parent),
-        },
-      ];
-    }),
+    rows: await loadRows(listed),
     count: plan.rows.length,
     child_count: plan.children.length,
     truncated: plan.rows.length > listed.length,

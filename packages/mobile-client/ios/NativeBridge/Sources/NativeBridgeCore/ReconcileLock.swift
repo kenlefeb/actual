@@ -33,6 +33,8 @@ public struct ReconcileMatches: Codable, Equatable {
         public let kind: Kind
         public let ids: [String]
         public let amounts: [Int]
+        // For the shared Transaction row: payee, category, date
+        public let rows: [ReconcileRows.Row]
     }
 
     public let difference: Int?

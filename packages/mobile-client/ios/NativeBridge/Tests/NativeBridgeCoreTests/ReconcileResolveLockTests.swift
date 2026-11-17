@@ -63,6 +63,9 @@ final class ReconcileResolveLockContractTests: XCTestCase {
         let matches = try JSONDecoder().decode(ReconcileMatches.self, from: matchesData)
         XCTAssertEqual(matches.matches.map(\.kind), [.tickOne, .tickOne, .tickTwo, .untickOne])
         XCTAssertEqual(matches.addAmountParam, "-41.80")
+        // The shared Transaction row's fields (PR 403 design review)
+        XCTAssertEqual(matches.matches[0].rows.first?.payee, "Grocer")
+        XCTAssertEqual(matches.matches[0].rows.first?.date, "2016-12-20")
         XCTAssertEqual(try canonical(JSONEncoder().encode(matches)), try canonical(matchesData))
 
         let previewData = Data(try json("reconcile-lock-preview").utf8)

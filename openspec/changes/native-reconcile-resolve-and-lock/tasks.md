@@ -20,7 +20,7 @@ Test-first: write the tests, see them fail, then write the code. One group per P
 - [x] 2.3 Step 4 screen: summary, What locks with exact counts, linked transfers not locked, balance on record, the lock note, "Lock N transactions" and "Not now — keep my ticks"; remove-adjustment through `native/undo`
 - [x] 2.4 Reopen In progress at step 2 with the recorded balance; step 2's "Continue to lock" at zero (haptic, "Difference zero" announcement, no auto-advance); step 3's auto-advance at zero; "Untick it" label. Done screen, haptic and announcement, next due account, the checklist's Done; handle an unverified result
 - [ ] 2.6 File the deferred Backlog story: a Swift-minted one-shot confirmation nonce for native adjust and lock (design D9), for production hardening
-- [ ] 2.5 Dynamic Type to AX5, VoiceOver order and announcements (step, difference as a live region, "Joint Checking is reconciled"), Dark Mode, localization; verify in the Simulator against the Figma frames once the Designer has corrected frames 54:406 and the adjustment date; UX Designer review
+- [x] 2.5 Dynamic Type to AX5, VoiceOver order and announcements (step, difference as a live region, "Joint Checking is reconciled"), Dark Mode, localization; verify in the Simulator against the Figma frames once the Designer has corrected frames 54:406 and the adjustment date; UX Designer review
 
 ## Workflow follow-up
 

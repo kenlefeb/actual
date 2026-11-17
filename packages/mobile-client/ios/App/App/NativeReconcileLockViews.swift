@@ -13,6 +13,7 @@ struct ReconcilePrimaryButton: View {
     var body: some View {
         Button(action: action) {
             Text(title).font(.headline).foregroundColor(isEnabled ? NativeReconcileTokens.onAccent : nil)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, minHeight: 44).multilineTextAlignment(.center)
         }
         .buttonStyle(.borderedProminent)
@@ -56,6 +57,24 @@ struct ReconcileSummaryCard: View {
     }
 }
 
+// Steps 3 and 4: the step line and the summary, pinned above the list
+struct ReconcilePinnedHeader: View {
+    let step: Int
+    let name: String
+    let summary: ReconcileSummary?
+    let style: BudgetAmountStyle
+
+    var body: some View {
+        VStack(spacing: 12) {
+            ReconcileStepHeader(step: step, name: name)
+            ReconcileSummaryCard(summary: summary, style: style)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(NativeReconcileTokens.background)
+    }
+}
+
 // A tappable option: a title in the accent and a line under it
 struct ReconcileOption: View {
     let title: String
@@ -89,18 +108,19 @@ struct ReconcileResolveView: View {
     let toLock: () -> Void
     @State private var searchText: String?
     @State private var isAdjusting = false
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private func amount(_ value: Int) -> String { BudgetAmountFormat.string(value, style: style) }
     private var difference: String { amount(model.difference ?? 0) }
 
     var body: some View {
         List {
-            Section {
-                ReconcileStepHeader(step: 3, name: ReconcileWords.resolve)
-                ReconcileSummaryCard(summary: tick.summary, style: style)
+            if typeSize.isAccessibilitySize {
+                ReconcilePinnedHeader(step: 3, name: ReconcileWords.resolve, summary: tick.summary, style: style)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
             }
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
             if !model.matches.isEmpty {
                 Section(header: Text(ReconcileWords.likely)) {
                     ForEach(Array(model.matches.enumerated()), id: \.offset) { _, match in matchRow(match) }
@@ -142,6 +162,9 @@ struct ReconcileResolveView: View {
             if let error = model.error { Text(error.message).foregroundColor(.secondary) }
         }
         .listStyle(.insetGrouped)
+        .safeAreaInset(edge: .top) {
+            if !typeSize.isAccessibilitySize { ReconcilePinnedHeader(step: 3, name: ReconcileWords.resolve, summary: tick.summary, style: style) }
+        }
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button(action: back) { Image(systemName: "chevron.left") }.accessibilityLabel(Text(ReconcileWords.backToTick))
@@ -175,29 +198,31 @@ struct ReconcileResolveView: View {
 
     private func matchRow(_ match: ReconcileMatches.Match) -> some View {
         let isUntick = match.kind == .untickOne
-        let amounts = match.amounts.map { ($0 > 0 ? "+" : "") + amount($0) }.joined(separator: " + ")
         let detail =
             switch match.kind {
             case .tickOne: ReconcileWords.sameAmount
             case .tickTwo: ReconcileWords.twoRows
             case .untickOne, .other: ReconcileWords.untickDetail
             }
+        let action = isUntick ? ReconcileWords.untickIt : ReconcileWords.tickIt
         return Button {
             Task { await model.apply(match) }
         } label: {
             VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(amounts).font(.body.monospacedDigit())
-                    Spacer()
-                    Text(detail).font(.footnote).foregroundColor(.secondary).multilineTextAlignment(.trailing)
+                ForEach(match.rows) { row in
+                    NativeTransactionRow(
+                        payee: row.payee ?? row.notes ?? "", category: row.category, date: row.date,
+                        amount: (row.amount > 0 ? "+" : "") + amount(row.amount), isIncome: row.amount > 0,
+                        status: row.cleared ? .cleared : .notCleared)
                 }
-                Text(isUntick ? ReconcileWords.untickIt : ReconcileWords.tickIt)
-                    .font(.subheadline.weight(.semibold)).foregroundColor(NativeReconcileTokens.accent)
+                Text(detail).font(.footnote).foregroundColor(.secondary)
+                Text(action).font(.subheadline.weight(.semibold)).foregroundColor(NativeReconcileTokens.accent)
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
+        .accessibilityHint(Text(action))
     }
 }
 
@@ -234,15 +259,15 @@ struct ReconcileAdjustSheet: View {
                     Text(String(format: ReconcileWords.budgetChanges, BudgetAmountFormat.string(abs(model.difference ?? 0), style: style)))
                 }
                 if let error = model.error { Text(error.message).foregroundColor(.secondary) }
-                Section {
-                    ReconcilePrimaryButton(title: String(format: ReconcileWords.addSignedAdjustment, signed), isEnabled: model.difference != 0) {
-                        Task {
-                            if await model.adjust(categoryId: categoryId, label: ReconcileWords.adjustmentLabel) { dismiss() }
-                        }
+            }
+            .safeAreaInset(edge: .bottom) {
+                ReconcilePrimaryButton(title: String(format: ReconcileWords.addSignedAdjustment, signed), isEnabled: model.difference != 0) {
+                    Task {
+                        if await model.adjust(categoryId: categoryId, label: ReconcileWords.adjustmentLabel) { dismiss() }
                     }
                 }
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets())
+                .padding()
+                .background(NativeReconcileTokens.background)
             }
             .navigationTitle(ReconcileWords.addAdjustmentTitle)
             .navigationBarTitleDisplayMode(.inline)
@@ -275,7 +300,10 @@ private struct LabeledRow: View {
 extension View {
     // A medium-detent sheet on iOS 16 and later; full height before
     @ViewBuilder func mediumDetent() -> some View {
-        if #available(iOS 16, *) {
+        if #available(iOS 16.4, *) {
+            // Opaque, so the page behind never shows through the sheet
+            presentationDetents([.medium, .large]).presentationBackground(NativeReconcileTokens.background)
+        } else if #available(iOS 16, *) {
             presentationDetents([.medium, .large])
         } else {
             self
@@ -295,17 +323,18 @@ struct ReconcileLockView: View {
     let close: () -> Void
     let removed: () -> Void
     let locked: () -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     private func amount(_ value: Int) -> String { BudgetAmountFormat.string(value, style: style) }
 
     var body: some View {
         List {
-            Section {
-                ReconcileStepHeader(step: 4, name: ReconcileWords.lockStep)
-                ReconcileSummaryCard(summary: summary, style: style)
+            if typeSize.isAccessibilitySize {
+                ReconcilePinnedHeader(step: 4, name: ReconcileWords.lockStep, summary: summary, style: style)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
             }
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
             if let preview = model.state.read {
                 Section(header: Text(ReconcileWords.whatLocks)) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -330,18 +359,21 @@ struct ReconcileLockView: View {
                         }
                     }
                 }
-                Section {
-                    Label(ReconcileWords.lockNote, systemImage: "lock.fill").font(.subheadline)
-                        .foregroundColor(NativeReconcileTokens.attention)
-                }
             } else if case .failed(let error) = model.state {
                 ReconcileErrorView(message: error.message) { Task { await model.load() } }
+            }
+            if typeSize.isAccessibilitySize {
+                lockNote.listRowBackground(Color.clear).listRowInsets(EdgeInsets())
             }
             if let error = model.error { Text(error.message).foregroundColor(.secondary) }
         }
         .listStyle(.insetGrouped)
+        .safeAreaInset(edge: .top) {
+            if !typeSize.isAccessibilitySize { ReconcilePinnedHeader(step: 4, name: ReconcileWords.lockStep, summary: summary, style: style) }
+        }
         .safeAreaInset(edge: .bottom) {
             VStack(spacing: 8) {
+                if !typeSize.isAccessibilitySize { lockNote }
                 ReconcilePrimaryButton(
                     title: String(format: ReconcileWords.lockCount, model.state.read?.count ?? 0),
                     isEnabled: model.state.read != nil && !model.isLocking
@@ -352,7 +384,10 @@ struct ReconcileLockView: View {
                         locked()
                     }
                 }
-                Button(ReconcileWords.notNow, action: close).font(.headline).frame(minHeight: 44)
+                Button(action: close) {
+                    Text(ReconcileWords.notNow).fixedSize(horizontal: false, vertical: true).multilineTextAlignment(.center)
+                }
+                .font(.headline).frame(minHeight: 44)
             }
             .padding()
             .background(NativeReconcileTokens.background)
@@ -369,6 +404,16 @@ struct ReconcileLockView: View {
             }
         }
         .task { await model.load() }
+    }
+
+    // Words and a lock symbol on its tint, never colour alone
+    private var lockNote: some View {
+        Label(ReconcileWords.lockNote, systemImage: "lock.fill").font(.footnote)
+            .foregroundColor(NativeReconcileTokens.attention)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 10).fill(NativeReconcileTokens.attention.opacity(0.1)))
     }
 
     // The lock needs a zero difference, so the record's amount is both
@@ -411,24 +456,35 @@ struct ReconcileDoneView: View {
     private var lockedCount: Int { model.state.read?.count ?? 0 }
 
     var body: some View {
-        VStack(spacing: 16) {
-            Spacer()
-            Image(systemName: verified ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                .font(.system(size: 56)).foregroundColor(verified ? NativeReconcileTokens.accent : NativeReconcileTokens.attention)
-                .accessibilityHidden(true)
-            Text(title).font(.title2.weight(.bold)).multilineTextAlignment(.center)
-            Text(detail).font(.subheadline).foregroundColor(.secondary).multilineTextAlignment(.center)
-            Spacer()
-            if verified {
-                if let next { ReconcilePrimaryButton(title: String(format: ReconcileWords.nextAccount, next.name)) { open(next.id) } }
-                Button(ReconcileWords.backToChecklist, action: checklist).font(.headline).frame(minHeight: 44)
-            } else {
-                ReconcilePrimaryButton(title: String(format: ReconcileWords.reviewAccount, accountName), action: review)
-                Button(ReconcileWords.backToChecklist, action: checklist).font(.headline).frame(minHeight: 44)
+        // Scrolls, so nothing truncates at accessibility sizes
+        ScrollView {
+            VStack(spacing: 16) {
+                Image(systemName: verified ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                    .font(.system(size: 56)).foregroundColor(verified ? NativeReconcileTokens.accent : NativeReconcileTokens.attention)
+                    .accessibilityHidden(true)
+                    .padding(.top, 80)
+                Text(title).font(.title2.weight(.bold)).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                Text(detail).font(.subheadline).foregroundColor(.secondary).multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .padding()
+            .frame(maxWidth: .infinity)
         }
-        .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .safeAreaInset(edge: .bottom) {
+            VStack(spacing: 8) {
+                if verified {
+                    if let next { ReconcilePrimaryButton(title: String(format: ReconcileWords.nextAccount, next.name)) { open(next.id) } }
+                } else {
+                    ReconcilePrimaryButton(title: String(format: ReconcileWords.reviewAccount, accountName), action: review)
+                }
+                Button(action: checklist) {
+                    Text(ReconcileWords.backToChecklist).fixedSize(horizontal: false, vertical: true).multilineTextAlignment(.center)
+                }
+                .font(.headline).frame(minHeight: 44)
+            }
+            .padding()
+            .background(NativeReconcileTokens.background)
+        }
         .background(NativeReconcileTokens.background.ignoresSafeArea())
         .navigationBarBackButtonHidden(true)
         .toolbar {

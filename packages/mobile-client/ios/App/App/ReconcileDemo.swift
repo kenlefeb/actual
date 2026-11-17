@@ -23,8 +23,7 @@ enum ReconcileDemo {
         case "account-statement-balance-prefill": prefill
         case "native/reconcile-rows": rows
         case "native/reconcile-tick": #"{"statement":465413,"cleared":465413,"difference":0}"#
-        case "native/reconcile-matches":
-            #"{"difference":4180,"matches":[{"kind":"tick-one","ids":["t4"],"amounts":[4180]},{"kind":"tick-two","ids":["t2","t5"],"amounts":[-3820,8000]}],"add_amount_param":"-41.80"}"#
+        case "native/reconcile-matches": matches
         case "native/reconcile-lock-preview": preview
         case "native/reconcile-lock":
             mode == "b2-moved"
@@ -51,6 +50,11 @@ enum ReconcileDemo {
 
     private static let prefill =
         #"{"prefill":{"amount":465413,"source":"bank-sync","as_of":"2026-11-17","link":"bank-sync"},"alternatives":[{"amount":461233,"source":"cleared","as_of":null,"link":null}],"cleared_balance":461233,"record":null,"account_type":null}"#
+
+    private static let matches =
+        #"{"difference":4180,"matches":[{"kind":"tick-one","ids":["t4"],"amounts":[4180],"rows":["# + row("t4", "Costco refund", "Groceries", "2026-11-08", 4180, false)
+        + #"]},{"kind":"tick-two","ids":["t2","t5"],"amounts":[-3820,8000],"rows":["# + row("t2", "Shell", "Gas", "2026-11-14", -3820, false) + ","
+        + row("t5", "Payroll", "Income", "2026-11-15", 8000, false) + #"]}],"add_amount_param":"-41.80"}"#
 
     private static let preview =
         #"{"rows":[],"count":17,"child_count":2,"truncated":false,"partners":[{"id":"x1","account":"High-Yield Savings","amount":-50000,"date":"2026-11-03","reconciled":false},{"id":"x2","account":"Visa Signature","amount":30000,"date":"2026-11-20","reconciled":false}],"skipped_children":[],"record":{"amount":465413,"source":"bank-sync","entered_at":1794935880000},"plan_digest":"demo"}"#

@@ -26,6 +26,8 @@ export type NativeReconcileStatus = 'due' | 'in-progress' | 'done' | 'ready';
 export type NativeReconcileMonth = {
   month: string;
   excluded: string[];
+  // The open accounts on the exclusion list, for Edit List to re-add
+  hidden: { id: string; name: string }[];
   accounts: {
     id: string;
     name: string;
@@ -33,6 +35,8 @@ export type NativeReconcileMonth = {
     detail: { cleared: number; statement: number | null };
     // ms, as the account stores it
     last_reconciled: string | null;
+    // The bank sync provider (e.g. simpleFin), named by the source line
+    sync_source: string | null;
   }[];
 };
 
@@ -47,6 +51,7 @@ export type NativeReconcileRow = {
   id: string;
   date: string;
   payee: string | null;
+  category: string | null;
   notes: string | null;
   amount: number;
   cleared: boolean;
@@ -118,12 +123,16 @@ export async function reconcileMonth(): Promise<NativeReconcileMonth> {
     id: string;
     name: string;
     last_reconciled: string | null;
+    account_sync_source: string | null;
   }>(
-    'SELECT id, name, last_reconciled FROM accounts WHERE tombstone = 0 AND closed = 0 ORDER BY sort_order, name',
+    'SELECT id, name, last_reconciled, account_sync_source FROM accounts WHERE tombstone = 0 AND closed = 0 ORDER BY sort_order, name',
   );
   return {
     month,
     excluded,
+    hidden: accounts
+      .filter(a => excluded.includes(a.id))
+      .map(({ id, name }) => ({ id, name })),
     accounts: await Promise.all(
       accounts
         .filter(a => !excluded.includes(a.id))
@@ -145,6 +154,7 @@ export async function reconcileMonth(): Promise<NativeReconcileMonth> {
                   : 'due',
             detail: { cleared: summary.cleared, statement: summary.statement },
             last_reconciled: a.last_reconciled ?? null,
+            sync_source: a.account_sync_source ?? null,
           };
         }),
     ),
@@ -185,6 +195,7 @@ export async function reconcileRows({
         'id',
         'date',
         { payee: 'payee.name' },
+        { category: 'category.name' },
         'notes',
         'amount',
         'cleared',
@@ -201,6 +212,7 @@ export async function reconcileRows({
     rows: data.map(({ is_parent, ...row }) => ({
       ...row,
       payee: row.payee ?? null,
+      category: row.category ?? null,
       notes: row.notes ?? null,
       cleared: Boolean(row.cleared),
       reconciled: Boolean(row.reconciled),

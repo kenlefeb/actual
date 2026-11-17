@@ -8,6 +8,7 @@
   "hideFraction": false,
   "month": "2017-01",
   "excluded": [],
+  "hidden": [],
   "accounts": [
     {
       "id": "checking",
@@ -17,7 +18,8 @@
         "cleared": 105000,
         "statement": null
       },
-      "last_reconciled": null
+      "last_reconciled": null,
+      "sync_source": null
     },
     {
       "id": "savings",
@@ -27,7 +29,8 @@
         "cleared": 0,
         "statement": null
       },
-      "last_reconciled": null
+      "last_reconciled": null,
+      "sync_source": null
     },
     {
       "id": "card",
@@ -37,7 +40,8 @@
         "cleared": 0,
         "statement": null
       },
-      "last_reconciled": null
+      "last_reconciled": null,
+      "sync_source": null
     }
   ]
 }

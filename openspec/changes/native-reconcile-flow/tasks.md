@@ -16,13 +16,13 @@ Test-first: write the tests, see them fail, then write the code. One story per g
 ## 2. Native reconcile on iPhone: checklist, step 1 and step 2 (sc-4801)
 
 - [x] 2.1 `native/reconcile-month`, `native/reconcile-rows`, `native/reconcile-tick`, `native/reconcile-list-set` in `server/native/app.ts` (design D5). Failing contract tests first on a seed with splits, a reconciled row and a transfer: statuses, exclusion default, tick refuses reconciled, another account's id (whole call fails) and a lone split child, sets a parent's children, and is one undo step, summary equals the MCP's cleared balance, list write touches only its preference; a perf test like `native/app.perf.test.ts`
-- [ ] 2.2 Allowlist the handlers (Swift list and `native-bridge-allowlist.json`) and the `presentReconcile` chrome message, tests first: the lists are equal, an off-list name is refused natively, a message from another origin is ignored
-- [ ] 2.3 `NativeScreen.reconcile` switch that reads **on** when unset (Ken, 2026-11-15), its Settings toggle to turn it off, and the script entry (design D1). Failing tests first: unset is on, off is off, the toggle persists across a reload
-- [ ] 2.4 Page side: the ••• › Reconcile… item and the Accounts banner send `presentReconcile` when the switch is on and fall back to the dialog otherwise; banner states (due, collapsed, hidden). Failing tests first
-- [ ] 2.5 Swift view models (`ReconcileMonthViewModel`, `ReconcileStepOneViewModel`, `ReconcileTickViewModel`) against a fake transport and fixtures: loaded, error and timeout keep the last values, coalesced re-reads, Edit List, tick and difference. Failing tests first
-- [ ] 2.6 SwiftUI screens: checklist with Edit List, step 1 in its three states, step 2 with the pinned summary, `NativeTransactionRow` (new, reused later by Accounts), tap and swipe ticks, haptic, "To tick" and "All", full-screen large detent. Verify in the Simulator against the Figma frames, light and dark
-- [ ] 2.7 Dynamic Type to AX5, VoiceOver (step announcement, difference live region, row labels and custom actions), localization of all text; notes on the story; UX Designer review
-- [ ] 2.8 File the Backlog story for the assistant nudge (design D6)
+- [x] 2.2 Allowlist the handlers (Swift list and `native-bridge-allowlist.json`) and the `presentReconcile` chrome message, tests first: the lists are equal, an off-list name is refused natively, a message from another origin is ignored
+- [x] 2.3 `NativeScreen.reconcile` switch that reads **on** when unset (Ken, 2026-11-15), its Settings toggle to turn it off, and the script entry (design D1). Failing tests first: unset is on, off is off, the toggle persists across a reload
+- [x] 2.4 Page side: the ••• › Reconcile… item and the Accounts banner send `presentReconcile` when the switch is on and fall back to the dialog otherwise; banner states (due, collapsed, hidden). Failing tests first
+- [x] 2.5 Swift view models (`ReconcileMonthViewModel`, `ReconcileStepOneViewModel`, `ReconcileTickViewModel`) against a fake transport and fixtures: loaded, error and timeout keep the last values, coalesced re-reads, Edit List, tick and difference. Failing tests first
+- [x] 2.6 SwiftUI screens: checklist with Edit List, step 1 in its three states, step 2 with the pinned summary, `NativeTransactionRow` (new, reused later by Accounts), tap and swipe ticks, haptic, "To tick" and "All", full-screen large detent. Verify in the Simulator against the Figma frames, light and dark
+- [x] 2.7 Dynamic Type to AX5, VoiceOver (step announcement, difference live region, row labels and custom actions), localization of all text; notes on the story; UX Designer review
+- [x] 2.8 File the Backlog story for the assistant nudge (design D6)
 
 ## 3. Reconcile on Mac (sc-4801)
 

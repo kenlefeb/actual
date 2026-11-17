@@ -1,11 +1,13 @@
 import {
   hasNativeTabBar,
   installNativeChrome,
+  isNativeReconcileOn,
   isNativeScreenOn,
   nativeHaptic,
   nativeParentPath,
   postNativeClosed,
   postNativeRoute,
+  presentNativeReconcile,
   setNativeScreenOn,
   showsNativeTabBar,
 } from './nativeChrome';
@@ -112,7 +114,26 @@ describe('installNativeChrome', () => {
     ]);
   });
 
+  // sc-4801: "Ready to lock — finish in the register" opens the web reconcile
+  it('opens an account register reconciling to a statement amount', () => {
+    const { win } = iosApp();
+    const navigate = vi.fn();
+    installNativeChrome(win, navigate, vi.fn());
+
+    win.__actualNativeChrome?.navigate('/accounts/a-1?reconcile=465413');
+    win.__actualNativeChrome?.navigate('/accounts/a-1?reconcile=-1250');
+
+    expect(navigate.mock.calls).toEqual([
+      ['/accounts/a-1?reconcile=465413'],
+      ['/accounts/a-1?reconcile=-1250'],
+    ]);
+  });
+
   it.each([
+    '/accounts/a-1?reconcile=1.5',
+    '/accounts/a-1?reconcile=1&x=2',
+    '/budget?reconcile=1',
+    '/accounts?reconcile=1',
     'https://example.com/budget',
     '//example.com/budget',
     'mailto:budget',
@@ -295,6 +316,37 @@ describe('nativeParentPath', () => {
       expect(chrome.nativeParentPath('/transactions/t1', 'acct')).toBe(
         '/accounts/acct',
       );
+    });
+  });
+});
+
+// native-reconcile-flow: "The iPhone flow opens from the account menu and the
+// Accounts banner" (sc-4801)
+describe('the native Reconcile switch', () => {
+  it('is on in the app when unset, and off once turned off', () => {
+    const { win } = iosApp();
+    expect(isNativeReconcileOn(win)).toBe(true);
+    setNativeScreenOn('reconcile', false, win);
+    expect(isNativeReconcileOn(win)).toBe(false);
+    setNativeScreenOn('reconcile', true, win);
+    expect(isNativeReconcileOn(win)).toBe(true);
+  });
+
+  it('is always off in a browser', () => {
+    expect(isNativeReconcileOn(browser())).toBe(false);
+  });
+
+  it('asks the app for an account or the checklist', () => {
+    const { win, postMessage } = iosApp();
+    presentNativeReconcile({ accountId: 'checking' }, win);
+    expect(postMessage).toHaveBeenLastCalledWith({
+      type: 'presentReconcile',
+      account_id: 'checking',
+    });
+    presentNativeReconcile('checklist', win);
+    expect(postMessage).toHaveBeenLastCalledWith({
+      type: 'presentReconcile',
+      checklist: true,
     });
   });
 });

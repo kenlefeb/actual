@@ -100,4 +100,20 @@ describe('NativeScreens', () => {
     expect(checkbox).toBeChecked();
     expect(win.__actualNativeScreens?.paychecks).toBe(true);
   });
+
+  // sc-4801: Reconcile ships on; unset reads as on, and a click turns it off
+  it('offers the Reconcile switch, on when unset, and turns it off', () => {
+    const postMessage = insideIosApp();
+    renderSettings();
+    const checkbox = screen.getByRole('checkbox', { name: /Native Reconcile/ });
+    expect(checkbox).toBeChecked();
+    fireEvent.click(checkbox);
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'nativeScreen',
+      screen: 'reconcile',
+      on: false,
+    });
+    expect(checkbox).not.toBeChecked();
+    expect(win.__actualNativeScreens?.reconcile).toBe(false);
+  });
 });

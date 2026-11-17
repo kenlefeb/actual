@@ -7,6 +7,7 @@ import { View } from '@actual-app/components/view';
 import { Checkbox } from '#components/forms';
 import {
   hasNativeTabBar,
+  isNativeReconcileOn,
   isNativeScreenOn,
   setNativeScreenOn,
 } from '#native/nativeChrome';
@@ -23,6 +24,8 @@ export function NativeScreens() {
   const [paychecksOn, setPaychecksOn] = useState(() =>
     isNativeScreenOn('paychecks'),
   );
+  // sc-4801: on unless turned off here
+  const [reconcileOn, setReconcileOn] = useState(() => isNativeReconcileOn());
 
   if (!hasNativeTabBar()) return null;
 
@@ -89,6 +92,38 @@ export function NativeScreens() {
               onChange={() => {
                 setNativeScreenOn('paychecks', !paychecksOn);
                 setPaychecksOn(!paychecksOn);
+              }}
+            />
+          </View>
+        }
+      />
+      <SettingsRow
+        htmlFor="settings-native-reconcile"
+        title={<Trans>Native Reconcile</Trans>}
+        description={
+          <Text>
+            <Trans>
+              Reconcile accounts on native iPhone screens, from the Accounts
+              banner or an account's Reconcile… menu item. Turn it off to use
+              the web dialog instead.
+            </Trans>
+          </Text>
+        }
+        control={
+          <View
+            style={{
+              minWidth: 44,
+              minHeight: 44,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Checkbox
+              id="settings-native-reconcile"
+              checked={reconcileOn}
+              onChange={() => {
+                setNativeScreenOn('reconcile', !reconcileOn);
+                setReconcileOn(!reconcileOn);
               }}
             />
           </View>

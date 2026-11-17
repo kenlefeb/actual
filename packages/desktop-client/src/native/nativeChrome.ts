@@ -8,11 +8,14 @@ type ChromeMessage =
   | { type: 'route'; path: string; tabBar: boolean }
   | { type: 'closed' }
   | { type: 'haptic' }
-  | { type: 'nativeScreen'; screen: NativeScreenName; on: boolean };
+  | { type: 'nativeScreen'; screen: NativeScreenName; on: boolean }
+  | { type: 'presentReconcile'; account_id: string }
+  | { type: 'presentReconcile'; checklist: true };
 
 // The screens that have a native version behind a per-screen switch: the
-// Budget tab (sc-3751) and Schedules & Paychecks (sc-4341)
-export type NativeScreenName = 'budget' | 'paychecks';
+// Budget tab (sc-3751), Schedules & Paychecks (sc-4341) and the Reconcile
+// flow (sc-4801)
+export type NativeScreenName = 'budget' | 'paychecks' | 'reconcile';
 
 type NativeChrome = {
   navigate: (path: string) => void;
@@ -56,6 +59,8 @@ const SECTIONS = [
   'notifications',
 ];
 const PATH = /^\/([a-z-]+)(\/[\w-]+)*\/?$/;
+// sc-4801: an account register reconciling to a statement amount (cents)
+const RECONCILE_PATH = /^\/accounts\/[\w-]+\?reconcile=-?\d{1,15}$/;
 
 function post(win: ChromeWindow, message: ChromeMessage) {
   win.webkit?.messageHandlers?.actualNativeChrome?.postMessage(message);
@@ -74,6 +79,25 @@ export function isNativeScreenOn(
   win: ChromeWindow = window,
 ) {
   return win.__actualNativeScreens?.[screen] === true;
+}
+
+// sc-4801: the native Reconcile flow ships on, so unset reads as on (Ken,
+// 2026-11-15); always off outside the app
+export function isNativeReconcileOn(win: ChromeWindow = window) {
+  return hasNativeTabBar(win) && win.__actualNativeScreens?.reconcile !== false;
+}
+
+// Asks the app to present the native Reconcile flow; it checks the account
+export function presentNativeReconcile(
+  target: { accountId: string } | 'checklist',
+  win: ChromeWindow = window,
+) {
+  post(
+    win,
+    target === 'checklist'
+      ? { type: 'presentReconcile', checklist: true }
+      : { type: 'presentReconcile', account_id: target.accountId },
+  );
 }
 
 // The app stores the switch (UserDefaults) and applies it when the tab is
@@ -111,7 +135,10 @@ export function installNativeChrome(
   win.__actualNativeChrome = {
     navigate(path) {
       const section = PATH.exec(path)?.[1];
-      if (!section || !SECTIONS.includes(section)) {
+      if (
+        !RECONCILE_PATH.test(path) &&
+        (!section || !SECTIONS.includes(section))
+      ) {
         throw new Error(`native tab bar: ${path} is not allowlisted`);
       }
       navigate(path);

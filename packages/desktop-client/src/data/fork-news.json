@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "id": "fork-release-26.10.1-alpha.42",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.42 — Ken's Actual fork",
+      "date": "2026-11-17",
+      "version": "26.10.1-alpha.42",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.42.md",
+      "body": "**Unofficial fork prerelease.** Based on upstream Actual v26.11.0 (`1766241e3f4b3c578e424c4fa15f1eb83c0da17d`, October 29, 2026); not an official Actual Budget release.\n\nThis release lets the MCP server (the connector that lets Claude read and change a budget) reconcile an account to a statement balance, with the balance confirmed by a person first.",
+      "details": "#### Features\n\n- The MCP can reconcile an account to a statement balance.\n- Reconcile needs the new `transactions:reconcile` permission, which a connection's grant must include. It is not granted in production.\n- Reconcile also needs a statement balance that a person has confirmed in the app. The assistant cannot supply the balance itself. The screens for recording the balance are still to come, so reconcile cannot be used end to end yet.\n\n#### Enhancements\n\n- The server's operator can set the reconcile limit, and how much clock difference a recorded statement balance tolerates.\n\n#### Bugfixes\n\n- None in this release.\n\n#### Maintenance\n\n- No upstream changes in this release; the fork stays on upstream Actual 26.11.0.\n- The reconcile and recorded-statement-balance changes are specified (sc-4213, sc-4793, sc-4800).\n\n#### Known limitations\n\n- Experimental.\n- MCP reconcile needs the `transactions:reconcile` scope and a statement balance the human confirmed in the app; the app screens for confirming it are not built yet.\n- The hosted MCP still cannot delete anything, because no delete scope (including `accounts:delete`) is granted; adding it is a grants-file change and a deploy.\n- The native Schedules & Paychecks screens are off by default; turn them on in Settings to try them.\n- Tapping a tag in the transaction editor does nothing.\n- Tags are not yet fully accessible on the phone.\n- OpenID sign-out needs the server's address in the identity provider's allowed sign-out addresses; without it the provider shows an error page, though you are already signed out of Actual.\n- Attached documents aren't included in a budget export.\n- Documents removed before alpha.35 are recorded the first time an updated device syncs, and deleted 30 days after that. Removals made on a device that has not been updated are not tracked.\n- HEIC pictures are refused; use the Photos library or a JPEG or PNG copy.\n- Attaching a document needs a connection; there is no offline upload queue.\n- After restoring server data from a backup, pause the cleanup first (`production/RESTORE.md`)."
+    },
+    {
       "id": "fork-release-26.10.1-alpha.41",
       "type": "release",
       "title": "Release 26.10.1-alpha.41 — Ken's Actual fork",

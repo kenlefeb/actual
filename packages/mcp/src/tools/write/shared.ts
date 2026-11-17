@@ -62,6 +62,14 @@ export async function budgetId() {
   return found;
 }
 
+/** The fields every attempt line gains when written (time, call id, phase, schema), so a size check counts the real line. */
+const LINE_FIELDS = () => ({
+  time: new Date().toISOString(),
+  call_id: randomUUID(),
+  phase: 'attempt',
+  schema: 2,
+});
+
 /**
  * Refuses (fixed text, before any audit line) a delete whose own attempt line
  * or whose undo's attempt line would exceed the audit line limit, so every
@@ -74,7 +82,8 @@ export async function requireUndoableLine(
   entry: { ids: string[]; changes: AuditChange[] },
 ) {
   const budget_id = await budgetId();
-  const size = (line: object) => Buffer.byteLength(JSON.stringify(line));
+  const size = (line: object) =>
+    Buffer.byteLength(JSON.stringify({ ...LINE_FIELDS(), ...line }));
   const own = size({ ...log.identity, tool, budget_id, ...entry });
   const undo = size({
     ...log.identity,
@@ -248,7 +257,14 @@ export async function loggedWrite<R extends object>(
   // undo history and its own line); refused before anything is written.
   const budget_id = await budgetId();
   const lineBytes = Buffer.byteLength(
-    JSON.stringify({ ...log.identity, tool, budget_id, ...entry }),
+    JSON.stringify({
+      ...LINE_FIELDS(),
+      ...log.identity,
+      tool,
+      budget_id,
+      ...entry,
+      ...(options.undoes ? { undoes: options.undoes } : {}),
+    }),
   );
   if (lineBytes > log.limits.maxAuditLineBytes) {
     throw new Refusal(

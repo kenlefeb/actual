@@ -435,6 +435,8 @@ export function registerTransactionWriteTools(
       };
       await requireUndoableLine(auditLog, 'write_delete_transactions', entry);
 
+      // The partner children actually unlinked, read back after a failure
+      const unlinkedDone = new Set<string>();
       return loggedWrite(
         auditLog,
         'write_delete_transactions',
@@ -442,6 +444,7 @@ export function registerTransactionWriteTools(
         async callId => {
           try {
             for (const rowId of ids) await api.deleteTransaction(rowId);
+            for (const k of unlinked.keys()) unlinkedDone.add(k);
             return { applied: [...deleted.keys()] };
           } catch (error) {
             stderrLine(
@@ -456,6 +459,13 @@ export function registerTransactionWriteTools(
               t => t.id,
             ),
           );
+          if (unlinked.size > 0) {
+            for (const t of await editRows({
+              id: { $oneof: [...unlinked.keys()] },
+            })) {
+              if (t.transfer_id === null) unlinkedDone.add(t.id);
+            }
+          }
           return {
             applied: [...deleted.keys()].filter(x => !left.has(x)),
             failed: callId,
@@ -463,7 +473,7 @@ export function registerTransactionWriteTools(
         },
         async outcome => ({
           deleted: outcome.applied ?? [],
-          unlinked: outcome.failed ? [] : [...unlinked.keys()],
+          unlinked: [...unlinkedDone],
           attachments: attachments.length,
           ...(outcome.failed
             ? {

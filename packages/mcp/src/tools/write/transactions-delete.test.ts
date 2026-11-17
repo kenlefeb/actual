@@ -279,6 +279,51 @@ describe('write_delete_transactions', () => {
     expect(await alive(out.id)).toBe(true);
   });
 
+  describe('with the grant option and the call override', () => {
+    it('allows a reconciled transfer partner', async () => {
+      const { checking, savings } = await setup({ allow_reconciled: true });
+      const { out, into } = await transfer(checking, savings);
+      await api.updateTransaction(into.id, { cleared: true, reconciled: true });
+      const res = await del({ ids: [out.id], allow_reconciled: true });
+      expect(res.isError).toBe(false);
+      expect(await alive(out.id)).toBe(false);
+      expect(await alive(into.id)).toBe(false);
+    });
+
+    it("allows a split whose child's transfer partner is reconciled", async () => {
+      const { checking, savings } = await setup({ allow_reconciled: true });
+      const { out, into } = await transfer(checking, savings);
+      const sp = await split(checking, 300000);
+      const child = sp.children[0];
+      await db.deleteTransaction({ id: out.id });
+      await db.updateTransaction({ id: into.id, transfer_id: child.id });
+      await db.updateTransaction({ id: child.id, transfer_id: into.id });
+      await api.updateTransaction(into.id, { cleared: true, reconciled: true });
+      const res = await del({ ids: [sp.parent.id], allow_reconciled: true });
+      expect(res.isError).toBe(false);
+      expect(await alive(sp.parent.id)).toBe(false);
+      expect(await alive(into.id)).toBe(false);
+    });
+
+    it('allows unlinking a reconciled partner child', async () => {
+      const { checking, savings } = await setup({ allow_reconciled: true });
+      const { out, into } = await transfer(checking, savings);
+      const sp = await split(savings);
+      const child = sp.children[0];
+      await db.deleteTransaction({ id: into.id });
+      await db.updateTransaction({ id: out.id, transfer_id: child.id });
+      await db.updateTransaction({
+        id: child.id,
+        transfer_id: out.id,
+        reconciled: true,
+      });
+      const res = await del({ ids: [out.id], allow_reconciled: true });
+      expect(res.isError).toBe(false);
+      expect(await alive(out.id)).toBe(false);
+      expect((await rows({ id: child.id }))[0].transfer_id).toBeNull();
+    });
+  });
+
   it('is refused by scope without delete', async () => {
     const { checking } = await setup({
       scopes: SCOPES.filter(s => s !== 'delete'),
@@ -350,10 +395,8 @@ describe('write_delete_transactions', () => {
     const probe = await setup();
     const [p] = await rows({ account: probe.checking });
     await del({ ids: [p.id] });
-    // The size loggedWrite checks: the logged line without time, call id, phase, schema
-    const { time, call_id, phase, schema, ...checked } = auditLines()[0];
-    void [time, call_id, phase, schema];
-    const size = Buffer.byteLength(JSON.stringify(checked));
+    // The delete's real attempt line is the largest it may be
+    const size = Buffer.byteLength(JSON.stringify(auditLines()[0]));
     await h.close();
 
     const { checking } = await setup({}, { maxAuditLineBytes: size });
@@ -363,6 +406,74 @@ describe('write_delete_transactions', () => {
     expect(res.text).toMatch(/undo/);
     expect(auditLines()).toHaveLength(0);
     expect(await alive(t.id)).toBe(true);
+  });
+
+  it('refuses a duplicate id', async () => {
+    const { checking } = await setup();
+    const [t] = await rows({ account: checking });
+    const res = await del({ ids: [t.id, t.id] });
+    expect(res.isError).toBe(true);
+    expect(res.text).toMatch(/only once/);
+    expect(await alive(t.id)).toBe(true);
+  });
+
+  it('refuses a confirm reused with a different set of ids', async () => {
+    const { checking } = await setup({ confirm_destructive: true });
+    await api.addTransactions(checking, [{ date: '2026-11-02', amount: -100 }]);
+    const [a, b] = await rows({ account: checking });
+    const dry = await del({ ids: [a.id] });
+    const res = await del({ ids: [a.id, b.id], confirm: dry.json.confirm });
+    expect(res.isError).toBe(true);
+    expect(await alive(a.id)).toBe(true);
+    expect(await alive(b.id)).toBe(true);
+  });
+
+  it('reports what a mid-delete failure left: deleted rows and unlinked children', async () => {
+    const { checking, savings } = await setup();
+    await api.addTransactions(checking, [{ date: '2026-11-02', amount: -100 }]);
+    const { out, into } = await transfer(checking, savings);
+    const sp = await split(savings);
+    const child = sp.children[0];
+    await db.deleteTransaction({ id: into.id });
+    await db.updateTransaction({ id: out.id, transfer_id: child.id });
+    await db.updateTransaction({
+      id: child.id,
+      transfer_id: out.id,
+      payee: await transferPayee(checking),
+    });
+    const plain = (await rows({ account: checking, amount: -100 }))[0];
+    const real = api.deleteTransaction;
+    let calls = 0;
+    vi.spyOn(api, 'deleteTransaction').mockImplementation(async id => {
+      calls++;
+      if (calls === 2) throw new Error('engine down');
+      return real(id);
+    });
+    const res = await del({ ids: [out.id, plain.id] });
+    expect(res.isError).toBe(false);
+    expect(res.json.failed).toBeTruthy();
+    expect(res.json.deleted).toEqual([out.id]);
+    // The first call deleted `out` and unlinked the child; the second failed
+    expect(res.json.unlinked).toEqual([child.id]);
+    expect(await alive(out.id)).toBe(false);
+    expect(await alive(plain.id)).toBe(true);
+    const outcome = auditLines().find(l => l.phase === 'outcome');
+    expect(outcome.status).toBe('failed');
+    expect(outcome.applied).toEqual([out.id]);
+  });
+
+  it('reports nothing unlinked when the failure came before the unlink', async () => {
+    const { checking, savings } = await setup();
+    const { out, into } = await transfer(checking, savings);
+    const sp = await split(savings);
+    const child = sp.children[0];
+    await db.deleteTransaction({ id: into.id });
+    await db.updateTransaction({ id: out.id, transfer_id: child.id });
+    await db.updateTransaction({ id: child.id, transfer_id: out.id });
+    vi.spyOn(api, 'deleteTransaction').mockRejectedValue(new Error('down'));
+    const res = await del({ ids: [out.id] });
+    expect(res.json.deleted).toEqual([]);
+    expect(res.json.unlinked).toEqual([]);
   });
 
   it('cannot be undone yet: write_undo refuses it as not undoable', async () => {

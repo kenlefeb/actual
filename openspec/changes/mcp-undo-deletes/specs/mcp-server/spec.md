@@ -23,7 +23,7 @@
 - **THEN** the call is refused by scope naming `delete`, and nothing changed
 
 ### Requirement: Transaction delete refusals
-`write_delete_transactions` SHALL refuse the whole call, changing nothing, when an id is unknown, already deleted or a split child, or when a row or its transfer partner is reconciled and that row does not set `allow_reconciled` with the grant's option, as in "Reconciled rows need an explicit override".
+`write_delete_transactions` SHALL refuse the whole call, changing nothing, when an id is unknown, already deleted or a split child, or when any row it would delete or unlink is reconciled (the row, its transfer partner, a child's transfer partner, or a partner child it would unlink) and that row does not set `allow_reconciled` with the grant's option, as in "Reconciled rows need an explicit override".
 
 #### Scenario: A split child
 - **WHEN** a client passes the id of a split child
@@ -34,8 +34,21 @@
 - **WHEN** a client deletes it without `allow_reconciled`
 - **THEN** the call is refused naming the row as reconciled, and nothing changed
 
+#### Scenario: A child's reconciled partner
+- **GIVEN** a split whose child is a transfer to "Savings", with the Savings side reconciled
+- **WHEN** a client deletes the split parent without `allow_reconciled`
+- **THEN** the call is refused naming the Savings side, and nothing changed
+
+### Requirement: Audit lines name the budget
+Every schema 2 audit line SHALL carry `budget_id`, the sync id of the loaded budget. `write_undo` SHALL refuse, with the unknown-id text, a line without `budget_id` or with one other than the loaded budget's.
+
+#### Scenario: Another budget is loaded
+- **GIVEN** a delete logged while budget X was loaded, and the server now has budget Y
+- **WHEN** the client calls `write_undo` for it
+- **THEN** the call is refused as unknown and nothing changed
+
 ### Requirement: Deletes log what their undo needs
-The attempt line of a transaction, category or group delete SHALL hold, as ids and values only: every row it deletes or unlinks (children, partners and attachments included) with each changed column's before, each `category_mapping` row it re-points with before and after, and each transfer category cell it changes as `category:month` with before and after.
+The attempt line of a transaction, category or group delete SHALL hold, as ids and values only: every row it deletes or unlinks (children, partners, children's partners and attachments included) with its account, payee and date and each changed column's before, each `category_mapping` row it re-points with before and after, and each transfer cell as `category:month` with before and after.
 
 #### Scenario: A category delete with a transfer
 - **GIVEN** "Dining" with budgeted amounts in 2 months and a transfer to "Groceries"
@@ -43,7 +56,7 @@ The attempt line of a transaction, category or group delete SHALL hold, as ids a
 - **THEN** the attempt line names "Dining", its mapping change and the 2 "Groceries" cells with before and after
 
 ### Requirement: A delete must be undoable
-A delete whose attempt line would exceed the audit line limit, or whose transfer cells exceed the cell limit, SHALL be refused with fixed text before any audit line, changing nothing. These are the existing configurable limits; no other limit applies.
+A delete SHALL be refused with fixed text before any audit line, changing nothing, when its attempt line or the attempt line its undo would write would exceed the audit line limit, or its transfer cells exceed the cell limit. These are the existing configurable limits; no other limit applies.
 
 #### Scenario: A group too large to undo
 - **GIVEN** a cell limit of 100
@@ -51,7 +64,7 @@ A delete whose attempt line would exceed the audit line limit, or whose transfer
 - **THEN** the call is refused naming the cell limit, and nothing changed
 
 ### Requirement: Undo of a delete restores the original rows
-`write_undo` of a transaction, category or group delete SHALL restore the rows it deleted with their original ids, put back the columns and mapping rows it changed, then the transfer cells. It needs the delete's scopes, no `confirm`, and counts rows against the row limit and cells against the cell limit.
+`write_undo` of a transaction, category or group delete SHALL sync first, check every conflict, then restore the deleted rows with their original ids, the columns and mapping rows it changed, and the transfer cells in one `undeleteRows` call, all or nothing. It needs the delete's scopes, no `confirm`, and counts rows against the row limit and cells against the cell limit.
 
 #### Scenario: A category comes back
 - **GIVEN** "Dining" with notes, a goal and 12 transactions, deleted with a transfer to "Groceries"
@@ -67,8 +80,19 @@ A delete whose attempt line would exceed the audit line limit, or whose transfer
 - **WHEN** the client undoes a group delete
 - **THEN** the group and all its categories are back with their ids and order
 
+#### Scenario: The handler fails
+- **WHEN** `undeleteRows` throws during an undo of a category delete
+- **THEN** the category is still deleted, the "Groceries" cells are unchanged, and the undo can be retried
+
+### Requirement: Undo of a delete reports what it sees
+After the restore, `write_undo` SHALL read the restored rows and cells back, and the result and outcome line SHALL name any that another device's change already overrode. The result reflects this server's copy of the budget only.
+
+#### Scenario: Overridden by a sync
+- **WHEN** a sync during the undo brings another device's later edit of a restored row
+- **THEN** the result names that row as overridden instead of reporting it restored
+
 ### Requirement: Undo of a delete refuses on any conflict
-`write_undo` of a delete SHALL refuse the whole undo, changing nothing, naming ids and fields, when a logged row is no longer deleted, a live category or group has its name in the same place, a category's group is deleted, a mapping row or transfer cell differs from what the delete left, the transfer category is deleted, an unlinked partner changed, or a restored row is reconciled without `allow_reconciled`.
+`write_undo` of a delete SHALL refuse the whole undo, changing nothing, naming ids and fields, when a logged row is missing or not deleted, a logged value is not an id of its kind, a live category or group has its name in the same place, a category's group or the transfer category is deleted, or a mapping row or transfer cell differs from what the delete left.
 
 #### Scenario: The name is taken
 - **GIVEN** a deleted category "Dining" and a new "Dining" in the same group
@@ -84,6 +108,24 @@ A delete whose attempt line would exceed the audit line limit, or whose transfer
 - **GIVEN** a deleted category whose group was deleted later
 - **WHEN** the client undoes the category delete
 - **THEN** the undo is refused naming the group, and nothing changed
+
+### Requirement: Undo of a transaction delete checks live references
+`write_undo` of a transaction delete SHALL also refuse when a restored row's account is closed or deleted, its payee does not resolve to a live payee, an unlinked partner child is deleted, reconciled or no longer unlinked, or, without `allow_reconciled` and the grant's option, a restored row is reconciled or its account was reconciled after the delete.
+
+#### Scenario: Its account is gone
+- **GIVEN** a deleted transaction whose account was later deleted in the app
+- **WHEN** the client undoes the delete
+- **THEN** the undo is refused naming the account, and nothing changed
+
+#### Scenario: Reconciled since
+- **GIVEN** a deleted transaction whose account was reconciled after the delete
+- **WHEN** the client undoes the delete without `allow_reconciled`
+- **THEN** the undo is refused naming the account as reconciled since, and nothing changed
+
+#### Scenario: Its partner child is gone
+- **GIVEN** a deleted transfer whose partner split child was unlinked, and the child's split deleted later
+- **WHEN** the client undoes the delete
+- **THEN** the undo is refused naming the child, and nothing changed
 
 ## MODIFIED Requirements
 

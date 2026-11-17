@@ -12,7 +12,7 @@ The Architect's Explore (sc-4692 comment 4913) found that every delete in scope 
 - **Delete audit lines carry what undo needs**: transaction, category and group deletes log every id they tombstone, the mapping rows and transfer partner fields they change, and the transfer category's budget cells before and after. Ids and values only.
 - **A delete must be undoable**: a delete whose undo record would not fit the audit line limit or the cell limit is refused before any audit line. No new limit.
 - **`write_undo` reverses deletes** of transactions, categories and category groups by restoring the original rows, through a new fork handler, and puts the transfer category's budget cells back. It refuses the whole undo on any conflict.
-- **Fork handler `undelete-rows`** with a typed `@actual-app/api` method `undeleteRows`: resets `tombstone` and a few allowlisted columns for named ids of allowlisted tables, in one batch, without rules or transfer hooks.
+- **Fork handler `undelete-rows`** with a typed `@actual-app/api` method `undeleteRows`: un-deletes named deleted rows of fixed tables of the loaded budget, sets a few fixed columns only on those rows (or the partner the delete unlinked), and puts back the transfer cells, all in one batch, without rules or transfer hooks. A check mode reads deleted rows for the planner.
 
 Mobile scope: none. The MCP server and the API have no UI, so this change is exempt from the desktop and mobile rule.
 
@@ -26,8 +26,8 @@ None.
 
 ### Modified Capabilities
 
-- `mcp-server`: new requirements "Delete transactions", "Transaction delete refusals", "Deletes log what their undo needs", "A delete must be undoable", "Undo of a delete restores the original rows" and "Undo of a delete refuses on any conflict"; "What undo reverses" is modified.
-- `api-fork-handlers`: new requirement "Undelete rows".
+- `mcp-server`: new requirements "Delete transactions", "Transaction delete refusals", "Audit lines name the budget", "Deletes log what their undo needs", "A delete must be undoable", "Undo of a delete restores the original rows", "Undo of a delete reports what it sees", "Undo of a delete refuses on any conflict" and "Undo of a transaction delete checks live references"; "What undo reverses" is modified.
+- `api-fork-handlers`: new requirements "Undelete rows", "Undelete sets only fixed columns" and "Undelete restores rows and cells together".
 
 ## Impact
 

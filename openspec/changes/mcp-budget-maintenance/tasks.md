@@ -15,8 +15,8 @@ Backlog stories to file before the PRs merge: undo of templates (goals and the a
 
 ### 2A. Carryover and hold
 
-- [ ] 2.1 `write_set_budget_carryover`, `write_hold_budget_for_next_month`, `write_reset_budget_hold` (`budget:write`) (design D5). Failing tests first: scope refusal, tracking budget refuses hold, hold with no to-budget says nothing held, clamped hold reads back, carryover audit names the months, before and after audited, not undoable
-- [ ] 2.2 `coverage.json` lines for the three API methods, `README.md`, typecheck, lint, tests
+- [x] 2.1 `write_set_budget_carryover`, `write_hold_budget_for_next_month`, `write_reset_budget_hold` (`budget:write`) (design D5). Failing tests first: scope refusal, tracking budget refuses hold, hold with no to-budget says nothing held, clamped hold reads back, carryover audit names the months, before and after audited, not undoable
+- [x] 2.2 `coverage.json` lines for the three API methods, `README.md`, typecheck, lint, tests
 
 ### 2B. Copy and average
 

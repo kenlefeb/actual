@@ -351,21 +351,28 @@ export function registerBudgetWriteTools(
         throw new Refusal('amount must be above 0. Nothing changed.');
       }
       await requireEnvelope();
-      const before = await heldFor(m);
+      const { forNextMonth, toBudget } = await api.getBudgetMonth(m);
+      const before = Number(forNextMonth ?? 0);
+      // The engine's rule: it adds at most the to-budget, and nothing when that is not above 0
+      const expected =
+        Number(toBudget) > 0
+          ? before + Math.min(amount, Number(toBudget))
+          : before;
       let after = before;
       return loggedWrite(
         auditLog,
         'write_hold_budget_for_next_month',
         {
           ids: [m],
-          changes: [
-            { id: m, field: `hold:${m}`, before, after: before + amount },
-          ],
+          changes: [{ id: m, field: `hold:${m}`, before, after: expected }],
         },
         async () => {
           await api.holdBudgetForNextMonth(m, amount);
           after = await heldFor(m);
-          return { applied: after === before ? [] : [m] };
+          return {
+            applied: after === before ? [] : [m],
+            detail: { hold_after: after },
+          };
         },
         async () => ({
           held: after !== before,

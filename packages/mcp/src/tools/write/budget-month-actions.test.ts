@@ -124,6 +124,50 @@ describe('Budget hold', () => {
       amount: 500000,
     });
     expect(res.json).toMatchObject({ held: true, for_next_month: 100000 });
+    const [attempt, outcome] = lines().filter(
+      l => l.tool === 'write_hold_budget_for_next_month',
+    );
+    expect(attempt.changes[0]).toMatchObject({ before: 0, after: 100000 });
+    expect(outcome).toMatchObject({ applied: ['2026-02'], hold_after: 100000 });
+  });
+
+  it('Stacks a second hold the way the engine does', async () => {
+    await start();
+    await fund(100000);
+    await h.call('write_hold_budget_for_next_month', {
+      month: '2026-02',
+      amount: 30000,
+    });
+    const res = await h.call('write_hold_budget_for_next_month', {
+      month: '2026-02',
+      amount: 20000,
+    });
+    expect(res.json).toMatchObject({ held: true, for_next_month: 50000 });
+    const attempts = lines().filter(
+      l =>
+        l.tool === 'write_hold_budget_for_next_month' && l.phase === 'attempt',
+    );
+    expect(attempts[1].changes[0]).toMatchObject({
+      before: 30000,
+      after: 50000,
+    });
+  });
+
+  it('Holds nothing when to-budget is negative', async () => {
+    await start();
+    await fund(100000);
+    await api.setBudgetAmount('2026-02', await rent(), 150000);
+    expect((await api.getBudgetMonth('2026-02')).toBudget).toBeLessThan(0);
+    const res = await h.call('write_hold_budget_for_next_month', {
+      month: '2026-02',
+      amount: 10000,
+    });
+    expect(res.json).toMatchObject({ held: false, for_next_month: 0 });
+    const [attempt, outcome] = lines().filter(
+      l => l.tool === 'write_hold_budget_for_next_month',
+    );
+    expect(attempt.changes[0]).toMatchObject({ before: 0, after: 0 });
+    expect(outcome).toMatchObject({ applied: [], hold_after: 0 });
   });
 
   it('Says nothing was held when there is nothing to budget', async () => {
@@ -135,6 +179,11 @@ describe('Budget hold', () => {
     expect(res.isError, res.text).toBe(false);
     expect(res.json).toMatchObject({ held: false, for_next_month: 0 });
     expect((await api.getBudgetMonth('2026-02')).forNextMonth).toBe(0);
+    const [attempt, outcome] = lines().filter(
+      l => l.tool === 'write_hold_budget_for_next_month',
+    );
+    expect(attempt.changes[0]).toMatchObject({ before: 0, after: 0 });
+    expect(outcome).toMatchObject({ applied: [], hold_after: 0 });
   });
 
   it('Refuses in a tracking budget', async () => {
@@ -169,5 +218,15 @@ describe('Budget hold', () => {
     });
     const undo = await h.call('write_undo', { write_id: w.json.write_id });
     expect(undo.isError).toBe(true);
+    expect(undo.text).toContain('cannot be undone');
+  });
+
+  it('Reset is not undoable', async () => {
+    await start();
+    const w = await h.call('write_reset_budget_hold', { month: '2026-02' });
+    expect(w.isError, w.text).toBe(false);
+    const undo = await h.call('write_undo', { write_id: w.json.write_id });
+    expect(undo.isError).toBe(true);
+    expect(undo.text).toContain('cannot be undone');
   });
 });

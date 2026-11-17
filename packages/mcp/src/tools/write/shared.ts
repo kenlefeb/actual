@@ -181,7 +181,12 @@ export async function loggedWrite<R extends object>(
   write: (callId: string) => Promise<WriteOutcome>,
   result: (outcome: WriteOutcome) => Promise<R>,
   /** `destructive` is per call (an undo deletes only when it reverses a create); `undoes` marks an undo's lines. */
-  options: { destructive?: boolean; undoes?: string } = {},
+  options: {
+    destructive?: boolean;
+    undoes?: string;
+    /** Extra text fields for a dry run only (names beside ids); not bound by the confirm. */
+    preview?: Record<string, unknown>;
+  } = {},
 ): Promise<
   | ((R | { applied: string[] | null; read_back: string }) & {
       audit_outcome?: 'not-logged';
@@ -211,7 +216,7 @@ export async function loggedWrite<R extends object>(
           ids: entry.ids,
           confirm: `${issued}.${confirmMac(issued, log, tool, entry)}`,
         },
-        { changes: entry.changes },
+        { changes: entry.changes, ...options.preview },
       );
     }
     checkConfirm(given, log, tool, entry);
@@ -273,6 +278,15 @@ export async function loggedWrite<R extends object>(
   }
   const named = { ...out, write_id: call_id };
   return logged ? named : { ...named, audit_outcome: 'not-logged' as const };
+}
+
+/** Whether `loggedWrite` will answer this call with a dry run and a `confirm` instead of writing. */
+export function isDryRun(log: WriteLog, destructive = log.destructive) {
+  return (
+    destructive &&
+    log.grant.confirm_destructive &&
+    typeof log.args.confirm !== 'string'
+  );
 }
 
 /** Refuses (fixed text, before any audit line) more rows than this connection's row limit. */

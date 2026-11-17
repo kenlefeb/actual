@@ -2,13 +2,16 @@ import * as api from '@actual-app/api';
 import { z } from 'zod';
 
 import type { Limits } from '#limits';
+import { ENVELOPE_BYTES } from '#paging';
 import { Refusal } from '#refusal';
 import { withText } from '#sanitize';
 import { moneyAs } from '#tools/read/shared';
 
-import type { RegisterWriteTool } from './shared';
+import type { RegisterWriteTool, WriteLog, WriteOutcome } from './shared';
 import {
+  confirm,
   id,
+  isDryRun,
   loggedWrite,
   requireAmount,
   requireCells,
@@ -76,6 +79,208 @@ function moneyResult(m: string, before: number, after: number, note: string) {
 
 async function heldFor(m: string) {
   return Number((await api.getBudgetMonth(m)).forNextMonth ?? 0);
+}
+
+/** One budget cell to write: its category and month, the amount, and the amount read just before. */
+type Cell = {
+  month: string;
+  category_id: string;
+  amount: number;
+  before: number;
+  key: string;
+};
+
+const cellKey = (c: { category_id: string; month: string }) =>
+  `${c.category_id}:${c.month}`;
+
+/**
+ * Writes cells in order inside the caller's write lock, each re-checked
+ * against its audited before, and stops at the first cell that changed or that
+ * the engine fails on (design D3, D4). Not inside api.batchBudgetUpdates: a
+ * batch hides its own writes from reads until it ends, which would make the
+ * re-check of the next cell meaningless. Each cell is read, then written.
+ */
+async function writeCells(
+  plan: Cell[],
+  log: WriteLog,
+  tool: string,
+  callId: string,
+): Promise<WriteOutcome> {
+  const applied: string[] = [];
+  let failed: string | undefined;
+  let reason = '';
+  let maybe: string | undefined;
+  for (const c of plan) {
+    try {
+      // The audited before must still hold when its cell is written
+      const now = await budgeted(c.month, c.category_id);
+      if (now.amount !== c.before) {
+        failed = c.key;
+        reason = 'changed';
+        break;
+      }
+      await api.setBudgetAmount(c.month, c.category_id, c.amount);
+      applied.push(c.key);
+    } catch (error) {
+      stderrLine(log, `${tool} failed (call ${callId})`, error);
+      failed = c.key;
+      reason = 'engine';
+      // The engine may have committed before it threw: read the cell back
+      try {
+        const now = await budgeted(c.month, c.category_id);
+        if (now.amount === c.amount && c.amount !== c.before) {
+          applied.push(c.key);
+          reason = 'engine-written';
+        }
+      } catch {
+        maybe = c.key;
+      }
+      break;
+    }
+  }
+  return {
+    applied,
+    ...(failed
+      ? {
+          failed,
+          detail: {
+            reason,
+            ...(maybe ? { maybe_written: maybe } : {}),
+          },
+        }
+      : {}),
+  };
+}
+
+/** What a cell write returns: each cell's before and after, and on a stop the applied, failed and not-written cells. */
+async function cellsResult(plan: Cell[], outcome: WriteOutcome) {
+  const after = new Map<string, Awaited<ReturnType<typeof budgetedMonth>>>();
+  try {
+    for (const m of new Set(plan.map(c => c.month))) {
+      after.set(m, await budgetedMonth(m));
+    }
+  } catch {
+    // The failure report below matters more than the read-back
+    after.clear();
+  }
+  const done = new Set(outcome.applied ?? []);
+  return {
+    cells: plan.map(c =>
+      withText(
+        {
+          month: c.month,
+          category_id: c.category_id,
+          ...moneyAs('before', c.before),
+          ...(after.size > 0
+            ? moneyAs(
+                'after',
+                after.get(c.month)?.get(c.category_id)?.amount ?? c.amount,
+              )
+            : {}),
+        },
+        { category: after.get(c.month)?.get(c.category_id)?.name },
+      ),
+    ),
+    applied: outcome.applied ?? [],
+    ...(outcome.failed
+      ? {
+          failed: outcome.failed,
+          not_written: plan
+            .map(c => c.key)
+            .filter(k => !done.has(k) && k !== outcome.failed),
+          ...(outcome.detail?.maybe_written
+            ? { maybe_written: outcome.detail.maybe_written }
+            : {}),
+          failure:
+            outcome.detail?.reason === 'changed'
+              ? 'That cell changed since it was read, so it and the cells after it were not written. Cells listed as applied were written; write_undo restores them.'
+              : outcome.detail?.reason === 'engine-written'
+                ? 'The engine reported an error on that cell after writing it, so it is counted as applied; the cells after it were not written. write_undo restores the applied cells.'
+                : outcome.detail?.maybe_written
+                  ? 'The engine failed on that cell and it could not be read back, so it may have been written; check it by hand. The cells after it were not written, and this write cannot be undone.'
+                  : 'The engine failed on that cell, so it and the cells after it were not written. Cells listed as applied were written; write_undo restores them.',
+        }
+      : {}),
+  };
+}
+
+/**
+ * A whole-month action (copy, average) from its plan: the app's own cells,
+ * only those that change counted against the cell limit, and under
+ * `confirm_destructive` a dry run that lists every cell or, when they do not
+ * fit one response, is refused with no `confirm` (design D4).
+ */
+async function runMonthAction(
+  log: WriteLog,
+  tool: string,
+  month: string,
+  extra: Record<string, unknown>,
+  planned: Array<{ categoryId: string; before: number; after: number }>,
+) {
+  requireCells(log, planned.length);
+  if (planned.length === 0) {
+    return { month, changed: 0, cells: [], note: 'No cell would change.' };
+  }
+  const plan: Cell[] = planned.map(c => ({
+    month,
+    category_id: c.categoryId,
+    amount: c.after,
+    before: c.before,
+    key: cellKey({ category_id: c.categoryId, month }),
+  }));
+  const entry = {
+    ids: plan.map(c => c.key),
+    changes: plan.map(c => ({
+      id: c.category_id,
+      field: `budgeted:${month}`,
+      before: c.before,
+      after: c.amount,
+    })),
+    month,
+    ...extra,
+  };
+  // Names beside each cell, so a person can read the dry run
+  const names = new Map<string, { category: string; group: string }>();
+  for (const g of (await api.getBudgetMonth(month)).categoryGroups) {
+    for (const c of g.categories ?? []) {
+      names.set(String(c.id), {
+        category: String(c.name),
+        group: String(g.name),
+      });
+    }
+  }
+  const cells = plan.map(c => ({
+    cell: c.key,
+    category: names.get(c.category_id)?.category,
+    group: names.get(c.category_id)?.group,
+    before: c.before,
+    after: c.amount,
+  }));
+  if (
+    isDryRun(log) &&
+    Buffer.byteLength(
+      JSON.stringify({ ids: entry.ids, changes: entry.changes, cells }),
+    ) +
+      ENVELOPE_BYTES >
+      log.limits.maxResponseBytes
+  ) {
+    throw new Refusal(
+      `The dry run would list ${plan.length} cells, more than fits in one response (${log.limits.maxResponseBytes} bytes), and it is never shortened, so no confirm is issued. Nothing changed. Set the cells in smaller batches with write_set_budget_amounts.`,
+    );
+  }
+  return loggedWrite(
+    log,
+    tool,
+    entry,
+    callId => writeCells(plan, log, tool, callId),
+    async outcome => ({
+      month,
+      ...extra,
+      changed: plan.length,
+      ...(await cellsResult(plan, outcome)),
+    }),
+    { preview: { cells } },
+  );
 }
 
 export function registerBudgetWriteTools(
@@ -149,9 +354,7 @@ export function registerBudgetWriteTools(
     },
     async ({ cells }, auditLog) => {
       requireCells(auditLog, cells.length);
-      const key = (c: { category_id: string; month: string }) =>
-        `${c.category_id}:${c.month}`;
-      if (new Set(cells.map(key)).size !== cells.length) {
+      if (new Set(cells.map(cellKey)).size !== cells.length) {
         throw new Refusal(
           'A category and month may appear only once. Nothing changed.',
         );
@@ -170,7 +373,7 @@ export function registerBudgetWriteTools(
       const plan = cells.map(c => {
         const before = months.get(c.month)!.get(c.category_id);
         if (!before) throw new Refusal(NOT_A_CATEGORY);
-        return { ...c, key: key(c), before: before.amount };
+        return { ...c, key: cellKey(c), before: before.amount };
       });
 
       return loggedWrite(
@@ -185,114 +388,50 @@ export function registerBudgetWriteTools(
             after: c.amount,
           })),
         },
-        async callId => {
-          const applied: string[] = [];
-          let failed: string | undefined;
-          let reason = '';
-          let maybe: string | undefined;
-          // Not inside api.batchBudgetUpdates: a batch hides its own writes
-          // from reads until it ends, which would make the re-check of the
-          // next cell meaningless. Each cell is read, then written.
-          for (const c of plan) {
-            try {
-              // The audited before must still hold when its cell is written
-              const now = await budgeted(c.month, c.category_id);
-              if (now.amount !== c.before) {
-                failed = c.key;
-                reason = 'changed';
-                break;
-              }
-              await api.setBudgetAmount(c.month, c.category_id, c.amount);
-              applied.push(c.key);
-            } catch (error) {
-              stderrLine(
-                auditLog,
-                `write_set_budget_amounts failed (call ${callId})`,
-                error,
-              );
-              failed = c.key;
-              reason = 'engine';
-              // The engine may have committed before it threw: read the cell back
-              try {
-                const now = await budgeted(c.month, c.category_id);
-                if (now.amount === c.amount && c.amount !== c.before) {
-                  applied.push(c.key);
-                  reason = 'engine-written';
-                }
-              } catch {
-                maybe = c.key;
-              }
-              break;
-            }
-          }
-          return {
-            applied,
-            ...(failed
-              ? {
-                  failed,
-                  detail: {
-                    reason,
-                    ...(maybe ? { maybe_written: maybe } : {}),
-                  },
-                }
-              : {}),
-          };
-        },
-        async outcome => {
-          const after = new Map<
-            string,
-            Awaited<ReturnType<typeof budgetedMonth>>
-          >();
-          try {
-            for (const m of months.keys()) after.set(m, await budgetedMonth(m));
-          } catch {
-            // The failure report below matters more than the read-back
-            after.clear();
-          }
-          const done = new Set(outcome.applied ?? []);
-          return {
-            cells: plan.map(c =>
-              withText(
-                {
-                  month: c.month,
-                  category_id: c.category_id,
-                  ...moneyAs('before', c.before),
-                  ...(after.size > 0
-                    ? moneyAs(
-                        'after',
-                        after.get(c.month)?.get(c.category_id)?.amount ??
-                          c.amount,
-                      )
-                    : {}),
-                },
-                { category: after.get(c.month)?.get(c.category_id)?.name },
-              ),
-            ),
-            applied: outcome.applied ?? [],
-            ...(outcome.failed
-              ? {
-                  failed: outcome.failed,
-                  not_written: plan
-                    .map(c => c.key)
-                    .filter(k => !done.has(k) && k !== outcome.failed),
-                  ...(outcome.detail?.maybe_written
-                    ? { maybe_written: outcome.detail.maybe_written }
-                    : {}),
-                  failure:
-                    outcome.detail?.reason === 'changed'
-                      ? 'That cell changed since it was read, so it and the cells after it were not written. Cells listed as applied were written; write_undo restores them.'
-                      : outcome.detail?.reason === 'engine-written'
-                        ? 'The engine reported an error on that cell after writing it, so it is counted as applied; the cells after it were not written. write_undo restores the applied cells.'
-                        : outcome.detail?.maybe_written
-                          ? 'The engine failed on that cell and it could not be read back, so it may have been written; check it by hand. The cells after it were not written, and this write cannot be undone.'
-                          : 'The engine failed on that cell, so it and the cells after it were not written. Cells listed as applied were written; write_undo restores them.',
-                }
-              : {}),
-          };
-        },
+        callId =>
+          writeCells(plan, auditLog, 'write_set_budget_amounts', callId),
+        outcome => cellsResult(plan, outcome),
       );
     },
     { scopes: ['budget:write'] },
+  );
+
+  tool(
+    'write_copy_budget_month',
+    `Copy last month's budgeted amounts into a month (YYYY-MM), as the budget menu's copy does: every category that is not hidden (and, in an envelope budget, not income) gets the previous month's amount. Only cells that would change are written and counted against the cell limit (${limits.maxCells} by default). When this connection must confirm destructive calls, the first call changes nothing and lists every cell (category_id:month, before, after) with a \`confirm\`; call again with it within 5 minutes. A dry run too large to list in one response is refused with no confirm. Cells are re-checked as they are written, and a stop names applied, failed and not_written cells. Cells are named category_id:month in the audit log. write_undo restores the applied cells.`,
+    { month, confirm },
+    async ({ month: m }, auditLog) => {
+      requireMonth(m);
+      return runMonthAction(
+        auditLog,
+        'write_copy_budget_month',
+        m,
+        {},
+        await api.planCopyBudgetMonth(m),
+      );
+    },
+    { scopes: ['budget:write'], destructive: true },
+  );
+
+  tool(
+    'write_set_budget_to_average',
+    `Set a month's (YYYY-MM) budgeted amounts to the average spending of the last 3, 6 or 12 months, as the budget menu's average does: every category that is not hidden (and, in an envelope budget, not income), expenses as positive budgets. Only cells that would change are written and counted against the cell limit (${limits.maxCells} by default). When this connection must confirm destructive calls, the first call changes nothing and lists every cell (category_id:month, before, after) with a \`confirm\`; call again with it within 5 minutes. A dry run too large to list in one response is refused with no confirm. Cells are re-checked as they are written, and a stop names applied, failed and not_written cells. Cells are named category_id:month in the audit log. write_undo restores the applied cells.`,
+    {
+      month,
+      months: z.union([z.literal(3), z.literal(6), z.literal(12)]),
+      confirm,
+    },
+    async ({ month: m, months }, auditLog) => {
+      requireMonth(m);
+      return runMonthAction(
+        auditLog,
+        'write_set_budget_to_average',
+        m,
+        { average_months: months },
+        await api.planBudgetToAverage(m, months),
+      );
+    },
+    { scopes: ['budget:write'], destructive: true },
   );
 
   tool(

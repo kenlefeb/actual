@@ -161,6 +161,30 @@
   "api/budget-reset-hold": {
     "tool": "write_reset_budget_hold"
   },
+  "api/budget-copy-month-plan": {
+    "tool": "write_copy_budget_month"
+  },
+  "planCopyBudgetMonth": {
+    "tool": "write_copy_budget_month"
+  },
+  "api/budget-copy-month": {
+    "tool": "write_copy_budget_month"
+  },
+  "copyBudgetMonth": {
+    "tool": "write_copy_budget_month"
+  },
+  "api/budget-average-plan": {
+    "tool": "write_set_budget_to_average"
+  },
+  "planBudgetToAverage": {
+    "tool": "write_set_budget_to_average"
+  },
+  "api/budget-average": {
+    "tool": "write_set_budget_to_average"
+  },
+  "setBudgetToAverage": {
+    "tool": "write_set_budget_to_average"
+  },
   "amazon-orders-parse": {
     "skip": "Reads a file the user picked in the app (sc-926); the export stays on the device"
   },

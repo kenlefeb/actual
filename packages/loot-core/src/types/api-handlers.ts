@@ -15,6 +15,7 @@ import type {
   APIScheduleEntity,
   APITagEntity,
 } from '#server/api-models';
+import type { BudgetCellPlan } from '#server/budget/month-plans';
 import type { BudgetFileHandlers } from '#server/budgetfiles/app';
 import type { batchUpdateTransactions } from '#server/transactions';
 import type { QueryState } from '#shared/query';
@@ -100,6 +101,22 @@ export type ApiHandlers = {
   }) => Promise<boolean>;
 
   'api/budget-reset-hold': (arg: { month: string }) => Promise<void>;
+
+  'api/budget-copy-month-plan': (arg: {
+    month: string;
+  }) => Promise<BudgetCellPlan[]>;
+
+  'api/budget-copy-month': (arg: { month: string }) => Promise<void>;
+
+  'api/budget-average-plan': (arg: {
+    month: string;
+    months: 3 | 6 | 12;
+  }) => Promise<BudgetCellPlan[]>;
+
+  'api/budget-average': (arg: {
+    month: string;
+    months: 3 | 6 | 12;
+  }) => Promise<void>;
 
   'api/transactions-export': (arg: {
     transactions: TransactionEntity[];

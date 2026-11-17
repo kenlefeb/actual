@@ -1,4 +1,5 @@
 import type { Grant } from './grants';
+import { MAX_RESPONSE_BYTES } from './paging';
 
 type Env = Record<string, string | undefined>;
 
@@ -20,6 +21,9 @@ export type Limits = {
   auditTailBytes: number;
   /** The most one write's attempt line may hold, so one write cannot fill the tail. */
   maxAuditLineBytes: number;
+  /** The most a dry run's response may hold; a larger one is refused, never shortened. */
+  maxResponseBytes: number;
+  responseBytesCeiling: number;
 };
 
 export const DEFAULT_LIMITS: Limits = {
@@ -31,6 +35,8 @@ export const DEFAULT_LIMITS: Limits = {
   deleteCeiling: 1000,
   auditTailBytes: 2 * 1024 * 1024,
   maxAuditLineBytes: 512 * 1024,
+  maxResponseBytes: MAX_RESPONSE_BYTES,
+  responseBytesCeiling: 1_000_000,
 };
 
 // What a cell or a row costs in an audit line, with margin (a cell is about
@@ -72,6 +78,14 @@ export function loadLimits(env: Env, prefix: string): Limits {
     ),
     auditTailBytes: read('AUDIT_TAIL_BYTES', DEFAULT_LIMITS.auditTailBytes),
     maxAuditLineBytes: 0,
+    maxResponseBytes: read(
+      'MAX_RESPONSE_BYTES',
+      DEFAULT_LIMITS.maxResponseBytes,
+    ),
+    responseBytesCeiling: read(
+      'MAX_RESPONSE_BYTES_CEILING',
+      DEFAULT_LIMITS.responseBytesCeiling,
+    ),
   };
   // A quarter of the tail by default, so 4 writes fit
   limits.maxAuditLineBytes = read(
@@ -87,6 +101,11 @@ export function loadLimits(env: Env, prefix: string): Limits {
     ['MAX_ROWS', limits.maxRows, limits.rowsCeiling],
     ['MAX_CELLS', limits.maxCells, limits.cellsCeiling],
     ['MAX_DELETE_ROWS', limits.maxDeleteRows, limits.deleteCeiling],
+    [
+      'MAX_RESPONSE_BYTES',
+      limits.maxResponseBytes,
+      limits.responseBytesCeiling,
+    ],
   ] as const;
   for (const [suffix, limit, ceiling] of pairs) {
     if (limit > ceiling) {

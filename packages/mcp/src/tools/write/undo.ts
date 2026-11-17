@@ -36,6 +36,8 @@ const UNDOABLE: Record<string, Scope[]> = {
   write_create_transactions: ['transactions:write'],
   write_set_budget_amount: ['budget:write'],
   write_set_budget_amounts: ['budget:write'],
+  write_copy_budget_month: ['budget:write'],
+  write_set_budget_to_average: ['budget:write'],
   write_update_category: ['structure:write'],
   write_update_category_group: ['structure:write'],
   write_create_category: ['structure:write'],
@@ -43,7 +45,12 @@ const UNDOABLE: Record<string, Scope[]> = {
 };
 
 /** Tools whose writes are budget cells (`category:month`), undone against the cell limit. */
-const CELL_TOOLS = ['write_set_budget_amount', 'write_set_budget_amounts'];
+const CELL_TOOLS = [
+  'write_set_budget_amount',
+  'write_set_budget_amounts',
+  'write_copy_budget_month',
+  'write_set_budget_to_average',
+];
 
 /** Transaction fields an undo may put back. */
 const TRANSACTION_FIELDS = [
@@ -534,6 +541,8 @@ const PLANNERS: Record<string, (ctx: Ctx) => Promise<Plan>> = {
   write_create_transactions: planCreateTransactions,
   write_set_budget_amount: planBudgetCells,
   write_set_budget_amounts: planBudgetCells,
+  write_copy_budget_month: planBudgetCells,
+  write_set_budget_to_average: planBudgetCells,
   write_update_category: ctx => planCategoryUpdate(ctx, false),
   write_update_category_group: ctx => planCategoryUpdate(ctx, true),
   write_create_category: ctx => planCategoryCreate(ctx, false),
@@ -588,7 +597,7 @@ export function registerUndoTools(
 
   write(
     'write_undo',
-    "Undo one of this identity's earlier writes by its write_id (from the write's result or list_writes): transaction creates and updates, budget amounts, and category and group creates and updates. It restores the logged values and is refused, changing nothing, if any of them changed since or a created row is in use. A write can be undone once. Reversing a write needs the scopes that write needed. Moves, paycheck skips, deletes and account tools are not undoable.",
+    "Undo one of this identity's earlier writes by its write_id (from the write's result or list_writes): transaction creates and updates, budget amounts (also copy last month and set to average), and category and group creates and updates. It restores the logged values and is refused, changing nothing, if any of them changed since or a created row is in use. A write can be undone once. Reversing a write needs the scopes that write needed. Moves, paycheck skips, deletes and account tools are not undoable.",
     {
       write_id: id,
       allow_reconciled: z.boolean().optional(),

@@ -7,6 +7,7 @@ import { loadConfig } from '#config';
 
 const WRITE_TOOLS = [
   'write_close_account',
+  'write_copy_budget_month',
   'write_create_account',
   'write_create_account_group',
   'write_create_category',
@@ -26,6 +27,7 @@ const WRITE_TOOLS = [
   'write_set_budget_amount',
   'write_set_budget_amounts',
   'write_set_budget_carryover',
+  'write_set_budget_to_average',
   'write_skip_paycheck',
   'write_undo',
   'write_update_account',

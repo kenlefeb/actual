@@ -1884,6 +1884,154 @@ describe('API fork handlers', () => {
     });
   });
 
+  // The plan lists the cells the app's own action then changes, and writes nothing
+  describe.each(['envelope', 'tracking'])(
+    'Copy last month and set to average (%s)',
+    budgetType => {
+      async function budgeted() {
+        const out = new Map<string, number>();
+        for (const m of await api.getBudgetMonths()) {
+          const { categoryGroups } = await api.getBudgetMonth(m);
+          for (const c of categoryGroups.flatMap(g => g.categories ?? [])) {
+            out.set(`${String(c.id)}:${m}`, Number(c.budgeted ?? 0));
+          }
+        }
+        return out;
+      }
+
+      /** The cells that differ between two snapshots, the plan's shape. */
+      function diff(before: Map<string, number>, after: Map<string, number>) {
+        return [...after]
+          .filter(([key, value]) => value !== (before.get(key) ?? 0))
+          .map(([key, value]) => {
+            const [categoryId, month] = key.split(':');
+            return {
+              categoryId,
+              month,
+              before: before.get(key) ?? 0,
+              after: value,
+            };
+          });
+      }
+
+      const byCell = (
+        a: { categoryId: string; month: string },
+        b: { categoryId: string; month: string },
+      ) =>
+        `${a.categoryId}:${a.month}`.localeCompare(
+          `${b.categoryId}:${b.month}`,
+        );
+
+      async function fixture() {
+        await api.loadBudget(budgetName);
+        await api.internal!.send('preferences/save', {
+          id: 'budgetType',
+          value: budgetType,
+        });
+        const months = await api.getBudgetMonths();
+        const target = months[months.length - 1];
+        const prior = months.slice(-13, -1);
+        const group = await api.createCategoryGroup({ name: 'X' });
+        const hiddenGroup = await api.createCategoryGroup({ name: 'H' });
+        const income = (await api.getCategoryGroups()).find(g => g.is_income)!;
+        const make = (name: string, group_id: string, is_income = false) =>
+          api.createCategory({ name, group_id, is_income } as never);
+        const a = await make('A', group);
+        const b = await make('B', group);
+        const hidden = await make('Hid', hiddenGroup);
+        const pay = await make('Pay', income.id, true);
+        await api.updateCategoryGroup(hiddenGroup, { hidden: true });
+        const account = await api.createAccount({ name: 'Checking' }, 0);
+        await api.addTransactions(
+          account,
+          prior.flatMap((m, i) => [
+            { date: `${m}-05`, amount: -(i + 1) * 1000, category: a },
+            { date: `${m}-06`, amount: -(i % 3) * 100, category: b },
+            { date: `${m}-07`, amount: (i + 1) * 5000, category: pay },
+            { date: `${m}-08`, amount: -700, category: hidden },
+          ]),
+        );
+        const last = prior[prior.length - 1];
+        for (const [c, v] of [
+          [a, 4000],
+          [b, 700],
+          [hidden, 123],
+          [pay, 9000],
+        ] as const) {
+          await api.setBudgetAmount(last, c, v);
+        }
+        await api.setBudgetAmount(target, a, 4000);
+        await api.setBudgetAmount(target, b, 5);
+        return { target, last, a, b, hidden, pay };
+      }
+
+      test('Copy: the plan writes nothing and equals the action', async () => {
+        const { target, a, b, hidden, pay } = await fixture();
+        const before = await budgeted();
+
+        const plan = await api.planCopyBudgetMonth(target);
+        expect(await budgeted()).toEqual(before);
+
+        await api.copyBudgetMonth(target);
+        expect([...plan].sort(byCell)).toEqual(
+          diff(before, await budgeted()).sort(byCell),
+        );
+        const ids = plan.map(c => c.categoryId);
+        // A already holds its copied value; hidden categories are skipped; income only in tracking
+        expect(ids).not.toContain(a);
+        expect(ids).not.toContain(hidden);
+        expect(ids).toContain(b);
+        expect(ids.includes(pay)).toBe(budgetType === 'tracking');
+        expect(plan.find(c => c.categoryId === b)).toEqual({
+          categoryId: b,
+          month: target,
+          before: 5,
+          after: 700,
+        });
+      });
+
+      test.each([3, 6, 12] as const)(
+        'Average of %i months: the plan equals the action',
+        async months => {
+          const { target, a, b, hidden, pay } = await fixture();
+          // Distinct current values so every averaged cell differs
+          for (const c of [a, b, pay]) await api.setBudgetAmount(target, c, 1);
+          const before = await budgeted();
+
+          const plan = await api.planBudgetToAverage(target, months);
+          expect(await budgeted()).toEqual(before);
+
+          await api.setBudgetToAverage(target, months);
+          expect([...plan].sort(byCell)).toEqual(
+            diff(before, await budgeted()).sort(byCell),
+          );
+          const ids = plan.map(c => c.categoryId);
+          expect(ids).toContain(a);
+          expect(ids).not.toContain(hidden);
+          expect(ids.includes(pay)).toBe(budgetType === 'tracking');
+          // Expenses become positive budgets, from negative spending
+          expect(plan.find(c => c.categoryId === a)!.after).toBeGreaterThan(0);
+        },
+      );
+
+      test('Bad input is the handler error', async () => {
+        const { target } = await fixture();
+        await expect(api.planCopyBudgetMonth('soon')).rejects.toThrow(
+          'Invalid month format',
+        );
+        await expect(api.copyBudgetMonth('2999-01')).rejects.toThrow(
+          'No budget exists for month',
+        );
+        await expect(
+          api.planBudgetToAverage(target, 5 as never),
+        ).rejects.toThrow('3, 6 or 12');
+        await expect(
+          api.setBudgetToAverage(target, 4 as never),
+        ).rejects.toThrow('3, 6 or 12');
+      });
+    },
+  );
+
   test("A split's parent and children update together", async () => {
     await api.loadBudget(budgetName);
     const account = await api.createAccount({ name: 'Checking' }, 0);
@@ -1966,6 +2114,10 @@ const FORK_HANDLER_METHODS = {
   'api/category-group-move': 'moveCategoryGroup',
   'api/category-usage-get': 'getCategoryUsage',
   'api/transactions-update': 'updateTransactions',
+  'api/budget-copy-month-plan': 'planCopyBudgetMonth',
+  'api/budget-copy-month': 'copyBudgetMonth',
+  'api/budget-average-plan': 'planBudgetToAverage',
+  'api/budget-average': 'setBudgetToAverage',
 } as const;
 
 describe('API fork handler coverage', () => {

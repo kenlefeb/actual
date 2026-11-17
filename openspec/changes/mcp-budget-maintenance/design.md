@@ -12,6 +12,7 @@ Server settings (operator only) give the defaults and ceilings. Stdio uses `ACTU
 | `MAX_CELLS` | 500 | `MAX_CELLS_CEILING` | 2,000 |
 | `MAX_DELETE_ROWS` | 50 | `MAX_DELETE_ROWS_CEILING` | 1,000 |
 | `AUDIT_TAIL_BYTES` | 2 MB | none | none |
+| `MAX_RESPONSE_BYTES` | 100 KB | `MAX_RESPONSE_BYTES_CEILING` | 1 MB |
 
 A grant's `max_rows`, `max_cells` and `max_delete_rows` replace the default for that connection, up to the ceiling; above it the grants file is invalid (a typo drops every connection to read-only, which is fail closed, and why the deploy validates the file first, D7). The limit in force is `grant ?? setting ?? built-in default`. No limit is hard-coded beyond these defaults. Rejected: keeping "lower only"; Ken said these are defaults.
 
@@ -29,7 +30,7 @@ Validate everything first (real months, amounts, existing category ids, no dupli
 
 ## D4. Month actions: plan, dry run, write
 
-Copy, average and templates each compute a plan (cell, before, after, and for templates goal before and after) without writing; the tool marks itself destructive, so under `confirm_destructive` the first call returns the plan and a `confirm`. The `confirm` MAC binds the whole plan: every cell's before and after and every goal and automation-store value the call would write, because they are all in `entry.changes`. A dry run that cannot list every cell within the 100 KB response cap is refused with fixed text and no `confirm` (narrow the categories or month); it is never truncated, because Ken wants a cell-by-cell dry run. At the default 500 cells (about 200 bytes each) it fits; the check matters when a setting raises the limit.
+Copy, average and templates each compute a plan (cell, before, after, and for templates goal before and after) without writing; the tool marks itself destructive, so under `confirm_destructive` the first call returns the plan and a `confirm`. The `confirm` MAC binds the whole plan: every cell's before and after and every goal and automation-store value the call would write, because they are all in `entry.changes`. A dry run that cannot list every cell, with each category and group name beside it, within the response size setting (`MAX_RESPONSE_BYTES`, 100 KB by default; the reads keep their own 100 KB paging) is refused with fixed text and no `confirm` (narrow the categories or month); it is never truncated, because Ken wants a cell-by-cell dry run. At the default 500 cells (about 200 bytes each) it fits; the check matters when a setting raises the limit.
 
 At write time, inside the lock, the plan is recomputed and must equal the confirmed one, and each cell re-checks its `before` as it is written; on a mismatch the remaining cells are not written and the result and outcome name applied and failed cells. A sync from another device between recompute and write is caught by the per-cell check. Without `confirm_destructive` the call writes at once with the same per-cell check.
 

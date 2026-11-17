@@ -57,6 +57,13 @@ import type {
   TransactionEntity,
 } from '#types/models';
 
+import {
+  reconcileListSet,
+  reconcileMonth,
+  reconcileRows,
+  reconcileTick,
+} from './reconcile';
+
 // null: the value doesn't apply to this budget type (or row)
 type Amount = number | null;
 
@@ -202,6 +209,10 @@ export type NativeHandlers = {
   'native/undo': typeof nativeUndo;
   'native/paycheck-preview': typeof paycheckPreview;
   'native/paycheck-save': typeof paycheckSave;
+  'native/reconcile-month': typeof reconcileChecklist;
+  'native/reconcile-rows': typeof reconcileRows;
+  'native/reconcile-tick': typeof reconcileTick;
+  'native/reconcile-list-set': typeof reconcileListSet;
 };
 
 export const app = createApp<NativeHandlers>();
@@ -216,6 +227,16 @@ app.method(
     undoable(paycheckSave, args => ({ nativeUndoToken: args?.undoToken })),
   ),
 );
+// sc-4801 (native-reconcile-flow D5)
+app.method('native/reconcile-month', reconcileChecklist);
+app.method('native/reconcile-rows', reconcileRows);
+app.method(
+  'native/reconcile-tick',
+  mutator(
+    undoable(reconcileTick, args => ({ nativeUndoToken: args?.undoToken })),
+  ),
+);
+app.method('native/reconcile-list-set', mutator(reconcileListSet));
 
 async function budgetMonth({
   month,
@@ -285,6 +306,11 @@ async function budgetMonth({
       })),
     })),
   };
+}
+
+// The checklist, with the currency the flow's amounts are shown in
+async function reconcileChecklist() {
+  return { ...(await readCurrency()), ...(await reconcileMonth()) };
 }
 
 // How the web formats money (useFormat.ts)

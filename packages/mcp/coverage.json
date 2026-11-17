@@ -259,5 +259,17 @@
   },
   "native/paycheck-save": {
     "skip": "Native iOS bridge write (sc-4343); paychecks are not in the MCP v1 write set (mcp-server \"Write tools\")"
+  },
+  "native/reconcile-month": {
+    "skip": "Native iOS bridge read of the Reconcile checklist (sc-4801, ADR 11); MCP reads each account's reconcile status through get_account_reconciliation"
+  },
+  "native/reconcile-rows": {
+    "skip": "Native iOS bridge read of the rows to tick (sc-4801, ADR 11); MCP reads rows through list_transactions and the cleared balance through get_account_reconciliation"
+  },
+  "native/reconcile-tick": {
+    "skip": "Native iOS bridge write of a person ticking rows (sc-4801); MCP sets cleared through write_update_transactions"
+  },
+  "native/reconcile-list-set": {
+    "skip": "Native iOS bridge write of the person's own Reconcile checklist exclusions (sc-4801); a display preference, not budget data"
   }
 }

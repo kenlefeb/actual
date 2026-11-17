@@ -1,0 +1,31 @@
+{
+  "account": "checking",
+  "scope": "to-tick",
+  "rows": [
+    {
+      "id": "split",
+      "date": "2016-12-30",
+      "payee": null,
+      "notes": null,
+      "amount": -3000,
+      "cleared": false,
+      "reconciled": false,
+      "isParent": true
+    },
+    {
+      "id": "food",
+      "date": "2016-12-28",
+      "payee": "Grocer",
+      "notes": null,
+      "amount": -4180,
+      "cleared": false,
+      "reconciled": false,
+      "isParent": false
+    }
+  ],
+  "summary": {
+    "statement": 95000,
+    "cleared": 105000,
+    "difference": -10000
+  }
+}

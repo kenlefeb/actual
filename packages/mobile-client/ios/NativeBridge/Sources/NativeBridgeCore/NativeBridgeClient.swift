@@ -20,7 +20,14 @@ public enum NativeBridgeAllowlist {
     // nor a budget write. Only NativeBridgeClient.sync() reaches it: the generic
     // call refuses it, so its result is always decoded and its deadline applies.
     public static let sync: Set<String> = ["sync"]
-    public static let handlers: Set<String> = reads.union(writes).union(paycheckWrites).union(sync)
+    // sc-4801 (native-reconcile-flow D5). The consume stays off: only a lock consumes a record.
+    public static let reconcileReads: Set<String> = [
+        "native/reconcile-month", "native/reconcile-rows", "account-statement-balance-prefill", "account-statement-balance-get",
+    ]
+    // Sent only as ReconcileTick, ReconcileListSet and StatementBalanceSave
+    public static let reconcileWrites: Set<String> = ["native/reconcile-tick", "native/reconcile-list-set", "account-statement-balance-save"]
+    public static let handlers: Set<String> = reads.union(writes).union(paycheckWrites).union(sync).union(reconcileReads)
+        .union(reconcileWrites)
 }
 
 // The page's reduced sync result (nativeBridge.ts): whether it worked, and a
@@ -214,7 +221,11 @@ public struct NativeBridgeClient {
             (args is BudgetAmountWrite && name == "budget/budget-amount") || (args as? Transfer)?.handler == name
             || (args is PaycheckSkip && name == "paycheck-skip-next") || (args is NativeUndo && name == "native/undo")
             || (args is PaycheckSave && name == "native/paycheck-save") || (args is PaycheckDelete && name == "paycheck-delete")
-        let isWrite = NativeBridgeAllowlist.writes.contains(name) || NativeBridgeAllowlist.paycheckWrites.contains(name)
+            || (args is ReconcileTick && name == "native/reconcile-tick") || (args is ReconcileListSet && name == "native/reconcile-list-set")
+            || (args is StatementBalanceSave && name == "account-statement-balance-save")
+        let isWrite =
+            NativeBridgeAllowlist.writes.contains(name) || NativeBridgeAllowlist.paycheckWrites.contains(name)
+            || NativeBridgeAllowlist.reconcileWrites.contains(name)
         guard !isWrite || isTyped else {
             throw NativeBridgeError.invalidWrite(name)
         }

@@ -11,5 +11,12 @@
   "paycheck-year-to-date",
   "native/paycheck-save",
   "paycheck-delete",
-  "sync"
+  "sync",
+  "native/reconcile-month",
+  "native/reconcile-rows",
+  "native/reconcile-tick",
+  "native/reconcile-list-set",
+  "account-statement-balance-prefill",
+  "account-statement-balance-save",
+  "account-statement-balance-get"
 ]

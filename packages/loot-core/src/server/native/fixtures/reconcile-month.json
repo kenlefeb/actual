@@ -1,0 +1,43 @@
+{
+  "currencyCode": "",
+  "currencyDecimalPlaces": 2,
+  "currencySymbol": "",
+  "currencySymbolPosition": "before",
+  "currencySpace": false,
+  "numberFormat": "comma-dot",
+  "hideFraction": false,
+  "month": "2017-01",
+  "excluded": [],
+  "accounts": [
+    {
+      "id": "checking",
+      "name": "Checking",
+      "status": "due",
+      "detail": {
+        "cleared": 105000,
+        "statement": null
+      },
+      "last_reconciled": null
+    },
+    {
+      "id": "savings",
+      "name": "Savings",
+      "status": "due",
+      "detail": {
+        "cleared": 0,
+        "statement": null
+      },
+      "last_reconciled": null
+    },
+    {
+      "id": "card",
+      "name": "Card",
+      "status": "due",
+      "detail": {
+        "cleared": 0,
+        "statement": null
+      },
+      "last_reconciled": null
+    }
+  ]
+}

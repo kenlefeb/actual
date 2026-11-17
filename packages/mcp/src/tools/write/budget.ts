@@ -314,17 +314,15 @@ async function writeTemplates(
   const keys = plan.cells.map(c =>
     cellKey({ category_id: c.categoryId, month }),
   );
+  // Never an empty `failed` (a store-only plan has no cells): the audit would say ok
+  const first = keys[0] ?? month;
   if (
     JSON.stringify(await api.planBudgetTemplates(month, options)) !==
     JSON.stringify(plan)
   ) {
-    return {
-      applied: [],
-      failed: keys[0],
-      detail: { reason: 'changed' },
-    };
+    return { applied: [], failed: first, detail: { reason: 'changed' } };
   }
-  let reason = '';
+  let threw = false;
   try {
     await api.applyBudgetTemplates(month, options);
   } catch (error) {
@@ -333,26 +331,82 @@ async function writeTemplates(
       `write_apply_budget_templates failed (call ${callId})`,
       error,
     );
-    reason = 'engine';
+    threw = true;
   }
-  // The engine may have committed before it threw: the read-back decides
+  // The engine writes automations, budgets and goals in separate batches and
+  // may have stopped between them: read all three back
   let applied: string[] = [];
+  let missing: string | undefined;
   try {
-    const now = await budgetedMonth(month);
+    const now = await readTemplateState(month);
+    const ok = (c: TemplatePlan['cells'][number]) =>
+      now.budgeted.get(c.categoryId) === c.after &&
+      (now.goals.get(c.categoryId)?.goal ?? null) === c.goalAfter &&
+      (now.goals.get(c.categoryId)?.longGoal ?? null) === c.longGoalAfter;
     applied = plan.cells
-      .filter(c => now.get(c.categoryId)?.amount === c.after)
+      .filter(ok)
       .map(c => cellKey({ category_id: c.categoryId, month }));
+    missing =
+      keys.find(k => !applied.includes(k)) ??
+      plan.store
+        .filter(s => (now.defs.get(s.categoryId) ?? null) !== s.after)
+        .map(s => `automation:${s.categoryId}`)[0];
   } catch {
     return {
       applied: [],
-      failed: keys[0],
-      detail: { reason: 'engine', maybe_written: keys[0] },
+      failed: first,
+      detail: { reason: 'engine', maybe_written: first },
     };
   }
-  const missing = keys.find(k => !applied.includes(k));
+  if (threw) {
+    return {
+      applied,
+      failed: missing ?? first,
+      detail: { reason: 'engine', maybe_written: missing ?? first },
+    };
+  }
   return missing
-    ? { applied, failed: missing, detail: { reason: reason || 'engine' } }
+    ? { applied, failed: missing, detail: { reason: 'engine' } }
     : { applied };
+}
+
+/** A month's budgeted amounts and goals, and the stored automations, as the engine left them. */
+async function readTemplateState(month: string) {
+  const prefs = (await api.internal?.send('preferences/get')) as
+    | { budgetType?: string }
+    | undefined;
+  const table =
+    prefs?.budgetType === 'tracking' ? 'reflect_budgets' : 'zero_budgets';
+  const rows = (
+    (await api.runQuery(
+      api
+        .q(table)
+        .filter({ month: Number(month.replace('-', '')) })
+        .select(['category', 'amount', 'goal', 'long_goal']),
+    )) as {
+      data: Array<{
+        category: string;
+        amount: number | null;
+        goal: number | null;
+        long_goal: number | null;
+      }>;
+    }
+  ).data;
+  const defs = (
+    (await api.runQuery(api.q('categories').select(['id', 'goal_def']))) as {
+      data: Array<{ id: string; goal_def: string | null }>;
+    }
+  ).data;
+  return {
+    budgeted: new Map(rows.map(r => [r.category, Number(r.amount ?? 0)])),
+    goals: new Map(
+      rows.map(r => [
+        r.category,
+        { goal: r.goal ?? null, longGoal: r.long_goal ?? null },
+      ]),
+    ),
+    defs: new Map(defs.map(d => [d.id, d.goal_def ?? null])),
+  };
 }
 
 /**

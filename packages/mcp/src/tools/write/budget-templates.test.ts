@@ -177,6 +177,68 @@ describe('Apply budget templates', () => {
     expect(await budgetedNow(a)).toBe(10000);
   });
 
+  it('A store-only plan with a throwing engine is a failure, not ok', async () => {
+    await start();
+    const { a, b } = await fixture();
+    // A is already budgeted, so only its automation would be stored
+    await api.setBudgetAmount(MONTH, a, 10000);
+    await api.updateNote(b, '');
+    vi.spyOn(api, 'applyBudgetTemplates').mockRejectedValue(new Error('boom'));
+    const res = await h.call('write_apply_budget_templates', { month: MONTH });
+    expect(res.isError, res.text).toBe(false);
+    expect(res.json.failed).toBeTruthy();
+    expect(res.json.failure).toMatch(/may have been written/);
+    expect(lines()[1]).toMatchObject({ status: 'failed' });
+  });
+
+  it('A plan that changed with no cells still names a failure', async () => {
+    await start();
+    const { a, b } = await fixture();
+    await api.setBudgetAmount(MONTH, a, 10000);
+    await api.updateNote(b, '');
+    const real = api.planBudgetTemplates;
+    let calls = 0;
+    vi.spyOn(api, 'planBudgetTemplates').mockImplementation(async (...args) => {
+      const plan = await real(...args);
+      return ++calls === 1 ? plan : { ...plan, errors: ['x'] };
+    });
+    const res = await h.call('write_apply_budget_templates', { month: MONTH });
+    expect(res.json.failed).toBeTruthy();
+    expect(lines()[1]).toMatchObject({ status: 'failed' });
+  });
+
+  it('A goal the engine did not write is not applied, and a throw says maybe written', async () => {
+    await start();
+    const { a, b } = await fixture();
+    // The engine writes budgets and goals in separate batches: budgets land, then it throws
+    vi.spyOn(api, 'applyBudgetTemplates').mockImplementation(async () => {
+      await api.setBudgetAmount(MONTH, a, 10000);
+      throw new Error('boom');
+    });
+    const res = await h.call('write_apply_budget_templates', { month: MONTH });
+    expect(res.json.applied).not.toContain(`${a}:${MONTH}`);
+    expect(res.json.applied).not.toContain(`${b}:${MONTH}`);
+    expect(res.json.failed).toBeTruthy();
+    expect(res.json.failure).toMatch(/may have been written/);
+    expect(lines()[1]).toMatchObject({ status: 'failed' });
+  });
+
+  it('A throw after every write still says maybe written', async () => {
+    await start();
+    await fixture();
+    const real = api.applyBudgetTemplates;
+    vi.spyOn(api, 'applyBudgetTemplates').mockImplementation(
+      async (...args) => {
+        await real(...args);
+        throw new Error('boom');
+      },
+    );
+    const res = await h.call('write_apply_budget_templates', { month: MONTH });
+    expect(res.json.failed).toBeTruthy();
+    expect(res.json.failure).toMatch(/may have been written/);
+    expect(res.json.applied.length).toBeGreaterThan(0);
+  });
+
   it('Stops when the plan changed between the check and the write', async () => {
     await start();
     const { a } = await fixture();

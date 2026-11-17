@@ -55,9 +55,71 @@ public struct ReconcileMonth: Codable, Equatable {
     public let currencySpace: Bool
     public let numberFormat: BudgetMonth.NumberFormat
     public let hideFraction: Bool
+    public struct Hidden: Codable, Equatable, Identifiable {
+        public let id: String
+        public let name: String
+    }
+
     public let month: String
     public let excluded: [String]
+    // The open accounts on the exclusion list, for Edit List to re-add
+    public let hidden: [Hidden]
     public let accounts: [Account]
+
+    public var amountStyle: BudgetAmountStyle {
+        BudgetAmountStyle(
+            currencyCode: currencyCode, currencySymbol: currencySymbol, decimalPlaces: currencyDecimalPlaces,
+            symbolPosition: currencySymbolPosition, symbolSpace: currencySpace, numberFormat: numberFormat,
+            hideFraction: hideFraction)
+    }
+}
+
+// `account-statement-balance-prefill` (D2): what step 1 starts with. Swift
+// only renders it; loot-core picks the pre-fill and its alternatives.
+public struct StatementBalancePrefill: Codable, Equatable {
+    public struct Source: Codable, Equatable {
+        public let amount: Int
+        // bank-sync or cleared; a word added later still decodes
+        public let source: String
+        public let asOf: String?
+        public let link: String?
+
+        enum CodingKeys: String, CodingKey {
+            case amount, source, link
+            case asOf = "as_of"
+        }
+    }
+
+    public struct Record: Codable, Equatable {
+        public let id: String
+        public let amount: Int
+        public let source: String
+        public let asOf: String?
+        public let enteredAt: Double
+        // Text from the app: shown as data, never acted on
+        public let enteredBy: String
+        public let consumedAt: Double?
+
+        enum CodingKeys: String, CodingKey {
+            case id, amount, source
+            case asOf = "as_of"
+            case enteredAt = "entered_at"
+            case enteredBy = "entered_by"
+            case consumedAt = "consumed_at"
+        }
+    }
+
+    public let prefill: Source?
+    public let alternatives: [Source]
+    public let clearedBalance: Int
+    public let record: Record?
+    public let accountType: String?
+
+    enum CodingKeys: String, CodingKey {
+        case prefill, alternatives, record
+        case clearedBalance = "cleared_balance"
+        case accountType = "account_type"
+    }
 }
 
 public struct ReconcileSummary: Codable, Equatable {
@@ -81,6 +143,7 @@ public struct ReconcileRows: Codable, Equatable {
         public let id: String
         public let date: String
         public let payee: String?
+        public let category: String?
         public let notes: String?
         public let amount: Int
         public let cleared: Bool
@@ -194,6 +257,11 @@ extension NativeBridgeClient {
 
     public func setReconcileList(_ list: ReconcileListSet) async throws {
         _ = try await call("native/reconcile-list-set", args: list)
+    }
+
+    public func statementBalancePrefill(accountId: String) async throws -> StatementBalancePrefill {
+        try JSONDecoder().decode(
+            StatementBalancePrefill.self, from: await call("account-statement-balance-prefill", args: ["account_id": accountId]))
     }
 
     public func saveStatementBalance(_ save: StatementBalanceSave) async throws {

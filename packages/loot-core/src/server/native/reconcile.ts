@@ -26,6 +26,8 @@ export type NativeReconcileStatus = 'due' | 'in-progress' | 'done' | 'ready';
 export type NativeReconcileMonth = {
   month: string;
   excluded: string[];
+  // The open accounts on the exclusion list, for Edit List to re-add
+  hidden: { id: string; name: string }[];
   accounts: {
     id: string;
     name: string;
@@ -47,6 +49,7 @@ export type NativeReconcileRow = {
   id: string;
   date: string;
   payee: string | null;
+  category: string | null;
   notes: string | null;
   amount: number;
   cleared: boolean;
@@ -124,6 +127,9 @@ export async function reconcileMonth(): Promise<NativeReconcileMonth> {
   return {
     month,
     excluded,
+    hidden: accounts
+      .filter(a => excluded.includes(a.id))
+      .map(({ id, name }) => ({ id, name })),
     accounts: await Promise.all(
       accounts
         .filter(a => !excluded.includes(a.id))
@@ -185,6 +191,7 @@ export async function reconcileRows({
         'id',
         'date',
         { payee: 'payee.name' },
+        { category: 'category.name' },
         'notes',
         'amount',
         'cleared',
@@ -201,6 +208,7 @@ export async function reconcileRows({
     rows: data.map(({ is_parent, ...row }) => ({
       ...row,
       payee: row.payee ?? null,
+      category: row.category ?? null,
       notes: row.notes ?? null,
       cleared: Boolean(row.cleared),
       reconciled: Boolean(row.reconciled),

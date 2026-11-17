@@ -1,0 +1,19 @@
+{
+  "prefill": {
+    "amount": 46541,
+    "source": "bank-sync",
+    "as_of": "2016-12-31",
+    "link": "bank-sync"
+  },
+  "alternatives": [
+    {
+      "amount": 105000,
+      "source": "cleared",
+      "as_of": null,
+      "link": null
+    }
+  ],
+  "cleared_balance": 105000,
+  "record": null,
+  "account_type": null
+}

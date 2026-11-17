@@ -8,6 +8,7 @@
   "hideFraction": false,
   "month": "2017-01",
   "excluded": [],
+  "hidden": [],
   "accounts": [
     {
       "id": "checking",

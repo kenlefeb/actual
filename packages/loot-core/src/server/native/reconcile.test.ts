@@ -1,3 +1,4 @@
+import { app as accountsApp } from '#server/accounts/app';
 import { clearedBalanceOf } from '#server/accounts/statement-balance';
 // Fork-only (sc-4801, openspec/changes/native-reconcile-flow D5). The native
 // reconcile handlers' contract: the Swift tests decode the fixtures this file
@@ -53,6 +54,12 @@ beforeEach(async () => {
   await db.insertAccount({ id: 'card', name: 'Card', sort_order: 3 });
   await db.insertAccount({ id: 'old', name: 'Old', closed: 1, sort_order: 4 });
   await db.insertPayee({ id: 'grocer', name: 'Grocer' });
+  await db.insertCategoryGroup({ id: 'food-group', name: 'Food' });
+  await db.insertCategory({
+    id: 'groceries',
+    name: 'Groceries',
+    cat_group: 'food-group',
+  });
   // currentDay() is 2017-01-01 in tests
   await db.insertTransaction({
     id: 'paid',
@@ -75,6 +82,7 @@ beforeEach(async () => {
     date: '2016-12-28',
     amount: -4180,
     payee: 'grocer',
+    category: 'groceries',
     cleared: false,
   });
   await db.insertTransaction({
@@ -169,6 +177,11 @@ describe('native/reconcile-month', () => {
     const result = await month();
     expect(result.accounts.map(a => a.id)).toEqual(['checking', 'card']);
     expect(result.excluded).toEqual(['savings']);
+    // Edit List re-adds by name; a closed or unknown id is not offered
+    await setPref('reconcile-excluded-accounts', '["savings","old","gone"]');
+    expect((await month()).hidden).toEqual([
+      { id: 'savings', name: 'Savings' },
+    ]);
   });
 
   it.each([
@@ -189,6 +202,7 @@ describe('native/reconcile-rows', () => {
     await record(95000);
     const result = await rows('checking');
     expect(result.rows.map(r => r.id)).toEqual(['split', 'food']);
+    expect(result.rows[1].category).toBe('Groceries');
     expect(result.summary).toEqual({
       statement: 95000,
       cleared: 105000,
@@ -235,6 +249,30 @@ describe('native/reconcile-rows', () => {
   it('refuses an unknown or closed account', async () => {
     await expect(rows('nope')).rejects.toThrow(/account/);
     await expect(rows('old')).rejects.toThrow(/account/);
+  });
+});
+
+describe('account-statement-balance-prefill for native', () => {
+  it('matches the contract fixture', async () => {
+    await db.update('accounts', {
+      id: 'checking',
+      account_sync_source: 'simpleFin',
+      balance_current: 46541,
+    });
+    // Stamped by bank sync: written a day ago, so fresh
+    await setPref('bank-balance-at-checking', String(Date.now() - 86_400_000));
+    const result = await accountsApp.handlers[
+      'account-statement-balance-prefill'
+    ]({ account_id: 'checking' });
+    expect(result.prefill?.amount).toBe(46541);
+    // The write day depends on the clock: fixed for the fixture
+    const fixed = {
+      ...result,
+      prefill: result.prefill && { ...result.prefill, as_of: '2016-12-31' },
+    };
+    await expect(JSON.stringify(fixed, null, 2) + '\n').toMatchFileSnapshot(
+      './fixtures/statement-balance-prefill.json',
+    );
   });
 });
 

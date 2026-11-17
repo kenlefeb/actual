@@ -23,6 +23,10 @@ import {
   openAccountCloseModal,
   pushModal,
 } from '#modals/modalsSlice';
+import {
+  isNativeReconcileOn,
+  presentNativeReconcile,
+} from '#native/nativeChrome';
 import { useDispatch, useSelector } from '#redux';
 
 import { AccountTransactions } from './AccountTransactions';
@@ -144,6 +148,12 @@ function AccountHeader({ account }: { readonly account: AccountEntity }) {
   const [, setSearchParams] = useSearchParams();
 
   const onReconcile = useCallback(() => {
+    // sc-4801: the iOS app presents its native flow (D1)
+    if (isNativeReconcileOn()) {
+      dispatch(collapseModals({ rootModalName: 'account-menu' }));
+      presentNativeReconcile({ accountId: account.id });
+      return;
+    }
     dispatch(
       pushModal({
         modal: {

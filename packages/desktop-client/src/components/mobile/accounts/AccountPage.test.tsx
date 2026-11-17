@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { TestProviders } from '#mocks';
+import type { ChromeWindow } from '#native/nativeChrome';
 
 import { AccountPage } from './AccountPage';
 
@@ -58,6 +59,51 @@ describe('AccountPage', () => {
       },
     });
   });
+
+  // native-reconcile-flow (sc-4801): ••• › Reconcile… in the iOS app
+  it.each([[true], [false]])(
+    'with the native Reconcile switch %s, Reconcile… goes native or to the dialog',
+    async on => {
+      const postMessage = vi.fn();
+      (window as unknown as ChromeWindow).webkit = {
+        messageHandlers: { actualNativeChrome: { postMessage } },
+      };
+      window.__actualNativeScreens = { reconcile: on };
+      try {
+        render(
+          <TestProviders>
+            <MemoryRouter initialEntries={['/accounts/checking']}>
+              <Routes>
+                <Route path="/accounts/:id" element={<AccountPage />} />
+              </Routes>
+            </MemoryRouter>
+          </TestProviders>,
+        );
+        await userEvent.click(screen.getByRole('button', { name: 'Checking' }));
+        const [{ modal: menu }] = state.pushModal.mock.lastCall ?? [];
+        state.pushModal.mockClear();
+        menu.options.onReconcile();
+        const presented = postMessage.mock.calls.some(
+          ([message]) => message.type === 'presentReconcile',
+        );
+        expect(presented).toBe(on);
+        if (on) {
+          expect(postMessage).toHaveBeenCalledWith({
+            type: 'presentReconcile',
+            account_id: 'checking',
+          });
+          expect(state.pushModal).not.toHaveBeenCalled();
+        } else {
+          expect(state.pushModal.mock.lastCall?.[0].modal.name).toBe(
+            'account-reconcile',
+          );
+        }
+      } finally {
+        delete (window as { webkit?: unknown }).webkit;
+        delete window.__actualNativeScreens;
+      }
+    },
+  );
 
   it('ends a long account name with an ellipsis in the header', () => {
     state.account = {

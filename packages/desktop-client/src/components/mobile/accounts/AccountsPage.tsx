@@ -42,6 +42,8 @@ import { useDispatch, useSelector } from '#redux';
 import type { Binding, SheetFields } from '#spreadsheet';
 import * as bindings from '#spreadsheet/bindings';
 
+import { NativeReconcileBanner } from './NativeReconcileBanner';
+
 const ROW_HEIGHT = 60;
 
 // Virtual account id for the all-accounts transaction list (/accounts/all)
@@ -374,6 +376,7 @@ function AllAccountList({
             aria-label={t('Account list')}
             style={{ paddingBottom: MOBILE_NAV_HEIGHT }}
           >
+            <NativeReconcileBanner />
             <AccountHeader
               id={ALL_ACCOUNTS_ID}
               name={t('All accounts')}

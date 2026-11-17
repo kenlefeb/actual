@@ -21,6 +21,14 @@ public enum NativeScreenSwitch {
     public static func isPaychecksNative(defaults: UserDefaults = .standard) -> Bool {
         defaults.bool(forKey: paychecksKey)
     }
+
+    // sc-4801: the Reconcile flow ships on, so unset reads as on (Ken,
+    // 2026-11-15); Settings stores false to turn it off
+    public static let reconcileKey = "NativeScreen.reconcile"
+
+    public static func isReconcileNative(defaults: UserDefaults = .standard) -> Bool {
+        defaults.object(forKey: reconcileKey) == nil || defaults.bool(forKey: reconcileKey)
+    }
 }
 
 // The script that tells the page which native screens are on, at the start of
@@ -33,7 +41,10 @@ public enum NativeScreensScript {
         guard let origin = expectedOrigin, let literal = try? JSONEncoder().encode(origin) else { return "" }
         let screens = NativeTab.allCases.filter(NativeScreenSwitch.nativeTabs.contains).map {
             "\"\($0.rawValue)\": \(NativeScreenSwitch.screen(for: $0, defaults: defaults) == .native)"
-        } + ["\"paychecks\": \(NativeScreenSwitch.isPaychecksNative(defaults: defaults))"]
+        } + [
+            "\"paychecks\": \(NativeScreenSwitch.isPaychecksNative(defaults: defaults))",
+            "\"reconcile\": \(NativeScreenSwitch.isReconcileNative(defaults: defaults))",
+        ]
         return "if (location.origin === \(String(decoding: literal, as: UTF8.self))) { window.__actualNativeScreens = {\(screens.joined(separator: ", "))}; }"
     }
 }

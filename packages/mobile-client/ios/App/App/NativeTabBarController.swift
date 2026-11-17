@@ -16,6 +16,8 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
     // The native Schedules & Paychecks list (sc-4341) lies over the web
     // Schedules screen the same way, in whichever tab shows it
     private var paychecksOverlay: (screen: NativePaychecksViewController, container: TabContainerViewController)?
+    // The native Reconcile flow (sc-4801), presented over whichever tab asked
+    private weak var reconcileFlow: NativeReconcileViewController?
     private var pagePath = NativeTab.budget.rootPath
     private var tabBarShown = false
     private static let addIdentifier = "add"
@@ -73,7 +75,9 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
         bridgeController.nativeBridge.onPaychecksEvent = { [weak self] event, tables in
             self?.budgetOverlay?.paychecksEventReceived(event, tables: tables)
             self?.paychecksOverlay?.screen.eventReceived(event, tables: tables)
+            self?.reconcileFlow?.eventReceived(event, tables: tables)
         }
+        chrome.onPresentReconcile = { [weak self] body in self?.presentReconcile(body) }
         // Hidden until a budget is open (sign-in and the budget list have none)
         setTabBarVisible(false)
 
@@ -180,6 +184,41 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
             container.setOverlay(nil)
         }
     }
+
+    // sc-4801: reads the checklist first, so only an open account it lists
+    // (or the banner's checklist request) opens the flow; anything else is ignored
+    private func presentReconcile(_ body: Any) {
+        guard reconcileFlow == nil, presentedViewController == nil else { return }
+        let client = bridgeController.nativeBridge.client
+        let month = ReconcileMonthViewModel(client: client)
+        Task { @MainActor [weak self] in
+            await month.load()
+            guard let self, self.reconcileFlow == nil, self.presentedViewController == nil,
+                  let request = month.request(from: body), month.state.read != nil
+            else { return }
+            let chrome = self.bridgeController.nativeChrome
+            let flow = NativeReconcileViewController(
+                month: month, request: request, client: client, navigate: { [weak chrome] in chrome?.navigate(to: $0) })
+            self.reconcileFlow = flow
+            self.present(flow, animated: true)
+        }
+    }
+
+    #if DEBUG
+    // Test-only: `-ReconcileDemo checklist|step1|step2` shows the flow on sample data
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        guard let request = ReconcileDemo.request, reconcileFlow == nil else { return }
+        let month = ReconcileMonthViewModel(client: ReconcileDemo.client)
+        Task { @MainActor in
+            await month.load()
+            let flow = NativeReconcileViewController(month: month, request: request, client: ReconcileDemo.client, navigate: { _ in })
+            if ReconcileDemo.startsAtStepTwo { flow.showStepTwo("checking") }
+            reconcileFlow = flow
+            present(flow, animated: false)
+        }
+    }
+    #endif
 
     // MARK: UITabBarControllerDelegate (the Add button never becomes selected)
 

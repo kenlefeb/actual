@@ -20,6 +20,9 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
     var onClosed: (() -> Void)?
     // A per-screen switch changed in Settings (sc-3751)
     var onNativeScreenChanged: (() -> Void)?
+    // sc-4801: the page asked for the native Reconcile flow; the body is checked
+    // against the open accounts (PresentReconcile) before anything loads
+    var onPresentReconcile: ((Any) -> Void)?
     private let haptics = UIImpactFeedbackGenerator(style: .light)
 
     // Runs before the page loads, so the page sees the handler at startup
@@ -65,6 +68,8 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
             let key: String
             if name == "paychecks" {
                 key = NativeScreenSwitch.paychecksKey
+            } else if name == "reconcile" {
+                key = NativeScreenSwitch.reconcileKey
             } else if let tab = NativeTab(rawValue: name), NativeScreenSwitch.nativeTabs.contains(tab) {
                 key = NativeScreenSwitch.key(for: tab)
             } else {
@@ -73,6 +78,9 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
             UserDefaults.standard.set(on, forKey: key)
             if let controller = bridge?.webView?.configuration.userContentController { installScreensScript(on: controller) }
             onNativeScreenChanged?()
+        case "presentReconcile":
+            // Only while the switch is on; the page falls back to its dialog otherwise
+            if NativeScreenSwitch.isReconcileNative() { onPresentReconcile?(message.body) }
         case "haptic":
             // Follows the system's haptics setting
             haptics.impactOccurred()

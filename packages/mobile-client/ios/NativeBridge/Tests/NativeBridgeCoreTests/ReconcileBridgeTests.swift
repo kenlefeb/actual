@@ -131,3 +131,19 @@ final class PresentReconcileTests: XCTestCase {
         XCTAssertNil(PresentReconcile(body: "presentReconcile", openAccounts: open))
     }
 }
+
+// task 2.3: NativeScreen.reconcile reads on when unset (Ken, 2026-11-15)
+final class ReconcileSwitchTests: XCTestCase {
+    func testIsOnWhenUnsetAndOffWhenTurnedOff() {
+        let suite = "ReconcileSwitchTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        XCTAssertEqual(NativeScreenSwitch.reconcileKey, "NativeScreen.reconcile")
+        XCTAssertTrue(NativeScreenSwitch.isReconcileNative(defaults: defaults))
+        defaults.set(false, forKey: NativeScreenSwitch.reconcileKey)
+        XCTAssertFalse(NativeScreenSwitch.isReconcileNative(defaults: defaults))
+        XCTAssertTrue(NativeScreensScript.source(defaults: defaults, expectedOrigin: "capacitor://localhost").contains(#""reconcile": false"#))
+        defaults.set(true, forKey: NativeScreenSwitch.reconcileKey)
+        XCTAssertTrue(NativeScreensScript.source(defaults: defaults, expectedOrigin: "capacitor://localhost").contains(#""reconcile": true"#))
+    }
+}

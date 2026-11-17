@@ -44,20 +44,21 @@ A consume SHALL set `consumed_at` only when the stored record's `id` equals the 
 - **THEN** the second call consumes nothing and says so
 
 ### Requirement: A record is usable until it expires or is used
-A record SHALL be usable by the MCP tool only while unconsumed, no older than the expiry setting, not dated more than 5 minutes ahead and not from the `cleared` source. The expiry SHALL default to 168 hours, be set only by the operator, and not exceed an operator ceiling of 720 hours.
+A record SHALL be usable by the MCP tool only while unconsumed, no older than the expiry setting, not dated ahead of the reader's clock by more than the skew allowance and not from the `cleared` source. The expiry (default 168 hours, ceiling 720) and the skew allowance (default 5 minutes, ceiling 60) SHALL be set only by the operator.
 
 #### Scenario: Expired
 - **GIVEN** an expiry of 168 hours and a record entered 169 hours ago
 - **THEN** its status is `expired`
 
 #### Scenario: A future-dated record
-- **WHEN** a record's `entered_at` is more than 5 minutes ahead of the reader's clock
-- **THEN** its status is `expired`
+- **GIVEN** a skew allowance of 5 minutes
+- **WHEN** a record's `entered_at` is 6 minutes ahead of the reader's clock
+- **THEN** its status is `expired`, and 4 minutes ahead is usable
 
 #### Scenario: A cleared echo
 - **WHEN** the record's source is `cleared`
 - **THEN** its status is `echo` and it is not usable
 
 #### Scenario: A bad setting
-- **WHEN** the expiry setting is zero, not a whole number or above the ceiling
+- **WHEN** the expiry or skew setting is zero, not a whole number or above its ceiling
 - **THEN** the server refuses to start with fixed text

@@ -10,7 +10,7 @@ The in-app UI is not here: the native reconcile flow is sc-4801 (waits on Figma)
 
 - **Group 1, sc-4793:** a per-account, synced **statement balance record** `{id, amount, source, as_of, entered_at, entered_by, consumed_at}` kept as a synced preference. Internal handlers to save, read and consume it (the app's only way in); API-visible handlers to read and consume it (the MCP's only way in). Nothing under `api/` can record one. The saving engine stamps `entered_at` and `id`; `consume` is a compare-and-set on the record id. Desktop, web, Electron and phone all use the same record.
 - **Group 2, sc-4800:** `write_reconcile_account` drops its `statement_balance` argument and uses only the record. It refuses, with fixed text, when there is none, it is expired, it was consumed, or its source is `cleared`. The dry run, the audit line and the confirm digest carry the record; a lock consumes it (re-checked inside the write lock). `get_account_reconciliation` reports the record's status.
-- **Expiry is a setting** (default 168 hours, operator ceiling 720), not a constant.
+- **Expiry and clock-skew allowance are settings** (168 hours, ceiling 720; 5 minutes, ceiling 60), not constants.
 
 Mobile scope: none in this change. The record and handlers are client-neutral and the MCP has no UI; the screens are sc-4801 and sc-4802.
 

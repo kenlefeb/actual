@@ -4,9 +4,9 @@ import UIKit
 // Fork-only (sc-4801, native-reconcile-flow D7, Figma "Reconcile — iPhone &
 // Mac"). The native Reconcile flow, presented full screen (large detent only)
 // over the web Accounts screens: the "Reconcile this month" checklist, step 1
-// (confirm the statement balance) and step 2 (tick off). Every amount and the
-// difference are loot-core's; this only shows them. Steps 3 and 4 are sc-4825:
-// at 0.00 step 2 hands over to the web register, which locks.
+// (confirm the statement balance), step 2 (tick off), step 3 (resolve the
+// difference), step 4 (lock) and done (sc-4825). Every amount, the difference
+// and what locks are loot-core's; this only shows them.
 final class NativeReconcileViewController: UIHostingController<ReconcileFlowView> {
     private let flow: ReconcileFlowModel
 
@@ -28,23 +28,46 @@ final class NativeReconcileViewController: UIHostingController<ReconcileFlowView
 
     #if DEBUG
     func showStepTwo(_ id: String) { flow.confirmed(id) }
+
+    // Test-only: the B2 screens on ReconcileDemo's sample data
+    func showDemo(_ mode: String, _ id: String) {
+        flow.confirmed(id)
+        switch mode {
+        case "b2-step3", "b2-adjust": flow.toResolve(id)
+        case "b2-step4": flow.toLock(id)
+        case "b2-done", "b2-moved":
+            flow.toLock(id)
+            Task { @MainActor [flow] in
+                await flow.lock?.load()
+                _ = await flow.lock?.lock()
+                flow.locked(id)
+            }
+        default: break
+        }
+    }
     #endif
 
     // A page event (sync-event and its changed tables)
     func eventReceived(_ event: String, tables: [String]) {
         flow.month.eventReceived(event, tables: tables)
         flow.tick?.eventReceived(event, tables: tables)
+        flow.resolve?.eventReceived(event, tables: tables)
+        flow.lock?.eventReceived(event, tables: tables)
     }
 }
 
 // Which screen the flow shows; step 1 and step 2 keep their models
 @MainActor
 final class ReconcileFlowModel: ObservableObject {
-    enum Screen: Equatable { case checklist, stepOne(String), stepTwo(String) }
+    enum Screen: Equatable { case checklist, stepOne(String), stepTwo(String), stepThree(String), stepFour(String), done(String) }
 
     @Published var screen: Screen
     @Published private(set) var stepOne: ReconcileStepOneViewModel?
     @Published private(set) var tick: ReconcileTickViewModel?
+    @Published private(set) var resolve: ReconcileResolveViewModel?
+    @Published private(set) var lock: ReconcileLockViewModel?
+    // The adjustment's undo token, kept for step 4's Remove
+    private(set) var adjustmentToken: String?
     let month: ReconcileMonthViewModel
     private let client: NativeBridgeClient
 
@@ -62,22 +85,64 @@ final class ReconcileFlowModel: ObservableObject {
         return read?.accounts.first { $0.id == id }?.name ?? read?.hidden.first { $0.id == id }?.name ?? ""
     }
 
+    // An In progress account (a usable record) resumes at step 2, step 1 one tap back
     func open(_ id: String) {
         guard let style else { return }
         stepOne = ReconcileStepOneViewModel(client: client, accountId: id, style: style)
-        tick = nil
-        screen = .stepOne(id)
+        (tick, resolve, lock, adjustmentToken) = (nil, nil, nil, nil)
+        let account = month.state.read?.accounts.first { $0.id == id }
+        if account?.status == .inProgress {
+            confirmed(id)
+        } else {
+            screen = .stepOne(id)
+        }
     }
+
+    func editBalance(_ id: String) { screen = .stepOne(id) }
 
     func confirmed(_ id: String) {
         tick = ReconcileTickViewModel(client: client, accountId: id, style: style)
         screen = .stepTwo(id)
     }
 
+    func toResolve(_ id: String) {
+        resolve = ReconcileResolveViewModel(client: client, accountId: id, accountName: name(of: id))
+        screen = .stepThree(id)
+    }
+
+    func toLock(_ id: String) {
+        if let token = resolve?.adjustmentToken { adjustmentToken = token }
+        lock = ReconcileLockViewModel(client: client, accountId: id)
+        screen = .stepFour(id)
+    }
+
+    func adjustmentRemoved(_ id: String) {
+        adjustmentToken = nil
+        toResolve(id)
+    }
+
+    func locked(_ id: String) {
+        screen = .done(id)
+        Task { await month.load() }
+    }
+
     func backToChecklist() {
-        (stepOne, tick) = (nil, nil)
+        (stepOne, tick, resolve, lock, adjustmentToken) = (nil, nil, nil, nil, nil)
         screen = .checklist
         Task { await month.load() }
+    }
+
+    // The adjustment sheet's categories: this month's expense categories
+    func categories() async -> [BudgetMonth.Category] {
+        guard let month = month.state.read?.month,
+            let read = try? await client.budgetMonth(month)
+        else { return [] }
+        return read.expenseGroups.flatMap(\.visibleCategories)
+    }
+
+    // The next Due account after this one, for the done screen
+    func nextDue(after id: String) -> ReconcileMonth.Account? {
+        month.due.first { $0.id != id }
     }
 }
 
@@ -104,8 +169,32 @@ struct ReconcileFlowView: View {
                 case .stepTwo(let id):
                     if let model = flow.tick, let style = flow.style {
                         ReconcileTickView(
-                            model: model, style: style, accountName: flow.name(of: id), back: { flow.open(id) },
-                            close: close, closeAndOpen: closeAndOpen)
+                            model: model, style: style, accountName: flow.name(of: id), back: { flow.editBalance(id) },
+                            close: close, closeAndOpen: closeAndOpen, resolve: { flow.toResolve(id) }, toLock: { flow.toLock(id) })
+                    }
+                case .stepThree(let id):
+                    if let model = flow.resolve, let style = flow.style, let tick = flow.tick {
+                        ReconcileResolveView(
+                            model: model, tick: tick, style: style, loadCategories: flow.categories,
+                            back: { flow.confirmed(id) }, close: close, closeToChecklist: { path in
+                                flow.backToChecklist()
+                                closeAndOpen(path)
+                            }, toLock: { flow.toLock(id) })
+                    }
+                case .stepFour(let id):
+                    if let model = flow.lock, let style = flow.style {
+                        ReconcileLockView(
+                            model: model, style: style, accountName: flow.name(of: id),
+                            provider: account(id)?.providerName, adjustmentToken: flow.adjustmentToken,
+                            back: { flow.confirmed(id) }, close: close, removed: { flow.adjustmentRemoved(id) },
+                            locked: { flow.locked(id) })
+                    }
+                case .done(let id):
+                    if let model = flow.lock, let style = flow.style {
+                        ReconcileDoneView(
+                            model: model, style: style, accountName: flow.name(of: id), next: flow.nextDue(after: id),
+                            open: flow.open, checklist: flow.backToChecklist, close: close,
+                            review: { closeAndOpen("/accounts/\(id)") })
                     }
                 }
             }
@@ -496,6 +585,9 @@ struct ReconcileTickView: View {
     let back: () -> Void
     let close: () -> Void
     let closeAndOpen: (String) -> Void
+    // Above zero: step 3; at zero: step 4, only when tapped
+    let resolve: () -> Void
+    let toLock: () -> Void
     @State private var search = ""
     @Environment(\.dynamicTypeSize) private var typeSize
     private let haptics = UIImpactFeedbackGenerator(style: .light)
@@ -534,6 +626,8 @@ struct ReconcileTickView: View {
         .onChange(of: model.announcement) { message in
             if let message { UIAccessibility.post(notification: .announcement, argument: message) }
         }
+        // A tick that balances the account: a success haptic, no auto-advance
+        .onChange(of: model.zeroCount) { _ in UINotificationFeedbackGenerator().notificationOccurred(.success) }
     }
 
     private func amount(_ value: Int?) -> String {
@@ -631,20 +725,17 @@ struct ReconcileTickView: View {
         Task { await model.toggle(row) }
     }
 
-    private var exitButton: some View {
-        Button {
-            if model.exit == .readyToLock, let statement = model.summary?.statement {
-                closeAndOpen("/accounts/\(model.accountId)?reconcile=\(statement)")
+    @ViewBuilder private var exitButton: some View {
+        VStack(spacing: 8) {
+            if model.exit == .continueToLock {
+                ReconcilePrimaryButton(title: ReconcileWords.continueToLock, action: toLock)
             } else {
-                close()
+                if model.summary?.statement != nil {
+                    ReconcilePrimaryButton(title: ReconcileWords.continueButton, action: resolve)
+                }
+                Button(ReconcileWords.doneForNow, action: close).font(.headline).frame(minHeight: 44)
             }
-        } label: {
-            Text(model.exit == .readyToLock ? ReconcileWords.readyToLock : ReconcileWords.doneForNow)
-                .font(.headline).foregroundColor(NativeReconcileTokens.onAccent).frame(maxWidth: .infinity, minHeight: 44)
-                .multilineTextAlignment(.center)
         }
-        .buttonStyle(.borderedProminent)
-        .buttonBorderShape(.capsule)
         .padding()
         .background(NativeReconcileTokens.background)
     }
@@ -766,7 +857,7 @@ enum ReconcileWords {
     static let hintMark = NSLocalizedString("Double-tap to mark cleared", comment: "Native Reconcile: VoiceOver row hint")
     static let hintUnmark = NSLocalizedString("Double-tap to mark not cleared", comment: "Native Reconcile: VoiceOver row hint")
     static let editTransaction = NSLocalizedString("Edit transaction", comment: "Native Reconcile: row action")
-    static let readyToLock = NSLocalizedString("Ready to lock — finish in the register", comment: "Native Reconcile: step 2 exit at 0.00")
+    static let continueToLock = NSLocalizedString("Continue to lock", comment: "Native Reconcile: step 2 exit at 0.00")
     static let doneForNow = NSLocalizedString("Done for now", comment: "Native Reconcile: step 2 exit above zero")
     static let tryAgain = NSLocalizedString("Try again", comment: "Native Reconcile: retry a failed read")
 }

@@ -59,8 +59,9 @@ const SECTIONS = [
   'notifications',
 ];
 const PATH = /^\/([a-z-]+)(\/[\w-]+)*\/?$/;
-// sc-4801: an account register reconciling to a statement amount (cents)
-const RECONCILE_PATH = /^\/accounts\/[\w-]+\?reconcile=-?\d{1,15}$/;
+// sc-4825: the add form with an account (by name, encoded) and a decimal amount
+const ADD_PATH =
+  /^\/transactions\/new\?account=[\w%.~-]{1,300}&amount=-?\d{1,10}(\.\d{1,4})?$/;
 
 function post(win: ChromeWindow, message: ChromeMessage) {
   win.webkit?.messageHandlers?.actualNativeChrome?.postMessage(message);
@@ -135,10 +136,7 @@ export function installNativeChrome(
   win.__actualNativeChrome = {
     navigate(path) {
       const section = PATH.exec(path)?.[1];
-      if (
-        !RECONCILE_PATH.test(path) &&
-        (!section || !SECTIONS.includes(section))
-      ) {
+      if (!ADD_PATH.test(path) && (!section || !SECTIONS.includes(section))) {
         throw new Error(`native tab bar: ${path} is not allowlisted`);
       }
       navigate(path);

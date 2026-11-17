@@ -214,6 +214,7 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
             await month.load()
             let flow = NativeReconcileViewController(month: month, request: request, client: ReconcileDemo.client, navigate: { _ in })
             if ReconcileDemo.startsAtStepTwo { flow.showStepTwo("checking") }
+            if ReconcileDemo.mode.hasPrefix("b2-") { flow.showDemo(ReconcileDemo.mode, "checking") }
             reconcileFlow = flow
             present(flow, animated: false)
         }

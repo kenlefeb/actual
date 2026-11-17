@@ -235,9 +235,9 @@ public final class ReconcileStepOneViewModel: ObservableObject {
 @MainActor
 public final class ReconcileTickViewModel: ObservableObject {
     public enum Exit: Equatable {
-        // Difference 0.00: finish (and lock) in the web register (B1 locks nothing)
-        case readyToLock
-        // Above zero, or no statement: close and keep the ticks
+        // Difference 0.00: Continue to lock (step 4, sc-4825)
+        case continueToLock
+        // Above zero, or no statement: Continue to step 3, or close keeping the ticks
         case doneForNow
     }
 
@@ -247,6 +247,8 @@ public final class ReconcileTickViewModel: ObservableObject {
     @Published public private(set) var error: ReconcileError?
     // For VoiceOver: the difference after a tick
     @Published public private(set) var announcement: String?
+    // Counts ticks that brought the difference to zero, for the success haptic
+    @Published public private(set) var zeroCount = 0
 
     public let accountId: String
     private let client: NativeBridgeClient
@@ -264,7 +266,7 @@ public final class ReconcileTickViewModel: ObservableObject {
     }
 
     public var rows: [ReconcileRows.Row] { state.read?.rows ?? [] }
-    public var exit: Exit { summary?.difference == 0 ? .readyToLock : .doneForNow }
+    public var exit: Exit { summary?.difference == 0 ? .continueToLock : .doneForNow }
 
     public func load() async {
         generation += 1
@@ -295,10 +297,227 @@ public final class ReconcileTickViewModel: ObservableObject {
             self.error = ReconcileError.from(error, .tickFailed)
             return
         }
-        if let difference = summary?.difference {
+        if summary?.difference == 0 {
+            zeroCount += 1
+            announcement = NSLocalizedString("Difference zero", comment: "Native Reconcile: VoiceOver when a tick balances the account")
+        } else if let difference = summary?.difference {
             let text = style.map { BudgetAmountFormat.string(difference, style: $0) } ?? String(difference)
             announcement = String(format: NSLocalizedString("Difference %@", comment: "Native Reconcile: VoiceOver after a tick"), text)
         }
         await load()
+    }
+}
+
+// MARK: Steps 3 and 4 (sc-4825, native-reconcile-resolve-and-lock)
+
+public enum ReconcileStepError: Equatable {
+    case tickFailed, searchFailed, adjustFailed, lockFailed, undoFailed, timedOut
+
+    static func from(_ error: Error, _ otherwise: ReconcileStepError) -> ReconcileStepError {
+        if case NativeBridgeError.timedOut = error { return .timedOut }
+        return otherwise
+    }
+
+    public var message: String {
+        switch self {
+        case .tickFailed:
+            NSLocalizedString("The row could not be changed. Nothing changed.", comment: "Native Reconcile: tick failed")
+        case .searchFailed:
+            NSLocalizedString("The search could not run.", comment: "Native Reconcile: search failed")
+        case .adjustFailed:
+            NSLocalizedString(
+                "The adjustment was not added: the difference changed, or the category can't be used. Nothing changed.",
+                comment: "Native Reconcile: adjustment refused")
+        case .lockFailed:
+            NSLocalizedString(
+                "The account changed since this screen. Review it again. Nothing changed.", comment: "Native Reconcile: lock refused")
+        case .undoFailed:
+            NSLocalizedString(
+                "The adjustment can't be removed here any more. Delete it in the register.", comment: "Native Reconcile: undo refused")
+        case .timedOut:
+            NSLocalizedString("The budget did not answer in time. Nothing changed.", comment: "Native Reconcile: timed out")
+        }
+    }
+}
+
+// Step 3: likely matches, search, the add form and the adjustment
+@MainActor
+public final class ReconcileResolveViewModel: ObservableObject {
+    static let maxSearch = 100
+
+    @Published public private(set) var state: ReconcileLoad<ReconcileMatches> = .loading
+    @Published public private(set) var searchResults: ReconcileLoad<ReconcileRows> = .loading
+    @Published public private(set) var error: ReconcileStepError?
+    // The difference reached zero here: the flow moves to step 4 by itself
+    @Published public private(set) var reachedZero = false
+    // The adjustment's undo token, for removing it in step 4
+    @Published public private(set) var adjustmentToken: String?
+
+    public let accountId: String
+    public let accountName: String
+    private let client: NativeBridgeClient
+    private var coalescer: ChangeCoalescer?
+    private var generation = 0
+
+    public init(client: NativeBridgeClient, accountId: String, accountName: String, changeInterval: TimeInterval = 1.0 / 60) {
+        self.client = client
+        self.accountId = accountId
+        self.accountName = accountName
+        coalescer = ChangeCoalescer(interval: changeInterval) { [weak self] in
+            Task { @MainActor in await self?.load() }
+        }
+    }
+
+    public var difference: Int? { state.read?.difference }
+    public var matches: [ReconcileMatches.Match] { state.read?.matches ?? [] }
+
+    // The add form, with this account and the difference (loot-core's own parameter)
+    public var addPath: String? {
+        guard let amount = state.read?.addAmountParam,
+            let account = accountName.addingPercentEncoding(withAllowedCharacters: .alphanumerics)
+        else { return nil }
+        return "/transactions/new?account=\(account)&amount=\(amount)"
+    }
+
+    public func load() async {
+        generation += 1
+        let current = generation
+        do {
+            let read = try await client.reconcileMatches(accountId: accountId)
+            guard current == generation else { return }
+            state = .loaded(read)
+            if read.difference == 0 { reachedZero = true }
+        } catch {
+            guard current == generation else { return }
+            state = state.failing(error)
+        }
+    }
+
+    public func eventReceived(_ event: String, tables: [String]) {
+        guard event == "sync-event", tables.contains(where: reconcileWatchedTables.contains) else { return }
+        coalescer?.notify()
+    }
+
+    public func apply(_ match: ReconcileMatches.Match) async {
+        let cleared = match.kind != .untickOne
+        guard let tick = try? ReconcileTick(accountId: accountId, ids: match.ids, cleared: cleared) else { return }
+        await send(tick)
+    }
+
+    // A search result's row, ticked or unticked
+    public func toggle(_ row: ReconcileRows.Row) async {
+        guard !row.reconciled, let tick = try? ReconcileTick(accountId: accountId, ids: [row.id], cleared: !row.cleared) else { return }
+        await send(tick)
+    }
+
+    private func send(_ tick: ReconcileTick) async {
+        error = nil
+        do {
+            _ = try await client.reconcileTick(tick)
+        } catch {
+            self.error = ReconcileStepError.from(error, .tickFailed)
+            return
+        }
+        await load()
+    }
+
+    public func search(_ text: String) async {
+        guard text.count <= Self.maxSearch else { return }
+        do {
+            searchResults = .loaded(try await client.reconcileSearch(accountId: accountId, text: text))
+        } catch {
+            searchResults = searchResults.failing(error)
+        }
+    }
+
+    // A person's confirmed adjustment of the difference loot-core showed
+    public func adjust(categoryId: String?, label: String) async -> Bool {
+        error = nil
+        guard let amount = difference,
+            let adjust = try? ReconcileAdjust(accountId: accountId, amount: amount, categoryId: categoryId, label: label)
+        else {
+            error = .adjustFailed
+            return false
+        }
+        do {
+            _ = try await client.reconcileAdjust(adjust)
+        } catch {
+            self.error = ReconcileStepError.from(error, .adjustFailed)
+            await load()
+            return false
+        }
+        adjustmentToken = adjust.undoToken
+        await load()
+        return true
+    }
+}
+
+// Step 4: the preview, the lock and removing an adjustment
+@MainActor
+public final class ReconcileLockViewModel: ObservableObject {
+    @Published public private(set) var state: ReconcileLoad<ReconcileLockPreview> = .loading
+    @Published public private(set) var error: ReconcileStepError?
+    @Published public private(set) var result: ReconcileLockResult?
+    @Published public private(set) var isLocking = false
+
+    public let accountId: String
+    private let client: NativeBridgeClient
+    private var coalescer: ChangeCoalescer?
+    private var generation = 0
+
+    public init(client: NativeBridgeClient, accountId: String, changeInterval: TimeInterval = 1.0 / 60) {
+        self.client = client
+        self.accountId = accountId
+        coalescer = ChangeCoalescer(interval: changeInterval) { [weak self] in
+            Task { @MainActor in await self?.load() }
+        }
+    }
+
+    public func load() async {
+        generation += 1
+        let current = generation
+        do {
+            let read = try await client.reconcileLockPreview(accountId: accountId)
+            guard current == generation else { return }
+            state = .loaded(read)
+        } catch {
+            guard current == generation else { return }
+            state = state.failing(error)
+        }
+    }
+
+    public func eventReceived(_ event: String, tables: [String]) {
+        guard result == nil, event == "sync-event", tables.contains(where: reconcileWatchedTables.contains) else { return }
+        coalescer?.notify()
+    }
+
+    // true: the rows locked (verified or not, see `result`)
+    public func lock() async -> Bool {
+        guard !isLocking, let digest = state.read?.planDigest, let lock = try? ReconcileLock(accountId: accountId, planDigest: digest)
+        else { return false }
+        error = nil
+        isLocking = true
+        defer { isLocking = false }
+        do {
+            result = try await client.reconcileLock(lock)
+            return true
+        } catch {
+            self.error = ReconcileStepError.from(error, .lockFailed)
+            await load()
+            return false
+        }
+    }
+
+    // Only while the adjustment is still the last undoable write
+    public func removeAdjustment(token: String) async -> Bool {
+        error = nil
+        do {
+            try await client.undo(try NativeUndo(token: token))
+        } catch {
+            self.error = ReconcileStepError.from(error, .undoFailed)
+            return false
+        }
+        await load()
+        return true
     }
 }

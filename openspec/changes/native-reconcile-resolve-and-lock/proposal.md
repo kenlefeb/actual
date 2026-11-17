@@ -13,7 +13,7 @@ Story sc-4825 (Integrations, epic 1550), Reconcile B2: B1 (sc-4801, change `nati
 - **Bridge:** `native/reconcile-matches`, `native/reconcile-lock-preview`, `native/reconcile-adjust`, `native/reconcile-lock`, and a `search` argument on `native/reconcile-rows`, allowlisted; none reachable through `api/`.
 - **Limits are settings:** match candidates (300, ceiling 2,000), match results (5, ceiling 20), lock list rows (200, ceiling 2,000), as synced preferences.
 
-Mobile scope: the iPhone screens (group 2); the web add form gains an `amount` query parameter. The Mac screens are sc-4872.
+Mobile scope: the iPhone screens (group 2); the web add form's existing `amount` query parameter is made safe (finite and bounded). The Mac screens are sc-4872.
 
 Not in this change: the Mac flow (sc-4872); moving the MCP's lock onto the loot-core selection (Backlog, needs a fork handler); unlock (sc-4784); the assistant nudge (Backlog); a native transaction form.
 
@@ -27,6 +27,6 @@ Not in this change: the Mac flow (sc-4872); moving the MCP's lock onto the loot-
 ## Impact
 
 - **loot-core:** `server/accounts/reconcile-plan.ts` (the shared lock selection), `server/native/reconcile.ts` and `native/app.ts` (the handlers), prefs key types.
-- **desktop-client:** `native-bridge-allowlist.json`; the mobile add-transaction form's `amount` parameter.
+- **desktop-client:** `native-bridge-allowlist.json`; the mobile add-transaction form's existing `amount` parameter (a finite, bounded check).
 - **iOS:** `NativeBridgeCore` (view models, allowlist) and the app's reconcile screens (steps 3 and 4, the adjustment sheet, done).
 - **Reviews:** Tester; Solution Architect; Security Analyst (a native lock, adjustment creation, new bridge writes); Product Owner; UX Designer (Figma frames need two corrections, design D3 and D5).

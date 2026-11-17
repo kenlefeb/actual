@@ -19,6 +19,7 @@ describe('Limits are configurable defaults', () => {
       cellsCeiling: 2000,
       deleteCeiling: 1000,
       auditTailBytes: 2 * 1024 * 1024,
+      maxAuditLineBytes: 512 * 1024,
     });
     expect(DEFAULT_LIMITS).toEqual(loadLimits({}, STDIO));
   });
@@ -41,6 +42,20 @@ describe('Limits are configurable defaults', () => {
       rowsCeiling: 3000,
       auditTailBytes: 8 * 1024 * 1024,
     });
+  });
+
+  it('The audit line limit follows the tail and can be set', () => {
+    expect(
+      loadLimits({ [`${STDIO}AUDIT_TAIL_BYTES`]: '4194304' }, STDIO)
+        .maxAuditLineBytes,
+    ).toBe(1024 * 1024);
+    expect(
+      loadLimits({ [`${STDIO}MAX_AUDIT_LINE_BYTES`]: '1000' }, STDIO)
+        .maxAuditLineBytes,
+    ).toBe(1000);
+    expect(() =>
+      loadLimits({ [`${STDIO}MAX_AUDIT_LINE_BYTES`]: '600000' }, STDIO),
+    ).toThrow(/MAX_AUDIT_LINE_BYTES.*AUDIT_TAIL_BYTES/);
   });
 
   it('The hosted entry uses its own names', () => {

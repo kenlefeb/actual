@@ -259,4 +259,70 @@ describe('Set many budget amounts', () => {
     expect(await budgetedNow('2026-02', b)).toBe(999);
     expect(await budgetedNow('2026-02', c)).toBe(0);
   });
+  it('An engine throw after the cell was written counts it applied', async () => {
+    await start();
+    const [a, b, c] = await cats(['A', 'B', 'C']);
+    const real = api.setBudgetAmount;
+    let calls = 0;
+    vi.spyOn(api, 'setBudgetAmount').mockImplementation(async (...args) => {
+      calls += 1;
+      await real(...args);
+      if (calls === 2) throw new Error('timed out after the write');
+    });
+    const res = await h.call('write_set_budget_amounts', {
+      cells: [
+        cell('2026-02', a, 10),
+        cell('2026-02', b, 20),
+        cell('2026-02', c, 30),
+      ],
+    });
+    expect(res.json).toMatchObject({
+      applied: [`${a}:2026-02`, `${b}:2026-02`],
+      failed: `${b}:2026-02`,
+      not_written: [`${c}:2026-02`],
+    });
+    expect(res.json.failure).toMatch(/written/);
+    expect(lines()[1]).toMatchObject({
+      status: 'failed',
+      applied: [`${a}:2026-02`, `${b}:2026-02`],
+    });
+    vi.restoreAllMocks();
+    expect(await budgetedNow('2026-02', c)).toBe(0);
+    const undo = await h.call('write_undo', { write_id: res.json.write_id });
+    expect(undo.isError, undo.text).toBe(false);
+    expect(await budgetedNow('2026-02', b)).toBe(0);
+  });
+
+  it('An engine throw whose cell cannot be read back is maybe written', async () => {
+    await start();
+    const [a, b] = await cats(['A', 'B']);
+    const realSet = api.setBudgetAmount;
+    const realGet = api.getBudgetMonth;
+    let broken = false;
+    vi.spyOn(api, 'setBudgetAmount').mockImplementation(async (...args) => {
+      if (args[1] === b) {
+        broken = true;
+        throw new Error('engine down');
+      }
+      return realSet(...args);
+    });
+    vi.spyOn(api, 'getBudgetMonth').mockImplementation(async m => {
+      if (broken) throw new Error('read failed');
+      return realGet(m);
+    });
+    const res = await h.call('write_set_budget_amounts', {
+      cells: [cell('2026-02', a, 10), cell('2026-02', b, 20)],
+    });
+    vi.restoreAllMocks();
+    expect(res.isError, res.text).toBe(false);
+    expect(res.json.failed).toBe(`${b}:2026-02`);
+    expect(res.json.maybe_written).toBe(`${b}:2026-02`);
+    expect(res.json.failure).toMatch(/may have been written/);
+    expect(lines()[1]).toMatchObject({
+      status: 'failed',
+      maybe_written: `${b}:2026-02`,
+    });
+    const list = await h.call('list_writes');
+    expect(list.json.writes[0].undoable).toBe(false);
+  });
 });

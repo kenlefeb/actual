@@ -169,6 +169,9 @@ function whyNot(e: Entry) {
     Array.isArray(o.applied) &&
     o.applied.length > 0;
   if (o.status !== 'ok' && !partial) return 'it did not complete';
+  if (o.maybe_written) {
+    return 'a cell may have been written but is not recorded';
+  }
   if (!Array.isArray(o.applied) || o.read_back === 'failed') {
     return 'its result is unknown';
   }
@@ -191,7 +194,7 @@ function conflict(items: string[]) {
   const shown = items.slice(0, 20).join(', ');
   const more = items.length > 20 ? ` and ${items.length - 20} more` : '';
   return new UndoRefusal(
-    `A later change means this write can no longer be undone safely: ${shown}${more} no longer hold what it left. Nothing changed. ${BY_HAND}`,
+    `A later change means this write can no longer be undone safely: ${shown}${more} no longer ${items.length === 1 ? 'holds' : 'hold'} what it left. Nothing changed. ${BY_HAND}`,
     'conflict',
   );
 }

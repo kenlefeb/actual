@@ -146,4 +146,20 @@ describe('Limits are configurable defaults', () => {
     expect(res.text).toMatch(/undo of a create/);
     expect(await ids()).toHaveLength(52);
   });
+
+  it('A write whose audit line is too large is refused', async () => {
+    await start(3, {}, { maxAuditLineBytes: 2500 });
+    const all = await ids();
+    const long = 'x'.repeat(1000);
+    const big = await h.call('write_update_transactions', {
+      updates: all.map(t => ({ id: t.id, notes: long })),
+    });
+    expect(big.isError).toBe(true);
+    expect(big.text).toMatch(/audit line.*above the limit of 2500/);
+    expect((await ids()).every(t => t.notes === null)).toBe(true);
+    const ok = await h.call('write_update_transactions', {
+      updates: [{ id: all[0].id, notes: long }],
+    });
+    expect(ok.isError, ok.text).toBe(false);
+  });
 });

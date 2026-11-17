@@ -155,6 +155,7 @@ export function registerBudgetWriteTools(
           const applied: string[] = [];
           let failed: string | undefined;
           let reason = '';
+          let maybe: string | undefined;
           // Not inside api.batchBudgetUpdates: a batch hides its own writes
           // from reads until it ends, which would make the re-check of the
           // next cell meaningless. Each cell is read, then written.
@@ -177,12 +178,30 @@ export function registerBudgetWriteTools(
               );
               failed = c.key;
               reason = 'engine';
+              // The engine may have committed before it threw: read the cell back
+              try {
+                const now = await budgeted(c.month, c.category_id);
+                if (now.amount === c.amount && c.amount !== c.before) {
+                  applied.push(c.key);
+                  reason = 'engine-written';
+                }
+              } catch {
+                maybe = c.key;
+              }
               break;
             }
           }
           return {
             applied,
-            ...(failed ? { failed, detail: { reason } } : {}),
+            ...(failed
+              ? {
+                  failed,
+                  detail: {
+                    reason,
+                    ...(maybe ? { maybe_written: maybe } : {}),
+                  },
+                }
+              : {}),
           };
         },
         async outcome => {
@@ -190,7 +209,12 @@ export function registerBudgetWriteTools(
             string,
             Awaited<ReturnType<typeof budgetedMonth>>
           >();
-          for (const m of months.keys()) after.set(m, await budgetedMonth(m));
+          try {
+            for (const m of months.keys()) after.set(m, await budgetedMonth(m));
+          } catch {
+            // The failure report below matters more than the read-back
+            after.clear();
+          }
           const done = new Set(outcome.applied ?? []);
           return {
             cells: plan.map(c =>
@@ -199,12 +223,15 @@ export function registerBudgetWriteTools(
                   month: c.month,
                   category_id: c.category_id,
                   ...moneyAs('before', c.before),
-                  ...moneyAs(
-                    'after',
-                    after.get(c.month)!.get(c.category_id)?.amount ?? c.amount,
-                  ),
+                  ...(after.size > 0
+                    ? moneyAs(
+                        'after',
+                        after.get(c.month)?.get(c.category_id)?.amount ??
+                          c.amount,
+                      )
+                    : {}),
                 },
-                { category: after.get(c.month)!.get(c.category_id)?.name },
+                { category: after.get(c.month)?.get(c.category_id)?.name },
               ),
             ),
             applied: outcome.applied ?? [],
@@ -214,10 +241,17 @@ export function registerBudgetWriteTools(
                   not_written: plan
                     .map(c => c.key)
                     .filter(k => !done.has(k) && k !== outcome.failed),
+                  ...(outcome.detail?.maybe_written
+                    ? { maybe_written: outcome.detail.maybe_written }
+                    : {}),
                   failure:
                     outcome.detail?.reason === 'changed'
                       ? 'That cell changed since it was read, so it and the cells after it were not written. Cells listed as applied were written; write_undo restores them.'
-                      : 'The engine failed on that cell, so it and the cells after it were not written. Cells listed as applied were written; write_undo restores them.',
+                      : outcome.detail?.reason === 'engine-written'
+                        ? 'The engine reported an error on that cell after writing it, so it is counted as applied; the cells after it were not written. write_undo restores the applied cells.'
+                        : outcome.detail?.maybe_written
+                          ? 'The engine failed on that cell and it could not be read back, so it may have been written; check it by hand. The cells after it were not written, and this write cannot be undone.'
+                          : 'The engine failed on that cell, so it and the cells after it were not written. Cells listed as applied were written; write_undo restores them.',
                 }
               : {}),
           };

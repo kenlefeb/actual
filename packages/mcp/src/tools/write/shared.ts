@@ -189,6 +189,16 @@ export async function loggedWrite<R extends object>(
     })
   | { dry_run: true; ids: string[]; confirm: string }
 > {
+  // One write may not fill the audit tail an undo reads (it would evict the
+  // undo history and its own line); refused before anything is written.
+  const lineBytes = Buffer.byteLength(
+    JSON.stringify({ ...log.identity, tool, ...entry }),
+  );
+  if (lineBytes > log.limits.maxAuditLineBytes) {
+    throw new Refusal(
+      `This write would make an audit line of ${lineBytes} bytes, above the limit of ${log.limits.maxAuditLineBytes}. Nothing changed. Split it into smaller calls.`,
+    );
+  }
   const destructive = options.destructive ?? log.destructive;
   const undoes = options.undoes ? { undoes: options.undoes } : {};
   if (destructive && log.grant.confirm_destructive) {

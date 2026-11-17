@@ -18,6 +18,8 @@ export type Limits = {
   deleteCeiling: number;
   /** How much of the audit log's end an undo reads. */
   auditTailBytes: number;
+  /** The most one write's attempt line may hold, so one write cannot fill the tail. */
+  maxAuditLineBytes: number;
 };
 
 export const DEFAULT_LIMITS: Limits = {
@@ -28,6 +30,7 @@ export const DEFAULT_LIMITS: Limits = {
   cellsCeiling: 2000,
   deleteCeiling: 1000,
   auditTailBytes: 2 * 1024 * 1024,
+  maxAuditLineBytes: 512 * 1024,
 };
 
 // What a cell or a row costs in an audit line, with margin (a cell is about
@@ -68,7 +71,18 @@ export function loadLimits(env: Env, prefix: string): Limits {
       DEFAULT_LIMITS.deleteCeiling,
     ),
     auditTailBytes: read('AUDIT_TAIL_BYTES', DEFAULT_LIMITS.auditTailBytes),
+    maxAuditLineBytes: 0,
   };
+  // A quarter of the tail by default, so 4 writes fit
+  limits.maxAuditLineBytes = read(
+    'MAX_AUDIT_LINE_BYTES',
+    Math.floor(limits.auditTailBytes / WRITES_IN_TAIL),
+  );
+  if (limits.maxAuditLineBytes * WRITES_IN_TAIL > limits.auditTailBytes) {
+    throw new Error(
+      `${name('MAX_AUDIT_LINE_BYTES')} is too large for ${name('AUDIT_TAIL_BYTES')}: the audit tail must hold ${WRITES_IN_TAIL} such lines.`,
+    );
+  }
   const pairs = [
     ['MAX_ROWS', limits.maxRows, limits.rowsCeiling],
     ['MAX_CELLS', limits.maxCells, limits.cellsCeiling],

@@ -42,6 +42,25 @@ The row limit (50), cell limit (500), delete limit (50) and their ceilings (1,00
 - **WHEN** the server starts
 - **THEN** it exits with fixed text naming the two settings
 
+### Requirement: One write cannot fill the audit tail
+A write whose attempt audit line would exceed the audit line limit (a setting, default a quarter of the audit tail) SHALL be refused with fixed text before any audit line, changing nothing.
+
+#### Scenario: A write with huge notes
+- **GIVEN** an audit line limit of 2,500 bytes
+- **WHEN** a client updates 3 transactions with 1,000-character notes
+- **THEN** the call is refused and nothing changed
+
+### Requirement: An engine error after a cell was written
+When the engine throws while setting a cell of `write_set_budget_amounts`, the server SHALL read the cell back: a cell holding the new amount is applied, and one that cannot be read back is recorded as `maybe_written` and the write is not undoable. `not_written` is the cells minus `applied` and `failed`.
+
+#### Scenario: Throw after the write
+- **WHEN** the engine writes the second of 3 cells and then throws
+- **THEN** the first two are applied, the third is not written, and undo restores the first two
+
+#### Scenario: Throw and no read-back
+- **WHEN** the engine throws on a cell and the read-back fails
+- **THEN** the result and outcome line say the cell may have been written and the write is not undoable
+
 ### Requirement: Delete tools have their own limit
 Tools that delete or close (category group delete, account close and delete, and undo of a create) SHALL count rows against the delete limit, the lower of the delete limit (the grant's `max_delete_rows`, else the setting, at most the ceiling) and the row limit in force (the grant's `max_rows`, else the setting), and a refusal SHALL say it is the delete limit, including for an undo of a create. Raising `max_rows` or `max_cells` SHALL NOT raise it.
 

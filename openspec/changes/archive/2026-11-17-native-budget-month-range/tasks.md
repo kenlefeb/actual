@@ -21,7 +21,7 @@ Test-first: write the tests, run them and see them fail before writing the code.
 ## 4. Wrap up (sc-3850)
 
 - [x] 4.1 Release note or fork news only if user-facing text changes; otherwise state why none is needed in the PR. Verify: `yarn check:fork-news` passes if a note was added.
-- [ ] 4.2 Archive this change after `add-native-budget-screen` and `native-bridge` are archived (the "Month outside the range" edit is already made in the spec PR). Verify: `yarn check:openspec-shortcut`.
+- [x] 4.2 Archive this change after `add-native-budget-screen` and `native-bridge` are archived (the "Month outside the range" edit is already made in the spec PR). Verify: `yarn check:openspec-shortcut`.
 
 ## 5. The picker marks the shown month (sc-4092)
 

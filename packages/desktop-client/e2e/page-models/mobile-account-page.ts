@@ -81,6 +81,14 @@ export class MobileAccountPage {
       .click();
     const reconcileModal = this.page.getByTestId('account-reconcile-modal');
     const amountInput = reconcileModal.getByTestId('amount-input');
+    // With no bank balance the field starts empty behind "Enter amount"
+    const enterAmount = reconcileModal.getByRole('button', {
+      name: 'Enter amount',
+    });
+    await amountInput.or(enterAmount).first().waitFor();
+    if (await enterAmount.isVisible()) {
+      await enterAmount.click();
+    }
     await amountInput.waitFor();
     if (amount != null) {
       await amountInput.fill(amount);

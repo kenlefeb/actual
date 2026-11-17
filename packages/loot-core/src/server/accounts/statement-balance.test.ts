@@ -369,6 +369,16 @@ describe('account-statement-balance-prefill (1.1)', () => {
     },
   );
 
+  it('Treats a stamp in the future beyond a small skew as stale', async () => {
+    await bankAccount();
+    await setPref('bank-balance-at-acct1', String(Date.now() + 2 * DAY));
+    const r = await prefill();
+    expect(r.prefill).toBeNull();
+    expect(r.alternatives[0]).toMatchObject({ source: 'bank-sync' });
+    await setPref('bank-balance-at-acct1', String(Date.now() + 60_000));
+    expect((await prefill()).prefill?.amount).toBe(46541);
+  });
+
   it('Accepts the ceiling of 30 days', async () => {
     await bankAccount();
     await setPref('reconcile-bank-balance-max-age-days', '30');

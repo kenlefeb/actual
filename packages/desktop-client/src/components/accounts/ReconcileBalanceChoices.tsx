@@ -71,7 +71,7 @@ export function ReconcileBalanceChoices({
         })
       : t('From {{provider}} balance, date unknown', { provider });
   } else {
-    line = t('No bank balance to fill in. Enter your statement balance.');
+    line = t('No recent bank balance');
   }
 
   const buttonStyle = isMobile ? { height: styles.mobileMinHeight } : undefined;
@@ -143,7 +143,11 @@ export function ReconcileBalanceChoices({
             aria-label={t('About this balance')}
             aria-expanded={isOpen}
             onPress={isMobile ? () => setIsOpen(open => !open) : undefined}
-            style={{ padding: 2 }}
+            style={
+              isMobile
+                ? { minWidth: 44, minHeight: 44, padding: 0 }
+                : { padding: 2 }
+            }
           >
             <SvgInformationOutline
               style={{ width: 12, height: 12, color: theme.pageTextLight }}
@@ -166,14 +170,14 @@ export function ReconcileBalanceChoices({
       {isMobile && note}
       {isEmpty && !applied && !edited && (
         <Text style={{ color: theme.pageTextLight, fontSize: 12 }}>
-          {<Trans>Type the balance from your statement to continue.</Trans>}
+          <Trans>Enter the closing balance from your statement.</Trans>
         </Text>
       )}
       {prefill.alternatives.map(alternative =>
         alternative.source === 'cleared' ? (
           <View key="cleared" style={{ gap: 2 }}>
             <Button style={buttonStyle} onPress={() => onChoose(alternative)}>
-              {<Trans>Use cleared balance</Trans>}
+              <Trans>Use cleared balance</Trans>
             </Button>
             <Text
               style={{

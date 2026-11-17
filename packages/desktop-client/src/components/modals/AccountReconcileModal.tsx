@@ -27,7 +27,6 @@ import { useDateFormat } from '#hooks/useDateFormat';
 import { useFeatureFlag } from '#hooks/useFeatureFlag';
 import { useLocale } from '#hooks/useLocale';
 import type { Modal as ModalType } from '#modals/modalsSlice';
-import { addNotification } from '#notifications/notificationsSlice';
 import { useDispatch } from '#redux';
 
 type AccountReconcileModalProps = Extract<
@@ -74,24 +73,13 @@ export function AccountReconcileModal({
     if (newAmount == null) {
       return;
     }
-    const source = await recordStatementBalance(
+    await recordStatementBalance(
+      dispatch,
       accountId,
       newAmount,
       applied,
       edited,
     );
-    if (source === 'cleared') {
-      dispatch(
-        addNotification({
-          notification: {
-            type: 'message',
-            message: t(
-              "The cleared balance is the app's own figure, not a statement, so an assistant cannot use it to reconcile. Enter your statement's balance to let it.",
-            ),
-          },
-        }),
-      );
-    }
     onReconcile(newAmount);
   };
 
@@ -114,7 +102,23 @@ export function AccountReconcileModal({
                 'Enter the current balance of your bank account that you want to reconcile with:',
               )}
             />
-            {prefill && (
+            {prefill && amount == null && (
+              <Button
+                style={{
+                  ...styles.veryLargeText,
+                  color: theme.pageTextSubdued,
+                  height: styles.mobileMinHeight,
+                }}
+                variant="bare"
+                onPress={() => {
+                  setAmount(0);
+                  setAmountInputKey(key => key + 1);
+                }}
+              >
+                <Trans>Enter amount</Trans>
+              </Button>
+            )}
+            {prefill && amount != null && (
               <View
                 style={{
                   justifyContent: 'center',
@@ -123,7 +127,7 @@ export function AccountReconcileModal({
               >
                 <AmountInput
                   key={amountInputKey}
-                  value={integerToAmount(amount ?? 0)}
+                  value={integerToAmount(amount)}
                   onChange={newAmount => setAmount(amountToInteger(newAmount))}
                   autoFocus
                   autoFocusDelay={150}

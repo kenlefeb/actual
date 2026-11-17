@@ -155,20 +155,25 @@ describe('AccountReconcileModal on phone web (native-reconcile-flow 1.2, 1.3)', 
     expect(onReconcile).toHaveBeenCalledWith(1250);
   });
 
-  it('with no source Reconcile is off with a hint, until the cleared balance is chosen', async () => {
+  it('with no source the field is empty with one hint and Reconcile is off, until the cleared balance is chosen', async () => {
     mockResolver(null, [CLEARED]);
     const { onReconcile, store } = open();
-    await screen.findByLabelText('Statement balance');
+    await screen.findByRole('button', { name: 'Enter amount' });
+    // not a made-up 0.00
+    expect(
+      screen.queryByLabelText('Statement balance'),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Reconcile' })).toBeDisabled();
     expect(
-      screen.getByText(/Type the balance from your statement/),
-    ).toBeInTheDocument();
+      screen.getAllByText(/closing balance from your statement/),
+    ).toHaveLength(1);
     expect(
       screen.getByText('Your own cleared total — not an independent check'),
     ).toBeInTheDocument();
     await userEvent.click(
       screen.getByRole('button', { name: 'Use cleared balance' }),
     );
+    expect(screen.getByLabelText('Statement balance')).toHaveValue('10.00');
     await userEvent.click(screen.getByRole('button', { name: 'Reconcile' }));
     expect(saveCalls()[0][1]).toMatchObject({
       amount: 1000,
@@ -180,12 +185,48 @@ describe('AccountReconcileModal on phone web (native-reconcile-flow 1.2, 1.3)', 
     expect(onReconcile).toHaveBeenCalledWith(1000);
   });
 
+  it('tapping the empty field lets you type a balance', async () => {
+    mockResolver(null, [CLEARED]);
+    open();
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Enter amount' }),
+    );
+    expect(screen.getByLabelText('Statement balance')).toBeInTheDocument();
+  });
+
+  it('the info button is at least 44 points square', async () => {
+    open();
+    await screen.findByLabelText('Statement balance');
+    expect(
+      screen.getByRole('button', { name: 'About this balance' }),
+    ).toHaveStyle({ minWidth: '44px', minHeight: '44px' });
+  });
+
+  it('tells the person when the balance could not be recorded, and still reconciles', async () => {
+    vi.mocked(send).mockImplementation((async (name: string) => {
+      if (name === 'account-statement-balance-save') throw new Error('no');
+      return {
+        prefill: BANK,
+        alternatives: [CLEARED],
+        cleared_balance: 1000,
+        record: null,
+        account_type: null,
+      };
+    }) as never);
+    const { onReconcile, store } = open();
+    await screen.findByLabelText('Statement balance');
+    await userEvent.click(screen.getByRole('button', { name: 'Reconcile' }));
+    expect(onReconcile).toHaveBeenCalledWith(46541);
+    expect(store.getState().notifications.notifications[0].message).toMatch(
+      /Nothing was recorded for your assistant/,
+    );
+  });
+
   it('a stale bank balance is offered and saves with its own date', async () => {
     mockResolver(null, [{ ...BANK, as_of: '2026-11-02' }, CLEARED]);
     const { onReconcile } = open();
-    await screen.findByLabelText('Statement balance');
     await userEvent.click(
-      screen.getByRole('button', { name: /Use bank balance from/ }),
+      await screen.findByRole('button', { name: /Use bank balance from/ }),
     );
     await userEvent.click(screen.getByRole('button', { name: 'Reconcile' }));
     expect(saveCalls()[0][1]).toMatchObject({

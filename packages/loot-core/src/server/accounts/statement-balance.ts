@@ -14,6 +14,7 @@ export const MAX_AGE_PREF = 'reconcile-bank-balance-max-age-days';
 const DEFAULT_MAX_AGE_DAYS = 7;
 const MAX_AGE_CEILING_DAYS = 30;
 const DAY_MS = 86_400_000;
+const CLOCK_SKEW_MS = 5 * 60_000;
 
 export const STATEMENT_BALANCE_SOURCES = [
   'bank-sync',
@@ -169,7 +170,9 @@ export async function getStatementBalancePrefill({
           link: 'bank-sync',
         }
       : null;
-  const isFresh = stamp != null && Date.now() - stamp <= days * DAY_MS;
+  // A stamp from a clock ahead by more than a small skew is not trusted
+  const age = stamp == null ? null : Date.now() - stamp;
+  const isFresh = age != null && age >= -CLOCK_SKEW_MS && age <= days * DAY_MS;
 
   return {
     prefill: bank && isFresh ? bank : null,

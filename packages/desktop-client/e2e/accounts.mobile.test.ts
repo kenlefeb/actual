@@ -65,6 +65,25 @@ test.describe('Mobile Accounts', () => {
     await expect(page).toMatchThemeScreenshots();
   });
 
+  test('reconcile dialog with no bank balance', async () => {
+    const accountsPage = await navigation.goToAccountsPage();
+    await accountsPage.waitFor();
+
+    const accountPage = await accountsPage.openNthAccount(0);
+    await accountPage.waitFor();
+
+    await accountPage.accountMenuButton.click();
+    await page
+      .getByTestId('account-menu-modal')
+      .getByRole('button', { name: 'Reconcile', exact: true })
+      .click();
+    const reconcileModal = page.getByTestId('account-reconcile-modal');
+    await expect(
+      reconcileModal.getByRole('button', { name: 'Enter amount' }),
+    ).toBeVisible();
+    await expect(reconcileModal).toMatchThemeScreenshots();
+  });
+
   test('reconciles an account', async () => {
     const accountsPage = await navigation.goToAccountsPage();
     await accountsPage.waitFor();

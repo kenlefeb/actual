@@ -282,9 +282,13 @@ describe('ReconcileMenu source and recorded balance (native-reconcile-flow 1.2, 
     open();
     expect(await screen.findByRole('textbox')).toHaveValue('');
     expect(
-      screen.getByText(/Type the balance from your statement/),
+      screen.getByText(/Enter the closing balance from your statement/),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Reconcile' })).toBeDisabled();
+    expect(screen.getByText('No recent bank balance')).toBeInTheDocument();
+    expect(
+      screen.getAllByText(/closing balance from your statement/),
+    ).toHaveLength(1);
     expect(
       screen.getByText('Your own cleared total — not an independent check'),
     ).toBeInTheDocument();
@@ -334,10 +338,13 @@ describe('ReconcileMenu source and recorded balance (native-reconcile-flow 1.2, 
         account_type: null,
       };
     }) as never);
-    const { onReconcile } = open();
+    const { onReconcile, store } = open();
     await screen.findByRole('textbox');
     await userEvent.click(screen.getByRole('button', { name: 'Reconcile' }));
     expect(onReconcile).toHaveBeenCalledWith(46541);
+    expect(store.getState().notifications.notifications[0].message).toMatch(
+      /Nothing was recorded for your assistant/,
+    );
   });
 
   test('text with no digits does not reconcile', async () => {

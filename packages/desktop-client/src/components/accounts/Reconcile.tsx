@@ -22,7 +22,6 @@ import { useDateFormat } from '#hooks/useDateFormat';
 import { useFormat } from '#hooks/useFormat';
 import { useLocale } from '#hooks/useLocale';
 import { useSheetValue } from '#hooks/useSheetValue';
-import { addNotification } from '#notifications/notificationsSlice';
 import { useDispatch } from '#redux';
 
 import { ReconcileBalanceChoices } from './ReconcileBalanceChoices';
@@ -179,24 +178,7 @@ export function ReconcileMenu({
       return;
     }
 
-    const source = await recordStatementBalance(
-      account.id,
-      amount,
-      applied,
-      edited,
-    );
-    if (source === 'cleared') {
-      dispatch(
-        addNotification({
-          notification: {
-            type: 'message',
-            message: t(
-              "The cleared balance is the app's own figure, not a statement, so an assistant cannot use it to reconcile. Enter your statement's balance to let it.",
-            ),
-          },
-        }),
-      );
-    }
+    await recordStatementBalance(dispatch, account.id, amount, applied, edited);
 
     onReconcile(amount);
     onClose();

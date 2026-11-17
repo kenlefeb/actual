@@ -172,6 +172,31 @@ test.describe('Accounts', () => {
     expect(wideDialogBox.width).toBeLessThanOrEqual(700);
   });
 
+  test('reconcile dialog with no bank balance, and after Use cleared balance', async () => {
+    accountPage = await navigation.createAccount({
+      name: 'Reconcile Source',
+      offBudget: false,
+      balance: 100,
+    });
+    await accountPage.waitFor();
+
+    await page.getByRole('button', { name: 'Reconcile' }).click();
+    const reconcilePopover = page.locator('[data-popover]');
+    await expect(reconcilePopover.getByRole('textbox')).toHaveValue('');
+    await expect(
+      reconcilePopover.getByText(
+        'Enter the closing balance from your statement.',
+      ),
+    ).toBeVisible();
+    await expect(reconcilePopover).toMatchThemeScreenshots();
+
+    await reconcilePopover
+      .getByRole('button', { name: 'Use cleared balance' })
+      .click();
+    await expect(reconcilePopover.getByRole('textbox')).not.toHaveValue('');
+    await expect(reconcilePopover).toMatchThemeScreenshots();
+  });
+
   test('shift-click range selection skips hidden reconciled transactions', async () => {
     accountPage = await navigation.createAccount({
       name: 'Range Select',

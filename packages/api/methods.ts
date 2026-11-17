@@ -469,6 +469,26 @@ export function copyBudgetMonth(month: string) {
   return send('api/budget-copy-month', { month });
 }
 
+/** The cells, goals and stored automations a template apply would write; writes nothing. */
+export function planBudgetTemplates(
+  month: string,
+  options: { overwrite?: boolean; categoryIds?: string[] } = {},
+) {
+  return send('api/budget-templates-plan', { month, ...options });
+}
+
+/**
+ * Applies the goal templates of `month` as the budget menu does: only
+ * unbudgeted categories, all of them with `overwrite`, or exactly the listed
+ * `categoryIds` (which are always overwritten).
+ */
+export function applyBudgetTemplates(
+  month: string,
+  options: { overwrite?: boolean; categoryIds?: string[] } = {},
+) {
+  return send('api/budget-templates-apply', { month, ...options });
+}
+
 /** The cells setting `month` to the 3, 6 or 12 month average would change; writes nothing. */
 export function planBudgetToAverage(month: string, months: 3 | 6 | 12) {
   return send('api/budget-average-plan', { month, months });

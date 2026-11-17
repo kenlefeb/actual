@@ -204,6 +204,33 @@ async function cellsResult(plan: Cell[], outcome: WriteOutcome) {
   };
 }
 
+/** Names beside each cell, so a person can read the dry run. */
+async function categoryNames(month: string) {
+  const names = new Map<string, { category: string; group: string }>();
+  for (const g of (await api.getBudgetMonth(month)).categoryGroups) {
+    for (const c of g.categories ?? []) {
+      names.set(String(c.id), {
+        category: String(c.name),
+        group: String(g.name),
+      });
+    }
+  }
+  return names;
+}
+
+/** A dry run is never shortened: one that does not fit the response size is refused, with no confirm. */
+function requireDryRunFits(log: WriteLog, shown: object, count: number) {
+  if (
+    isDryRun(log) &&
+    Buffer.byteLength(JSON.stringify(shown)) + ENVELOPE_BYTES >
+      log.limits.maxResponseBytes
+  ) {
+    throw new Refusal(
+      `The dry run would list ${count} cells, more than fits in one response (${log.limits.maxResponseBytes} bytes), and it is never shortened, so no confirm is issued. Nothing changed. Narrow it (fewer categories, or set the cells in smaller batches with write_set_budget_amounts).`,
+    );
+  }
+}
+
 /**
  * A whole-month action (copy, average) from its plan: the app's own cells,
  * only those that change counted against the cell limit, and under
@@ -239,16 +266,7 @@ async function runMonthAction(
     month,
     ...extra,
   };
-  // Names beside each cell, so a person can read the dry run
-  const names = new Map<string, { category: string; group: string }>();
-  for (const g of (await api.getBudgetMonth(month)).categoryGroups) {
-    for (const c of g.categories ?? []) {
-      names.set(String(c.id), {
-        category: String(c.name),
-        group: String(g.name),
-      });
-    }
-  }
+  const names = await categoryNames(month);
   const cells = plan.map(c => ({
     cell: c.key,
     category: names.get(c.category_id)?.category,
@@ -256,18 +274,11 @@ async function runMonthAction(
     before: c.before,
     after: c.amount,
   }));
-  if (
-    isDryRun(log) &&
-    Buffer.byteLength(
-      JSON.stringify({ ids: entry.ids, changes: entry.changes, cells }),
-    ) +
-      ENVELOPE_BYTES >
-      log.limits.maxResponseBytes
-  ) {
-    throw new Refusal(
-      `The dry run would list ${plan.length} cells, more than fits in one response (${log.limits.maxResponseBytes} bytes), and it is never shortened, so no confirm is issued. Nothing changed. Set the cells in smaller batches with write_set_budget_amounts.`,
-    );
-  }
+  requireDryRunFits(
+    log,
+    { ids: entry.ids, changes: entry.changes, cells },
+    plan.length,
+  );
   return loggedWrite(
     log,
     tool,
@@ -283,6 +294,169 @@ async function runMonthAction(
   );
 }
 
+type TemplatePlan = Awaited<ReturnType<typeof api.planBudgetTemplates>>;
+
+type TemplateOptions = { overwrite: boolean; categoryIds?: string[] };
+
+/**
+ * Applies the plan through the app's own action, once, inside the caller's
+ * write lock. The plan is recomputed first and must equal the confirmed one
+ * (goals and stored automations included); the engine then writes every cell
+ * in one batch, so it is read back, not re-checked cell by cell (design D4).
+ */
+async function writeTemplates(
+  plan: TemplatePlan,
+  month: string,
+  options: TemplateOptions,
+  log: WriteLog,
+  callId: string,
+): Promise<WriteOutcome> {
+  const keys = plan.cells.map(c =>
+    cellKey({ category_id: c.categoryId, month }),
+  );
+  if (
+    JSON.stringify(await api.planBudgetTemplates(month, options)) !==
+    JSON.stringify(plan)
+  ) {
+    return {
+      applied: [],
+      failed: keys[0],
+      detail: { reason: 'changed' },
+    };
+  }
+  let reason = '';
+  try {
+    await api.applyBudgetTemplates(month, options);
+  } catch (error) {
+    stderrLine(
+      log,
+      `write_apply_budget_templates failed (call ${callId})`,
+      error,
+    );
+    reason = 'engine';
+  }
+  // The engine may have committed before it threw: the read-back decides
+  let applied: string[] = [];
+  try {
+    const now = await budgetedMonth(month);
+    applied = plan.cells
+      .filter(c => now.get(c.categoryId)?.amount === c.after)
+      .map(c => cellKey({ category_id: c.categoryId, month }));
+  } catch {
+    return {
+      applied: [],
+      failed: keys[0],
+      detail: { reason: 'engine', maybe_written: keys[0] },
+    };
+  }
+  const missing = keys.find(k => !applied.includes(k));
+  return missing
+    ? { applied, failed: missing, detail: { reason: reason || 'engine' } }
+    : { applied };
+}
+
+/**
+ * Apply or overwrite a month's templates from the app's plan: the cells and
+ * goals that change, counted against the cell limit, and the automations the
+ * notes would store. Not undoable: goals and the automation store cannot be
+ * restored yet (design D6).
+ */
+async function runTemplates(
+  log: WriteLog,
+  month: string,
+  mode: 'apply' | 'overwrite',
+  categoryIds: string[] | undefined,
+) {
+  const options: TemplateOptions = {
+    overwrite: mode === 'overwrite',
+    ...(categoryIds ? { categoryIds } : {}),
+  };
+  const plan = await api.planBudgetTemplates(month, options);
+  if (plan.errors.length > 0) {
+    return withText(
+      {
+        month,
+        changed: 0,
+        cells: [],
+        note: 'A template has an error, so the app applies nothing. Fix the note and try again. Nothing changed.',
+      },
+      { errors: plan.errors },
+    );
+  }
+  requireCells(log, plan.cells.length);
+  if (plan.cells.length === 0 && plan.store.length === 0) {
+    return { month, changed: 0, cells: [], note: 'No cell would change.' };
+  }
+  const changes = [
+    ...plan.cells.flatMap(c =>
+      (
+        [
+          ['budgeted', c.before, c.after],
+          ['goal', c.goalBefore, c.goalAfter],
+          ['long_goal', c.longGoalBefore, c.longGoalAfter],
+        ] as const
+      )
+        .filter(([, before, after]) => before !== after)
+        .map(([field, before, after]) => ({
+          id: c.categoryId,
+          field: `${field}:${month}`,
+          before,
+          after,
+        })),
+    ),
+    ...plan.store.map(s => ({
+      id: s.categoryId,
+      field: 'automation',
+      before: s.before,
+      after: s.after,
+    })),
+  ];
+  const entry = {
+    ids: plan.cells.map(c => cellKey({ category_id: c.categoryId, month })),
+    changes,
+    month,
+    mode,
+  };
+  const names = await categoryNames(month);
+  const cells = plan.cells.map(c => ({
+    cell: cellKey({ category_id: c.categoryId, month }),
+    category: names.get(c.categoryId)?.category,
+    group: names.get(c.categoryId)?.group,
+    before: c.before,
+    after: c.after,
+    goal_before: c.goalBefore,
+    goal_after: c.goalAfter,
+  }));
+  requireDryRunFits(log, { ...entry, cells }, plan.cells.length);
+  return loggedWrite(
+    log,
+    'write_apply_budget_templates',
+    entry,
+    callId => writeTemplates(plan, month, options, log, callId),
+    async outcome => ({
+      month,
+      mode,
+      changed: plan.cells.length,
+      automations_stored: plan.store.length,
+      cells: cells.map(({ category, group, ...c }) =>
+        withText(c, { category, group }),
+      ),
+      applied: outcome.applied ?? [],
+      ...(outcome.failed
+        ? {
+            failed: outcome.failed,
+            failure:
+              outcome.detail?.reason === 'changed'
+                ? 'The templates changed since they were checked, so nothing was written.'
+                : outcome.detail?.maybe_written
+                  ? 'The engine failed and the result could not be read back, so it may have been written; check the month by hand.'
+                  : 'The engine failed or did not write every cell; check the month by hand. Cells listed as applied were written. This write cannot be undone.',
+          }
+        : {}),
+    }),
+    { preview: { cells } },
+  );
+}
 export function registerBudgetWriteTools(
   tool: RegisterWriteTool,
   limits: Limits,
@@ -434,6 +608,32 @@ export function registerBudgetWriteTools(
     { scopes: ['budget:write'], destructive: true },
   );
 
+  tool(
+    'write_apply_budget_templates',
+    `Apply a month's (YYYY-MM) budget templates (the #template and #goal lines of category notes, no AI), as the budget menu's apply and overwrite do. mode "apply" (the default) runs only categories with no budgeted amount; "overwrite" runs every category with a template. With category_ids only those categories run, always overwriting. The budgeted amounts and goals that would change are counted against the cell limit (${limits.maxCells} by default), and the automations the notes would store are listed too. When this connection must confirm destructive calls, the first call changes nothing and lists every cell (category_id:month, before, after, goal before and after) with a \`confirm\` that binds every cell, goal and stored automation; call again with it within 5 minutes. A dry run too large to list in one response is refused with no confirm. A note with a template error applies nothing and says so. Cells are named category_id:month in the audit log, which records each goal before and after. Not undoable.`,
+    {
+      month,
+      mode: z.enum(['apply', 'overwrite']).optional(),
+      category_ids: z.array(id).min(1).max(limits.cellsCeiling).optional(),
+      confirm,
+    },
+    async ({ month: m, mode, category_ids }, auditLog) => {
+      requireMonth(m);
+      if (category_ids) {
+        if (new Set(category_ids).size !== category_ids.length) {
+          throw new Refusal(
+            'A category may be listed only once. Nothing changed.',
+          );
+        }
+        const known = await budgetedMonth(m);
+        if (category_ids.some(c => !known.has(c))) {
+          throw new Refusal(NOT_A_CATEGORY);
+        }
+      }
+      return runTemplates(auditLog, m, mode ?? 'apply', category_ids);
+    },
+    { scopes: ['budget:write'], destructive: true },
+  );
   tool(
     'write_set_budget_carryover',
     "Turn rollover (carryover) of a category's balance on or off, by category id (never a name). The engine applies it from the given month (YYYY-MM) onward, to every later month. Returns the flag before and after and how many months it covers. Not undoable.",

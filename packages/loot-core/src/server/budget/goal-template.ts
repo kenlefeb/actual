@@ -1,6 +1,7 @@
 import { logger } from '#platform/server/log';
 import { aqlQuery } from '#server/aql';
 import * as db from '#server/db';
+import * as sheet from '#server/sheet';
 import { batchMessages } from '#server/sync';
 // @ts-strict-ignore
 import * as monthUtils from '#shared/months';
@@ -12,7 +13,12 @@ import type { Template } from '#types/models/templates';
 import { getSheetValue, isTrackingBudget, setBudget, setGoal } from './actions';
 import { CategoryTemplateContext } from './category-template-context';
 import { tombstoneOrphanCleanupGroups } from './cleanup-groups';
-import { checkTemplateNotes, storeNoteTemplates } from './template-notes';
+import { getGoalDefsToReset } from './statements';
+import {
+  checkTemplateNotes,
+  getCategoriesWithTemplates,
+  storeNoteTemplates,
+} from './template-notes';
 import type { TemplateNotification } from './template-notification';
 
 export function distributeRemainder(
@@ -310,6 +316,26 @@ async function computeTemplates(
   return { contexts: templateContexts, errors, orphanGoals };
 }
 
+function templateWrites(
+  contexts: CategoryTemplateContext[],
+  orphanGoals: TemplateGoal[],
+) {
+  const budgetList: TemplateBudget[] = [];
+  const goalList: TemplateGoal[] = [...orphanGoals];
+  contexts.forEach(context => {
+    const values = context.getValues();
+    budgetList.push({
+      category: context.category.id,
+      budgeted: values.budgeted,
+    });
+    goalList.push({
+      category: context.category.id,
+      goal: values.goal,
+      longGoal: values.longGoal ? 1 : null,
+    });
+  });
+  return { budgetList, goalList };
+}
 async function processTemplate(
   month: string,
   force: boolean,
@@ -340,20 +366,7 @@ async function processTemplate(
     };
   }
 
-  const budgetList: TemplateBudget[] = [];
-  const goalList: TemplateGoal[] = [...orphanGoals];
-  contexts.forEach(context => {
-    const values = context.getValues();
-    budgetList.push({
-      category: context.category.id,
-      budgeted: values.budgeted,
-    });
-    goalList.push({
-      category: context.category.id,
-      goal: values.goal,
-      longGoal: values.longGoal ? 1 : null,
-    });
-  });
+  const { budgetList, goalList } = templateWrites(contexts, orphanGoals);
   await setBudgets(month, budgetList);
   await setGoals(month, goalList);
 
@@ -362,6 +375,131 @@ async function processTemplate(
     message: 'templates-applied',
     count: contexts.length,
   };
+}
+
+/** One category's budgeted amount and goal as a template run would leave them. */
+export type TemplateCellPlan = {
+  categoryId: string;
+  month: string;
+  before: number;
+  after: number;
+  goalBefore: number | null;
+  goalAfter: number | null;
+  longGoalBefore: number | null;
+  longGoalAfter: number | null;
+};
+
+/** One automation a run would store from notes or clear, as its stored text. */
+export type TemplateStorePlan = {
+  categoryId: string;
+  before: string | null;
+  after: string | null;
+};
+
+export type TemplatePlan = {
+  cells: TemplateCellPlan[];
+  store: TemplateStorePlan[];
+  errors: string[];
+};
+
+/**
+ * What `applyTemplate`, `overwriteTemplate` and `applyMultipleCategoryTemplates`
+ * would write, without writing: the budgeted amounts and goals that change and
+ * the automations stored from notes. It runs the same computation on the
+ * templates the notes would leave in the store.
+ */
+export async function planTemplates({
+  month,
+  overwrite,
+  categoryIds,
+}: {
+  month: string;
+  overwrite: boolean;
+  categoryIds?: Array<CategoryEntity['id']>;
+}): Promise<TemplatePlan> {
+  // The store step: notes replace stored automations, and notes that no
+  // longer hold a template clear the ones they once made
+  const rows = await db.all<{
+    id: string;
+    goal_def: string | null;
+    template_settings: string | null;
+  }>('SELECT id, goal_def, template_settings FROM categories');
+  const stored = new Map(rows.map(r => [r.id, r]));
+  const goalDefs = new Map<string, string>(
+    rows.flatMap(r =>
+      r.goal_def ? [[r.id, r.goal_def] as [string, string]] : [],
+    ),
+  );
+  const store: TemplateStorePlan[] = [];
+  for (const { id, templates } of await getCategoriesWithTemplates()) {
+    const row = stored.get(id);
+    if (!row) continue;
+    const after = templates.length > 0 ? JSON.stringify(templates) : null;
+    if (after) goalDefs.set(id, after);
+    else goalDefs.delete(id);
+    const source = row.template_settings
+      ? JSON.parse(row.template_settings).source
+      : 'notes';
+    if (after !== row.goal_def || source !== 'notes') {
+      store.push({ categoryId: id, before: row.goal_def, after });
+    }
+  }
+  for (const { id, goal_def } of await getGoalDefsToReset()) {
+    goalDefs.delete(id);
+    store.push({ categoryId: id, before: goal_def, after: null });
+  }
+
+  const categoryTemplates: Record<CategoryEntity['id'], Template[]> = {};
+  for (const [id, def] of goalDefs) {
+    if (!categoryIds || categoryIds.includes(id)) {
+      categoryTemplates[id] = JSON.parse(def);
+    }
+  }
+  let categories: CategoryEntity[] = [];
+  if (categoryIds) {
+    ({ data: categories } = await aqlQuery(
+      q('categories')
+        .filter({ id: { $oneof: categoryIds } })
+        .select('*'),
+    ));
+  }
+  const { contexts, errors, orphanGoals } = await computeTemplates(
+    month,
+    overwrite || !!categoryIds,
+    categoryTemplates,
+    categories,
+  );
+  if (errors.length > 0) return { cells: [], store, errors };
+
+  const { budgetList, goalList } = templateWrites(contexts, orphanGoals);
+  const sheetName = monthUtils.sheetForMonth(month);
+  const readGoal = (cell: string, id: string) => {
+    const v = sheet.getCell(sheetName, `${cell}-${id}`).value;
+    return typeof v === 'number' ? v : null;
+  };
+  const cells: TemplateCellPlan[] = [];
+  for (const goal of goalList) {
+    const id = goal.category;
+    const before = await getSheetValue(sheetName, `budget-${id}`);
+    const cell: TemplateCellPlan = {
+      categoryId: id,
+      month,
+      before,
+      after: budgetList.find(b => b.category === id)?.budgeted ?? before,
+      goalBefore: readGoal('goal', id),
+      goalAfter: goal.goal,
+      longGoalBefore: readGoal('long-goal', id),
+      longGoalAfter: goal.longGoal,
+    };
+    if (
+      cell.before !== cell.after ||
+      cell.goalBefore !== cell.goalAfter ||
+      cell.longGoalBefore !== cell.longGoalAfter
+    ) {
+      cells.push(cell);
+    }
+  }
+  return { cells, store, errors };
 }
 
 export type DryRunCategoryResult = {

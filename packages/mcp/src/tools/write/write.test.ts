@@ -6,6 +6,7 @@ import { startHarness } from '#client-harness';
 import { loadConfig } from '#config';
 
 const WRITE_TOOLS = [
+  'write_apply_budget_templates',
   'write_close_account',
   'write_copy_budget_month',
   'write_create_account',

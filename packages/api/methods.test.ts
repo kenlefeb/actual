@@ -2032,6 +2032,170 @@ describe('API fork handlers', () => {
     },
   );
 
+  // The plan lists what the app's own apply and overwrite then write, and writes nothing
+  describe.each(['envelope', 'tracking'])(
+    'Budget templates (%s)',
+    budgetType => {
+      async function fixture() {
+        await api.loadBudget(budgetName);
+        await api.internal!.send('preferences/save', {
+          id: 'budgetType',
+          value: budgetType,
+        });
+        const months = await api.getBudgetMonths();
+        const target = months[months.length - 1];
+        const group = await api.createCategoryGroup({ name: 'X' });
+        const income = (await api.getCategoryGroups()).find(g => g.is_income)!;
+        const make = (name: string, group_id: string, is_income = false) =>
+          api.createCategory({ name, group_id, is_income } as never);
+        const a = await make('A', group);
+        const b = await make('B', group);
+        const d = await make('D', group);
+        const orphan = await make('Orphan', group);
+        const pay = await make('Pay', income.id, true);
+        const account = await api.createAccount({ name: 'Checking' }, 0);
+        await api.addTransactions(account, [
+          { date: `${target}-01`, amount: 100000, category: pay },
+        ]);
+        await api.updateNote(a, '#template 100');
+        await api.updateNote(b, '#goal 500');
+        await api.updateNote(d, '#template 80');
+        await api.updateNote(orphan, '#template 10');
+        // The orphan holds a goal from an earlier run; its note is then removed
+        await api.internal!.send('budget/overwrite-goal-template', {
+          month: target,
+        });
+        await api.updateNote(orphan, '');
+        await api.updateNote(b, '#goal 700');
+        await api.setBudgetAmount(target, a, 0);
+        await api.setBudgetAmount(target, d, 30);
+        return { target, a, b, d, orphan };
+      }
+
+      type Snapshot = Awaited<ReturnType<typeof state>>;
+
+      async function state(month: string) {
+        const table =
+          budgetType === 'tracking' ? 'reflect_budgets' : 'zero_budgets';
+        const { data } = (await api.runQuery(
+          api
+            .q(table)
+            .filter({ month: Number(month.replace('-', '')) })
+            .select(['category', 'amount', 'goal', 'long_goal']),
+        )) as { data: Array<Record<string, number | string | null>> };
+        const { data: defs } = (await api.runQuery(
+          api.q('categories').select(['id', 'goal_def']),
+        )) as { data: Array<{ id: string; goal_def: string | null }> };
+        return {
+          cells: new Map(
+            (data as Array<Record<string, number | string | null>>).map(r => [
+              String(r.category),
+              {
+                budgeted: Number(r.amount ?? 0),
+                goal: (r.goal as number | null) ?? null,
+                longGoal: (r.long_goal as number | null) ?? null,
+              },
+            ]),
+          ),
+          defs: new Map(
+            (defs as Array<{ id: string; goal_def: string | null }>).map(r => [
+              r.id,
+              r.goal_def ?? null,
+            ]),
+          ),
+        };
+      }
+
+      /** What the plan must say the action changed, read from two snapshots. */
+      function expected(before: Snapshot, after: Snapshot) {
+        const empty = { budgeted: 0, goal: null, longGoal: null };
+        const cells = [...after.cells].flatMap(([id, now]) => {
+          const was = before.cells.get(id) ?? empty;
+          return now.budgeted === was.budgeted &&
+            now.goal === was.goal &&
+            now.longGoal === was.longGoal
+            ? []
+            : [
+                {
+                  categoryId: id,
+                  before: was.budgeted,
+                  after: now.budgeted,
+                  goalBefore: was.goal,
+                  goalAfter: now.goal,
+                  longGoalBefore: was.longGoal,
+                  longGoalAfter: now.longGoal,
+                },
+              ];
+        });
+        const store = [...after.defs].flatMap(([id, def]) =>
+          def === before.defs.get(id) ? [] : [{ categoryId: id }],
+        );
+        return { cells, store };
+      }
+      const byCategory = (
+        a: { categoryId: string },
+        b: { categoryId: string },
+      ) => a.categoryId.localeCompare(b.categoryId);
+
+      test.each([false, true])(
+        'The plan writes nothing and equals the app (overwrite %s)',
+        async overwrite => {
+          const { target, a, b, d, orphan } = await fixture();
+          const before = await state(target);
+
+          const plan = await api.planBudgetTemplates(target, { overwrite });
+          expect(await state(target)).toEqual(before);
+
+          await api.applyBudgetTemplates(target, { overwrite });
+          const want = expected(before, await state(target));
+          expect(
+            plan.cells
+              .map(({ month: _month, ...cell }) => cell)
+              .sort(byCategory),
+          ).toEqual(want.cells.sort(byCategory));
+          expect(
+            plan.store
+              .map(s => ({ categoryId: s.categoryId }))
+              .sort(byCategory),
+          ).toEqual(want.store.sort(byCategory));
+
+          const ids = plan.cells.map(c => c.categoryId);
+          // A is unbudgeted so it runs; D is budgeted so only an overwrite runs it
+          expect(ids).toContain(a);
+          expect(ids).toContain(b);
+          expect(ids.includes(d)).toBe(overwrite);
+          // The orphan's goal is reset whichever way
+          expect(ids).toContain(orphan);
+          expect(plan.cells.find(c => c.categoryId === b)).toMatchObject({
+            goalAfter: 70000,
+          });
+          expect(plan.errors).toEqual([]);
+        },
+      );
+
+      test('Only the listed categories are overwritten', async () => {
+        const { target, a, d } = await fixture();
+        const before = await state(target);
+        const plan = await api.planBudgetTemplates(target, {
+          categoryIds: [d],
+        });
+        expect(await state(target)).toEqual(before);
+        await api.applyBudgetTemplates(target, { categoryIds: [d] });
+        const after = await state(target);
+        expect(plan.cells.map(c => c.categoryId)).toEqual([d]);
+        expect(after.cells.get(d)!.budgeted).toBe(plan.cells[0].after);
+        expect(after.cells.get(a)).toEqual(before.cells.get(a));
+      });
+
+      test('A template that does not parse is an error in the plan', async () => {
+        const { target, a } = await fixture();
+        await api.updateNote(a, '#template schedule nosuch');
+        const plan = await api.planBudgetTemplates(target, {});
+        expect(plan.cells).toEqual([]);
+        expect(plan.errors.join(' ')).toContain('A');
+      });
+    },
+  );
   test("A split's parent and children update together", async () => {
     await api.loadBudget(budgetName);
     const account = await api.createAccount({ name: 'Checking' }, 0);

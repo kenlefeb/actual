@@ -124,6 +124,7 @@ import {
 } from '#util/schedule-actions';
 
 import { AmountInput } from './AmountInput';
+import { amountFromParam } from './amountParam';
 import { NotesField } from './NotesField';
 import { SplitAmountInput } from './SplitAmountInput';
 import {
@@ -1726,9 +1727,7 @@ function TransactionEditUnconnected({
             lastTransaction?.account ||
             null,
           category: searchParamCategory || locationState?.categoryId || null,
-          amount: -amountToInteger(
-            parseFloat(searchParams.get('amount') || '') || 0,
-          ),
+          amount: amountFromParam(searchParams.get('amount')),
           cleared: searchParams.get('cleared') === 'true',
           notes: searchParams.get('notes') || '',
         },

@@ -63,6 +63,12 @@ import {
   reconcileRows,
   reconcileTick,
 } from './reconcile';
+import {
+  reconcileAdjust,
+  reconcileLock,
+  reconcileLockPreview,
+  reconcileMatches,
+} from './reconcile-lock';
 
 // null: the value doesn't apply to this budget type (or row)
 type Amount = number | null;
@@ -213,6 +219,10 @@ export type NativeHandlers = {
   'native/reconcile-rows': typeof reconcileRows;
   'native/reconcile-tick': typeof reconcileTick;
   'native/reconcile-list-set': typeof reconcileListSet;
+  'native/reconcile-matches': typeof reconcileMatches;
+  'native/reconcile-lock-preview': typeof reconcileLockPreview;
+  'native/reconcile-adjust': typeof reconcileAdjust;
+  'native/reconcile-lock': typeof reconcileLock;
 };
 
 export const app = createApp<NativeHandlers>();
@@ -237,6 +247,21 @@ app.method(
   ),
 );
 app.method('native/reconcile-list-set', mutator(reconcileListSet));
+// sc-4825 (native-reconcile-resolve-and-lock D2 to D5)
+app.method('native/reconcile-matches', reconcileMatches);
+app.method('native/reconcile-lock-preview', reconcileLockPreview);
+app.method(
+  'native/reconcile-adjust',
+  mutator(
+    undoable(reconcileAdjust, args => ({ nativeUndoToken: args?.undoToken })),
+  ),
+);
+// Its own undo step with no token: every earlier token is refused after it,
+// and no token can undo it through the bridge (D5)
+app.method(
+  'native/reconcile-lock',
+  mutator(undoable(reconcileLock, () => ({ nativeLock: true }))),
+);
 
 async function budgetMonth({
   month,

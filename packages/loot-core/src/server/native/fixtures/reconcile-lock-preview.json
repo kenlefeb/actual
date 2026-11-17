@@ -1,0 +1,58 @@
+{
+  "rows": [
+    {
+      "id": "split",
+      "date": "2016-12-20",
+      "payee": null,
+      "category": null,
+      "notes": null,
+      "amount": -3000,
+      "cleared": true,
+      "reconciled": false,
+      "isParent": true
+    },
+    {
+      "id": "xfer",
+      "date": "2016-12-20",
+      "payee": "Savings",
+      "category": null,
+      "notes": null,
+      "amount": -700,
+      "cleared": true,
+      "reconciled": false,
+      "isParent": false
+    },
+    {
+      "id": "paid",
+      "date": "2016-12-01",
+      "payee": null,
+      "category": null,
+      "notes": null,
+      "amount": 100000,
+      "cleared": true,
+      "reconciled": false,
+      "isParent": false
+    }
+  ],
+  "count": 3,
+  "child_count": 2,
+  "truncated": false,
+  "partners": [
+    {
+      "id": "xfer-b",
+      "account": "Savings",
+      "amount": 700,
+      "date": "2016-12-20",
+      "reconciled": false
+    }
+  ],
+  "skipped_children": [
+    "done-a"
+  ],
+  "record": {
+    "amount": 100500,
+    "source": "entered",
+    "entered_at": 0
+  },
+  "plan_digest": "61dce30d2d19cb46ddad1c5f2142de1b0d85b037771bdea55b7f5a88d17c5916"
+}

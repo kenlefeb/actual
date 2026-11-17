@@ -271,5 +271,17 @@
   },
   "native/reconcile-list-set": {
     "skip": "Native iOS bridge write of the person's own Reconcile checklist exclusions (sc-4801); a display preference, not budget data"
+  },
+  "native/reconcile-matches": {
+    "skip": "Native iOS bridge read of Reconcile step 3's likely matches (sc-4825, ADR 11); MCP reads rows through list_transactions"
+  },
+  "native/reconcile-lock-preview": {
+    "skip": "Native iOS bridge read of what a reconcile locks (sc-4825, ADR 11); MCP's write_reconcile_account returns the same in its dry run"
+  },
+  "native/reconcile-adjust": {
+    "skip": "Native-only: a person's confirmed reconciliation adjustment (sc-4825, design D4); no MCP tool or api/ handler creates an adjustment"
+  },
+  "native/reconcile-lock": {
+    "skip": "Native-only: a person's lock from the app (sc-4825, design D5); MCP locks through write_reconcile_account"
   }
 }

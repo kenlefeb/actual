@@ -22,6 +22,11 @@ const RECONCILE = [
   'account-statement-balance-prefill',
   'account-statement-balance-save',
   'account-statement-balance-get',
+  // sc-4825
+  'native/reconcile-matches',
+  'native/reconcile-lock-preview',
+  'native/reconcile-adjust',
+  'native/reconcile-lock',
 ];
 
 describe('reconcile handlers through the page bridge', () => {
@@ -34,8 +39,41 @@ describe('reconcile handlers through the page bridge', () => {
     ['native/reconcile-month', { extra: 1 }, undefined],
     [
       'native/reconcile-rows',
-      { account_id: 'a', scope: 'all', extra: 1 },
-      { account_id: 'a', scope: 'all' },
+      { account_id: 'a', scope: 'all', search: '41.80', extra: 1 },
+      { account_id: 'a', scope: 'all', search: '41.80' },
+    ],
+    [
+      'native/reconcile-matches',
+      { account_id: 'a', extra: 1 },
+      { account_id: 'a' },
+    ],
+    [
+      'native/reconcile-lock-preview',
+      { account_id: 'a', extra: 1 },
+      { account_id: 'a' },
+    ],
+    [
+      'native/reconcile-adjust',
+      {
+        account_id: 'a',
+        amount: 4180,
+        category_id: 'c',
+        label: 'Adjustment',
+        undoToken: 'T',
+        date: '2001-01-01',
+      },
+      {
+        account_id: 'a',
+        amount: 4180,
+        category_id: 'c',
+        label: 'Adjustment',
+        undoToken: 'T',
+      },
+    ],
+    [
+      'native/reconcile-lock',
+      { account_id: 'a', plan_digest: 'd', ids: ['x'] },
+      { account_id: 'a', plan_digest: 'd' },
     ],
     [
       'native/reconcile-tick',
@@ -72,6 +110,18 @@ describe('reconcile handlers through the page bridge', () => {
     const { bridge, send } = setup();
     await bridge.call(name, args);
     expect(send).toHaveBeenCalledWith(name, forwarded);
+  });
+
+  it('refuses an adjustment without its undo token', async () => {
+    const { bridge, send } = setup();
+    await expect(
+      bridge.call('native/reconcile-adjust', {
+        account_id: 'a',
+        amount: 1,
+        label: 'x',
+      }),
+    ).rejects.toThrow(/undo token/);
+    expect(send).not.toHaveBeenCalled();
   });
 
   it('refuses a tick without its undo token', async () => {

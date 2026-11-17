@@ -6,6 +6,7 @@
   "printWidth": 80,
   "ignorePatterns": [
     "openspec/",
+    "packages/loot-core/src/server/native/fixtures/",
     ".agents/skills/openspec-*/",
     ".claude/skills/openspec-*/",
     ".claude/commands/opsx/",

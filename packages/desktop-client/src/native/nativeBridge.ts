@@ -237,10 +237,18 @@ async function validatePaycheckSave(forward: Send, args: unknown) {
 // sc-4801: each reconcile handler's own fields. loot-core checks the values
 // (native-reconcile-flow D5); a save never carries who, loot-core derives it.
 const RECONCILE_FIELDS = new Map([
-  ['native/reconcile-rows', ['account_id', 'scope']],
+  ['native/reconcile-rows', ['account_id', 'scope', 'search']],
   ['native/reconcile-tick', ['account_id', 'ids', 'cleared', 'undoToken']],
   ['native/reconcile-list-set', ['excluded']],
   ['account-statement-balance-prefill', ['account_id']],
+  // sc-4825
+  ['native/reconcile-matches', ['account_id']],
+  ['native/reconcile-lock-preview', ['account_id']],
+  [
+    'native/reconcile-adjust',
+    ['account_id', 'amount', 'category_id', 'label', 'undoToken'],
+  ],
+  ['native/reconcile-lock', ['account_id', 'plan_digest']],
   ['account-statement-balance-get', ['account_id']],
   [
     'account-statement-balance-save',
@@ -324,7 +332,10 @@ export function createNativeBridge({
       } else if (name === 'native/reconcile-month') {
         args = undefined;
       } else if (RECONCILE_FIELDS.has(name)) {
-        if (name === 'native/reconcile-tick') {
+        if (
+          name === 'native/reconcile-tick' ||
+          name === 'native/reconcile-adjust'
+        ) {
           readToken((args as Record<string, unknown> | null)?.undoToken);
         }
         args = pickFields(args, RECONCILE_FIELDS.get(name) ?? []);

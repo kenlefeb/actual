@@ -1,0 +1,44 @@
+{
+  "difference": 4180,
+  "matches": [
+    {
+      "kind": "tick-one",
+      "ids": [
+        "one-new"
+      ],
+      "amounts": [
+        4180
+      ]
+    },
+    {
+      "kind": "tick-one",
+      "ids": [
+        "one-old"
+      ],
+      "amounts": [
+        4180
+      ]
+    },
+    {
+      "kind": "tick-two",
+      "ids": [
+        "pair-b",
+        "pair-a"
+      ],
+      "amounts": [
+        1180,
+        3000
+      ]
+    },
+    {
+      "kind": "untick-one",
+      "ids": [
+        "wrong"
+      ],
+      "amounts": [
+        -4180
+      ]
+    }
+  ],
+  "add_amount_param": "-41.80"
+}

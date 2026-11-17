@@ -147,6 +147,13 @@ async function seedPlan() {
     payee: 'to-savings',
     transfer_id: 'xfer-b',
   });
+  // A cleared child under an uncleared parent (PR 402 review)
+  await tx('open-split', -900, { cleared: false, is_parent: true });
+  await tx('open-a', -900, {
+    cleared: true,
+    is_child: true,
+    parent_id: 'open-split',
+  });
   await db.insertTransaction({
     id: 'xfer-b',
     account: 'savings',
@@ -217,13 +224,17 @@ describe('lockPlan (D1)', () => {
 
     expect(ours).toEqual(['paid', 'split', 'split-a', 'split-b', 'xfer']);
     expect(ours).toEqual(mcp);
-    // The web also locks an unreconciled child of an already reconciled
-    // parent; the MCP and lockPlan skip it (design D1 names it skipped).
-    // Everything else is the same set.
+    // The web also locks two kinds of child that the MCP and lockPlan leave:
+    // an unreconciled child of an already reconciled parent (named skipped,
+    // design D1) and a cleared child of an uncleared parent (its parent is
+    // not selected), and through that child it also writes the uncleared
+    // parent. Everything else is the same set.
     expect(plan.skippedChildren).toEqual(['done-a']);
-    expect(ours).toEqual(
-      [...web].filter(id => !plan.skippedChildren.includes(id)).sort(),
+    expect([...web].sort()).toEqual(
+      [...ours, 'done-a', 'open-a', 'open-split'].sort(),
     );
+    expect(ours).not.toContain('open-a');
+    expect(mcp).not.toContain('open-a');
     expect(plan.skippedChildren).toEqual(mcpSkipped);
     expect(plan.partners.map(p => p.id)).toEqual(['xfer-b']);
   });
@@ -265,7 +276,7 @@ describe('native/reconcile-matches (D2)', () => {
   it('orders a single, then a pair, then an untick, nearest date first', async () => {
     await tx('base', 100000, { cleared: true, date: '2016-11-01' });
     await tx('one-old', 4180, { date: '2016-12-01' });
-    await tx('one-new', 4180, { date: '2016-12-20' });
+    await tx('one-new', 4180, { date: '2016-12-20', payee: 'grocer' });
     await tx('pair-a', 3000, { date: '2016-12-10' });
     await tx('pair-b', 1180, { date: '2016-12-11' });
     await tx('wrong', -4180, { cleared: true, date: '2016-12-05' });
@@ -282,6 +293,16 @@ describe('native/reconcile-matches (D2)', () => {
       ['untick-one', ['wrong']],
     ]);
     expect(result.matches[2].amounts).toEqual([1180, 3000]);
+    // The shared Transaction row's fields (PR 403 design review)
+    expect(result.matches[0].rows).toEqual([
+      expect.objectContaining({
+        id: 'one-new',
+        date: '2016-12-20',
+        payee: 'Grocer',
+        amount: 4180,
+        cleared: false,
+      }),
+    ]);
     expect(result.add_amount_param).toBe('-41.80');
     await expect(JSON.stringify(result, null, 2) + '\n').toMatchFileSnapshot(
       './fixtures/reconcile-matches.json',
@@ -349,6 +370,17 @@ describe('native/reconcile-rows search (D2)', () => {
   it('finds an amount and its swapped digits', async () => {
     const ids = (await search('41.80')).rows.map(r => r.id).sort();
     expect(ids).toEqual(['a', 'b', 'c']);
+  });
+
+  it('reads an amount in the budget currency places (0 for JPY)', async () => {
+    await setPref('defaultCurrencyCode', 'JPY');
+    await tx('yen', -418);
+    await tx('yen10', -4180);
+    expect((await search('418')).rows.map(r => r.id)).toContain('yen');
+    // Not an amount in yen: never read as 418 or 4180
+    const ids = (await search('41.8')).rows.map(r => r.id);
+    expect(ids).not.toContain('yen');
+    expect(ids).not.toContain('yen10');
   });
 
   it('finds payee and notes text, case-insensitive', async () => {
@@ -419,7 +451,11 @@ describe('native/reconcile-lock-preview (D3)', () => {
     const third = (await preview()).plan_digest;
     expect(third).not.toBe(second);
     await record(2);
-    expect((await preview()).plan_digest).not.toBe(third);
+    const fourth = (await preview()).plan_digest;
+    expect(fourth).not.toBe(third);
+    // A skipped child that is reconciled is no longer skipped (PR 402 review)
+    await db.updateTransaction({ id: 'done-a', reconciled: true });
+    expect((await preview()).plan_digest).not.toBe(fourth);
   });
 });
 

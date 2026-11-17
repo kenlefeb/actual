@@ -260,7 +260,6 @@ describe('API handlers', () => {
         account_id: 'acct1',
         amount: 500,
         source: 'entered',
-        entered_by: 'app',
       });
       await expect(
         handlers['api/account-statement-balance-get']({ accountId: 'acct1' }),
@@ -285,7 +284,6 @@ describe('API handlers', () => {
         account_id: 'acct1',
         amount: 500,
         source: 'entered',
-        entered_by: 'app',
       });
       const key = 'statement-balance-acct1';
       const attempts: Array<() => Promise<unknown>> = [

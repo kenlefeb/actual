@@ -20,6 +20,7 @@ import {
   groupBankSyncAccounts,
 } from './bankSyncUtils';
 import { BuiltInProviders } from './BuiltInProviders';
+import { ReconcileBalanceAgeSetting } from './ReconcileBalanceAgeSetting';
 import { useBuiltInBankSyncProviders } from './useBuiltInBankSyncProviders';
 
 export function BankSync() {
@@ -90,6 +91,7 @@ export function BankSync() {
       />
 
       {hasLinkedAccounts && <AutomaticSyncSettings />}
+      {hasLinkedAccounts && <ReconcileBalanceAgeSetting />}
 
       {openAccounts.length === 0 && (
         <Text style={{ fontSize: '1.1rem' }}>

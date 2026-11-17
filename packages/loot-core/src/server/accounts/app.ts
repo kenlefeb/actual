@@ -47,6 +47,7 @@ import { getStartingBalancePayee } from './payees';
 import {
   consumeStatementBalance,
   getStatementBalance,
+  getStatementBalancePrefill,
   saveStatementBalance,
 } from './statement-balance';
 import * as bankSync from './sync';
@@ -73,6 +74,7 @@ export type AccountHandlers = {
   'account-move-on-budget-preview': typeof previewMoveOnBudget;
   'account-move-on-budget': typeof moveOnBudget;
   'account-statement-balance-save': typeof saveStatementBalance;
+  'account-statement-balance-prefill': typeof getStatementBalancePrefill;
   'account-statement-balance-get': typeof getStatementBalance;
   'account-statement-balance-consume': typeof consumeStatementBalance;
   'account-close': typeof closeAccount;
@@ -1825,6 +1827,7 @@ app.method('account-move-on-budget', mutator(undoable(moveOnBudget)));
 // Not undoable: an undo must never revive a consumed record
 app.method('account-statement-balance-save', mutator(saveStatementBalance));
 app.method('account-statement-balance-get', getStatementBalance);
+app.method('account-statement-balance-prefill', getStatementBalancePrefill);
 app.method(
   'account-statement-balance-consume',
   mutator(consumeStatementBalance),

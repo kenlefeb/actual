@@ -39,6 +39,10 @@ export type SyncedPrefs = Partial<
     | `show-balances-${string}`
     // The human-recorded statement balance, written only by the app's own handlers
     | `statement-balance-${string}`
+    // When bank sync last wrote the account's balance (ms); written only by bank sync
+    | `bank-balance-at-${string}`
+    // Days (1 to 30, default 7) a synced bank balance may pre-fill the reconcile field
+    | 'reconcile-bank-balance-max-age-days'
     | `show-extra-balances-${string}`
     // @deprecated: superseded by `transaction-table-columns-${string}`; only
     // read as a fallback for budgets that never used the column manager

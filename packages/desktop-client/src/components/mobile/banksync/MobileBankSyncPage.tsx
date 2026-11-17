@@ -15,6 +15,7 @@ import {
 } from '#components/banksync/bankSyncUtils';
 import type { GroupedBankSyncAccounts } from '#components/banksync/bankSyncUtils';
 import { BuiltInProviders } from '#components/banksync/BuiltInProviders';
+import { ReconcileBalanceAgeSetting } from '#components/banksync/ReconcileBalanceAgeSetting';
 import { useBuiltInBankSyncProviders } from '#components/banksync/useBuiltInBankSyncProviders';
 import { Search } from '#components/common/Search';
 import { MobilePageHeader, Page } from '#components/Page';
@@ -123,6 +124,9 @@ export function MobileBankSyncPage() {
       {hasLinkedAccounts && (
         <View style={{ padding: '0 15px 15px', flexShrink: 0 }}>
           <AutomaticSyncSettings />
+          <View style={{ marginTop: 15 }}>
+            <ReconcileBalanceAgeSetting />
+          </View>
         </View>
       )}
       {openAccounts.length > 0 && (

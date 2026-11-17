@@ -35,6 +35,9 @@
   "account-statement-balance-get": {
     "skip": "App-only handler: the human records and reads their statement balance in the app; the MCP reaches it through the api/ read"
   },
+  "account-statement-balance-prefill": {
+    "skip": "App-only handler: the pre-fill for a person's own reconcile field; the MCP reads the recorded balance, never the pre-fill (native-reconcile-flow)"
+  },
   "account-statement-balance-save": {
     "skip": "Never reachable by MCP: only a person in the app records a statement balance (reconcile-recorded-statement-balance)"
   },

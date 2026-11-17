@@ -294,6 +294,9 @@ final class ReconcileTickViewModelTests: XCTestCase {
         XCTAssertEqual(model.exit, .doneForNow)
         page.results["native/reconcile-tick"] = #"{"statement":95000,"cleared":95000,"difference":0}"#
         await model.toggle(model.rows[1])
-        XCTAssertEqual(model.exit, .readyToLock)
+        // sc-4825: at zero, Continue to lock, with "Difference zero" and a haptic; no auto-advance
+        XCTAssertEqual(model.exit, .continueToLock)
+        XCTAssertEqual(model.announcement, "Difference zero")
+        XCTAssertEqual(model.zeroCount, 1)
     }
 }

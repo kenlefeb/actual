@@ -114,26 +114,31 @@ describe('installNativeChrome', () => {
     ]);
   });
 
-  // sc-4801: "Ready to lock — finish in the register" opens the web reconcile
-  it('opens an account register reconciling to a statement amount', () => {
+  // sc-4825: Reconcile step 3's "Add the missing transaction" opens the add
+  // form with the account and loot-core's amount parameter
+  it('opens the add form with an account and an amount', () => {
     const { win } = iosApp();
     const navigate = vi.fn();
     installNativeChrome(win, navigate, vi.fn());
 
-    win.__actualNativeChrome?.navigate('/accounts/a-1?reconcile=465413');
-    win.__actualNativeChrome?.navigate('/accounts/a-1?reconcile=-1250');
+    win.__actualNativeChrome?.navigate(
+      '/transactions/new?account=Joint%20Checking&amount=-41.80',
+    );
+    win.__actualNativeChrome?.navigate('/transactions/new?account=A&amount=5');
 
     expect(navigate.mock.calls).toEqual([
-      ['/accounts/a-1?reconcile=465413'],
-      ['/accounts/a-1?reconcile=-1250'],
+      ['/transactions/new?account=Joint%20Checking&amount=-41.80'],
+      ['/transactions/new?account=A&amount=5'],
     ]);
   });
 
   it.each([
-    '/accounts/a-1?reconcile=1.5',
-    '/accounts/a-1?reconcile=1&x=2',
-    '/budget?reconcile=1',
-    '/accounts?reconcile=1',
+    '/accounts/a-1?reconcile=1',
+    '/transactions/new?account=A&amount=1e999',
+    '/transactions/new?account=A&amount=1&cleared=true',
+    '/transactions/new?amount=1&account=A',
+    '/transactions/t1?account=A&amount=1',
+    '/budget?account=A&amount=1',
     'https://example.com/budget',
     '//example.com/budget',
     'mailto:budget',

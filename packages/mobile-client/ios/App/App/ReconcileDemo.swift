@@ -8,12 +8,14 @@ enum ReconcileDemo {
     static var request: PresentReconcile? {
         switch UserDefaults.standard.string(forKey: "ReconcileDemo") {
         case "checklist": .checklist
-        case "step1", "step2": .account("checking")
+        case "step1", "step2", "b2-step3", "b2-adjust", "b2-step4", "b2-done", "b2-moved": .account("checking")
         default: nil
         }
     }
 
-    static var startsAtStepTwo: Bool { UserDefaults.standard.string(forKey: "ReconcileDemo") == "step2" }
+    static var mode: String { UserDefaults.standard.string(forKey: "ReconcileDemo") ?? "" }
+    static var startsAtStepTwo: Bool { mode == "step2" }
+    static var opensAdjustSheet: Bool { mode == "b2-adjust" }
 
     static let client = NativeBridgeClient { name, _ in
         switch name {
@@ -21,6 +23,13 @@ enum ReconcileDemo {
         case "account-statement-balance-prefill": prefill
         case "native/reconcile-rows": rows
         case "native/reconcile-tick": #"{"statement":465413,"cleared":465413,"difference":0}"#
+        case "native/reconcile-matches":
+            #"{"difference":4180,"matches":[{"kind":"tick-one","ids":["t4"],"amounts":[4180]},{"kind":"tick-two","ids":["t2","t5"],"amounts":[-3820,8000]}],"add_amount_param":"-41.80"}"#
+        case "native/reconcile-lock-preview": preview
+        case "native/reconcile-lock":
+            mode == "b2-moved"
+                ? #"{"locked_ids":["t1"],"linked_ids":[],"verified":false,"cleared":464413,"difference":1000}"#
+                : #"{"locked_ids":["t1"],"linked_ids":["x1","x2"],"verified":true,"cleared":465413,"difference":0}"#
         default: "null"
         }
     }
@@ -42,6 +51,9 @@ enum ReconcileDemo {
 
     private static let prefill =
         #"{"prefill":{"amount":465413,"source":"bank-sync","as_of":"2026-11-17","link":"bank-sync"},"alternatives":[{"amount":461233,"source":"cleared","as_of":null,"link":null}],"cleared_balance":461233,"record":null,"account_type":null}"#
+
+    private static let preview =
+        #"{"rows":[],"count":17,"child_count":2,"truncated":false,"partners":[{"id":"x1","account":"High-Yield Savings","amount":-50000,"date":"2026-11-03","reconciled":false},{"id":"x2","account":"Visa Signature","amount":30000,"date":"2026-11-20","reconciled":false}],"skipped_children":[],"record":{"amount":465413,"source":"bank-sync","entered_at":1794935880000},"plan_digest":"demo"}"#
 
     private static func row(_ id: String, _ payee: String, _ category: String, _ date: String, _ amount: Int, _ cleared: Bool) -> String {
         #"{"id":"\#(id)","date":"\#(date)","payee":"\#(payee)","category":"\#(category)","notes":null,"amount":\#(amount),"cleared":\#(cleared),"reconciled":false,"isParent":false}"#

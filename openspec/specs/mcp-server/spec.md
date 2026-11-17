@@ -143,7 +143,7 @@ The server SHALL offer the write tools `write_create_transactions`, `write_updat
 - **THEN** every deleting tool is annotated destructive and needs the `delete` scope
 
 ### Requirement: Write limits
-Writes SHALL take explicit ids and never a name matched from text, SHALL change at most 50 rows per call, and SHALL return the before and after values of every field changed.
+Writes SHALL take explicit ids and never a name matched from text, SHALL change at most the row limit of rows (default 50) and the cell limit of budget cells (default 500) per call, and SHALL return the before and after values of every field changed.
 
 #### Scenario: Over the row limit
 - **WHEN** a client calls `write_update_transactions` with 51 ids
@@ -536,7 +536,7 @@ The transfer category for `write_delete_category` SHALL exist, differ from the d
 - **THEN** the group is deleted and an audit line names it
 
 ### Requirement: Category group delete transfer target and limits
-The transfer category for `write_delete_category_group` SHALL exist, SHALL NOT be in the group being deleted, and SHALL be an expense category. The income group SHALL be refused, and so SHALL a group of more than 50 categories. A group delete SHALL write one attempt and one outcome audit line naming the group, its categories and the transfer id.
+The transfer category for `write_delete_category_group` SHALL exist, SHALL NOT be in the group being deleted, and SHALL be an expense category. The income group SHALL be refused, and so SHALL a group of more categories than the delete limit. A group delete SHALL write one attempt and one outcome audit line naming the group, its categories and the transfer id.
 
 #### Scenario: A transfer inside the group
 - **WHEN** a client calls `write_delete_category_group` for "Food" with the id of "Snacks"
@@ -662,7 +662,7 @@ The stdio entry with `--writes` SHALL set the grant's `allow_reconciled` option 
 - **THEN** it exits with a fixed error and opens no budget
 
 ### Requirement: Hosted grants come from a grants file
-The hosted entry SHALL read grants from the file named by `ACTUAL_MCP_GRANTS_FILE`. Each grant names an OAuth subject, a client id or `*`, its scopes and optional `confirm_destructive`, `max_rows` and `allow_reconciled` (off when absent). The file SHALL be checked on every call, so a change applies on the next call without a restart. An exact client id SHALL take precedence over `*`; a connection with no matching grant SHALL have no scopes.
+The hosted entry SHALL read grants from the file named by `ACTUAL_MCP_GRANTS_FILE`. Each grant names an OAuth subject, a client id or `*`, its scopes and optional `confirm_destructive`, `max_rows`, `max_cells`, `max_delete_rows` and `allow_reconciled` (off when absent). The file SHALL be checked on every call, so a change applies on the next call without a restart. An exact client id SHALL take precedence over `*`; a connection with no matching grant SHALL have no scopes.
 
 #### Scenario: A grant change applies on the next call
 - **GIVEN** the assistant's grant includes `transactions:write`
@@ -675,7 +675,7 @@ The hosted entry SHALL read grants from the file named by `ACTUAL_MCP_GRANTS_FIL
 - **THEN** the call is refused by scope, while the same call from the pre-registered client succeeds
 
 ### Requirement: The grants file schema is strict
-A grants file SHALL be valid only when `version` is 1, it has no unknown keys, each `scopes` is a non-empty array of known scope names, `max_rows` is a positive integer, `confirm_destructive` and `allow_reconciled` are booleans, `subject` is a literal subject (never a wildcard), no (subject, client) pair appears twice, and every `*` client grant holds `budget:read` only and no `allow_reconciled`.
+A grants file SHALL be valid only when `version` is 1, it has no unknown keys, each `scopes` is a non-empty array of known scope names, `max_rows`, `max_cells` and `max_delete_rows` are positive integers not above their server ceilings, `confirm_destructive` and `allow_reconciled` are booleans, `subject` is a literal subject (never a wildcard), no (subject, client) pair appears twice, and every `*` client grant holds `budget:read` only and no `allow_reconciled`.
 
 #### Scenario: A duplicate pair
 - **WHEN** the grants file has two grants for the same subject and client
@@ -753,8 +753,8 @@ With `confirm_destructive` on, a destructive tool called without `confirm` SHALL
 - **WHEN** the client calls with that `confirm`
 - **THEN** the call is refused and nothing changed
 
-### Requirement: A grant can lower the row cap
-A grant's `max_rows` SHALL lower the per-call row limit below 50 for that connection, and SHALL never raise it.
+### Requirement: A grant sets the row and cell limits
+A grant's `max_rows`, `max_cells` and `max_delete_rows` SHALL set the row, cell and delete limits for that connection, up to the server's ceilings, replacing the server defaults.
 
 #### Scenario: Lowered cap
 - **GIVEN** a grant with `max_rows` 10
@@ -1239,7 +1239,7 @@ The server SHALL run write tools and `write_undo` one at a time per process, wit
 - **THEN** the call is refused as not undoable and nothing changed
 
 ### Requirement: What undo reverses
-`write_undo` SHALL reverse `write_update_transactions` by restoring the fields, `write_create_transactions` by deleting the created rows, `write_set_budget_amount` by restoring the amount, the category and group update tools by restoring name, hidden and group, and their create tools by deleting while unused. It SHALL replay only allowlisted fields of the ids in `applied` and `created`. It SHALL refuse any other write, an old line, and a current transfer pair or split, with fixed text.
+`write_undo` SHALL reverse `write_update_transactions` by restoring fields, `write_create_transactions` by deleting the created rows, every tool that sets budgeted cells (single and many amounts, copy, average) by restoring them, category and group updates by restoring name, hidden and group, and their creates by deleting while unused. It SHALL replay only allowlisted fields of the ids in `applied` and `created`, and refuse any other write, an old line or a split.
 
 #### Scenario: A move is not undoable yet
 - **WHEN** a client calls `write_undo` for a `write_move_category` write
@@ -1254,6 +1254,10 @@ The server SHALL run write tools and `write_undo` one at a time per process, wit
 - **GIVEN** the engine fails on the second of 3 rows during an undo
 - **WHEN** the call returns
 - **THEN** the outcome line records `applied` and `failed`, the result says so, and the write cannot be undone again
+
+#### Scenario: Carryover is not undoable yet
+- **WHEN** a client calls `write_undo` for a `write_set_budget_carryover` write
+- **THEN** the call is refused as not undoable and nothing changed
 
 ### Requirement: An undo is used once it applied
 A write SHALL count as undone only after an undo with outcome `ok` or with at least one row applied. A refusal, a conflict, or a failure before the first row SHALL NOT count, so the undo can be retried. A second request for an undone write SHALL be refused naming the undo's `write_id`.
@@ -1288,3 +1292,308 @@ The scope `accounts:delete` SHALL be a known scope, valid in the grants file and
 - **GIVEN** a connection granted `budget:read structure:write accounts:delete`
 - **WHEN** the client calls `write_delete_category`
 - **THEN** the call is refused naming `delete` as missing
+
+### Requirement: Set many budget amounts
+`write_set_budget_amounts` (`budget:write`) SHALL set the budgeted amount of each `{month, category_id, amount}` cell in one call, refusing the whole call before any audit line when a cell has a bad month, amount or category id, or repeats another cell, and SHALL return each cell's before and after.
+
+#### Scenario: A bad cell changes nothing
+- **WHEN** a client sends 3 cells and the second names an unknown category id
+- **THEN** the call is refused and no cell changed
+
+#### Scenario: Before and after
+- **WHEN** a client sets 2 cells
+- **THEN** the result and the audit line give each cell's before and after
+
+### Requirement: Budget cells have their own limit
+A call, or an undo, that would change more budget cells (category and month) than the connection's cell limit SHALL be refused before any audit line, naming the count and the limit. The cell limit is separate from the row limit, and audit lines name cells as `category:month`.
+
+#### Scenario: Over the cell limit
+- **GIVEN** a cell limit of 500
+- **WHEN** a client calls `write_set_budget_amounts` with 501 cells
+- **THEN** the call is refused and no cell changed
+
+#### Scenario: Rows are not cells
+- **GIVEN** a row limit of 10
+- **WHEN** a client sets 40 budget cells
+- **THEN** the call succeeds
+
+### Requirement: Limits are configurable defaults
+The row limit (50), cell limit (500), delete limit (50), dry-run response size (100 KB) and their ceilings (1,000, 2,000, 1,000, 1 MB) SHALL be server settings only the operator sets; a grant's `max_rows`, `max_cells` and `max_delete_rows` set that connection's value up to the ceiling. The audit tail is a setting (default 2 MB); the server SHALL refuse to start when it cannot hold 4 writes of ceiling size (150 bytes a cell, 250 a row). A value over its ceiling SHALL be invalid.
+
+#### Scenario: A grant overrides the setting
+- **GIVEN** the cell setting is 200 and the grant has `max_cells` 300
+- **WHEN** a client changes 250 cells
+- **THEN** the call succeeds
+
+#### Scenario: Above the ceiling
+- **GIVEN** the cell ceiling is its default
+- **WHEN** the grants file has `max_cells` 3000
+- **THEN** the file is invalid and every write tool is refused by scope
+
+#### Scenario: A ceiling the audit tail cannot hold
+- **GIVEN** the cell ceiling is set to 5,000 and the audit tail to 2 MB
+- **WHEN** the server starts
+- **THEN** it exits with fixed text naming the two settings
+
+### Requirement: One write cannot fill the audit tail
+A write whose attempt audit line would exceed the audit line limit (a setting, default a quarter of the audit tail) SHALL be refused with fixed text before any audit line, changing nothing.
+
+#### Scenario: A write with huge notes
+- **GIVEN** an audit line limit of 2,500 bytes
+- **WHEN** a client updates 3 transactions with 1,000-character notes
+- **THEN** the call is refused and nothing changed
+
+### Requirement: An engine error after a cell was written
+When the engine throws while setting a cell of `write_set_budget_amounts`, the server SHALL read the cell back: a cell holding the new amount is applied, and one that cannot be read back is recorded as `maybe_written` and the write is not undoable. `not_written` is the cells minus `applied` and `failed`.
+
+#### Scenario: Throw after the write
+- **WHEN** the engine writes the second of 3 cells and then throws
+- **THEN** the first two are applied, the third is not written, and undo restores the first two
+
+#### Scenario: Throw and no read-back
+- **WHEN** the engine throws on a cell and the read-back fails
+- **THEN** the result and outcome line say the cell may have been written and the write is not undoable
+
+### Requirement: Delete tools have their own limit
+Tools that delete or close (category group delete, account close and delete, and undo of a create) SHALL count rows against the delete limit, the lower of the delete limit (the grant's `max_delete_rows`, else the setting, at most the ceiling) and the row limit in force (the grant's `max_rows`, else the setting), and a refusal SHALL say it is the delete limit, including for an undo of a create. Raising `max_rows` or `max_cells` SHALL NOT raise it.
+
+#### Scenario: A raised row limit does not widen a delete
+- **GIVEN** a grant with `max_rows` 1000 and no `max_delete_rows`
+- **WHEN** a client deletes a group of 51 categories
+- **THEN** the call is refused and nothing changed
+
+### Requirement: Budget carryover and hold
+`write_set_budget_carryover`, `write_hold_budget_for_next_month` and `write_reset_budget_hold` (`budget:write`) SHALL change the same state as the app. Hold SHALL be refused in a tracking budget and SHALL say when nothing was held; each SHALL audit its before and after and is not undoable.
+
+#### Scenario: Hold with nothing to budget
+- **GIVEN** a month whose to-budget is 0
+- **WHEN** a client holds 100.00
+- **THEN** nothing changes and the result says nothing was held
+
+#### Scenario: Hold in a tracking budget
+- **WHEN** a client calls hold on a tracking budget
+- **THEN** the call is refused with fixed text and nothing changed
+
+### Requirement: Copy and average a budget month
+`write_copy_budget_month` and `write_set_budget_to_average` (3, 6 or 12 months) (`budget:write`) SHALL give the cells the app's action gives and count only cells that change. Under `confirm_destructive` the first call SHALL list every cell's before and after, with its category and group name, and a `confirm`, and SHALL be refused, issuing no `confirm`, when the list does not fit the response size setting.
+
+#### Scenario: Dry run then confirm
+- **GIVEN** `confirm_destructive` on
+- **WHEN** a client calls `write_copy_budget_month`, then again with the returned `confirm`
+- **THEN** the first call changes nothing and lists each cell, and the second writes them
+
+#### Scenario: A dry run too large to show
+- **GIVEN** a copy that would change 3,000 cells
+- **WHEN** a client calls it without `confirm`
+- **THEN** the call is refused, no `confirm` is issued and nothing changed
+
+### Requirement: A confirm covers everything a call writes
+A `confirm` SHALL bind every value its call would write, including goals and automation-store entries, and each cell SHALL be checked against its `before` inside the write lock; on a mismatch the remaining cells are not written and the result and outcome line name the applied and failed cells.
+
+#### Scenario: A goal changed after the dry run
+- **WHEN** a template line changes so a goal differs but the budgeted cells are the same, and the client calls with the old `confirm`
+- **THEN** the call is refused and nothing changed
+
+#### Scenario: A cell changed between check and write
+- **WHEN** a sync changes the second of 3 cells after the plan was checked
+- **THEN** the first is written, the second and third are not, and the result names them
+
+### Requirement: Apply budget templates
+`write_apply_budget_templates` (`budget:write`) SHALL apply or overwrite the goal templates of a month, for all or listed categories, with the app's result, the same dry run and cell limit, and no AI. Its audit line SHALL record each cell's goal before and after, and it is not undoable until goals and the automation store are restored.
+
+#### Scenario: Overwrite is audited with goals
+- **WHEN** a client overwrites a month's templates
+- **THEN** the audit line holds each cell's budgeted and goal before and after
+
+#### Scenario: Templates are not undoable
+- **WHEN** a client calls `write_undo` for a `write_apply_budget_templates` write
+- **THEN** the call is refused as not undoable and nothing changed
+
+### Requirement: Undo of budget cells
+`write_undo` of a budget-cell write SHALL be counted against the cell limit, not the row limit, and SHALL match cells by category and month. It SHALL refuse the whole undo, changing nothing, when any applied cell no longer holds the value the write left; cells the write did not apply are ignored. A write that stopped midway records only its applied cells, so its undo restores those.
+
+#### Scenario: A large write is undone
+- **GIVEN** a 200-cell `write_set_budget_amounts` under the default limits
+- **WHEN** the client calls `write_undo` for it
+- **THEN** all 200 cells are restored
+
+#### Scenario: A write that stopped midway
+- **GIVEN** a write of two cells for one category, in two months, where the engine failed on the second
+- **WHEN** the client calls `write_undo` for it
+- **THEN** the first cell is restored and the second is not touched
+
+#### Scenario: One applied cell changed since
+- **WHEN** one of the applied cells was edited after the write and the client calls `write_undo`
+- **THEN** the undo is refused and no cell changed
+
+### Requirement: Reconciling has its own scope
+Locking rows SHALL need the scope `transactions:reconcile`, which no other scope implies and `transactions:write` does not grant. The stdio writes entry grants it when `ACTUAL_MCP_WRITES_SCOPES` is unset; a hosted grant holds it only when listed, and never on a `*` client.
+
+#### Scenario: A writer cannot reconcile
+- **GIVEN** a grant of `budget:read transactions:write`
+- **WHEN** a client calls `write_reconcile_account`
+- **THEN** the call is refused by scope and nothing changed
+
+#### Scenario: A wildcard client
+- **WHEN** the client `*` grant lists `transactions:reconcile`
+- **THEN** the grants file is invalid and every write tool is refused by scope
+
+### Requirement: Reconcile an account
+`write_reconcile_account` (`transactions:reconcile`) SHALL take an account id and no statement balance, compute the cleared balance and difference against the account's usable statement balance record as the app does, and only when the difference is zero lock the account's cleared, unreconciled rows and stamp `last_reconciled`. It SHALL never create an adjustment row.
+
+#### Scenario: A zero difference locks the cleared rows
+- **GIVEN** cleared rows totalling 12,345 cents, 3 of them unreconciled
+- **WHEN** a client reconciles the account, whose usable record is 12,345, and confirms
+- **THEN** the 3 rows are reconciled, uncleared rows are untouched and `last_reconciled` is set
+
+#### Scenario: A difference writes nothing
+- **WHEN** a client reconciles that account, whose usable record is 12,000
+- **THEN** the result gives the cleared balance and the difference of -345, no confirm is issued, no row changed and `last_reconciled` is unchanged
+
+#### Scenario: Zero rows to lock
+- **GIVEN** every cleared row is already reconciled and the difference is zero
+- **WHEN** a client reconciles and confirms
+- **THEN** no row changes, `last_reconciled` is stamped and the audit line records that change
+
+### Requirement: A reconcile is always two steps
+`write_reconcile_account` SHALL answer its first call with a dry run, whatever `confirm_destructive` says, and lock only on a second call with the returned `confirm`, which SHALL be bound by digest to each row's id, amount, date, account, cleared flag and parent, to its transfer partners and to the balance. The dry run SHALL state in fixed text that MCP cannot undo or unlock the rows.
+
+#### Scenario: The dry run discloses the lock
+- **WHEN** a client calls it on an account with a zero difference
+- **THEN** nothing changed and the dry run lists the row ids and says rows locked can be unlocked only in the app, or by `allow_reconciled` once released, and not by `write_undo`
+
+#### Scenario: Two rows swap amounts
+- **WHEN** after the dry run row A changes from 100 to 90 and row B from 50 to 60
+- **THEN** the confirm is refused and nothing changed
+
+#### Scenario: Grants without confirm_destructive
+- **GIVEN** a grant with `confirm_destructive` off
+- **WHEN** a client calls it without a confirm
+- **THEN** it still returns a dry run and locks nothing
+
+### Requirement: A reconcile is atomic and verified
+The lock SHALL run inside the write lock, recompute the plan and require it to equal the confirmed one, apply all rows in one batch, then re-read the cleared balance. When it no longer equals the statement balance the result and outcome line SHALL say `verified: false` with the new balance, list the rows locked and not stamp `last_reconciled`.
+
+#### Scenario: A sync lands during the write
+- **WHEN** a cleared row arrives between the recompute and the re-read
+- **THEN** the locked rows are reported, `verified` is false, `last_reconciled` is not stamped and the audit outcome names the new difference
+
+### Requirement: A reconcile selects whole splits
+A reconcile SHALL select only rows that are not split children, sum those rows for the cleared balance, and lock each selected split parent together with all its children. A child whose parent is not selected SHALL stay as it is and be named in the result.
+
+#### Scenario: A split parent
+- **WHEN** a cleared parent with 2 children is locked
+- **THEN** the children are reconciled and the balance counted the parent once
+
+#### Scenario: A reconciled parent with an unreconciled child
+- **WHEN** the parent is already reconciled and a child is not
+- **THEN** the child is not locked and the result names it as skipped
+
+### Requirement: A reconcile names the transfer partners it freezes
+The dry run SHALL list the ids of the other legs of every transfer it locks, so the freeze is visible; locking changes no partner row.
+
+#### Scenario: A transfer leg
+- **WHEN** a client reconciles Checking, which holds a transfer leg to Savings
+- **THEN** the dry run lists the Savings leg's id, and the Savings row is unchanged after the lock
+
+### Requirement: Reconciliation reads
+Transaction reads SHALL return `reconciled`, and `get_account_reconciliation` (`budget:read`) SHALL return an account's cleared balance, its count of cleared unreconciled rows and its `last_reconciled`, from the query the write uses. Its result is not proof of a statement balance.
+
+#### Scenario: The read matches the write
+- **GIVEN** a usable record equal to the account's cleared balance
+- **WHEN** a client reads the cleared balance and then reconciles
+- **THEN** the difference is zero and the rows locked equal the read count
+
+### Requirement: Reconciling has its own row limit
+A reconcile SHALL be refused before any audit line when the rows it would lock, split children included, exceed the connection's `max_reconcile_rows`: a setting defaulting to 500, replaceable by a grant's value up to an operator ceiling of 1,000, and not limited by `max_rows`.
+
+#### Scenario: More rows than the limit
+- **GIVEN** a limit of 500 and 501 rows to lock
+- **WHEN** a client reconciles against a usable record equal to the cleared balance
+- **THEN** the call is refused, naming 501 and 500, and no row changed
+
+#### Scenario: The row limit does not apply
+- **GIVEN** `max_rows` of 10 and 40 rows to lock
+- **THEN** the call succeeds
+
+#### Scenario: A grant above the ceiling
+- **WHEN** a grant's `max_reconcile_rows` is above the ceiling or not a positive integer
+- **THEN** the grants file is invalid and every write tool is refused by scope
+
+### Requirement: The reconcile limit fits the audit tail and the response
+The server SHALL refuse to start when 4 writes of the reconcile ceiling do not fit the audit tail, a check separate from and no larger than the strictest of the row, cell and delete checks. A dry run that exceeds `MAX_RESPONSE_BYTES` SHALL be refused with no confirm.
+
+#### Scenario: The tail cannot hold the ceiling
+- **WHEN** 4 times the ceiling times the per-row bytes exceeds the audit tail
+- **THEN** the server refuses to start
+
+#### Scenario: A ceiling-size dry run fits
+- **GIVEN** the default response size and 1,000 rows each with one transfer partner
+- **THEN** the dry run is returned whole
+
+### Requirement: A reconcile is audited
+A reconcile SHALL log, with `schema: 2`, the row ids to lock, one change for the account's `last_reconciled` before and after, the recorded statement balance, cleared balance and difference, and the plan digest, even when no row locks. It is not undoable by `write_undo`.
+
+#### Scenario: Audit lines
+- **WHEN** a client locks 2 rows
+- **THEN** the attempt line holds the 2 ids, the `last_reconciled` change, the balances and the digest, and the outcome line lists the applied ids and `verified`
+
+#### Scenario: Undo is refused
+- **WHEN** a client undoes a reconcile
+- **THEN** `write_undo` refuses it as not undoable and nothing changed
+
+### Requirement: A reconcile uses only the human's recorded balance
+`write_reconcile_account` SHALL take an account id and no statement balance, and SHALL use only the account's usable statement balance record, which a person saved in the app. A call that passes a statement balance SHALL be refused.
+
+#### Scenario: A model passes back the cleared balance
+- **WHEN** a client reads the cleared balance and calls the tool with it as `statement_balance`
+- **THEN** the call is refused, no confirm is issued and nothing changed
+
+#### Scenario: A recorded balance
+- **GIVEN** a usable record of 12,345 cents and cleared rows totalling 12,345
+- **WHEN** a client calls the tool and then confirms
+- **THEN** the cleared rows are locked against that balance
+
+### Requirement: A reconcile refuses an unusable record
+The tool SHALL refuse with fixed text, before any audit line and ending "Nothing changed.", when the account has no record, the record is expired or consumed, or its source is `cleared`, telling the client to ask the user to enter the balance in the app's Reconcile. The none text SHALL name `sync_budget`.
+
+#### Scenario: No record
+- **WHEN** a client reconciles an account with no record
+- **THEN** it is refused with the none text and nothing changed
+
+#### Scenario: Expired, consumed and echo
+- **WHEN** a client reconciles with an expired, a consumed or a cleared-source record
+- **THEN** each is refused with its own fixed text and nothing changed
+
+### Requirement: A reconcile shows and audits the record
+The dry run SHALL carry the record's amount, source, `as_of`, `entered_at`, `entered_by` and age, and the audit line the same except the age, which is derived from `entered_at` and left out on purpose, with `entered_by` as data, and the `plan_digest` SHALL include the record's id, amount, source and `entered_at`.
+
+#### Scenario: The dry run names its source
+- **WHEN** a client calls the tool for an account with a bank-sync record
+- **THEN** the dry run shows the amount, `bank-sync`, when it was entered and by whom
+
+#### Scenario: The record is replaced between steps
+- **WHEN** the app saves a new record after the dry run
+- **THEN** the confirm is refused and nothing changed
+
+### Requirement: A lock consumes the record
+Inside the write lock the tool SHALL require the record to be unconsumed, unexpired, not `cleared` and equal to the confirmed one. It SHALL consume the record by id whenever rows were locked, even when `verified` is false, and say so in the outcome line; a failed consume SHALL be reported with the rows still locked.
+
+#### Scenario: One entry locks once
+- **WHEN** a client reconciles successfully and then calls the tool again
+- **THEN** the second call is refused as consumed
+
+#### Scenario: An unverified lock
+- **WHEN** the balance no longer matches after rows were locked
+- **THEN** the result says `verified: false` and the record is consumed
+
+#### Scenario: Two confirms of one dry run
+- **WHEN** a client confirms the same zero-row dry run twice
+- **THEN** the second is refused as consumed and nothing changed
+
+### Requirement: The reconciliation read reports the record
+`get_account_reconciliation` SHALL return `statement_balance_record` with a `status` of `usable`, `none`, `expired`, `consumed` or `echo`, and the record's source, amount, dates and age when there is one.
+
+#### Scenario: Status of each case
+- **WHEN** a client reads an account with an expired record
+- **THEN** the status is `expired`

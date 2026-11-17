@@ -229,3 +229,29 @@ Every bridge call SHALL keep the 5 second default deadline, except `sync`, which
 - **GIVEN** the 30 second deadline for `sync`
 - **WHEN** native code calls `native/budget-month` and the engine does not answer
 - **THEN** that call fails with the timeout error after about 5 seconds
+
+### Requirement: The reconcile handlers are allowlisted
+The bridge allowlist SHALL add `native/reconcile-month`, `native/reconcile-rows`, `native/reconcile-tick`, `native/reconcile-list-set`, `account-statement-balance-prefill`, `account-statement-balance-save` and `account-statement-balance-get`, and the native chrome SHALL accept a `presentReconcile` message only from the app's own page and only for an `account_id` that is a known open account. No other handler SHALL join the list.
+
+#### Scenario: An allowlisted reconcile read
+- **WHEN** native code calls `native/reconcile-month`
+- **THEN** loot-core runs it and native receives the checklist
+
+#### Scenario: An unknown account id
+- **WHEN** the page posts `presentReconcile` with an id that is not a known open account, or is not a string
+- **THEN** native ignores it and loads nothing
+
+#### Scenario: A message from another page
+- **WHEN** a frame outside the app's origin posts `presentReconcile`
+- **THEN** it is ignored
+
+### Requirement: The step 3 and 4 handlers are allowlisted and native only
+The bridge allowlist SHALL add `native/reconcile-matches`, `native/reconcile-lock-preview`, `native/reconcile-adjust` and `native/reconcile-lock`, and `native/reconcile-rows` SHALL accept a `search` argument. No `api/` handler SHALL expose the native lock or the adjustment.
+
+#### Scenario: An allowlisted lock preview
+- **WHEN** native code calls `native/reconcile-lock-preview`
+- **THEN** loot-core returns the rows, partners and digest
+
+#### Scenario: The API
+- **WHEN** the API's handlers are listed
+- **THEN** none exposes the native lock or adjustment

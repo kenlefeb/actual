@@ -264,13 +264,13 @@ export async function transactionForm({
       t.notes, t.cleared, t.reconciled, t.amount, t.is_child, t.schedule,
       ta.id AS transfer_account, ta.name AS transfer_account_name,
       (ta.closed = 1 OR ta.tombstone = 1) AS transfer_account_closed,
-      pt.id AS partner_id, pt.account AS partner_account, pt.date AS partner_date, pt.amount AS partner_amount,
+      pt.id AS partner_id, pt.acct AS partner_account, pt.date AS partner_date, pt.amount AS partner_amount,
       pt.notes AS partner_notes, pt.cleared AS partner_cleared, pt.reconciled AS partner_reconciled
     FROM ${ALIVE} t
     LEFT JOIN payees p ON p.id = t.payee
     LEFT JOIN categories c ON c.id = t.category
     LEFT JOIN accounts ta ON ta.id = p.transfer_acct
-    LEFT JOIN ${ALIVE} pt ON pt.id = t.transfer_id`;
+    LEFT JOIN transactions pt ON pt.id = t.transfer_id AND pt.tombstone = 0`;
   const parent =
     typeof id === 'string'
       ? await db.first<DbFormRow>(

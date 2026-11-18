@@ -434,6 +434,14 @@ describe('native/transaction-preview', () => {
       -100033,
     );
     expect((await preview(draft({ amountText: '12,5+1' }))).amount).toBe(-1350);
+    for (const [format, text] of [
+      ['space-comma', '1\u202F000,33'],
+      ['apostrophe-dot', '1\u2019000.33'],
+      ['comma-dot-in', '1,000.33'],
+    ]) {
+      await setPref('numberFormat', format);
+      expect((await preview(draft({ amountText: text }))).amount).toBe(-100033);
+    }
     await setPref('numberFormat', 'comma-dot');
     expect((await preview(draft({ amountText: '1,000.33' }))).amount).toBe(
       -100033,

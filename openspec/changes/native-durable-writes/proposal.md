@@ -49,9 +49,11 @@ None.
   - "Only stored changes reach the server"
   - "The failure notice says what was lost"
   - "The notice's cut-off time is exact"
-  - "The failure notice survives a restart"
+  - "A restart closes the lost window"
+  - "A restart keeps the device-full reason"
   - "The failure notice outranks the reload notice"
-  - "The cut-off stays true across restarts"
+  - "Each failure has its own lost window"
+  - "The notice lists at most two windows"
   - "The storage wait is a limit"
   - "The shells flush storage before backgrounding or quitting"
   - "Durable platforms do not wait for storage"
@@ -62,6 +64,8 @@ None.
   - "Test hooks are absent from production"
   - "The barrier is measured and gated"
   - "An acknowledged write survives a page-process kill"
+
+- `mobile-sync-status`: new requirement "A held sync says it is waiting".
 
 ## Impact
 

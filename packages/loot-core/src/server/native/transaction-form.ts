@@ -565,6 +565,9 @@ export function canonicalAmount(
       let fraction = '';
       while (isDigit(text[at])) fraction += text[at++];
       digits = `${digits || '0'}.${fraction}`;
+    } else if (text[at] === decimal && digits !== '') {
+      // A trailing decimal separator reads as no fraction, as on the web (PR 453)
+      at++;
     }
     if (digits === '') return false;
     out += digits;

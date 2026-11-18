@@ -117,21 +117,13 @@ describe('NativeScreens', () => {
     expect(win.__actualNativeScreens?.reconcile).toBe(false);
   });
 
-  // sc-4931 (native-accounts-screen D4): off until story 3611 ships the screens
-  it('offers the Accounts switch, off when unset, and turns it on', () => {
-    const postMessage = insideIosApp();
+  // sc-4931: the Accounts toggle appears with the overlay and tab wiring (task 2.4),
+  // so it does nothing for people until then
+  it('does not offer an Accounts switch yet', () => {
+    insideIosApp();
     renderSettings();
-    const checkbox = screen.getByRole('checkbox', {
-      name: /Native Accounts screen/,
-    });
-    expect(checkbox).not.toBeChecked();
-    fireEvent.click(checkbox);
-    expect(postMessage).toHaveBeenCalledWith({
-      type: 'nativeScreen',
-      screen: 'accounts',
-      on: true,
-    });
-    expect(checkbox).toBeChecked();
-    expect(win.__actualNativeScreens?.accounts).toBe(true);
+    expect(
+      screen.queryByRole('checkbox', { name: /Native Accounts screen/ }),
+    ).not.toBeInTheDocument();
   });
 });

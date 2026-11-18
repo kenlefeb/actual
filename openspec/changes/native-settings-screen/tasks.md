@@ -11,7 +11,7 @@
 
 ## 1. Engine: settings reads, the save, limits and gates (sc-4643)
 
-- [ ] 1.1 Move `LIMITS` and `readLimit` to `server/native/limits.ts` (design D1, D11).
+- [x] 1.1 Move `LIMITS` and `readLimit` to `server/native/limits.ts` (design D1, D11).
   - Add `server-info-timeout-seconds` (default 5, ceiling 30).
   - Add any limit from #435 or #436 that has not merged yet, so the registry matches D11's table.
   - Write failing tests first:
@@ -19,21 +19,21 @@
     - every id has a localized name and help line;
     - no MCP server limit or grant key is in the registry.
   - The existing limit tests must stay green.
-- [ ] 1.2 `native/settings` (design D1). Write failing contract tests first:
+- [x] 1.2 `native/settings` (design D1). Write failing contract tests first:
   - every preference, with and without `flags.currency`;
   - budget name and ids;
   - encryption on and off;
   - a server and a local-only budget;
-  - `sync.pending` true while `messages_pending` has rows;
+  - `sync.pending` true while local changes are unsent (`messages_crdt` newer than `lastSyncedTimestamp`; `messages_pending` holds deferred incoming messages, not unsent ones);
   - the limits equal the registry, with value, default and ceiling;
   - no network call.
 
   Fixture: `settings.json`.
-- [ ] 1.3 `native/server-info`. Write failing tests first:
+- [x] 1.3 `native/server-info`. Write failing tests first:
   - a reachable server;
   - an unreachable server returns `{reachable: false, version: null}` within the deadline;
   - the deadline limit uses its default for out-of-range values.
-- [ ] 1.4 `native/settings-save` (design D1), as one exported engine function that every caller uses. Write failing tests first:
+- [x] 1.4 `native/settings-save` (design D1), as one exported engine function that every caller uses. Write failing tests first:
   - each key's closed set, compared with what web Settings stores for the same choice;
   - limits from 1 to the ceiling, and null resets;
   - `[native:invalid-setting]` for an unknown key, a bad value, an MCP limit or grant key, or an empty change, with nothing written;
@@ -43,8 +43,8 @@
   - `budgetType` runs `reset-budget-cache` in the same batch.
 
   Add `invalid-setting` to `native-refusal-codes.json`.
-- [ ] 1.5 `settings.perf.test.ts` (design D3): the stated seed, a median under 50 ms, printing the median and p95.
-- [ ] 1.6 Allowlists (design D2):
+- [x] 1.5 `settings.perf.test.ts` (design D3): the stated seed, a median under 50 ms, printing the median and p95.
+- [x] 1.6 Allowlists (design D2):
   - the three names in `native-bridge-allowlist.json` and the Swift client list, with a test that the lists are equal;
   - the page's argument lists, with a test that extra fields are dropped;
   - the page adds `clientVersion`;

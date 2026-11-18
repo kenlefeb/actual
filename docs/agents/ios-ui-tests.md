@@ -30,7 +30,10 @@ Run one build at a time on the shared Mac, and check `uptime` first.
 
 ## Add a test to a native screen
 
-1. If the screen is not the Accounts screen, add a host beside
+1. A host's types and launch argument must be named `UITest<Screen>`, and every
+   line that names one must sit inside `#if DEBUG` (`yarn check:native-swift`
+   fails otherwise; the Release archive is also scanned for `UITest*` names in
+   `fork-ios.yml`). If the screen is not the Accounts screen, add a host beside
    `UITestAccounts` (same `#if DEBUG`, its own launch argument, a fake client
    with the fixtures that screen reads) and one line in `SceneDelegate`.
 2. Add a `final class ...UITests: XCTestCase` in `App/AppUITests/` and put the

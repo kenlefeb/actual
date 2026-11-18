@@ -358,6 +358,17 @@ void test('Native Swift: the UI-test hook outside #if DEBUG fails', () => {
     }).length,
     1,
   );
+  // A sibling host for another screen is held to the same rule
+  assert.equal(
+    problems({ [scene]: 'if UITestSettings.isOn { run() }\n' }).length,
+    1,
+  );
+  assert.deepEqual(
+    problems({
+      [scene]: '#if DEBUG\nif UITestSettings.isOn { run() }\n#endif\n',
+    }),
+    [],
+  );
   // A nested #if keeps the outer DEBUG; the UI-test target itself is not shipped
   assert.deepEqual(
     problems({

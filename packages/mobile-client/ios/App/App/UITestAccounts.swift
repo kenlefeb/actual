@@ -5,10 +5,15 @@ import UIKit
 // Test-only (sc-5177). The UI-test target launches the app with
 // `-UITestAccounts YES`: the window's root is then the native Accounts screen
 // on the fixtures below, through a fake transport, with no web view, no
-// budget, no sign-in and no network. Compiled in Debug builds only, so a
-// Release build has neither this host nor the launch argument. The fixtures
-// are copies of packages/loot-core/src/server/native/fixtures/ (the loot-core
-// contract tests keep those true); refresh them from there when a shape changes.
+// budget, no sign-in and no network. Compiled in Debug builds only (the
+// `native-swift` check and the archive step of fork-ios.yml keep it out of a
+// Release build). The fixtures are copies of
+// packages/loot-core/src/server/native/fixtures/ (the loot-core contract tests
+// keep those true); refresh them from there when a shape changes.
+//
+// The fake honours the register's scope the way loot-core does (uncleared and
+// uncategorized drop rows), and the web hand-offs and Reconcile entries are
+// written on screen as "<action>:<account>" for the tests to read.
 enum UITestAccounts {
     static var isOn: Bool { UserDefaults.standard.bool(forKey: "UITestAccounts") }
 
@@ -16,8 +21,9 @@ enum UITestAccounts {
         let client = NativeBridgeClient { name, args in
             switch name {
             case "native/accounts-list": accountsList
-            case "native/account-register": args.contains("\"search\"") ? registerSearch : register
+            case "native/account-register": registerPage(args.contains("\"search\"") ? registerSearch : register, args: args)
             case "native/budget-month": budgetMonth
+            case "native/reconcile-month": reconcileMonth
             default: "null"
             }
         }
@@ -26,14 +32,26 @@ enum UITestAccounts {
         let handOff = HandOffLabel()
         let actions = AccountsActions(
             navigate: { _ in },
-            handOff: { action, _ in handOff.text = action },
+            handOff: { action, id in handOff.text = "\(action):\(id ?? "")" },
             openRegister: { nav.register = AccountRegisterViewModel(client: client, accountId: $0) },
             closeRegister: { nav.register = nil },
-            reconcile: { _ in })
+            reconcile: { handOff.text = "reconcile:\($0 ?? "checklist")" })
         return UIHostingController(
             rootView: UITestAccountsRoot(
                 screen: AccountsScreen(model: model, nav: nav, reconcileMonth: ReconcileMonthViewModel(client: client), actions: actions),
                 handOff: handOff, model: model))
+    }
+
+    // loot-core filters by scope on its side; the fake does the same to the fixture
+    private static func registerPage(_ page: String, args: String) -> String {
+        guard let scope = (try? JSONSerialization.jsonObject(with: Data(args.utf8)) as? [String: Any])?["scope"] as? String,
+            scope != "all",
+            var object = (try? JSONSerialization.jsonObject(with: Data(page.utf8))) as? [String: Any],
+            let rows = object["rows"] as? [[String: Any]]
+        else { return page }
+        object["rows"] = rows.filter { scope == "uncleared" ? $0["cleared"] as? Bool == false : ($0["categoryId"] == nil || $0["categoryId"] is NSNull) }
+        guard let data = try? JSONSerialization.data(withJSONObject: object) else { return page }
+        return String(decoding: data, as: UTF8.self)
     }
 
     private static let accountsList = #"""
@@ -48,6 +66,9 @@ enum UITestAccounts {
     private static let budgetMonth = #"""
     {"month":"2026-03","firstMonth":"2026-02","lastMonth":"2026-03","budgetType":"envelope","currencyCode":"","currencyDecimalPlaces":2,"currencySymbol":"","currencySymbolPosition":"before","currencySpace":false,"numberFormat":"comma-dot","hideFraction":false,"totals":{"budgeted":-160000,"spent":-120000,"income":300000,"balance":40000,"toBudget":140000,"available":300000,"lastMonthOverspent":0,"forNextMonth":0,"fromLastMonth":0,"budgetedIncome":null,"saved":null},"groups":[{"id":"bills","name":"Bills","isIncome":false,"hidden":false,"budgeted":160000,"spent":-120000,"balance":40000,"categories":[{"id":"power","name":"Power","hidden":true,"budgeted":10000,"spent":0,"balance":10000,"carryover":false},{"id":"rent","name":"Rent","hidden":false,"budgeted":150000,"spent":-120000,"balance":30000,"carryover":false}]},{"id":"income","name":"Income","isIncome":true,"hidden":false,"budgeted":null,"spent":300000,"balance":null,"categories":[{"id":"salary","name":"Salary","hidden":false,"budgeted":null,"spent":300000,"balance":null,"carryover":false}]}]}
     """#
+    private static let reconcileMonth = #"""
+    {"currencyCode":"","currencyDecimalPlaces":2,"currencySymbol":"","currencySymbolPosition":"before","currencySpace":false,"numberFormat":"comma-dot","hideFraction":false,"month":"2017-01","excluded":[],"hidden":[],"accounts":[{"id":"checking","name":"Checking","status":"due","detail":{"cleared":105000,"statement":null},"last_reconciled":null,"sync_source":null},{"id":"savings","name":"Savings","status":"due","detail":{"cleared":0,"statement":null},"last_reconciled":null,"sync_source":null},{"id":"card","name":"Card","status":"due","detail":{"cleared":0,"statement":null},"last_reconciled":null,"sync_source":null}]}
+    """#
 }
 
 @MainActor
@@ -55,7 +76,7 @@ final class HandOffLabel: ObservableObject {
     @Published var text = ""
 }
 
-// The screen, with the last web hand-off written over it for the tests to read
+// The screen, with the last hand-off written over it for the tests to read
 private struct UITestAccountsRoot: View {
     let screen: AccountsScreen
     @ObservedObject var handOff: HandOffLabel

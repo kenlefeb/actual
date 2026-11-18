@@ -78,7 +78,7 @@ function weakensWebKit(path, text) {
 // argument. The UI-test target itself is never part of the app.
 // shortcut: counts #if/#endif lines, not a parser; an `#if DEBUG && x` or a
 // negated condition is not recognised as Debug-only, which can only fail loudly.
-const UI_TEST_HOOK = /UITestAccounts/;
+const UI_TEST_HOOK = /UITest[A-Z]\w*/;
 
 function hookOutsideDebug(path, text) {
   if (path.includes('/AppUITests/')) return [];

@@ -150,6 +150,8 @@ public struct AccountUpcoming: Codable, Equatable {
         public let amount: Int
         public let cleared: Bool
         public let splitCount: Int
+        // sc-5224: a split's other line payees; nil from an older loot-core
+        public let otherPayees: Int?
         public let transferAccount: AccountRegister.TransferAccount?
         public let status: Status
         // payee, category, amount, notes, date, cleared, splits: what the rules changed

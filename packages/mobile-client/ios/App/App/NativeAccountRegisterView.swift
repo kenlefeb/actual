@@ -410,9 +410,7 @@ private struct UpcomingSectionView: View {
 }
 
 enum UpcomingRowText {
-    static func payee(_ row: AccountUpcoming.Row) -> String {
-        [row.payee, row.transferAccount?.name, row.notes].compactMap { $0 }.first { !$0.isEmpty } ?? RegisterWords.noPayee
-    }
+    static func payee(_ row: AccountUpcoming.Row) -> String { UpcomingWords.payee(row) }
 
     // As posted rows read: the split count, the transfer's other account, or the category
     static func detail(_ row: AccountUpcoming.Row) -> String? {

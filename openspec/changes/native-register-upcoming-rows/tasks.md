@@ -9,7 +9,7 @@ Amended 2026-11-18 (design D6 to D11), and again after the second perf stop (D12
 - [x] 1.1 (built, keep) Move the bodies of `isScheduleRelevantToAccount`, `inverseBasedOnAccount` and `comparePreviewTransactions` verbatim into `packages/loot-core/src/shared/` with their tests. `useAccountPreviewTransactions.ts` and `usePreviewTransactions.ts` change only their imports, and the web-only steps stay in the hooks. The web register's tests (desktop `Account` and mobile `AccountTransactions`) pass unchanged (design D1)
 - [x] 1.2 (built, keep; retarget the tests at `native/account-upcoming`) Failing tests first for "The upcoming read returns rows as they will post" and "Upcoming rows name the fields rules set":
   - rules set payee and category;
-  - a split's own row with `splitCount` (parent payee null, design D11);
+  - a split's own row with `splitCount` (parent payee as the web shows it, design D11);
   - a split line into this account, inverted with `transferAccount`;
   - a template split line;
   - status `due`, `upcoming` and `missed`;
@@ -74,3 +74,7 @@ Ships before `native-accounts-screen` task 3.8 turns the native Accounts screen 
 - [x] 4.1 Failing test first: an upcoming row whose rule names a payee that does not exist yet (a row's own payee and a split line's) is found by searching that name; the Uncleared and Uncategorized chips are unchanged; no payee is created
 - [x] 4.2 The upcoming rows' JSON source carries the unresolved name under a stand-in payee id, and a stand-in payee row joins it, so the posted rows' predicate is unchanged and matches the name shown
 - [x] 4.3 The latency gates still hold (`yarn workspace @actual-app/core run perf`, on a quiet machine)
+
+## 5. A split's payee as the web shows it (sc-5224)
+
+- [x] 5.1 Failing tests first: a split whose lines keep the schedule's payee, lines with different payees, a line with no payee, no line with a payee, and a rule-set payee on the whole split; the parity test gains the kept-payee split. loot-core returns the web's split payee (`useDisplayPayee`) and `otherPayees`; Swift shows "(+N more)" and "Split (no payee)"; no payee is created

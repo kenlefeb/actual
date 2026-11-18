@@ -182,7 +182,6 @@ struct AccountsScreen: View {
     var body: some View {
         NavigationView {
             content
-                .environment(\.editMode, $editMode)
                 .navigationBarTitle(Text(AccountsWords.title), displayMode: .large)
                 .toolbar {
                     ToolbarItem(placement: .navigationBarLeading) {

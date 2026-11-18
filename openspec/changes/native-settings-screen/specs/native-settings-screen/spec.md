@@ -88,11 +88,46 @@ On iPhone, when changes on the device have not synced, the sign-out confirmation
 - **THEN** the confirmation has no unsynced-changes warning
 
 ### Requirement: Settings without a native screen open the web section
-On iPhone, a setting with no native screen yet SHALL be a row that opens its existing web section and returns to native Settings when closed. The rows SHALL be exactly: language, switch budget, change server, encryption, users, bank sync providers, business calendars, experimental features, export, reset cache, repair transactions and notifications. Backups SHALL not appear on iPhone.
+On iPhone, a setting with no native screen yet SHALL be a row that opens its existing web section and returns to native Settings when closed. The rows SHALL be exactly: language, switch budget, change server (or set up sync when local only), encryption, users, bank sync providers, business calendars, experimental features, export, reset cache, repair transactions and notifications. Backups SHALL not appear on iPhone.
 
 #### Scenario: Language
-- **WHEN** the person taps Language
+- **WHEN** the person taps Language in the This iPhone section
 - **THEN** the web language setting opens, and closing it returns to native Settings
+
+### Requirement: Per-device settings are grouped under This iPhone
+On iPhone, Settings SHALL show a This iPhone section holding the native-screen switches and the Language row, which hands off to the web and says it opens in the web view. Language SHALL not appear under Features.
+
+#### Scenario: Section contents
+- **WHEN** the person opens Settings
+- **THEN** the This iPhone section lists the native-screen switches and Language, and Features does not list Language
+
+### Requirement: A local-only budget shows that it is not syncing
+On iPhone, for a budget with no sync server, Settings › Sync SHALL show "Server: Local only, not syncing", say the budget is stored only on this iPhone, and offer Set up sync, which opens the web sync setup. It SHALL show no Sign out and no Encryption row. About SHALL show the server as not syncing, with no Retry.
+
+#### Scenario: Sync section
+- **GIVEN** a budget that does not sync
+- **WHEN** the person opens Settings
+- **THEN** Sync shows "Local only, not syncing" and Set up sync, and no Sign out or Encryption row
+
+#### Scenario: Set up sync
+- **WHEN** the person taps Set up sync
+- **THEN** the web sync setup opens, and closing it returns to native Settings
+
+#### Scenario: About
+- **GIVEN** a budget that does not sync
+- **THEN** About shows the server as not syncing, with no Retry, and the client and app versions
+
+### Requirement: Settings shows a loading state
+On iPhone, until the first settings read answers, the Settings tab SHALL show its sections on the real layout with placeholder values and no spinner, and VoiceOver SHALL read that settings are loading. The native-screen switches SHALL show at once. If the read fails, the tab SHALL show an error with Retry.
+
+#### Scenario: First load
+- **GIVEN** the engine has not answered the settings read
+- **WHEN** the person opens Settings
+- **THEN** the sections show placeholders, the switches show their values, and VoiceOver reads "Loading settings"
+
+#### Scenario: Read fails
+- **WHEN** the first settings read fails
+- **THEN** the tab shows an error with Retry, and Retry reads again
 
 #### Scenario: No backups on iPhone
 - **THEN** native Settings on iPhone shows no Backups row
@@ -109,7 +144,7 @@ Inside the iPhone app, the native screens and the web screens SHALL follow the s
 Settings › Advanced › Limits SHALL list every configurable limit with its value and default, natively on iPhone and in web Settings on desktop and phone web. A value SHALL be a whole number from 1 to the limit's ceiling; Reset SHALL return it to the default. The change SHALL apply to the next read or write on every device and in a running MCP server.
 
 #### Scenario: Raising the register page size
-- **WHEN** the person sets "Register page size" to 120 on iPhone
+- **WHEN** the person sets "Register: rows per page" to 120 on iPhone
 - **THEN** the next register page on iPhone and the web shows the same value in Limits, and a register page holds 120 rows
 
 #### Scenario: Over the ceiling
@@ -123,7 +158,7 @@ Settings › Advanced › Limits SHALL list every configurable limit with its va
 ### Requirement: Every limit explains itself
 Each limit SHALL show a plain-words name, one line saying what it protects, its default and its ceiling. A limit without a name or help line SHALL still be listed under its id, and a test SHALL fail the build when a registry limit lacks either.
 
-#### Scenario: Register page size
+#### Scenario: Register: rows per page
 - **WHEN** the person opens Limits
 - **THEN** "Register: rows per page" reads "Keeps the register fast on a large account", "Default 50", "Up to 200"
 

@@ -12,6 +12,7 @@
         "amount": -7000,
         "cleared": false,
         "splitCount": 0,
+        "otherPayees": 0,
         "transferAccount": {
           "id": "savings",
           "name": "Savings"
@@ -23,13 +24,14 @@
         "id": "preview/schedule-split/2017-01-05",
         "scheduleId": "schedule-split",
         "date": "2017-01-05",
-        "payee": null,
+        "payee": "Savings",
         "category": null,
         "categoryId": null,
         "notes": null,
         "amount": -50000,
         "cleared": false,
         "splitCount": 2,
+        "otherPayees": 1,
         "transferAccount": null,
         "status": "upcoming",
         "ruleFields": [
@@ -54,6 +56,7 @@
         "amount": 7000,
         "cleared": false,
         "splitCount": 0,
+        "otherPayees": 0,
         "transferAccount": {
           "id": "checking",
           "name": "Checking"
@@ -72,6 +75,7 @@
         "amount": 20000,
         "cleared": false,
         "splitCount": 0,
+        "otherPayees": 0,
         "transferAccount": {
           "id": "checking",
           "name": "Checking"

@@ -25,7 +25,10 @@ public class NativeBridgePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
     var onSyncStatus: ((NativeSyncStatus) -> Void)?
     private lazy var coalescer = ChangeCoalescer { [weak self] in self?.onChange?() }
 
-    lazy var client = NativeBridgeClient { [weak self] name, argsJSON in
+    // sc-5219: whether this device has stored the writes made through `client`
+    let writeStorage = WriteStorageStatus()
+
+    lazy var client = NativeBridgeClient(storage: writeStorage) { [weak self] name, argsJSON in
         guard let self else { throw NativeBridgeError.noPage }
         return try await self.evaluate(name: name, argsJSON: argsJSON)
     }
@@ -41,6 +44,9 @@ public class NativeBridgePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
         let origin = message.frameInfo.securityOrigin
         guard PageOriginGuard.accepts(isMainFrame: message.frameInfo.isMainFrame, scheme: origin.protocol, host: origin.host, port: origin.port, serverURL: bridge?.config.serverURL),
               let event = NativeBridgeEvent.name(of: message.body) else { return }
+        if let seq = NativeBridgeEvent.storedSeq(of: message.body) {
+            Task { @MainActor [writeStorage] in writeStorage.storedEvent(seq: seq) }
+        }
         onEvent?(event)
         onPaychecksEvent?(event, NativeBridgeEvent.tables(of: message.body))
         let status = syncStatus.next(after: message.body, now: Date())

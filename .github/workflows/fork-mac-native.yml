@@ -14,6 +14,11 @@ on:
       - 'packages/mobile-client/ios/NativeBridge/**'
       - '.github/workflows/fork-mac-native.yml'
       - 'fork/scripts/check-mac-release-flags.sh'
+      # What the storage perf gate measures (sc-5219)
+      - 'packages/desktop-client/src/native/**'
+      - 'packages/loot-core/src/platform/server/fs/**'
+      - 'packages/loot-core/src/server/native/persisted.ts'
+      - '.yarn/patches/absurd-sql-*'
 
 permissions:
   contents: read
@@ -23,6 +28,59 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # sc-5219 (native-durable-writes D11): the web build the perf gate runs on.
+  # Built on Linux because macOS runner minutes are expensive. It keeps the test
+  # hooks, so it is only ever used here.
+  storage-perf-www:
+    if: github.repository == 'kenlefeb/actual'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Set up environment
+        uses: ./.github/actions/setup
+        with:
+          download-translations: 'false'
+      - name: Build the web app with the test hooks
+        run: yarn build:browser --skip-translations
+        env:
+          FORK_TEST_HOOKS: 'true'
+      - name: Stage it for the Mac app
+        run: yarn workspace mobile-client stage:www
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: storage-perf-www
+          path: packages/mobile-client/www
+          retention-days: 1
+          if-no-files-found: error
+
+  storage-perf-gate:
+    if: github.repository == 'kenlefeb/actual'
+    needs: storage-perf-www
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: storage-perf-www
+          path: packages/mobile-client/www
+      - name: Measure what the storage barrier adds to a write
+        working-directory: packages/mobile-client/macos
+        env:
+          TEST_RUNNER_HE_STORAGE_PERF_GATE: '1'
+        run: >-
+          xcodebuild test
+          -project HomeEconomicsMac.xcodeproj
+          -scheme HomeEconomicsMac
+          -destination platform=macOS
+          -only-testing:HomeEconomicsMacTests/StoragePerfGateTests
+          CODE_SIGNING_ALLOWED=NO
+
   fork-mac-native:
     if: github.repository == 'kenlefeb/actual'
     runs-on: macos-26

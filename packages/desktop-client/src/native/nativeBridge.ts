@@ -500,12 +500,8 @@ export function installNativeBridge(win: BridgeWindow) {
   if (!handler) return;
 
   // send and listen are typed per handler name; the bridge is dynamic by design
-  const forward = send as unknown as Send;
-  // sc-5219 (D7a): sends are delivered in order, so this reaches the engine
-  // before anything that opens a budget
-  forward('native/enable-storage-guard').catch(() => undefined);
   win.__actualNativeBridge = createNativeBridge({
-    send: forward,
+    send: send as unknown as Send,
     listen: listen as unknown as Listen,
     notify: message => handler.postMessage(message),
   });

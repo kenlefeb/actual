@@ -222,24 +222,18 @@ describe('installNativeBridge', () => {
     sent.mockRestore();
   });
 
-  // Queued ahead of anything the app sends, so before any budget opens
-  it('turns the storage guard on before telling native code it is ready', () => {
-    const order: string[] = [];
-    const sent = vi.spyOn(connection, 'send').mockImplementation((async (
-      name: string,
-    ) => {
-      order.push(name);
-    }) as never);
+  // Task 2.5: the switch-on lands with the failure notices, so no build
+  // carries the guard without them
+  it('does not turn the storage guard on yet', () => {
+    const sent = vi
+      .spyOn(connection, 'send')
+      .mockResolvedValue(undefined as never);
     installNativeBridge({
       webkit: {
-        messageHandlers: {
-          actualNativeBridge: {
-            postMessage: ({ event }) => order.push(event),
-          },
-        },
+        messageHandlers: { actualNativeBridge: { postMessage: vi.fn() } },
       },
     });
-    expect(order.slice(0, 2)).toEqual(['native/enable-storage-guard', 'ready']);
+    expect(sent).not.toHaveBeenCalled();
     sent.mockRestore();
   });
 

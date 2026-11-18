@@ -24,7 +24,7 @@
 - [x] 2.2 The latch check, the `storage-failed` event in `EVENTS`, `native-bridge-allowlist.json`, the Swift allowlist and `coverage.json` skips
 - [x] 2.3 Test hooks behind `__FORK_TEST_HOOKS__` (false in production builds). A Fork CI step searches the production page and worker bundles for the hook marker and fails if found (D10)
 - [x] 2.4 Run `yarn typecheck`, `yarn lint` and the `@actual-app/web` tests; all pass
-- [x] 2.5 Failing test first: the bridge calls `native/enable-storage-guard` as it installs, before any budget opens. A failure from before the switch latches with a cut-off that can overstate the loss (Security, PR #473)
+- [ ] 2.5 Failing test first: the bridge calls `native/enable-storage-guard` as it installs, before any budget opens. A failure from before the switch latches with a cut-off that can overstate the loss (Security, PR #473). **Not in the group 2 PR:** this lands in the group 3 PR that adds the failure notices (3.1), so no build carries the guard without them. Until then the page's latch check, event forwarding and allowlist entries are in place but nothing sets the latch
 
 ## 3. iPhone and Mac shells (sc-5219)
 

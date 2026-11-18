@@ -39,7 +39,7 @@ export function useNativeTabBarRoutes() {
           } else if (action === 'bank-sync') {
             void navigate('/bank-sync', { state: { fromTabBar: true } });
           } else {
-            void navigate(`/accounts/${accountId}`, {
+            void navigate(`/accounts/${encodeURIComponent(accountId ?? '')}`, {
               state: { fromTabBar: true, openAccountMenu: true },
             });
           }

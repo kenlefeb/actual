@@ -95,5 +95,18 @@ describe('useNativeTabBarRoutes', () => {
         openAccountMenu: true,
       });
     });
+
+    it('encodes the account id, so it cannot change the route', () => {
+      const { result } = renderInApp();
+      act(() =>
+        window.__actualNativeChrome?.webAccountAction?.(
+          'account-settings',
+          '../settings a/b',
+        ),
+      );
+      expect(result.current.location.pathname).toBe(
+        '/accounts/..%2Fsettings%20a%2Fb',
+      );
+    });
   });
 });

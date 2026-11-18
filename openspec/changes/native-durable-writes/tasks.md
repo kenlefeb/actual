@@ -41,7 +41,7 @@
   - iPhone: the background task with an expiration handler, ended at the earliest of the answer, the wait or expiry.
   - Mac: `.terminateLater` on quit, a deferred window close, and a best-effort flush in `EngineLifecycle.willSleep`.
   - Tests with a fake client (D8).
-- [ ] 3.3 Mac perf gate in `HomeEconomicsMacTests`: the end-to-end client write (`native/storage-state`, the write, `native/persisted`) against the bare write, 30 runs each, at most 50 ms added to the median and 250 ms to the p95, run in `fork-mac-native`. Record simulator timings in the PR, and a real iPhone's median and p95 before the native Accounts screen defaults on. If the gate misses, stop and report to the Director. Report any default below 2000 ms to the Product Owner (D7, D11)
+- [ ] 3.3 Mac perf gate in `HomeEconomicsMacTests`: the end-to-end client write (`native/storage-state`, the write, `native/persisted`) against the bare write, 30 runs each, at most 50 ms added to the median and 250 ms to the p95, run in `fork-mac-native`. Record simulator timings in the PR and, before the first TestFlight build with this change, a real iPhone's median and p95 and the largest test budget's write time against the 60 s read deadline (raise the constant if it comes close). If the gate misses, stop and report to the Director. Report any default below 2000 ms to the Product Owner (D7, D11)
 - [ ] 3.4 Kill tests, in the Atlas helper login only:
   - Mac: extend `PageProcessKillTests` with 20 kills after `stored: true`, all kept and `PRAGMA integrity_check` passing, plus one kill mid-write.
   - Control run: barrier hook off and a 300 ms commit delay; it must lose at least 1, or it fails as inconclusive.
@@ -57,3 +57,4 @@
 - [ ] 4.4 `floor` in `native/settings`, its fixture and Swift decoding; the native and web Limits screens bounded to floor through ceiling (D7)
 - [ ] 4.5 The closed-budget notice in the shells, with the Product Owner's wording in the copy table; the restart notices' approved wording goes there too
 - [ ] 4.6 Failing tests first, then the status lines (`NativeAccountsViewController` and its Accounts sync state; `MobileSyncStatus.tsx`): "Waiting for this device to finish saving" on `storage-slow`, kept through held retries, and normal again when the wait clears
+- [ ] 4.7 The patch as specified in D2 and D7: rejection from `trans.onabort` only; a `Set` of files; the per-database queue with the guard on or off; the 60 s deadline covering only the wait for pending writes, with a test that a read slower than the deadline still opens; `initialFullSync` completing under `storage-slow`

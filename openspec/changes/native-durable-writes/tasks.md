@@ -49,6 +49,8 @@
   - iPhone simulator: the same loop.
   - Put the before and after counts in the PR (D12).
 - [ ] 3.5 Run the `NativeBridgeCore` tests, the Mac tests and the iOS build; all pass. The next TestFlight build carries this change (Product Owner, comment 5222)
+- [ ] 3.6 Failing test first for "A not-yet-stored write belongs to its page load": `seq` carries the page load's epoch; Swift also records each write's page-load generation, for a write with no answer and so no `seq`; `stored: true` and `stored` clear only their own epoch; a restart turns older pending writes into "may not have been saved", and no later success clears them (D4)
+- [ ] 3.7 **Gate:** do not turn the storage guard on in the iPhone app until sc-5247 (iPhone page-death reload) and the iPhone part of sc-5220 (reload notice) have merged. The PR that turns it on links both merged PRs (Product Owner, sc-5219 comment 5277; design D7a)
 
 ## 4. Review decisions from the engine PR (sc-5219)
 

@@ -25,7 +25,7 @@ Read on `development` at 2645aa42b:
 
 ### D1. One engine: move the relevance and inversion functions to loot-core
 
-`isScheduleRelevantToAccount`, `inverseBasedOnAccount` and `comparePreviewTransactions` are pure. They move to `packages/loot-core/src/shared/schedules.ts` (or a sibling module) with their tests. The desktop-client hooks import them, with no change in web behaviour. The native read then runs the web's steps server-side, in the same call:
+`isScheduleRelevantToAccount`, `inverseBasedOnAccount` and `comparePreviewTransactions` are pure. Their bodies move verbatim to `packages/loot-core/src/shared/schedules.ts` (or a sibling module) with their tests. The desktop-client hooks change only their imports, with no change in web behaviour. The web-only steps stay in the hooks: the status shown as the category, and the `preview/<id>` child ids. The native read then runs the web's steps server-side, in the same call:
 - preview, then `runRules` (the function behind `rules-run`) on each row;
 - sort with `comparePreviewTransactions`;
 - `inverseBasedOnAccount` for the account.
@@ -47,11 +47,13 @@ An inverted row's amount is the negated line amount, its payee is the transfer p
 - `splitCount`, `transferAccount`;
 - `status`: `due`, `upcoming` or `missed`, from the statuses `getStatus` gives.
 
-`runningBalance` stays null.
+- `ruleFields`: the names, from the fixed set payee, category, amount, notes, date, cleared and splits, of the fields whose value after `runRules` differs from the preview before it. Each comparison is a value comparison, done in loot-core.
+
+`runningBalance` stays null. Ids are stable between reads, and a fixture asserts their format so Swift row identity holds (Architect review, PR #436, nit 3).
 
 ### D3. Filtering with the posted rows' predicate
 
-`registerFilter` gains a source name for its child subquery. The register read builds a CTE, `upcoming(id, account, date, payee, category, notes, amount, cleared, is_parent, is_child, parent_id, transfer_id)`, from the D2 rows and their lines as bound `VALUES`. It joins `accounts a`, `payees p`, `categories c` and `accounts ta` as the posted query does, and applies the same `filter.sql` with the CTE as the source. So `uncleared`, `uncategorized` (with its split-parent, off-budget and on-budget-transfer exemptions) and search (payee, category, notes, amount, a matching line returning its row) mean exactly what they mean for posted rows.
+`registerFilter` gains a source name for its child subquery. The register read builds a CTE, `upcoming(id, account, date, payee, category, notes, amount, cleared, is_parent, is_child, parent_id, transfer_id)`, from the D2 rows and their lines. The rows are passed as **one JSON parameter** and read with `json_each(?)` (`json_extract(value, '$.id')`, and so on), as the codebase already does elsewhere. Bound `VALUES` was rejected because it needs about 12 variables per row: 40 daily schedules over a 366-day cap make about 14,600 rows, far past SQLite's variable limit (32,766, or 999 on older builds). A test reads more rows than both limits (Architect review, finding 1). It joins `accounts a`, `payees p`, `categories c` and `accounts ta` as the posted query does, and applies the same `filter.sql` with the CTE as the source. So `uncleared`, `uncategorized` (with its split-parent, off-budget and on-budget-transfer exemptions) and search (payee, category, notes, amount, a matching line returning its row) mean exactly what they mean for posted rows.
 
 Alternative rejected: a TEMP table, which writes during a read; or a TypeScript twin of the search, which is a second predicate.
 
@@ -61,7 +63,13 @@ Upcoming rows are a section of the first page (`cursor` null) only. They are nev
 
 ### D5. Horizon
 
-The window stays the budget's `upcomingScheduledTransactionLength` preference (default 7 days) and each schedule's `custom_upcoming_length`, as on the web. It is capped by `accounts-register-upcoming-max-days` in `LIMITS` (default 92, ceiling 366). Rows dated after today plus the cap are dropped before rules run. A missing or bad value falls back to 92. No refusal is added.
+The window stays the budget's `upcomingScheduledTransactionLength` preference (default 7 days) and each schedule's `custom_upcoming_length`, as on the web. It is capped by `accounts-register-upcoming-max-days` in `LIMITS` (default 92, ceiling 366). Rows dated after today plus the cap are dropped before rules run. A missing or bad value falls back to 92. No refusal is added. When the cap dropped any row, the first page returns `upcomingCapDays`, and the register shows "Scheduled rows shown up to N days; change this in Settings > Limits." The web equality holds only within the cap.
+
+The limit is listed in native Settings' Limits section with the label "Scheduled rows: days ahead" and text saying it caps the budget's upcoming length. That section is story 4643's: it lists every entry in `LIMITS`, so this change adds the entry and its label, and depends on 4643 for the screen (Product Owner review, item 1).
+
+### D5a. Tapping an upcoming row
+
+A tap opens a native read-only detail: date, payee, category, amount, account, "Scheduled" in words, and "Fields set by rules: …" from `ruleFields` when it is not empty. There is no edit and no web hand-off, so the closed hand-off set is unchanged; schedule editing is story 4617 (Product Owner review, item 2).
 
 ### D6. Perf gate
 
@@ -70,7 +78,9 @@ The window stays the budget's `upcomingScheduledTransactionLength` preference (d
 - 20 transfers into it;
 - 5 daily.
 
-The first-page cases (no search; search; `uncleared`) stay under the 50 ms median. If they don't, the remedy is a lower default cap, not a skipped gate.
+The first-page cases (no search; search; `uncleared`) stay under the 50 ms median. A worst case adds 50 daily schedules across the full default cap of 92 days, about 4,600 occurrences through `runRules`, and it is held to the same gate (Architect review, finding 2).
+
+Stop and report, as ADR 11 did: if any median, the worst case included, cannot get under 50 ms, the developer stops and reports the medians and p95s to the Director, and does not skip or loosen the gate. The remedies, decided by the Architect and the Product Owner, are a lower default cap, or a new named row-cap limit in `LIMITS` with its own default and ceiling.
 
 ## Risks / Trade-offs
 

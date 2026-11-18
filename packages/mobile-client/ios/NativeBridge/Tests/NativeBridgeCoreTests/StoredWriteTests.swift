@@ -147,14 +147,17 @@ final class StoredWriteTests: XCTestCase {
         let status = WriteStorageStatus()
         status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "old", n: 1)))
         status.pageLoaded()
-        XCTAssertEqual(status.message, WriteStorageStatus.mayNotBeSavedMessage)
+        XCTAssertTrue(status.mayNotBeSaved)
+        XCTAssertNil(status.message)
         status.record(PersistedAnswer(stored: true, seq: PersistedSeq(epoch: "new", n: 99)))
-        XCTAssertEqual(status.message, WriteStorageStatus.mayNotBeSavedMessage)
+        XCTAssertTrue(status.mayNotBeSaved)
+        XCTAssertNil(status.message)
         status.storedEvent(seq: 1, epoch: "new")
         status.storedEvent(seq: 1, epoch: "old")
-        XCTAssertEqual(status.message, WriteStorageStatus.mayNotBeSavedMessage)
-        status.acknowledgeMayNotBeSaved()
+        XCTAssertTrue(status.mayNotBeSaved)
         XCTAssertNil(status.message)
+        status.acknowledgeMayNotBeSaved()
+        XCTAssertFalse(status.mayNotBeSaved)
     }
 
     // The spec's "No answer before the restart"
@@ -165,14 +168,16 @@ final class StoredWriteTests: XCTestCase {
         status.record(.notStored, madeIn: generation)
         status.writeEnded()
         status.record(PersistedAnswer(stored: true, seq: PersistedSeq(epoch: "new", n: 1)))
-        XCTAssertEqual(status.message, WriteStorageStatus.mayNotBeSavedMessage)
+        XCTAssertTrue(status.mayNotBeSaved)
+        XCTAssertNil(status.message)
     }
 
     func testANewEpochAloneRevealsARestart() {
         let status = WriteStorageStatus()
         status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "old", n: 9)))
         status.record(PersistedAnswer(stored: true, seq: PersistedSeq(epoch: "new", n: 99)))
-        XCTAssertEqual(status.message, WriteStorageStatus.mayNotBeSavedMessage)
+        XCTAssertTrue(status.mayNotBeSaved)
+        XCTAssertNil(status.message)
     }
 
     func testStoredClearsOnlyItsOwnEpochAndEachWriteIsTracked() {
@@ -200,6 +205,22 @@ final class StoredWriteTests: XCTestCase {
         status.pageLoaded()
         status.record(PersistedAnswer(stored: true, seq: PersistedSeq(epoch: "new", n: 99)))
         XCTAssertNil(status.message)
+    }
+
+    func testThePersonIsToldToKeepTheAppOpen() {
+        XCTAssertEqual(WriteStorageStatus.notYetStoredMessage, "Still saving to this device. Keep the app open.")
+    }
+
+    func testAWriteIsPendingWhileSavingAndWhileNotYetStored() {
+        let status = WriteStorageStatus()
+        XCTAssertFalse(status.isPending)
+        status.writeBegan()
+        XCTAssertTrue(status.isPending)
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 1)))
+        status.writeEnded()
+        XCTAssertTrue(status.isPending)
+        status.storedEvent(seq: 1, epoch: "e")
+        XCTAssertFalse(status.isPending)
     }
 
     // A normal write takes milliseconds, so its "Saving…" must not flash

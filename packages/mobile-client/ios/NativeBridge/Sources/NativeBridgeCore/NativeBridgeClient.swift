@@ -138,10 +138,7 @@ public enum NativeBridgeEvent {
 public final class WriteStorageStatus: ObservableObject {
     public static let savingMessage = NSLocalizedString("Saving…", comment: "Native screens: a change is being stored on this device")
     public static let notYetStoredMessage = NSLocalizedString(
-        "Saved here, not yet stored on this device.", comment: "Native screens: a change was made but this device has not stored it yet")
-    public static let mayNotBeSavedMessage = NSLocalizedString(
-        "Some recent changes may not have been saved. Check them, and make again any that are missing.",
-        comment: "Native screens: the app restarted while changes were not yet stored")
+        "Still saving to this device. Keep the app open.", comment: "Native screens: a change was made but this device has not stored it yet")
 
     @Published public private(set) var message: String?
     private var writesInProgress = 0 { didSet { updateMessage() } }
@@ -149,8 +146,9 @@ public final class WriteStorageStatus: ObservableObject {
     // number; nil when that call got no answer
     private var unstored: [Int?] = [] { didSet { updateMessage() } }
     // A restart came while writes were unstored. No later success can vouch
-    // for them, so only the person's acknowledgement clears this.
-    private var mayNotBeSaved = false { didSet { updateMessage() } }
+    // for them, so only OK on the restart notice clears this. The notice says
+    // so; the status line shows only saving in progress.
+    @Published public private(set) var mayNotBeSaved = false
     private var currentEpoch: String?
     private var retiredEpochs: Set<String> = []
     // Counts page loads here, for a write that never got a `seq`
@@ -158,11 +156,10 @@ public final class WriteStorageStatus: ObservableObject {
 
     public nonisolated init() {}
 
+    public var isPending: Bool { message != nil }
+
     private func updateMessage() {
-        let next: String? =
-            if writesInProgress > 0 { Self.savingMessage } else if mayNotBeSaved { Self.mayNotBeSavedMessage } else if !unstored.isEmpty {
-                Self.notYetStoredMessage
-            } else { nil }
+        let next = writesInProgress > 0 ? Self.savingMessage : unstored.isEmpty ? nil : Self.notYetStoredMessage
         if next != message { message = next }
     }
 

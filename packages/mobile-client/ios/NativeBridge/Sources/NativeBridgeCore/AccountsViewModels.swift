@@ -218,6 +218,8 @@ public final class AccountsListViewModel: ObservableObject {
     @Published public private(set) var isSyncing = false
     // The subtitle: the app passes on loot-core's sync events; a pull sets it too
     @Published public var syncStatus: NativeSyncStatus = .unknown
+    // sc-5219: a change is still being stored on this device
+    @Published public var isWritePending = false
     public let writes: AccountsWrites
     public var undoOffer: AccountsUndoOffer? { writes.undoOffer }
     public var actionError: AccountsActionError? { writes.actionError }

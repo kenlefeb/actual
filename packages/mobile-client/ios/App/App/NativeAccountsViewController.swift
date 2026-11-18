@@ -90,6 +90,9 @@ final class NativeAccountsViewController: UIHostingController<AccountsScreen> {
     // loot-core's sync outcome, as NativeBridgePlugin follows it
     func syncStatusChanged(_ status: NativeSyncStatus) { model.syncStatus = status }
 
+    // sc-5219: whether a change is still being stored on this device
+    func writePendingChanged(_ isPending: Bool) { model.isWritePending = isPending }
+
     // The closed set of web flows (D7a); an action or account it does not allow is dropped
     func handOff(_ action: String, accountId: String? = nil) {
         guard let list = model.state.value,
@@ -270,7 +273,7 @@ struct AccountsScreen: View {
 
     @ViewBuilder private func loaded(_ list: AccountsList, staleError: AccountsLoadError?) -> some View {
         if list.isEmpty {
-            AccountsEmpty(status: model.syncStatus, staleError: staleError, handOff: actions.handOff) { Task { await model.refresh() } }
+            AccountsEmpty(status: model.syncStatus, isWritePending: model.isWritePending, staleError: staleError, handOff: actions.handOff) { Task { await model.refresh() } }
         } else {
             AccountsListBody(
                 list: list, status: model.syncStatus, isSyncing: model.isSyncing, staleError: staleError, model: model,
@@ -314,7 +317,7 @@ private struct AccountsListBody: View {
 
     var body: some View {
         List {
-            Section(header: SyncSubtitle(status: isSyncing && status != .waitingForStorage ? .syncing : status, staleError: staleError) { Task { await model.refresh() } }) {
+            Section(header: SyncSubtitle(status: isSyncing && status != .waitingForStorage ? .syncing : status, isWritePending: model.isWritePending, staleError: staleError) { Task { await model.refresh() } }) {
                 if let reconcileMonth { ReconcileBanner(month: reconcileMonth) { actions.reconcile(nil) } }
                 Button { actions.navigate("/accounts/all") } label: {
                     LinkRow { AccountTexts(name: AccountsWords.allAccounts, detail: AccountsWords.allAccountsDetail) }
@@ -402,6 +405,7 @@ struct OptionalAccessibilityAction: ViewModifier {
 // failed re-read in place of it. A failure is warning text and a tap retries.
 private struct SyncSubtitle: View {
     let status: NativeSyncStatus
+    let isWritePending: Bool
     let staleError: AccountsLoadError?
     let retry: () -> Void
 
@@ -429,7 +433,7 @@ private struct SyncSubtitle: View {
         case .unknown: return ("", false)
         case .syncing: return (AccountsWords.syncing, false)
         case .synced(let date): return (AccountsWords.synced(date, now: now), false)
-        case .offline: return (AccountsWords.offline, false)
+        case .offline: return (NativeSyncStatus.offlineWords(AccountsWords.offline, isWritePending: isWritePending), false)
         case .failed: return (AccountsWords.syncFailed, true)
         case .local: return (AccountsWords.localFile, false)
         case .waitingForStorage: return (NativeSyncStatus.waitingMessage, false)
@@ -576,13 +580,14 @@ private struct ClosedAccountsView: View {
 // D7 States: no accounts. Add and Link hand off to the web flows (D7a).
 private struct AccountsEmpty: View {
     let status: NativeSyncStatus
+    let isWritePending: Bool
     let staleError: AccountsLoadError?
     let handOff: (String, String?) -> Void
     let retry: () -> Void
 
     var body: some View {
         List {
-            Section(header: SyncSubtitle(status: status, staleError: staleError, retry: retry)) {
+            Section(header: SyncSubtitle(status: status, isWritePending: isWritePending, staleError: staleError, retry: retry)) {
                 VStack(spacing: 12) {
                     Text(AccountsWords.firstAccount).font(.headline).accessibilityAddTraits(.isHeader)
                     Text(AccountsWords.firstAccountDetail).foregroundColor(.secondary).multilineTextAlignment(.center)

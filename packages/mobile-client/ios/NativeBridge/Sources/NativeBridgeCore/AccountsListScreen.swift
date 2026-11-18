@@ -89,6 +89,11 @@ public enum NativeSyncStatus: Equatable {
     public static let waitingMessage = NSLocalizedString(
         "Waiting for this device to finish saving", comment: "Native sync status: sync is held until local storage catches up")
 
+    // The offline line says changes are saved here, so not while one is still being stored
+    public static func offlineWords(_ offline: String, isWritePending: Bool) -> String {
+        isWritePending ? WriteStorageStatus.notYetStoredMessage : offline
+    }
+
     // A page event's body ({event, payload}); anything but a sync outcome keeps the status
     public func next(after body: Any, now: Date) -> NativeSyncStatus {
         guard NativeBridgeEvent.name(of: body) == "sync-event",

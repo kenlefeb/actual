@@ -12,9 +12,10 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
     private var router = NativeTabRouter()
     private var containers: [NativeTab: TabContainerViewController] = [:]
     private var foregroundObserver: NSObjectProtocol?
-    // sc-5219: "Saving…" and "Saved here, not yet stored on this device.", above the tab bar
+    // sc-5219: "Saving…" and "Still saving to this device. Keep the app open.", above the tab bar
     private let writeStorageLine = UIView()
     private var writeStorageObserver: AnyCancellable?
+    private var writePendingObserver: AnyCancellable?
     // The native Budget tab (sc-3751) lies over the web Budget screen while the
     // switch is on and the page shows /budget with the tab bar; otherwise the web screen below shows as before
     private var budgetOverlay: NativeBudgetViewController?
@@ -132,6 +133,10 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
             self.view.bringSubviewToFront(line)
             if let message { UIAccessibility.post(notification: .announcement, argument: message) }
         }
+        writePendingObserver = bridgeController.nativeBridge.writeStorage.$message
+            .map { $0 != nil }
+            .removeDuplicates()
+            .sink { [weak self] in self?.accountsOverlay?.writePendingChanged($0) }
     }
 
     // MARK: Tabs
@@ -212,6 +217,7 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
             let screen = NativeAccountsViewController(
                 client: bridgeController.nativeBridge.client, chrome: chrome, syncStatus: bridgeController.nativeBridge.syncStatus,
                 presentReconcile: { [weak self] in self?.presentReconcile($0) })
+            screen.writePendingChanged(bridgeController.nativeBridge.writeStorage.isPending)
             accountsOverlay = screen
             container.setOverlay(screen)
         }

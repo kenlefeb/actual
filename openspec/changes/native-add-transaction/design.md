@@ -152,7 +152,13 @@ It returns `{draft, ruleFields, replaced, remaining, errors}` and has no side ef
   - `ruleFields` lists every field whose value currently comes from a rule.
   - A draft with an `id` runs no rules.
 - **The split remainder.** `remaining` is the parent minus the children's sum.
-- **Errors.** `errors` maps each field (with a child index for splits) to a code from `transaction-field-errors.json`:
+- **Errors.** `errors` maps each field (with a child index for splits) to `{code, detail?}`.
+  - `code` comes from `transaction-field-errors.json`.
+  - `detail` is present only for `amount-invalid`: `{decimalSeparator}`, `"."` or `","`, taken from the budget's number format (`.` for `comma-dot`, `apostrophe-dot` and `comma-dot-in`; `,` for `dot-comma` and `space-comma`). It is never text the person typed (added 2026-11-18, story 3602 PR #450).
+  - The screen builds the message from a translated string with that separator and an example in the same format ("Use . for decimals, like 12.50"). `amount-negative`'s message tells the person to choose Expense or Income.
+  - A save refusal still carries codes only (`[native:invalid-draft:amount-invalid]`). The view model then previews once more to get the detail.
+
+  The codes:
   - `amount-invalid`, `amount-required`;
   - `amount-negative`: a leading minus sign, or a result below zero. The message, from the copy table, says in plain words to choose Expense or Income instead (added 2026-11-18);
   - `account-required`, `account-closed` (the transaction's account, or a transfer payee's account that is closed or deleted);

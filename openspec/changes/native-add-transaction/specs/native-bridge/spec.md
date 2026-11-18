@@ -140,6 +140,23 @@ Preview and save SHALL read each number by the budget's format: grouping only be
 - **GIVEN** the format is `comma-dot-in`
 - **THEN** `1,00,000.50` reads as 100000.50, and `1,000,00` and `1,000,000` are `amount-invalid`
 
+### Requirement: An unreadable amount says how to write one
+The preview's `amount-invalid` field error SHALL carry the budget's decimal separator, `.` or `,`, taken from its number format and never from the text typed. The sheet SHALL show a translated message naming that separator with an example in the budget's format; `amount-negative` SHALL tell the person to choose Expense or Income.
+
+#### Scenario: Dot-decimal budget
+- **GIVEN** the format is `comma-dot`
+- **WHEN** the person types `12,50`
+- **THEN** the error carries separator `.`, and the sheet says "Use . for decimals, like 12.50"
+
+#### Scenario: Comma-decimal budget
+- **GIVEN** the format is `dot-comma`
+- **WHEN** the person types `12.50`
+- **THEN** the error carries separator `,`, and the sheet says "Use , for decimals, like 12,50"
+
+#### Scenario: A leading minus
+- **WHEN** the person types `-5`
+- **THEN** the sheet tells them to choose Expense or Income instead
+
 ### Requirement: Amount expressions use a closed set of operators
 Preview and save SHALL accept `+ - * /`, `×` and `÷`, and `−` (U+2212) as subtraction, each between two operands, with parentheses; spaces next to an operator or parenthesis, or around the text, are ignored. One currency symbol next to a number SHALL be ignored. Anything else, including `1e20`, `0x10`, `1_000`, `^` and a leading `+`, SHALL be `amount-invalid`.
 

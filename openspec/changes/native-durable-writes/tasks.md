@@ -31,7 +31,7 @@
   - the read/write table in `NativeBridgeClient` (every allowlisted name classified);
   - the two-call write returning `stored`, with only `native/persisted` retried;
   - "Saving…" until stored, and "Saved here, not yet stored on this device." on `stored: false`, cleared on `stored`;
-  - the persistent app-level failure notice with `lastStoredFlushAt` and Reload, and the device-full variant (free up space, then reload; saved changes can't sync until then);
+  - the persistent app-level failure notice with `lastStoredFlushAt` and Reload, and the device-full variant (the Product Owner's four sentences), the time to the second and truncated, and the no-time sentence when nothing stored this session;
   - `[native:not-stored]` mapping;
   - copy-table keys, with the failure wording sent to the Product Owner for approval (D3, D5).
 - [ ] 3.2 Lifecycle:

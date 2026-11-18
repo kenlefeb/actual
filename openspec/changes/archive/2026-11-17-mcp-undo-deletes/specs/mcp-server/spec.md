@@ -64,12 +64,12 @@ A delete SHALL be refused with fixed text before any audit line, changing nothin
 - **THEN** the call is refused naming the cell limit, and nothing changed
 
 ### Requirement: A group delete keeps its mappings undoable
-A category group delete with a transfer SHALL be refused, changing nothing and before any audit line, when the group holds categories deleted earlier: the app would re-point their mappings and an undo could not restore them. Without a transfer such a group SHALL delete as before.
+A category group delete with a transfer SHALL be refused, changing nothing and before any audit line, when the group holds categories deleted earlier (the message says so and names no ids): the app would re-point their mappings and an undo could not restore them. Without a transfer such a group SHALL delete as before.
 
 #### Scenario: An earlier-deleted category in the group
 - **GIVEN** a group holding a live category and one deleted earlier
 - **WHEN** a client deletes the group with `transfer_category_id`
-- **THEN** the call is refused naming the earlier deletes, and nothing is logged or changed
+- **THEN** the call is refused saying the group holds categories deleted earlier and advising a delete without a transfer or in the app (it names no ids), and nothing is logged or changed
 
 #### Scenario: The same group without a transfer
 - **WHEN** a client deletes that group with no transfer category

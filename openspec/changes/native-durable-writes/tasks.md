@@ -6,11 +6,11 @@
   - writes settle on `complete`, and on `abort` and `error`;
   - the chain advances in order with values captured at flush time;
   - `lastStoredFlushAt` is the last stored write's flush time, and `quota` is set on a quota error;
-  - the latch stops writes and raises `fallback-write-error` and `storage-failed`;
+  - the latch stops writes and raises `storage-failed` (`fallback-write-error` only when the safety check fails);
   - `whenPersisted` and `storageState`;
   - SharedArrayBuffer mode resolves at once (design D2, D12).
 - [ ] 1.2 `yarn patch absurd-sql@0.0.54`: rewrite `Persistance.write` to settle on the transaction; capture values at flush time; the chain, the latch, `lastStoredFlushAt`, `quota`, `whenPersisted` and `storageState`; failures raise `onFallbackFailure`. Keep the MIT notice and a header naming sc-5219. Add the root `resolutions` entry. `yarn install --immutable` passes with the lock's patch hash (D1, D2)
-- [ ] 1.3 `whenPersisted()` and `storageState()` in `platform/server/fs/index.ts` (fork-marked), and resolving versions in `index.electron.ts` and `index.api.ts` (D2, "Only the native shells wait for storage")
+- [ ] 1.3 `whenPersisted()` and `storageState()` in `platform/server/fs/index.ts` (fork-marked), and resolving versions in `index.electron.ts` and `index.api.ts` (D2, "Durable platforms do not wait for storage")
 - [ ] 1.4 Failing tests first for `native/persisted` (stored, not stored on timeout, `[native:not-stored]`), `native/storage-state` and the limit with floor and ceiling. Then:
   - both handlers;
   - `not-stored` in `refusal.ts` and `native-refusal-codes.json`;
@@ -32,6 +32,9 @@
   - the two-call write returning `stored`, with only `native/persisted` retried;
   - "Saving…" until stored, and "Saved here, not yet stored on this device." on `stored: false`, cleared on `stored`;
   - the persistent app-level failure notice with `lastStoredFlushAt` and Reload, and the device-full variant (the Product Owner's four sentences), the time to the second and truncated, and the no-time sentence when nothing stored this session;
+  - the restart notice on iPhone and Mac: its copy with a time, with none and for a full device, OK, no Reload, repeated restarts, and a manual Reload showing no restart notice unless one is waiting for OK (D5a);
+  - the failure notice replacing the reload notice at once, and no reload notice while it shows;
+  - the held earliest cut-off: kept until OK, a later failure notice using its own cut-off, the restart notice returning on the next load, and a load time instead of "since you opened the app" after any reload;
   - `[native:not-stored]` mapping;
   - copy-table keys, with the failure wording sent to the Product Owner for approval (D3, D5).
 - [ ] 3.2 Lifecycle:
@@ -45,3 +48,12 @@
   - iPhone simulator: the same loop.
   - Put the before and after counts in the PR (D12).
 - [ ] 3.5 Run the `NativeBridgeCore` tests, the Mac tests and the iOS build; all pass. The next TestFlight build carries this change (Product Owner, comment 5222)
+
+## 4. Review decisions from the engine PR (sc-5219)
+
+- [ ] 4.1 Failing tests first, then the engine: a timed-out sync wait raises `storage-slow`, emits no success, sends nothing and schedules a retry; `storage-stored` follows a timed-out `native/persisted`; `storage-close-failed` fires once for a closed file and does not latch (D4, D6, D7a)
+- [ ] 4.2 The page bridge forwards `storage-stored` as `stored`; `storage-slow` and `storage-failed` join the sync reasons in the page and Swift
+- [ ] 4.3 The storage guard: a one-way engine switch, off by default and set when the native bridge installs. Tests that with it off a fallback-mode browser's sync, messages and `fallback-write-error` are as today (safety-check failures only, no `conflict` flag), that with it off the patched backend fails as stock does (no latch, no dropped queue, quota rejections unseen, `onFallbackFailure` only for the safety check), and that with it on the latch, refusal, gate and notices apply; on `storage-failed` the page asks `native/storage-state` (D7a)
+- [ ] 4.4 `floor` in `native/settings`, its fixture and Swift decoding; the native and web Limits screens bounded to floor through ceiling (D7)
+- [ ] 4.5 The closed-budget notice in the shells, with the Product Owner's wording in the copy table; the restart notices' approved wording goes there too
+- [ ] 4.6 Failing tests first, then the status lines (`NativeAccountsViewController` and its Accounts sync state; `MobileSyncStatus.tsx`): "Waiting for this device to finish saving" on `storage-slow`, kept through held retries, and normal again when the wait clears

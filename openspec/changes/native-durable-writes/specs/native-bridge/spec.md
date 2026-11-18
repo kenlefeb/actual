@@ -73,17 +73,30 @@ The engine SHALL send local changes to the sync server only after `whenPersisted
 - **THEN** those changes are there and are sent on the next sync
 
 ### Requirement: The failure notice says what was lost
-The app-level notice SHALL say, from the copy table, that changes can't be saved, to reload, and that changes made after <time> weren't saved and need to be made again, where <time> is `lastStoredFlushAt` in the person's locale. On a quota failure it SHALL say the device is full: free space, then reload; saved changes can't sync until then. The Product Owner approves the wording.
+The app-level notice SHALL say, from the copy table, that changes can't be saved, to reload, and that changes made after <time> weren't saved and need to be made again, where <time> is `lastStoredFlushAt` in the person's locale. On a quota failure it SHALL say, in four sentences, that the device is full, to free up some space and reload, what was lost, and that saved changes can't sync until there's space. The wording is the Product Owner's, in the copy table.
 
 #### Scenario: The time shown is when the last stored write was flushed
 - **GIVEN** a write flushed at 3:42:10 PM that stored at 3:42:12 PM, and a change made at 3:42:11 PM whose write then failed
 - **WHEN** the notice shows
-- **THEN** it says changes made after 3:42 PM (3:42:10) need to be made again, so the 3:42:11 change is not reported as saved
+- **THEN** it says changes made after 3:42:10 PM need to be made again, so the 3:42:11 change is not reported as saved
 
 #### Scenario: Device full
 - **GIVEN** a write that fails with a quota error
 - **WHEN** the notice shows
-- **THEN** it says the device is full, to free up space and then reload, and that saved changes can't sync until then
+- **THEN** it reads "This device is full, so changes can't be saved. Free up some space, then reload the app. Changes made after <time> weren't saved and need to be made again. Saved changes can't sync until there's space."
+
+### Requirement: The notice's cut-off time is exact
+The notice SHALL show `lastStoredFlushAt` to the second in the person's locale (for example 3:42:10 PM), truncated, never rounded up, so a change stored just before it is never re-entered as a duplicate. When no write has stored since the app opened, it SHALL say "Changes made since you opened the app weren't saved and need to be made again." in place of the sentence with <time>.
+
+#### Scenario: Seconds, not minutes
+- **GIVEN** a change stored at 3:42:05 PM and `lastStoredFlushAt` 3:42:10.900 PM
+- **WHEN** the notice shows
+- **THEN** it says "after 3:42:10 PM", never "after 3:42 PM" or "after 3:42:11 PM"
+
+#### Scenario: Nothing stored this session
+- **GIVEN** the app opened and its first write failed
+- **WHEN** the notice shows
+- **THEN** it says "Changes made since you opened the app weren't saved and need to be made again." and shows no time
 
 ### Requirement: The storage wait is a limit
 `native-persist-wait-ms` SHALL be in the limits registry with the name "Saving: wait for device storage", the help line "How long a change waits to be stored on this device before the app says it isn't yet", default 2000, floor 100 and ceiling 4000, under the 5 s bridge deadline. A value outside floor to ceiling SHALL read as the default.

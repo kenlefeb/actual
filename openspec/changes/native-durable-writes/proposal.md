@@ -48,6 +48,7 @@ None.
   - "No write applies after a storage failure"
   - "Only stored changes reach the server"
   - "The failure notice says what was lost"
+  - "The notice's cut-off time is exact"
   - "The storage wait is a limit"
   - "The shells flush storage before backgrounding or quitting"
   - "Only the native shells wait for storage"

@@ -49,7 +49,9 @@
     - dates outside 1900-01-01 to 2999-12-31 are `date-invalid`, and future dates are allowed;
     - notes over `transaction-notes-max-length` on any row are `notes-too-long`;
     - a transfer payee with a closed or deleted account is `account-closed`;
-    - no payee is ever created, and nothing is written.
+    - no payee is ever created, and nothing is written, including for a rule that sets a payee by name: the payee count is unchanged after many previews and after the `ruleFields` re-run (`runRules` with payee names unresolved);
+    - the amount grammar: `1e20`, `0x10`, `1_000`, `12 34`, `1..5`, `12abc`, `$12`, `-5` and `2*-3` are `amount-invalid` (no unary sign); `3-8` is `amount-negative`, with the direction unchanged; grouping and parentheses evaluate;
+    - the split count is checked before any child is evaluated or looked up;
   - Add the fixtures `transaction-preview.json` and `transaction-field-errors.json`, with a test that the field codes and the refusal codes share no code.
 - [ ] 1.4 `native/transaction-save` (design D3), in the order of D3.
   - Write failing tests first:

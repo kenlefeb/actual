@@ -97,12 +97,25 @@ Keys such as `reconciled`, `imported_id` and `tombstone` never reach `batchUpdat
 
 ### `native/transaction-preview {draft, changedField}`
 
-It returns `{draft, ruleFields, replaced, remaining, errors}` and writes nothing. It never creates a payee.
+It returns `{draft, ruleFields, replaced, remaining, errors}` and has no side effects. It writes to no table, creates no payee, and makes no undo step (amended 2026-11-18 after the review of PR #447).
 
-- **Amounts.** loot-core evaluates each `amountText` with `evalArithmetic` in the budget's number format, applies `inflow`, and returns integer minor units. Swift never parses, adds or rounds money.
-  - Amount text longer than 100 characters is `amount-invalid`.
-  - So is a result that is not finite, not a whole number of minor units, or larger in magnitude than `Number.MAX_SAFE_INTEGER`.
-  - The 100-character bound is input validation, not a tunable limit: no amount needs more.
+- **Payee names.** The rules run with payee names left unresolved: `runRules` gets an option, such as `{ resolvePayeeNames: false }`, so a rule action that sets a payee by name never calls `insertPayee`.
+  - The preview maps such a name to a live payee with the same name, ignoring case, or returns it as `payeeName`.
+  - The save resolves or creates it under D3's payee rules, inside its own undo step.
+  - This holds for the second rules run that `ruleFields` needs, too.
+- **Split count first.** Before evaluating any child, the preview and the save compare the number of `splits` with `transaction-split-max-children`, which is never above its ceiling of 200. Over it, the preview reports only `split-limit`, and the save refuses with `[native:invalid-draft:split-limit]`. No child is evaluated and no id is looked up.
+- **Amounts.** loot-core checks each `amountText` against the grammar below before evaluating it with `evalArithmetic` in the budget's number format. It then checks that the evaluation consumed the whole text, applies the sign from the control (D8a), and returns integer minor units. Swift never parses, adds or rounds money.
+  - **The grammar,** in full:
+    - a number is digits, optionally grouped with the budget's grouping separator, with at most one decimal separator from the budget's number format;
+    - the operators are `+ - * /` and the keypad's `× ÷`, each between two operands;
+    - parentheses may group;
+    - spaces may sit between tokens.
+
+    Nothing else is allowed: no currency symbols, letters, exponents (`e`, `^`), `0x`, `_`, unary signs, or spaces inside a number.
+  - **Refusals.** Text outside the grammar, or not fully consumed, is `amount-invalid` (`1e20`, `0x10`, `1_000`, `12 34`, `1..5`, `12abc`, `$12`, `-5`, `2*-3`). So is text longer than 100 characters, and a result that is not finite, not whole minor units, or beyond `Number.MAX_SAFE_INTEGER` in magnitude.
+  - **The 100-character bound** is input validation, not a tunable limit: no amount needs more.
+  - **The sign** comes only from the Expense / Income / Transfer control and the transfer direction, never from the text. A result below zero (`3-8`) is `amount-negative`, not a flipped direction. Zero is allowed, as on the web.
+  - **Deliberate differences from the web.** The web's `evalArithmetic` accepts currency symbols, unary minus, `^`, and trailing junk that `currencyToAmount` drops, and it lets the text's sign flip the direction. The native engine refuses these so that no amount is silently truncated or reversed.
 - **Rules.** For a draft with no `id`, rules run as on the web:
   - a payee change applies every field the rules set;
   - any other change fills only empty fields and notes;
@@ -112,6 +125,7 @@ It returns `{draft, ruleFields, replaced, remaining, errors}` and writes nothing
 - **The split remainder.** `remaining` is the parent minus the children's sum.
 - **Errors.** `errors` maps each field (with a child index for splits) to a code from `transaction-field-errors.json`:
   - `amount-invalid`, `amount-required`;
+  - `amount-negative`: the expression evaluates below zero; the person chooses the direction with the control instead (added 2026-11-18);
   - `account-required`, `account-closed` (the transaction's account, or a transfer payee's account that is closed or deleted);
   - `transfer-same-account`: a transfer payee of the transaction's own account (added 2026-11-18, as the web refuses it);
   - `category-not-allowed`, `category-unknown`;

@@ -80,7 +80,7 @@ loot-core SHALL accept a draft and its splits only with the listed keys and type
 - **THEN** the preview fails with `[native:invalid-draft]`
 
 ### Requirement: The preview evaluates amounts and rules without writing
-`native/transaction-preview` SHALL return the draft as the web form would show it after a field commit, each amount evaluated from its text in the budget's number format as signed integer minor units, the split remainder, the fields set by rules, any fields a payee change replaced with their previous values, and field errors from a closed set of codes. It SHALL write nothing and never create a payee.
+`native/transaction-preview` SHALL return the draft as the web form would show it after a field commit, each amount evaluated from its text as signed integer minor units, the split remainder, the fields set by rules, any fields a payee change replaced with their previous values, and field errors from a closed set of codes. It SHALL have no side effects: no table written, no payee created, no undo step.
 
 #### Scenario: Arithmetic
 - **WHEN** a draft carries amount text `12.50+3*2` with Outflow in a `1,000.33` budget
@@ -95,6 +95,15 @@ loot-core SHALL accept a draft and its splits only with the listed keys and type
 - **WHEN** a draft names the new payee "Corner Bakery"
 - **THEN** no payee is created
 
+#### Scenario: A rule names a payee that does not exist
+- **GIVEN** a rule "notes contains zz → set payee name Brand New Payee", and no such payee
+- **WHEN** native code previews a new draft with notes "zz" ten times
+- **THEN** each result carries the payee name "Brand New Payee" unresolved, and the number of payees is unchanged
+
+#### Scenario: The save creates it
+- **WHEN** native code then saves that draft
+- **THEN** "Brand New Payee" is created in the save's undo step, and undo removes it
+
 ### Requirement: Rules keep the person's own fields
 In a preview of a new draft, rules SHALL not change a field the person set or cleared by hand, except that a payee change may replace it, as on the web; each field so replaced SHALL be returned with its previous value. A draft with an id SHALL run no rules.
 
@@ -107,6 +116,22 @@ In a preview of a new draft, rules SHALL not change a field the person set or cl
 - **GIVEN** the person chose category Dining by hand
 - **WHEN** the payee changes to Costco
 - **THEN** the preview returns Groceries and lists category as replaced, previously Dining
+
+### Requirement: Amount text follows a closed grammar
+Preview and save SHALL accept amount text only as numbers (digits, the budget's grouping separator, one decimal separator), the operators + − × ÷, parentheses and spaces between tokens, fully consumed. Other text SHALL be `amount-invalid`. The sign SHALL come only from the Expense, Income or Transfer choice, and a result below zero SHALL be `amount-negative`.
+
+#### Scenario: Text the grammar does not consume
+- **WHEN** a draft's amount text is `1e20`, `0x10`, `1_000`, `12 34`, `1..5`, `12abc`, `$12`, `-5` or `2*-3`
+- **THEN** the preview reports `amount-invalid` and the save fails with `[native:invalid-draft:amount-invalid]`
+
+#### Scenario: A negative result
+- **WHEN** a draft chosen as Expense has amount text `3-8`
+- **THEN** the preview reports `amount-negative`, the direction stays Expense, and the save fails with `[native:invalid-draft:amount-negative]`
+
+#### Scenario: Grouping and parentheses
+- **GIVEN** a budget with number format `1,000.33`
+- **WHEN** a draft chosen as Expense has amount text `(1,200.50 + 99.50) / 2`
+- **THEN** the preview returns −65000
 
 ### Requirement: Field values are bounded
 The engine SHALL report as field errors: amount text over 100 characters, or an amount not finite, not whole minor units or beyond the safe integer range (`amount-invalid`); notes on any row over `transaction-notes-max-length` (default 10,000, ceiling 50,000; `notes-too-long`); a date that is not real or outside 1900-01-01 to 2999-12-31 (`date-invalid`). A future date SHALL be allowed.
@@ -237,12 +262,16 @@ A save that passes its checks SHALL create a new payee only from a trimmed, non-
 - **THEN** the call fails with `[native:invalid-draft]` and no payee is created
 
 ### Requirement: Split size is a setting
-A save or preview SHALL refuse more children than `transaction-split-max-children`, default 50, ceiling 200; a malformed or out-of-range value SHALL use the default. Over the limit, the preview SHALL report `split-limit` and the save SHALL refuse with `[native:invalid-draft:split-limit]`.
+A save or preview SHALL refuse more children than `transaction-split-max-children` (default 50, ceiling 200; a malformed or out-of-range value uses the default), checking the count before evaluating any child. Over the limit, the preview SHALL report only `split-limit` and the save SHALL refuse with `[native:invalid-draft:split-limit]`.
 
 #### Scenario: Over the default
 - **GIVEN** the preference unset
 - **WHEN** native code saves a split with 51 children
 - **THEN** the call fails with `[native:invalid-draft:split-limit]` and nothing is stored
+
+#### Scenario: Checked before evaluating
+- **WHEN** native code previews a split with 2,000 children whose amount texts are invalid
+- **THEN** the preview reports only `split-limit`, and no child is evaluated or looked up
 
 #### Scenario: Raised limit
 - **GIVEN** `transaction-split-max-children` is 120

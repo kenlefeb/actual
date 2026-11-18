@@ -136,7 +136,7 @@ final class BudgetViewModelTests: XCTestCase {
         domain: "WKErrorDomain", code: 4,
         userInfo: [
             NSLocalizedDescriptionKey: "A JavaScript exception occurred",
-            "WKJavaScriptExceptionMessage": "Error: native/budget-month: no budget for month 2026-03",
+            "WKJavaScriptExceptionMessage": "Error: [native:no-budget-for-month] native/budget-month: no budget for month 2026-03",
         ])
 
     func testAMonthWithNoBudgetShowsAnEmptyStateNotARetry() async {
@@ -338,7 +338,7 @@ final class BudgetMonthNavigationTests: XCTestCase {
             if month < budget.first || month > budget.last {
                 throw NSError(
                     domain: "WKErrorDomain", code: 4,
-                    userInfo: ["WKJavaScriptExceptionMessage": "Error: native/budget-month: no budget for month \(month)"])
+                    userInfo: ["WKJavaScriptExceptionMessage": "Error: [native:no-budget-for-month] native/budget-month: no budget for month \(month)"])
             }
             return try fixtureJSON("budget-month-envelope", month: month, range: budget.advertised)
         }

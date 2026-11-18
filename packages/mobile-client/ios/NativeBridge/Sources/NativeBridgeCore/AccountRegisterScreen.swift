@@ -58,9 +58,9 @@ public struct RegisterResults: Equatable {
 }
 
 extension AccountRegisterContent {
-    // Only while a search is set, from the first page
-    public func results(search: String) -> RegisterResults? {
-        guard !search.isEmpty, let count = first.resultCount, let total = first.resultTotal else { return nil }
+    // While any filter is active (a search or a scope other than All), from the first page
+    public func results(search: String, scope: AccountRegisterScope) -> RegisterResults? {
+        guard !search.isEmpty || scope != .all, let count = first.resultCount, let total = first.resultTotal else { return nil }
         return RegisterResults(count: count, total: total)
     }
 }

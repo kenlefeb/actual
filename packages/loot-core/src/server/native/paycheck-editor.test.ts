@@ -459,7 +459,7 @@ describe('native/paycheck-save', () => {
           daysEarly: { savings: 3 },
           undoToken: 'X',
         }),
-      ).rejects.toThrow(/name-missing/);
+      ).rejects.toThrow(/^\[native:invalid-draft:name-missing\] /);
       await expectUnchanged();
     });
 

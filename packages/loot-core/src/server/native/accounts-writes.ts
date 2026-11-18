@@ -6,6 +6,7 @@ import * as db from '#server/db';
 import { batchUpdateTransactions } from '#server/transactions';
 
 import { readLimit } from './reconcile-lock';
+import { nativeRefusal } from './refusal';
 
 // What a write touched, for the undo conflict check (D3a)
 export type Touched = { transactions: string[]; accounts: string[] };
@@ -127,7 +128,8 @@ function checkReconciled(
   confirmed: unknown,
 ) {
   if (confirmed !== true && rows.some(r => r.reconciled)) {
-    throw new Error(
+    throw nativeRefusal(
+      'needs-confirmed-reconciled',
       `${name}: a reconciled row needs confirmedReconciled to be true`,
     );
   }

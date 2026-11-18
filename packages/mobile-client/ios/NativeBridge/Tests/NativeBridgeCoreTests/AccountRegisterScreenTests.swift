@@ -56,10 +56,14 @@ final class RegisterResultsTests: XCTestCase {
         return AccountRegisterContent(first: page, rows: page.rows, nextCursor: page.nextCursor, pages: 1)
     }
 
-    func testTheFooterShowsTheCountAndTotalOnlyWhileSearching() throws {
-        XCTAssertEqual(try content("account-register-search").results(search: "grocer"), RegisterResults(count: 2, total: -7180))
-        XCTAssertNil(try content("account-register-search").results(search: ""))
-        XCTAssertNil(try content("account-register").results(search: "grocer"))
+    // PR 430 review: whenever any filter is active, a search or a scope other than All
+    func testTheFooterShowsTheCountAndTotalWhileAnyFilterIsActive() throws {
+        let filtered = try content("account-register-search")
+        XCTAssertEqual(filtered.results(search: "grocer", scope: .all), RegisterResults(count: 2, total: -7180))
+        XCTAssertEqual(filtered.results(search: "", scope: .uncleared), RegisterResults(count: 2, total: -7180))
+        XCTAssertEqual(filtered.results(search: "", scope: .uncategorized), RegisterResults(count: 2, total: -7180))
+        XCTAssertNil(filtered.results(search: "", scope: .all))
+        XCTAssertNil(try content("account-register").results(search: "grocer", scope: .all))
     }
 
     func testTheRegistersReadErrorsNameTransactions() {
@@ -211,7 +215,7 @@ final class AccountRegisterWriteTests: XCTestCase {
         await model.categorize(try row("food"), category: nil, confirmed: false)
         XCTAssertTrue(try page.args("native/transactions-categorize")["category"] is NSNull)
         let token = model.undoOffer?.token
-        page.failures["native/undo"] = NativeBridgeError.page("native/undo: changed since, can't undo")
+        page.failures["native/undo"] = NativeBridgeError.page("[native:undo-changed-since] words that may change")
         await model.undo()
         XCTAssertEqual(try page.args("native/undo")["token"] as? String, token)
         XCTAssertEqual(model.actionError, .changedSince)
@@ -260,7 +264,7 @@ final class AccountRegisterWriteTests: XCTestCase {
         let model = model(page)
         await model.load()
         page.failures["native/transactions-delete"] = NativeBridgeError.page(
-            "native/transactions-delete: a reconciled row needs confirmedReconciled to be true")
+            "[native:needs-confirmed-reconciled] words that may change")
         await model.delete(try row("split"), confirmed: false)
         XCTAssertEqual(model.confirmationNeeded, .delete(try row("split")))
         XCTAssertNil(model.actionError)
@@ -277,7 +281,7 @@ final class AccountRegisterWriteTests: XCTestCase {
         let model = model(page)
         await model.load()
         page.failures["native/transactions-categorize"] = NativeBridgeError.page(
-            "native/transactions-categorize: a reconciled row needs confirmedReconciled to be true")
+            "[native:needs-confirmed-reconciled] other words")
         await model.categorize(try row("food"), category: nil, confirmed: false)
         XCTAssertEqual(model.confirmationNeeded, .categorize(try row("food"), category: nil))
         let sent = page.names().count

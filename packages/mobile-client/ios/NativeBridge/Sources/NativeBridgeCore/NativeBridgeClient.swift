@@ -86,6 +86,44 @@ public enum NativeBridgeEvent {
     }
 }
 
+// sc-3611 (native-bridge: "Native refusals carry a stable code"). A loot-core
+// refusal native code reacts to starts with `[native:<code>]` or
+// `[native:<code>:<detail,...>]` (server/native/refusal.ts). Swift reads only
+// that token; the words after it are free to change. The codes are the
+// contract fixture native-refusal-codes.json. An unknown code is no code, so
+// the screen shows its generic message.
+public struct NativeRefusal: Equatable {
+    public enum Code: String, CaseIterable {
+        case needsConfirmedReconciled = "needs-confirmed-reconciled"
+        case undoChangedSince = "undo-changed-since"
+        case undoNothing = "undo-nothing"
+        case noBudgetForMonth = "no-budget-for-month"
+        case invalidDraft = "invalid-draft"
+    }
+
+    public let code: Code
+    public let detail: [String]
+
+    public init(code: Code, detail: [String] = []) {
+        (self.code, self.detail) = (code, detail)
+    }
+
+    // nil unless `message` starts with a known code's token
+    public init?(_ message: String) {
+        guard message.hasPrefix("[native:"), let end = message.firstIndex(of: "]") else { return nil }
+        let token = message[message.index(message.startIndex, offsetBy: 8)..<end]
+        let parts = token.split(separator: ":", maxSplits: 1).map(String.init)
+        guard let first = parts.first, let code = Code(rawValue: first) else { return nil }
+        self.init(code: code, detail: parts.count > 1 ? parts[1].split(separator: ",").map(String.init) : [])
+    }
+
+    // A page refusal's code, or nil for any other error
+    public init?(_ error: Error) {
+        guard case NativeBridgeError.page(let message) = error else { return nil }
+        self.init(message)
+    }
+}
+
 public enum NativeBridgeError: Error, Equatable {
     case notAllowlisted(String)
     case timedOut(String)

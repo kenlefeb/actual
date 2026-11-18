@@ -153,11 +153,7 @@ public final class AccountsWrites: ObservableObject {
         do {
             try await write()
         } catch {
-            if case NativeBridgeError.page(let message) = error, message.contains("needs confirmedReconciled") {
-                actionError = .needsConfirmation
-            } else {
-                actionError = Self.isTimeout(error) ? .timedOut : failed
-            }
+            actionError = Self.writeError(error, otherwise: failed)
             return
         }
         await reread()
@@ -181,12 +177,18 @@ public final class AccountsWrites: ObservableObject {
         await reread()
     }
 
-    // loot-core's native/undo says which refusal it is (server/native/app.ts)
-    private static func undoError(_ error: Error) -> AccountsActionError {
-        switch error {
-        case NativeBridgeError.timedOut: return .undoTimedOut
-        case NativeBridgeError.page(let message) where message.contains("changed since"): return .changedSince
-        case NativeBridgeError.page(let message) where message.contains("nothing to undo"): return .nothingToUndo
+    // A refused write: loot-core's code for "confirm a reconciled row first", a timeout, or `otherwise`
+    static func writeError(_ error: Error, otherwise: AccountsActionError) -> AccountsActionError {
+        if NativeRefusal(error)?.code == .needsConfirmedReconciled { return .needsConfirmation }
+        return isTimeout(error) ? .timedOut : otherwise
+    }
+
+    // native/undo's refusal code says which refusal it is (server/native/app.ts)
+    static func undoError(_ error: Error) -> AccountsActionError {
+        if isTimeout(error) { return .undoTimedOut }
+        switch NativeRefusal(error)?.code {
+        case .undoChangedSince: return .changedSince
+        case .undoNothing: return .nothingToUndo
         default: return .undoFailed
         }
     }

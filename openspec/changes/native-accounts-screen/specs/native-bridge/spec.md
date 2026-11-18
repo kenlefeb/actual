@@ -63,8 +63,20 @@ The register read SHALL filter by scope `all`, `uncleared` or `uncategorized`, a
 - **WHEN** the scope is `uncleared` or a search is set
 - **THEN** every row's running balance is null
 
+### Requirement: Native refusals carry a stable code
+A loot-core refusal that native code or the page branches on SHALL begin with a code token, `[native:<code>]` or `[native:<code>:<detail>]`, from the list in `native-refusal-codes.json`. Native code SHALL branch on the token only, never on the words after it, and SHALL treat an unknown code as a generic failure. The page SHALL pass the message on unchanged.
+
+#### Scenario: Reworded refusal
+- **GIVEN** the words after `[native:undo-changed-since]` change
+- **WHEN** native Undo is refused for a later change
+- **THEN** the screen still says "Changed since — can't undo."
+
+#### Scenario: Unknown code
+- **WHEN** a refusal carries a code native code does not know
+- **THEN** the screen shows its generic failure message
+
 ### Requirement: A filtered register carries its result count and total
-While a search or a scope other than `all` is set, the register read's first page SHALL return `resultCount` and `resultTotal`: the number of top-level rows matching on every page, and loot-core's sum of their amounts. A split SHALL count once, at its parent's amount, and its children never. Unfiltered reads and later pages SHALL omit both. Native code SHALL show them and never add amounts.
+While a search or a scope other than `all` is set, the register read's first page SHALL return `resultCount` and `resultTotal`: the number of top-level rows matching on every page, and loot-core's sum of their amounts. A split SHALL count once, at its parent's amount, and its children never. Unfiltered reads and later pages SHALL omit both. Native code SHALL show them while any filter is active and never add amounts.
 
 #### Scenario: A search spanning pages
 - **GIVEN** a page size of 1 and a search matching a plain row and, through a child, a split

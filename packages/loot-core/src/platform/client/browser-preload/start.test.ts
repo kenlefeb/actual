@@ -6,7 +6,8 @@ vi.mock('absurd-sql/dist/indexeddb-main-thread', () => ({
   initBackend: vi.fn(),
 }));
 
-// fork: sc-4942. WebKit never makes a custom scheme cross-origin isolated, so
+// fork: sc-4942. WebKit does not expose SharedArrayBuffer on a custom scheme
+// (crossOriginIsolated may still report true), so
 // the SwiftUI Mac app, like the Capacitor app, runs the engine in a direct
 // Worker in the SharedArrayBuffer fallback mode.
 describe('startBrowserBackend fallback mode', () => {
@@ -30,7 +31,7 @@ describe('startBrowserBackend fallback mode', () => {
   beforeEach(() => {
     FakeWorker.created = [];
     vi.stubGlobal('Worker', FakeWorker);
-    // As in WebKit on a custom scheme: no cross-origin isolation
+    // As in WebKit on a custom scheme: no SharedArrayBuffer
     vi.stubGlobal('SharedArrayBuffer', undefined);
     localStorage.clear();
   });

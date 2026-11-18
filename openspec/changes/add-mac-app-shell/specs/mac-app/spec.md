@@ -64,7 +64,7 @@ The Mac app's native code SHALL NOT log, store or send a URL's query or fragment
 - **THEN** no log line, crash report or stored value contains the token or the query
 
 ### Requirement: The web view is never weakened
-The Mac app SHALL NOT use a private WebKit API, or enable file-URL access or universal access from file URLs, or drop COOP or COEP. It SHALL NOT run a script in the page while the main frame is off `homeeconomics://localhost`. If cross-origin isolation is missing, the only fallback is the page's direct Worker in its existing fallback mode, as on iPhone. In-frame navigation SHALL be allowed only to the app's scheme and to `https` on the sync server and provider hosts.
+The Mac app SHALL NOT use a private WebKit API, or enable file-URL access or universal access from file URLs, or drop COOP or COEP. It SHALL NOT run a script in the page while the main frame is off `homeeconomics://localhost`. If SharedArrayBuffer is unavailable, the only fallback is the page's direct Worker in its existing fallback mode, as on iPhone. In-frame navigation SHALL be allowed only to the app's scheme and to `https` on the sync server and provider hosts.
 
 #### Scenario: A plain-http server
 - **GIVEN** the person enters an `http://` sync server address
@@ -75,6 +75,19 @@ The Mac app SHALL NOT use a private WebKit API, or enable file-URL access or uni
 - **GIVEN** a link to a host that is neither the sync server nor the provider
 - **WHEN** it is followed
 - **THEN** it opens in the default browser, not in the app's web view
+
+### Requirement: In-frame sign-in hosts are a fixed list in this milestone
+Until story 4984, the hosts allowed in-frame over `https` SHALL be a list fixed in the app's build: the fork's sync servers and their OpenID provider. A user whose sync server or sign-in provider is not listed, including a provider that sends them on to another host, SHALL be able to sign in only with a password; OpenID sign-in opens in the default browser and cannot return to the app.
+
+#### Scenario: A listed server
+- **GIVEN** the person's server and its OpenID provider are on the app's list
+- **WHEN** they sign in with OpenID
+- **THEN** the provider's pages load in the app's window and sign-in completes
+
+#### Scenario: A server that is not listed
+- **GIVEN** the person's server or its OpenID provider is not on the app's list
+- **WHEN** they sign in
+- **THEN** password sign-in works, and OpenID sign-in does not complete in the app
 
 ### Requirement: Onboarding uses the web screens and budgets open only by sync download
 Until native onboarding ships, the Mac app SHALL show the web screens in its window for the server URL, sign-in (password and OpenID), the budget list and the encryption password. A budget SHALL open only by downloading it from the sync server, like a new device. An end-to-end encrypted budget SHALL ask for its password before it opens.
@@ -103,7 +116,7 @@ Native Mac code SHALL NOT open, read or copy a budget database, including the El
 - **THEN** the fork check fails and names the file
 
 ### Requirement: Evicted storage is recovered by download, with a warning
-The sync server SHALL stay the source of truth. Native code SHALL keep a non-secret flag, outside the web view's storage, that a budget (by id) was open. If on launch the flag is set and the web view has no budget, the app SHALL warn that this Mac's local data was cleared and unsynced changes may be lost, then show onboarding to download again.
+The sync server SHALL stay the source of truth. Native code SHALL keep, in UserDefaults and never logged, only whether a budget was open and its cloud file id, taken from the page's budget state event. It SHALL warn that this Mac's local data was cleared and unsynced changes may be lost only when that flag is set and the page, after `ready`, reports the state `none`; never on a timeout. It then shows onboarding to download again.
 
 #### Scenario: Data evicted after a budget was open
 - **GIVEN** a budget was open, and the app's website data was removed while the app was not running

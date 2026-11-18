@@ -30,7 +30,8 @@ export type StartBackendOptions = {
   /**
    * fork: sc-4942. Always run in the SharedArrayBuffer fallback mode, as
    * inside Capacitor: for a native shell that serves the page from a custom
-   * URL scheme (the SwiftUI Mac app), which WebKit never isolates.
+   * URL scheme (the SwiftUI Mac app), where WebKit does not expose
+   * SharedArrayBuffer even if crossOriginIsolated reports true.
    */
   sharedArrayBufferFallback?: boolean;
 };

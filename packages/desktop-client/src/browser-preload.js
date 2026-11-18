@@ -49,7 +49,8 @@ const isOpenIdCallback = window.location.pathname
 const isProviderSignOutReturn = consumeProviderSignOut();
 
 // fork: sc-4942. The SwiftUI Mac app serves this page from its own scheme,
-// which WebKit never makes cross-origin isolated: a direct Worker in the
+// where WebKit does not expose SharedArrayBuffer (crossOriginIsolated may
+// still report true): a direct Worker in the
 // SharedArrayBuffer fallback mode, as in the Capacitor app.
 const isMacApp = nativeShell() === 'mac-app';
 

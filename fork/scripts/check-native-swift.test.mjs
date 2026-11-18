@@ -109,15 +109,35 @@ void test('Native Swift: fails on file-URL access or a private WebKit setting', 
     'webView.configuration.preferences.setValue(true, forKey: "_developerExtrasEnabled")',
     'webView.perform(NSSelectorFromString("_setDrawsBackground:"), with: false)',
     'let s = Selector(("_privateThing"))',
+    // PR 413 review: each of these got past the first version of the rule
+    'webView.loadFileURL(index, allowingReadAccessTo: URL(fileURLWithPath: "/"))',
+    'prefs.setValue(true, forKey: "developerExtrasEnabled")',
+    'prefs.setValue(true, forKeyPath: "_allowFileAccess")',
+    'prefs.setValue(true, forKey: k)',
+    'let k = "allow" + "FileAccessFromFileURLs"',
+    'let c: AnyClass? = NSClassFromString("_WKProcessPoolConfiguration")',
+    'let v = prefs.value(forKey: k)',
   ]) {
-    const found = problems({ 'macos/Mac/Bad.swift': `${line}\n` });
+    const found = problems({
+      'macos/Mac/Bad.swift': `import WebKit\n${line}\n`,
+    });
     assert.equal(found.length, 1, line);
     assert.match(found[0], /macos\/Mac\/Bad\.swift: weakens WebKit/);
   }
   assert.deepEqual(
     problems({
       'macos/Mac/Ok.swift':
-        'configuration.preferences.javaScriptCanOpenWindowsAutomatically = false\ndefaults.set(true, forKey: "budgetWasOpen")\n',
+        'import WebKit\nconfiguration.preferences.javaScriptCanOpenWindowsAutomatically = false\ndefaults.set(true, forKey: "budgetWasOpen")\nlet s = defaults.string(forKey: "cloudFileId")\n',
+    }),
+    [],
+  );
+});
+
+void test('Native Swift: key-value coding is checked only where WebKit is imported', () => {
+  assert.deepEqual(
+    problems({
+      'macos/Mac/Plain.swift':
+        'import Foundation\nobject.setValue(1, forKey: "count")\n',
     }),
     [],
   );

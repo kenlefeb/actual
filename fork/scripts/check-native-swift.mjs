@@ -48,10 +48,23 @@ const USER_SCRIPT_ALLOWED = new Set([
 const PAGE_CALL =
   /\b(?:callAsyncJavaScript|evaluateJavaScript|triggerJSEvent|triggerWindowJSEvent|triggerDocumentJSEvent|notifyListeners)\b|\beval\(\s*js\s*:/;
 const USER_SCRIPT = /\bWKUserScript\s*\(/;
-// sc-4942 (mac-app): no file-URL access and no private WebKit API, reached
-// by key-value coding or by an underscored selector
-const WEAKENS_WEBKIT =
-  /\b(?:allowFileAccessFromFileURLs|allowUniversalAccessFromFileURLs)\b|forKey:\s*"_|(?:NSSelectorFromString|Selector)\(\s*\(?\s*"_/;
+// sc-4942 (mac-app): no file-URL access and no private WebKit API. The
+// setting names fail anywhere; in a file that imports WebKit, the ways to
+// reach a private API (key-value coding, selectors and classes by name) and
+// file-URL loading fail outright, whatever the key. UserDefaults'
+// `set(_:forKey:)` and `string(forKey:)` stay allowed.
+const FILE_URL_SETTING =
+  /(?:FileAccessFromFileURLs|UniversalAccessFromFileURLs)/;
+const IMPORTS_WEBKIT = /^\s*(?:@testable\s+)?import\s+WebKit\b/m;
+const WEBKIT_DENIED =
+  /\bloadFileURL\b|\.setValue\(|\bvalue\(\s*forKey|forKeyPath:|\bNSClassFromString\b|\bNSSelectorFromString\b|\bSelector\(\s*\(/;
+
+function weakensWebKit(text) {
+  return (
+    FILE_URL_SETTING.test(text) ||
+    (IMPORTS_WEBKIT.test(text) && WEBKIT_DENIED.test(text))
+  );
+}
 
 // files: { path: contents }. Returns failure messages; empty means pass.
 export function problems(files) {
@@ -67,7 +80,7 @@ export function problems(files) {
     ...(!USER_SCRIPT_ALLOWED.has(path) && USER_SCRIPT.test(text)
       ? [`${path}: adds a WKUserScript outside the allowlist`]
       : []),
-    ...(WEAKENS_WEBKIT.test(text)
+    ...(weakensWebKit(text)
       ? [
           `${path}: weakens WebKit (file-URL access or a private API); see add-mac-app-shell`,
         ]

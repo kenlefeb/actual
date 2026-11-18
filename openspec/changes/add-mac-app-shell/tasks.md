@@ -26,11 +26,11 @@ Test-first: write each test, run it and see it fail before writing the code. One
   - no private WebKit API or file-URL access preference is set, and no user script is added.
 
   Verify: the tests pass.
-- [ ] 1.4a Add the eviction warning. Swift stores a non-secret "budget open" flag with the budget id in `UserDefaults` when a budget opens, and clears it when the budget is closed. At launch, if the flag is set and the page reports no budget, it warns that local data was cleared and unsynced changes may be lost, then shows onboarding. Test with fakes, failing first: the flag plus empty storage warns, and a first launch does not. Verify: the tests pass.
+- [ ] 1.4a Add the eviction warning. Swift stores a non-secret "budget open" flag with the cloud file id in `UserDefaults` when the page's `budget-state` event says a budget opened, and clears it when it says closed. At launch, if the flag is set and the page reports `none` after `ready`, it warns that local data was cleared and unsynced changes may be lost, then shows onboarding. Test with fakes, failing first: the flag plus empty storage warns, and a first launch does not. Verify: the tests pass.
 - [x] 1.5 Keep the engine alive. Closing the window orders it out without terminating; reopening from the Dock shows the same web view. Re-read hooks fire on `didBecomeActive` and `didWake` and never while inactive. Test the lifecycle logic with fakes, failing first. Verify: the tests pass.
 - [x] 1.6 Add a Debug-menu item, in Debug builds only, that calls `native/budget-month` for the current month and shows the result size and time.
 - [ ] 1.7 **Spike exit criteria.** Run on Ken's Mac or a team Mac against staging and record each result on sc-4942. All must pass before group 2 starts.
-  1. The engine starts in the direct Worker with the page's fallback mode; record whether `crossOriginIsolated` is false, as expected. Relaunching keeps the downloaded budget.
+  1. The engine starts in the direct Worker with the page's fallback mode; record `crossOriginIsolated` and `typeof SharedArrayBuffer` (the first local run saw true and undefined; the forced fallback runs either way). Relaunching keeps the downloaded budget.
   2. OpenID sign-in through staging's Auth0 completes and returns to `homeeconomics://localhost/openid-cb`.
   3. An envelope budget, a tracking budget and an end-to-end encrypted budget each download and open. The encrypted one asks for its password.
   4. The 1.6 bridge call succeeds within the iPhone latency gate, also after the window was closed for 10 minutes and after a sleep and wake.

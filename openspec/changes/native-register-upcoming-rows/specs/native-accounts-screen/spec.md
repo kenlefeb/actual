@@ -45,17 +45,17 @@ While any filter is active, the iPhone register SHALL show the upcoming rows' co
 - **THEN** the list says 3 results with their total, and 1 scheduled with its total
 
 ### Requirement: A capped count and total say they are partial
-When loot-core returns `upcomingAll`, the iPhone register SHALL label the count and total as partial: "Nearest K of M scheduled", where M (`upcomingAll`) and K (`upcomingKept`) both count upcoming occurrences, M before the cap and K kept by it, and the total labelled as those nearest rows' total. The rows shown and `upcomingCount` may differ from K after inversion and filters.
+When loot-core returns `upcomingMore`, the iPhone register SHALL label the count and total as partial: "Nearest K scheduled; more not shown", with K (`upcomingKept`, occurrences kept) from loot-core, and the total labelled as those nearest rows' total. It SHALL never show a count of all scheduled occurrences, which loot-core does not compute.
 
 #### Scenario: Capped, unfiltered
-- **GIVEN** 4,600 scheduled previews and the default row cap of 100
+- **GIVEN** 4,600 scheduled occurrences and the default row cap of 100
 - **WHEN** the user opens the register
-- **THEN** the upcoming section says "Nearest 100 of 4,600 scheduled" and its total is labelled as the nearest rows' total
+- **THEN** the upcoming section says "Nearest 100 scheduled; more not shown" and its total is labelled as the nearest rows' total
 
 #### Scenario: Capped and searched
 - **GIVEN** the same account and a search matching 2 of the nearest 100
 - **WHEN** the results show
-- **THEN** the section says 2 scheduled in the nearest 100 of 4,600, with those 2 rows' total
+- **THEN** the section says 2 scheduled in the nearest 100, more not shown or searched, with those 2 rows' total
 
 #### Scenario: Not capped
 - **GIVEN** 12 scheduled previews
@@ -143,12 +143,12 @@ While upcoming rows are marked "Updating…", tapping one SHALL open its read-on
 - **THEN** the upcoming section shows "Loading scheduled…" until the reply
 
 ### Requirement: The register says when the row cap hides scheduled rows
-When loot-core returns `upcomingMore`, the iPhone register SHALL say below the upcoming rows: "N more scheduled rows not shown or searched; change this in Settings > Limits.", with N from loot-core, and nothing otherwise.
+When loot-core returns `upcomingMore`, the iPhone register SHALL say below the upcoming rows: "More scheduled rows are not shown or searched; change this in Settings > Limits.", and nothing otherwise.
 
 #### Scenario: Fifty daily schedules
-- **GIVEN** an upcoming read returning `upcomingMore` 4,500
+- **GIVEN** an upcoming read returning `upcomingMore` true
 - **WHEN** the user opens the register
-- **THEN** the notice says 4,500 more scheduled rows are not shown or searched and points to Settings > Limits
+- **THEN** the notice says more scheduled rows are not shown or searched and points to Settings > Limits
 
 ### Requirement: The cap is a labelled limit in Settings
 The Limits section of native Settings (story 4643) SHALL list `accounts-register-upcoming-max-days` as "Scheduled rows: days ahead" (it caps the budget's upcoming scheduled length in the native register; default 92, ceiling 366) and `accounts-upcoming-max-rows` as "Scheduled rows: most shown" (default 100, ceiling 500), each with its value, default and ceiling, as for every limit there.

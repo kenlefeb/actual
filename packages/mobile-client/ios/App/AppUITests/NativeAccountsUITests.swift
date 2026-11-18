@@ -30,10 +30,12 @@ final class NativeAccountsUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["On Budget"].exists || app.staticTexts["On budget"].exists)
     }
 
-    // The drag handle is an element the row labels "Reorder <name>, <balance>, ..."; its
-    // type differs between iOS versions, so match any type
+    // The drag handle is an element labelled "Reorder <name>" (the iOS 27 simulator adds
+    // ", <balance>, ..."), so match either, on any element type
     private func handle(_ name: String) -> XCUIElement {
-        app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Reorder \(name),")).firstMatch
+        app.descendants(matching: .any).matching(
+            NSPredicate(format: "label == %@ OR label BEGINSWITH %@", "Reorder \(name)", "Reorder \(name),")
+        ).firstMatch
     }
 
     // What the screen offers, for a failure message: a CI failure has no screenshot to look at

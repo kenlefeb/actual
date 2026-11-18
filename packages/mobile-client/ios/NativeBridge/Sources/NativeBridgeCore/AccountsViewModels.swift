@@ -319,7 +319,7 @@ public final class AccountsListViewModel: ObservableObject {
 
 // The register as the pages loaded so far have built it
 public struct AccountRegisterContent: Equatable {
-    // The first page: currency, header and upcoming
+    // The first page: currency and header
     public let first: AccountRegister
     public let rows: [AccountRegister.Row]
     // nil after the last page
@@ -327,12 +327,33 @@ public struct AccountRegisterContent: Equatable {
     public let pages: Int
 
     public var header: AccountRegister.Header? { first.header }
-    public var upcoming: [AccountRegister.Upcoming]? { first.upcoming }
+}
+
+// sc-4973 (D7): the upcoming section, apart from the posted rows. `updating`
+// keeps the last rows, dimmed, while a re-read after a write or change runs.
+public enum UpcomingSection: Equatable {
+    case loading
+    case loaded(AccountUpcoming)
+    case updating(AccountUpcoming)
+    case failed
+
+    public var read: AccountUpcoming? {
+        switch self {
+        case .loaded(let read), .updating(let read): read
+        case .loading, .failed: nil
+        }
+    }
+
+    public var isUpdating: Bool {
+        if case .updating = self { return true }
+        return false
+    }
 }
 
 @MainActor
 public final class AccountRegisterViewModel: ObservableObject {
-    public static let watchedTables = accountsWatchedTables
+    // Schedules and rules change the upcoming rows
+    public static let watchedTables = accountsWatchedTables.union(["schedules", "rules"])
     // The engine's cap, counted in UTF-16 units as it does
     static let maxSearch = 100
 
@@ -346,6 +367,7 @@ public final class AccountRegisterViewModel: ObservableObject {
     @Published public private(set) var categoriesFailed = false
     // A change loot-core refused until the person confirms a reconciled row
     @Published public private(set) var confirmationNeeded: RegisterRetry?
+    @Published public private(set) var upcoming: UpcomingSection = .loading
     public let writes: AccountsWrites
     public var undoOffer: AccountsUndoOffer? { writes.undoOffer }
     public var actionError: AccountsActionError? { writes.actionError }
@@ -361,6 +383,7 @@ public final class AccountRegisterViewModel: ObservableObject {
     private var pendingSearch: Task<Void, Never>?
     private var isSceneActive = true
     private var generation = 0
+    private var upcomingGeneration = 0
     private var isLoadingMore = false
 
     public init(
@@ -406,6 +429,7 @@ public final class AccountRegisterViewModel: ObservableObject {
         generation += 1
         let mine = generation
         isLoadingMore = false
+        let section = startUpcoming(keepingRows: false)
         do {
             let page = try await client.accountRegister(try request(cursor: nil))
             guard mine == generation else { return }
@@ -413,7 +437,38 @@ public final class AccountRegisterViewModel: ObservableObject {
         } catch {
             guard mine == generation else { return }
             state = state.failing(.from(error))
+            return
         }
+        await readUpcoming(section)
+    }
+
+    // A newer read wins: a reply for an older scope, search or write is dropped
+    private func startUpcoming(keepingRows: Bool) -> Int {
+        upcomingGeneration += 1
+        if keepingRows, let read = upcoming.read {
+            upcoming = .updating(read)
+        } else {
+            upcoming = .loading
+        }
+        return upcomingGeneration
+    }
+
+    private func readUpcoming(_ mine: Int) async {
+        do {
+            let read = try await client.accountUpcoming(
+                try AccountUpcomingRequest(accountId: accountId, scope: scope, search: search.isEmpty ? nil : search))
+            guard mine == upcomingGeneration else { return }
+            upcoming = .loaded(read)
+        } catch {
+            guard mine == upcomingGeneration else { return }
+            upcoming = .failed
+        }
+    }
+
+    // Retry on the failed section: the upcoming rows only
+    public func retryUpcoming() async {
+        guard isSceneActive else { return }
+        await readUpcoming(startUpcoming(keepingRows: false))
     }
 
     // The loaded pages again from the top, one after another, replaced only when
@@ -427,6 +482,7 @@ public final class AccountRegisterViewModel: ObservableObject {
         generation += 1
         let mine = generation
         isLoadingMore = false
+        let section = startUpcoming(keepingRows: true)
         do {
             let first = try await client.accountRegister(try request(cursor: nil))
             var rows = first.rows
@@ -445,6 +501,7 @@ public final class AccountRegisterViewModel: ObservableObject {
             guard mine == generation else { return }
             state = state.failing(.from(error))
         }
+        await readUpcoming(section)
     }
 
     // The next page, with the cursor loot-core handed back

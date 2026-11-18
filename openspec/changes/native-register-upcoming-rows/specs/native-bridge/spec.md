@@ -1,38 +1,50 @@
 ## ADDED Requirements
 
-### Requirement: The register's upcoming rows come from loot-core
-The first page of `native/account-register` SHALL return `upcoming`: rows built with the same functions as the web's preview (rules run, split-action relevance, per-line inversion), each with id, scheduleId, date, payee, category, categoryId, notes, signed amount, cleared, splitCount, transferAccount, status and `ruleFields`. Rows SHALL pass the read's scope and search with posted rows' predicate. Later pages SHALL omit `upcoming`, and the cursor SHALL NOT cover it.
+### Requirement: Upcoming rows are their own read
+Upcoming rows SHALL come from `native/account-upcoming {account_id, scope, search}`, a read-only handler, never from `native/account-register`. The register read SHALL do no schedule work: no schedule query, preview, status or rule run. `native/account-upcoming` SHALL join the bridge allowlist in the Swift list and the page's list, which stay equal, with a `coverage.json` skip, and SHALL validate `scope` and `search` as the register read does.
+
+#### Scenario: The register read ignores schedules
+- **GIVEN** an account with 200 schedules in the window
+- **WHEN** native code reads the register's first page
+- **THEN** the result has no `upcoming`, `upcomingCount`, `upcomingTotal` or `upcomingCapDays`, and no schedule or rule is read
+
+#### Scenario: Allowlisted
+- **WHEN** the page is asked for `native/account-upcoming`
+- **THEN** it is forwarded, and both allowlists name it
+
+#### Scenario: Bad arguments
+- **WHEN** native code calls `native/account-upcoming` with an unknown account, scope `paid`, or a search over 100 characters
+- **THEN** the call fails as the register read fails for the same arguments, and nothing is read or changed
+
+### Requirement: The upcoming read returns rows as they will post
+`native/account-upcoming` SHALL return `upcoming`: rows built with the web preview's functions (rules run, split-action relevance, per-line inversion), each with id, scheduleId, date, payee, category, categoryId, notes, signed amount, cleared, splitCount, transferAccount, status and `ruleFields`, filtered by the scope and search with posted rows' predicate. Every returned row SHALL have had its rules run.
 
 #### Scenario: Rules applied
 - **GIVEN** a schedule whose rule sets the payee "Power Co" and the category "Utilities"
-- **WHEN** native code reads the first page
-- **THEN** its upcoming row has payee "Power Co" and category "Utilities", equal to the web's preview
+- **WHEN** native code reads `native/account-upcoming`
+- **THEN** its row has payee "Power Co" and category "Utilities", equal to the web's preview
 
-#### Scenario: A formula split line
-- **GIVEN** a split schedule whose line payee is set by a formula that resolves to this account's transfer payee
-- **WHEN** native code reads this account's first page
-- **THEN** that line is an upcoming row, inverted
-
-#### Scenario: Paging
-- **WHEN** native code reads the second page with the first page's cursor
-- **THEN** the page has no `upcoming`, `upcomingCount` or `upcomingTotal`, and the same rows as without schedules
+#### Scenario: A template split line
+- **GIVEN** a split schedule whose line payee is set by a template action that resolves to this account's transfer payee
+- **WHEN** native code reads this account's upcoming rows
+- **THEN** that line is a row, inverted
 
 #### Scenario: Filtered
 - **WHEN** native code reads with scope `uncleared` and search "rent"
 - **THEN** `upcoming` holds only rows that are uncleared and match "rent"
 
 #### Scenario: More rows than SQLite's variable limit
-- **GIVEN** 40 daily schedules and a cap of 366 days, about 14,600 upcoming rows
-- **WHEN** native code reads the first page with a search
+- **GIVEN** a row cap of 500 and 500 upcoming rows, each with split lines
+- **WHEN** native code reads with a search
 - **THEN** the read succeeds and filters them, with no error about too many variables
 
-### Requirement: The register returns upcoming count and total
-Whenever the first page returns `upcoming`, it SHALL also return `upcomingCount` (its rows, an inverted line counting once) and `upcomingTotal` (loot-core's sum of their signed amounts), and later pages SHALL omit both. `resultCount` and `resultTotal` SHALL count posted rows only.
+### Requirement: The upcoming read returns its count and total
+`native/account-upcoming` SHALL return `upcomingCount` (the rows it returns, an inverted line counting once) and `upcomingTotal` (loot-core's sum of their signed amounts); both cover returned rows only, never rows past the cap. The register read's `resultCount` and `resultTotal` SHALL count posted rows only.
 
 #### Scenario: Separate totals
 - **GIVEN** a search matching posted rows of -10.00 and -5.00 and an upcoming row of -20.00
-- **WHEN** native code reads the first page
-- **THEN** `resultCount` is 2, `resultTotal` is -1500, `upcomingCount` is 1 and `upcomingTotal` is -2000
+- **WHEN** native code reads the register's first page and the upcoming read
+- **THEN** `resultCount` is 2 and `resultTotal` is -1500; `upcomingCount` is 1 and `upcomingTotal` is -2000
 
 #### Scenario: Nothing upcoming
 - **WHEN** no schedule falls in the window
@@ -43,33 +55,63 @@ Each upcoming row SHALL carry `ruleFields`: the names, from the fixed set payee,
 
 #### Scenario: Payee and category set by a rule
 - **GIVEN** a schedule whose rule sets the payee and the category
-- **WHEN** native code reads the first page
+- **WHEN** native code reads the upcoming rows
 - **THEN** the row's `ruleFields` is `["payee", "category"]`
 
 #### Scenario: Stable ids
-- **WHEN** native code reads the same first page twice
-- **THEN** every upcoming row, inverted lines included, has the same id both times, in the documented format
+- **WHEN** native code reads the same upcoming rows twice
+- **THEN** every row, inverted lines included, has the same id both times, in the documented format
 
 ### Requirement: The upcoming horizon is a capped setting
-The window SHALL be the budget's upcoming-length preference and each schedule's custom length, as on the web, capped at `accounts-register-upcoming-max-days`, a synced limit read through `readLimit` (default 92, ceiling 366). A missing or bad value SHALL fall back to the default with no refusal. When the cap hid any row, the first page SHALL return `upcomingCapDays` (the cap in days), and omit it otherwise.
+The window SHALL be the budget's upcoming-length preference and each schedule's custom length, as on the web, capped at `accounts-register-upcoming-max-days`, a synced limit read through `readLimit` (default 92, ceiling 366). A missing or bad value SHALL fall back to the default with no refusal. When the cap hid any row, the read SHALL return `upcomingCapDays` (the cap in days), and omit it otherwise.
 
 #### Scenario: A custom length beyond the cap
 - **GIVEN** a schedule with a custom upcoming length of 6 months and the default cap
-- **WHEN** native code reads the first page
+- **WHEN** native code reads the upcoming rows
 - **THEN** only its occurrences within 92 days of today are rows, and `upcomingCapDays` is 92
 
 #### Scenario: Nothing hidden
 - **GIVEN** every schedule's window inside the cap
-- **WHEN** native code reads the first page
+- **WHEN** native code reads the upcoming rows
 - **THEN** there is no `upcomingCapDays`
 
 #### Scenario: A bad value
 - **WHEN** `accounts-register-upcoming-max-days` is "0", "400" or "abc"
 - **THEN** the cap is 92
 
-### Requirement: The register's upcoming rows meet the latency gate
-The perf suite SHALL time the register's first page on the 20,000-row account with 200 schedules in the window (split schedules, transfers into the account and daily schedules among them), with no filter, with search and with scope `uncleared`, and a worst case of 50 daily schedules across the full default cap, and SHALL fail when a median exceeds 50 ms.
+### Requirement: Upcoming rows are capped before rules run
+Before rules run, the read SHALL keep at most `accounts-upcoming-max-rows` previews (a synced limit via `readLimit`, default 100, ceiling 500) of the relevant schedules: each schedule's next occurrence first, then each one's second, and so on, each round in the web's preview order. Rules, inversion, filter and counts see only those. When previews were dropped it SHALL return `upcomingAll` (all previews, counted without rules), `upcomingKept` and `upcomingMore`, all counting occurrences.
 
-#### Scenario: The gate runs in CI
+#### Scenario: Fifty daily schedules
+- **GIVEN** 50 daily schedules over a 92-day window, about 4,600 previews, and the default row cap
+- **WHEN** native code reads the upcoming rows
+- **THEN** rules run for 100 previews only, `upcomingKept` is 100, `upcomingAll` is about 4,600 and `upcomingMore` is `upcomingAll` minus 100
+
+#### Scenario: A monthly bill among weekly schedules
+- **GIVEN** a row cap of 10, 12 weekly schedules and one monthly bill due in 20 days
+- **WHEN** native code reads the upcoming rows
+- **THEN** the monthly bill's next occurrence is kept, and later weekly occurrences are dropped first
+
+#### Scenario: Under the cap
+- **GIVEN** 12 previews in the window
+- **WHEN** native code reads the upcoming rows
+- **THEN** all 12 run rules and there is no `upcomingMore`, `upcomingKept` or `upcomingAll`
+
+#### Scenario: A bad value
+- **WHEN** `accounts-upcoming-max-rows` is "0", "600" or "abc"
+- **THEN** the cap is 100
+
+### Requirement: Schedule statuses cost one query
+The upcoming read SHALL work out statuses only for schedules relevant to the account, and SHALL find which of them already have a transaction in their occurrence window with one query over their ids (each schedule's latest transaction date compared with its match start date), giving the same answer as `getHasTransactionsQuery`.
+
+#### Scenario: Same answer as the web's query
+- **GIVEN** a budget fixture with paid, unpaid, split and transfer schedules, a schedule paid by a split child, one whose matching row is tombstoned, and one on a closed account
+- **WHEN** the one-query check and `getHasTransactionsQuery` run over the same schedules
+- **THEN** they name the same schedules
+
+### Requirement: The reads meet their latency gates
+The perf suite SHALL fail when the register's first page median exceeds 50 ms on the 20,000-row account with 200 schedules in the window, or when `native/account-upcoming`'s median exceeds 100 ms with those 200 schedules (split, transfer-in and daily among them) or 150 ms in a worst case of 50 daily schedules across the 92-day cap, each with no filter, search and scope `uncleared`.
+
+#### Scenario: The gates run in CI
 - **WHEN** Fork CI runs `yarn workspace @actual-app/core run perf`
-- **THEN** it prints each case's median and p95, the worst case included, and fails if a median is over 50 ms
+- **THEN** it prints each case's median and p95, and fails if a median is over its gate

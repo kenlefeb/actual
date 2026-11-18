@@ -51,7 +51,7 @@ The undo runs under the write lock, in this order:
    - a category of the same name (case-insensitive, as the move checks) is now in the old group;
    - the old group is not of the category's kind (income or expense), or the old next sibling is the row itself. The undo applies to the logged old place every rule the move tool applies to its arguments, so an edited line cannot do what the tool refuses (Security review, finding 1).
 
-   Each refusal names the ids and fields, says the cause in plain words (for example "the category it sat before, C, has been deleted") and says what to do instead: the row stays where it is; move it by hand with `write_move_category` or `write_move_category_group`, or tell Ken (Product Owner review). The text is fixed per cause and carries no names or values from the budget beyond ids.
+   Each refusal names the ids and fields, says the cause in plain words (for example "the category it sat before, C, has been deleted") and says what to do instead: the row stays where it is; move it by hand with `write_move_category` or `write_move_category_group`, or tell the budget's owner (Product Owner review; Security asked for no person's name in product text). The text is fixed per cause and carries no names or values from the budget beyond ids.
 4. Count 1 row against the row limit (`requireRows`), as the move counts.
 5. Apply one engine call, `api.moveCategory(id, old_group, old_next ?? undefined)` or `api.moveCategoryGroup(id, old_next ?? undefined)`. Its line holds the swapped `group_id` and `next_*` changes and `undoes`.
 

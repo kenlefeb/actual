@@ -47,20 +47,49 @@ In the iPhone and Mac apps, the Swift bridge client SHALL follow every allowlist
 #### Scenario: Slow storage
 - **GIVEN** a commit that takes 3 s and the default wait of 2000 ms
 - **WHEN** the user categorizes a row on iPhone
-- **THEN** the row changes, the client returns `stored: false`, "Saved here, not yet stored on this device." shows, and it clears when the engine's `storage-stored` reaches Swift as `stored`
+- **THEN** the row changes, the client returns `stored: false`, "Still saving to this device. Keep the app open." shows, and it clears when the engine's `storage-stored` reaches Swift as `stored`
 
 ### Requirement: A not-yet-stored write belongs to its page load
-Swift SHALL track each unconfirmed write by its own page-load generation and, once answered, by `seq`, which holds the page load's epoch and the write's order in it. A `stored: true` answer or `stored` event SHALL clear only writes of its own epoch. A restart SHALL turn every pending write of an older epoch into "may not have been saved", covered by the restart or reload notice, and no later success SHALL clear it.
+Swift SHALL track each unconfirmed write by its own page-load generation and, once answered, by `seq`, which holds the page load's epoch and the write's order in it. A `stored: true` answer or `stored` event SHALL clear only writes of its own epoch. A restart SHALL turn every pending write of an older epoch into "may not have been saved", covered by the restart notice, and no later success SHALL clear it.
 
 #### Scenario: A success after a restart
-- **GIVEN** a write showing "Saved here, not yet stored on this device." when the page restarts
+- **GIVEN** a write showing "Still saving to this device. Keep the app open." when the page restarts
 - **WHEN** a write in the new page answers `stored: true`, or a `stored` event arrives with the same number in the new epoch
-- **THEN** the earlier write is not reported as stored, and it stays "may not have been saved"
+- **THEN** the earlier write is not reported as stored, it stays "may not have been saved", the status line clears, and the restart notice says so
 
 #### Scenario: No answer before the restart
 - **GIVEN** a write whose `native/persisted` call never answered, so it has no `seq`, when the page restarts
 - **WHEN** a write in the new page answers `stored: true`
 - **THEN** the earlier write's generation is older, so it is not reported as stored and stays "may not have been saved"
+
+### Requirement: The storage status line shows only saving states
+The native storage status line SHALL show only "Saving…" while a write awaits its answer and "Still saving to this device. Keep the app open." after `stored: false`, until stored. Once shown, "Saving…" SHALL stay at least 0.6 s, with no animation and without delaying any reply. A restart that leaves a write "may not have been saved" SHALL clear the line.
+
+#### Scenario: A quick write after "Saving…" appears
+- **GIVEN** "Saving…" showing
+- **WHEN** the write is stored 0.1 s later
+- **THEN** the write's result is returned at once, and "Saving…" stays until 0.6 s after it appeared
+
+#### Scenario: Storage is slow
+- **GIVEN** "Saving…" showing
+- **WHEN** the client returns `stored: false`
+- **THEN** the line changes to "Still saving to this device. Keep the app open."
+
+### Requirement: A restart with unconfirmed writes tells the person
+If a restart leaves a write "may not have been saved" and no failure notice is showing, Swift SHALL show, with OK and in place of the reload notice, "The app restarted. Some recent changes may not have been saved. Check them, and make again any that are missing." This text SHALL appear nowhere else. A failure notice's restart form SHALL take priority.
+
+#### Scenario: A pending write at a restart
+- **GIVEN** a write showing "Still saving to this device. Keep the app open." and no failure notice
+- **WHEN** the page restarts on its own
+- **THEN** the line clears, this notice shows, no reload notice shows, and OK dismisses it
+
+### Requirement: Offline never claims saved while a write is pending
+The native "Offline — changes saved on this iPhone" status SHALL show only when no write is pending. While one is, the status SHALL show the storage status line's text instead, so "Still saving to this device. Keep the app open." wins over it.
+
+#### Scenario: Offline with slow storage
+- **GIVEN** the app is offline and a write has returned `stored: false`
+- **WHEN** the Accounts status shows
+- **THEN** it reads "Still saving to this device. Keep the app open.", and returns to the offline text once the write is stored
 
 ### Requirement: Any storage failure latches and is shown app-wide
 With the storage guard on, any failed IndexedDB write of the open budget, from any source (bridge write, web-screen edit or sync), SHALL set a failed latch. The patched storage SHALL write nothing more, the page SHALL send a `storage-failed` event with `lastStoredFlushAt` (when the last write that stored was flushed), and Swift SHALL show a persistent app-level notice, whichever screen is showing, until the person reloads or, after a restart, taps OK.

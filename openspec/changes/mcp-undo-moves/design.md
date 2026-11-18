@@ -35,7 +35,7 @@ Lines stay `schema: 2`. A schema number versions the whole line, but this is one
 - a schema 2 move line without a `next_category_id` or `next_group_id` change: not undoable, reason "logged before moves recorded their place";
 - a schema 2 move line with it: undoable.
 
-The planner checks that each logged value is a string id or null before using it, and otherwise refuses as not undoable ("a logged value is not an id of its kind", as Undo C does).
+The planner uses a move line only when its `ids` name exactly one row, and its changes are exactly one `group_id` and one `next_category_id` (category move) or exactly one `next_group_id` (group move), each for that row, with every value a string id or null. Any other shape is not undoable ("a logged value is not an id of its kind", as Undo C does). It never picks one change out of several. (Security review, PR #433, finding 2.)
 
 ### D3. Undo of a move
 
@@ -48,7 +48,10 @@ The undo runs under the write lock, in this order:
    - its current next sibling is not its logged after `next_*`;
    - the old group is gone;
    - the old next sibling is gone or no longer in the old group (Product Owner decision 1: refuse, never put it last);
-   - a category of the same name (case-insensitive, as the move checks) is now in the old group.
+   - a category of the same name (case-insensitive, as the move checks) is now in the old group;
+   - the old group is not of the category's kind (income or expense), or the old next sibling is the row itself. The undo applies to the logged old place every rule the move tool applies to its arguments, so an edited line cannot do what the tool refuses (Security review, finding 1).
+
+   Each refusal names the ids and fields, says the cause in plain words (for example "the category it sat before, C, has been deleted") and says what to do instead: the row stays where it is; move it by hand with `write_move_category` or `write_move_category_group`, or tell Ken (Product Owner review). The text is fixed per cause and carries no names or values from the budget beyond ids.
 4. Count 1 row against the row limit (`requireRows`), as the move counts.
 5. Apply one engine call, `api.moveCategory(id, old_group, old_next ?? undefined)` or `api.moveCategoryGroup(id, old_next ?? undefined)`. Its line holds the swapped `group_id` and `next_*` changes and `undoes`.
 
@@ -58,19 +61,20 @@ Alternative rejected: compare only the group and accept any position. That would
 
 ### D4. Not-undoable table in code
 
-`undo.ts` gains `NOT_UNDOABLE: Record<tool, reason>` beside `UNDOABLE`. A test lists every registered write tool and fails unless it is in exactly one table, so a new tool must declare itself. Reasons are fixed text:
+`undo.ts` gains `NOT_UNDOABLE: Record<tool, reason>` beside `UNDOABLE`. A test lists every registered write tool and fails unless it is in exactly one table, so a new tool must declare itself. It also fails when a tool in `UNDOABLE` has no planner, or a tool in `NOT_UNDOABLE` has one. Reasons are fixed text:
 
 | Tool | Reason |
 |---|---|
 | write_apply_budget_templates | it also stores goals and template automations, which undo cannot restore |
-| write_set_budget_carryover | it changes every later month and only the first is logged |
+| write_set_budget_carryover | it changes every later month and only the first is logged; undo is planned in sc-5097 |
 | write_hold_budget_for_next_month | clear it with write_reset_budget_hold |
 | write_reset_budget_hold | hold again with write_hold_budget_for_next_month |
 | write_skip_paycheck | the engine cannot yet put back a skipped date |
 | write_create_account | delete the account with write_delete_account |
-| write_update_account, write_reopen_account, write_create_account_group, write_update_account_group | not undoable yet |
+| write_update_account, write_reopen_account, write_create_account_group, write_update_account_group | not undoable yet; undo is planned in sc-5097 |
 | write_delete_account_group | its accounts became ungrouped; recreate the group and regroup them |
-| write_close_account, write_delete_account | the bank-sync unlink cannot be undone |
+| write_close_account | the bank-sync unlink cannot be undone |
+| write_delete_account | it deletes the account and every row in it with no snapshot, and the bank-sync unlink cannot be undone |
 | write_move_on_budget | the app has no move-off-budget action |
 | write_set_account_business_days | regenerating paychecks can clear skips and recreate schedules |
 | write_reconcile_account | MCP cannot unlock reconciled rows |
@@ -84,7 +88,7 @@ Before any audit line, `loggedWrite` runs `requireUndoableLine` for every tool i
 
 ### D6. Always confirm two permanent actions
 
-`write_apply_budget_templates`, and `write_close_account` and `write_delete_account` when the account is bank-linked, pass `alwaysConfirm`. The first call is a dry run with a `confirm` bound to the call and its changes, as reconcile does, whatever `confirm_destructive` says. An unlinked account keeps today's rule. A templates dry run too large to list is refused with no confirm, as it already is under confirm. With confirm off, that is new: split the call with `category_ids`, or raise the cell limit.
+`write_apply_budget_templates`, and `write_close_account` and `write_delete_account` when the account is bank-linked, pass `alwaysConfirm`. An account is bank-linked when it has a bank sync link (`account_id` set) at the time of each call. The fact is read on the first call and the confirming call alike; it is part of the entry the `confirm` binds (`unlinks_bank_sync` is already in the close and delete lines, so a change of link makes an old `confirm` stale); and a failure to read it counts as bank-linked (Security review, finding 3). The first call is a dry run with a `confirm` bound to the call and its changes, as reconcile does, whatever `confirm_destructive` says. An unlinked account keeps today's rule. A templates dry run too large to list is refused with no confirm, as it already is under confirm. With confirm off, that is new: split the call with `category_ids`, or raise the cell limit.
 
 ## Risks / Trade-offs
 

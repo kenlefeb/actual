@@ -21,6 +21,11 @@ The attempt line of `write_move_category` SHALL hold `group_id` and `next_catego
 - **WHEN** the client calls `write_undo` for the move
 - **THEN** "X" holds "A", "B", "C" in that order again, and the log has an undo line with `undoes`
 
+#### Scenario: Undo a reorder within one group
+- **GIVEN** "C" moved before "A" within group "X" ("A", "B", "C"), and nothing changed since
+- **WHEN** the client calls `write_undo` for the move
+- **THEN** "X" holds "A", "B", "C" again
+
 #### Scenario: Undo a group move
 - **GIVEN** group "Z" moved from last to before "X", and nothing changed since
 - **WHEN** the client calls `write_undo` for the move
@@ -32,12 +37,17 @@ The attempt line of `write_move_category` SHALL hold `group_id` and `next_catego
 - **THEN** the call is refused by scope naming `structure:write`, and nothing changed
 
 ### Requirement: Undo of a move refuses on any conflict
-`write_undo` of a move SHALL refuse the whole undo, changing nothing and naming ids and fields only, when the row is gone, is not in its logged after group, or its next sibling is not its logged after one; the old group is gone; the old next sibling is gone or not in the old group; or a category of the same name is now in the old group. A refusal does not use the undo up.
+`write_undo` of a move SHALL refuse the whole undo, changing nothing, when the row is gone, is not in its logged after group, or its next sibling is not its logged after one; the old group is gone; the old next sibling is gone or not in the old group; or a category of the same name is now in the old group. The refusal SHALL name ids and fields, say the cause in plain words and say what to do instead. A refusal does not use the undo up.
 
 #### Scenario: The old neighbour is gone
 - **GIVEN** "B" moved out of "X" ("A", "B", "C"), and "C" deleted since
 - **WHEN** the client calls `write_undo` for the move
 - **THEN** the call is refused naming "C", "B" stays where it is, and nothing changed
+
+#### Scenario: The refusal says why and what to do
+- **GIVEN** an undo refused because the old neighbour "C" was deleted
+- **WHEN** the client reads the refusal
+- **THEN** it names "C" and `next_category_id`, says in plain words that the category it sat before is gone, and says the category stays where it is: move it by hand with `write_move_category`, or tell Ken
 
 #### Scenario: Moved again since
 - **GIVEN** "B" moved into "Y", then moved again into "Z"
@@ -53,6 +63,50 @@ The attempt line of `write_move_category` SHALL hold `group_id` and `next_catego
 - **GIVEN** "B" moved into "Y" by MCP, then moved within "Y" on another device that has synced
 - **WHEN** the client calls `write_undo` for the move
 - **THEN** the undo syncs first, sees the change, and refuses naming `next_category_id`
+
+### Requirement: Undo of a move applies the move's own rules
+`write_undo` of a move SHALL also refuse when the old group is not of the category's kind (income or expense), or the old next sibling is the row itself, applying to the logged old place every rule `write_move_category` / `write_move_category_group` applies to its arguments. The refusal says why and what to do instead, as for a conflict.
+
+#### Scenario: An edited line points at an income group
+- **GIVEN** an expense category's move line whose `group_id` before names an income group
+- **WHEN** the client calls `write_undo` for it
+- **THEN** the call is refused saying a category cannot move between an income and an expense group, and nothing changed
+
+#### Scenario: The old next sibling is the row itself
+- **GIVEN** a move line whose `next_category_id` before is the moved category's own id
+- **WHEN** the client calls `write_undo` for it
+- **THEN** the call is refused and nothing changed
+
+### Requirement: Undo of a move reads only a well-formed line
+The planner SHALL use the line only when its `ids` name exactly one row, and its changes are exactly one `group_id` and one `next_category_id` (category move) or exactly one `next_group_id` (group move), each for that row; any other shape is not undoable ("a logged value is not an id of its kind").
+
+#### Scenario: Two next changes
+- **GIVEN** a category move line with two `next_category_id` changes
+- **WHEN** the client calls `write_undo` for it
+- **THEN** the call is refused as not undoable and nothing changed
+
+#### Scenario: A change for another row
+- **GIVEN** a category move line whose `group_id` change names a row other than the one in `ids`
+- **WHEN** the client calls `write_undo` for it
+- **THEN** the call is refused as not undoable and nothing changed
+
+### Requirement: Bank-linked is read at each call
+An account SHALL be bank-linked when it has a bank sync link (`account_id` set) at the time of each call; the fact SHALL be read on the first call and the confirming call alike, be part of what the `confirm` binds, and a failure to read it SHALL count as bank-linked.
+
+#### Scenario: Linked after the client last read it
+- **GIVEN** `confirm_destructive` off, and an account the client last saw unlinked that was linked to bank sync in the app since
+- **WHEN** the client calls `write_close_account` without `confirm`
+- **THEN** the call answers with a dry run and a `confirm`, and nothing changed
+
+#### Scenario: A confirm from before a change of link
+- **GIVEN** a `confirm` from a dry run of closing a bank-linked account, and the link removed since
+- **WHEN** the client calls again with that `confirm`
+- **THEN** the call is refused as a stale confirm and nothing changed
+
+#### Scenario: The link cannot be read
+- **GIVEN** `confirm_destructive` off and an account whose bank link cannot be read
+- **WHEN** a client calls `write_delete_account` without `confirm`
+- **THEN** the call answers with a dry run and a `confirm`, and nothing changed
 
 ### Requirement: Every write declares whether it is undoable
 Every write tool SHALL be in exactly one code table: undoable, or not undoable with a fixed reason. `list_writes` SHALL show that reason, and `write_undo` SHALL refuse the caller's own such write with it. Each write tool's description SHALL end with "write_undo reverses it." or "Not undoable:" and its reason. Budget templates, account close and delete, move on budget and reconcile SHALL be not undoable.

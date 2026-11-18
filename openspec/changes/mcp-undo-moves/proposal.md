@@ -7,7 +7,7 @@ Story sc-4691 (Undo B, the second part of sc-4203 after sc-4215 and sc-4692). Ag
 ## What Changes
 
 - **Moves log their old place**: `write_move_category` logs the category's old next sibling as `next_category_id` (null when it was last), and `write_move_category_group` logs `next_group_id`. These are new field names: the old `before_category_id` and `before_group_id` changes, always null in production lines, are never read as "was last".
-- **`write_undo` reverses moves**: a category or group goes back before its old next sibling (or last). It syncs first, refuses on any conflict (including an old neighbour that is gone), needs `structure:write` and changes nothing on refusal. Move lines without the new field are not undoable, with a fixed reason.
+- **`write_undo` reverses moves**: a category or group goes back before its old next sibling (or last). It syncs first, applies the move tool's own rules to the old place, accepts only a well-formed line, and refuses on any conflict (including an old neighbour that is gone) with a reason in plain words and what to do instead. It needs `structure:write` and changes nothing on refusal. Move lines without the new field are not undoable, with a fixed reason.
 - **A declared not-undoable list**: every write tool is either in the undo table or in a not-undoable table with a fixed reason. `list_writes` and `write_undo` give that reason. Each write tool's description says whether `write_undo` reverses it. Budget templates stay not undoable.
 - **Every undoable write fits its undo**: the up-front audit line check that deletes already have (their own line and their undo's line) applies to every undoable tool.
 - **Always confirm two permanent actions**: closing or deleting a bank-linked account, and applying budget templates, always answer the first call with a dry run and a `confirm`, whatever `confirm_destructive` says.
@@ -26,7 +26,7 @@ None.
 
 ### Modified Capabilities
 
-- `mcp-server`: new requirements "Moves log their old place", "Undo of a move", "Undo of a move refuses on any conflict", "Every write declares whether it is undoable" and "Permanent actions always confirm". Modified requirements: "What undo reverses", "Undo a write", "List my writes" and "One write cannot fill the audit tail".
+- `mcp-server`: new requirements "Moves log their old place", "Undo of a move", "Undo of a move refuses on any conflict", "Undo of a move applies the move's own rules", "Undo of a move reads only a well-formed line", "Bank-linked is read at each call", "Every write declares whether it is undoable" and "Permanent actions always confirm". Modified requirements: "What undo reverses", "Undo a write", "List my writes" and "One write cannot fill the audit tail".
 
 ## Impact
 

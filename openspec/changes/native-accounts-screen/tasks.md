@@ -34,7 +34,7 @@ Tests first: write the tests, see them fail, then write the code. One story per 
 - [ ] 3.5 Reconcile entry (design D8): the list banner, ••• › Reconcile and the long-press present the existing flow; a UI test that each opens on the right account
 - [ ] 3.6 Dynamic Type to AX5, VoiceOver labels and custom actions, Dark Mode, Reduce Motion, localization; UX Designer reviews against the frames; notes on the story
 - [ ] 3.7 Fork news entry for the native Accounts screen; file Backlog stories for the follow-ups in design D7 (the "to review" count, per-account bank sync failure; native add and link account is sc-4949)
-- [ ] 3.8 Flip the Accounts switch to on when unset (design D4): show the Settings toggle (hidden until now), `NativeScreenSwitch.isAccountsNative`, the page's `isNativeScreenOn('accounts')` fallback and the Settings default; failing tests first. It lands with the screens in this group, never before
+- [ ] 3.8 Flip the Accounts switch to on when unset (design D4): show the Settings toggle (hidden until now), `NativeScreenSwitch.isAccountsNative`, the page's `isNativeScreenOn('accounts')` fallback and the Settings default; failing tests first. It lands with the screens in this group, never before. It also waits for group 2 of `native-register-upcoming-rows` (sc-4973): until that ships, the native register shows no upcoming rows, because `native/account-register` no longer returns them
 
 ## Mac, deferred to the Mac app (sc-3629)
 

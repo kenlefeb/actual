@@ -499,6 +499,7 @@ public final class AccountRegisterViewModel: ObservableObject {
         pendingSearch?.cancel()
         guard !search.isEmpty || scope != .all else { return }
         search = ""
+        scope = .all
         await load()
     }
 

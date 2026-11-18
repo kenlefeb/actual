@@ -57,7 +57,7 @@ Cleared and uncleared reuse `native/reconcile-tick`, which already refuses recon
 
 ## D4. The switch ships on
 
-`NativeTab.accounts` joins `nativeTabs`. `NativeScreen.accounts` reads **on** when unset (Ken, 2026-11-15, as reconcile does), and web Settings › Native screens stores false to turn it off. The `NativeScreensScript` entry tells the page. With it off, the Accounts tab is the web screens exactly as today.
+`NativeTab.accounts` joins `nativeTabs`. `NativeScreen.accounts` reads **on** when unset (Ken, 2026-11-15, as reconcile does), and web Settings › Native screens stores false to turn it off. The `NativeScreensScript` entry tells the page. With it off, the Accounts tab is the web screens exactly as today. Default stays off until story 3611 ships the screens (Director, 2026-11-17); the flip to on is task 3.8.
 
 ## D5. The overlay
 

@@ -116,4 +116,14 @@ describe('NativeScreens', () => {
     expect(checkbox).not.toBeChecked();
     expect(win.__actualNativeScreens?.reconcile).toBe(false);
   });
+
+  // sc-4931: the Accounts toggle appears with the overlay and tab wiring (task 2.4),
+  // so it does nothing for people until then
+  it('does not offer an Accounts switch yet', () => {
+    insideIosApp();
+    renderSettings();
+    expect(
+      screen.queryByRole('checkbox', { name: /Native Accounts screen/ }),
+    ).not.toBeInTheDocument();
+  });
 });

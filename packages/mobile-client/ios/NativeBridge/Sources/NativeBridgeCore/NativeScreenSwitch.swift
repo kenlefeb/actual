@@ -23,8 +23,9 @@ public enum NativeScreenSwitch {
     }
 
     // sc-4931 (native-accounts-screen D4): the Accounts screen. It reads OFF while unset: the
-    // default flips to on in story 3611's PR, which ships the screens. Until then a person can
-    // turn it on in Settings; with it off the Accounts tab is the web screens as today.
+    // default flips to on, and Settings shows its toggle, in story 3611's PR, which ships the
+    // screens. Until then only developers and tests turn it on, by setting this UserDefaults
+    // key to true (the page toggle is hidden); with it off the Accounts tab is the web screens as today.
     public static let accountsKey = "NativeScreen.accounts"
 
     public static func isAccountsNative(defaults: UserDefaults = .standard) -> Bool {

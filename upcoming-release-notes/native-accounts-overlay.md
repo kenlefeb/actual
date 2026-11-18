@@ -1,6 +1,6 @@
 ---
-category: Enhancements
+category: Maintenance
 authors: [kenlefeb]
 ---
 
-Add a Native Accounts screen switch to iPhone Settings, off by default, that shows a placeholder while the new screens are being built
+Prepare the iPhone Accounts tab for the new native Accounts screens, with no visible change yet

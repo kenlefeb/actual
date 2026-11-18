@@ -24,10 +24,6 @@ export function NativeScreens() {
   const [paychecksOn, setPaychecksOn] = useState(() =>
     isNativeScreenOn('paychecks'),
   );
-  // sc-4931: off until the native Accounts screens are finished (story 3611)
-  const [accountsOn, setAccountsOn] = useState(() =>
-    isNativeScreenOn('accounts'),
-  );
   // sc-4801: on unless turned off here
   const [reconcileOn, setReconcileOn] = useState(() => isNativeReconcileOn());
 
@@ -96,38 +92,6 @@ export function NativeScreens() {
               onChange={() => {
                 setNativeScreenOn('paychecks', !paychecksOn);
                 setPaychecksOn(!paychecksOn);
-              }}
-            />
-          </View>
-        }
-      />
-      <SettingsRow
-        htmlFor="settings-native-accounts"
-        title={<Trans>Native Accounts screen</Trans>}
-        description={
-          <Text>
-            <Trans>
-              Show the Accounts tab as a native iPhone screen. It starts the
-              next time you open Accounts, and is still being built. Turn it off
-              to go back.
-            </Trans>
-          </Text>
-        }
-        control={
-          <View
-            style={{
-              minWidth: 44,
-              minHeight: 44,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Checkbox
-              id="settings-native-accounts"
-              checked={accountsOn}
-              onChange={() => {
-                setNativeScreenOn('accounts', !accountsOn);
-                setAccountsOn(!accountsOn);
               }}
             />
           </View>

@@ -8,7 +8,8 @@ import UIKit
 // `/accounts/<id>` with the tab bar. It stays hidden, so the web screen shows,
 // until loot-core has answered and knows the account; a failed read leaves the
 // web screen too. Story 3611 puts the SwiftUI list and register inside; until
-// then it shows a plain notice that says how to turn the switch off.
+// then it shows a plain notice. Nothing in Settings turns the switch on until then; developers set
+// the UserDefaults key `NativeScreen.accounts` (NativeScreenSwitch.accountsKey) to true.
 final class NativeAccountsViewController: UIHostingController<AccountsNotice> {
     let route: NativeAccountsRoute
     private let model: AccountsListViewModel
@@ -72,7 +73,7 @@ struct AccountsNotice: View {
         VStack(spacing: 12) {
             Text("Accounts")
                 .font(.largeTitle.bold())
-            Text("The native Accounts screen is still being built. Turn it off in Settings › Native screens to use the web screens.")
+            Text("The native Accounts screen is still being built.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

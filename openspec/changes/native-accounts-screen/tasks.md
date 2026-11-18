@@ -16,7 +16,7 @@ Tests first: write the tests, see them fail, then write the code. One story per 
 - [x] 2.1a Undo conflict check (design D3a): the writes record the state they left; `native/undo` refuses and changes nothing when a touched row or account differs since. Failing tests first with an edit applied after the write, as a sync would
 - [x] 2.2 Allowlist the four writes in both lists with `coverage.json` skips; a test that `account-reopen` and `transactions-batch-update` are refused natively
 - [x] 2.3 `NativeScreen.accounts` (design D4): `NativeTab.accounts` in `nativeTabs`, reading on when unset, the script entry, and the toggle in `NativeScreens.tsx`. Failing tests first: unset is on, off is off, the toggle persists across a reload
-  - Temporary (Director, 2026-11-17): the switch defaults to OFF in code, so web `/accounts` is unchanged until the screens exist; the default flip to on is task 3.8. Done in sc-4931: `.accounts` in `nativeTabs`, the script entry, the Settings toggle and the overlay host (2.4).
+  - Temporary (Director, 2026-11-17): the switch defaults to OFF in code, so web `/accounts` is unchanged until the screens exist; the default flip to on is task 3.8. Done in sc-4931: `.accounts` in `nativeTabs`, the script entry and the overlay host (2.4). The Settings toggle is hidden until story 3611 ships the screens; it moves to task 3.8.
 - [x] 2.4 The overlay on the Accounts container and the router (design D5). Failing `NativeBridgeCore` tests first for which paths show native (`/accounts`, `/accounts/<known id>`) and which stay web (`/accounts/all`, unknown ids, `/transactions/<id>`), and for back returning to the register
 - [x] 2.4a `webAccountAction` chrome message (design D7a): the closed action set, an account id required and known for `account-settings` and `bank-sync`, origin-checked; the page opens the existing add-account, link-account, account-menu and bank-sync flows, and the overlay steps aside and re-reads on close. Failing tests first on both sides
   - Done: `WebAccountAction`, the app's `handOff`, the page's `webAccountAction`, and the page flows it opens (the add-account dialog for add and link, the bank sync page, and the account page with its menu open). The overlay steps aside while a sheet or the web editor hides the tab bar and is built again, re-reading, on return.
@@ -34,7 +34,7 @@ Tests first: write the tests, see them fail, then write the code. One story per 
 - [ ] 3.5 Reconcile entry (design D8): the list banner, ••• › Reconcile and the long-press present the existing flow; a UI test that each opens on the right account
 - [ ] 3.6 Dynamic Type to AX5, VoiceOver labels and custom actions, Dark Mode, Reduce Motion, localization; UX Designer reviews against the frames; notes on the story
 - [ ] 3.7 Fork news entry for the native Accounts screen; file Backlog stories for the follow-ups in design D7 (the "to review" count, per-account bank sync failure; native add and link account is sc-4949)
-- [ ] 3.8 Flip the Accounts switch to on when unset (design D4): `NativeScreenSwitch.isAccountsNative`, the page's `isNativeScreenOn('accounts')` fallback and the Settings default; failing tests first. It lands with the screens in this group, never before
+- [ ] 3.8 Flip the Accounts switch to on when unset (design D4): show the Settings toggle (hidden until now), `NativeScreenSwitch.isAccountsNative`, the page's `isNativeScreenOn('accounts')` fallback and the Settings default; failing tests first. It lands with the screens in this group, never before
 
 ## Mac, deferred to the Mac app (sc-3629)
 

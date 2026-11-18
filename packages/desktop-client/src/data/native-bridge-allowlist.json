@@ -36,5 +36,6 @@
   "native/settings-save",
   "native/transaction-form",
   "native/payees",
-  "native/transaction-preview"
+  "native/transaction-preview",
+  "native/transaction-save"
 ]

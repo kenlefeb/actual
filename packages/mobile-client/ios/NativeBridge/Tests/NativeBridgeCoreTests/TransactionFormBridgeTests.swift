@@ -127,4 +127,32 @@ final class TransactionFormContractTests: XCTestCase {
         XCTAssertEqual(
             try JSONSerialization.jsonObject(with: data) as? [String: String], ["id": "t", "account_id": "a"])
     }
+
+    // D3 and D4: the save is a typed write; loose arguments never reach the page
+    func testTheSaveIsATypedWriteAndReturnsTheId() async throws {
+        var seen: [(String, String)] = []
+        let client = NativeBridgeClient { name, args in
+            seen.append((name, args))
+            return #"{"id":"n"}"#
+        }
+        let draft = TransactionDraft(
+            newId: "0b5f2c1e-8d3a-4f6b-9c2d-1a2b3c4d5e6f", id: nil, account: "a", date: "2016-12-20", payee: nil,
+            payeeName: nil, category: nil, notes: "", cleared: false, inflow: false, amountText: "1", splits: [],
+            userFields: [])
+        let saved = try await client.saveTransaction(
+            try TransactionSave(draft: draft, previewDigest: "p", digest: nil, undoToken: "T"))
+        XCTAssertEqual(saved, TransactionSaveResult(id: "n"))
+        XCTAssertEqual(seen.map(\.0), ["native/transaction-save"])
+        XCTAssertTrue(seen[0].1.contains(#""confirmedReconciled":false"#))
+        XCTAssertTrue(seen[0].1.contains(#""undoToken":"T""#))
+        XCTAssertTrue(seen[0].1.contains(#""previewDigest":"p""#))
+        do {
+            _ = try await client.call("native/transaction-save", args: ["draft": "x"])
+            XCTFail("the save took loose arguments")
+        } catch NativeBridgeError.invalidWrite {
+        }
+        XCTAssertTrue(NativeBridgeAllowlist.transactionWrites.contains("native/transaction-save"))
+        XCTAssertThrowsError(try TransactionSave(draft: draft, digest: nil, undoToken: ""))
+        XCTAssertEqual(seen.count, 1)
+    }
 }

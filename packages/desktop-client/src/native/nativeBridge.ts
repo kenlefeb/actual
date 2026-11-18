@@ -284,6 +284,12 @@ const TRANSACTION_FIELDS = new Map([
   ['native/transaction-form', ['id', 'account_id']],
   ['native/payees', ['search']],
   ['native/transaction-preview', ['draft']],
+  // D3: loot-core refuses a missing token as invalid-draft and reads
+  // learn-categories from the budget; previewDigest binds an add to its preview
+  [
+    'native/transaction-save',
+    ['draft', 'previewDigest', 'digest', 'undoToken', 'confirmedReconciled'],
+  ],
 ]);
 
 function pickFields(args: unknown, fields: string[]) {

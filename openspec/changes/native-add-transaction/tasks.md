@@ -68,7 +68,7 @@
     - the upstream edit is only `runRules`'s optional parameter and the branch around `insertPayee` in `transaction-rules.ts`, with `rules-run` and the default unchanged (a test that the default still creates the payee);
     - the split count is checked before any child is evaluated or looked up;
   - Add the fixtures `transaction-preview.json` and `transaction-field-errors.json`, with a test that the field codes and the refusal codes share no code.
-- [ ] 1.4 `native/transaction-save` (design D3), in the order of D3.
+- [x] 1.4 `native/transaction-save` (design D3), in the order of D3.
   - Write failing tests first:
     - no undo token, or a bad shape, is `[native:invalid-draft]`;
     - a repeated `newId`:
@@ -105,10 +105,10 @@
     - evaluating `amountText` is not a difference;
     - a rule change to any rule-settable field on any row refuses with `preview-stale` before any write, whether or not a preview was answered.
   - Tests that a transfer payee of the transaction's own account is refused with `transfer-same-account`, and one of a closed account with `account-closed`.
-- [ ] 1.4a Add the reconciled-split-parent rule to `native/transactions-delete`. Write failing tests first: a partner inside a reconciled split needs `confirmedReconciled`.
-- [ ] 1.5 Undo conflict check for saves (design D3). The save records `readTouchedState`. `native/undo` refuses with `[native:undo-changed-since]` after a later change to a touched row.
+- [x] 1.4a Add the reconciled-split-parent rule to `native/transactions-delete`. Write failing tests first: a partner inside a reconciled split needs `confirmedReconciled`.
+- [x] 1.5 Undo conflict check for saves (design D3). The save records `readTouchedState`. `native/undo` refuses with `[native:undo-changed-since]` after a later change to a touched row.
   - Write failing tests first, with an edit applied after the save, as a sync would apply it.
-- [ ] 1.6 `transaction-form.perf.test.ts` (design D5). Use the stated seed and the six measurements, each with a median under 50 ms. Print the median and p95. If the rules cases miss 50 ms, stop and report the numbers to the Director before changing the design.
+- [x] 1.6 `transaction-form.perf.test.ts` (design D5). Use the stated seed and the six measurements, each with a median under 50 ms. Print the median and p95. If the rules cases miss 50 ms, stop and report the numbers to the Director before changing the design.
 - [ ] 1.7 Allowlists (design D4):
   - add the four names to `native-bridge-allowlist.json` and the Swift client list, with a test that the lists are equal;
   - add the page argument lists in `nativeBridge.ts`, with a test that extra fields are dropped;

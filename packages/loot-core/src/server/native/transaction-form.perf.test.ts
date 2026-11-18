@@ -2,8 +2,8 @@
 // Fork-only (sc-3602, native-add-transaction D5). On 5,000 payees, 40
 // accounts, 150 categories, 300 rules (payee, notes and amount conditions and
 // a split action) and a 50-child split, times the payee search, the two
-// previews and the form read (ADR 11 gate: median under 50 ms). The save's
-// measurement lands with the save. Prints the median and p95 every run.
+// previews, the form read and a new transaction's save (ADR 11 gate: median
+// under 50 ms). Prints the median and p95 every run.
 import * as db from '#server/db';
 import { loadMappings } from '#server/db/mappings';
 import * as prefs from '#server/prefs';
@@ -238,6 +238,17 @@ describe('native transaction form reads', () => {
           id: 'split',
         });
         expect(transaction?.splits).toHaveLength(CHILDREN);
+      }),
+    ).toBeLessThan(50);
+    // D3: every rule is checked against the draft, and none applies to this payee
+    expect(
+      await time('native/transaction-save, a new transaction', async () => {
+        const newId = crypto.randomUUID();
+        const { id } = await h['native/transaction-save']({
+          draft: { ...draft, newId, payee: 'p4000' },
+          undoToken: newId,
+        });
+        expect(id).toBe(newId);
       }),
     ).toBeLessThan(50);
   }, 600_000);

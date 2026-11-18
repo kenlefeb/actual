@@ -213,6 +213,43 @@ describe('native/transactions-categorize', () => {
 });
 
 describe('native/transactions-delete', () => {
+  // sc-3602 (native-add-transaction task 1.4a, Security #416 finding C)
+  it('needs confirmedReconciled when the partner is a child of a reconciled split', async () => {
+    await batchUpdateTransactions({
+      added: [
+        {
+          id: 'sp',
+          account: 'savings',
+          date: '2016-12-20',
+          amount: 500,
+          is_parent: true,
+        },
+        {
+          id: 'sp/a',
+          account: 'savings',
+          date: '2016-12-20',
+          payee: 'to-checking',
+          amount: 500,
+          is_child: true,
+          parent_id: 'sp',
+        },
+      ] as never,
+    });
+    await db.update('transactions', { id: 'sp', reconciled: 1 });
+    const partner = (
+      await db.first<{ transferred_id: string }>(
+        "SELECT transferred_id FROM transactions WHERE id = 'sp/a'",
+      )
+    )?.transferred_id as string;
+    expect((await row('sp/a'))?.reconciled).toBe(0);
+    await expect(remove({ ids: [partner] })).rejects.toThrow(
+      /^\[native:needs-confirmed-reconciled\] /,
+    );
+    expect((await row(partner))?.tombstone).toBe(0);
+    await remove({ ids: [partner], confirmedReconciled: true });
+    expect((await row(partner))?.tombstone).toBe(1);
+  });
+
   it('deletes the rows as one undo step', async () => {
     await remove({ ids: ['t1', 't2'] });
     expect((await row('t1'))?.tombstone).toBe(1);

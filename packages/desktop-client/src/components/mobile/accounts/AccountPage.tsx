@@ -245,6 +245,14 @@ function AccountHeader({ account }: { readonly account: AccountEntity }) {
   useEffect(() => {
     if (!asked || handledMenuRequests.has(location.key)) return;
     handledMenuRequests.add(location.key);
+    // The record above is page memory; a web-view reload would read the flag
+    // from the history entry again. Drop it there too, without navigating, so
+    // the router (and Modals) see no location change (#458 review).
+    const entry = window.history.state as { usr?: Record<string, unknown> } | null;
+    if (entry?.usr?.openAccountMenu) {
+      const { openAccountMenu: _handled, ...usr } = entry.usr;
+      window.history.replaceState({ ...entry, usr }, '');
+    }
     onClick();
   }, [asked, onClick, location.key]);
 

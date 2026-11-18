@@ -2,7 +2,10 @@ import express from 'express';
 import rateLimit from 'express-rate-limit';
 
 import { disableOpenID, enableOpenID, isAdmin } from './account-db';
-import { isValidRedirectUrl, loginWithOpenIdFinalize } from './accounts/openid';
+import {
+  isAllowedRedirectTarget,
+  loginWithOpenIdFinalize,
+} from './accounts/openid';
 import { checkPassword } from './accounts/password';
 import * as UserService from './services/user-service';
 import {
@@ -104,7 +107,7 @@ app.get('/callback', async (req, res) => {
     return;
   }
 
-  if (!isValidRedirectUrl(url)) {
+  if (!isAllowedRedirectTarget(url)) {
     res.status(400).send({ status: 'error', reason: 'Invalid redirect URL' });
     return;
   }

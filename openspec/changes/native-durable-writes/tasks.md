@@ -6,11 +6,11 @@
   - writes settle on `complete`, and on `abort` and `error`;
   - the chain advances in order with values captured at flush time;
   - `lastStoredFlushAt` is the last stored write's flush time, and `quota` is set on a quota error;
-  - the latch stops writes and raises `fallback-write-error` and `storage-failed`;
+  - the latch stops writes and raises `storage-failed` (`fallback-write-error` only on a conflict);
   - `whenPersisted` and `storageState`;
   - SharedArrayBuffer mode resolves at once (design D2, D12).
 - [ ] 1.2 `yarn patch absurd-sql@0.0.54`: rewrite `Persistance.write` to settle on the transaction; capture values at flush time; the chain, the latch, `lastStoredFlushAt`, `quota`, `whenPersisted` and `storageState`; failures raise `onFallbackFailure`. Keep the MIT notice and a header naming sc-5219. Add the root `resolutions` entry. `yarn install --immutable` passes with the lock's patch hash (D1, D2)
-- [ ] 1.3 `whenPersisted()` and `storageState()` in `platform/server/fs/index.ts` (fork-marked), and resolving versions in `index.electron.ts` and `index.api.ts` (D2, "Only the native shells wait for storage")
+- [ ] 1.3 `whenPersisted()` and `storageState()` in `platform/server/fs/index.ts` (fork-marked), and resolving versions in `index.electron.ts` and `index.api.ts` (D2, "Durable platforms do not wait for storage")
 - [ ] 1.4 Failing tests first for `native/persisted` (stored, not stored on timeout, `[native:not-stored]`), `native/storage-state` and the limit with floor and ceiling. Then:
   - both handlers;
   - `not-stored` in `refusal.ts` and `native-refusal-codes.json`;
@@ -32,6 +32,9 @@
   - the two-call write returning `stored`, with only `native/persisted` retried;
   - "Saving…" until stored, and "Saved here, not yet stored on this device." on `stored: false`, cleared on `stored`;
   - the persistent app-level failure notice with `lastStoredFlushAt` and Reload, and the device-full variant (the Product Owner's four sentences), the time to the second and truncated, and the no-time sentence when nothing stored this session;
+  - the restart form on iPhone and Mac: its copy with and without a time, OK, no Reload, repeated restarts, and a manual Reload showing no restart notice (D5a);
+  - the failure notice replacing the reload notice at once, and no reload notice while it shows;
+  - the held cut-off: the earlier time kept on a new failure, and a load time used instead of "since you opened the app" after any reload;
   - `[native:not-stored]` mapping;
   - copy-table keys, with the failure wording sent to the Product Owner for approval (D3, D5).
 - [ ] 3.2 Lifecycle:
@@ -45,3 +48,11 @@
   - iPhone simulator: the same loop.
   - Put the before and after counts in the PR (D12).
 - [ ] 3.5 Run the `NativeBridgeCore` tests, the Mac tests and the iOS build; all pass. The next TestFlight build carries this change (Product Owner, comment 5222)
+
+## 4. Review decisions from the engine PR (sc-5219)
+
+- [ ] 4.1 Failing tests first, then the engine: a timed-out sync wait raises `storage-slow`, emits no success, sends nothing and schedules a retry; `storage-stored` follows a timed-out `native/persisted`; `storage-close-failed` fires once for a closed file and does not latch (D4, D6, D7a)
+- [ ] 4.2 The page bridge forwards `storage-stored` as `stored`; `storage-slow` and `storage-failed` join the sync reasons in the page and Swift
+- [ ] 4.3 Fallback-mode browsers: `fallback-write-error` only on a conflict, `conflict` on `storage-failed`, the sticky notification with Reload, no alert for `storage-slow`, and no web notification in the shells (D7a)
+- [ ] 4.4 `floor` in `native/settings`, its fixture and Swift decoding; the native and web Limits screens bounded to floor through ceiling (D7)
+- [ ] 4.5 The closed-budget notice in the shells and browsers, with its wording in the copy table for the Product Owner's approval

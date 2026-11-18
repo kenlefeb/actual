@@ -129,7 +129,67 @@ public struct AccountRegisterRequest: Encodable, Equatable {
     }
 }
 
+// sc-4973 (native-register-upcoming-rows D7, D8): `native/account-upcoming`,
+// read after the register's first page. Rows are as they will post, after the
+// schedule's rules; the count, total and caps are loot-core's.
+public struct AccountUpcoming: Codable, Equatable {
+    public enum Status: String, Codable {
+        case due, upcoming, missed
+    }
+
+    public struct Row: Codable, Equatable, Identifiable {
+        // `preview/<schedule>/<date>`, or `preview/` plus a split line's id
+        public let id: String
+        public let scheduleId: String
+        public let date: String
+        public let payee: String?
+        public let category: String?
+        public let categoryId: String?
+        public let notes: String?
+        // Signed for this account
+        public let amount: Int
+        public let cleared: Bool
+        public let splitCount: Int
+        // sc-5224: a split's other line payees; nil from an older loot-core
+        public let otherPayees: Int?
+        public let transferAccount: AccountRegister.TransferAccount?
+        public let status: Status
+        // payee, category, amount, notes, date, cleared, splits: what the rules changed
+        public let ruleFields: [String]
+    }
+
+    public let upcoming: [Row]
+    // The returned rows only, never rows past the caps
+    public let upcomingCount: Int
+    public let upcomingTotal: Int
+    // The day cap, only when it hid a row
+    public let upcomingCapDays: Int?
+    // Only when the row cap stopped with more left: the occurrences kept
+    public let upcomingKept: Int?
+    public let upcomingMore: Bool?
+}
+
+public struct AccountUpcomingRequest: Encodable, Equatable {
+    public let accountId: String
+    public let scope: AccountRegisterScope
+    public let search: String?
+
+    public init(accountId: String, scope: AccountRegisterScope = .all, search: String? = nil) throws {
+        let register = try AccountRegisterRequest(accountId: accountId, scope: scope, search: search)
+        (self.accountId, self.scope, self.search) = (register.accountId, register.scope, register.search)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case accountId = "account_id"
+        case scope, search
+    }
+}
+
 extension NativeBridgeClient {
+    public func accountUpcoming(_ request: AccountUpcomingRequest) async throws -> AccountUpcoming {
+        try JSONDecoder().decode(AccountUpcoming.self, from: await call("native/account-upcoming", args: request))
+    }
+
     public func accountsList() async throws -> AccountsList {
         try JSONDecoder().decode(AccountsList.self, from: await call("native/accounts-list"))
     }

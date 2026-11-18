@@ -164,4 +164,51 @@ final class AccountsBridgeTests: XCTestCase {
         XCTAssertEqual(seen[1].0, "native/account-register")
         XCTAssertEqual(seen[1].1, #"{"account_id":"checking","cursor":"c","scope":"uncleared","search":"a%"}"#)
     }
+
+    // sc-4973 (native-register-upcoming-rows): `native/account-upcoming`, read
+    // after the register's first page. The fixture is loot-core's, keyed by account.
+    func testDecodesTheUpcomingFixture() throws {
+        let object = try JSONSerialization.jsonObject(with: fixture("account-register-upcoming")) as! [String: Any]
+        let checking = try JSONSerialization.data(withJSONObject: object["checking"]!)
+        let read = try JSONDecoder().decode(AccountUpcoming.self, from: checking)
+        XCTAssertEqual(read.upcoming.map(\.id), ["preview/schedule-save/2017-01-06", "preview/schedule-split/2017-01-05"])
+        XCTAssertEqual(read.upcoming[0].transferAccount, AccountRegister.TransferAccount(id: "savings", name: "Savings"))
+        XCTAssertEqual(read.upcoming[0].status, .upcoming)
+        XCTAssertEqual(read.upcoming[1].splitCount, 2)
+        XCTAssertEqual(read.upcoming[1].ruleFields, ["payee", "splits"])
+        XCTAssertEqual(read.upcomingCount, 2)
+        XCTAssertEqual(read.upcomingTotal, -57000)
+        XCTAssertNil(read.upcomingCapDays)
+        XCTAssertNil(read.upcomingMore)
+        XCTAssertTrue(try roundTrips(AccountUpcoming.self, checking))
+        let savings = try JSONDecoder().decode(
+            AccountUpcoming.self, from: try JSONSerialization.data(withJSONObject: object["savings"]!))
+        // The split line into Savings, inverted: `preview/` plus its line id
+        XCTAssertEqual(savings.upcoming.map(\.id), ["preview/schedule-save/2017-01-06", "preview/schedule-split/2017-01-05/1"])
+        XCTAssertEqual(savings.upcomingTotal, 27000)
+    }
+
+    func testDecodesTheCapsOfTheUpcomingRead() throws {
+        let data = Data(#"{"upcoming":[],"upcomingCount":0,"upcomingTotal":0,"upcomingCapDays":92,"upcomingKept":100,"upcomingMore":true}"#.utf8)
+        let read = try JSONDecoder().decode(AccountUpcoming.self, from: data)
+        XCTAssertEqual(read.upcomingCapDays, 92)
+        XCTAssertEqual(read.upcomingKept, 100)
+        XCTAssertEqual(read.upcomingMore, true)
+        XCTAssertTrue(try roundTrips(AccountUpcoming.self, data))
+    }
+
+    func testTheUpcomingReadSendsAccountScopeAndSearchOnly() async throws {
+        var seen: [(String, String)] = []
+        let client = NativeBridgeClient { name, args in
+            seen.append((name, args))
+            return #"{"upcoming":[],"upcomingCount":0,"upcomingTotal":0}"#
+        }
+        _ = try await client.accountUpcoming(try AccountUpcomingRequest(accountId: "checking", scope: .uncleared, search: "rent"))
+        _ = try await client.accountUpcoming(try AccountUpcomingRequest(accountId: "checking"))
+        XCTAssertEqual(seen.map(\.0), ["native/account-upcoming", "native/account-upcoming"])
+        XCTAssertEqual(seen[0].1, #"{"account_id":"checking","scope":"uncleared","search":"rent"}"#)
+        XCTAssertEqual(seen[1].1, #"{"account_id":"checking","scope":"all"}"#)
+        XCTAssertThrowsError(try AccountUpcomingRequest(accountId: ""))
+        XCTAssertThrowsError(try AccountUpcomingRequest(accountId: "a", search: String(repeating: "😀", count: 51)))
+    }
 }

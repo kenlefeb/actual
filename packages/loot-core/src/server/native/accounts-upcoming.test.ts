@@ -23,7 +23,11 @@ import {
 import type { ScheduleStatuses } from '#shared/schedules';
 import type * as Schedules from '#shared/schedules';
 import { ungroupTransactions } from '#shared/transactions';
-import type { AccountEntity, ScheduleEntity } from '#types/models';
+import type {
+  AccountEntity,
+  ScheduleEntity,
+  TransactionEntity,
+} from '#types/models';
 
 import { schedulesWithTransactions } from './accounts';
 import { app } from './app';
@@ -229,6 +233,7 @@ describe('native/account-upcoming', () => {
         amount: -9000,
         cleared: false,
         splitCount: 0,
+        otherPayees: 0,
         transferAccount: null,
         status: 'upcoming',
         ruleFields: ['payee', 'category'],
@@ -243,8 +248,10 @@ describe('native/account-upcoming', () => {
         id: `preview/${id}/2017-01-05`,
         amount: -50000,
         splitCount: 2,
-        // The rules clear a split parent's payee when its lines differ
-        payee: null,
+        // As the web shows a split (useDisplayPayee): its lines' most common
+        // payee, here a tie the first line wins, and how many others there are
+        payee: 'Savings',
+        otherPayees: 1,
         ruleFields: ['payee', 'splits'],
       }),
     ]);
@@ -277,6 +284,172 @@ describe('native/account-upcoming', () => {
     expect(read.upcoming).toEqual([
       expect.objectContaining({ payee: 'Brand New Payee', amount: -500 }),
     ]);
+  });
+
+  // sc-5196: search matches the name a row shows, even before its payee exists
+  it('finds a row by a payee name no payee has yet, still creating nothing', async () => {
+    await addSchedule('Named', {
+      date: '2017-01-03',
+      amount: -500,
+      actions: [{ op: 'set', field: 'payee_name', value: 'Brand New Payee' }],
+    });
+    // A split whose line names a new payee: the line's name finds its row
+    await addSchedule('Lines', {
+      date: '2017-01-04',
+      amount: -900,
+      payee: 'grocer',
+      actions: [
+        {
+          op: 'set-split-amount',
+          field: 'amount',
+          value: -100,
+          options: { splitIndex: 1, method: 'fixed-amount' },
+        },
+        {
+          op: 'set',
+          field: 'payee_name',
+          value: 'Line Shop',
+          options: { splitIndex: 1 },
+        },
+        {
+          op: 'set-split-amount',
+          field: 'amount',
+          options: { splitIndex: 2, method: 'remainder' },
+        },
+      ],
+    });
+    const payees = async () =>
+      (await db.all<{ n: number }>('SELECT COUNT(*) AS n FROM payees'))[0].n;
+    const before = await payees();
+    const amounts = async (over: Partial<Args>) =>
+      (await upcoming(over)).upcoming.map(r => r.amount);
+    expect(await amounts({ search: 'brand new' })).toEqual([-500]);
+    expect(await amounts({ search: 'line shop' })).toEqual([-900]);
+    expect(await amounts({ search: 'nobody' })).toEqual([]);
+    // The chips are as before: both rows are uncleared, only the plain one
+    // is uncategorized (a split parent never is)
+    expect(await amounts({ scope: 'uncleared' })).toEqual([-900, -500]);
+    expect(await amounts({ scope: 'uncategorized' })).toEqual([-500]);
+    expect(await payees()).toBe(before);
+  });
+
+  // sc-5224: a split parent shows the payee the web shows for it
+  describe('a split parent', () => {
+    const lines = (one: Action[] = [], two: Action[] = []) => [
+      {
+        op: 'set-split-amount',
+        field: 'amount',
+        value: -4000,
+        options: { splitIndex: 1, method: 'fixed-amount' },
+      },
+      ...one.map(a => ({ ...a, options: { splitIndex: 1 } })),
+      {
+        op: 'set-split-amount',
+        field: 'amount',
+        options: { splitIndex: 2, method: 'remainder' },
+      },
+      ...two.map(a => ({ ...a, options: { splitIndex: 2 } })),
+    ];
+    const payeeOf = (to: string) => ({ op: 'set', field: 'payee', value: to });
+    const row = async () => (await upcoming()).upcoming[0];
+
+    it('keeps the payee both lines keep, with no rule-set payee', async () => {
+      await addSchedule('Kept', {
+        date: '2017-01-03',
+        amount: -9000,
+        payee: 'power',
+        actions: lines(),
+      });
+      expect(await row()).toMatchObject({
+        payee: 'Power Co',
+        otherPayees: 0,
+        splitCount: 2,
+        ruleFields: ['splits'],
+      });
+    });
+
+    it('shows the first of its lines payees and counts the others', async () => {
+      await addSchedule('Two', {
+        date: '2017-01-03',
+        amount: -9000,
+        payee: 'power',
+        actions: lines([payeeOf('grocer')], [payeeOf('power')]),
+      });
+      expect(await row()).toMatchObject({ payee: 'Grocer', otherPayees: 1 });
+    });
+
+    it('ignores a line with no payee', async () => {
+      await addSchedule('Half', {
+        date: '2017-01-03',
+        amount: -9000,
+        payee: 'power',
+        actions: lines([payeeOf(null as never)]),
+      });
+      expect(await row()).toMatchObject({ payee: 'Power Co', otherPayees: 0 });
+    });
+
+    it('has no payee when no line has one', async () => {
+      await addSchedule('None', {
+        date: '2017-01-03',
+        amount: -9000,
+        actions: lines(),
+      });
+      expect(await row()).toMatchObject({ payee: null, otherPayees: 0 });
+    });
+
+    it('shows a payee a rule sets on the whole split, which its lines inherit', async () => {
+      await addSchedule('Set', {
+        date: '2017-01-03',
+        amount: -9000,
+        payee: 'grocer',
+        actions: [payeeOf('power'), ...lines()],
+      });
+      expect(await row()).toMatchObject({
+        payee: 'Power Co',
+        otherPayees: 0,
+        ruleFields: ['payee', 'splits'],
+      });
+    });
+
+    // Can't tell "parent wins" from "lines win": the engine clears a split parent's payee after rules
+    it('takes a split payee from its lines when a rule sets a different payee on the parent', async () => {
+      await addSchedule('Differs', {
+        date: '2017-01-03',
+        amount: -9000,
+        payee: 'grocer',
+        actions: [
+          payeeOf('power'),
+          ...lines([payeeOf('grocer')], [payeeOf('grocer')]),
+        ],
+      });
+      expect(await row()).toMatchObject({
+        payee: 'Grocer',
+        otherPayees: 0,
+        ruleFields: ['splits'],
+      });
+    });
+
+    // The web names a transfer payee by its account, whatever the payee is called
+    it('names a transfer line by its account', async () => {
+      await db.update('payees', { id: 'to-savings', name: 'Renamed payee' });
+      await addSchedule('To savings', {
+        date: '2017-01-03',
+        amount: -9000,
+        payee: 'to-savings',
+        actions: lines(),
+      });
+      expect(await row()).toMatchObject({ payee: 'Savings', otherPayees: 0 });
+    });
+  });
+
+  it('names a plain transfer by its account, not its payee', async () => {
+    await db.update('payees', { id: 'to-savings', name: 'Renamed payee' });
+    await addSchedule('Save', {
+      date: '2017-01-03',
+      amount: -7000,
+      payee: 'to-savings',
+    });
+    expect((await upcoming()).upcoming[0]).toMatchObject({ payee: 'Savings' });
   });
 
   it('inverts a plain transfer into the account, naming the other account', async () => {
@@ -376,6 +549,24 @@ describe('native/account-upcoming', () => {
 
   it('equals the web preview for the same budget, unfiltered and within the cap', async () => {
     await addSplit();
+    // sc-5224: a split whose lines keep the schedule's payee
+    await addSchedule('Kept', {
+      date: '2017-01-04',
+      amount: -3000,
+      payee: 'power',
+      actions: [
+        {
+          op: 'set-split-amount',
+          field: 'amount',
+          options: { splitIndex: 1, method: 'remainder' },
+        },
+        {
+          op: 'set-split-amount',
+          field: 'amount',
+          options: { splitIndex: 2, method: 'remainder' },
+        },
+      ],
+    });
     await addSchedule('Save', {
       date: '2017-01-06',
       amount: -7000,
@@ -861,6 +1052,32 @@ async function webPreview(account: string) {
     getPayeeByTransferAccount,
     getTransferAccountByPayee,
   });
+  // The web's split payee (useDisplayPayee): the lines' most common payee,
+  // the first to reach the top count winning a tie, and the other payees
+  const displayPayee = (t: TransactionEntity) => {
+    const lines = ungrouped.filter(c => c.parent_id === t.id);
+    const nameOf = (id?: string | null) => {
+      const payee = payees.find(p => p.id === id);
+      const account = accounts.find(a => a.id === payee?.transfer_acct);
+      return account?.name ?? payee?.name ?? null;
+    };
+    if (lines.length === 0) return { payee: nameOf(t.payee), otherPayees: 0 };
+    const counts = new Map<string, number>();
+    let top: string | null = null;
+    let max = 0;
+    for (const line of lines) {
+      if (!line.payee) continue;
+      counts.set(line.payee, (counts.get(line.payee) ?? 0) + 1);
+      if ((counts.get(line.payee) ?? 0) > max) {
+        max = counts.get(line.payee) ?? 0;
+        top = line.payee;
+      }
+    }
+    return {
+      payee: top ? nameOf(top) : null,
+      otherPayees: top ? counts.size - 1 : 0,
+    };
+  };
   return transactions
     .filter(t => !t.parent_id)
     .map(t => {
@@ -873,7 +1090,7 @@ async function webPreview(account: string) {
             )
           : t.id,
         date: t.date,
-        payee: payees.find(p => p.id === t.payee)?.name ?? null,
+        ...displayPayee(t),
         category: (t as { inversed?: boolean }).inversed
           ? null
           : (categories.find(c => c.id === t.category)?.name ?? null),

@@ -63,7 +63,7 @@ Upcoming rows are never part of the register read or its keyset (D7), so cursors
 
 ### D5. Horizon
 
-The window stays the budget's `upcomingScheduledTransactionLength` preference (default 7 days) and each schedule's `custom_upcoming_length`, as on the web. It is capped by `accounts-register-upcoming-max-days` in `LIMITS` (default 92, ceiling 366). Rows dated after today plus the cap are dropped before rules run. A missing or bad value falls back to 92. No refusal is added. When the cap dropped any row, the upcoming read returns `upcomingCapDays`, and the register shows "Scheduled rows shown up to N days; change this in Settings > Limits." The web equality holds only within the cap.
+The window stays the budget's `upcomingScheduledTransactionLength` preference (default 7 days) and each schedule's `custom_upcoming_length`, as on the web. It is capped by `accounts-register-upcoming-max-days` in `LIMITS` (default 92, ceiling 366). Rows dated after today plus the cap are dropped before rules run. A missing or bad value falls back to 92. No refusal is added. When the cap dropped any row, the upcoming read returns `upcomingCapDays`, and the register shows "Scheduled rows shown up to N days; change this in Settings > Advanced > Limits." The web equality holds only within the cap.
 
 The limit is listed in native Settings' Limits section with the label "Scheduled rows: days ahead" and text saying it caps the budget's upcoming length. That section is story 4643's: it lists every entry in `LIMITS`, so this change adds the entry and its label, and depends on 4643 for the screen (Product Owner review, item 1).
 
@@ -128,7 +128,7 @@ Relevance (`isScheduleRelevantToAccount`) needs no status, so it runs first. Sta
 
 ### D11. Answers to the developer's questions
 
-- **A split schedule's parent row has payee null:** intended. `runRules` with split actions leaves the parent without a payee, the web preview shows the same, and so does the posted split. The row shows "Split (n)" as posted split parents do.
+- **A split schedule's parent row shows the payee the web shows** (corrected by sc-5224): `runRules` leaves the parent without a payee, and the web names it from its lines (`useDisplayPayee`: the most common line payee, "(+N more)" for the others, "Split (no payee)" when none has one), so loot-core returns that payee and `otherPayees`.
 - **A formula on the payee field does nothing:** right. The rules engine does not apply formulas to `payee`. Relevance still treats a formula or template line as maybe relevant. The spec scenario now uses a template action, as the test does.
 - **No label field in `LIMITS`:** both limits join story 4643's registry with a name and help line when it lands:
   - `accounts-register-upcoming-max-days`: "Scheduled rows: days ahead", help "Caps the budget's upcoming scheduled length in the native register."

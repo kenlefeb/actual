@@ -52,6 +52,110 @@ public struct RegisterDay: Equatable, Identifiable {
 }
 
 // The search footer: "N results" and their total, both loot-core's (D1)
+// sc-4973 (native-register-upcoming-rows): the upcoming section's words. Every
+// number is loot-core's; nothing is counted or summed here.
+public enum UpcomingWords {
+    public static let loading = NSLocalizedString("Loading scheduled…", comment: "Native Accounts register: upcoming rows in flight")
+    public static let failed = NSLocalizedString(
+        "Couldn't load scheduled rows. Try again.", comment: "Native Accounts register: upcoming rows failed")
+    public static let updating = NSLocalizedString("Updating…", comment: "Native Accounts register: upcoming rows being re-read")
+    public static let scheduled = NSLocalizedString("Scheduled", comment: "Native Accounts register: an upcoming row, in words")
+
+    // sc-5224: as the web names a row; a split reads as its lines' payee
+    public static func payee(_ row: AccountUpcoming.Row) -> String {
+        // The web names a split by its lines alone, never by its notes
+        let candidates = row.splitCount > 0 ? [row.payee] : [row.payee, row.transferAccount?.name, row.notes]
+        guard let name = candidates.compactMap({ $0 }).first(where: { !$0.isEmpty }) else {
+            return row.splitCount > 0
+                ? NSLocalizedString("Split (no payee)", comment: "Native Accounts register: a split with no payee on any line")
+                : NSLocalizedString("No payee", comment: "Native Accounts register: a row without a payee")
+        }
+        guard let others = row.otherPayees, others > 0 else { return name }
+        return String(
+            format: NSLocalizedString("%1$@ (+%2$d more)", comment: "Native Accounts register: a split with several payees"), name,
+            others)
+    }
+
+    public static func summary(_ read: AccountUpcoming, filtered: Bool) -> String {
+        guard read.upcomingMore == true, let kept = read.upcomingKept else {
+            return String(format: NSLocalizedString("%d scheduled", comment: "Native Accounts register: upcoming count"), read.upcomingCount)
+        }
+        if filtered {
+            return String(
+                format: NSLocalizedString(
+                    "%1$d scheduled in the first %2$d; more not shown or searched",
+                    comment: "Native Accounts register: upcoming count, capped and filtered"), read.upcomingCount, kept)
+        }
+        return String(
+            format: NSLocalizedString("First %d scheduled; more not shown", comment: "Native Accounts register: upcoming count, capped"), kept)
+    }
+
+    // Before loot-core's total; a capped total is the shown rows' only
+    public static func totalLabel(_ read: AccountUpcoming) -> String {
+        read.upcomingMore == true
+            ? NSLocalizedString("Total of the rows shown: ", comment: "Native Accounts register: upcoming total, capped")
+            : NSLocalizedString("Scheduled total: ", comment: "Native Accounts register: upcoming total")
+    }
+
+    public static func capNotice(_ read: AccountUpcoming) -> String? {
+        read.upcomingCapDays.map {
+            String(
+                format: NSLocalizedString(
+                    "Scheduled rows shown up to %d days; change this in Settings > Advanced > Limits.",
+                    comment: "Native Accounts register: the days-ahead limit hid rows"), $0)
+        }
+    }
+
+    public static func moreNotice(_ read: AccountUpcoming) -> String? {
+        guard read.upcomingMore == true else { return nil }
+        return NSLocalizedString(
+            "More scheduled rows are not shown or searched. To see more, raise Scheduled rows: most shown in Settings > Advanced > Limits (up to 500).",
+            comment: "Native Accounts register: the most-shown limit hid rows")
+    }
+
+    // loot-core's field names, in its order, as words
+    public static func ruleFields(_ fields: [String]) -> String? {
+        guard !fields.isEmpty else { return nil }
+        let names = fields.map { field -> String in
+            switch field {
+            case "payee": NSLocalizedString("payee", comment: "Native Accounts register: a field a rule set")
+            case "category": NSLocalizedString("category", comment: "Native Accounts register: a field a rule set")
+            case "amount": NSLocalizedString("amount", comment: "Native Accounts register: a field a rule set")
+            case "notes": NSLocalizedString("notes", comment: "Native Accounts register: a field a rule set")
+            case "date": NSLocalizedString("date", comment: "Native Accounts register: a field a rule set")
+            case "cleared": NSLocalizedString("cleared", comment: "Native Accounts register: a field a rule set")
+            case "splits": NSLocalizedString("splits", comment: "Native Accounts register: a field a rule set")
+            default: field
+            }
+        }
+        return String(
+            format: NSLocalizedString("Fields set by rules: %@", comment: "Native Accounts register: upcoming row detail"),
+            names.joined(separator: ", "))
+    }
+}
+
+// The posted section when it has no rows. When upcoming rows matched, it says
+// "posted", so it never reads as if nothing matched (sc-4973 comment 5197).
+public enum RegisterEmptyWords {
+    public static func text(search: String, scope: AccountRegisterScope, upcomingShown: Bool) -> String {
+        if !search.isEmpty {
+            return String(
+                format: upcomingShown
+                    ? NSLocalizedString(
+                        "No posted transactions match “%@”.", comment: "Native Accounts register: only scheduled rows match the search")
+                    : NSLocalizedString("No transactions match “%@”.", comment: "Native Accounts register: no search results"),
+                search)
+        }
+        if scope != .all {
+            return upcomingShown
+                ? NSLocalizedString(
+                    "No posted transactions match this filter.", comment: "Native Accounts register: only scheduled rows match the chip")
+                : NSLocalizedString("No transactions match this filter.", comment: "Native Accounts register: a scope chip with no rows")
+        }
+        return NSLocalizedString("No transactions yet.", comment: "Native Accounts register: an empty account")
+    }
+}
+
 public struct RegisterResults: Equatable {
     public let count: Int
     public let total: Int

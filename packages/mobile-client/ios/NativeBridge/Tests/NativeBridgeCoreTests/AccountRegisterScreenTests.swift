@@ -232,6 +232,23 @@ final class AccountRegisterWriteTests: XCTestCase {
         try await waitUntil("the offer expired") { model.undoOffer == nil }
     }
 
+    // sc-3611 hands-on pass: the chips only show while searching, so Cancel must
+    // restore the whole register, scope included, or the register stays filtered
+    // with no visible way back
+    func testCancelRestoresTheWholeRegister() async throws {
+        let page = FakeRegisterPage()
+        let model = model(page)
+        await model.load()
+        await model.setScope(.uncleared)
+        XCTAssertEqual(try page.args("native/account-register")["scope"] as? String, "uncleared")
+        await model.cancelSearch()
+        XCTAssertEqual(model.scope, .all)
+        XCTAssertEqual(model.search, "")
+        let read = try page.args("native/account-register")
+        XCTAssertEqual(read["scope"] as? String, "all")
+        XCTAssertNil(read["search"] as? String)
+    }
+
     // The picker reads the month's groups (D3: no new read); hidden ones are left out
     func testThePickerListsTheVisibleCategories() async throws {
         let page = FakeRegisterPage()

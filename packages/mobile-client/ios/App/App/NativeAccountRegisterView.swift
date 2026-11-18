@@ -286,6 +286,10 @@ private struct RegisterList: View {
             }
         }
         .listStyle(.insetGrouped)
+        // Cancel (the field closing) restores the whole register, scope included
+        .onChange(of: isSearching) { searching in
+            if !searching { Task { await model.cancelSearch() } }
+        }
     }
 
     private var results: RegisterResults? { content.results(search: search, scope: model.scope) }

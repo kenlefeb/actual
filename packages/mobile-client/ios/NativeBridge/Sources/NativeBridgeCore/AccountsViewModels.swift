@@ -493,6 +493,16 @@ public final class AccountRegisterViewModel: ObservableObject {
         }
     }
 
+    // Cancel in the search field: the whole register again, scope included,
+    // since the chips only show while searching (sc-3611 hands-on pass)
+    public func cancelSearch() async {
+        pendingSearch?.cancel()
+        guard !search.isEmpty || scope != .all else { return }
+        search = ""
+        scope = .all
+        await load()
+    }
+
     public func refresh() async {
         guard isSceneActive, !isSyncing else { return }
         isSyncing = true

@@ -17,7 +17,6 @@ import { MobileBackButton } from '#components/mobile/MobileBackButton';
 import { AddTransactionButton } from '#components/mobile/transactions/AddTransactionButton';
 import { MobilePageHeader, Page } from '#components/Page';
 import { useAccount } from '#hooks/useAccount';
-import { useNavigate } from '#hooks/useNavigate';
 import { useSyncedPref } from '#hooks/useSyncedPref';
 import {
   collapseModals,
@@ -98,6 +97,9 @@ export function AccountPage() {
   );
 }
 
+// History entries whose native "account settings" hand-off already opened the menu
+const handledMenuRequests = new Set<string>();
+
 function AccountHeader({ account }: { readonly account: AccountEntity }) {
   const { t } = useTranslation();
   const syncingAccountIds = useSelector(state => state.account.accountsSyncing);
@@ -105,7 +107,6 @@ function AccountHeader({ account }: { readonly account: AccountEntity }) {
   const failed = isAccountFailedSync(account);
 
   const dispatch = useDispatch();
-  const navigate = useNavigate();
   const { mutate: updateAccount } = useUpdateAccountMutation();
 
   const onSave = useCallback(
@@ -235,15 +236,17 @@ function AccountHeader({ account }: { readonly account: AccountEntity }) {
   ]);
 
   // The native Accounts screen hands "account settings" to this menu (D7a):
-  // open it once, then forget the request so Back never reopens it
+  // open it once per history entry. No navigation afterwards: Modals closes
+  // every sheet when the location changes, which would shut the menu at once
+  // (sc-3611 hands-on pass); the entry's key keeps Back from reopening it.
   const location = useLocation();
   const asked = (location.state as { openAccountMenu?: boolean } | null)
     ?.openAccountMenu;
   useEffect(() => {
-    if (!asked) return;
+    if (!asked || handledMenuRequests.has(location.key)) return;
+    handledMenuRequests.add(location.key);
     onClick();
-    void navigate(location.pathname, { replace: true, state: {} });
-  }, [asked, onClick, navigate, location.pathname]);
+  }, [asked, onClick, location.key]);
 
   return (
     <View

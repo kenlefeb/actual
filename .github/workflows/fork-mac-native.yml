@@ -13,6 +13,7 @@ on:
       - 'packages/mobile-client/macos/**'
       - 'packages/mobile-client/ios/NativeBridge/**'
       - '.github/workflows/fork-mac-native.yml'
+      - 'fork/scripts/check-mac-release-flags.sh'
 
 permissions:
   contents: read
@@ -37,4 +38,18 @@ jobs:
           -project HomeEconomicsMac.xcodeproj
           -scheme HomeEconomicsMac
           -destination platform=macOS
+          CODE_SIGNING_ALLOWED=NO
+      # Story 5186: Debug builds let Safari's Web Inspector read the page;
+      # Release must never define DEBUG
+      - name: Release defines no DEBUG
+        run: fork/scripts/check-mac-release-flags.sh
+      - name: Test the Release configuration
+        working-directory: packages/mobile-client/macos
+        run: >-
+          xcodebuild test
+          -project HomeEconomicsMac.xcodeproj
+          -scheme HomeEconomicsMac
+          -destination platform=macOS
+          -configuration Release
+          ENABLE_TESTABILITY=YES
           CODE_SIGNING_ALLOWED=NO

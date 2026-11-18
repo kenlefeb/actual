@@ -25,6 +25,8 @@ final class PageProcessKillTests: XCTestCase {
 
     func testAChangeSurvivesTheEndOfThePageProcess() async throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["HE_PAGE_KILL_TEST"] == "1", "manual check")
+        // It ends this user's web processes: never in a person's own session
+        try XCTSkipUnless(NSUserName() == "atlas", "runs only as the Atlas helper user")
         let www = Bundle.main.resourceURL!.appendingPathComponent("www")
         try XCTSkipUnless(FileManager.default.fileExists(atPath: www.appendingPathComponent("index.html").path), "no staged www")
 

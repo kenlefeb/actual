@@ -46,6 +46,7 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
         configuration.applicationNameForUserAgent = "HomeEconomicsMac/\(version)"
         configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
         webView = WKWebView(frame: .zero, configuration: configuration)
+        webView.isInspectable = Self.isInspectable(debugBuild: Self.isDebugBuild)
         self.policy = policy
         self.openInBrowser = openInBrowser
         super.init()
@@ -53,6 +54,17 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
         webView.navigationDelegate = self
         webView.uiDelegate = self
     }
+
+    #if DEBUG
+    static let isDebugBuild = true
+    #else
+    static let isDebugBuild = false
+    #endif
+
+    // Story 5186: Safari's Web Inspector may attach to a Debug build only, to
+    // diagnose a stalled page. It can read everything the page holds, the
+    // sign-in token included, so a Release build is never inspectable.
+    nonisolated static func isInspectable(debugBuild: Bool) -> Bool { debugBuild }
 
     // Replaceable in tests
     lazy var loadPage: (URLRequest) -> Void = { [weak self] in _ = self?.webView.load($0) }
@@ -76,8 +88,8 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
     // the web view last showed. loot-core's database lives in IndexedDB, but
     // it is written there asynchronously: a change survives once it has been
     // flushed (measured: 1 s and 5 s after a write it survived; killed at once,
-    // the last changes were gone). A bridge call in flight fails with its
-    // timeout and is not retried.
+    // the last changes were gone). A bridge call in flight fails, usually at
+    // once with `.pageOrigin` (else with its timeout), and is not retried.
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         if reloads.allowsReload(at: now()) {
             Self.logger.notice("page process ended; reloading the app's page")

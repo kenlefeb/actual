@@ -134,15 +134,23 @@ jobs:
         run: |
           APP="build/App.xcarchive/Products/Applications/App.app"
           test -x "$APP/App" || { echo "::error::No app binary in $APP"; exit 1; }
-          # The compiled code only (the app binary, frameworks and dylibs): a web
-          # asset or a resource may hold such a name for reasons that are not ours
+          # The compiled code only (the app binary, frameworks, dylibs and extensions): a
+          # web asset or a resource may hold such a name for reasons that are not ours.
+          # The guard fails if it cannot do its job: the app binary must be in the
+          # scanned list, and a file it cannot read is an error, not "no match".
+          LISTING="$(find "$APP" -type f -exec file {} +)"
+          MACHO="$(printf '%s\n' "$LISTING" | grep -v ' (for architecture ' | sed -n 's/:[[:space:]]*Mach-O.*//p')"
+          printf '%s\n' "$MACHO" | grep -Fxq "$APP/App" || { echo "::error::The app binary was not among the scanned files"; exit 1; }
           HITS=0
           while IFS= read -r FILE; do
-            if grep -qaE 'UITest[A-Z][A-Za-z]*' "$FILE"; then
-              echo "$FILE"
-              HITS=1
-            fi
-          done < <(find "$APP" -type f -exec file {} + | grep 'Mach-O' | sed 's/:[[:space:]]*Mach-O.*//')
+            RC=0
+            grep -qaE 'UITest[A-Z][A-Za-z]*' "$FILE" || RC=$?
+            case "$RC" in
+              0) echo "$FILE"; HITS=1 ;;
+              1) ;;
+              *) echo "::error::Could not read $FILE"; exit 1 ;;
+            esac
+          done <<< "$MACHO"
           if [ "$HITS" = 1 ]; then
             echo "::error::The Release archive contains the UI-test hook; it must stay inside #if DEBUG"
             exit 1

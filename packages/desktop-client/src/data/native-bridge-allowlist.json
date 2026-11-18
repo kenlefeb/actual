@@ -29,7 +29,12 @@
   "native/transactions-delete",
   "native/account-reopen",
   "native/account-move",
+  "native/transaction-form",
+  "native/payees",
   "native/settings",
   "native/server-info",
-  "native/settings-save"
+  "native/settings-save",
+  "native/transaction-form",
+  "native/payees",
+  "native/transaction-preview"
 ]

@@ -326,6 +326,14 @@ const NULLABLE_RULE_FIELDS = ['payee', 'category'] as const;
 export async function runRules(
   trans,
   accounts: Map<string, db.DbAccount> | null = null,
+  // Fork-only (sc-3602): false leaves a payee name no payee has yet as
+  // `payee: 'new'` with its `payee_name`, so a preview creates nothing
+  // Fork-only (sc-3602): fields no rule may change. They are put back after
+  // each rule, so no later rule's conditions see a value they never had
+  {
+    resolvePayeeNames = true,
+    protectedFields = [],
+  }: { resolvePayeeNames?: boolean; protectedFields?: string[] } = {},
 ) {
   await ensureFormulaPreferencesLoaded();
 
@@ -400,8 +408,24 @@ export async function runRules(
     accountsMap,
     formulaStrings,
   );
+  // A protected category keeps its group, and a protected payee its name
+  const kept = protectedFields
+    .flatMap(field =>
+      field === 'category'
+        ? [field, 'category_group']
+        : field === 'payee'
+          ? [field, 'payee_name']
+          : [field],
+    )
+    .map(field => [field, finalTrans[field]]);
+  const restore = () => {
+    if (kept.length > 0) {
+      finalTrans = Object.assign({}, finalTrans, Object.fromEntries(kept));
+    }
+  };
 
   for (let i = 0; i < rules.length; i++) {
+    restore();
     // If there is a scheduleRuleID (meaning this transaction came from a schedule) then exclude rules linked to other schedules.
     if (scheduleRuleID !== '') {
       if (rules[i].id === scheduleRuleID) {
@@ -409,7 +433,7 @@ export async function runRules(
         await ensureBalanceFor(rules[i]);
         const changes = rules[i].execActions(finalTrans);
         finalTrans = Object.assign({}, finalTrans, changes);
-        await resolvePayeeNameForRules(finalTrans);
+        await resolvePayeeNameForRules(finalTrans, resolvePayeeNames);
         lastCategoryIdForGroup = await refreshCategoryGroupIfChanged(
           finalTrans,
           lastCategoryIdForGroup,
@@ -427,7 +451,7 @@ export async function runRules(
             rules[i].execActions(finalTrans),
           );
         }
-        await resolvePayeeNameForRules(finalTrans);
+        await resolvePayeeNameForRules(finalTrans, resolvePayeeNames);
         lastCategoryIdForGroup = await refreshCategoryGroupIfChanged(
           finalTrans,
           lastCategoryIdForGroup,
@@ -443,7 +467,7 @@ export async function runRules(
           rules[i].execActions(finalTrans),
         );
       }
-      await resolvePayeeNameForRules(finalTrans);
+      await resolvePayeeNameForRules(finalTrans, resolvePayeeNames);
       lastCategoryIdForGroup = await refreshCategoryGroupIfChanged(
         finalTrans,
         lastCategoryIdForGroup,
@@ -451,7 +475,11 @@ export async function runRules(
     }
   }
 
-  const result = await finalizeTransactionForRules(finalTrans);
+  restore();
+  const result = await finalizeTransactionForRules(
+    finalTrans,
+    resolvePayeeNames,
+  );
   for (const field of missingNullableFields) {
     if (result[field] === null) {
       delete result[field];
@@ -1281,6 +1309,7 @@ export async function prepareTransactionForRules(
 
 async function resolvePayeeNameForRules(
   trans: TransactionEntity | TransactionForRules,
+  resolvePayeeNames = true,
 ): Promise<void> {
   if (!('payee_name' in trans) || trans.payee !== 'new') {
     return;
@@ -1288,6 +1317,7 @@ async function resolvePayeeNameForRules(
 
   if (trans.payee_name) {
     let payee_id = (await getPayeeByName(trans.payee_name))?.id;
+    if (!payee_id && !resolvePayeeNames) return;
     payee_id ??= await insertPayee({
       name: trans.payee_name,
     });
@@ -1329,10 +1359,11 @@ async function refreshCategoryGroupIfChanged(
 
 export async function finalizeTransactionForRules(
   trans: TransactionEntity | TransactionForRules,
+  resolvePayeeNames = true,
 ): Promise<TransactionEntity> {
   if ('payee_name' in trans) {
-    await resolvePayeeNameForRules(trans);
-    delete trans.payee_name;
+    await resolvePayeeNameForRules(trans, resolvePayeeNames);
+    if (trans.payee !== 'new') delete trans.payee_name;
   }
 
   if ('balance' in trans) {

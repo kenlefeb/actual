@@ -1,0 +1,128 @@
+{
+  "currencyCode": "",
+  "currencyDecimalPlaces": 2,
+  "currencySymbol": "",
+  "currencySymbolPosition": "before",
+  "currencySpace": false,
+  "numberFormat": "comma-dot",
+  "hideFraction": false,
+  "accounts": [
+    {
+      "id": "checking",
+      "name": "Checking",
+      "offbudget": false,
+      "transferPayee": "to-checking"
+    },
+    {
+      "id": "savings",
+      "name": "Savings",
+      "offbudget": false,
+      "transferPayee": "to-savings"
+    },
+    {
+      "id": "house",
+      "name": "House",
+      "offbudget": true,
+      "transferPayee": "to-house"
+    }
+  ],
+  "categoryGroups": [
+    {
+      "id": "food-group",
+      "name": "Food",
+      "isIncome": false,
+      "categories": [
+        {
+          "id": "secret",
+          "name": "Secret",
+          "hidden": true
+        },
+        {
+          "id": "dining",
+          "name": "Dining",
+          "hidden": false
+        },
+        {
+          "id": "groceries",
+          "name": "Groceries",
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "id": "hidden-group",
+      "name": "Hidden",
+      "isIncome": false,
+      "categories": [
+        {
+          "id": "stash",
+          "name": "Stash",
+          "hidden": true
+        }
+      ]
+    }
+  ],
+  "defaults": null,
+  "transaction": {
+    "id": "split",
+    "date": "2016-12-20",
+    "payee": "costco",
+    "payeeName": "Costco",
+    "category": null,
+    "categoryName": null,
+    "notes": "Weekly shop",
+    "cleared": true,
+    "reconciled": false,
+    "amount": -3000,
+    "transferAccount": null,
+    "transferAccountClosed": false,
+    "partner": null,
+    "account": "checking",
+    "schedule": null,
+    "attachments": [],
+    "splits": [
+      {
+        "id": "split/a",
+        "date": "2016-12-20",
+        "payee": "costco",
+        "payeeName": "Costco",
+        "category": "groceries",
+        "categoryName": "Groceries",
+        "notes": "",
+        "cleared": true,
+        "reconciled": false,
+        "amount": -1000,
+        "transferAccount": null,
+        "transferAccountClosed": false,
+        "partner": null
+      },
+      {
+        "id": "split/b",
+        "date": "2016-12-20",
+        "payee": "to-savings",
+        "payeeName": "Savings",
+        "category": null,
+        "categoryName": null,
+        "notes": "",
+        "cleared": true,
+        "reconciled": false,
+        "amount": -2000,
+        "transferAccount": {
+          "id": "savings",
+          "name": "Savings"
+        },
+        "transferAccountClosed": false,
+        "partner": {
+          "id": "id2",
+          "account": "savings",
+          "date": "2016-12-20",
+          "amount": 2000,
+          "notes": "",
+          "cleared": false,
+          "reconciled": false
+        }
+      }
+    ],
+    "digest": "<sha-256>"
+  }
+}

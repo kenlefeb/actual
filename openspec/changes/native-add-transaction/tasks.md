@@ -6,8 +6,8 @@
 
 ## 1. Engine: form reads, preview, save, limits and gates (sc-3602)
 
-- [ ] 1.0 Shared row state (design D1): add `parent_id`, `is_parent`, `is_child` and `sort_order` to `readTouchedState`, additively. The accounts-write tests must stay green. The digest is the SHA-256 of that state over the touched set, with no second reader.
-- [ ] 1.1 `native/transaction-form` in `server/native/transaction-form.ts` (design D1).
+- [x] 1.0 Shared row state (design D1): add `parent_id`, `is_parent`, `is_child` and `sort_order` to `readTouchedState`, additively. The accounts-write tests must stay green. The digest is the SHA-256 of that state over the touched set, with no second reader.
+- [x] 1.1 `native/transaction-form` in `server/native/transaction-form.ts` (design D1).
   - Each open account carries its `transferPayee` id, and each transfer row carries its `partner` fields (design D1, added 2026-11-18).
   - Categories include hidden ones, marked `hidden` (added 2026-11-18).
   - Write failing contract tests first on a seed that has:
@@ -21,7 +21,7 @@
     - a deleted id or a closed account's transaction fails with `[native:not-found]`;
     - a child added, or a transfer relinked, changes the digest.
   - Add the fixture `transaction-form.json`.
-- [ ] 1.2 `native/payees` (design D1).
+- [x] 1.2 `native/payees` (design D1).
   - Write failing tests first:
     - favourites first, then by name;
     - only live payees, and only `{id, name, favorite}`;
@@ -31,7 +31,7 @@
     - `payee-picker-max-results` defaults to 50, has a ceiling of 500, and malformed values fall back.
   - Add both limits to the `LIMITS` registry.
   - Add the fixture `payees.json`.
-- [ ] 1.3 `native/transaction-preview` (design D2).
+- [x] 1.3 `native/transaction-preview` (design D2).
   - Write failing tests first, each comparing against `rules-run` with the web form's application rules:
     - arithmetic in each number format;
     - Inflow and Outflow;

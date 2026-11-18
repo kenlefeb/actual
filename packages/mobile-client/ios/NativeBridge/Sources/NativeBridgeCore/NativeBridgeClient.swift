@@ -39,6 +39,11 @@ public enum NativeBridgeAllowlist {
     public static let accountsWrites: Set<String> = [
         "native/transactions-categorize", "native/transactions-delete", "native/account-reopen", "native/account-move",
     ]
+    // sc-3602 (native-add-transaction D4): the Add transaction sheet's reads and its preview, which
+    // writes nothing. The raw transactions-batch-update, transaction-add, rules-run and payee-create stay off.
+    public static let transactionReads: Set<String> = [
+        "native/transaction-form", "native/payees", "native/transaction-preview",
+    ]
     // sc-4643 (native-settings-screen D2). The save is sent only as SettingsSave;
     // preferences/save, save-global-prefs, subscribe-sign-out, set-server-url,
     // key-make and reset-budget-cache stay off.
@@ -46,6 +51,7 @@ public enum NativeBridgeAllowlist {
     public static let settingsWrites: Set<String> = ["native/settings-save"]
     public static let handlers: Set<String> = reads.union(writes).union(paycheckWrites).union(sync).union(reconcileReads)
         .union(reconcileWrites).union(accountsReads).union(accountsWrites).union(settingsReads).union(settingsWrites)
+        .union(transactionReads)
 }
 
 // The page's reduced sync result (nativeBridge.ts): whether it worked, and a
@@ -105,6 +111,8 @@ public struct NativeRefusal: Equatable {
         case noBudgetForMonth = "no-budget-for-month"
         case invalidDraft = "invalid-draft"
         case invalidSetting = "invalid-setting"
+        // sc-3602: a form read of a transaction that is gone or in a closed account
+        case notFound = "not-found"
     }
 
     public let code: Code

@@ -1,0 +1,36 @@
+{
+  "result": {
+    "account": "checking",
+    "date": "2016-12-20",
+    "payee": "costco",
+    "payeeName": null,
+    "category": "dining",
+    "notes": "Mine",
+    "cleared": false,
+    "inflow": false,
+    "amount": -1000,
+    "amountText": "10.00",
+    "splits": []
+  },
+  "resultDigest": "5e8799ef4c139dc0c439540d8d71fcfe370a25726c6b4fe4e351ce180b0166db",
+  "ruleFields": [],
+  "suggestions": [
+    {
+      "field": "category",
+      "row": 0,
+      "value": {
+        "id": "groceries",
+        "name": "Groceries"
+      }
+    },
+    {
+      "field": "notes",
+      "row": 0,
+      "value": {
+        "text": "Bulk"
+      }
+    }
+  ],
+  "remaining": null,
+  "errors": {}
+}

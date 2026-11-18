@@ -1,0 +1,16 @@
+[
+  "amount-invalid",
+  "amount-required",
+  "account-required",
+  "account-closed",
+  "category-not-allowed",
+  "category-unknown",
+  "date-invalid",
+  "split-mismatch",
+  "split-limit",
+  "payee-too-long",
+  "notes-too-long",
+  "transfer-same-account",
+  "category-hidden",
+  "amount-negative"
+]

@@ -1,0 +1,43 @@
+{
+  "result": {
+    "account": "checking",
+    "date": "2016-12-20",
+    "payee": null,
+    "payeeName": null,
+    "category": null,
+    "notes": "",
+    "cleared": false,
+    "inflow": false,
+    "amount": -3000,
+    "amountText": "30.00",
+    "splits": [
+      {
+        "payee": null,
+        "payeeName": null,
+        "category": "groceries",
+        "notes": "",
+        "inflow": false,
+        "amount": -1000,
+        "amountText": "10.00"
+      },
+      {
+        "payee": null,
+        "payeeName": null,
+        "category": "dining",
+        "notes": "",
+        "inflow": false,
+        "amount": -500,
+        "amountText": "5.00"
+      }
+    ]
+  },
+  "resultDigest": "6e5a6612a9116ac030370dc46057ee0ff58a52013fe84d42a2f8e297288f7dca",
+  "ruleFields": [],
+  "suggestions": [],
+  "remaining": -1500,
+  "errors": {
+    "splits": {
+      "code": "split-mismatch"
+    }
+  }
+}

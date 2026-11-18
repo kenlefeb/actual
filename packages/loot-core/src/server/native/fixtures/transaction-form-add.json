@@ -1,0 +1,71 @@
+{
+  "currencyCode": "",
+  "currencyDecimalPlaces": 2,
+  "currencySymbol": "",
+  "currencySymbolPosition": "before",
+  "currencySpace": false,
+  "numberFormat": "comma-dot",
+  "hideFraction": false,
+  "accounts": [
+    {
+      "id": "checking",
+      "name": "Checking",
+      "offbudget": false,
+      "transferPayee": "to-checking"
+    },
+    {
+      "id": "savings",
+      "name": "Savings",
+      "offbudget": false,
+      "transferPayee": "to-savings"
+    },
+    {
+      "id": "house",
+      "name": "House",
+      "offbudget": true,
+      "transferPayee": "to-house"
+    }
+  ],
+  "categoryGroups": [
+    {
+      "id": "food-group",
+      "name": "Food",
+      "isIncome": false,
+      "categories": [
+        {
+          "id": "secret",
+          "name": "Secret",
+          "hidden": true
+        },
+        {
+          "id": "dining",
+          "name": "Dining",
+          "hidden": false
+        },
+        {
+          "id": "groceries",
+          "name": "Groceries",
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "id": "hidden-group",
+      "name": "Hidden",
+      "isIncome": false,
+      "categories": [
+        {
+          "id": "stash",
+          "name": "Stash",
+          "hidden": true
+        }
+      ]
+    }
+  ],
+  "defaults": {
+    "account": "savings",
+    "date": "2016-12-20",
+    "cleared": false
+  },
+  "transaction": null
+}

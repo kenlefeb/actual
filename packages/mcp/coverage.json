@@ -314,6 +314,15 @@
   "native/account-move": {
     "skip": "Native iOS bridge wrapper of account-move with an undo token (sc-4931, design D3); a display order, MCP orders accounts through write_update_account"
   },
+  "native/transaction-form": {
+    "skip": "Native iOS bridge batched read of the Add transaction sheet (sc-3602, ADR 11); MCP reads accounts, categories and transactions through list_accounts, list_category_groups and list_transactions"
+  },
+  "native/payees": {
+    "skip": "Native iOS bridge payee picker search (sc-3602, ADR 11); MCP reads payees through list_payees"
+  },
+  "native/transaction-preview": {
+    "skip": "Native-only: the Add transaction sheet's preview of a person's draft, which writes nothing (sc-3602, design D2); MCP writes transactions through write_create_transactions"
+  },
   "native/settings": {
     "skip": "Native iOS Settings read (sc-4643, native-settings-screen D1); MCP reads settings through get_settings in the mcp-settings-tools change"
   },

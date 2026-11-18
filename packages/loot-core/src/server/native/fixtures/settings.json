@@ -58,6 +58,36 @@
       "ceiling": 500
     },
     {
+      "id": "payee-picker-max-results",
+      "value": 50,
+      "default": 50,
+      "ceiling": 500
+    },
+    {
+      "id": "payee-search-max-length",
+      "value": 100,
+      "default": 100,
+      "ceiling": 200
+    },
+    {
+      "id": "payee-name-max-length",
+      "value": 200,
+      "default": 200,
+      "ceiling": 500
+    },
+    {
+      "id": "transaction-notes-max-length",
+      "value": 10000,
+      "default": 10000,
+      "ceiling": 50000
+    },
+    {
+      "id": "transaction-split-max-children",
+      "value": 50,
+      "default": 50,
+      "ceiling": 200
+    },
+    {
       "id": "server-info-timeout-seconds",
       "value": 5,
       "default": 5,

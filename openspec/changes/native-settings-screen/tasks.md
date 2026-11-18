@@ -71,7 +71,8 @@
   - Write failing tests first on both sides.
 - [ ] 2.3 Theme (design D7): inside the iOS app the page uses `auto` without writing the stored theme, and web Settings hides Themes. Write failing tests first.
 - [ ] 2.4 `SettingsViewModel`, tested against the fake transport and fixtures (design D10). Write failing tests first:
-  - a redacted first load;
+  - a redacted first load, with the switches shown at once and an error with Retry when the read fails;
+  - a local-only budget: no Sign out or Encryption row, Set up sync, and no `native/server-info` call;
   - a re-read keeps the values;
   - coalesced `preferences` and `sync` events;
   - no calls in the background;
@@ -89,6 +90,10 @@
 
 - the Native screens section, with the Settings row and its footer;
 - the hand-off row style ("Opens in the web view");
+- the This iPhone section, with the Native screens switches and the Language row;
+- the local-only Sync section (text and Set up sync, no Sign out or Encryption) and the local-only About;
+- the Settings loading state (redacted) and the first-read error with Retry;
+- the copy table (frame, element, text), approved by the Product Owner;
 - the Budget type confirmation;
 - the Sign out confirmation, with and without the unsynced-changes warning and Sync now;
 - About with the server unreachable and Retry;
@@ -99,9 +104,11 @@
 - [ ] 3.1 The tab (design D10):
   - budget card;
   - Budget, with the Formatting drill-down, Budget type, Learn categories and Upcoming length;
-  - Native screens;
-  - Sync, with server, encryption and Sign out;
+  - This iPhone, with the Native screens switches and the Language hand-off;
+  - Sync, with server, encryption and Sign out, or for a local-only budget the local-only text and Set up sync;
   - Features and Data hand-off rows;
+  - the loading state and the first-read error;
+  - every string localized, with text from the approved copy table;
   - Advanced, with copyable ids;
   - About, with the client, app and server versions, and Notifications.
 

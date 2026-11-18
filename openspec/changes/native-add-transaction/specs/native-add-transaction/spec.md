@@ -93,15 +93,15 @@ On iPhone, a field filled by a rule SHALL read "Set by a rule" in words and to V
 - **THEN** nothing is stored, the sheet says "Rules changed this; check and save again.", shows the rule's new result with "Set by a rule", and the person saves again
 
 ### Requirement: Amount entry with sign and arithmetic
-On iPhone, the amount field SHALL accept a number or an arithmetic expression with + − × ÷ in the budget's number format, and an Outflow or Inflow sign. The engine SHALL evaluate the expression; the sheet SHALL show the result and SHALL never compute money itself. An expression that does not evaluate SHALL show an inline error and block saving.
+On iPhone, the amount field SHALL accept a number or an arithmetic expression with + − × ÷ in the budget's number format; Expense, Income, or a transfer's direction SHALL set the sign. The engine SHALL evaluate the expression; the sheet SHALL show the result and SHALL never compute money itself. An expression that does not evaluate SHALL show an inline error and block saving.
 
 #### Scenario: An expression
 - **GIVEN** a budget with number format `1,000.33`
-- **WHEN** the person types `12.50+3*2` as an Outflow
+- **WHEN** the person types `12.50+3*2` as an Expense
 - **THEN** the sheet shows −18.50 and saves −1850 minor units
 
 #### Scenario: Inflow
-- **WHEN** the person types `200` and chooses Inflow
+- **WHEN** the person types `200` and chooses Income
 - **THEN** the saved amount is +20000 minor units
 
 #### Scenario: Not a number
@@ -125,8 +125,25 @@ On iPhone, the payee picker SHALL search the budget's payees, favourites first, 
 - **WHEN** the person picks Savings under Transfers and saves 100 as Outflow
 - **THEN** Checking has −100 and Savings has +100, linked as a transfer
 
+### Requirement: Transfer is its own choice
+On iPhone, the sheet SHALL offer Expense, Income and Transfer. Transfer SHALL replace Payee with a To account row (open accounts other than this one) and a direction (out of or into this account), and SHALL be stored through the destination's transfer payee. Picking a transfer payee SHALL select Transfer; leaving Transfer SHALL clear To account.
+
+#### Scenario: A transfer out
+- **GIVEN** a new transaction in Checking
+- **WHEN** the person chooses Transfer, To account Savings, out of Checking, and 100
+- **THEN** Checking has −100 and Savings has +100, linked as a transfer, and no Payee row was shown
+
+#### Scenario: Picking a transfer payee
+- **WHEN** the person picks Savings under Transfers in the payee picker
+- **THEN** the control shows Transfer with To account Savings
+
+#### Scenario: Back to Expense
+- **GIVEN** Transfer with To account Savings
+- **WHEN** the person chooses Expense
+- **THEN** the Payee row returns empty and no transfer is saved
+
 ### Requirement: Category follows the account and transfer rules
-On iPhone, the sheet SHALL not offer a category for a transaction in an off-budget account or for a transfer between two on-budget accounts, and SHALL say why in words. A transfer between an on-budget and an off-budget account SHALL keep its category on the on-budget side.
+On iPhone, the sheet SHALL hide the category, saying why in words, for a transaction in an off-budget account and for a transfer between two on-budget or two off-budget accounts. A transfer between an on-budget and an off-budget account SHALL show the category only on the on-budget side.
 
 #### Scenario: Off-budget account
 - **WHEN** the person sets the account to an off-budget account
@@ -135,6 +152,52 @@ On iPhone, the sheet SHALL not offer a category for a transaction in an off-budg
 #### Scenario: On-budget transfer
 - **WHEN** the person picks an on-budget account under Transfers from an on-budget account
 - **THEN** the category row reads "Transfers between budget accounts don't use categories"
+
+#### Scenario: Transfer to an off-budget account
+- **GIVEN** a new transaction in on-budget Checking
+- **WHEN** the person chooses Transfer to off-budget Brokerage
+- **THEN** the Category row shows and its category is saved on the Checking side
+
+### Requirement: The category picker
+On iPhone, the category picker SHALL list the form read's non-hidden categories by group, filter them by a typed search, offer Uncategorized first (no category), and tick the current category by id. If re-reading the categories fails, it SHALL keep the last list and show an error with Retry.
+
+#### Scenario: Search
+- **WHEN** the person types "groc" in the category picker
+- **THEN** only categories whose names contain "groc" are listed, under their groups
+
+#### Scenario: Uncategorized
+- **WHEN** the person picks Uncategorized and saves
+- **THEN** the transaction has no category
+
+#### Scenario: Tick by id
+- **GIVEN** two categories named "Fees" in different groups, and the transaction uses the second
+- **THEN** only the second "Fees" is ticked
+
+#### Scenario: Re-read fails
+- **GIVEN** a category was added on another device and the re-read fails
+- **THEN** the picker keeps its list and shows an error with Retry
+
+### Requirement: An unchecked field does not block saving
+On iPhone, a timed-out preview SHALL retry once by itself and once on return to the foreground, then show "Couldn't check this yet." with Check Again. Save SHALL stay allowed. If the save's own rule run changes anything the sheet showed, nothing SHALL be stored and the sheet SHALL show the new result with "Rules changed this; check and save again."; otherwise the save SHALL store what was shown.
+
+#### Scenario: Retry succeeds
+- **GIVEN** the first preview times out
+- **WHEN** the automatic retry answers
+- **THEN** the field shows the checked value and no warning
+
+#### Scenario: Still unchecked
+- **GIVEN** both the first preview and the retry time out
+- **THEN** the field shows "Couldn't check this yet." with Check Again, and Save is enabled
+
+#### Scenario: Saving an unchecked draft that a rule changes
+- **GIVEN** an unchecked field, and a rule that would change the category
+- **WHEN** the person saves
+- **THEN** nothing is stored, and the sheet shows the new category with "Rules changed this; check and save again."
+
+#### Scenario: Saving an unchecked draft that no rule changes
+- **GIVEN** an unchecked amount of `12.50+3*2`, and no rule that applies
+- **WHEN** the person saves
+- **THEN** the transaction is stored with −18.50 and the sheet closes
 
 ### Requirement: Splits keep their remainder from the engine
 On iPhone, the sheet SHALL let the person split a transaction into children, each with amount, category, payee and notes, up to the limit `transaction-split-max-children`. The sheet SHALL show the engine's remaining amount in words and SHALL block saving until the children sum to the parent.
@@ -152,7 +215,7 @@ On iPhone, the sheet SHALL let the person split a transaction into children, eac
 - **THEN** "Add split" is disabled and says the limit is 50
 
 ### Requirement: A changed transaction is not overwritten
-On iPhone, saving an edit SHALL fail with "This transaction changed on another device" when the transaction, any of its children, or any transfer partner changed after the sheet read it. Nothing SHALL be written. Reload SHALL show the current values and say which fields changed.
+On iPhone, saving an edit SHALL fail with "This transaction changed on another device" when the transaction, any of its children, or any transfer partner changed after the sheet read it. Nothing SHALL be written. Reload SHALL keep the person's edits, take new values for fields they did not edit, list fields changed in both places with "Use theirs", and list changes made only on a split child or transfer partner.
 
 #### Scenario: Edited elsewhere
 - **GIVEN** the sheet is open on a transaction, and a sync changes its notes
@@ -163,6 +226,41 @@ On iPhone, saving an edit SHALL fail with "This transaction changed on another d
 - **GIVEN** a transfer is open, and a sync changes the partner row's date
 - **WHEN** the person saves
 - **THEN** nothing is written and the same message shows
+
+#### Scenario: Reload keeps typed work
+- **GIVEN** the person changed the amount, and another device changed the notes
+- **WHEN** the person taps Reload
+- **THEN** the amount keeps the person's value, the notes show the other device's value, and nothing is listed
+
+#### Scenario: Both changed the same field
+- **GIVEN** the person changed the notes, and another device also changed the notes
+- **WHEN** the person taps Reload
+- **THEN** the notes keep the person's text, the list shows both texts with "Use theirs", and saving uses the new digest
+
+#### Scenario: Use theirs
+- **WHEN** the person taps "Use theirs" on the notes
+- **THEN** the notes show the other device's text
+
+#### Scenario: Only the partner changed
+- **GIVEN** a transfer is open, the person changed the amount, and another device changed only the partner's date
+- **WHEN** the person taps Reload
+- **THEN** the sheet lists that the other side of the transfer changed its date, keeps the person's amount, and saves only after they have seen it
+
+#### Scenario: Only a child changed
+- **GIVEN** a split is open, and another device changed only the second child's category
+- **WHEN** the person taps Reload
+- **THEN** the second child shows the new category and the sheet lists that it changed
+
+### Requirement: Text comes from the approved copy table
+On iPhone, every user-facing string in the sheet SHALL be a localized string whose exact text comes from the Designer's copy table once the Product Owner approves it; wording quoted in this spec is illustrative until then. Text SHALL say the cause and what to do in plain words, with no codes.
+
+#### Scenario: A hard-coded string
+- **WHEN** a user-facing string in the sheet is not a localized string
+- **THEN** the localization test fails
+
+#### Scenario: No codes shown
+- **WHEN** a save is refused with `[native:invalid-draft:notes-too-long]`
+- **THEN** the sheet shows plain words for the notes field and no code
 
 ### Requirement: Reconciled rows ask first
 On iPhone, saving or deleting a transaction SHALL first ask the person to confirm when any row it would touch is reconciled, children and transfer partners included, and a row inside a reconciled split counts as reconciled. The dialog SHALL name each affected account. Without that confirmation, nothing SHALL be written.

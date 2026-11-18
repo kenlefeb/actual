@@ -1,3 +1,5 @@
+import defaults from '#data/native-screen-defaults.json';
+
 import {
   hasNativeTabBar,
   installNativeChrome,
@@ -11,7 +13,7 @@ import {
   setNativeScreenOn,
   showsNativeTabBar,
 } from './nativeChrome';
-import type { ChromeWindow } from './nativeChrome';
+import type { ChromeWindow, NativeScreenName } from './nativeChrome';
 
 // native-appearance: "iPhone uses a native tab bar" (sc-3514)
 function iosApp() {
@@ -187,11 +189,37 @@ describe('postNativeClosed', () => {
 
 // native-budget-screen: "The native Budget tab has a per-screen switch" (sc-3751)
 describe('the native Budget screen switch', () => {
-  it('is off until the app says it is on', () => {
-    expect(isNativeScreenOn('budget', iosApp().win)).toBe(false);
+  // sc-5090: shipped screens are on until the user turns them off (Ken, 2026-11-15)
+  it('is on until the user turns it off', () => {
+    expect(isNativeScreenOn('budget', iosApp().win)).toBe(true);
     const { win } = iosApp();
+    win.__actualNativeScreens = { budget: false };
+    expect(isNativeScreenOn('budget', win)).toBe(false);
     win.__actualNativeScreens = { budget: true };
     expect(isNativeScreenOn('budget', win)).toBe(true);
+  });
+
+  it('reads on for Paychecks when unset, and keeps an explicit off', () => {
+    const { win } = iosApp();
+    expect(isNativeScreenOn('paychecks', win)).toBe(true);
+    win.__actualNativeScreens = { paychecks: false };
+    expect(isNativeScreenOn('paychecks', win)).toBe(false);
+  });
+
+  it('keeps the Accounts switch off when unset', () => {
+    const { win } = iosApp();
+    expect(isNativeScreenOn('accounts', win)).toBe(false);
+    win.__actualNativeScreens = { accounts: true };
+    expect(isNativeScreenOn('accounts', win)).toBe(true);
+  });
+
+  // The Swift side checks the same file (NativeScreenDefaultsTests)
+  it('reads each screen as the shared defaults file says when unset', () => {
+    for (const [screen, on] of Object.entries(defaults)) {
+      expect(isNativeScreenOn(screen as NativeScreenName, iosApp().win)).toBe(
+        on,
+      );
+    }
   });
 
   it('tells the app and remembers the new value', () => {

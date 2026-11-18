@@ -8,6 +8,7 @@
 
 - [ ] 1.0 Shared row state (design D1): add `parent_id`, `is_parent`, `is_child` and `sort_order` to `readTouchedState`, additively. The accounts-write tests must stay green. The digest is the SHA-256 of that state over the touched set, with no second reader.
 - [ ] 1.1 `native/transaction-form` in `server/native/transaction-form.ts` (design D1).
+  - Each open account carries its `transferPayee` id, and each transfer row carries its `partner` fields (design D1, added 2026-11-18).
   - Write failing contract tests first on a seed that has:
     - on-budget, off-budget and closed accounts;
     - hidden categories;
@@ -75,6 +76,10 @@
     - a repeated token returns the same id;
     - nothing changes on any refusal.
   - Add `changed-since`, `preview-stale` and `not-found` to the shared `native-refusal-codes.json`.
+  - Tests for D3 step 4:
+    - evaluating `amountText` is not a difference;
+    - a rule change to any rule-settable field on any row refuses with `preview-stale` before any write, whether or not a preview was answered.
+  - Tests that a transfer payee of the transaction's own account is refused with `transfer-same-account`, and one of a closed account with `account-closed`.
 - [ ] 1.4a Add the reconciled-split-parent rule to `native/transactions-delete`. Write failing tests first: a partner inside a reconciled split needs `confirmedReconciled`.
 - [ ] 1.5 Undo conflict check for saves (design D3). The save records `readTouchedState`. `native/undo` refuses with `[native:undo-changed-since]` after a later change to a touched row.
   - Write failing tests first, with an edit applied after the save, as a sync would apply it.
@@ -109,7 +114,14 @@
   - `preview-stale` shows "Rules changed this; check and save again.", previews again and shows the rule's result;
   - `ruleFields` drives the indicator, and the person's edits join `userFields`;
   - replaced fields offer Restore;
-  - a form-read `not-found` shows the unavailable state.
+  - a form-read `not-found` shows the unavailable state;
+  - a preview timeout retries once after `previewRetryDelay` and once on foreground, then shows the unchecked state, with Save still enabled;
+  - Reload after `changed-since`:
+    - compares only engine values (new read against base) with per-field edited flags, and never parses `amountText`;
+    - lists both-changed fields with "Use theirs";
+    - lists child-only and partner-only changes;
+    - adopts the new digest only after showing that list;
+  - choosing a transfer payee sets Transfer, and leaving Transfer clears To account.
 - [ ] 2.2 `NativeScreen.addTransaction` (design D7):
   - add the switch, the script entry, and the router paths (`/transactions/new`, `/transactions/<id>`);
   - add the `webTransactionAction` chrome message with its closed actions, origin check and live-id check.
@@ -126,6 +138,11 @@
 - amount expression display and keypad accessory;
 - inline errors;
 - category row disabled, with its reason (off-budget, on-budget transfer);
+- the category picker: groups, search, Uncategorized, the tick, and the error with Retry;
+- the Transfer state: the Expense / Income / Transfer control, the To account row, the direction wording, and the category hidden with its reason;
+- Reload keeping the person's edits, with the both-changed list and "Use theirs";
+- "Couldn't check this yet." with Check Again;
+- the copy table (frame, element, text), approved by the Product Owner;
 - "Set by a rule", the replaced-fields notice and Restore;
 - the "Not checked" state after a preview timeout;
 - Cancel's discard confirmation;
@@ -150,6 +167,9 @@ Then:
   - Save with haptic and the Undo toast;
   - Cancel with the discard confirmation.
   - Verify in the Simulator against the Add and Edit frames (node 25-2), light and dark.
+- [ ] 3.0 Transfer state (design D8a): the three-way control, To account and direction, the category rules, and switching modes. Add UI tests.
+- [ ] 3.0a Category picker (design D8d): search, Uncategorized, tick by id, and the error with Retry. Add UI tests.
+- [ ] 3.0b Copy (design D8e): every string is localized from the approved copy table, with a test for hard-coded strings.
 - [ ] 3.1a The rule indicator, the person's overrides, and the replaced-fields notice with Restore (design D2a). Add UI tests and VoiceOver announcements.
 - [ ] 3.2 Splits: add and remove a child, the remainder in words, the `split-limit` state.
 - [ ] 3.3 Transfers and category rules: the off-budget and on-budget transfer wording.

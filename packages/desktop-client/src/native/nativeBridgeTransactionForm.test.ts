@@ -16,12 +16,13 @@ function setup() {
 }
 
 describe('the Add transaction calls through the page bridge', () => {
-  it('lists the form, the payee search and the preview', () => {
+  it('lists the form, the payee search, the preview and the save', () => {
     expect(allowlist).toEqual(
       expect.arrayContaining([
         'native/transaction-form',
         'native/payees',
         'native/transaction-preview',
+        'native/transaction-save',
       ]),
     );
   });
@@ -56,6 +57,24 @@ describe('the Add transaction calls through the page bridge', () => {
         extra: 1,
       },
       { draft: { account: 'a' }, changedField: 'payee' },
+    ],
+    // The save reads learn-categories from the budget, never from the call
+    [
+      'native/transaction-save',
+      {
+        draft: { account: 'a' },
+        digest: 'd',
+        undoToken: 'T',
+        confirmedReconciled: true,
+        learnCategories: false,
+        extra: 1,
+      },
+      {
+        draft: { account: 'a' },
+        digest: 'd',
+        undoToken: 'T',
+        confirmedReconciled: true,
+      },
     ],
   ])('forwards %s with only its own fields', async (name, args, forwarded) => {
     const { bridge, send } = setup();

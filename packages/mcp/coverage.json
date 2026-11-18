@@ -322,5 +322,8 @@
   },
   "native/transaction-preview": {
     "skip": "Native-only: the Add transaction sheet's preview of a person's draft, which writes nothing (sc-3602, design D2); MCP writes transactions through write_create_transactions"
+  },
+  "native/transaction-save": {
+    "skip": "Native iOS bridge write of a person's Add transaction draft with an undo token (sc-3602, design D3); MCP writes transactions through write_create_transactions and write_update_transactions"
   }
 }

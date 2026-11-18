@@ -31,5 +31,6 @@
   "native/account-move",
   "native/transaction-form",
   "native/payees",
-  "native/transaction-preview"
+  "native/transaction-preview",
+  "native/transaction-save"
 ]

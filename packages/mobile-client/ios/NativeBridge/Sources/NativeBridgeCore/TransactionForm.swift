@@ -266,3 +266,29 @@ public struct TransactionPreviewRequest: Encodable, Equatable {
         (self.draft, self.changedField) = (draft, changedField)
     }
 }
+
+// `native/transaction-save` (D3): sent only as this typed value. loot-core
+// checks the draft again, evaluates every amount itself and runs the rules.
+public struct TransactionSave: Encodable, Equatable {
+    public let draft: TransactionDraft
+    // An edit's digest from the form read; nil for an add
+    public let digest: String?
+    // Sent true only after the person confirms the native dialog
+    public let confirmedReconciled: Bool
+    public let undoToken: String
+
+    public init(draft: TransactionDraft, digest: String?, confirmedReconciled: Bool = false, undoToken: String) throws {
+        guard !undoToken.isEmpty else { throw NativeBridgeError.invalidWrite("undoToken") }
+        (self.draft, self.digest, self.confirmedReconciled, self.undoToken) = (draft, digest, confirmedReconciled, undoToken)
+    }
+}
+
+public struct TransactionSaveResult: Codable, Equatable {
+    public let id: String
+}
+
+extension NativeBridgeClient {
+    public func saveTransaction(_ write: TransactionSave) async throws -> TransactionSaveResult {
+        try JSONDecoder().decode(TransactionSaveResult.self, from: await call("native/transaction-save", args: write))
+    }
+}

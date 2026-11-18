@@ -89,7 +89,7 @@ final class SyncAllowlistTests: XCTestCase {
                 .union(NativeBridgeAllowlist.sync).union(NativeBridgeAllowlist.reconcileReads)
                 .union(NativeBridgeAllowlist.reconcileWrites).union(NativeBridgeAllowlist.accountsReads)
                 .union(NativeBridgeAllowlist.accountsWrites)
-                .union(NativeBridgeAllowlist.transactionReads))
+                .union(NativeBridgeAllowlist.transactionReads).union(NativeBridgeAllowlist.transactionWrites))
         XCTAssertFalse(NativeBridgeAllowlist.handlers.contains("undo"))
         XCTAssertFalse(NativeBridgeAllowlist.handlers.contains("redo"))
     }

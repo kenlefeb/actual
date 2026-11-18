@@ -153,12 +153,12 @@ describe('native/transaction-save: an add', () => {
     const rows = await live();
     expect(rows).toHaveLength(3);
     const children = rows.filter(r => r.isChild);
-    expect(children.map(c => [c.amount, c.category]).sort()).toEqual(
-      [
-        [-1000, 'groceries'],
-        [-2000, 'dining'],
-      ].sort(),
-    );
+    expect(
+      children.map(c => [c.amount, c.category]).sort((a, b) => +a[0] - +b[0]),
+    ).toEqual([
+      [-2000, 'dining'],
+      [-1000, 'groceries'],
+    ]);
     expect(children.every(c => c.parent_id === NEW_ID)).toBe(true);
     const payee = await db.first<{ id: string }>(
       "SELECT id FROM payees WHERE name = 'Corner Bakery' AND tombstone = 0",

@@ -44,9 +44,11 @@ public enum NativeBridgeAllowlist {
     public static let transactionReads: Set<String> = [
         "native/transaction-form", "native/payees", "native/transaction-preview",
     ]
+    // Sent only as TransactionSave (D3)
+    public static let transactionWrites: Set<String> = ["native/transaction-save"]
     public static let handlers: Set<String> = reads.union(writes).union(paycheckWrites).union(sync).union(reconcileReads)
         .union(reconcileWrites).union(accountsReads).union(accountsWrites)
-        .union(transactionReads)
+        .union(transactionReads).union(transactionWrites)
 }
 
 // The page's reduced sync result (nativeBridge.ts): whether it worked, and a
@@ -107,6 +109,9 @@ public struct NativeRefusal: Equatable {
         case invalidDraft = "invalid-draft"
         // sc-3602: a form read of a transaction that is gone or in a closed account
         case notFound = "not-found"
+        // sc-3602 (D3): the save of an edit that changed elsewhere, or a draft rules changed since it was shown
+        case changedSince = "changed-since"
+        case previewStale = "preview-stale"
     }
 
     public let code: Code
@@ -286,9 +291,11 @@ public struct NativeBridgeClient {
             || (args is TransactionsCategorize && name == "native/transactions-categorize")
             || (args is TransactionsDelete && name == "native/transactions-delete")
             || (args is AccountReopen && name == "native/account-reopen") || (args is AccountMove && name == "native/account-move")
+            || (args is TransactionSave && name == "native/transaction-save")
         let isWrite =
             NativeBridgeAllowlist.writes.contains(name) || NativeBridgeAllowlist.paycheckWrites.contains(name)
             || NativeBridgeAllowlist.reconcileWrites.contains(name) || NativeBridgeAllowlist.accountsWrites.contains(name)
+            || NativeBridgeAllowlist.transactionWrites.contains(name)
         guard !isWrite || isTyped else {
             throw NativeBridgeError.invalidWrite(name)
         }

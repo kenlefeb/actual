@@ -89,9 +89,17 @@ final class SyncAllowlistTests: XCTestCase {
         XCTAssertEqual(
             NativeBridgeAllowlist.transactionReads,
             ["native/transaction-form", "native/payees", "native/transaction-preview"])
+        // sc-5219: neither changes the budget, so neither is a write: the page's latch check
+        // must not refuse them, and a timed-out native/persisted may be retried
+        XCTAssertEqual(NativeBridgeAllowlist.storage, ["native/persisted", "native/storage-state"])
+        let allWrites = NativeBridgeAllowlist.writes.union(NativeBridgeAllowlist.paycheckWrites)
+            .union(NativeBridgeAllowlist.reconcileWrites).union(NativeBridgeAllowlist.accountsWrites)
+            .union(NativeBridgeAllowlist.settingsWrites).union(NativeBridgeAllowlist.transactionWrites)
+        XCTAssertTrue(NativeBridgeAllowlist.storage.isDisjoint(with: allWrites))
         XCTAssertEqual(
             NativeBridgeAllowlist.handlers,
-            NativeBridgeAllowlist.reads.union(NativeBridgeAllowlist.writes).union(NativeBridgeAllowlist.paycheckWrites)
+            NativeBridgeAllowlist.storage.union(NativeBridgeAllowlist.reads).union(NativeBridgeAllowlist.writes)
+                .union(NativeBridgeAllowlist.paycheckWrites)
                 .union(NativeBridgeAllowlist.sync).union(NativeBridgeAllowlist.reconcileReads)
                 .union(NativeBridgeAllowlist.reconcileWrites).union(NativeBridgeAllowlist.accountsReads)
                 .union(NativeBridgeAllowlist.accountsWrites).union(NativeBridgeAllowlist.settingsReads)

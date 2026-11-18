@@ -18,7 +18,7 @@ The Product Owner's decision (comment 5222): Propose now, top of the native queu
   - they are chained with values captured at flush time;
   - the library exposes "when persisted" and the storage state;
   - any failed write sets a latch that stops all further writes, so stored data stays at the last good commit.
-- **A saved write is a stored write.** The Swift bridge client follows each write with a `native/persisted` call, which has its own deadline. It returns the write's result with `stored: true` or `stored: false`. Screens show a write as saved only when stored, and "Saving…" until then; past the wait they show "Saved here, not yet stored on this device." A write is never retried because storage was slow.
+- **A saved write is a stored write.** The Swift bridge client follows each write with a `native/persisted` call, which has its own deadline. It returns the write's result with `stored: true` or `stored: false`. Screens show a write as saved only when stored, and "Saving…" until then; past the wait they show "Still saving to this device. Keep the app open." A write is never retried because storage was slow.
 - **Nothing applies after a storage failure, from any source.** The page bridge checks the latch before forwarding any write, and refuses with `[native:not-stored]`. A persistent app-level notice says changes made after the last stored time need to be made again, and offers Reload.
 - **Only stored changes reach the server.** Sync waits for local storage before sending, and sends nothing after a failure. A refused change therefore can't come back as a duplicate.
 - **A new limit.** `native-persist-wait-ms` ("Saving: wait for device storage", default 2000, floor 100, ceiling 4000, under the 5 s bridge deadline).
@@ -27,7 +27,7 @@ The Product Owner's decision (comment 5222): Propose now, top of the native queu
   - Mac: on quit and window close, and best-effort on sleep.
 - **Test hooks stay out of production.** A build-time constant removes them, and Fork CI checks the bundles.
 
-Mobile scope: the iPhone app and the Mac app, the two native shells. The web screens inside them get the lifecycle flushes only. The web app served by our server, Electron and MCP are not at risk and do not change (design D7).
+Mobile scope: the iPhone app and the Mac app, the two native shells. The web screens inside them get the lifecycle flushes only. The web app served by our server, Electron and MCP are not at risk and do not change. A browser that falls back to the same storage mode keeps today's sync and messages; protecting it is story 5249 (design D7a).
 
 Not in this change:
 - offering the absurd-sql change upstream (a later, separate decision);
@@ -41,20 +41,34 @@ None.
 
 ### Modified Capabilities
 
-- `native-bridge`: new requirements:
+- `native-bridge`: "Sync failure reasons map to a closed set" is modified. New requirements:
   - "A write is saved only when storage says so"
   - "The storage barrier waits for complete"
+  - "A not-yet-stored write belongs to its page load"
+  - "The storage status line shows only saving states"
+  - "A restart with unconfirmed writes tells the person"
+  - "Offline never claims saved while a write is pending"
   - "Any storage failure latches and is shown app-wide"
   - "No write applies after a storage failure"
   - "Only stored changes reach the server"
   - "The failure notice says what was lost"
   - "The notice's cut-off time is exact"
+  - "The restart notice asks the person to check"
+  - "A restart keeps the device-full reason"
+  - "The failure notice outranks the reload notice"
+  - "The restart notice keeps the earliest cut-off"
   - "The storage wait is a limit"
   - "The shells flush storage before backgrounding or quitting"
-  - "Only the native shells wait for storage"
+  - "Durable platforms do not wait for storage"
+  - "A held sync never reports success"
+  - "The storage guard is for the native shells"
+  - "A closed budget's failed write is reported"
+  - "Limits report their floor"
   - "Test hooks are absent from production"
   - "The barrier is measured and gated"
   - "An acknowledged write survives a page-process kill"
+
+- `mobile-sync-status`: new requirement "A held sync says it is waiting".
 
 ## Impact
 

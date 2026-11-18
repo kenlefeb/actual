@@ -49,7 +49,7 @@ Ships before `native-accounts-screen` task 3.8 turns the native Accounts screen 
   - an "Updating…" row opens only the read-only detail, marked "Updating…", with no swipe actions;
   - "Loading scheduled…" only for the first load and for scope or search changes;
   - "First K scheduled; more not shown" from `upcomingKept`, with the total labelled as the shown rows' total, when `upcomingMore` is present, and plain "N scheduled" otherwise;
-  - the `upcomingMore` notice naming "Scheduled rows: most shown" in Settings > Advanced > Limits, up to 500;
+  - the `upcomingMore` notice, with no pointer to Settings until task 2.4;
   - upcoming rows shown while a scope or search is set;
   - "N scheduled" and its total shown apart from the posted results;
   - both notices (`upcomingCapDays`, `upcomingMore`);
@@ -61,8 +61,8 @@ Ships before `native-accounts-screen` task 3.8 turns the native Accounts screen 
   - the partial count and total wording;
   - both notices.
 - [ ] 2.3 Tapping an upcoming row opens the native read-only detail with "Scheduled" and "Fields set by rules: …", with no edit and no web hand-off (design D5a). UI test for a row with and without rule-set fields
-- [ ] 2.4 The Limits section rows "Scheduled rows: days ahead" and "Scheduled rows: most shown". `accounts-upcoming-max-rows`'s display name is "Scheduled rows: most shown", with help "The most scheduled rows the native register shows and searches (up to 500)." If story 4643's Limits registry has merged, add both with their name and help line, and check that changing each changes the register and its notice. If not, comment both labels and help lines on story 4643 so they land there
-- [ ] 2.5 Check on the iPhone simulator against the web register, unfiltered and filtered, within the caps; record screenshots in the PR
+- [ ] 2.4 The Limits section rows "Scheduled rows: days ahead" and "Scheduled rows: most shown". `accounts-upcoming-max-rows`'s display name is "Scheduled rows: most shown", with help "The most scheduled rows the native register shows and searches (up to 500)." If story 4643's Limits registry has merged, add both with their name and help line, and check that changing each changes the register and its notice. If not, comment both labels and help lines on story 4643 so they land there. When the Limits screen ships, restore the pointer the two notices dropped (Product Owner, sc-3611 comment 5251): "Scheduled rows shown up to N days; change this in Settings > Advanced > Limits." and "More scheduled rows are not shown or searched. To see more, raise Scheduled rows: most shown in Settings > Advanced > Limits (up to 500)."
+- [x] 2.5 Checked by hand on the iPhone simulator against the web register, unfiltered (sc-4973 comment 5244, with the Savings side in comment 5223). Filtered views have no web counterpart (the web hides upcoming rows when filtered), the day and row caps are covered by the engine parity tests, and the screenshots are kept with the Director, not in the PR. Scope set by the Product Owner in sc-4973 comment 5218.
 - [x] 2.6 Run the `NativeBridgeCore` tests and the iOS build; all pass
 
 ## 3. Archive (sc-4973)

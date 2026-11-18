@@ -2,18 +2,24 @@ import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
 
 import { patchFetchForSqlJS } from '#mocks/util';
+import * as connection from '#platform/server/connection';
 import * as idb from '#platform/server/indexeddb';
 import * as sqlite from '#platform/server/sqlite';
 
 import {
   _setDocumentDir,
+  enableStorageLatch,
   exists,
   init,
   join,
   pathToId,
   readFile,
+  storageState,
+  whenPersisted,
   writeFile,
 } from './index';
+
+vi.mock('#platform/server/connection', () => ({ send: vi.fn() }));
 
 beforeAll(() => {
   const baseURL = `${__dirname}/../../../../../../node_modules/@jlongster/sql.js/dist/`;
@@ -164,6 +170,167 @@ describe('web filesystem', () => {
     const FS = sqlite._getModule().FS;
     const { node } = FS.lookupPath('/custom/xyz/db.sqlite', {});
     expect(node.link).toBe('/blocked/' + pathToId('/custom/xyz/db.sqlite'));
+  });
+});
+
+// Fork-only (sc-5219, native-durable-writes D2, D5): the real blocked fs and
+// patched backend in fallback mode, as the iPhone and Mac shells run them
+describe('storage state of the blocked fs', () => {
+  // Fails `times` readwrite transactions; everything else runs as usual
+  function failWrites(times = Infinity) {
+    const transaction = IDBDatabase.prototype.transaction;
+    let left = times;
+    vi.spyOn(IDBDatabase.prototype, 'transaction').mockImplementation(function (
+      this: IDBDatabase,
+      ...args: Parameters<IDBDatabase['transaction']>
+    ) {
+      if (args[1] === 'readwrite' && left > 0) {
+        left--;
+        throw new DOMException('full', 'QuotaExceededError');
+      }
+      return transaction.apply(this, args);
+    });
+  }
+
+  async function openFile(name: string) {
+    await idb.openDatabase();
+    await sqlite.init();
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubGlobal('SharedArrayBuffer', undefined);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('')),
+    );
+    await init();
+    const FS = sqlite._getModule().FS;
+    const stream = FS.open(`/blocked/${name}`, 'w+');
+    // The blocked fs's own stream, which the sql.js types don't describe
+    const blocked = stream as unknown as {
+      node: {
+        contents: {
+          openHandles: number;
+          ops: { persistance: { readAll(): Promise<unknown> } };
+          lock(type: number): void;
+          unlock(type: number): void;
+        };
+      };
+      stream_ops: { fsync(stream: unknown): void };
+    };
+    const write = (byte: number) => {
+      // A first block carries SQLite's page size, big-endian at offset 16
+      const page = new Uint8Array(4096).fill(byte);
+      page.set([0x10, 0], 16);
+      FS.write(stream as never, page, 0, 4096, 0);
+      blocked.stream_ops.fsync(stream);
+    };
+    // Under SQLite's write lock, so the safety check runs
+    const lockedWrite = (byte: number) => {
+      blocked.node.contents.lock(4);
+      write(byte);
+      blocked.node.contents.unlock(1);
+    };
+    return {
+      write,
+      lockedWrite,
+      close: () => FS.close(stream),
+      contents: blocked.node.contents,
+    };
+  }
+
+  beforeEach(() => {
+    vi.mocked(connection.send).mockClear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  test('reports a stored write of the open file', async () => {
+    const file = await openFile('stored');
+    file.write(1);
+    await whenPersisted();
+    expect(storageState()).toMatchObject({
+      failed: false,
+      lastStoredFlushAt: expect.any(Number),
+    });
+  });
+
+  test('with the guard off, a failed write is unseen and only the safety check alerts, as in stock', async () => {
+    const file = await openFile('guard-off');
+    file.lockedWrite(1);
+    await whenPersisted();
+    failWrites(1);
+    file.lockedWrite(2);
+    await whenPersisted();
+    expect(storageState()).toMatchObject({ failed: false, quota: false });
+    expect(connection.send).not.toHaveBeenCalled();
+    file.lockedWrite(3);
+    await whenPersisted();
+    expect(vi.mocked(connection.send).mock.calls).toEqual([
+      ['fallback-write-error'],
+    ]);
+  });
+
+  test('with the guard on, latches and reports a failed write of the open file', async () => {
+    const file = await openFile('open');
+    enableStorageLatch();
+    failWrites();
+    file.write(1);
+    await expect(whenPersisted()).rejects.toThrow('full');
+    expect(storageState()).toMatchObject({ failed: true, quota: true });
+    // Not the safety check, so not the one-tab message
+    expect(connection.send).not.toHaveBeenCalledWith('fallback-write-error');
+    expect(connection.send).toHaveBeenCalledWith('storage-failed', {
+      lastStoredFlushAt: null,
+      quota: true,
+    });
+  });
+
+  // A handle left open would make this budget's later failure latch the open one
+  test('a budget that fails to open leaves no handle open', async () => {
+    const file = await openFile('failed-open');
+    file.close();
+    sqlite._getModule().FS.symlink('/blocked/failed-open', '/failed-open');
+    vi.spyOn(file.contents.ops.persistance, 'readAll').mockRejectedValue(
+      new Error('stuck'),
+    );
+    await expect(sqlite.openDatabase('/failed-open')).rejects.toThrow('stuck');
+    expect(file.contents.openHandles).toBe(0);
+  });
+
+  test('reports the flush time of the last stored write as the cut-off', async () => {
+    const file = await openFile('cut-off');
+    enableStorageLatch();
+    vi.spyOn(Date, 'now').mockReturnValue(5000);
+    file.write(1);
+    await whenPersisted();
+    failWrites();
+    file.write(2);
+    await expect(whenPersisted()).rejects.toThrow('full');
+    expect(connection.send).toHaveBeenCalledWith('storage-failed', {
+      lastStoredFlushAt: 5000,
+      quota: true,
+    });
+  });
+
+  test("records and reports a closed file's failed last write without latching", async () => {
+    const file = await openFile('closed');
+    enableStorageLatch();
+    failWrites();
+    file.write(1);
+    file.close();
+    await whenPersisted();
+    expect(storageState()).toMatchObject({
+      failed: false,
+      closeFailed: true,
+    });
+    expect(connection.send).toHaveBeenCalledWith('storage-close-failed');
+    expect(connection.send).not.toHaveBeenCalledWith(
+      'storage-failed',
+      expect.anything(),
+    );
   });
 });
 

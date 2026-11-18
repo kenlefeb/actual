@@ -54,15 +54,36 @@ public enum NativeBridgeAllowlist {
     // key-make and reset-budget-cache stay off.
     public static let settingsReads: Set<String> = ["native/settings", "native/server-info"]
     public static let settingsWrites: Set<String> = ["native/settings-save"]
+    // sc-5219 (native-durable-writes D4, D5): the storage barrier and the failure latch.
+    // The guard's switch stays off: the page sets it as its bridge installs.
+    public static let storage: Set<String> = ["native/persisted", "native/storage-state"]
     public static let handlers: Set<String> = reads.union(writes).union(paycheckWrites).union(sync).union(reconcileReads)
         .union(reconcileWrites).union(accountsReads).union(accountsWrites).union(settingsReads).union(settingsWrites)
-        .union(transactionReads).union(transactionWrites)
+        .union(transactionReads).union(transactionWrites).union(storage)
+
+    // sc-5219 (D3): what a call is. A write is followed by native/persisted; a
+    // storage call changes nothing, so it is never a write.
+    public enum Kind: Equatable { case read, write, sync, storage }
+
+    public static let allReads: Set<String> = reads.union(reconcileReads).union(accountsReads).union(transactionReads)
+        .union(settingsReads)
+
+    // Anything not listed as a read is a write, as on the page, so a new
+    // handler cannot skip the barrier by being left off a list
+    public static func kind(of name: String) -> Kind? {
+        guard handlers.contains(name) else { return nil }
+        if sync.contains(name) { return .sync }
+        if storage.contains(name) { return .storage }
+        return allReads.contains(name) ? .read : .write
+    }
 }
 
 // The page's reduced sync result (nativeBridge.ts): whether it worked, and a
 // reason from a closed set. Nothing else of loot-core's error crosses.
 public enum SyncFailureReason: String, Equatable {
     case network, unauthorized, outOfSync = "out-of-sync", clockDrift = "clock-drift", encryption, other
+    // sc-5219 (native-durable-writes)
+    case storageSlow = "storage-slow", storageFailed = "storage-failed"
 }
 
 public enum SyncResult: Decodable, Equatable {
@@ -100,7 +121,90 @@ public enum NativeBridgeEvent {
         else { return [] }
         return tables.compactMap { $0 as? String }
     }
+
+    // sc-5219: the number of the native/persisted call whose writes are now stored
+    public static func storedSeq(of body: Any) -> Int? {
+        guard name(of: body) == "stored" else { return nil }
+        return ((body as? [String: Any])?["payload"] as? [String: Any])?["seq"] as? Int
+    }
 }
+
+// sc-5219 (native-durable-writes D3, D4): whether this device has stored the
+// writes made through the client. One per page.
+//
+// With the storage guard off a failed write still answers stored, so app code
+// must not be able to read that yet. `message`, `write` and `StoredWrite` are
+// internal, which stops the Mac app (it imports this package), and exist only
+// in package builds, which stops the iPhone app (it compiles these sources
+// itself, so internal would not). The guard's PR opens them up.
+@MainActor
+public final class WriteStorageStatus: ObservableObject {
+    public static let savingMessage = NSLocalizedString("Saving…", comment: "Native screens: a change is being stored on this device")
+    public static let notYetStoredMessage = NSLocalizedString(
+        "Saved here, not yet stored on this device.", comment: "Native screens: a change was made but this device has not stored it yet")
+
+    @Published private var writesInProgress = 0
+    // Writes not known to be stored: when their native/persisted call was
+    // asked, and its number once answered
+    @Published private var unstored: [(ticket: Int, seq: Int?)] = []
+    private var lastTicket = 0
+    private var newestStoredTicket = 0
+    private var storedThroughSeq = 0
+
+    public nonisolated init() {}
+
+    #if SWIFT_PACKAGE
+    var message: String? {
+        if writesInProgress > 0 { return Self.savingMessage }
+        return unstored.isEmpty ? nil : Self.notYetStoredMessage
+    }
+    #endif
+
+    func writeBegan() { writesInProgress += 1 }
+    func writeEnded() { writesInProgress -= 1 }
+
+    // Taken just before asking, because answers can arrive out of order
+    func nextTicket() -> Int {
+        lastTicket += 1
+        return lastTicket
+    }
+
+    // A stored answer covers every write asked about before it, and no later one
+    func record(_ answer: PersistedAnswer, ticket: Int) {
+        if answer.stored {
+            newestStoredTicket = max(newestStoredTicket, ticket)
+            unstored.removeAll { $0.ticket <= ticket }
+        } else if ticket > newestStoredTicket {
+            // This call waits for every write before it, so it speaks for any
+            // earlier call that never got an answer
+            if answer.seq != nil { unstored.removeAll { $0.seq == nil && $0.ticket < ticket } }
+            if (answer.seq ?? .max) > storedThroughSeq { unstored.append((ticket, answer.seq)) }
+        }
+    }
+
+    // The engine's storage-stored, which the page forwards as `stored`. It can
+    // arrive before the answer that carries its number. Writes are stored in
+    // order, so it covers every earlier number too.
+    public func storedEvent(seq: Int) {
+        storedThroughSeq = max(storedThroughSeq, seq)
+        unstored.removeAll { $0.seq.map { $0 <= seq } ?? false }
+    }
+}
+
+struct PersistedAnswer: Decodable, Equatable {
+    let stored: Bool
+    var seq: Int?
+
+    static let notStored = PersistedAnswer(stored: false)
+}
+
+#if SWIFT_PACKAGE
+// A write's result, and whether this device has stored it
+struct StoredWrite {
+    let data: Data
+    let stored: Bool
+}
+#endif
 
 // sc-3611 (native-bridge: "Native refusals carry a stable code"). A loot-core
 // refusal native code reacts to starts with `[native:<code>]` or
@@ -121,6 +225,8 @@ public struct NativeRefusal: Equatable {
         // sc-3602 (D3): the save of an edit that changed elsewhere, or a draft rules changed since it was shown
         case changedSince = "changed-since"
         case previewStale = "preview-stale"
+        // sc-5219 (native-durable-writes D5): storage failed; nothing more is stored
+        case notStored = "not-stored"
     }
 
     public let code: Code
@@ -270,13 +376,17 @@ public struct NativeBridgeClient {
     private let transport: Transport
     private let timeout: TimeInterval
     private let syncTimeout: TimeInterval
+    // The app's clients have one, so every write waits for storage. Demo and
+    // screen-test clients have no page storage to wait for.
+    private let storage: WriteStorageStatus?
 
     public init(
         timeout: TimeInterval = NativeBridgeClient.defaultTimeout, syncTimeout: TimeInterval = NativeBridgeClient.defaultSyncTimeout,
-        transport: @escaping Transport
+        storage: WriteStorageStatus? = nil, transport: @escaping Transport
     ) {
         self.timeout = timeout
         self.syncTimeout = syncTimeout
+        self.storage = storage
         self.transport = transport
     }
 
@@ -284,9 +394,67 @@ public struct NativeBridgeClient {
         try await call(name, args: [String: String]())
     }
 
-    // Arguments are any JSON value, so a number crosses as a number
     public func call<Args: Encodable>(_ name: String, args: Args) async throws -> Data {
-        guard NativeBridgeAllowlist.handlers.contains(name), !NativeBridgeAllowlist.sync.contains(name) else {
+        if storage != nil, NativeBridgeAllowlist.kind(of: name) == .write {
+            return try await sendThenPersist(name, args: args).data
+        }
+        return try await send(name, args: args)
+    }
+
+    // sc-5219 (D3): the write with its own deadline, then native/persisted with
+    // its own. The write is never retried. A failure of the second call only
+    // means not stored: the write has already been applied.
+    private func sendThenPersist<Args: Encodable>(_ name: String, args: Args) async throws -> (data: Data, stored: Bool) {
+        await storage?.writeBegan()
+        let data: Data
+        do {
+            data = try await send(name, args: args)
+        } catch {
+            await storage?.writeEnded()
+            throw error
+        }
+        let stored = await persisted()
+        await storage?.writeEnded()
+        return (data, stored)
+    }
+
+    #if SWIFT_PACKAGE
+    func write<Args: Encodable>(_ name: String, args: Args) async throws -> StoredWrite {
+        let result = try await sendThenPersist(name, args: args)
+        return StoredWrite(data: result.data, stored: result.stored)
+    }
+    #endif
+
+    private func persisted() async -> Bool {
+        let ticket = await storage?.nextTicket() ?? 0
+        do {
+            let answer = try await askPersisted()
+            await storage?.record(answer, ticket: ticket)
+            return answer.stored
+        } catch NativeBridgeError.timedOut {
+            await storage?.record(.notStored, ticket: ticket)
+            // The one call that may be repeated: it changes nothing
+            Task {
+                let retry = await storage?.nextTicket() ?? 0
+                if let answer = try? await askPersisted() { await storage?.record(answer, ticket: retry) }
+            }
+            return false
+        } catch {
+            await storage?.record(.notStored, ticket: ticket)
+            return false
+        }
+    }
+
+    private func askPersisted() async throws -> PersistedAnswer {
+        let name = "native/persisted"
+        let json = try await withTimeout(name, timeout) { try await transport(name, "{}") }
+        return try JSONDecoder().decode(PersistedAnswer.self, from: Data(json.utf8))
+    }
+
+    // Arguments are any JSON value, so a number crosses as a number
+    private func send<Args: Encodable>(_ name: String, args: Args) async throws -> Data {
+        // sync and the storage calls have their own paths
+        guard let kind = NativeBridgeAllowlist.kind(of: name), kind != .sync, kind != .storage else {
             throw NativeBridgeError.notAllowlisted(name)
         }
         // Each write name takes only its own typed value
@@ -302,12 +470,7 @@ public struct NativeBridgeClient {
             || (args is AccountReopen && name == "native/account-reopen") || (args is AccountMove && name == "native/account-move")
             || (args is SettingsSave && name == "native/settings-save")
             || (args is TransactionSave && name == "native/transaction-save")
-        let isWrite =
-            NativeBridgeAllowlist.writes.contains(name) || NativeBridgeAllowlist.paycheckWrites.contains(name)
-            || NativeBridgeAllowlist.reconcileWrites.contains(name) || NativeBridgeAllowlist.accountsWrites.contains(name)
-            || NativeBridgeAllowlist.settingsWrites.contains(name)
-            || NativeBridgeAllowlist.transactionWrites.contains(name)
-        guard !isWrite || isTyped else {
+        guard kind != .write || isTyped else {
             throw NativeBridgeError.invalidWrite(name)
         }
         let encoder = JSONEncoder()

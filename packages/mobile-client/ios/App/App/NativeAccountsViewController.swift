@@ -178,6 +178,7 @@ struct AccountsScreen: View {
     // Owned here and handed to the list: a toolbar EditButton's own edit mode
     // never reached the List (sc-3611 hands-on pass)
     @State private var editMode: EditMode = .inactive
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         NavigationView {
@@ -188,7 +189,7 @@ struct AccountsScreen: View {
                     ToolbarItem(placement: .navigationBarLeading) {
                         if let list = model.state.value, !list.sections.onBudget.accounts.isEmpty || !list.sections.offBudget.accounts.isEmpty {
                             Button(editMode.isEditing ? AccountsWords.done : AccountsWords.edit) {
-                                withAnimation { editMode = editMode.isEditing ? .inactive : .active }
+                                withAnimation(reduceMotion ? nil : .default) { editMode = editMode.isEditing ? .inactive : .active }
                             }
                         }
                     }
@@ -205,7 +206,12 @@ struct AccountsScreen: View {
             Button(AccountsWords.ok, role: .cancel) {}
         }
         .onChange(of: model.actionError) { error in
-            if let error { UIAccessibility.post(notification: .announcement, argument: error.message) }
+            if let error { AccessibilityAnnouncer.post(error.message) }
+        }
+        // The register announces its own reads while it is pushed over the list
+        // Once per failed read, including a retry that fails the same way
+        .onChange(of: model.failureCount) { _ in
+            if let error = model.state.error, nav.register == nil { AccessibilityAnnouncer.post(error.message) }
         }
     }
 
@@ -244,11 +250,14 @@ struct AccountsScreen: View {
         case .loading:
             // The real layout, redacted; no spinner and no shimmer (D6)
             AccountsListBody(
-                list: .placeholder, status: .syncing, isSyncing: true, staleError: nil, model: model, reconcileMonth: nil, actions: actions
+                list: .placeholder, status: .syncing, isSyncing: true, staleError: nil, model: model, reconcileMonth: nil, actions: actions,
+                isPlaceholder: true
             )
             .redacted(reason: .placeholder)
             .disabled(true)
-            .accessibilityLabel(Text(AccountsWords.loading))
+            // The placeholder rows are made-up names and numbers: each is hidden from VoiceOver
+            // (hiddenWhilePlaceholder), with one "Loading accounts" element in their place
+            .overlay { Color.clear.accessibilityElement().accessibilityLabel(Text(AccountsWords.loading)) }
         case .loaded(let list):
             loaded(list, staleError: nil)
         case .stale(let list, let error):
@@ -306,15 +315,32 @@ private struct AccountsListBody: View {
     // nil while the Reconcile flow's switch is off
     let reconcileMonth: ReconcileMonthViewModel?
     let actions: AccountsActions
+    var isPlaceholder = false
+
+    private var hasSubtitle: Bool {
+        if staleError != nil || isSyncing { return true }
+        if case .unknown = status { return false }
+        return true
+    }
+
+    @ViewBuilder private var firstRows: some View {
+        if let reconcileMonth { ReconcileBanner(month: reconcileMonth) { actions.reconcile(nil) } }
+        Button { actions.navigate("/accounts/all") } label: {
+            LinkRow { AccountTexts(name: AccountsWords.allAccounts, detail: AccountsWords.allAccountsDetail) }
+        }
+        .foregroundColor(.primary)
+    }
 
     var body: some View {
         List {
-            Section(header: SyncSubtitle(status: isSyncing ? .syncing : status, staleError: staleError) { Task { await model.refresh() } }) {
-                if let reconcileMonth { ReconcileBanner(month: reconcileMonth) { actions.reconcile(nil) } }
-                Button { actions.navigate("/accounts/all") } label: {
-                    LinkRow { AccountTexts(name: AccountsWords.allAccounts, detail: AccountsWords.allAccountsDetail) }
+            Group {
+            if hasSubtitle {
+                Section(header: SyncSubtitle(status: isSyncing ? .syncing : status, staleError: staleError) { Task { await model.refresh() } }) {
+                    firstRows
                 }
-                .foregroundColor(.primary)
+            } else {
+                // No status yet: a header with no words would be an unlabeled element
+                Section { firstRows }
             }
             section(.onBudget, title: AccountsWords.onBudget, list.sections.onBudget)
             section(.offBudget, title: AccountsWords.offBudget, list.sections.offBudget)
@@ -330,6 +356,8 @@ private struct AccountsListBody: View {
             Section {
                 AmountLine(title: AccountsWords.netWorth, amount: list.netWorth, style: list.amountStyle, isHeadline: true)
             }
+            }
+            .hiddenWhilePlaceholder()
         }
         .listStyle(.insetGrouped)
         .refreshable { await model.refresh() }
@@ -337,7 +365,7 @@ private struct AccountsListBody: View {
 
     @ViewBuilder private func section(_ which: AccountsListSection, title: String, _ section: AccountsList.Section) -> some View {
         if !section.accounts.isEmpty {
-            Section(header: AmountLine(title: title, amount: section.total, style: list.amountStyle, isHeadline: true).textCase(nil)) {
+            Section(header: AmountLine(title: title, amount: section.total, style: list.amountStyle, isHeadline: true).textCase(nil).accessibilityHidden(isPlaceholder)) {
                 ForEach(section.accounts) { account in
                     Button { actions.openRegister(account.id) } label: {
                         LinkRow { AccountRow(account: account, style: list.amountStyle) }
@@ -487,6 +515,7 @@ private struct AccountRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text([account.name, amountText, detail].filter { !$0.isEmpty }.joined(separator: ", ")))
         .accessibilityAddTraits(.isButton)
+        .hiddenWhilePlaceholder()
     }
 
     private var texts: some View { AccountTexts(name: account.name, detail: detail, isSecondary: isSecondary) }
@@ -497,9 +526,7 @@ private struct AccountRow: View {
         Text(amountText)
             .font(.body.monospacedDigit())
             .foregroundColor(account.balance < 0 ? Money.negative : .primary)
-            // Beside the name it keeps its width, so the name wraps instead of
-            // the amount breaking mid-number (sc-3611 hands-on pass)
-            .fixedSize(horizontal: !typeSize.isAccessibilitySize, vertical: true)
+            .wholeAmount()
     }
 
     private var detail: String { AccountsWords.detail(AccountDetail(account), style: style) }
@@ -526,6 +553,7 @@ private struct AmountLine: View {
         .accessibilityLabel(Text(title))
         .accessibilityValue(Text(BudgetAmountFormat.string(amount, style: style)))
         .accessibilityAddTraits(.isHeader)
+        .hiddenWhilePlaceholder()
     }
 
     @ViewBuilder private var texts: some View {
@@ -534,7 +562,7 @@ private struct AmountLine: View {
         Text(BudgetAmountFormat.string(amount, style: style))
             .font(.body.monospacedDigit())
             .foregroundColor(amount < 0 ? Money.negative : .secondary)
-            .fixedSize(horizontal: !typeSize.isAccessibilitySize, vertical: true)
+            .wholeAmount()
     }
 }
 

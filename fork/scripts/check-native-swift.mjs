@@ -72,9 +72,41 @@ function weakensWebKit(path, text) {
   );
 }
 
+// sc-5177: the iPhone UI tests launch the app on fixtures through a hook
+// (UITestAccounts). Every line that names it must sit inside `#if DEBUG`, so a
+// Release build, which TestFlight ships, has neither the hook nor its launch
+// argument. The UI-test target itself is never part of the app.
+// shortcut: counts #if/#endif lines, not a parser; an `#if DEBUG && x` or a
+// negated condition is not recognised as Debug-only, which can only fail loudly.
+const UI_TEST_HOOK = /UITest[A-Z]\w*/;
+
+function hookOutsideDebug(path, text) {
+  if (path.includes('/AppUITests/')) return [];
+  // One entry per open #if: true while the branch is the Debug-only one
+  const open = [];
+  const outside = [];
+  text.split('\n').forEach((line, i) => {
+    const directive = /^\s*#(if|elseif|else|endif)\b(.*)/.exec(line);
+    if (directive) {
+      const [, kind, rest] = directive;
+      if (kind === 'if') open.push(rest.trim() === 'DEBUG');
+      else if (kind === 'endif') open.pop();
+      else open[open.length - 1] = false;
+    } else if (UI_TEST_HOOK.test(line) && !open.some(Boolean)) {
+      outside.push(i + 1);
+    }
+  });
+  return outside.length
+    ? [
+        `${path}: names the UI-test hook outside #if DEBUG (line ${outside[0]}); a Release build must not contain it`,
+      ]
+    : [];
+}
+
 // files: { path: contents }. Returns failure messages; empty means pass.
 export function problems(files) {
   return Object.entries(files).flatMap(([path, text]) => [
+    ...hookOutsideDebug(path, text),
     ...RULES.filter(([re]) => re.test(text)).map(
       ([, what]) => `${path}: ${what}; only loot-core may open the budget`,
     ),

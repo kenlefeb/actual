@@ -29,6 +29,7 @@ struct NativeTransactionRow: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(accessibilityText))
+        .hiddenWhilePlaceholder()
     }
 
     // At accessibility sizes the amount moves under the payee, whole
@@ -63,8 +64,7 @@ struct NativeTransactionRow: View {
             Text(amount)
                 .font(.body.monospacedDigit())
                 .foregroundColor(isScheduled ? .secondary : isIncome ? NativeReconcileTokens.positive : .primary)
-                // Beside the payee it keeps its width, so the payee wraps, not the number
-                .fixedSize(horizontal: !typeSize.isAccessibilitySize, vertical: true)
+                .wholeAmount()
             statusLabel
         }
     }
@@ -112,6 +112,52 @@ struct NativeTransactionRow: View {
     }
 }
 
+// sc-3611 (task 3.6): an amount is never split across lines, which would read as
+// a different number. The floor is 40%: at the largest text size that is still
+// 17 pt or more for every amount style these screens use.
+extension View {
+    // On its own line: shrinks to fit the width. Its height stays free, or a tight
+    // height offer in a stack shrinks a short amount that fits the width anyway.
+    func oneLineAmount() -> some View {
+        lineLimit(1).minimumScaleFactor(0.4).fixedSize(horizontal: false, vertical: true)
+    }
+
+    // Beside a name it keeps its width and the name wraps; at the accessibility
+    // sizes it sits on its own line
+    func wholeAmount() -> some View { modifier(WholeAmount()) }
+}
+
+private struct WholeAmount: ViewModifier {
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    func body(content: Content) -> some View {
+        if typeSize.isAccessibilitySize {
+            content.oneLineAmount()
+        } else {
+            content.lineLimit(1).fixedSize(horizontal: true, vertical: true)
+        }
+    }
+}
+
+// "Label amount" in a line; at the accessibility sizes the label sits above the whole amount
+struct LabelledAmount: View {
+    let label: String
+    let amount: String
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(label.trimmingCharacters(in: .whitespaces)).fixedSize(horizontal: false, vertical: true)
+                Text(amount).monospacedDigit().oneLineAmount()
+            }
+            .accessibilityElement(children: .combine)
+        } else {
+            Text(label) + Text(amount).monospacedDigit()
+        }
+    }
+}
+
 enum NativeTransactionRowWords {
     static let cleared = NSLocalizedString("Cleared", comment: "Native transaction row: cleared status")
     static let notCleared = NSLocalizedString("Not cleared", comment: "Native transaction row: not cleared status")
@@ -119,4 +165,30 @@ enum NativeTransactionRowWords {
     static let scheduled = NSLocalizedString("Scheduled", comment: "Native transaction row: an upcoming scheduled transaction")
     static let locked = NSLocalizedString("Reconciled", comment: "Native transaction row: reconciled and locked")
     static let uncategorized = NSLocalizedString("Uncategorized", comment: "Native transaction row: no category")
+}
+
+
+// sc-3611 task 3.6: one place that speaks a failed read to VoiceOver. In a UI-test
+// launch it also records what it was asked to say, since XCUITest cannot hear it.
+enum AccessibilityAnnouncer {
+    static func post(_ text: String) {
+        UIAccessibility.post(notification: .announcement, argument: text)
+        #if DEBUG
+        Task { @MainActor in UITestAnnouncements.shared.record(text) }
+        #endif
+    }
+}
+
+// A redacted placeholder shows made-up names and numbers; VoiceOver must not read them
+// (sc-3611 task 3.6). Applied to a List's rows, it hides them while the view is redacted.
+struct HiddenWhilePlaceholder: ViewModifier {
+    @Environment(\.redactionReasons) private var redaction
+
+    func body(content: Content) -> some View {
+        content.accessibilityHidden(redaction.contains(.placeholder))
+    }
+}
+
+extension View {
+    func hiddenWhilePlaceholder() -> some View { modifier(HiddenWhilePlaceholder()) }
 }

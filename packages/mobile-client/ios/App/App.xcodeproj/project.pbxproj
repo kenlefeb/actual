@@ -21,6 +21,7 @@
 		FB3584000000000000000104 /* BudgetMonth.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000004 /* BudgetMonth.swift */; };
 		FB3584000000000000000105 /* NativeBridgeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000005 /* NativeBridgeClient.swift */; };
 		FB3584000000000000000106 /* ChangeCoalescer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000006 /* ChangeCoalescer.swift */; };
+		FB5247000000000000000101 /* PageRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5247000000000000000001 /* PageRecovery.swift */; };
 		FB4942000000000000000101 /* BudgetState.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB4942000000000000000001 /* BudgetState.swift */; };
 		FB3584000000000000000110 /* NativeBridgeBenchmarkTrigger.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000010 /* NativeBridgeBenchmarkTrigger.swift */; };
 		FB3584000000000000000111 /* NativeBridgeBenchmark.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000011 /* NativeBridgeBenchmark.swift */; };
@@ -56,7 +57,21 @@
 		FB434300000000000000101 /* PaycheckEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB434300000000000000001 /* PaycheckEditor.swift */; };
 		FB434300000000000000102 /* PaycheckEditorViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB434300000000000000002 /* PaycheckEditorViewModel.swift */; };
 		FB434300000000000000103 /* NativePaycheckEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB434300000000000000003 /* NativePaycheckEditorView.swift */; };
+		81468055292F86AB369B94B9 /* UITestAccounts.swift in Sources */ = {isa = PBXBuildFile; fileRef = D246F7DC88D369846186AFFB /* UITestAccounts.swift */; };
+		FB5247000000000000000102 /* UITestPageRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5247000000000000000002 /* UITestPageRecovery.swift */; };
+		820DB8ECE5803E95972A13EA /* NativeAccountsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9248F3DFD880A2634F9E61C9 /* NativeAccountsUITests.swift */; };
+		FB5247000000000000000103 /* PageRecoveryUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5247000000000000000003 /* PageRecoveryUITests.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		FF106B2F0C7CDDE374072E99 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 504EC2FC1FED79650016851F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 504EC3031FED79650016851F;
+			remoteInfo = App;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
@@ -77,6 +92,7 @@
 		FB3584000000000000000004 /* BudgetMonth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetMonth.swift; sourceTree = "<group>"; };
 		FB3584000000000000000005 /* NativeBridgeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBridgeClient.swift; sourceTree = "<group>"; };
 		FB3584000000000000000006 /* ChangeCoalescer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeCoalescer.swift; sourceTree = "<group>"; };
+		FB5247000000000000000001 /* PageRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageRecovery.swift; sourceTree = "<group>"; };
 		FB4942000000000000000001 /* BudgetState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetState.swift; sourceTree = "<group>"; };
 		FB3584000000000000000010 /* NativeBridgeBenchmarkTrigger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBridgeBenchmarkTrigger.swift; sourceTree = "<group>"; };
 		FB3584000000000000000011 /* NativeBridgeBenchmark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBridgeBenchmark.swift; sourceTree = "<group>"; };
@@ -112,6 +128,11 @@
 		FB434300000000000000001 /* PaycheckEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaycheckEditor.swift; sourceTree = "<group>"; };
 		FB434300000000000000002 /* PaycheckEditorViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaycheckEditorViewModel.swift; sourceTree = "<group>"; };
 		FB434300000000000000003 /* NativePaycheckEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePaycheckEditorView.swift; sourceTree = "<group>"; };
+		6DF959A4FBDF81B19F0E9A09 /* AppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		9248F3DFD880A2634F9E61C9 /* NativeAccountsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAccountsUITests.swift; sourceTree = "<group>"; };
+		FB5247000000000000000003 /* PageRecoveryUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageRecoveryUITests.swift; sourceTree = "<group>"; };
+		D246F7DC88D369846186AFFB /* UITestAccounts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestAccounts.swift; sourceTree = "<group>"; };
+		FB5247000000000000000002 /* UITestPageRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestPageRecovery.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -138,6 +159,7 @@
 			isa = PBXGroup;
 			children = (
 				504EC3061FED79650016851F /* App */,
+				7654946252DF8000B2E80143 /* AppUITests */,
 				FB3584000000000000000200 /* NativeBridgeCore */,
 				504EC3051FED79650016851F /* Products */,
 				7F8756D8B27F46E3366F6CEA /* Pods */,
@@ -149,6 +171,7 @@
 			isa = PBXGroup;
 			children = (
 				504EC3041FED79650016851F /* App.app */,
+				6DF959A4FBDF81B19F0E9A09 /* AppUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -158,6 +181,8 @@
 			children = (
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
+				D246F7DC88D369846186AFFB /* UITestAccounts.swift */,
+				FB5247000000000000000002 /* UITestPageRecovery.swift */,
 				FB3584000000000000000001 /* NativeBridgePlugin.swift */,
 				FB3584000000000000000002 /* AppBridgeViewController.swift */,
 				FB3584000000000000000003 /* NativeBridgeBenchmarkHarness.swift */,
@@ -198,6 +223,7 @@
 				FB3584000000000000000004 /* BudgetMonth.swift */,
 				FB3584000000000000000005 /* NativeBridgeClient.swift */,
 				FB3584000000000000000006 /* ChangeCoalescer.swift */,
+				FB5247000000000000000001 /* PageRecovery.swift */,
 				FB4942000000000000000001 /* BudgetState.swift */,
 				FB3584000000000000000011 /* NativeBridgeBenchmark.swift */,
 				FB3514000000000000000003 /* NativeTabRouter.swift */,
@@ -226,6 +252,15 @@
 			path = ../NativeBridge/Sources/NativeBridgeCore;
 			sourceTree = SOURCE_ROOT;
 		};
+		7654946252DF8000B2E80143 /* AppUITests */ = {
+			isa = PBXGroup;
+			children = (
+				9248F3DFD880A2634F9E61C9 /* NativeAccountsUITests.swift */,
+				FB5247000000000000000003 /* PageRecoveryUITests.swift */,
+			);
+			path = AppUITests;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -248,6 +283,22 @@
 			productReference = 504EC3041FED79650016851F /* App.app */;
 			productType = "com.apple.product-type.application";
 		};
+		BD29AC8A96B205978259D712 /* AppUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F25C0A38BED4202D43CB4D50 /* Build configuration list for PBXNativeTarget "AppUITests" */;
+			buildPhases = (
+				E8E45E520869893CA7E1921F /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				4F4E882A53C55F02EEBDD30F /* PBXTargetDependency */,
+			);
+			name = AppUITests;
+			productName = AppUITests;
+			productReference = 6DF959A4FBDF81B19F0E9A09 /* AppUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -257,6 +308,9 @@
 				LastSwiftUpdateCheck = 0920;
 				LastUpgradeCheck = 0920;
 				TargetAttributes = {
+					BD29AC8A96B205978259D712 = {
+						TestTargetID = 504EC3031FED79650016851F;
+					};
 					504EC3031FED79650016851F = {
 						CreatedOnToolsVersion = 9.2;
 						LastSwiftMigration = 1100;
@@ -280,6 +334,7 @@
 			projectRoot = "";
 			targets = (
 				504EC3031FED79650016851F /* App */,
+				BD29AC8A96B205978259D712 /* AppUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -340,6 +395,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				81468055292F86AB369B94B9 /* UITestAccounts.swift in Sources */,
+				FB5247000000000000000102 /* UITestPageRecovery.swift in Sources */,
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				FB3584000000000000000111 /* NativeBridgeBenchmark.swift in Sources */,
 				FB3584000000000000000110 /* NativeBridgeBenchmarkTrigger.swift in Sources */,
@@ -349,6 +406,7 @@
 				FB3584000000000000000104 /* BudgetMonth.swift in Sources */,
 				FB3584000000000000000105 /* NativeBridgeClient.swift in Sources */,
 				FB3584000000000000000106 /* ChangeCoalescer.swift in Sources */,
+				FB5247000000000000000101 /* PageRecovery.swift in Sources */,
 				FB4942000000000000000101 /* BudgetState.swift in Sources */,
 				5C3E1A022EBC000100A1B2C3 /* SceneDelegate.swift in Sources */,
 				FB3514000000000000000101 /* NativeChromePlugin.swift in Sources */,
@@ -386,7 +444,25 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E8E45E520869893CA7E1921F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				820DB8ECE5803E95972A13EA /* NativeAccountsUITests.swift in Sources */,
+				FB5247000000000000000103 /* PageRecoveryUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		4F4E882A53C55F02EEBDD30F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = App;
+			target = 504EC3031FED79650016851F /* App */;
+			targetProxy = FF106B2F0C7CDDE374072E99 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
 		504EC3101FED79650016851F /* LaunchScreen.storyboard */ = {
@@ -546,6 +622,37 @@
 			};
 			name = Release;
 		};
+		5657DED69553C0E4F70CAA4C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.actualbudget.AppUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = App;
+			};
+			name = Debug;
+		};
+		F12A8D6C0CAB3AB8925A5BCE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.actualbudget.AppUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = App;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -563,6 +670,15 @@
 			buildConfigurations = (
 				504EC3171FED79650016851F /* Debug */,
 				504EC3181FED79650016851F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F25C0A38BED4202D43CB4D50 /* Build configuration list for PBXNativeTarget "AppUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5657DED69553C0E4F70CAA4C /* Debug */,
+				F12A8D6C0CAB3AB8925A5BCE /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

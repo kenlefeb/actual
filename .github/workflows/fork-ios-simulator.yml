@@ -28,7 +28,8 @@ jobs:
   fork-ios-simulator:
     if: github.repository == 'kenlefeb/actual'
     runs-on: macos-26
-    timeout-minutes: 25
+    # A cold runner spends minutes on the first simulator boot, the web build and the build
+    timeout-minutes: 45
     env:
       # CocoaPods fails on a non-UTF-8 locale
       LANG: en_US.UTF-8
@@ -59,10 +60,28 @@ jobs:
       - name: Sync the native project
         run: yarn workspace mobile-client sync:ios
 
-      - name: Build the iPhone app for the simulator, unsigned
+      # One xcodebuild builds the app unsigned for the simulator (the sc-5054
+      # compile check) and runs the UI tests on it (sc-5177). No sign-in and no
+      # network: the tests launch the Debug-only fixture host (UITestAccounts.swift).
+      - name: Build the iPhone app and run the UI tests on the simulator
         working-directory: packages/mobile-client
-        run: >-
-          xcodebuild -workspace ios/App/App.xcworkspace -scheme App
-          -configuration Debug -sdk iphonesimulator
-          -destination 'generic/platform=iOS Simulator'
-          CODE_SIGNING_ALLOWED=NO build
+        run: |
+          UDID="$(xcrun simctl list devices available iPhone -j | node -e '
+            const d = JSON.parse(require("fs").readFileSync(0, "utf8")).devices;
+            const phones = Object.entries(d).filter(([k]) => k.includes("iOS")).flatMap(([, v]) => v);
+            console.log(phones[phones.length - 1].udid)')"
+          xcrun simctl boot "$UDID" || true
+          xcodebuild -workspace ios/App/App.xcworkspace -scheme App \
+            -configuration Debug -sdk iphonesimulator \
+            -destination "id=$UDID" \
+            -resultBundlePath "$RUNNER_TEMP/ui-tests.xcresult" \
+            CODE_SIGNING_ALLOWED=NO test
+
+      # The result bundle holds the failure screenshots and the UI hierarchy
+      - name: Keep the test results on a failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ui-tests-xcresult
+          path: ${{ runner.temp }}/ui-tests.xcresult
+          retention-days: 7

@@ -218,6 +218,24 @@ final class AccountsListViewModelTests: XCTestCase {
         try JSONDecoder().decode(AccountsList.self, from: Data(page.list.utf8))
     }
 
+    // sc-3611 task 3.6: the screens announce a failed read once per failed attempt. A retry that
+    // fails the same way leaves `state` as it was, so the count is what tells them
+    func testEveryFailedReadCountsOnceEvenWhenItFailsTheSameWay() async throws {
+        let page = try FakeAccountsPage()
+        let model = model(page)
+        XCTAssertEqual(model.failureCount, 0)
+        page.failures["native/accounts-list"] = Boom()
+        await model.load()
+        XCTAssertEqual(model.failureCount, 1)
+        let failed = model.state
+        await model.load()
+        XCTAssertEqual(model.state, failed, "the same failure leaves the state as it was")
+        XCTAssertEqual(model.failureCount, 2)
+        page.failures["native/accounts-list"] = nil
+        await model.load()
+        XCTAssertEqual(model.failureCount, 2, "a read that works is not a failure")
+    }
+
     func testTheFirstLoadIsRedactedThenShowsWhatLootCoreSent() async throws {
         let page = try FakeAccountsPage()
         let model = model(page)
@@ -555,6 +573,19 @@ final class AccountRegisterViewModelTests: XCTestCase {
 
     // The register read failed: there are no posted rows to keep, so the section
     // does not stay on Loading (it is not shown with the failed register)
+    func testEveryFailedRegisterReadCountsOnce() async throws {
+        let page = try FakeAccountsPage()
+        let model = model(page)
+        page.failures["native/account-register"] = Boom()
+        await model.load()
+        XCTAssertEqual(model.failureCount, 1)
+        await model.load()
+        XCTAssertEqual(model.failureCount, 2)
+        page.failures["native/account-register"] = nil
+        await model.load()
+        XCTAssertEqual(model.failureCount, 2)
+    }
+
     func testAFailedRegisterReadLeavesNoUpcomingLoading() async throws {
         let page = try FakeAccountsPage()
         page.failures["native/account-register"] = Boom()
@@ -666,12 +697,9 @@ final class AccountRegisterViewModelTests: XCTestCase {
         XCTAssertEqual(UpcomingWords.summary(capped, filtered: false), "First 100 scheduled; more not shown")
         XCTAssertEqual(UpcomingWords.summary(capped, filtered: true), "2 scheduled in the first 100; more not shown or searched")
         XCTAssertEqual(UpcomingWords.totalLabel(capped), "Total of the rows shown: ")
-        XCTAssertEqual(
-            UpcomingWords.moreNotice(capped),
-            "More scheduled rows are not shown or searched. To see more, raise Scheduled rows: most shown in Settings > Advanced > Limits (up to 500).")
-        // PO decision (sc-4973 comment 5197): both notices name Settings > Advanced > Limits
-        XCTAssertEqual(
-            UpcomingWords.capNotice(capped), "Scheduled rows shown up to 92 days; change this in Settings > Advanced > Limits.")
+        // PO decision (sc-3611 comment 5251): no pointer to a Limits screen until it ships (task 2.4)
+        XCTAssertEqual(UpcomingWords.moreNotice(capped), "More scheduled rows are not shown or searched.")
+        XCTAssertEqual(UpcomingWords.capNotice(capped), "Scheduled rows are shown up to 92 days.")
         XCTAssertEqual(UpcomingWords.ruleFields(["payee", "category"]), "Fields set by rules: payee, category")
         XCTAssertNil(UpcomingWords.ruleFields([]))
     }
@@ -690,16 +718,20 @@ final class AccountRegisterViewModelTests: XCTestCase {
 
     // sc-5224: a split reads as the web shows it, from loot-core's payee and count
     func testASplitShowsItsLinesPayeeAsTheWebDoes() throws {
-        func row(_ payee: String?, split: Int, others: Int?) throws -> AccountUpcoming.Row {
+        func row(_ payee: String?, split: Int, others: Int?, notes: String? = nil) throws -> AccountUpcoming.Row {
+            let notesJSON = notes.map { "\"\($0)\"" } ?? "null"
             let payeeJSON = payee.map { "\"\($0)\"" } ?? "null"
             let othersJSON = others.map { ",\"otherPayees\":\($0)" } ?? ""
-            let json = #"{"id":"preview/s/2017-01-03","scheduleId":"s","date":"2017-01-03","payee":\#(payeeJSON),"category":null,"categoryId":null,"notes":null,"amount":-1,"cleared":false,"splitCount":\#(split),"transferAccount":null,"status":"upcoming","ruleFields":[]\#(othersJSON)}"#
+            let json = #"{"id":"preview/s/2017-01-03","scheduleId":"s","date":"2017-01-03","payee":\#(payeeJSON),"category":null,"categoryId":null,"notes":\#(notesJSON),"amount":-1,"cleared":false,"splitCount":\#(split),"transferAccount":null,"status":"upcoming","ruleFields":[]\#(othersJSON)}"#
             return try JSONDecoder().decode(AccountUpcoming.Row.self, from: Data(json.utf8))
         }
         XCTAssertEqual(UpcomingWords.payee(try row("Power Co", split: 2, others: 0)), "Power Co")
         XCTAssertEqual(UpcomingWords.payee(try row("Grocer", split: 2, others: 1)), "Grocer (+1 more)")
         XCTAssertEqual(UpcomingWords.payee(try row(nil, split: 2, others: 0)), "Split (no payee)")
         XCTAssertEqual(UpcomingWords.payee(try row(nil, split: 0, others: nil)), "No payee")
+        // The web names a split by its lines only, never by its notes
+        XCTAssertEqual(UpcomingWords.payee(try row(nil, split: 2, others: 0, notes: "Quarterly")), "Split (no payee)")
+        XCTAssertEqual(UpcomingWords.payee(try row(nil, split: 0, others: 0, notes: "Quarterly")), "Quarterly")
         // An older loot-core sends no count
         XCTAssertEqual(UpcomingWords.payee(try row("Power Co", split: 2, others: nil)), "Power Co")
     }

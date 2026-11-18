@@ -69,6 +69,11 @@ export default defineConfig(({ mode }) => {
       'process.env.PUBLIC_URL': JSON.stringify(process.env.PUBLIC_URL || '/'),
       'process.env.ACTUAL_DATA_DIR': JSON.stringify('/'),
       'process.env.ACTUAL_DOCUMENT_DIR': JSON.stringify('/documents'),
+      // Fork (sc-5219, native-durable-writes D10): test hooks are compiled out
+      // unless a test build asks for them. Fork CI checks production bundles.
+      __FORK_TEST_HOOKS__: JSON.stringify(
+        process.env.FORK_TEST_HOOKS === 'true',
+      ),
     },
     plugins: [
       peggyLoader(),

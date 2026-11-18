@@ -323,3 +323,65 @@ void test('Native Swift: a project with no App target names every source', () =>
     ['Accounts.swift'],
   );
 });
+
+// sc-5177: the UI-test hook (UITestAccounts) must not reach a Release build
+void test('Native Swift: the UI-test hook outside #if DEBUG fails', () => {
+  const host = 'packages/mobile-client/ios/App/App/UITestAccounts.swift';
+  const guarded = '#if DEBUG\nenum UITestAccounts {}\n#endif\n';
+  assert.deepEqual(problems({ [host]: guarded }), []);
+  // The whole host unguarded
+  assert.match(
+    problems({ [host]: 'enum UITestAccounts {}\n' })[0],
+    /UITestAccounts\.swift: .*UI-test hook.*#if DEBUG/,
+  );
+  // Closed too early: the type sits after the #endif
+  assert.equal(
+    problems({ [host]: '#if DEBUG\n#endif\nenum UITestAccounts {}\n' }).length,
+    1,
+  );
+  // The switch in SceneDelegate
+  const scene = 'packages/mobile-client/ios/App/App/SceneDelegate.swift';
+  assert.deepEqual(
+    problems({
+      [scene]: '#if DEBUG\nif UITestAccounts.isOn { run() }\n#endif\n',
+    }),
+    [],
+  );
+  assert.equal(
+    problems({ [scene]: 'if UITestAccounts.isOn { run() }\n' }).length,
+    1,
+  );
+  // An #else of the DEBUG block is Release code
+  assert.equal(
+    problems({
+      [scene]: '#if DEBUG\n#else\nif UITestAccounts.isOn { run() }\n#endif\n',
+    }).length,
+    1,
+  );
+  // A sibling host for another screen is held to the same rule
+  assert.equal(
+    problems({ [scene]: 'if UITestSettings.isOn { run() }\n' }).length,
+    1,
+  );
+  assert.deepEqual(
+    problems({
+      [scene]: '#if DEBUG\nif UITestSettings.isOn { run() }\n#endif\n',
+    }),
+    [],
+  );
+  // A nested #if keeps the outer DEBUG; the UI-test target itself is not shipped
+  assert.deepEqual(
+    problems({
+      [scene]:
+        '#if DEBUG\n#if canImport(UIKit)\nUITestAccounts.isOn\n#endif\n#endif\n',
+    }),
+    [],
+  );
+  assert.deepEqual(
+    problems({
+      'packages/mobile-client/ios/App/AppUITests/NativeAccountsUITests.swift':
+        'app.launchArguments = ["-UITestAccounts", "YES"]\n',
+    }),
+    [],
+  );
+});

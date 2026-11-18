@@ -80,6 +80,6 @@ describe('settings through the page bridge', () => {
     await expect(
       bridge.call('native/settings-save', { changes: { dateFormat: 'x' } }),
     ).rejects.toThrow();
-    expect(send).not.toHaveBeenCalled();
+    expect(send.mock.calls).toEqual([['native/storage-state']]);
   });
 });

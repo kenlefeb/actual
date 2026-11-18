@@ -41,7 +41,10 @@ function setup(budgetType = 'envelope') {
     notify: vi.fn(),
   });
   const writes = () =>
-    send.mock.calls.filter(([name]) => name !== 'native/budget-month');
+    send.mock.calls.filter(
+      ([name]) =>
+        name !== 'native/budget-month' && name !== 'native/storage-state',
+    );
   return { bridge, send, writes };
 }
 

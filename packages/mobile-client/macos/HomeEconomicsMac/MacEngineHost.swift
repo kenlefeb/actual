@@ -31,7 +31,10 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
     private let openInBrowser: (URL) -> Void
     private static let logger = Logger(subsystem: "app.homeeconomics.budget.mac", category: "navigation")
 
-    lazy var client = NativeBridgeClient { [weak self] name, argsJSON in
+    // sc-5219: whether this device has stored the writes made through `client`
+    let writeStorage = WriteStorageStatus()
+
+    lazy var client = NativeBridgeClient(storage: writeStorage) { [weak self] name, argsJSON in
         guard let self else { throw NativeBridgeError.noPage }
         return try await PageCall(runner: self.webView, serverURL: Self.serverURL).bridgeCall(name: name, argsJSON: argsJSON)
     }
@@ -131,6 +134,9 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
             // Its exact shape or nothing (task 1.4a)
             if let state = BudgetState.parse(body) { onBudgetState?(state) }
             return
+        }
+        if let seq = NativeBridgeEvent.storedSeq(of: body) {
+            Task { @MainActor [writeStorage] in writeStorage.storedEvent(seq: seq) }
         }
         onEvent?(event)
         coalescer.notify()

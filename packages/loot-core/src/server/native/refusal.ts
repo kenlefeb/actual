@@ -16,6 +16,8 @@ export const NATIVE_REFUSAL_CODES = [
   // sc-3602 (D3): the save
   'changed-since',
   'preview-stale',
+  // sc-5219 (native-durable-writes D5): storage failed; nothing more is stored
+  'not-stored',
 ] as const;
 
 export type NativeRefusalCode = (typeof NATIVE_REFUSAL_CODES)[number];

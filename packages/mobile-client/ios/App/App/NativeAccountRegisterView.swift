@@ -29,7 +29,8 @@ struct AccountRegisterView: View {
         content
             .navigationBarTitle(Text(account?.name ?? ""), displayMode: .inline)
             .toolbar { ToolbarItem(placement: .navigationBarTrailing) { moreMenu } }
-            .searchable(text: $searchText, prompt: Text(RegisterWords.searchPrompt))
+            // Always shown: it is the way to the scope chips (task 3.6, frame 27:201)
+            .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: Text(RegisterWords.searchPrompt))
             .onChange(of: searchText) { text in Task { await model.setSearch(text) } }
             .refreshable { await model.refresh() }
             .task { if case .loading = model.state { await model.load() } }
@@ -38,10 +39,14 @@ struct AccountRegisterView: View {
             }
             .alert(model.actionError?.message ?? "", isPresented: isErrorShown) { Button(AccountsWords.ok, role: .cancel) {} }
             .onChange(of: model.actionError) { error in
-                if let error { UIAccessibility.post(notification: .announcement, argument: error.message) }
+                if let error { AccessibilityAnnouncer.post(error.message) }
+            }
+            // Once per failed read, including a retry that fails the same way
+            .onChange(of: model.failureCount) { _ in
+                if let error = model.state.error { AccessibilityAnnouncer.post(error.registerMessage) }
             }
             .onChange(of: model.undoOffer) { offer in
-                if let offer { UIAccessibility.post(notification: .announcement, argument: AccountsWords.undoText(offer)) }
+                if let offer { AccessibilityAnnouncer.post(AccountsWords.undoText(offer)) }
             }
             .confirmationDialog(confirming?.title ?? "", isPresented: isConfirming, titleVisibility: .visible, presenting: confirming) { ask in
                 Button(ask.action, role: ask.isDelete ? .destructive : nil) { confirmed(ask) }
@@ -118,7 +123,9 @@ struct AccountRegisterView: View {
             RegisterList(content: .placeholder, model: model, search: "", rowActions: { _ in .none }, actions: rowHandlers)
                 .redacted(reason: .placeholder)
                 .disabled(true)
-                .accessibilityLabel(Text(RegisterWords.loading))
+                // Each made-up row is hidden from VoiceOver (hiddenWhilePlaceholder), with one
+                // "Loading" element in their place (sc-3611 task 3.6)
+                .overlay { Color.clear.accessibilityElement().accessibilityLabel(Text(RegisterWords.loading)) }
         case .loaded(let content):
             RegisterList(
                 content: content, model: model, search: model.search, rowActions: rowActions, actions: rowHandlers,
@@ -247,6 +254,7 @@ private struct RegisterList: View {
 
     var body: some View {
         List {
+            Group {
             if let staleError {
                 Text(verbatim: staleError.registerMessage).foregroundColor(Money.warning).font(.subheadline)
                     .fixedSize(horizontal: false, vertical: true)
@@ -286,9 +294,11 @@ private struct RegisterList: View {
             }
             // The search footer: loot-core's total over every page (D1), never summed here
             if let results, results.count > 0 {
-                (Text(RegisterWords.resultsTotal) + Text(BudgetAmountFormat.string(results.total, style: style)).monospacedDigit())
+                LabelledAmount(label: RegisterWords.resultsTotal, amount: BudgetAmountFormat.string(results.total, style: style))
                     .font(.footnote).foregroundColor(.secondary).listRowBackground(Color.clear)
             }
+            }
+            .hiddenWhilePlaceholder()
         }
         .listStyle(.insetGrouped)
         // Cancel (the field closing) restores the whole register, scope included
@@ -388,7 +398,7 @@ private struct UpcomingSectionView: View {
             // loot-core's count and total, apart from the posted results; never summed here
             VStack(alignment: .leading, spacing: 2) {
                 Text(UpcomingWords.summary(read, filtered: filtered)).font(.subheadline)
-                (Text(UpcomingWords.totalLabel(read)) + Text(BudgetAmountFormat.string(read.upcomingTotal, style: style)).monospacedDigit())
+                LabelledAmount(label: UpcomingWords.totalLabel(read), amount: BudgetAmountFormat.string(read.upcomingTotal, style: style))
                     .font(.footnote).foregroundColor(.secondary)
             }
             .fixedSize(horizontal: false, vertical: true)
@@ -397,7 +407,7 @@ private struct UpcomingSectionView: View {
             .accessibilityValue(updating ? Text(UpcomingWords.updating) : Text(""))
         }
         .onChange(of: updating) { isUpdating in
-            if isUpdating { UIAccessibility.post(notification: .announcement, argument: UpcomingWords.updating) }
+            if isUpdating { AccessibilityAnnouncer.post(UpcomingWords.updating) }
         }
     }
 
@@ -442,7 +452,7 @@ private struct UpcomingRowDetail: View {
                     line(RegisterWords.detailDate, Dates.short(row.date))
                     line(RegisterWords.detailPayee, UpcomingRowText.payee(row))
                     line(RegisterWords.detailCategory, UpcomingRowText.detail(row) ?? RegisterWords.uncategorized)
-                    line(RegisterWords.detailAmount, style.map { UpcomingRowText.amount(row, style: $0) } ?? "")
+                    line(RegisterWords.detailAmount, style.map { UpcomingRowText.amount(row, style: $0) } ?? "", isAmount: true)
                     line(RegisterWords.detailAccount, accountName)
                     if let notes = row.notes, !notes.isEmpty { line(RegisterWords.detailNotes, notes) }
                 }
@@ -458,22 +468,30 @@ private struct UpcomingRowDetail: View {
     }
 
     // At accessibility sizes the value goes under its label, whole, so no word breaks
-    @ViewBuilder private func line(_ label: String, _ value: String) -> some View {
+    @ViewBuilder private func line(_ label: String, _ value: String, isAmount: Bool = false) -> some View {
         Group {
             if typeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(label).foregroundColor(.secondary)
-                    Text(value).fixedSize(horizontal: false, vertical: true)
+                    valueText(value, isAmount: isAmount)
                 }
             } else {
                 HStack(alignment: .top) {
                     Text(label).foregroundColor(.secondary)
                     Spacer(minLength: 12)
-                    Text(value).multilineTextAlignment(.trailing).fixedSize(horizontal: false, vertical: true)
+                    valueText(value, isAmount: isAmount).multilineTextAlignment(.trailing)
                 }
             }
         }
         .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder private func valueText(_ value: String, isAmount: Bool) -> some View {
+        if isAmount {
+            Text(value).monospacedDigit().wholeAmount()
+        } else {
+            Text(value).fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 
@@ -490,23 +508,24 @@ private struct RegisterHeader: View {
             Text(BudgetAmountFormat.string(header.balance, style: style))
                 .font(.largeTitle.bold().monospacedDigit())
                 .foregroundColor(header.balance < 0 ? Money.negative : .primary)
-                .fixedSize(horizontal: false, vertical: true)
-            // Two lines with no separator at the accessibility sizes, so a wrap never starts with "·"
+                .oneLineAmount()
+            // At the accessibility sizes each label sits above its whole amount
             Group {
                 if typeSize.isAccessibilitySize {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(String(format: RegisterWords.clearedAmount, BudgetAmountFormat.string(header.cleared, style: style)))
-                        Text(String(format: RegisterWords.unclearedAmount, BudgetAmountFormat.string(header.uncleared, style: style)))
+                    VStack(alignment: .leading, spacing: 6) {
+                        LabelledAmount(label: RegisterWords.clearedLabel, amount: BudgetAmountFormat.string(header.cleared, style: style))
+                        LabelledAmount(label: RegisterWords.unclearedLabel, amount: BudgetAmountFormat.string(header.uncleared, style: style))
                     }
                 } else {
                     Text(
                         String(
                             format: RegisterWords.clearedUncleared, BudgetAmountFormat.string(header.cleared, style: style),
-                            BudgetAmountFormat.string(header.uncleared, style: style)))
+                            BudgetAmountFormat.string(header.uncleared, style: style))
+                    )
+                    .oneLineAmount()
                 }
             }
             .font(.footnote.monospacedDigit()).foregroundColor(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
             if let clearingFor {
                 Text(AccountsWords.detail(.clearing(paycheck: clearingFor), style: style)).font(.footnote).foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -514,6 +533,7 @@ private struct RegisterHeader: View {
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
+        .hiddenWhilePlaceholder()
     }
 }
 
@@ -671,8 +691,8 @@ extension AccountRegisterContent {
 }
 
 enum RegisterWords {
-    static let clearedAmount = NSLocalizedString("Cleared %@", comment: "Native Accounts register: header, large text")
-    static let unclearedAmount = NSLocalizedString("Uncleared %@", comment: "Native Accounts register: header, large text")
+    static let clearedLabel = NSLocalizedString("Cleared", comment: "Native Accounts register: header, above the amount at large text")
+    static let unclearedLabel = NSLocalizedString("Uncleared", comment: "Native Accounts register: header, above the amount at large text")
     static let categoriesFailed = NSLocalizedString(
         "The categories could not be loaded.", comment: "Native Accounts register: category picker read failed")
     static let reconciledInvolvedTitle = NSLocalizedString(

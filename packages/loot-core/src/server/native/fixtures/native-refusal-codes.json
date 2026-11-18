@@ -7,5 +7,6 @@
   "invalid-setting",
   "not-found",
   "changed-since",
-  "preview-stale"
+  "preview-stale",
+  "not-stored"
 ]

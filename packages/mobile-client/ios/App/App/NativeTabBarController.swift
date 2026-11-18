@@ -16,6 +16,9 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
     // The native Schedules & Paychecks list (sc-4341) lies over the web
     // Schedules screen the same way, in whichever tab shows it
     private var paychecksOverlay: (screen: NativePaychecksViewController, container: TabContainerViewController)?
+    // The native Accounts screen (sc-4931) lies over the web Accounts screens while
+    // its off-by-default switch is on and the page shows /accounts or /accounts/<id>
+    private var accountsOverlay: NativeAccountsViewController?
     // The native Reconcile flow (sc-4801), presented over whichever tab asked
     private weak var reconcileFlow: NativeReconcileViewController?
     private var pagePath = NativeTab.budget.rootPath
@@ -75,6 +78,7 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
         bridgeController.nativeBridge.onPaychecksEvent = { [weak self] event, tables in
             self?.budgetOverlay?.paychecksEventReceived(event, tables: tables)
             self?.paychecksOverlay?.screen.eventReceived(event, tables: tables)
+            self?.accountsOverlay?.eventReceived(event, tables: tables)
             self?.reconcileFlow?.eventReceived(event, tables: tables)
         }
         chrome.onPresentReconcile = { [weak self] body in self?.presentReconcile(body) }
@@ -140,6 +144,24 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
     private func updateOverlays() {
         updateBudgetOverlay()
         updatePaychecksOverlay()
+        updateAccountsOverlay()
+    }
+
+    // sc-4931 (D5): the route decides; a sheet or the web editor hides the bar, so the
+    // screen is removed and built again, re-reading, when the page comes back
+    private func updateAccountsOverlay() {
+        let container = containers[.accounts]!
+        let route = NativeAccountsRoute.wanted(
+            switchOn: NativeScreenSwitch.isAccountsNative(), tabBarShown: tabBarShown, path: pagePath, selected: router.selected)
+        if let current = accountsOverlay, route != current.route {
+            accountsOverlay = nil
+            container.setOverlay(nil)
+        }
+        guard let route, accountsOverlay == nil, !container.hostsNativeScreen else { return }
+        let screen = NativeAccountsViewController(
+            client: bridgeController.nativeBridge.client, route: route, chrome: bridgeController.nativeChrome)
+        accountsOverlay = screen
+        container.setOverlay(screen)
     }
 
     private func updatePaychecksOverlay() {

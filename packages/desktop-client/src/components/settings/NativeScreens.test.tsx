@@ -117,8 +117,8 @@ describe('NativeScreens', () => {
     expect(win.__actualNativeScreens?.reconcile).toBe(false);
   });
 
-  // sc-4931: the Accounts toggle appears with the overlay and tab wiring (task 2.4),
-  // so it does nothing for people until then
+  // sc-4931: no Accounts toggle reaches users until the screens ship (story 3611). For
+  // developers and tests the app's UserDefaults key `NativeScreen.accounts` turns it on.
   it('does not offer an Accounts switch yet', () => {
     insideIosApp();
     renderSettings();

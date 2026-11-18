@@ -143,4 +143,41 @@ describe('AccountPage', () => {
       whiteSpace: 'nowrap',
     });
   });
+
+  // native-accounts-screen D7a: the native screen hands "account settings" to the web menu
+  it('opens the account menu once when asked by a native hand-off', async () => {
+    state.pushModal.mockClear();
+    render(
+      <TestProviders>
+        <MemoryRouter
+          initialEntries={[
+            {
+              pathname: '/accounts/checking',
+              state: { openAccountMenu: true },
+            },
+          ]}
+        >
+          <Routes>
+            <Route path="/accounts/:id" element={<AccountPage />} />
+          </Routes>
+        </MemoryRouter>
+      </TestProviders>,
+    );
+    await vi.waitFor(() => expect(state.pushModal).toHaveBeenCalledTimes(1));
+    expect(state.pushModal.mock.lastCall?.[0].modal.name).toBe('account-menu');
+  });
+
+  it('does not open the menu without the hand-off', () => {
+    state.pushModal.mockClear();
+    render(
+      <TestProviders>
+        <MemoryRouter initialEntries={['/accounts/checking']}>
+          <Routes>
+            <Route path="/accounts/:id" element={<AccountPage />} />
+          </Routes>
+        </MemoryRouter>
+      </TestProviders>,
+    );
+    expect(state.pushModal).not.toHaveBeenCalled();
+  });
 });

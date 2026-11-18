@@ -122,7 +122,7 @@ A split child `id` SHALL be accepted only on an edit, and only for a live child 
 - **THEN** "Brand New Payee" is created in the save's undo step, and undo removes it
 
 ### Requirement: Rules keep the person's own fields
-The person's fields SHALL be every field they set or cleared by hand in the sheet, plus a preset account. Rules SHALL never change them, in the preview, on a payee change, or at save; for each one a rule would set differently, the preview SHALL return the rule's value as a suggestion. The draft SHALL hold only the person's input, never a rule's output. A draft with an id SHALL run no rules.
+The person's fields SHALL be every field they set or cleared by hand in the sheet, plus a preset account. Rules SHALL never change them, in the preview, on a payee change, or at save, and SHALL see only the person's values when evaluating each rule's conditions; for each one a rule would set differently, the preview SHALL return the rule's value as a suggestion. The draft SHALL hold only the person's input, never a rule's output. A draft with an id SHALL run no rules.
 
 #### Scenario: A cleared category
 - **GIVEN** the Costco rule filled Groceries, then the person cleared the category
@@ -138,6 +138,11 @@ The person's fields SHALL be every field they set or cleared by hand in the shee
 - **GIVEN** the person chose category Dining by hand
 - **WHEN** the payee changes to Costco, whose rule sets Groceries
 - **THEN** the result keeps Dining, and the preview suggests Groceries for the category
+
+#### Scenario: No rule fires on a value the person does not have
+- **GIVEN** rule A "payee is Costco → category Groceries" and rule B "category is Groceries → notes food"
+- **WHEN** native code previews a new draft with payee Costco and the category Dining set by hand
+- **THEN** the result has Dining, the notes are untouched, and the category suggestion is Groceries
 
 #### Scenario: Taking the suggestion
 - **GIVEN** that suggestion
@@ -296,7 +301,7 @@ The preview and the save SHALL report `account-closed` when the transaction's ac
 - **THEN** the call fails with `[native:invalid-draft]`
 
 ### Requirement: The result digest is canonical and separate
-`resultDigest` SHALL be SHA-256 over canonical JSON of the array of rows a save would store (parent, then children in input order, so count and order count), each with exactly account, amount in minor units, category, cleared, date, notes, its own payee as a tagged id or name, and schedule, keys sorted. It SHALL be computed in the engine, apart from the edit digest; an edit sends both.
+`resultDigest` SHALL be SHA-256 over canonical JSON of the array of rows a save would store (parent, then children in input order, so count and order count), each with exactly account, amount in minor units, category, cleared, date, notes, its own payee as a tagged id or name, and schedule, keys sorted. It SHALL be computed in the engine, apart from the edit digest. It applies to adds; an edit's `previewDigest` is not required and not checked.
 
 #### Scenario: Same input, same digest
 - **WHEN** native code previews the same input twice with no change to rules or data
@@ -310,9 +315,13 @@ The preview and the save SHALL report `account-closed` when the transaction's ac
 - **WHEN** two inputs differ only in the order of their JSON keys
 - **THEN** their result digests are equal
 
-#### Scenario: An edit sends both
-- **WHEN** native code saves an edit
-- **THEN** a wrong edit digest refuses with `[native:changed-since]`, and a wrong `previewDigest` refuses with `[native:preview-stale]`
+#### Scenario: An edit is checked by its edit digest only
+- **WHEN** native code saves an edit with a wrong `previewDigest`, or none, and a current edit digest
+- **THEN** the save stores it
+
+#### Scenario: A changed row on an edit
+- **WHEN** native code saves an edit with a stale edit digest
+- **THEN** the call fails with `[native:changed-since]` and nothing changes
 
 ### Requirement: Rules run first at save and must match the preview
 For a new transaction the save SHALL compute the result as the preview does, once, on the same input. It SHALL store it only if its digest equals the preview digest sent, or, with none sent, if no rule changed a rule-settable field of the input; otherwise `[native:preview-stale]`, before writing. Validation and the reconciled check SHALL apply to the result.
@@ -451,8 +460,8 @@ Swift SHALL send `webTransactionAction` only with a saved, live id from the form
 - **THEN** it ignores the message
 
 ### Requirement: Form reads, previews and saves meet the latency gate
-On a seed of 5,000 payees, 40 accounts, 150 categories, 300 rules and a 50-child split, the median loot-core time SHALL be under 50 ms for: a two-letter and an empty payee search, a payee-change preview with three hand-set fields to suggest for, an amount-change preview on the split, the form read of the split, and a new transaction's save.
+On a seed of 5,000 payees, 40 accounts, 150 categories, 300 rules and a 50-child split, the median loot-core time SHALL be under 50 ms for: a two-letter and an empty payee search, a payee-change preview with three hand-set fields, the same on the 50-child split, an amount-change preview on the split, the form read of the split, and a new transaction's save.
 
 #### Scenario: The perf suite
 - **WHEN** the native perf suite runs in Fork CI
-- **THEN** each of the six measurements prints its median and p95, and the job fails if any median is 50 ms or more
+- **THEN** each of the seven measurements prints its median and p95, and the job fails if any median is 50 ms or more

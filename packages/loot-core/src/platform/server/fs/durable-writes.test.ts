@@ -33,7 +33,12 @@ type Ops = {
     lastStoredFlushAt: number | null;
     quota: boolean;
   };
-  persistance: { getDb(): Promise<IDBDatabase> };
+  persistance: {
+    _openDb: IDBDatabase | null;
+    getDb(): Promise<IDBDatabase>;
+    readAll(): Promise<unknown>;
+    write(...args: unknown[]): Promise<void>;
+  };
 };
 
 type TestFile = {
@@ -41,6 +46,7 @@ type TestFile = {
   meta: { size: number; blockSize?: number } | null;
   open(): void;
   close(): void;
+  delete(): void;
   readIfFallback(): Promise<void>;
 };
 
@@ -262,6 +268,32 @@ describe('absurd-sql fallback reads', () => {
     },
   );
 
+  it('give up after a minute behind a write that never settles, and do not read', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const { file, ops } = fallbackFile({ guard: false });
+      ops.persistance.write = () => new Promise(() => undefined);
+      const readAll = vi.spyOn(ops.persistance, 'readAll');
+      writeOnePage(ops);
+      let settled = false;
+      const failure = file.readIfFallback().then(
+        () => null,
+        (error: Error) => {
+          settled = true;
+          return error;
+        },
+      );
+      await vi.advanceTimersByTimeAsync(59_999);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect((await failure)?.message).toMatch(/timed out/i);
+      expect(readAll).not.toHaveBeenCalled();
+      expect(file.meta).toEqual({ size: 0 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('after a reload, find the last write that stored', async () => {
     const { ops, name } = fallbackFile();
     ops.writeMeta({ size: BLOCK });
@@ -273,6 +305,33 @@ describe('absurd-sql fallback reads', () => {
     const reloaded = openFile(new IndexedDBBackend(vi.fn()), name);
     await reloaded.readIfFallback();
     expect(firstByte(reloaded)).toBe(1);
+  });
+});
+
+describe('absurd-sql fallback closes and deletes', () => {
+  it('close the connection only after the writes before them', async () => {
+    const { backend, file, ops, name } = fallbackFile({ guard: false });
+    await ops.persistance.getDb();
+    ops.writeMeta({ size: BLOCK });
+    ops.writeBlocks([{ pos: 0, data: block(7) }], BLOCK);
+    file.close();
+    await ops.whenPersisted();
+    // A close that ran first would leave the write's reopened connection behind
+    await vi.waitFor(() => expect(ops.persistance._openDb).toBeNull());
+    const reopened = openFile(backend, name);
+    await reopened.readIfFallback();
+    expect(firstByte(reopened)).toBe(7);
+  });
+
+  it('delete the database after a pending write, and it stays gone', async () => {
+    const { backend, file, ops, name } = fallbackFile({ guard: false });
+    ops.writeMeta({ size: BLOCK });
+    ops.writeBlocks([{ pos: 0, data: block(7) }], BLOCK);
+    file.close();
+    file.delete();
+    const reopened = openFile(backend, name);
+    await reopened.readIfFallback();
+    expect(reopened.meta).toEqual({ size: 0 });
   });
 });
 

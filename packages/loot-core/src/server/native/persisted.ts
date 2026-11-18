@@ -18,7 +18,7 @@ let storageGuard = false;
 
 export const storageGuardEnabled = () => storageGuard;
 
-/** `native/enable-storage-guard`. One-way; browsers have no bridge to call it. */
+/** `native/enable-storage-guard`. One-way; only the native bridge should call it. */
 export async function enableStorageGuard(): Promise<void> {
   if (storageGuard) return;
   storageGuard = true;
@@ -91,7 +91,8 @@ export async function waitForStorage(): Promise<
 export async function storageState(): Promise<
   StorageState & { syncHeld: boolean }
 > {
-  return { ...fs.storageState(), syncHeld };
+  const state = fs.storageState();
+  return { ...state, syncHeld: syncHeld && !state.failed };
 }
 
 // A sync is waiting on device storage (D6): the status line says so

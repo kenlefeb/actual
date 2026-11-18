@@ -10,7 +10,7 @@ import * as db from '#server/db';
 import * as prefs from '#server/prefs';
 
 import { app } from './app';
-import { storageGuardEnabled } from './persisted';
+import { setSyncHeld, storageGuardEnabled } from './persisted';
 
 const h = app.handlers;
 const healthy = {
@@ -127,6 +127,14 @@ describe('native/persisted', () => {
 });
 
 describe('native/storage-state', () => {
+  it('does not call a sync held once storage has failed', async () => {
+    setSyncHeld(true);
+    expect((await h['native/storage-state']()).syncHeld).toBe(true);
+    storage.storageState.mockReturnValue({ ...healthy, failed: true });
+    expect((await h['native/storage-state']()).syncHeld).toBe(false);
+    setSyncHeld(false);
+  });
+
   it('returns the latch, the last stored flush time and quota, at once', async () => {
     expect(await h['native/storage-state']()).toEqual({
       ...healthy,

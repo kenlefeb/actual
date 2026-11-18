@@ -800,7 +800,8 @@ export async function initialFullSync(): Promise<{
   if (isError(result)) {
     // Make sure to wait for anything in the spreadsheet to process
     await sheet.waitOnSpreadsheet();
-    return result;
+    // Fork (sc-5219): only held back and retrying; the budget itself is fine
+    return result.error.reason === 'storage-slow' ? {} : result;
   }
   return {};
 }

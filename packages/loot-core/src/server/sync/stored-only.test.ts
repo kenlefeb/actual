@@ -19,6 +19,7 @@ import {
   applyMessages,
   clearFullSyncTimeout,
   fullSync,
+  initialFullSync,
   setSyncingMode,
 } from './index';
 
@@ -174,6 +175,31 @@ describe('sync sends only stored changes', () => {
     );
     expect(isSyncHeld()).toBe(false);
     vi.useRealTimers();
+  });
+
+  // A budget download ends with this sync: the budget is on the device
+  it('does not fail an initial sync that is only held', async () => {
+    await db.update('preferences', {
+      id: 'native-persist-wait-ms',
+      value: '100',
+    });
+    await localChange();
+    storage.whenPersisted.mockReturnValueOnce(
+      new Promise<void>(() => undefined),
+    );
+    storage.whenPersisted.mockClear();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const syncing = initialFullSync();
+    await vi.waitFor(() => expect(storage.whenPersisted).toHaveBeenCalled());
+    await vi.advanceTimersByTimeAsync(100);
+    expect(await syncing).toEqual({});
+    expect(isSyncHeld()).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it('still reports a storage failure from an initial sync', async () => {
+    storage.storageState.mockReturnValue({ ...healthy, failed: true });
+    expect((await initialFullSync()).error?.reason).toBe('storage-failed');
   });
 
   it('sends and receives nothing once storage has failed, and reports it', async () => {

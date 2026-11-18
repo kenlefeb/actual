@@ -278,6 +278,21 @@ describe('storage state of the blocked fs', () => {
     });
   });
 
+  test('reports the flush time of the last stored write as the cut-off', async () => {
+    const file = await openFile('cut-off');
+    enableStorageLatch();
+    vi.spyOn(Date, 'now').mockReturnValue(5000);
+    file.write(1);
+    await whenPersisted();
+    failWrites();
+    file.write(2);
+    await expect(whenPersisted()).rejects.toThrow('full');
+    expect(connection.send).toHaveBeenCalledWith('storage-failed', {
+      lastStoredFlushAt: 5000,
+      quota: true,
+    });
+  });
+
   test("records and reports a closed file's failed last write without latching", async () => {
     const file = await openFile('closed');
     enableStorageLatch();

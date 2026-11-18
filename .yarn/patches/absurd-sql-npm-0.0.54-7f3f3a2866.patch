@@ -1,5 +1,5 @@
 diff --git a/dist/indexeddb-backend.js b/dist/indexeddb-backend.js
-index a30d815805c225258b7d49ef15af9decfe02eb2f..3c932102ad2f9c964bcf315ca41a0acb7a528c22 100644
+index a30d815805c225258b7d49ef15af9decfe02eb2f..47d50cbf40736041e68ae2872aa11ab57ea60dc1 100644
 --- a/dist/indexeddb-backend.js
 +++ b/dist/indexeddb-backend.js
 @@ -1,3 +1,9 @@
@@ -29,13 +29,17 @@ index a30d815805c225258b7d49ef15af9decfe02eb2f..3c932102ad2f9c964bcf315ca41a0acb
    // TODO: This should be renamed to `getDatabaseName`
    getStoreName() {
      return this.filename.replace(/\//g, '-');
-@@ -1067,6 +1083,19 @@ async function openDb(name) {
+@@ -1067,6 +1083,23 @@ async function openDb(name) {
    });
  }
  
 +// Fork (sc-5219): per database, every fallback write, read, close and delete
 +// runs after the ones before it, across all the files of that name
 +let fallbackChains = new Map();
++
++// A write that never settles must not hang a budget's open for ever. Fixed,
++// not a configurable limit: limits are stored in the budget being opened.
++const FALLBACK_READ_DEADLINE_MS = 60000;
 +
 +function enqueue(dbName, task) {
 +  let result = (fallbackChains.get(dbName) || Promise.resolve()).then(task);
@@ -49,7 +53,7 @@ index a30d815805c225258b7d49ef15af9decfe02eb2f..3c932102ad2f9c964bcf315ca41a0acb
  // Using a separate class makes it easier to follow the code, and
  // importantly it removes any reliance on internal state in
  // `FileOpsFallback`. That would be problematic since these method
-@@ -1127,6 +1156,11 @@ class Persistance {
+@@ -1127,6 +1160,11 @@ class Persistance {
      });
    }
  
@@ -61,7 +65,7 @@ index a30d815805c225258b7d49ef15af9decfe02eb2f..3c932102ad2f9c964bcf315ca41a0acb
    async write(writes, cachedFirstBlock, hasLocked) {
      let db = await this.getDb(this.dbName);
  
-@@ -1136,6 +1170,10 @@ class Persistance {
+@@ -1136,6 +1174,10 @@ class Persistance {
      let store = trans.objectStore('data');
  
      await new Promise((resolve, reject) => {
@@ -72,7 +76,7 @@ index a30d815805c225258b7d49ef15af9decfe02eb2f..3c932102ad2f9c964bcf315ca41a0acb
        let req = store.get(0);
        req.onsuccess = e => {
          if (hasLocked) {
-@@ -1153,17 +1191,13 @@ class Persistance {
+@@ -1153,17 +1195,13 @@ class Persistance {
          for (let write of writes) {
            store.put(write.value, write.key);
          }
@@ -91,7 +95,7 @@ index a30d815805c225258b7d49ef15af9decfe02eb2f..3c932102ad2f9c964bcf315ca41a0acb
      this.filename = filename;
      this.dbName = this.filename.replace(/\//g, '-');
      this.cachedFirstBlock = null;
-@@ -1173,11 +1207,62 @@ class FileOpsFallback {
+@@ -1173,11 +1211,77 @@ class FileOpsFallback {
      this.transferBlockOwnership = false;
  
      this.persistance = new Persistance(this.dbName, onFallbackFailure);
@@ -150,12 +154,27 @@ index a30d815805c225258b7d49ef15af9decfe02eb2f..3c932102ad2f9c964bcf315ca41a0acb
    async readIfFallback() {
      this.transferBlockOwnership = true;
 -    this.blocks = await this.persistance.readAll();
-+    // Fork (sc-5219): behind every write flushed so far
-+    this.blocks = await enqueue(this.dbName, () => this.persistance.readAll());
++    // Fork (sc-5219): behind every write flushed so far. On expiry the open
++    // fails: reading past a stuck write could return stale or empty data.
++    let timer;
++    let deadline = new Promise((resolve, reject) => {
++      timer = setTimeout(
++        () => reject(new Error(`Timed out reading ${this.filename}`)),
++        FALLBACK_READ_DEADLINE_MS
++      );
++    });
++    try {
++      this.blocks = await Promise.race([
++        enqueue(this.dbName, () => this.persistance.readAll()),
++        deadline
++      ]);
++    } finally {
++      clearTimeout(timer);
++    }
  
      return this.readMeta();
    }
-@@ -1205,11 +1290,13 @@ class FileOpsFallback {
+@@ -1205,11 +1309,13 @@ class FileOpsFallback {
    }
  
    delete() {
@@ -174,7 +193,7 @@ index a30d815805c225258b7d49ef15af9decfe02eb2f..3c932102ad2f9c964bcf315ca41a0acb
    }
  
    open() {
-@@ -1226,7 +1313,8 @@ class FileOpsFallback {
+@@ -1226,7 +1332,8 @@ class FileOpsFallback {
        this.blocks = new Map();
      }
  
@@ -184,7 +203,7 @@ index a30d815805c225258b7d49ef15af9decfe02eb2f..3c932102ad2f9c964bcf315ca41a0acb
    }
  
    readMeta() {
-@@ -1277,12 +1365,36 @@ class FileOpsFallback {
+@@ -1277,12 +1384,36 @@ class FileOpsFallback {
  
    flush() {
      if (this.writeQueue.length > 0) {
@@ -226,7 +245,7 @@ index a30d815805c225258b7d49ef15af9decfe02eb2f..3c932102ad2f9c964bcf315ca41a0acb
      }
      this.cachedFirstBlock = null;
    }
-@@ -1291,6 +1403,23 @@ class FileOpsFallback {
+@@ -1291,6 +1422,23 @@ class FileOpsFallback {
  class IndexedDBBackend {
    constructor(onFallbackFailure) {
      this.onFallbackFailure = onFallbackFailure;
@@ -250,7 +269,7 @@ index a30d815805c225258b7d49ef15af9decfe02eb2f..3c932102ad2f9c964bcf315ca41a0acb
    }
  
    createFile(filename) {
-@@ -1302,10 +1431,11 @@ class IndexedDBBackend {
+@@ -1302,10 +1450,11 @@ class IndexedDBBackend {
        // SharedArrayBuffer is not supported. Use the fallback methods
        // which provide a somewhat working version, but doesn't
        // support mutations across connections (tabs)

@@ -1,0 +1,91 @@
+{
+  "currencyCode": "",
+  "currencyDecimalPlaces": 2,
+  "currencySymbol": "",
+  "currencySymbolPosition": "before",
+  "currencySpace": false,
+  "numberFormat": "comma-dot",
+  "hideFraction": false,
+  "rows": [
+    {
+      "id": "food",
+      "date": "2016-12-28",
+      "payee": "Grocer",
+      "category": "Groceries",
+      "splitCount": 0,
+      "notes": "weekly shop",
+      "amount": -4180,
+      "cleared": true,
+      "reconciled": false,
+      "transferAccount": null,
+      "transferReconciled": null,
+      "runningBalance": -12180
+    },
+    {
+      "id": "plain",
+      "date": "2016-12-27",
+      "payee": null,
+      "category": null,
+      "splitCount": 0,
+      "notes": null,
+      "amount": -500,
+      "cleared": false,
+      "reconciled": false,
+      "transferAccount": null,
+      "transferReconciled": null,
+      "runningBalance": -8000
+    },
+    {
+      "id": "lock",
+      "date": "2016-12-26",
+      "payee": null,
+      "category": null,
+      "splitCount": 0,
+      "notes": "50%_off",
+      "amount": 2500,
+      "cleared": true,
+      "reconciled": true,
+      "transferAccount": null,
+      "transferReconciled": null,
+      "runningBalance": -7500
+    },
+    {
+      "id": "split",
+      "date": "2016-12-25",
+      "payee": null,
+      "category": null,
+      "splitCount": 2,
+      "notes": null,
+      "amount": -3000,
+      "cleared": false,
+      "reconciled": false,
+      "transferAccount": null,
+      "transferReconciled": null,
+      "runningBalance": -10000
+    },
+    {
+      "id": "out",
+      "date": "2016-12-24",
+      "payee": "Savings",
+      "category": null,
+      "splitCount": 0,
+      "notes": null,
+      "amount": -7000,
+      "cleared": false,
+      "reconciled": false,
+      "transferAccount": {
+        "id": "savings",
+        "name": "Savings"
+      },
+      "transferReconciled": true,
+      "runningBalance": -7000
+    }
+  ],
+  "nextCursor": null,
+  "header": {
+    "balance": -12180,
+    "cleared": -1680,
+    "uncleared": -10500
+  },
+  "upcoming": []
+}

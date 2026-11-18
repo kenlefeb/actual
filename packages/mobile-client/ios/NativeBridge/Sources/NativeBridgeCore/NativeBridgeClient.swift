@@ -32,8 +32,10 @@ public enum NativeBridgeAllowlist {
         "native/reconcile-tick", "native/reconcile-list-set", "account-statement-balance-save", "native/reconcile-adjust",
         "native/reconcile-lock",
     ]
+    // sc-4386 (native-accounts-screen D1): the Accounts screen's batched reads
+    public static let accountsReads: Set<String> = ["native/accounts-list", "native/account-register"]
     public static let handlers: Set<String> = reads.union(writes).union(paycheckWrites).union(sync).union(reconcileReads)
-        .union(reconcileWrites)
+        .union(reconcileWrites).union(accountsReads)
 }
 
 // The page's reduced sync result (nativeBridge.ts): whether it worked, and a

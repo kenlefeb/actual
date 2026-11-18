@@ -22,5 +22,7 @@
   "native/reconcile-matches",
   "native/reconcile-lock-preview",
   "native/reconcile-adjust",
-  "native/reconcile-lock"
+  "native/reconcile-lock",
+  "native/accounts-list",
+  "native/account-register"
 ]

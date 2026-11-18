@@ -24,6 +24,7 @@ import {
   undoable,
   undoGroupHasWrites,
   undoTargetMeta,
+  withUndo,
 } from '#server/undo';
 import { setBusinessCalendars } from '#shared/business-calendar-lookup';
 import { getCurrency } from '#shared/currencies';
@@ -61,9 +62,12 @@ import { accountRegister, accountsList } from './accounts';
 import {
   accountMove,
   accountReopen,
+  changedSince,
+  readTouchedState,
   transactionsCategorize,
   transactionsDelete,
 } from './accounts-writes';
+import type { RecordedState, Touched } from './accounts-writes';
 import {
   reconcileListSet,
   reconcileMonth,
@@ -282,32 +286,38 @@ app.method('native/account-register', accountRegisterRead);
 // sc-4931 (D3): each write is one undo step carrying Swift's token
 app.method(
   'native/transactions-categorize',
-  mutator(
-    undoable(transactionsCategorize, args => ({
-      nativeUndoToken: args?.undoToken,
-    })),
-  ),
+  accountsWrite(transactionsCategorize),
 );
-app.method(
-  'native/transactions-delete',
-  mutator(
-    undoable(transactionsDelete, args => ({
-      nativeUndoToken: args?.undoToken,
-    })),
-  ),
-);
-app.method(
-  'native/account-reopen',
-  mutator(
-    undoable(accountReopen, args => ({ nativeUndoToken: args?.undoToken })),
-  ),
-);
-app.method(
-  'native/account-move',
-  mutator(
-    undoable(accountMove, args => ({ nativeUndoToken: args?.undoToken })),
-  ),
-);
+app.method('native/transactions-delete', accountsWrite(transactionsDelete));
+app.method('native/account-reopen', accountsWrite(accountReopen));
+app.method('native/account-move', accountsWrite(accountMove));
+
+type NativeUndoMeta = {
+  nativeUndoToken?: string;
+  touched?: Touched;
+  state?: RecordedState;
+};
+
+/**
+ * One undo step carrying Swift's token, and (D3a) the state the write left for
+ * each row and account it touched, so native/undo can refuse after a later change.
+ */
+function accountsWrite<A extends { undoToken: string }, R>(
+  write: (args: A, touched: Touched) => Promise<R>,
+) {
+  const handler = async (args: A) => {
+    const meta: NativeUndoMeta = { nativeUndoToken: args?.undoToken };
+    return withUndo(async () => {
+      const touched: Touched = { transactions: [], accounts: [] };
+      const result = await write(args, touched);
+      meta.touched = touched;
+      meta.state = await readTouchedState(touched);
+      return result;
+    }, meta);
+  };
+  // The handler types take loosely typed arguments; loot-core validates them
+  return mutator(handler as never) as unknown as (args: A) => Promise<R>;
+}
 
 async function accountsListRead() {
   return { ...(await readCurrency()), ...(await accountsList()) };
@@ -564,9 +574,16 @@ async function schedulesPaychecks(): Promise<NativeSchedulesPaychecks> {
  * a time, so nothing undoable lands between the check and the undo.
  */
 async function nativeUndo({ token }: { token: string }) {
-  const meta = undoTargetMeta() as { nativeUndoToken?: string } | undefined;
+  const meta = undoTargetMeta() as NativeUndoMeta | undefined;
   if (!token || meta?.nativeUndoToken !== token) {
     throw new Error('native/undo: nothing to undo');
+  }
+  if (
+    meta.touched &&
+    meta.state &&
+    (await changedSince(meta.touched, meta.state))
+  ) {
+    throw new Error("native/undo: changed since, can't undo");
   }
   await undo();
 }

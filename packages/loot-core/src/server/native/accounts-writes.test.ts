@@ -374,3 +374,51 @@ describe('native/account-move', () => {
     expect(await order(0)).toEqual(before);
   });
 });
+
+// Design D3a: native/undo refuses, changing nothing, when a row or account the
+// write touched differs from the state the write left (a sync edit since).
+describe('native/undo after an accounts write', () => {
+  it('refuses when a touched row was edited since, and changes nothing', async () => {
+    await categorize({ ids: ['t1', 't2'] });
+    await db.updateTransaction({ id: 't2', category: 'dining' });
+    await expect(undo()).rejects.toThrow(/changed since/);
+    expect((await row('t1'))?.category).toBe('groceries');
+    expect((await row('t2'))?.category).toBe('dining');
+  });
+
+  it('undoes when only an untouched row changed', async () => {
+    await categorize({ ids: ['t1'] });
+    await db.updateTransaction({ id: 't2', category: 'groceries' });
+    await undo();
+    expect((await row('t1'))?.category).toBeNull();
+    expect((await row('t2'))?.category).toBe('groceries');
+  });
+
+  it('refuses a delete undo when the row, a child or the partner changed since', async () => {
+    await addTxn('p', { is_parent: 1 });
+    await addTxn('c', { is_child: 1, parent_id: 'p' });
+    await remove({ ids: ['t1', 'p'] });
+    await db.updateTransaction({ id: 'c', category: 'dining' });
+    await expect(undo()).rejects.toThrow(/changed since/);
+    expect((await row('t1'))?.tombstone).toBe(1);
+    expect((await row('p'))?.tombstone).toBe(1);
+  });
+
+  it('refuses a reopen undo when the account changed since', async () => {
+    await h['native/account-reopen']({ id: 'old', undoToken: 'T' } as never);
+    await db.update('accounts', { id: 'old', sort_order: 77 });
+    await expect(undo()).rejects.toThrow(/changed since/);
+    expect((await account('old'))?.closed).toBe(0);
+  });
+
+  it('refuses a move undo when an account of the section moved since', async () => {
+    await h['native/account-move']({
+      id: 'savings',
+      targetId: 'checking',
+      undoToken: 'T',
+    } as never);
+    await db.update('accounts', { id: 'card', sort_order: 12345 });
+    await expect(undo()).rejects.toThrow(/changed since/);
+    expect((await account('card'))?.sort_order).toBe(12345);
+  });
+});

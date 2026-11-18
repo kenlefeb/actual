@@ -137,12 +137,17 @@ If the page restarts on its own while the failure notice shows, on iPhone or Mac
 - **THEN** the notice closes and no restart notice shows
 
 ### Requirement: A restart keeps the device-full reason
-If the latest failure was a quota failure, the restart notice SHALL read "The app restarted, and this device is out of space. Free up some space. Changes made after <A> may not have been saved. Check them, and make again any that are missing." With no cut-off, "Changes made since you opened the app" SHALL replace "Changes made after <A>".
+Swift SHALL hold the latest failure's quota reason, because a restart clears the engine's. If it was a quota failure, the restart notice SHALL read "The app restarted, and this device is out of space. Free up some space. Changes made after <A> may not have been saved. Check them, and make again any that are missing." With no cut-off, "Changes made since you opened the app" SHALL replace "Changes made after <A>".
 
 #### Scenario: Restart while the device is full
 - **GIVEN** the device-full notice showing a cut-off of 3:42:10 PM
 - **WHEN** the page reloads on its own
 - **THEN** the notice reads "The app restarted, and this device is out of space. Free up some space. Changes made after 3:42:10 PM may not have been saved. Check them, and make again any that are missing."
+
+#### Scenario: The engine has forgotten the reason
+- **GIVEN** a quota failure, then a restart after which `native/storage-state` reports no quota failure
+- **WHEN** the restart notice shows
+- **THEN** it still says the device is out of space
 
 ### Requirement: The failure notice outranks the reload notice
 The failure notice SHALL replace a showing reload notice (sc-5220) at once. No reload notice SHALL appear over or beside the failure notice or its restart form, however many times the page restarts. After the person dismisses them, later automatic reloads SHALL show the reload notice as usual.
@@ -188,6 +193,11 @@ When sync's storage wait expires, the engine SHALL NOT emit sync success. It SHA
 - **WHEN** the write completes and the retry runs
 - **THEN** the changes are sent, sync reports success and the status line returns to normal
 
+#### Scenario: Opening a budget during a held sync
+- **GIVEN** a budget's initial sync whose storage wait expires
+- **WHEN** the sync ends with `storage-slow`
+- **THEN** the budget opens with no download error, a retry is scheduled, `sync.pending` stays true and nothing says synced
+
 #### Scenario: A retry does not flicker
 - **GIVEN** a held sync whose retry is also held
 - **WHEN** the retry runs
@@ -230,8 +240,14 @@ A failed write in a file with no open handles SHALL NOT set the latch. The engin
 `native-persist-wait-ms` SHALL be in the limits registry with the name "Saving: wait for device storage", the help line "How long a change waits to be stored on this device before the app says it isn't yet", default 2000, floor 100 and ceiling 4000, under the 5 s bridge deadline. A value outside floor to ceiling SHALL read as the default.
 
 #### Scenario: Changed in Settings
+- **GIVEN** the Limits screen lists this limit
 - **WHEN** the user sets "Saving: wait for device storage" to 3000 in Settings > Advanced > Limits
 - **THEN** the next `native/persisted` call waits up to 3 s
+
+#### Scenario: Before the Limits screen lists it
+- **GIVEN** the Limits screen has not shipped this limit and nothing has set it
+- **WHEN** `native/persisted` runs
+- **THEN** the wait is the default 2000 ms
 
 #### Scenario: Bad values
 - **WHEN** the stored value is "50", "5000" or "abc"
@@ -269,7 +285,7 @@ Any hook that disables the barrier or delays storage for tests SHALL exist only 
 - **THEN** the marker is absent, or the job fails
 
 ### Requirement: The barrier is measured and gated
-The Mac test suite SHALL time a one-row categorize through the client end to end (the `native/storage-state` check, the write and `native/persisted`) against the bare write, 30 runs each, and SHALL fail when the three together add more than 50 ms to the median or 250 ms to the p95. A real iPhone's median and p95 SHALL be recorded before the native Accounts screen defaults on.
+The Mac test suite SHALL time a one-row categorize through the client end to end (the `native/storage-state` check, the write and `native/persisted`) against the bare write, 30 runs each, and SHALL fail when the three together add more than 50 ms to the median or 250 ms to the p95. A real iPhone's median and p95, and the largest test budget's write time, SHALL be recorded before the first TestFlight build with this change.
 
 #### Scenario: The gate runs in Mac CI
 - **WHEN** the `fork-mac-native` workflow runs the Mac tests

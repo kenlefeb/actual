@@ -690,16 +690,20 @@ final class AccountRegisterViewModelTests: XCTestCase {
 
     // sc-5224: a split reads as the web shows it, from loot-core's payee and count
     func testASplitShowsItsLinesPayeeAsTheWebDoes() throws {
-        func row(_ payee: String?, split: Int, others: Int?) throws -> AccountUpcoming.Row {
+        func row(_ payee: String?, split: Int, others: Int?, notes: String? = nil) throws -> AccountUpcoming.Row {
+            let notesJSON = notes.map { "\"\($0)\"" } ?? "null"
             let payeeJSON = payee.map { "\"\($0)\"" } ?? "null"
             let othersJSON = others.map { ",\"otherPayees\":\($0)" } ?? ""
-            let json = #"{"id":"preview/s/2017-01-03","scheduleId":"s","date":"2017-01-03","payee":\#(payeeJSON),"category":null,"categoryId":null,"notes":null,"amount":-1,"cleared":false,"splitCount":\#(split),"transferAccount":null,"status":"upcoming","ruleFields":[]\#(othersJSON)}"#
+            let json = #"{"id":"preview/s/2017-01-03","scheduleId":"s","date":"2017-01-03","payee":\#(payeeJSON),"category":null,"categoryId":null,"notes":\#(notesJSON),"amount":-1,"cleared":false,"splitCount":\#(split),"transferAccount":null,"status":"upcoming","ruleFields":[]\#(othersJSON)}"#
             return try JSONDecoder().decode(AccountUpcoming.Row.self, from: Data(json.utf8))
         }
         XCTAssertEqual(UpcomingWords.payee(try row("Power Co", split: 2, others: 0)), "Power Co")
         XCTAssertEqual(UpcomingWords.payee(try row("Grocer", split: 2, others: 1)), "Grocer (+1 more)")
         XCTAssertEqual(UpcomingWords.payee(try row(nil, split: 2, others: 0)), "Split (no payee)")
         XCTAssertEqual(UpcomingWords.payee(try row(nil, split: 0, others: nil)), "No payee")
+        // The web names a split by its lines only, never by its notes
+        XCTAssertEqual(UpcomingWords.payee(try row(nil, split: 2, others: 0, notes: "Quarterly")), "Split (no payee)")
+        XCTAssertEqual(UpcomingWords.payee(try row(nil, split: 0, others: 0, notes: "Quarterly")), "Quarterly")
         // An older loot-core sends no count
         XCTAssertEqual(UpcomingWords.payee(try row("Power Co", split: 2, others: nil)), "Power Co")
     }

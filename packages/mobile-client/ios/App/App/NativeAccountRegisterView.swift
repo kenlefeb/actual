@@ -242,12 +242,12 @@ private struct RegisterList: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             if isSearching { chips }
+            if !isSearching, search.isEmpty, let header = content.header {
+                Section { RegisterHeader(header: header, style: style, clearingFor: clearingFor) }
+            }
             if let results, results.count > 0 {
                 Text(AccountsCountWords.results(results.count)).font(.headline).listRowBackground(Color.clear)
                     .accessibilityAddTraits(.isHeader)
-            }
-            if !isSearching, search.isEmpty, let header = content.header {
-                Section { RegisterHeader(header: header, style: style, clearingFor: clearingFor) }
             }
             if !isSearching, search.isEmpty, let upcoming = content.upcoming, !upcoming.isEmpty {
                 Section(header: sectionTitle(RegisterWords.upcoming)) {
@@ -259,7 +259,9 @@ private struct RegisterList: View {
                 }
             }
             if content.rows.isEmpty {
-                Text(search.isEmpty ? RegisterWords.noTransactions : String(format: RegisterWords.noMatches, search))
+                Text(
+                    !search.isEmpty ? String(format: RegisterWords.noMatches, search)
+                        : model.scope != .all ? RegisterWords.noFilterMatches : RegisterWords.noTransactions)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
@@ -286,7 +288,7 @@ private struct RegisterList: View {
         .listStyle(.insetGrouped)
     }
 
-    private var results: RegisterResults? { content.results(search: search) }
+    private var results: RegisterResults? { content.results(search: search, scope: model.scope) }
 
     private func sectionTitle(_ text: String) -> some View {
         Text(text).font(.headline).foregroundColor(.primary).textCase(nil).accessibilityAddTraits(.isHeader)
@@ -513,6 +515,8 @@ extension AccountRegisterContent {
 }
 
 enum RegisterWords {
+    static let noFilterMatches = NSLocalizedString(
+        "No transactions match this filter.", comment: "Native Accounts register: a scope chip with no rows")
     static let clearedAmount = NSLocalizedString("Cleared %@", comment: "Native Accounts register: header, large text")
     static let unclearedAmount = NSLocalizedString("Uncleared %@", comment: "Native Accounts register: header, large text")
     static let categoriesFailed = NSLocalizedString(

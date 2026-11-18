@@ -85,7 +85,7 @@ The register SHALL show the header (working, cleared, uncleared), then upcoming 
 - **THEN** its category reads "Uncategorized" in warning text
 
 ### Requirement: Search and scope chips filter the register
-The system search field SHALL search payee, category, notes and amount; Cancel SHALL restore the register. Chips All, Uncleared and Uncategorized SHALL set the scope. While searching the header SHALL hide, a footer SHALL show the results' total, and no results SHALL read "No transactions match “<text>”."
+The system search field SHALL search payee, category, notes and amount; Cancel SHALL restore the register. Chips All, Uncleared and Uncategorized SHALL set the scope. While searching the header SHALL hide; while any filter is active (a search or a scope other than All) the list SHALL show "N results" and a footer the results' total, and no results SHALL read "No transactions match “<text>”."
 
 #### Scenario: Search
 - **WHEN** the user types "costco"

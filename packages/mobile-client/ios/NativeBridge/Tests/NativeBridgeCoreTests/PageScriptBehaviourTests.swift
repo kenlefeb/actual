@@ -85,7 +85,7 @@ final class PageScriptBehaviourTests: XCTestCase {
 
     func testABridgeErrorOnTheAppsOwnPageComesBackInsideTheConfirmedShape() async {
         let page = JSContextPage(swiftSees: "capacitor://localhost/budget", origin: "capacitor://localhost", prelude: """
-            window.__actualNativeBridge = { call: async function () { throw new Error('native/budget-month: no budget for month 2020-01'); } };
+            window.__actualNativeBridge = { call: async function () { throw new Error('[native:no-budget-for-month] native/budget-month: no budget for month 2020-01'); } };
             """)
         do {
             _ = try await PageCall(runner: page, serverURL: server).bridgeCall(name: "native/budget-month", argsJSON: "{}")

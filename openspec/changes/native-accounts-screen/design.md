@@ -56,6 +56,8 @@ Cleared and uncleared reuse `native/reconcile-tick`, which already refuses recon
 
 `native/undo` is last-write-wins today: it would put back the old values over an edit that synced in after the native write. For the accounts writes, the write records, in its undo metadata, the state it left for each row or account it touched: category, tombstone and sort order. `native/undo` then refuses, changing nothing, when any of them now differs, and the screen says "Changed since — can't undo." Rejected: undoing anyway. That silently loses another device's edit, and the check costs one read of the touched rows.
 
+Swift tells the refusals apart by a code token at the start of the message (`[native:undo-changed-since]`, `[native:undo-nothing]`, `[native:needs-confirmed-reconciled]`, and the Budget and paycheck editor's `no-budget-for-month` and `invalid-draft`), listed in `fixtures/native-refusal-codes.json`. An Error's own fields do not survive loot-core's `send()`, its message does; the words after the token stay free to change, and an unknown code is a generic failure (PR 430 review).
+
 ## D4. The switch ships on
 
 `NativeTab.accounts` joins `nativeTabs`. `NativeScreen.accounts` reads **on** when unset (Ken, 2026-11-15, as reconcile does), and web Settings › Native screens stores false to turn it off. The `NativeScreensScript` entry tells the page. With it off, the Accounts tab is the web screens exactly as today. Default stays off until story 3611 ships the screens (Director, 2026-11-17); the flip to on is task 3.8.

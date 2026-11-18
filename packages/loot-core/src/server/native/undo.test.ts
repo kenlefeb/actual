@@ -111,7 +111,7 @@ describe('native/undo', () => {
       depositDaysEarly: 3,
     });
 
-    await expect(nativeUndo('T')).rejects.toThrow(/nothing to undo/);
+    await expect(nativeUndo('T')).rejects.toThrow(/^\[native:undo-nothing\] /);
 
     expect(await payNextDate(paycheck)).toBe('2026-11-30');
     expect(await daysEarly('checking')).toBe(3);
@@ -120,8 +120,10 @@ describe('native/undo', () => {
   it('refuses an unknown token and changes nothing', async () => {
     await handlers['paycheck-skip-next']({ id: paycheck, undoToken: 'T' });
 
-    await expect(nativeUndo('made-up')).rejects.toThrow(/nothing to undo/);
-    await expect(nativeUndo('')).rejects.toThrow(/nothing to undo/);
+    await expect(nativeUndo('made-up')).rejects.toThrow(
+      /^\[native:undo-nothing\] /,
+    );
+    await expect(nativeUndo('')).rejects.toThrow(/^\[native:undo-nothing\] /);
 
     expect(await payNextDate(paycheck)).toBe('2026-11-30');
   });
@@ -140,7 +142,7 @@ describe('native/undo', () => {
     });
     await handlers['paycheck-skip-next']({ id: 'empty', undoToken: 'T' });
 
-    await expect(nativeUndo('T')).rejects.toThrow(/nothing to undo/);
+    await expect(nativeUndo('T')).rejects.toThrow(/^\[native:undo-nothing\] /);
 
     expect(await daysEarly('checking')).toBe(4);
   });

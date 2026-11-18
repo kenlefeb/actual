@@ -198,7 +198,7 @@ final class PaycheckEditorViewModelTests: XCTestCase {
         XCTAssertEqual(model.draft.name, "Acme")
         XCTAssertEqual(offers, 0)
 
-        page.failures["native/paycheck-save"] = NativeBridgeError.page("native/paycheck-save: invalid draft: name-missing, no-deposits")
+        page.failures["native/paycheck-save"] = NativeBridgeError.page("[native:invalid-draft:name-missing,no-deposits] words that may change")
         _ = await model.save()
         XCTAssertEqual(model.actionError, "Enter a name for the paycheck. Add at least one direct deposit.")
 

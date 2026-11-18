@@ -231,7 +231,9 @@ describe('native/budget-month range', () => {
 
   it('still refuses a month beyond the range', async () => {
     await createBudget(['2026-02', '2026-03']);
-    await expect(budgetMonth('2026-04')).rejects.toThrow(/no budget for month/);
+    await expect(budgetMonth('2026-04')).rejects.toThrow(
+      /^\[native:no-budget-for-month\] /,
+    );
   });
 });
 

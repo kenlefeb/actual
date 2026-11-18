@@ -23,12 +23,15 @@ public enum BudgetLoadError: Equatable {
         }
     }
 
-    // loot-core throws "native/budget-month: no budget for month <m>"; WebKit
-    // carries the text in the NSError's user info
+    // loot-core's `[native:no-budget-for-month]` refusal: from the page call, or
+    // from WebKit, which carries "Error: <message>" in the NSError's user info
     static func from(_ error: Error) -> BudgetLoadError {
         if case NativeBridgeError.timedOut = error { return .timedOut }
-        let text = "\(error) \((error as NSError).userInfo)"
-        return text.contains("no budget for month") ? .noBudgetForMonth : .other
+        var refusal = NativeRefusal(error)
+        if refusal == nil, let message = (error as NSError).userInfo["WKJavaScriptExceptionMessage"] as? String {
+            refusal = NativeRefusal(message.hasPrefix("Error: ") ? String(message.dropFirst(7)) : message)
+        }
+        return refusal?.code == .noBudgetForMonth ? .noBudgetForMonth : .other
     }
 }
 

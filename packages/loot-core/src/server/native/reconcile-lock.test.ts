@@ -654,7 +654,7 @@ describe('native/reconcile-lock (D5)', () => {
     expect(marker?.nativeUndoToken).toBeUndefined();
     for (const token of ['A', '', 'undefined', 'null']) {
       await expect(h['native/undo']({ token })).rejects.toThrow(
-        /nothing to undo/,
+        /^\[native:undo-nothing\] /,
       );
     }
     expect((await row('paid'))?.reconciled).toBe(1);

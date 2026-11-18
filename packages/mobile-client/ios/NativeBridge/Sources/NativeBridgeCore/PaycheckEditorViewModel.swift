@@ -230,13 +230,12 @@ public final class PaycheckEditorViewModel: ObservableObject {
     static func message(for error: Error) -> String {
         if case NativeBridgeError.timedOut = error { return timedOut }
         guard case NativeBridgeError.page(let message) = error else { return failed }
-        if let range = message.range(of: "invalid draft: ") {
-            return message[range.upperBound...].split(separator: ",")
-                .map { PaycheckErrorText.message($0.trimmingCharacters(in: .whitespaces)) }
-                .joined(separator: " ")
+        // `[native:invalid-draft:<codes>]`: the draft codes in the web's words
+        if let refusal = NativeRefusal(message), refusal.code == .invalidDraft {
+            return refusal.detail.map { PaycheckErrorText.message($0) }.joined(separator: " ")
         }
-        // Bridge refusals ("native bridge: …", "native/…") are not for people
-        if message.hasPrefix("native") { return failed }
+        // Bridge refusals ("native bridge: …", "native/…", or any coded one) are not for people
+        if message.hasPrefix("native") || message.hasPrefix("[native:") { return failed }
         return message
     }
 }

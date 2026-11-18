@@ -80,6 +80,7 @@ import {
   reconcileLockPreview,
   reconcileMatches,
 } from './reconcile-lock';
+import { nativeRefusal } from './refusal';
 
 // null: the value doesn't apply to this budget type (or row)
 type Amount = number | null;
@@ -338,7 +339,10 @@ async function budgetMonth({
     ? monthUtils.sheetForMonth(month)
     : null;
   if (!sheetName || cell(sheetName, 'total-budgeted') === null) {
-    throw new Error(`native/budget-month: no budget for month ${month}`);
+    throw nativeRefusal(
+      'no-budget-for-month',
+      `native/budget-month: no budget for month ${month}`,
+    );
   }
   const amount = (name: string): Amount => {
     const value = cell(sheetName, name);
@@ -576,14 +580,17 @@ async function schedulesPaychecks(): Promise<NativeSchedulesPaychecks> {
 async function nativeUndo({ token }: { token: string }) {
   const meta = undoTargetMeta() as NativeUndoMeta | undefined;
   if (!token || meta?.nativeUndoToken !== token) {
-    throw new Error('native/undo: nothing to undo');
+    throw nativeRefusal('undo-nothing', 'native/undo: nothing to undo');
   }
   if (
     meta.touched &&
     meta.state &&
     (await changedSince(meta.touched, meta.state))
   ) {
-    throw new Error("native/undo: changed since, can't undo");
+    throw nativeRefusal(
+      'undo-changed-since',
+      "native/undo: changed since, can't undo",
+    );
   }
   await undo();
 }
@@ -869,8 +876,10 @@ async function paycheckSave(args: {
     accounts,
   );
   if (errors.length > 0) {
-    throw new Error(
+    throw nativeRefusal(
+      'invalid-draft',
       `native/paycheck-save: invalid draft: ${errors.map(e => e.code).join(', ')}`,
+      errors.map(e => e.code),
     );
   }
 

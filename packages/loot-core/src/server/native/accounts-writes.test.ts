@@ -189,7 +189,7 @@ describe('native/transactions-categorize', () => {
     for (const confirmedReconciled of [undefined, false, 'true', 1]) {
       await expect(
         categorize({ ids: ['t1', 'r1'], confirmedReconciled }),
-      ).rejects.toThrow(/reconciled/);
+      ).rejects.toThrow(/^\[native:needs-confirmed-reconciled\] /);
     }
     expect((await row('t1'))?.category).toBeNull();
     await categorize({ ids: ['t1', 'r1'], confirmedReconciled: true });
@@ -252,7 +252,7 @@ describe('native/transactions-delete', () => {
     for (const confirmedReconciled of [undefined, false, 'true', 1]) {
       await expect(
         remove({ ids: ['t1', 'r1'], confirmedReconciled }),
-      ).rejects.toThrow(/reconciled/);
+      ).rejects.toThrow(/^\[native:needs-confirmed-reconciled\] /);
     }
     expect((await row('t1'))?.tombstone).toBe(0);
     await remove({ ids: ['t1', 'r1'], confirmedReconciled: true });
@@ -292,7 +292,9 @@ describe('native/transactions-delete', () => {
     it('refuses a reconciled partner without confirmation', async () => {
       const partner = await transfer();
       await db.updateTransaction({ id: partner, cleared: true, reconciled: 1 });
-      await expect(remove({ ids: ['x1'] })).rejects.toThrow(/reconciled/);
+      await expect(remove({ ids: ['x1'] })).rejects.toThrow(
+        /^\[native:needs-confirmed-reconciled\] /,
+      );
       expect((await row('x1'))?.tombstone).toBe(0);
       expect((await row(partner))?.tombstone).toBe(0);
       await remove({ ids: ['x1'], confirmedReconciled: true });
@@ -381,7 +383,7 @@ describe('native/undo after an accounts write', () => {
   it('refuses when a touched row was edited since, and changes nothing', async () => {
     await categorize({ ids: ['t1', 't2'] });
     await db.updateTransaction({ id: 't2', category: 'dining' });
-    await expect(undo()).rejects.toThrow(/changed since/);
+    await expect(undo()).rejects.toThrow(/^\[native:undo-changed-since\] /);
     expect((await row('t1'))?.category).toBe('groceries');
     expect((await row('t2'))?.category).toBe('dining');
   });
@@ -399,7 +401,7 @@ describe('native/undo after an accounts write', () => {
     await addTxn('c', { is_child: 1, parent_id: 'p' });
     await remove({ ids: ['t1', 'p'] });
     await db.updateTransaction({ id: 'c', category: 'dining' });
-    await expect(undo()).rejects.toThrow(/changed since/);
+    await expect(undo()).rejects.toThrow(/^\[native:undo-changed-since\] /);
     expect((await row('t1'))?.tombstone).toBe(1);
     expect((await row('p'))?.tombstone).toBe(1);
   });
@@ -407,7 +409,7 @@ describe('native/undo after an accounts write', () => {
   it('refuses a reopen undo when the account changed since', async () => {
     await h['native/account-reopen']({ id: 'old', undoToken: 'T' } as never);
     await db.update('accounts', { id: 'old', sort_order: 77 });
-    await expect(undo()).rejects.toThrow(/changed since/);
+    await expect(undo()).rejects.toThrow(/^\[native:undo-changed-since\] /);
     expect((await account('old'))?.closed).toBe(0);
   });
 
@@ -418,7 +420,7 @@ describe('native/undo after an accounts write', () => {
       undoToken: 'T',
     } as never);
     await db.update('accounts', { id: 'card', sort_order: 12345 });
-    await expect(undo()).rejects.toThrow(/changed since/);
+    await expect(undo()).rejects.toThrow(/^\[native:undo-changed-since\] /);
     expect((await account('card'))?.sort_order).toBe(12345);
   });
 });
@@ -475,7 +477,9 @@ describe('the full set of rows a write touches', () => {
     // p, c1, c2 and two partners are five rows
     await expect(remove({ ids: ['p'] })).rejects.toThrow(/at most 3/);
     await setPref('accounts-write-max-ids', '5');
-    await expect(remove({ ids: ['p'] })).rejects.toThrow(/reconciled/);
+    await expect(remove({ ids: ['p'] })).rejects.toThrow(
+      /^\[native:needs-confirmed-reconciled\] /,
+    );
     for (const id of ['p', 'c1', 'c2', partner1]) {
       expect((await row(id))?.tombstone).toBe(0);
     }
@@ -532,7 +536,9 @@ describe('the full set of rows a write touches', () => {
     await db.updateTransaction({ id: 'pc', transfer_id: 'x1' });
     // Only the parent carries the reconciled flag
     await db.updateTransaction({ id: 'pp', cleared: true, reconciled: 1 });
-    await expect(remove({ ids: ['x1'] })).rejects.toThrow(/reconciled/);
+    await expect(remove({ ids: ['x1'] })).rejects.toThrow(
+      /^\[native:needs-confirmed-reconciled\] /,
+    );
     expect((await row('x1'))?.tombstone).toBe(0);
     expect(await remove({ ids: ['x1'], confirmedReconciled: true })).toEqual({
       deleted: 1,
@@ -558,7 +564,9 @@ describe('the full set of rows a write touches', () => {
       )
     )?.transferred_id as string;
     await db.updateTransaction({ id: partner, cleared: true, reconciled: 1 });
-    await expect(categorize({ ids: ['x2'] })).rejects.toThrow(/reconciled/);
+    await expect(categorize({ ids: ['x2'] })).rejects.toThrow(
+      /^\[native:needs-confirmed-reconciled\] /,
+    );
     await setPref('accounts-write-max-ids', '1');
     await expect(
       categorize({ ids: ['x2'], confirmedReconciled: true }),
@@ -636,7 +644,7 @@ describe('native/undo refuses after a later change to anything the write touched
       notes: 'edited elsewhere',
       amount: 999,
     });
-    await expect(undo()).rejects.toThrow(/changed since/);
+    await expect(undo()).rejects.toThrow(/^\[native:undo-changed-since\] /);
     expect(await partnerState(partner)).toEqual({
       notes: 'edited elsewhere',
       amount: 999,
@@ -647,7 +655,7 @@ describe('native/undo refuses after a later change to anything the write touched
     const partner = await transferRow();
     await remove({ ids: ['x2'] });
     await db.updateTransaction({ id: partner, notes: 'edited elsewhere' });
-    await expect(undo()).rejects.toThrow(/changed since/);
+    await expect(undo()).rejects.toThrow(/^\[native:undo-changed-since\] /);
     expect((await row(partner))?.tombstone).toBe(1);
   });
 
@@ -680,34 +688,34 @@ describe('native/undo refuses after a later change to anything the write touched
     )?.transferred_id as string;
     await remove({ ids: ['p'] });
     await db.updateTransaction({ id: partner, notes: 'edited elsewhere' });
-    await expect(undo()).rejects.toThrow(/changed since/);
+    await expect(undo()).rejects.toThrow(/^\[native:undo-changed-since\] /);
     expect((await row(partner))?.tombstone).toBe(1);
   });
 
   it('refuses when a touched row was reconciled since', async () => {
     await categorize({ ids: ['t1'] });
     await db.updateTransaction({ id: 't1', cleared: true, reconciled: 1 });
-    await expect(undo()).rejects.toThrow(/changed since/);
+    await expect(undo()).rejects.toThrow(/^\[native:undo-changed-since\] /);
     expect((await row('t1'))?.category).toBe('groceries');
   });
 
   it('refuses when a touched row was linked to a schedule since', async () => {
     await categorize({ ids: ['t1'] });
     await db.update('transactions', { id: 't1', schedule: 'sched1' });
-    await expect(undo()).rejects.toThrow(/changed since/);
+    await expect(undo()).rejects.toThrow(/^\[native:undo-changed-since\] /);
     expect((await row('t1'))?.category).toBe('groceries');
   });
 
   it('refuses a reopen undo after the account was closed again or deleted', async () => {
     await h['native/account-reopen']({ id: 'old', undoToken: 'T' } as never);
     await db.update('accounts', { id: 'old', closed: 1 });
-    await expect(undo()).rejects.toThrow(/changed since/);
+    await expect(undo()).rejects.toThrow(/^\[native:undo-changed-since\] /);
   });
 
   it('refuses a reopen undo after the account was deleted', async () => {
     await h['native/account-reopen']({ id: 'old', undoToken: 'T' } as never);
     await db.update('accounts', { id: 'old', tombstone: 1 });
-    await expect(undo()).rejects.toThrow(/changed since/);
+    await expect(undo()).rejects.toThrow(/^\[native:undo-changed-since\] /);
   });
 
   it('refuses a move undo after a closed account of the section changed', async () => {
@@ -718,7 +726,7 @@ describe('native/undo refuses after a later change to anything the write touched
     } as never);
     // `old` is closed and on budget: the move reorders it with the section
     await db.update('accounts', { id: 'old', sort_order: 4242 });
-    await expect(undo()).rejects.toThrow(/changed since/);
+    await expect(undo()).rejects.toThrow(/^\[native:undo-changed-since\] /);
     expect((await account('old'))?.sort_order).toBe(4242);
   });
 

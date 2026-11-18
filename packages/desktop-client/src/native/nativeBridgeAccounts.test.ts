@@ -1,6 +1,20 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
 import allowlist from '#data/native-bridge-allowlist.json';
 
 import { createNativeBridge } from './nativeBridge';
+
+// The refusal-code contract, shared with loot-core and the Swift package
+const codes: string[] = JSON.parse(
+  readFileSync(
+    path.join(
+      __dirname,
+      '../../../loot-core/src/server/native/fixtures/native-refusal-codes.json',
+    ),
+    'utf8',
+  ),
+);
 
 // native-accounts-screen / native-bridge: "The accounts handlers are
 // allowlisted" (sc-4386). loot-core checks each call; the page forwards only
@@ -107,6 +121,21 @@ describe('accounts reads through the page bridge', () => {
     const { bridge, send } = setup();
     await bridge.call(name, args);
     expect(send).toHaveBeenCalledWith(name, forwarded);
+  });
+
+  // sc-3611: native code branches on a refusal's code token, so the page passes the message on whole
+  it.each(codes)('keeps the [native:%s] token of a refusal', async code => {
+    const { bridge, send } = setup();
+    const message = `[native:${code}] native/undo: words that may change`;
+    send.mockRejectedValueOnce(new Error(message));
+    await expect(
+      bridge.call('native/account-register', {
+        account_id: 'a',
+        scope: 'all',
+        search: null,
+        cursor: null,
+      }),
+    ).rejects.toThrow(message);
   });
 
   // sc-3611: the search footer's count and total reach native code as loot-core sent them

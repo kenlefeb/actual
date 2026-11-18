@@ -79,12 +79,12 @@ final class PageCallTests: XCTestCase {
 
     func testABridgeErrorInsideTheConfirmedShapeIsReturnedAsBefore() async {
         let page = FakePage("capacitor://localhost/budget")
-        page.reply = ["confirmed": true, "error": "native/budget-month: no budget for month 2020-01"]
+        page.reply = ["confirmed": true, "error": "[native:no-budget-for-month] native/budget-month: no budget for month 2020-01"]
         do {
             _ = try await PageCall(runner: page, serverURL: server).bridgeCall(name: "native/budget-month", argsJSON: "{}")
             XCTFail("expected the bridge error")
         } catch {
-            XCTAssertEqual(error as? NativeBridgeError, .page("native/budget-month: no budget for month 2020-01"))
+            XCTAssertEqual(error as? NativeBridgeError, .page("[native:no-budget-for-month] native/budget-month: no budget for month 2020-01"))
             XCTAssertEqual(BudgetLoadError.from(error), .noBudgetForMonth)
         }
     }

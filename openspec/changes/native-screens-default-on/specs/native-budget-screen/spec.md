@@ -3,7 +3,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: The native Budget tab has a per-screen switch and a web fallback
-The iOS app SHALL show the native Budget tab while a per-screen switch is on. The switch SHALL read on when it has never been set, and an explicit off SHALL be kept. Settings SHALL offer it. While it is off, the Budget tab SHALL show the web Budget screen exactly as before. A bridge call that fails or times out SHALL show an error state with a retry.
+The iOS app SHALL show the native Budget tab only while a per-screen switch is on. The switch SHALL read on when it has never been set, and an explicit off SHALL be kept, and Settings in the iOS app SHALL offer it. While it is off, the Budget tab SHALL show the web Budget screen exactly as before. A bridge call that fails or times out SHALL show an error state with a retry.
 
 #### Scenario: Switch on
 - **GIVEN** an envelope budget open in the iOS app and the switch on
@@ -24,3 +24,13 @@ The iOS app SHALL show the native Budget tab while a per-screen switch is on. Th
 - **GIVEN** the switch is on and the engine does not answer
 - **WHEN** the tab loads its month
 - **THEN** after the client timeout the tab shows an error state with a retry, instead of an empty or endless spinner
+
+## ADDED Requirements
+
+### Requirement: The native Budget tab shows the current month
+While the per-screen switch is on, the tab SHALL show the current month of an envelope budget, read-only: every group and category with its budgeted, spent and balance, and to-budget.
+
+#### Scenario: Current month
+- **GIVEN** an envelope budget open in the iOS app and the switch on
+- **WHEN** the user opens the Budget tab
+- **THEN** every group and category shows its budgeted, spent and balance, and the to-budget amount is shown

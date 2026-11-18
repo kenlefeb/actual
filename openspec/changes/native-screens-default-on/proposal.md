@@ -16,7 +16,6 @@ Story sc-5090, epic 470. Ken decided on 2026-11-15 that a native screen that shi
 ### Modified Capabilities
 
 - `native-budget-screen`: the switch defaults to on.
-- `native-paychecks-screen`: its switch requirement (in the open change add-native-paychecks-screen, not yet in the main specs) is edited in place to read on when unset.
 
 ## Impact
 

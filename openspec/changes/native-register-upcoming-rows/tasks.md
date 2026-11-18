@@ -40,7 +40,7 @@ Amended 2026-11-18 (design D6 to D11), and again after the second perf stop (D12
 
 Ships before `native-accounts-screen` task 3.8 turns the native Accounts screen on by default.
 
-- [ ] 2.1 Failing tests first in `AccountsBridgeTests` and `AccountsViewModelTests`:
+- [x] 2.1 Failing tests first in `AccountsBridgeTests` and `AccountsViewModelTests`:
   - decode `native/account-upcoming`: rows, `ruleFields`, `upcomingCount`, `upcomingTotal`, `upcomingCapDays` and `upcomingMore`;
   - the register shows posted rows before the upcoming reply, with "Loading scheduled…";
   - a stale reply (older scope, search or account) is dropped by the request counter;
@@ -54,7 +54,7 @@ Ships before `native-accounts-screen` task 3.8 turns the native Accounts screen 
   - "N scheduled" and its total shown apart from the posted results;
   - both notices (`upcomingCapDays`, `upcomingMore`);
   - no Swift arithmetic on amounts.
-- [ ] 2.2 `Accounts.swift` and `AccountsViewModels.swift` (`NativeBridgeCore`, the view model story 5101's Mac register will reuse) call the upcoming read after the first page and on every scope, search or change event. `NativeAccountRegisterView.swift` shows:
+- [x] 2.2 `Accounts.swift` and `AccountsViewModels.swift` (`NativeBridgeCore`, the view model story 5101's Mac register will reuse) call the upcoming read after the first page and on every scope, search or change event. `NativeAccountRegisterView.swift` shows:
   - upcoming rows with category, split count, the transfer's other account and "Scheduled" in words, kept while filtered;
   - the scheduled count and total;
   - the loading, failure and Retry states, with copy in the copy table;
@@ -63,8 +63,14 @@ Ships before `native-accounts-screen` task 3.8 turns the native Accounts screen 
 - [ ] 2.3 Tapping an upcoming row opens the native read-only detail with "Scheduled" and "Fields set by rules: …", with no edit and no web hand-off (design D5a). UI test for a row with and without rule-set fields
 - [ ] 2.4 The Limits section rows "Scheduled rows: days ahead" and "Scheduled rows: most shown". `accounts-upcoming-max-rows`'s display name is "Scheduled rows: most shown", with help "The most scheduled rows the native register shows and searches (up to 500)." If story 4643's Limits registry has merged, add both with their name and help line, and check that changing each changes the register and its notice. If not, comment both labels and help lines on story 4643 so they land there
 - [ ] 2.5 Check on the iPhone simulator against the web register, unfiltered and filtered, within the caps; record screenshots in the PR
-- [ ] 2.6 Run the `NativeBridgeCore` tests and the iOS build; all pass
+- [x] 2.6 Run the `NativeBridgeCore` tests and the iOS build; all pass
 
 ## 3. Archive (sc-4973)
 
 - [ ] 3.1 After `native-accounts-screen` archives, turn "Upcoming rows are their own read" into MODIFIED deltas of "A register page is one read with a keyset cursor" (the first page adds the header only) and "The accounts handlers are allowlisted" (adds `native/account-upcoming`), then validate and archive (design D7)
+
+## 4. Search by a payee name no payee has yet (sc-5196)
+
+- [x] 4.1 Failing test first: an upcoming row whose rule names a payee that does not exist yet (a row's own payee and a split line's) is found by searching that name; the Uncleared and Uncategorized chips are unchanged; no payee is created
+- [x] 4.2 The upcoming rows' JSON source carries the unresolved name under a stand-in payee id, and a stand-in payee row joins it, so the posted rows' predicate is unchanged and matches the name shown
+- [x] 4.3 The latency gates still hold (`yarn workspace @actual-app/core run perf`, on a quiet machine)

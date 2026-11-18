@@ -66,8 +66,38 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
     // sign-in token included, so a Release build is never inspectable.
     nonisolated static func isInspectable(debugBuild: Bool) -> Bool { debugBuild }
 
+    // Replaceable in tests
+    lazy var loadPage: (URLRequest) -> Void = { [weak self] in _ = self?.webView.load($0) }
+    var now: () -> Date = Date.init
+    var onPageGone: (() -> Void)?
+
     func load() {
-        webView.load(URLRequest(url: WWWSchemeHandler.appURL))
+        loadPage(URLRequest(url: WWWSchemeHandler.appURL))
+    }
+
+    private var reloads = ReloadGuard()
+
+    // The user's Reload, after the app stopped reloading on its own
+    func reloadAfterGivingUp() {
+        reloads.reset()
+        load()
+    }
+
+    // Story 5186: WebKit ended the page's process (memory pressure, a crash),
+    // which leaves an empty window. Reload the app's own page, never the URL
+    // the web view last showed. loot-core's database lives in IndexedDB, but
+    // it is written there asynchronously: a change survives once it has been
+    // flushed (measured: 1 s and 5 s after a write it survived; killed at once,
+    // the last changes were gone). A bridge call in flight fails, usually at
+    // once with `.pageOrigin` (else with its timeout), and is not retried.
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        if reloads.allowsReload(at: now()) {
+            Self.logger.notice("page process ended; reloading the app's page")
+            load()
+        } else {
+            Self.logger.notice("page process ended again; asking before reloading")
+            onPageGone?()
+        }
     }
 
     nonisolated static func acceptsMessage(isMainFrame: Bool, scheme: String, host: String, port: Int) -> Bool {

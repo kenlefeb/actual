@@ -34,6 +34,16 @@ private func registerPage(ids: [String], next: String?, header: Bool) throws -> 
 
 private struct Boom: Error {}
 
+// An upcoming reply with one row per amount, so a test can tell replies apart
+private func upcomingReply(_ amounts: [Int], more: Bool = false) -> String {
+    let rows = amounts.enumerated().map { index, amount in
+        #"{"id":"preview/s\#(index)/2017-01-0\#(index + 2)","scheduleId":"s\#(index)","date":"2017-01-0\#(index + 2)","payee":"P\#(index)","category":null,"categoryId":null,"notes":null,"amount":\#(amount),"cleared":false,"splitCount":0,"transferAccount":null,"status":"upcoming","ruleFields":[]}"#
+    }
+    let caps = more ? #","upcomingKept":\#(amounts.count),"upcomingMore":true"# : ""
+    // The total is loot-core's; the fake sends a fixed one so no test sums here
+    return #"{"upcoming":[\#(rows.joined(separator: ","))],"upcomingCount":\#(amounts.count),"upcomingTotal":-999\#(caps)}"#
+}
+
 // Time under the test's control: the models take their change timer and their
 // typing pause from here, so no test waits on the wall clock. The models call
 // these closures from tasks, so the state sits behind a lock, and a pause is
@@ -127,6 +137,10 @@ private final class FakeAccountsPage {
     var syncResult = #"{"ok":true}"#
     // search text -> page, so a test can tell which search's rows it got
     var searchPages: [String: String] = [:]
+    // sc-4973: the upcoming read's reply, by search text ("" for none)
+    var upcomingReplies: [String: String] = ["": upcomingReply([-100])]
+    // By scope, ahead of the search replies
+    var upcomingScopeReplies: [String: String] = [:]
     // A read for this search text waits here until `release` (a slow first search)
     private var held: [String: CheckedContinuation<Void, Never>] = [:]
     private var holding: Set<String> = []
@@ -140,8 +154,9 @@ private final class FakeAccountsPage {
         held.removeValue(forKey: search)?.resume()
     }
 
+    // Holds the next read with this key only; later ones pass
     fileprivate func waitIfHeld(_ search: String) async {
-        guard holding.contains(search) else { return }
+        guard holding.remove(search) != nil else { return }
         await withCheckedContinuation { held[search] = $0 }
     }
 
@@ -158,12 +173,22 @@ private final class FakeAccountsPage {
             {
                 await self.waitIfHeld(search)
             }
+            // An upcoming read for search "x" is held as "upcoming:x"
+            if name == "native/account-upcoming",
+               let request = try JSONSerialization.jsonObject(with: Data(args.utf8)) as? [String: Any]
+            {
+                await self.waitIfHeld("upcoming:" + ((request["search"] as? String) ?? ""))
+            }
             return try await MainActor.run {
                 self.calls.append((name, args))
                 if let failure = self.failures[name] { throw failure }
                 switch name {
                 case "native/accounts-list": return self.list
                 case "sync": return self.syncResult
+                case "native/account-upcoming":
+                    let request = try JSONSerialization.jsonObject(with: Data(args.utf8)) as! [String: Any]
+                    if let reply = self.upcomingScopeReplies[(request["scope"] as? String) ?? ""] { return reply }
+                    return self.upcomingReplies[(request["search"] as? String) ?? ""] ?? self.upcomingReplies[""]!
                 default:
                     let request = try JSONSerialization.jsonObject(with: Data(args.utf8)) as! [String: Any]
                     if let search = request["search"] as? String, let page = self.searchPages[search] { return page }
@@ -484,5 +509,182 @@ final class AccountRegisterViewModelTests: XCTestCase {
         XCTAssertEqual(page.count("sync"), 1)
         XCTAssertEqual(page.count("native/account-register"), 2)
         XCTAssertEqual(page.count("accounts-bank-sync"), 0)
+    }
+
+    // sc-4973 (native-register-upcoming-rows): the upcoming section, read after
+    // the register's first page
+
+    func testPostedRowsShowBeforeTheUpcomingReplyWhichThenFillsIn() async throws {
+        let page = try FakeAccountsPage()
+        page.hold("upcoming:")
+        let model = model(page)
+        let loading = Task { await model.load() }
+        try await eventually("the upcoming read is in flight") { page.isWaiting("upcoming:") }
+        XCTAssertNotNil(model.state.value, "posted rows first")
+        XCTAssertEqual(model.upcoming, .loading)
+        page.release("upcoming:")
+        await loading.value
+        XCTAssertEqual(model.upcoming.read?.upcoming.map(\.amount), [-100])
+        XCTAssertEqual(page.count("native/account-register"), 1)
+        let request = try JSONSerialization.jsonObject(
+            with: Data(page.calls.first { $0.name == "native/account-upcoming" }!.args.utf8)) as! [String: Any]
+        XCTAssertEqual(request["account_id"] as? String, "checking")
+        XCTAssertEqual(request["scope"] as? String, "all")
+        XCTAssertNil(request["search"])
+    }
+
+    // A search's read runs in a task the next keystroke cancels, which can end the
+    // older read before it replies; a scope change is not cancelled, so the older
+    // reply surely arrives last and only the request counter can drop it
+    func testAnUpcomingReplyForAnOlderScopeArrivingLastIsDropped() async throws {
+        let page = try FakeAccountsPage()
+        page.upcomingScopeReplies["all"] = upcomingReply([-1])
+        page.upcomingScopeReplies["uncleared"] = upcomingReply([-2])
+        page.hold("upcoming:")
+        let model = model(page)
+        let first = Task { await model.load() }
+        try await eventually("the older read is held") { page.isWaiting("upcoming:") }
+        await model.setScope(.uncleared)
+        XCTAssertEqual(model.upcoming.read?.upcoming.map(\.amount), [-2])
+        page.release("upcoming:")
+        await first.value
+        XCTAssertEqual(
+            page.calls.filter { $0.name == "native/account-upcoming" }.count, 2, "the older reply arrived, last")
+        XCTAssertEqual(model.upcoming.read?.upcoming.map(\.amount), [-2])
+    }
+
+    // The register read failed: there are no posted rows to keep, so the section
+    // does not stay on Loading (it is not shown with the failed register)
+    func testAFailedRegisterReadLeavesNoUpcomingLoading() async throws {
+        let page = try FakeAccountsPage()
+        page.failures["native/account-register"] = Boom()
+        let model = model(page)
+        await model.load()
+        XCTAssertEqual(model.upcoming, .failed)
+        XCTAssertEqual(page.count("native/account-upcoming"), 0)
+    }
+
+    func testAFailedUpcomingReadKeepsThePostedRowsAndRetryReadsOnlyTheUpcomingSection() async throws {
+        let page = try FakeAccountsPage()
+        page.failures["native/account-upcoming"] = Boom()
+        let model = model(page)
+        await model.load()
+        XCTAssertEqual(model.upcoming, .failed)
+        XCTAssertNotNil(model.state.value)
+        XCTAssertEqual(UpcomingWords.failed, "Couldn't load scheduled rows. Try again.")
+        page.failures = [:]
+        let registerReads = page.count("native/account-register")
+        await model.retryUpcoming()
+        XCTAssertEqual(page.count("native/account-register"), registerReads)
+        XCTAssertEqual(model.upcoming.read?.upcoming.map(\.amount), [-100])
+    }
+
+    func testAfterAChangeTheOldRowsShowUpdatingUntilTheNewReplyReplacesThem() async throws {
+        let page = try FakeAccountsPage()
+        let model = model(page)
+        await model.load()
+        let old = try XCTUnwrap(model.upcoming.read)
+        page.upcomingReplies[""] = upcomingReply([-200])
+        page.hold("upcoming:")
+        model.eventReceived("sync-event", tables: ["schedules"])
+        clock.fireChanges()
+        try await eventually("the re-read is held") { page.isWaiting("upcoming:") }
+        XCTAssertEqual(model.upcoming, .updating(old), "the old rows stay, marked Updating")
+        XCTAssertTrue(model.upcoming.isUpdating)
+        page.release("upcoming:")
+        try await eventually("the new reply") { model.upcoming.read?.upcoming.map(\.amount) == [-200] }
+        XCTAssertFalse(model.upcoming.isUpdating)
+    }
+
+    func testAReplyFromBeforeAWriteIsDropped() async throws {
+        let page = try FakeAccountsPage()
+        let model = model(page)
+        await model.load()
+        // A retry's read is in flight when a write re-reads the register and the section
+        page.hold("upcoming:")
+        let retry = Task { await model.retryUpcoming() }
+        try await eventually("the older read is held") { page.isWaiting("upcoming:") }
+        page.upcomingReplies[""] = upcomingReply([-300])
+        await model.reload()
+        XCTAssertEqual(model.upcoming.read?.upcoming.map(\.amount), [-300])
+        // The older read answers last, with what was true before the write
+        page.upcomingReplies[""] = upcomingReply([-999])
+        page.release("upcoming:")
+        await retry.value
+        XCTAssertEqual(model.upcoming.read?.upcoming.map(\.amount), [-300])
+        XCTAssertFalse(model.upcoming.isUpdating)
+    }
+
+    func testAFailedRefreshShowsTheFailureState() async throws {
+        let page = try FakeAccountsPage()
+        let model = model(page)
+        await model.load()
+        page.failures["native/account-upcoming"] = Boom()
+        await model.reload()
+        XCTAssertEqual(model.upcoming, .failed)
+    }
+
+    func testLoadingShowsForTheFirstLoadScopeAndSearchButNotForAChange() async throws {
+        let page = try FakeAccountsPage()
+        let model = model(page)
+        XCTAssertEqual(model.upcoming, .loading)
+        await model.load()
+        page.hold("upcoming:")
+        let scope = Task { await model.setScope(.uncleared) }
+        try await eventually("held") { page.isWaiting("upcoming:") }
+        XCTAssertEqual(model.upcoming, .loading, "a scope change shows Loading")
+        page.release("upcoming:")
+        await scope.value
+        XCTAssertNotNil(model.upcoming.read)
+        page.hold("upcoming:")
+        let change = Task { await model.reload() }
+        try await eventually("held again") { page.isWaiting("upcoming:") }
+        XCTAssertTrue(model.upcoming.isUpdating, "a change keeps the rows, marked Updating")
+        page.release("upcoming:")
+        await change.value
+    }
+
+    func testScheduleAndRuleChangesReReadTheRegister() async throws {
+        let page = try FakeAccountsPage()
+        let model = model(page)
+        await model.load()
+        model.eventReceived("sync-event", tables: ["schedules"])
+        model.eventReceived("sync-event", tables: ["rules"])
+        XCTAssertEqual(clock.scheduled, 1)
+    }
+
+    func testTheSummaryAndNoticesUseOnlyLootCoresNumbers() throws {
+        let plain = try JSONDecoder().decode(AccountUpcoming.self, from: Data(upcomingReply([-1, -2]).utf8))
+        XCTAssertEqual(UpcomingWords.summary(plain, filtered: false), "2 scheduled")
+        XCTAssertEqual(UpcomingWords.summary(plain, filtered: true), "2 scheduled")
+        XCTAssertEqual(UpcomingWords.totalLabel(plain), "Scheduled total: ")
+        XCTAssertNil(UpcomingWords.moreNotice(plain))
+        XCTAssertNil(UpcomingWords.capNotice(plain))
+        let capped = try JSONDecoder().decode(
+            AccountUpcoming.self,
+            from: Data(#"{"upcoming":[],"upcomingCount":2,"upcomingTotal":-3,"upcomingCapDays":92,"upcomingKept":100,"upcomingMore":true}"#.utf8))
+        XCTAssertEqual(UpcomingWords.summary(capped, filtered: false), "First 100 scheduled; more not shown")
+        XCTAssertEqual(UpcomingWords.summary(capped, filtered: true), "2 scheduled in the first 100; more not shown or searched")
+        XCTAssertEqual(UpcomingWords.totalLabel(capped), "Total of the rows shown: ")
+        XCTAssertEqual(
+            UpcomingWords.moreNotice(capped),
+            "More scheduled rows are not shown or searched. To see more, raise Scheduled rows: most shown in Settings > Advanced > Limits (up to 500).")
+        // PO decision (sc-4973 comment 5197): both notices name Settings > Advanced > Limits
+        XCTAssertEqual(
+            UpcomingWords.capNotice(capped), "Scheduled rows shown up to 92 days; change this in Settings > Advanced > Limits.")
+        XCTAssertEqual(UpcomingWords.ruleFields(["payee", "category"]), "Fields set by rules: payee, category")
+        XCTAssertNil(UpcomingWords.ruleFields([]))
+    }
+
+    // PO decision (sc-4973 comment 5197): when only upcoming rows match, the posted
+    // section says so, so it never reads as if nothing matched
+    func testTheEmptyPostedSectionSaysWhetherScheduledRowsMatched() {
+        XCTAssertEqual(RegisterEmptyWords.text(search: "rent", scope: .all, upcomingShown: false), "No transactions match “rent”.")
+        XCTAssertEqual(
+            RegisterEmptyWords.text(search: "rent", scope: .all, upcomingShown: true), "No posted transactions match “rent”.")
+        XCTAssertEqual(RegisterEmptyWords.text(search: "", scope: .uncleared, upcomingShown: false), "No transactions match this filter.")
+        XCTAssertEqual(
+            RegisterEmptyWords.text(search: "", scope: .uncleared, upcomingShown: true), "No posted transactions match this filter.")
+        XCTAssertEqual(RegisterEmptyWords.text(search: "", scope: .all, upcomingShown: true), "No transactions yet.")
     }
 }

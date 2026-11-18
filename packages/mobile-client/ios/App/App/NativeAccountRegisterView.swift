@@ -15,6 +15,8 @@ struct AccountRegisterView: View {
     @State private var searchText = ""
     @State private var confirming: RegisterConfirmation?
     @State private var categorizing: Categorizing?
+    // sc-4973: an upcoming row's read-only detail
+    @State private var upcomingDetail: AccountUpcoming.Row?
 
     private var account: AccountsList.Account? {
         guard let list else { return nil }
@@ -58,6 +60,11 @@ struct AccountRegisterView: View {
                 } message: { _ in
                     Text(RegisterWords.reconciledInvolved)
                 })
+            .sheet(item: $upcomingDetail) { row in
+                UpcomingRowDetail(
+                    row: row, accountName: account?.name ?? "", style: model.state.value?.first.amountStyle,
+                    isUpdating: model.upcoming.isUpdating)
+            }
             .sheet(item: $categorizing) { item in
                 CategoryPicker(model: model, currentId: item.row.categoryId) { category in
                     categorizing = nil
@@ -113,11 +120,13 @@ struct AccountRegisterView: View {
                 .disabled(true)
                 .accessibilityLabel(Text(RegisterWords.loading))
         case .loaded(let content):
-            RegisterList(content: content, model: model, search: model.search, rowActions: rowActions, actions: rowHandlers, clearingFor: account?.clearingFor)
+            RegisterList(
+                content: content, model: model, search: model.search, rowActions: rowActions, actions: rowHandlers,
+                clearingFor: account?.clearingFor, openUpcoming: { upcomingDetail = $0 })
         case .stale(let content, let error):
             RegisterList(
                 content: content, model: model, search: model.search, rowActions: rowActions, actions: rowHandlers,
-                clearingFor: account?.clearingFor, staleError: error)
+                clearingFor: account?.clearingFor, staleError: error, openUpcoming: { upcomingDetail = $0 })
         case .failed(let error):
             VStack(spacing: 12) {
                 Text(verbatim: error.registerMessage).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
@@ -231,6 +240,7 @@ private struct RegisterList: View {
     let actions: RegisterRowHandlers
     var clearingFor: String?
     var staleError: AccountsLoadError?
+    var openUpcoming: (AccountUpcoming.Row) -> Void = { _ in }
     @Environment(\.isSearching) private var isSearching
 
     private var style: BudgetAmountStyle { content.first.amountStyle }
@@ -249,19 +259,14 @@ private struct RegisterList: View {
                 Text(AccountsCountWords.results(results.count)).font(.headline).listRowBackground(Color.clear)
                     .accessibilityAddTraits(.isHeader)
             }
-            if !isSearching, search.isEmpty, let upcoming = content.upcoming, !upcoming.isEmpty {
-                Section(header: sectionTitle(RegisterWords.upcoming)) {
-                    ForEach(upcoming) { item in
-                        NativeTransactionRow(
-                            payee: item.payee.flatMap { $0.isEmpty ? nil : $0 } ?? RegisterWords.noPayee, category: nil, date: item.date, amount: signed(item.amount), isIncome: item.amount > 0,
-                            status: .scheduled, style: .register)
-                    }
-                }
-            }
+            // sc-4973: above the posted rows, kept while filtered (unlike the web)
+            UpcomingSectionView(
+                section: model.upcoming, filtered: !search.isEmpty || model.scope != .all, style: style,
+                retry: { Task { await model.retryUpcoming() } }, open: openUpcoming)
             if content.rows.isEmpty {
                 Text(
-                    !search.isEmpty ? String(format: RegisterWords.noMatches, search)
-                        : model.scope != .all ? RegisterWords.noFilterMatches : RegisterWords.noTransactions)
+                    RegisterEmptyWords.text(
+                        search: search, scope: model.scope, upcomingShown: !(model.upcoming.read?.upcoming.isEmpty ?? true)))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
@@ -322,6 +327,155 @@ private struct RegisterList: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+// sc-4973 (native-register-upcoming-rows): the upcoming rows as they will
+// post, from native/account-upcoming. While a re-read runs the old rows stay at
+// the same height, dimmed and marked Updating, so the posted rows never move.
+private struct UpcomingSectionView: View {
+    let section: UpcomingSection
+    let filtered: Bool
+    let style: BudgetAmountStyle
+    let retry: () -> Void
+    let open: (AccountUpcoming.Row) -> Void
+
+    var body: some View {
+        switch section {
+        case .loading:
+            Section(header: title) {
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text(UpcomingWords.loading).foregroundColor(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+            }
+        case .failed:
+            Section(header: title) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(UpcomingWords.failed).fixedSize(horizontal: false, vertical: true)
+                    Button(AccountsWords.retry, action: retry)
+                }
+            }
+        case .loaded(let read), .updating(let read):
+            if !read.upcoming.isEmpty || read.upcomingMore == true || read.upcomingCapDays != nil {
+                rows(read, updating: section.isUpdating)
+            }
+        }
+    }
+
+    private var title: some View { heading(RegisterWords.upcoming) }
+
+    private func heading(_ text: String) -> some View {
+        Text(text).font(.headline).foregroundColor(.primary).textCase(nil).accessibilityAddTraits(.isHeader)
+    }
+
+    private func rows(_ read: AccountUpcoming, updating: Bool) -> some View {
+        Section(
+            header: heading(updating ? "\(RegisterWords.upcoming) · \(UpcomingWords.updating)" : RegisterWords.upcoming),
+            footer: notices(read)
+        ) {
+            ForEach(read.upcoming) { row in
+                Button { open(row) } label: {
+                    NativeTransactionRow(
+                        payee: UpcomingRowText.payee(row), category: UpcomingRowText.detail(row), date: row.date,
+                        amount: UpcomingRowText.amount(row, style: style), isIncome: row.amount > 0, status: .scheduled, style: .register)
+                }
+                .foregroundColor(.primary)
+                .opacity(updating ? 0.45 : 1)
+                .accessibilityHint(updating ? Text(UpcomingWords.updating) : Text(""))
+            }
+            // loot-core's count and total, apart from the posted results; never summed here
+            VStack(alignment: .leading, spacing: 2) {
+                Text(UpcomingWords.summary(read, filtered: filtered)).font(.subheadline)
+                (Text(UpcomingWords.totalLabel(read)) + Text(BudgetAmountFormat.string(read.upcomingTotal, style: style)).monospacedDigit())
+                    .font(.footnote).foregroundColor(.secondary)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .opacity(updating ? 0.45 : 1)
+            .accessibilityElement(children: .combine)
+            .accessibilityValue(updating ? Text(UpcomingWords.updating) : Text(""))
+        }
+        .onChange(of: updating) { isUpdating in
+            if isUpdating { UIAccessibility.post(notification: .announcement, argument: UpcomingWords.updating) }
+        }
+    }
+
+    @ViewBuilder private func notices(_ read: AccountUpcoming) -> some View {
+        let lines = [UpcomingWords.capNotice(read), UpcomingWords.moreNotice(read)].compactMap { $0 }
+        if !lines.isEmpty {
+            Text(lines.joined(separator: "\n")).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+enum UpcomingRowText {
+    static func payee(_ row: AccountUpcoming.Row) -> String {
+        [row.payee, row.transferAccount?.name, row.notes].compactMap { $0 }.first { !$0.isEmpty } ?? RegisterWords.noPayee
+    }
+
+    // As posted rows read: the split count, the transfer's other account, or the category
+    static func detail(_ row: AccountUpcoming.Row) -> String? {
+        if row.splitCount > 0 { return String(format: RegisterWords.split, row.splitCount) }
+        if let transfer = row.transferAccount, row.category == nil { return String(format: RegisterWords.transfer, transfer.name) }
+        return row.category
+    }
+
+    static func amount(_ row: AccountUpcoming.Row, style: BudgetAmountStyle) -> String {
+        (row.amount > 0 ? "+" : "") + BudgetAmountFormat.string(row.amount, style: style)
+    }
+}
+
+// D5a: read-only, no edit and no web hand-off (schedule editing is story 4617)
+private struct UpcomingRowDetail: View {
+    let row: AccountUpcoming.Row
+    let accountName: String
+    let style: BudgetAmountStyle?
+    let isUpdating: Bool
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        NavigationView {
+            List {
+                Section {
+                    Text(isUpdating ? "\(UpcomingWords.scheduled) · \(UpcomingWords.updating)" : UpcomingWords.scheduled)
+                        .font(.headline)
+                    line(RegisterWords.detailDate, Dates.short(row.date))
+                    line(RegisterWords.detailPayee, UpcomingRowText.payee(row))
+                    line(RegisterWords.detailCategory, UpcomingRowText.detail(row) ?? RegisterWords.uncategorized)
+                    line(RegisterWords.detailAmount, style.map { UpcomingRowText.amount(row, style: $0) } ?? "")
+                    line(RegisterWords.detailAccount, accountName)
+                    if let notes = row.notes, !notes.isEmpty { line(RegisterWords.detailNotes, notes) }
+                }
+                if let fields = UpcomingWords.ruleFields(row.ruleFields) {
+                    Section { Text(fields).fixedSize(horizontal: false, vertical: true) }
+                }
+            }
+            .listStyle(.insetGrouped)
+            .navigationBarTitle(Text(UpcomingWords.scheduled), displayMode: .inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(RegisterWords.done) { dismiss() } } }
+        }
+        .tint(Color(NativeTabBarController.accent))
+    }
+
+    // At accessibility sizes the value goes under its label, whole, so no word breaks
+    @ViewBuilder private func line(_ label: String, _ value: String) -> some View {
+        Group {
+            if typeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(label).foregroundColor(.secondary)
+                    Text(value).fixedSize(horizontal: false, vertical: true)
+                }
+            } else {
+                HStack(alignment: .top) {
+                    Text(label).foregroundColor(.secondary)
+                    Spacer(minLength: 12)
+                    Text(value).multilineTextAlignment(.trailing).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -512,15 +666,13 @@ extension AccountRegisterContent {
         let first = AccountRegister(
             currencyCode: "", currencyDecimalPlaces: 2, currencySymbol: "", currencySymbolPosition: .before, currencySpace: false,
             numberFormat: .commaDot, hideFraction: false, rows: rows, nextCursor: nil,
-            header: AccountRegister.Header(balance: 1_234_567, cleared: 1_234_567, uncleared: 0), upcoming: [], resultCount: nil,
+            header: AccountRegister.Header(balance: 1_234_567, cleared: 1_234_567, uncleared: 0), upcoming: nil, resultCount: nil,
             resultTotal: nil)
         return AccountRegisterContent(first: first, rows: rows, nextCursor: nil, pages: 1)
     }()
 }
 
 enum RegisterWords {
-    static let noFilterMatches = NSLocalizedString(
-        "No transactions match this filter.", comment: "Native Accounts register: a scope chip with no rows")
     static let clearedAmount = NSLocalizedString("Cleared %@", comment: "Native Accounts register: header, large text")
     static let unclearedAmount = NSLocalizedString("Uncleared %@", comment: "Native Accounts register: header, large text")
     static let categoriesFailed = NSLocalizedString(
@@ -541,8 +693,13 @@ enum RegisterWords {
     static let workingBalance = NSLocalizedString("Working balance", comment: "Native Accounts register: header")
     static let clearedUncleared = NSLocalizedString("Cleared %1$@ · Uncleared %2$@", comment: "Native Accounts register: header")
     static let upcoming = NSLocalizedString("Upcoming", comment: "Native Accounts register: scheduled transactions section")
-    static let noTransactions = NSLocalizedString("No transactions yet.", comment: "Native Accounts register: an empty account")
-    static let noMatches = NSLocalizedString("No transactions match “%@”.", comment: "Native Accounts register: no search results")
+    static let done = NSLocalizedString("Done", comment: "Native Accounts register: close the scheduled row detail")
+    static let detailDate = NSLocalizedString("Date", comment: "Native Accounts register: scheduled row detail")
+    static let detailPayee = NSLocalizedString("Payee", comment: "Native Accounts register: scheduled row detail")
+    static let detailCategory = NSLocalizedString("Category", comment: "Native Accounts register: scheduled row detail")
+    static let detailAmount = NSLocalizedString("Amount", comment: "Native Accounts register: scheduled row detail")
+    static let detailAccount = NSLocalizedString("Account", comment: "Native Accounts register: scheduled row detail")
+    static let detailNotes = NSLocalizedString("Notes", comment: "Native Accounts register: scheduled row detail")
     static let all = NSLocalizedString("All", comment: "Native Accounts register: scope chip")
     static let uncleared = NSLocalizedString("Uncleared", comment: "Native Accounts register: scope chip")
     static let uncategorized = NSLocalizedString("Uncategorized", comment: "Native Accounts register: scope chip")

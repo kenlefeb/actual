@@ -315,7 +315,7 @@ async function registerFilter(
   }
   const text = typeof search === 'string' ? search.trim() : '';
   let sql = '';
-  let children = '';
+  let children: ((payees: string) => string) | null = null;
   const params: (string | number)[] = [];
   if (scope === 'uncleared') {
     sql += ' AND t.cleared = 0';
@@ -329,15 +329,16 @@ async function registerFilter(
     const child = await searchMatch(text);
     // A matching split child returns its parent
     sql += ` AND (${own.sql('t', 'p', 'c')} OR t.id IN (SELECT t.parent_id FROM `;
-    children = ` t
-      LEFT JOIN payees p ON p.id = t.payee
+    children = (payees: string) => ` t
+      LEFT JOIN ${payees} p ON p.id = t.payee
       LEFT JOIN categories c ON c.id = t.category
       WHERE t.is_child = 1 AND t.account = ? AND ${child.sql('t', 'p', 'c')}))`;
     params.push(...own.params, account, ...child.params);
   }
   return {
-    // `source`: the rows the child subquery reads, posted or upcoming
-    sql: (source: string) => (children ? sql + source + children : sql),
+    // `source` and `payees`: what the child subquery reads, for posted or upcoming rows
+    sql: (source: string, payees = 'payees') =>
+      children ? sql + source + children(payees) : sql,
     params,
     filtered: scope !== 'all' || text !== '',
   };
@@ -517,6 +518,8 @@ type UpcomingSql = {
   is_parent: number;
   is_child: number;
   parent_id: string | null;
+  // sc-5196: a payee name no payee has yet, under the stand-in id in `payee`
+  payee_name: string | null;
 };
 const UPCOMING_COLUMNS = [
   'id',
@@ -530,6 +533,7 @@ const UPCOMING_COLUMNS = [
   'is_parent',
   'is_child',
   'parent_id',
+  'payee_name',
 ] as const satisfies readonly (keyof UpcomingSql)[];
 
 type Upcoming = { row: NativeUpcomingRow; sql: UpcomingSql[] };
@@ -785,7 +789,9 @@ async function upcomingRows(account: string) {
     id,
     account,
     date: toDateRepr(t.date),
-    payee: t.payee || null,
+    // A rule-named payee that does not exist yet (the read creates none) is
+    // searched by its name through a stand-in payee row (sc-5196)
+    payee: t.payee === 'new' ? `new:${id}` : t.payee || null,
     category,
     notes: t.notes || null,
     amount: t.amount,
@@ -793,6 +799,10 @@ async function upcomingRows(account: string) {
     is_parent: 0,
     is_child: 0,
     parent_id: null,
+    payee_name:
+      t.payee === 'new'
+        ? ((t as { payee_name?: string }).payee_name ?? null)
+        : null,
     ...over,
   });
   const rows = transactions
@@ -858,14 +868,20 @@ async function filterUpcoming(
     c => `json_extract(value, '$.${c}') AS ${c}`,
   ).join(', ');
   const matched = await db.all<{ id: string }>(
-    `WITH upcoming AS MATERIALIZED (SELECT ${columns} FROM json_each(?))
+    `WITH upcoming AS MATERIALIZED (SELECT ${columns} FROM json_each(?)),
+     -- The payees, plus a stand-in for each name no payee has yet: the same
+     -- predicate then matches the name the row shows
+     upcoming_payees AS (
+       SELECT id, name, transfer_acct FROM payees
+       UNION ALL
+       SELECT payee, payee_name, NULL FROM upcoming WHERE payee_name IS NOT NULL)
      SELECT t.id
      FROM upcoming t
      JOIN accounts a ON a.id = t.account
-     LEFT JOIN payees p ON p.id = t.payee
+     LEFT JOIN upcoming_payees p ON p.id = t.payee
      LEFT JOIN categories c ON c.id = t.category
      LEFT JOIN accounts ta ON ta.id = p.transfer_acct AND ta.tombstone = 0
-     WHERE t.is_child = 0${filter.sql('upcoming')}`,
+     WHERE t.is_child = 0${filter.sql('upcoming', 'upcoming_payees')}`,
     [JSON.stringify(rows.flatMap(r => r.sql)), ...filter.params],
   );
   const ids = new Set(matched.map(r => r.id));

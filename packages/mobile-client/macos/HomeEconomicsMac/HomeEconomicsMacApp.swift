@@ -39,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         host.onChange = { [weak self] in self?.rereads?.notify() }
         // The page stays on its sign-in screen; nothing went to the browser
         host.onRefusedSignIn = { [weak self] in self?.showSignInNotSupported() }
+        host.onPageGone = { [weak self] in self?.showPageGone() }
         let storage = StorageLossMonitor(defaults: UserDefaults.standard) { [weak self] in self?.showStorageLost() }
         host.onBudgetState = { storage.handle($0) }
         self.host = host
@@ -82,6 +83,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func windowShouldClose(_ sender: NSWindow) -> Bool { lifecycle.windowShouldClose(sender) }
 
     // Task 1.4a: the web view's data was cleared while a budget was open
+    // Story 5186: the page's process kept ending, so the app stopped reloading it
+    private func showPageGone() {
+        guard let window, let host else { return }
+        let alert = NSAlert()
+        alert.messageText = String(localized: "The budget page stopped working")
+        alert.informativeText = String(
+            localized: "Reload to open it again. A change made in the last moment before it stopped may need to be made again.")
+        alert.addButton(withTitle: String(localized: "Reload"))
+        if let sheet = window.attachedSheet { window.endSheet(sheet) }
+        alert.beginSheetModal(for: window) { _ in host.reloadAfterGivingUp() }
+    }
+
     private func showStorageLost() {
         guard let window else { return }
         let alert = NSAlert()

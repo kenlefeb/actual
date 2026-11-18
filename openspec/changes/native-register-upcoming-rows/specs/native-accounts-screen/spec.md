@@ -19,7 +19,7 @@ The native register on iPhone SHALL show each upcoming scheduled row as it will 
 - **THEN** one upcoming row shows "Split (n)" with the schedule's amount
 
 ### Requirement: Upcoming rows follow scope and search
-On iPhone, a scope chip or search SHALL show the upcoming rows the posted row would match and hide the rest, by the same predicate as posted rows. Upcoming rows stay above the posted rows and grey, marked "Scheduled". This differs from the web, which hides them while filtered.
+On iPhone, a scope chip or search SHALL show the upcoming rows the posted row would match and hide the rest, by the same predicate as posted rows. Upcoming rows stay above the posted rows and grey, marked "Scheduled". This differs from the web, which hides them while filtered. When only upcoming rows match, the posted section SHALL say "No posted transactions match"; when nothing matches, "No transactions match".
 
 #### Scenario: Uncleared
 - **GIVEN** an upcoming row and a cleared posted row
@@ -30,6 +30,16 @@ On iPhone, a scope chip or search SHALL show the upcoming rows the posted row wo
 - **GIVEN** upcoming rows for "Netflix" and "Rent"
 - **WHEN** the user searches "netflix"
 - **THEN** only the Netflix upcoming row shows among upcoming rows
+
+#### Scenario: Only upcoming rows match
+- **GIVEN** an upcoming row for "Rent" and no posted row matching "rent"
+- **WHEN** the user searches "rent"
+- **THEN** the Rent upcoming row shows, and the posted section says "No posted transactions match “rent”."
+
+#### Scenario: A payee name no payee has yet
+- **GIVEN** an upcoming row whose rule names the payee "Brand New Payee", which does not exist yet
+- **WHEN** the user searches "brand new"
+- **THEN** that upcoming row shows, and no payee is created
 
 #### Scenario: Uncategorized
 - **GIVEN** an upcoming row with no category after rules, and one whose rule sets a category
@@ -63,12 +73,12 @@ When loot-core returns `upcomingMore`, the iPhone register SHALL label the count
 - **THEN** the section says "12 scheduled" with no "First" wording
 
 ### Requirement: The register says when the cap hides scheduled rows
-When loot-core reports that the horizon cap hid upcoming rows, the iPhone register SHALL say so below the upcoming rows: "Scheduled rows shown up to N days; change this in Settings > Limits.", with N from loot-core. It SHALL say nothing when no row was hidden.
+When loot-core reports that the horizon cap hid upcoming rows, the iPhone register SHALL say so below the upcoming rows: "Scheduled rows shown up to N days; change this in Settings > Advanced > Limits.", with N from loot-core. It SHALL say nothing when no row was hidden.
 
 #### Scenario: A schedule beyond the cap
 - **GIVEN** a schedule length of 6 months and the default cap of 92 days
 - **WHEN** the user opens the register
-- **THEN** the notice says scheduled rows are shown up to 92 days and points to Settings > Limits
+- **THEN** the notice says scheduled rows are shown up to 92 days and points to Settings > Advanced > Limits
 
 #### Scenario: Nothing hidden
 - **GIVEN** the default upcoming length of 1 week

@@ -279,6 +279,53 @@ describe('native/account-upcoming', () => {
     ]);
   });
 
+  // sc-5196: search matches the name a row shows, even before its payee exists
+  it('finds a row by a payee name no payee has yet, still creating nothing', async () => {
+    await addSchedule('Named', {
+      date: '2017-01-03',
+      amount: -500,
+      actions: [{ op: 'set', field: 'payee_name', value: 'Brand New Payee' }],
+    });
+    // A split whose line names a new payee: the line's name finds its row
+    await addSchedule('Lines', {
+      date: '2017-01-04',
+      amount: -900,
+      payee: 'grocer',
+      actions: [
+        {
+          op: 'set-split-amount',
+          field: 'amount',
+          value: -100,
+          options: { splitIndex: 1, method: 'fixed-amount' },
+        },
+        {
+          op: 'set',
+          field: 'payee_name',
+          value: 'Line Shop',
+          options: { splitIndex: 1 },
+        },
+        {
+          op: 'set-split-amount',
+          field: 'amount',
+          options: { splitIndex: 2, method: 'remainder' },
+        },
+      ],
+    });
+    const payees = async () =>
+      (await db.all<{ n: number }>('SELECT COUNT(*) AS n FROM payees'))[0].n;
+    const before = await payees();
+    const amounts = async (over: Partial<Args>) =>
+      (await upcoming(over)).upcoming.map(r => r.amount);
+    expect(await amounts({ search: 'brand new' })).toEqual([-500]);
+    expect(await amounts({ search: 'line shop' })).toEqual([-900]);
+    expect(await amounts({ search: 'nobody' })).toEqual([]);
+    // The chips are as before: both rows are uncleared, only the plain one
+    // is uncategorized (a split parent never is)
+    expect(await amounts({ scope: 'uncleared' })).toEqual([-900, -500]);
+    expect(await amounts({ scope: 'uncategorized' })).toEqual([-500]);
+    expect(await payees()).toBe(before);
+  });
+
   it('inverts a plain transfer into the account, naming the other account', async () => {
     const id = await addSchedule('Save', {
       date: '2017-01-06',

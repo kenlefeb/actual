@@ -437,6 +437,8 @@ public final class AccountRegisterViewModel: ObservableObject {
         } catch {
             guard mine == generation else { return }
             state = state.failing(.from(error))
+            // Never left on Loading: the failed state offers Retry with the register's
+            if section == upcomingGeneration { upcoming = .failed }
             return
         }
         await readUpcoming(section)

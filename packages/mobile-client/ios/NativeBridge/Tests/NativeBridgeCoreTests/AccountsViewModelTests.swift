@@ -139,6 +139,8 @@ private final class FakeAccountsPage {
     var searchPages: [String: String] = [:]
     // sc-4973: the upcoming read's reply, by search text ("" for none)
     var upcomingReplies: [String: String] = ["": upcomingReply([-100])]
+    // By scope, ahead of the search replies
+    var upcomingScopeReplies: [String: String] = [:]
     // A read for this search text waits here until `release` (a slow first search)
     private var held: [String: CheckedContinuation<Void, Never>] = [:]
     private var holding: Set<String> = []
@@ -185,6 +187,7 @@ private final class FakeAccountsPage {
                 case "sync": return self.syncResult
                 case "native/account-upcoming":
                     let request = try JSONSerialization.jsonObject(with: Data(args.utf8)) as! [String: Any]
+                    if let reply = self.upcomingScopeReplies[(request["scope"] as? String) ?? ""] { return reply }
                     return self.upcomingReplies[(request["search"] as? String) ?? ""] ?? self.upcomingReplies[""]!
                 default:
                     let request = try JSONSerialization.jsonObject(with: Data(args.utf8)) as! [String: Any]
@@ -530,23 +533,35 @@ final class AccountRegisterViewModelTests: XCTestCase {
         XCTAssertNil(request["search"])
     }
 
-    func testAnUpcomingReplyForAnOlderSearchIsDropped() async throws {
+    // A search's read runs in a task the next keystroke cancels, which can end the
+    // older read before it replies; a scope change is not cancelled, so the older
+    // reply surely arrives last and only the request counter can drop it
+    func testAnUpcomingReplyForAnOlderScopeArrivingLastIsDropped() async throws {
         let page = try FakeAccountsPage()
-        page.upcomingReplies["rent"] = upcomingReply([-1])
-        page.upcomingReplies["rental"] = upcomingReply([-2])
-        page.hold("upcoming:rent")
+        page.upcomingScopeReplies["all"] = upcomingReply([-1])
+        page.upcomingScopeReplies["uncleared"] = upcomingReply([-2])
+        page.hold("upcoming:")
         let model = model(page)
-        await model.setSearch("rent")
-        try await eventually("the pause started") { clock.pauses == 1 }
-        clock.endPauses()
-        try await eventually("the rent upcoming read is held") { page.isWaiting("upcoming:rent") }
-        await model.setSearch("rental")
-        try await eventually("the second pause started") { clock.pauses == 2 }
-        clock.endPauses()
-        try await eventually("the rental rows") { model.upcoming.read?.upcoming.map(\.amount) == [-2] }
-        page.release("upcoming:rent")
-        await settle()
+        let first = Task { await model.load() }
+        try await eventually("the older read is held") { page.isWaiting("upcoming:") }
+        await model.setScope(.uncleared)
         XCTAssertEqual(model.upcoming.read?.upcoming.map(\.amount), [-2])
+        page.release("upcoming:")
+        await first.value
+        XCTAssertEqual(
+            page.calls.filter { $0.name == "native/account-upcoming" }.count, 2, "the older reply arrived, last")
+        XCTAssertEqual(model.upcoming.read?.upcoming.map(\.amount), [-2])
+    }
+
+    // The register read failed: there are no posted rows to keep, so the section
+    // does not stay on Loading (it is not shown with the failed register)
+    func testAFailedRegisterReadLeavesNoUpcomingLoading() async throws {
+        let page = try FakeAccountsPage()
+        page.failures["native/account-register"] = Boom()
+        let model = model(page)
+        await model.load()
+        XCTAssertEqual(model.upcoming, .failed)
+        XCTAssertEqual(page.count("native/account-upcoming"), 0)
     }
 
     func testAFailedUpcomingReadKeepsThePostedRowsAndRetryReadsOnlyTheUpcomingSection() async throws {

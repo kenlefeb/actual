@@ -207,6 +207,52 @@ describe('AccountPage', () => {
     expect(state.pushModal).toHaveBeenCalledTimes(1);
   });
 
+  // #458 review: the "already opened" record is page memory, so a web-view reload
+  // would read the flag from browser history again and reopen the menu. The flag
+  // is cleared from the history entry itself, with no navigation.
+  it('clears the hand-off flag from the browser history entry once the menu opens', async () => {
+    state.pushModal.mockClear();
+    window.history.replaceState(
+      {
+        usr: { openAccountMenu: true, fromTabBar: true },
+        key: 'reload-entry',
+        idx: 0,
+      },
+      '',
+    );
+    const replace = vi.spyOn(window.history, 'replaceState');
+    const pushes = vi.spyOn(window.history, 'pushState');
+    try {
+      render(
+        <TestProviders>
+          <MemoryRouter
+            initialEntries={[
+              {
+                pathname: '/accounts/checking',
+                state: { openAccountMenu: true, fromTabBar: true },
+                key: 'reload-entry',
+              },
+            ]}
+          >
+            <Routes>
+              <Route path="/accounts/:id" element={<AccountPage />} />
+            </Routes>
+          </MemoryRouter>
+        </TestProviders>,
+      );
+      await vi.waitFor(() => expect(state.pushModal).toHaveBeenCalledTimes(1));
+      expect(window.history.state.usr.openAccountMenu).toBeUndefined();
+      expect(window.history.state.usr.fromTabBar).toBe(true);
+      expect(window.history.state.key).toBe('reload-entry');
+      expect(replace).toHaveBeenCalledTimes(1);
+      expect(pushes).not.toHaveBeenCalled();
+    } finally {
+      replace.mockRestore();
+      pushes.mockRestore();
+      window.history.replaceState(null, '');
+    }
+  });
+
   it('does not open the menu without the hand-off', () => {
     state.pushModal.mockClear();
     render(

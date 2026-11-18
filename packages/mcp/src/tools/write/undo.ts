@@ -588,12 +588,14 @@ function restorePlan(
   cells: RestoreCell[],
   logged: Change[],
   ids: string[],
+  /** What the delete counted against the delete limit: its transactions, or its categories. */
+  counted: number,
 ): Plan {
   return {
     ids,
     changes: swapped(logged),
     deletes: false,
-    restores: { rows: rows.length, cells: cells.length },
+    restores: { rows: counted, cells: cells.length },
     steps: [
       {
         id: 'restore',
@@ -651,7 +653,11 @@ async function planDeleteTransactions(ctx: Ctx): Promise<Plan> {
   const before = (c: Change) => c.before as Record<string, unknown>;
   for (const c of txs) {
     const b = before(c);
-    if (!isId(b.account) || (b.payee !== null && !isId(b.payee))) {
+    if (
+      !isId(b.account) ||
+      (b.payee !== null && !isId(b.payee)) ||
+      (b.category !== null && b.category !== undefined && !isId(b.category))
+    ) {
       throw notUndoable('A logged value is not an id.');
     }
   }
@@ -690,6 +696,32 @@ async function planDeleteTransactions(ctx: Ctx): Promise<Plan> {
     const payee = before(c).payee;
     if (typeof payee === 'string' && !payees.has(payee)) {
       stale.push(`${payee} (payee)`);
+    }
+  }
+  // A category deleted since is fine only when it forwards to a live one (a delete with a transfer)
+  const liveCategories = new Set(
+    (await load()).flatMap(g => g.categories.map(c => c.id)),
+  );
+  const gone = [
+    ...new Set(
+      txs.flatMap(c => {
+        const category = before(c).category;
+        return typeof category === 'string' && !liveCategories.has(category)
+          ? [category]
+          : [];
+      }),
+    ),
+  ];
+  if (gone.length > 0) {
+    const forwards = await checkRows(
+      gone.map(id => ({ table: 'categories' as const, id })),
+    );
+    for (const category of gone) {
+      const to = forwards.get(stateKey('categories', category))?.columns
+        .mapping;
+      if (typeof to !== 'string' || !liveCategories.has(to)) {
+        stale.push(`${category} (category)`);
+      }
     }
   }
 
@@ -756,6 +788,7 @@ async function planDeleteTransactions(ctx: Ctx): Promise<Plan> {
     [],
     logged,
     logged.map(c => c.id),
+    txs.length,
   );
 }
 
@@ -865,6 +898,7 @@ async function planDeleteCategories(ctx: Ctx, group: boolean): Promise<Plan> {
     })),
     all,
     ids,
+    catIds.length,
   );
 }
 
@@ -1012,7 +1046,8 @@ export function registerUndoTools(
         });
         // Undoing a create deletes: the delete limit, never a raised row limit
         if (plan.restores) {
-          requireRows(log, plan.restores.rows);
+          // Counted the way the delete counted them (design D4), so an allowed delete can be undone
+          requireDeleteRows(log, plan.restores.rows);
           if (plan.restores.cells > 0) requireCells(log, plan.restores.cells);
         } else if (plan.deletes) {
           requireDeleteRows(log, plan.steps.length);

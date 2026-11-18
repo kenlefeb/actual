@@ -57,11 +57,14 @@ function lines() {
     .map(l => JSON.parse(l));
 }
 
+let live: Grant; // the connection's grant; a test may lower a limit after the delete
+
 async function setup(over: Partial<Grant> = {}, limits: Partial<Limits> = {}) {
+  live = { scopes: [...SCOPES], confirm_destructive: false, ...over };
   h = await startHarness(
     { count: 1 },
     {
-      grant: { scopes: [...SCOPES], confirm_destructive: false, ...over },
+      grant: live,
       limits,
       identity: { user_id: 'u1', subject: 'sub1' },
     },
@@ -269,23 +272,41 @@ describe('undo of a transaction delete', () => {
     expect(await alive(out.id)).toBe(false);
   });
 
-  it('counts restored rows, attachments included, against the row limit', async () => {
-    const { checking } = await setup({}, { maxRows: 1 });
-    const [t] = await rows({ account: checking });
-    await db.insertWithUUID('transaction_attachments', {
-      transaction_id: t.id,
-      name: 'r.pdf',
-      mime: 'application/pdf',
-      size: 1,
-      sha256: 'a',
-      encrypt_meta: '{}',
-      created_at: '2026-11-01T10:00:00.000Z',
-    });
-    const id = await deleteRows([t.id]);
+  it('counts restored rows the way the delete did, against the delete limit', async () => {
+    const { checking } = await setup();
+    const { parent } = await split(checking);
+    const id = await deleteRows([parent.id]); // 3 rows
+    live.max_delete_rows = 2;
     const res = await undo(id);
     expect(res.isError).toBe(true);
-    expect(res.text).toMatch(/At most 1 rows/);
-    expect(await alive(t.id)).toBe(false);
+    expect(res.text).toMatch(/At most 2 rows/);
+    expect(await alive(parent.id)).toBe(false);
+    live.max_delete_rows = 3;
+    expect((await undo(id)).isError).toBe(false);
+  });
+
+  it('attachments do not count: 3 rows with 3 attachments undo at a delete limit of 3', async () => {
+    const { checking } = await setup({ max_delete_rows: 3 });
+    await api.addTransactions(checking, [
+      { date: '2026-11-02', amount: -1 },
+      { date: '2026-11-03', amount: -2 },
+    ]);
+    const all = await rows({ account: checking });
+    for (const t of all) {
+      await db.insertWithUUID('transaction_attachments', {
+        transaction_id: t.id,
+        name: 'r.pdf',
+        mime: 'application/pdf',
+        size: 1,
+        sha256: 'a',
+        encrypt_meta: '{}',
+        created_at: '2026-11-01T10:00:00.000Z',
+      });
+    }
+    const id = await deleteRows(all.map(t => t.id));
+    const res = await undo(id);
+    expect(res.isError, res.text).toBe(false);
+    for (const t of all) expect(await alive(t.id)).toBe(true);
   });
 
   it('a handler failure leaves everything deleted and the undo retryable', async () => {
@@ -390,6 +411,108 @@ async function cell(month: string, category: string) {
     .flatMap(g => g.categories ?? [])
     .find(c => c.id === category)?.budgeted;
 }
+
+describe('undo of a transaction delete: more references', () => {
+  it('refuses when the account was deleted', async () => {
+    const { savings } = await setup();
+    await api.addTransactions(savings, [{ date: '2026-11-02', amount: -10 }]);
+    const [t] = await rows({ account: savings });
+    const id = await deleteRows([t.id]);
+    await api.deleteAccount(savings);
+    const res = await undo(id);
+    expect(res.isError).toBe(true);
+    expect(res.text).toContain(`${savings} (account)`);
+  });
+
+  it('refuses when the restored category is gone, unless it forwards to a live one', async () => {
+    const { checking } = await setupCategories();
+    const cat = await api.createCategory({
+      name: 'Hobby',
+      group_id: (await api.getCategoryGroups())[0].id,
+    });
+    await api.addTransactions(checking, [
+      { date: '2026-11-02', amount: -10, category: cat },
+    ]);
+    const t = (await rows({ category: cat }))[0];
+    const id = await deleteRows([t.id]);
+    await api.deleteCategory(cat);
+    const refused = await undo(id);
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toContain(`${cat} (category)`);
+    expect(await alive(t.id)).toBe(false);
+  });
+
+  it('allows a restored category that was deleted with a transfer', async () => {
+    const { checking, groceries } = await setupCategories();
+    const cat = await api.createCategory({
+      name: 'Hobby',
+      group_id: (await api.getCategoryGroups())[0].id,
+    });
+    await api.addTransactions(checking, [
+      { date: '2026-11-02', amount: -10, category: cat },
+    ]);
+    const t = (await rows({ category: cat }))[0];
+    const id = await deleteRows([t.id]);
+    await api.deleteCategory(cat, groceries);
+    const ok = await undo(id);
+    expect(ok.isError, ok.text).toBe(false);
+    expect(await alive(t.id)).toBe(true);
+  });
+
+  it('refuses a restored row that is itself reconciled, unless allow_reconciled is set on both', async () => {
+    const { checking } = await setup({ allow_reconciled: true });
+    const [t] = await rows({ account: checking });
+    await api.updateTransaction(t.id, { cleared: true, reconciled: true });
+    const id = await deleteRows([t.id]).catch(() => undefined);
+    expect(id).toBeUndefined(); // the delete itself needs the override
+    const w = await call('write_delete_transactions', {
+      ids: [t.id],
+      allow_reconciled: true,
+    });
+    const refused = await undo(w.write_id);
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toContain(t.id);
+    expect(refused.text).toMatch(/Reconciled/);
+    const ok = await undo(w.write_id, { allow_reconciled: true });
+    expect(ok.isError, ok.text).toBe(false);
+  });
+
+  describe('a partner split child', () => {
+    async function unlinked() {
+      const { checking, savings } = await setup({ allow_reconciled: true });
+      const { out, into } = await transfer(checking, savings);
+      const sp = await split(savings);
+      const child = sp.children[0];
+      await db.deleteTransaction({ id: into.id });
+      await db.updateTransaction({ id: out.id, transfer_id: child.id });
+      await db.updateTransaction({
+        id: child.id,
+        transfer_id: out.id,
+        payee: await transferPayee(checking),
+      });
+      const id = await deleteRows([out.id]);
+      return { out, child, id };
+    }
+
+    it('refuses when it was reconciled since', async () => {
+      const { out, child, id } = await unlinked();
+      await db.updateTransaction({ id: child.id, reconciled: true });
+      const res = await undo(id);
+      expect(res.isError).toBe(true);
+      expect(res.text).toContain(child.id);
+      expect(await alive(out.id)).toBe(false);
+    });
+
+    it('refuses when it was linked elsewhere since', async () => {
+      const { out, child, id } = await unlinked();
+      await db.updateTransaction({ id: child.id, transfer_id: 'elsewhere' });
+      const res = await undo(id);
+      expect(res.isError).toBe(true);
+      expect(res.text).toContain(`${child.id} (transfer_id)`);
+      expect(await alive(out.id)).toBe(false);
+    });
+  });
+});
 
 describe('undo of a delete: grant, confirm and the line it writes', () => {
   it('needs the delete scopes, and no confirm under confirm_destructive', async () => {
@@ -598,13 +721,62 @@ describe('undo of a category delete', () => {
   });
 
   it('counts restored transfer cells against the cell limit', async () => {
-    const { dining, groceries } = await setupCategories({ max_cells: 5 });
+    const { dining, groceries } = await setupCategories();
     const w = await call('write_delete_category', {
       category_id: dining,
       transfer_category_id: groceries,
     });
-    const r = await undo(w.write_id);
-    expect(r.isError, r.text).toBe(false);
+    live.max_cells = 1; // the delete moved 2 cells
+    const refused = await undo(w.write_id);
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toMatch(/At most 1 budget cells/);
+    expect((await api.getCategories()).some(c => c.id === dining)).toBe(false);
+    live.max_cells = 2;
+    const ok = await undo(w.write_id);
+    expect(ok.isError, ok.text).toBe(false);
+  });
+
+  it('refuses when a mapping row is not what the delete left', async () => {
+    const { dining, groceries, rent } = await setupCategories();
+    const w = await call('write_delete_category', {
+      category_id: dining,
+      transfer_category_id: groceries,
+    });
+    await db.update('category_mapping', { id: dining, transferId: rent });
+    const res = await undo(w.write_id);
+    expect(res.isError).toBe(true);
+    expect(res.text).toContain(`${dining} (mapping)`);
+    expect((await api.getCategories()).some(c => c.id === dining)).toBe(false);
+  });
+
+  it('refuses a line whose logged category values are not ids', async () => {
+    const { dining } = await setupCategories();
+    const { appendFileSync } = await import('fs');
+    const base = {
+      time: '2026-11-01T00:00:00.000Z',
+      user_id: 'u1',
+      subject: 'sub1',
+      scopes: [],
+      tool: 'write_delete_category',
+      call_id: 'corrupt-cat',
+    };
+    appendFileSync(
+      h.auditLog,
+      `${JSON.stringify({
+        ...base,
+        phase: 'attempt',
+        schema: 2,
+        budget_id: await budgetId(),
+        ids: [dining],
+        changes: [
+          { id: dining, field: 'name', before: 'Dining', after: null },
+          { id: dining, field: 'group_id', before: 42, after: null },
+        ],
+      })}\n${JSON.stringify({ ...base, phase: 'outcome', status: 'ok', applied: [dining], failed: null, created: [] })}\n`,
+    );
+    const res = await undo('corrupt-cat');
+    expect(res.isError).toBe(true);
+    expect(res.text).toMatch(/not an id/);
   });
 });
 
@@ -616,6 +788,10 @@ describe('undo of a category group delete', () => {
     const b = await api.createCategory({ name: 'Movies', group_id: g });
     await api.setBudgetAmount('2026-01', a, 20);
     await api.setBudgetAmount('2026-01', b, 30);
+    const order = (await api.getCategoryGroups()).map(x => x.id);
+    const inGroup = (await api.getCategoryGroups())
+      .find(x => x.id === g)!
+      .categories?.map(c => c.id);
     const w = await call('write_delete_category_group', {
       group_id: g,
       transfer_category_id: groceries,
@@ -625,9 +801,8 @@ describe('undo of a category group delete', () => {
     expect(res.isError, res.text).toBe(false);
     const groups = await api.getCategoryGroups();
     const back = groups.find(x => x.id === g)!;
-    expect(back.categories?.map(c => c.id)).toEqual(
-      expect.arrayContaining([a, b]),
-    );
+    expect(back.categories?.map(c => c.id)).toEqual(inGroup);
+    expect(groups.map(x => x.id)).toEqual(order);
     expect(await cell('2026-01', groceries)).toBe(100);
     void dining;
   });
@@ -661,5 +836,42 @@ describe('undo of a category group delete', () => {
     expect(res.isError).toBe(true);
     expect(res.text).toMatch(/deleted earlier/);
     expect(lines()).toHaveLength(0);
+  });
+});
+
+describe('a group delete that is allowed can be undone, at the default limits', () => {
+  it('26 categories with a transfer: the delete and its undo both pass', async () => {
+    const { groceries } = await setupCategories();
+    const g = await api.createCategoryGroup({ name: 'Big' });
+    const made: string[] = [];
+    for (let i = 0; i < 26; i++) {
+      made.push(await api.createCategory({ name: `Cat ${i}`, group_id: g }));
+    }
+    await api.setBudgetAmount('2026-01', made[0], 10);
+    const inGroup = (await api.getCategoryGroups())
+      .find(x => x.id === g)!
+      .categories?.map(c => c.id);
+    const w = await call('write_delete_category_group', {
+      group_id: g,
+      transfer_category_id: groceries,
+    });
+    const res = await undo(w.write_id);
+    expect(res.isError, res.text).toBe(false);
+    expect(res.json.restored).toBe(27);
+    const back = (await api.getCategoryGroups()).find(x => x.id === g)!;
+    expect(back.categories?.map(c => c.id)).toEqual(inGroup);
+    expect(await cell('2026-01', groceries)).toBe(100);
+  });
+
+  it('a group holding earlier-deleted categories still deletes without a transfer', async () => {
+    await setupCategories();
+    const g = await api.createCategoryGroup({ name: 'Fun' });
+    const a = await api.createCategory({ name: 'Games', group_id: g });
+    await api.createCategory({ name: 'Movies', group_id: g });
+    await api.deleteCategory(a);
+    const res = await h.call('write_delete_category_group', { group_id: g });
+    expect(res.isError, res.text).toBe(false);
+    const back = await undo(res.json.write_id);
+    expect(back.isError, back.text).toBe(false);
   });
 });

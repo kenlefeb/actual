@@ -1126,6 +1126,15 @@ handlers['api/undelete-rows'] = withMutation(async function (
   const restored = rows.filter(r => isRestored(r.table, r.id));
   const sends: Array<{ table: string; id: string; fields: object }> = [];
 
+  // The transfer payee of an account: the one payee a real transfer side carries for it
+  const transferPayeeOf = async (account: unknown) =>
+    (
+      await db.first<{ id: string }>(
+        'SELECT id FROM payees WHERE transfer_acct = ? AND tombstone = 0',
+        [account as string],
+      )
+    )?.id;
+
   for (const r of rows) {
     const st = states.get(`${r.table}:${r.id}`);
     const keys = Object.keys(r.set ?? {});
@@ -1142,6 +1151,14 @@ handlers['api/undelete-rows'] = withMutation(async function (
         throw APIError(
           'A mapping may only be set to a category un-deleted in the call',
         );
+      }
+      // Only a deleted category's mapping may move, never a live one's
+      const owner = await db.first<{ tombstone: number }>(
+        'SELECT tombstone FROM categories WHERE id = ?',
+        [r.id],
+      );
+      if (owner?.tombstone !== 1) {
+        throw APIError('A mapping row must belong to a deleted category');
       }
       sends.push({ table: r.table, id: r.id, fields: { transferId: target } });
       continue;
@@ -1172,6 +1189,22 @@ handlers['api/undelete-rows'] = withMutation(async function (
             'transfer_id must name a row of the call that names this one back',
           );
         }
+        // A real transfer carries, on each side, the other side's account's transfer payee
+        const otherPayee = otherState.deleted
+          ? otherState.columns.description
+          : setOf('transactions', other)?.payee;
+        const mine = await transferPayeeOf(otherState.columns.acct);
+        const theirs = await transferPayeeOf(st.columns.acct);
+        if (
+          !mine ||
+          !theirs ||
+          st.columns.description !== mine ||
+          otherPayee !== theirs
+        ) {
+          throw APIError(
+            "Each side of a transfer needs the other account's transfer payee",
+          );
+        }
         fields.transferred_id = other;
       }
       sends.push({ table: r.table, id: r.id, fields });
@@ -1191,20 +1224,26 @@ handlers['api/undelete-rows'] = withMutation(async function (
     ) {
       throw APIError('A named row is not deleted');
     }
-    const fields: Record<string, unknown> = { transferred_id: link };
-    if (r.set?.payee !== undefined) {
-      const owner = await db.first<{ id: string }>(
-        'SELECT id FROM payees WHERE transfer_acct = ? AND tombstone = 0',
-        [partner.columns.acct as string],
-      );
-      if (r.set.payee !== owner?.id) {
-        throw APIError(
-          "payee must be the restored row's account's transfer payee",
-        );
-      }
-      fields.description = r.set.payee;
+    if (
+      st.columns.transferred_id !== null ||
+      st.columns.description !== null ||
+      st.columns.reconciled
+    ) {
+      throw APIError('The child is still linked or reconciled');
     }
+    const fields: Record<string, unknown> = { transferred_id: link };
+    if (r.set?.payee !== undefined) fields.description = r.set.payee;
     sends.push({ table: r.table, id: r.id, fields });
+  }
+
+  // Every restored category must end up mapping to itself, so no cycle can form
+  for (const r of restored) {
+    if (r.table !== 'categories') continue;
+    const reset = setOf('category_mapping', r.id)?.transferId;
+    const ends = reset ?? state(r.table, r.id)?.columns.mapping;
+    if (ends !== r.id) {
+      throw APIError('A restored category must map to itself');
+    }
   }
 
   // Cells: only the transfer categories of the categories restored here

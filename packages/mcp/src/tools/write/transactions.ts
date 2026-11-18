@@ -398,6 +398,7 @@ export function registerTransactionWriteTools(
             account: t.account,
             date: t.date,
             payee: t.payee,
+            category: t.category,
             transfer_id: t.transfer_id,
             parent_id: t.parent_id,
             reconciled: t.reconciled,

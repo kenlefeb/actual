@@ -38,6 +38,7 @@
   - the upcoming length accepts the web's presets and custom values matching `^[1-9][0-9]{0,2}-(day|week|month|year)$`, stored exactly as sent;
   - it refuses `0-day`, `03-week`, `1000-day`, `3-weeks`, `3-Week`, ` 3-week`, `-1-day`, `NaN-day` and `custom`;
   - an already-stored out-of-pattern value is returned as it is and never blocks saving another key;
+  - the view model sends only changed keys. A stored invalid upcoming length shows as Custom with its text, is never rewritten unless the person picks a new value, and is replaced by a valid choice;
   - limits from 1 to the ceiling, and null resets;
   - `[native:invalid-setting]` for an unknown key, a bad value, an MCP limit or grant key, or an empty change, with nothing written;
   - a two-key save with one bad key changes neither key;

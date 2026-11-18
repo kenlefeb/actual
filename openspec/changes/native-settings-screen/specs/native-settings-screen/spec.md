@@ -52,6 +52,21 @@ On iPhone, changing date format, number format, hide decimals, first day of week
 - **WHEN** the person chooses Custom length, 3 weeks
 - **THEN** the synced preference is `3-week`, as web Settings stores it, and never `custom`
 
+#### Scenario: A stored invalid length is shown, not rewritten
+- **GIVEN** the stored upcoming length is `NaN-day`, written by the web
+- **WHEN** the person opens Upcoming length
+- **THEN** it shows Custom with the text `NaN-day` as stored, nothing fails, and nothing is saved
+
+#### Scenario: Replacing it with a valid length
+- **GIVEN** that stored `NaN-day`
+- **WHEN** the person chooses 1 week
+- **THEN** the synced preference becomes `7`
+
+#### Scenario: Leaving it alone
+- **GIVEN** that stored `NaN-day`
+- **WHEN** the person changes only the date format
+- **THEN** the save sends only `dateFormat`, and the upcoming length stays `NaN-day`
+
 #### Scenario: Undo
 - **WHEN** the person changes the number format and taps Undo in the toast
 - **THEN** the earlier number format is restored

@@ -1,0 +1,114 @@
+import AppKit
+import Foundation
+import NativeBridgeCore
+import OSLog
+import WebKit
+
+// Fork-only (sc-4942, add-mac-app-shell). Hosts the one loot-core engine: the
+// staged web build in a plain WKWebView, served by WWWSchemeHandler at
+// homeeconomics://localhost with the default persistent website data store.
+// It replaces what NativeBridgePlugin does in the iPhone app:
+// - `actualNativeBridge` messages count only from the app's own main frame;
+// - native reads and writes go through NativeBridgeClient over PageCall;
+// - the page knows the shell by its user agent (`HomeEconomicsMac/<version>`),
+//   so no user script is added.
+// Nothing here weakens WebKit: no private API, no file-URL access, and no
+// script while the main frame is off the app's own page (PageCall checks).
+@MainActor
+final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegate, WKUIDelegate {
+    static let serverURL = URL(string: "\(WWWSchemeHandler.scheme)://\(WWWSchemeHandler.host)")!
+
+    let webView: WKWebView
+    // Every forwarded event, then one coalesced call per burst
+    var onEvent: ((String) -> Void)?
+    var onChange: (() -> Void)?
+    var onRefusedSignIn: (() -> Void)?
+    private lazy var coalescer = ChangeCoalescer { [weak self] in self?.onChange?() }
+    private let policy: NavigationPolicy
+    private let openInBrowser: (URL) -> Void
+    private static let logger = Logger(subsystem: "app.homeeconomics.budget.mac", category: "navigation")
+
+    lazy var client = NativeBridgeClient { [weak self] name, argsJSON in
+        guard let self else { throw NativeBridgeError.noPage }
+        return try await PageCall(runner: self.webView, serverURL: Self.serverURL).bridgeCall(name: name, argsJSON: argsJSON)
+    }
+
+    init(
+        www: URL, version: String, policy: NavigationPolicy = NavigationPolicy(allowedHosts: NavigationPolicy.bundledHosts()),
+        openInBrowser: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) }
+    ) {
+        let configuration = WKWebViewConfiguration()
+        configuration.setURLSchemeHandler(WWWSchemeHandler(root: www), forURLScheme: WWWSchemeHandler.scheme)
+        configuration.websiteDataStore = .default()
+        configuration.applicationNameForUserAgent = "HomeEconomicsMac/\(version)"
+        configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
+        webView = WKWebView(frame: .zero, configuration: configuration)
+        self.policy = policy
+        self.openInBrowser = openInBrowser
+        super.init()
+        configuration.userContentController.add(self, name: "actualNativeBridge")
+        webView.navigationDelegate = self
+        webView.uiDelegate = self
+    }
+
+    func load() {
+        webView.load(URLRequest(url: WWWSchemeHandler.appURL))
+    }
+
+    nonisolated static func acceptsMessage(isMainFrame: Bool, scheme: String, host: String, port: Int) -> Bool {
+        PageOriginGuard.accepts(isMainFrame: isMainFrame, scheme: scheme, host: host, port: port, serverURL: serverURL)
+    }
+
+    // MARK: WKScriptMessageHandler
+
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        // Only the app's own page: the provider's sign-in pages load in this web view too
+        let origin = message.frameInfo.securityOrigin
+        guard Self.acceptsMessage(isMainFrame: message.frameInfo.isMainFrame, scheme: origin.protocol, host: origin.host, port: origin.port),
+            let event = NativeBridgeEvent.name(of: message.body)
+        else { return }
+        onEvent?(event)
+        coalescer.notify()
+    }
+
+    // MARK: WKNavigationDelegate
+
+    func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction) async -> WKNavigationActionPolicy {
+        guard let url = action.request.url else { return .cancel }
+        switch policy.decide(url, isMainFrame: action.targetFrame?.isMainFrame ?? true, userClicked: Self.userClicked(action)) {
+        case .allow:
+            return .allow
+        case .openInBrowser:
+            openInBrowser(url)
+            return .cancel
+        case .refuseSignIn:
+            // Never the URL: a redirect here can carry a sign-in token or code
+            Self.logger.notice("refused a navigation to an unlisted host")
+            onRefusedSignIn?()
+            return .cancel
+        case .cancel:
+            Self.logger.notice("refused a navigation")
+            return .cancel
+        }
+    }
+
+    // A link the user activated. WebKit reports a redirect, a script
+    // navigation and a form post as other types. macOS exposes no public
+    // user-gesture flag beyond this, so a script's synthetic click on a link
+    // can still count: it only opens the browser at a URL the page itself
+    // shows, never a redirect's target.
+    static func userClicked(_ action: WKNavigationAction) -> Bool {
+        action.navigationType == .linkActivated
+    }
+
+    // MARK: WKUIDelegate
+
+    // A link that asks for a new window opens in the browser, never in a second web view
+    func webView(
+        _ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for action: WKNavigationAction,
+        windowFeatures: WKWindowFeatures
+    ) -> WKWebView? {
+        if let url = action.request.url, url.scheme?.lowercased() == "https", Self.userClicked(action) { openInBrowser(url) }
+        return nil
+    }
+}

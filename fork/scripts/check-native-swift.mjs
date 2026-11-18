@@ -48,6 +48,29 @@ const USER_SCRIPT_ALLOWED = new Set([
 const PAGE_CALL =
   /\b(?:callAsyncJavaScript|evaluateJavaScript|triggerJSEvent|triggerWindowJSEvent|triggerDocumentJSEvent|notifyListeners)\b|\beval\(\s*js\s*:/;
 const USER_SCRIPT = /\bWKUserScript\s*\(/;
+// sc-4942 (mac-app): no file-URL access and no private WebKit API. The
+// setting names fail anywhere; in a file that imports WebKit, the ways to
+// reach a private API (key-value coding, selectors and classes by name) and
+// file-URL loading fail outright, whatever the key. UserDefaults'
+// `set(_:forKey:)` and `string(forKey:)` stay allowed.
+const FILE_URL_SETTING =
+  /(?:FileAccessFromFileURLs|UniversalAccessFromFileURLs)/;
+// Any attributes, and `import class WebKit.X`; Objective-C's #import too
+const IMPORTS_WEBKIT =
+  /^\s*(?:@\w+\s+)*import\s+(?:(?:struct|class|enum|func|var|let|typealias|protocol)\s+)?WebKit\b|^\s*#\s*import\s*<WebKit\//m;
+const WEBKIT_DENIED =
+  /\bloadFileURL\b|\.setValue\(|\bsetValuesForKeys\b|\bvalue\(\s*forKey|forKeyPath:|\bsetValue:|\bvalueForKey:|\bNSClassFromString\b|\bNSSelectorFromString\b|\bSelector\(\s*\(|\bdlsym\b|\bobjc_msgSend\b|\bclass_getInstanceMethod\b|\bmethod_exchangeImplementations\b/;
+// The Mac app has no legitimate key-value coding, so every file there is
+// checked, whatever it imports (PR 413 re-review)
+const MAC_ROOT = 'packages/mobile-client/macos/';
+
+function weakensWebKit(path, text) {
+  return (
+    FILE_URL_SETTING.test(text) ||
+    ((path.startsWith(MAC_ROOT) || IMPORTS_WEBKIT.test(text)) &&
+      WEBKIT_DENIED.test(text))
+  );
+}
 
 // files: { path: contents }. Returns failure messages; empty means pass.
 export function problems(files) {
@@ -62,6 +85,11 @@ export function problems(files) {
       : []),
     ...(!USER_SCRIPT_ALLOWED.has(path) && USER_SCRIPT.test(text)
       ? [`${path}: adds a WKUserScript outside the allowlist`]
+      : []),
+    ...(weakensWebKit(path, text)
+      ? [
+          `${path}: weakens WebKit (file-URL access or a private API); see add-mac-app-shell`,
+        ]
       : []),
   ]);
 }

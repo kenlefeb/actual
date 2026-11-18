@@ -15,6 +15,34 @@ In the Mac app, the server URL the origin guard and page calls use SHALL be `hom
 - **WHEN** native code makes a bridge call or that page posts a message
 - **THEN** the call is refused with the origin error and the message is ignored
 
+### Requirement: The page reports its budget state to the Mac app
+In the Mac app the page SHALL post one event, `budget-state`, carrying only a state: `open` or `closed` with the budget's cloud file id (a UUID), or `none` with no id. It never carries the local budget id, which holds the budget's name. Swift SHALL accept it only through the page origin guard, and SHALL drop the whole message on any other shape, including `open` or `closed` without a UUID and `none` with an id.
+
+#### Scenario: A budget opens
+- **GIVEN** the Mac app's page opens a synced budget
+- **WHEN** it posts `budget-state`
+- **THEN** the event carries `open` and the cloud file id, and nothing else
+
+#### Scenario: A budget closes
+- **GIVEN** the Mac app's page closes a synced budget
+- **WHEN** it posts `budget-state`
+- **THEN** the event carries `closed` and the cloud file id, and Swift accepts it
+
+#### Scenario: No budget is open
+- **GIVEN** the Mac app's page finished starting with no budget
+- **WHEN** it posts `budget-state` with `none` and no id
+- **THEN** Swift accepts it
+
+#### Scenario: A malformed event
+- **GIVEN** a `budget-state` message whose state is unknown, an `open` or `closed` whose id is missing or not a UUID, or a `none` that carries an id
+- **WHEN** Swift receives it
+- **THEN** Swift ignores the whole message
+
+#### Scenario: A foreign page
+- **GIVEN** the provider's sign-in page is in the main frame
+- **WHEN** it posts a `budget-state` message
+- **THEN** Swift ignores it
+
 ### Requirement: Native budget writes can be undone by their token
 `budget/budget-amount`, `budget/transfer-category` and `budget/transfer-available` SHALL accept an optional undo token from native code and record it as that undo step's marker, as paycheck writes do. With no token, the step's marker SHALL be exactly what it is today, so web and iPhone calls are unchanged. `native/undo` with that token SHALL undo only that step.
 

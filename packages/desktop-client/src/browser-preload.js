@@ -8,6 +8,7 @@ import packageJson from '../package.json';
 import { nativeAppHomeUrl } from './auth/nativeAppHome';
 import { consumeProviderSignOut } from './auth/providerSignOut';
 import SharedBrowserServerWorker from './shared-browser-server.ts?sharedworker';
+import { nativeShell } from './style/nativeShell';
 import { computeClientVersion } from './util/versions';
 
 const backendWorkerUrl = new URL('./browser-server.js', import.meta.url);
@@ -47,6 +48,12 @@ const isOpenIdCallback = window.location.pathname
 // Read it before the backend starts so the flag never outlives this load.
 const isProviderSignOutReturn = consumeProviderSignOut();
 
+// fork: sc-4942. The SwiftUI Mac app serves this page from its own scheme,
+// where WebKit does not expose SharedArrayBuffer (crossOriginIsolated may
+// still report true): a direct Worker in the
+// SharedArrayBuffer fallback mode, as in the Capacitor app.
+const isMacApp = nativeShell() === 'mac-app';
+
 // *** Start the backend ***
 //
 // The multi-tab coordinator (leader/follower over SharedWorker), the direct
@@ -69,7 +76,9 @@ const worker = startBrowserBackend({
     Platform.isIOS ||
     Platform.isAndroid ||
     isOpenIdCallback ||
-    isProviderSignOutReturn,
+    isProviderSignOutReturn ||
+    isMacApp,
+  sharedArrayBufferFallback: isMacApp,
 });
 
 // Ask the browser to exclude this origin's storage (the local budget database

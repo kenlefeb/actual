@@ -101,6 +101,101 @@ void test('Native Swift: passes on bridge code', () => {
   );
 });
 
+// mac-app: "The web view is never weakened" (sc-4942)
+void test('Native Swift: fails on file-URL access or a private WebKit setting', () => {
+  for (const line of [
+    'prefs.setValue(true, forKey: "allowFileAccessFromFileURLs")',
+    'config.setValue(true, forKey: "allowUniversalAccessFromFileURLs")',
+    'webView.configuration.preferences.setValue(true, forKey: "_developerExtrasEnabled")',
+    'webView.perform(NSSelectorFromString("_setDrawsBackground:"), with: false)',
+    'let s = Selector(("_privateThing"))',
+    // PR 413 review: each of these got past the first version of the rule
+    'webView.loadFileURL(index, allowingReadAccessTo: URL(fileURLWithPath: "/"))',
+    'prefs.setValue(true, forKey: "developerExtrasEnabled")',
+    'prefs.setValue(true, forKeyPath: "_allowFileAccess")',
+    'prefs.setValue(true, forKey: k)',
+    'let k = "allow" + "FileAccessFromFileURLs"',
+    'let c: AnyClass? = NSClassFromString("_WKProcessPoolConfiguration")',
+    'let v = prefs.value(forKey: k)',
+  ]) {
+    const found = problems({
+      'macos/Mac/Bad.swift': `import WebKit\n${line}\n`,
+    });
+    assert.equal(found.length, 1, line);
+    assert.match(found[0], /macos\/Mac\/Bad\.swift: weakens WebKit/);
+  }
+  assert.deepEqual(
+    problems({
+      'macos/Mac/Ok.swift':
+        'import WebKit\nconfiguration.preferences.javaScriptCanOpenWindowsAutomatically = false\ndefaults.set(true, forKey: "budgetWasOpen")\nlet s = defaults.string(forKey: "cloudFileId")\n',
+    }),
+    [],
+  );
+});
+
+// PR 413 re-review: other import forms, other private-API routes, and any
+// file in the Mac app whatever it imports
+void test('Native Swift: the Mac app gets the WebKit deny rule in every file', () => {
+  const MAC = 'packages/mobile-client/macos/HomeEconomicsMac';
+  for (const [file, text] of [
+    [
+      'A.swift',
+      '@preconcurrency import WebKit\nprefs.setValue(true, forKey: "developerExtrasEnabled")\n',
+    ],
+    [
+      'B.swift',
+      'import class WebKit.WKPreferences\nprefs.setValue(true, forKey: k)\n',
+    ],
+    ['C.swift', 'import Foundation\nprefs.setValuesForKeys(["a": true])\n'],
+    ['D.swift', 'import Darwin\nlet f = dlsym(handle, "WKThing")\n'],
+    [
+      'E.m',
+      '#import <WebKit/WebKit.h>\n[prefs setValue:@YES forKey:@"developerExtrasEnabled"];\n',
+    ],
+    [
+      'F.swift',
+      'import Foundation\nfunc tweak(_ o: NSObject) { o.setValue(true, forKey: "x") }\n',
+    ],
+    ['G.m', 'id v = [prefs valueForKey:@"x"];\n'],
+    ['H.swift', 'import ObjectiveC\nmethod_exchangeImplementations(a, b)\n'],
+  ]) {
+    const found = problems({ [`${MAC}/${file}`]: text });
+    assert.equal(found.length, 1, file);
+    assert.match(found[0], /weakens WebKit/, file);
+  }
+  assert.deepEqual(
+    problems({
+      [`${MAC}/Flag.swift`]:
+        'import Foundation\ndefaults.set(true, forKey: "budgetWasOpen")\nlet id = defaults.string(forKey: "cloudFileId")\ndefaults.removeObject(forKey: "cloudFileId")\n',
+    }),
+    [],
+  );
+});
+
+void test('Native Swift: key-value coding is checked only where WebKit is imported', () => {
+  assert.deepEqual(
+    problems({
+      'macos/Mac/Plain.swift':
+        'import Foundation\nobject.setValue(1, forKey: "count")\n',
+    }),
+    [],
+  );
+});
+
+// mac-app: "Swift never opens a budget file" (sc-4942 task 1.10)
+void test('Native Swift: covers the Mac app sources', () => {
+  const root = mkdtempSync(join(tmpdir(), 'native-swift-'));
+  const mac = join(root, 'packages/mobile-client/macos/HomeEconomicsMac');
+  mkdirSync(mac, { recursive: true });
+  writeFileSync(join(mac, 'Bad.swift'), 'import SQLite3\n');
+  const found = problems(findNativeSources(root));
+  assert.equal(found.length, 1);
+  assert.match(
+    found[0],
+    /packages\/mobile-client\/macos\/HomeEconomicsMac\/Bad\.swift/,
+  );
+});
+
 void test('Native Swift: scans Swift, headers and Objective-C, skipping vendored code', () => {
   const root = mkdtempSync(join(tmpdir(), 'native-swift-'));
   const app = join(root, 'packages/mobile-client/ios/App');

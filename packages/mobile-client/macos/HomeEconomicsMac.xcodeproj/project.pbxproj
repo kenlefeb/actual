@@ -1,0 +1,509 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0AE479F0C3B3CECFA0884FA3 /* NavigationPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B93C4666FA76203E682E2997 /* NavigationPolicy.swift */; };
+		28EC592D58E47B867FCE83AB /* NativeBridgeCore in Frameworks */ = {isa = PBXBuildFile; productRef = ABB2EF3E62534EA3458FC777 /* NativeBridgeCore */; };
+		4D6B1D6CA58D0DA0283D6194 /* EngineSpikeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C2AD8712ED066882131A5FE /* EngineSpikeTests.swift */; };
+		59229A47A7A9270AD340FD46 /* MacEngineHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC8AC5EBA44BDCD55211F704 /* MacEngineHost.swift */; };
+		65449835F9DC761D489E1AAF /* NativeBridgeCore in Frameworks */ = {isa = PBXBuildFile; productRef = 9289CC55CB52500C91B5219D /* NativeBridgeCore */; };
+		D6673CBB0E01CEBA7D44FA28 /* EngineLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9232DFABC112DDBC56908FBF /* EngineLifecycle.swift */; };
+		DA9C537FB7C598492264F7D8 /* HomeEconomicsMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20D5FA73EC2BF679AC0CC233 /* HomeEconomicsMacApp.swift */; };
+		E2ABA8D1A32401500743525F /* WWWSchemeHandlerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE70CE285A9B6C939404F117 /* WWWSchemeHandlerTests.swift */; };
+		E644DA7DFD4183C213063A62 /* WWWSchemeHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1C03BA71996E1EB62B964E /* WWWSchemeHandler.swift */; };
+		F3CDC31ACE9D1C98C9301252 /* EngineLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A38DD33146BC5355A150EFF5 /* EngineLifecycleTests.swift */; };
+		F6FDC8769B0DEB3E2FC16ECB /* MacEngineHostTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F65F9272B94E505672B77A6 /* MacEngineHostTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		DFE38F3030129A0A53ABBF9C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 83421EFDF62EA3990863547E /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 56522A3F7F36AFA11C53E547;
+			remoteInfo = HomeEconomicsMac;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		20D5FA73EC2BF679AC0CC233 /* HomeEconomicsMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeEconomicsMacApp.swift; sourceTree = "<group>"; };
+		6F65F9272B94E505672B77A6 /* MacEngineHostTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacEngineHostTests.swift; sourceTree = "<group>"; };
+		7C2AD8712ED066882131A5FE /* EngineSpikeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineSpikeTests.swift; sourceTree = "<group>"; };
+		7F1C03BA71996E1EB62B964E /* WWWSchemeHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WWWSchemeHandler.swift; sourceTree = "<group>"; };
+		9232DFABC112DDBC56908FBF /* EngineLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineLifecycle.swift; sourceTree = "<group>"; };
+		9252D5E08BD225D044CBECF4 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		A38DD33146BC5355A150EFF5 /* EngineLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineLifecycleTests.swift; sourceTree = "<group>"; };
+		A3AED3396C398BCDAFC0F786 /* NativeBridge */ = {isa = PBXFileReference; lastKnownFileType = folder; name = NativeBridge; path = ../ios/NativeBridge; sourceTree = SOURCE_ROOT; };
+		B7C932CF5A0D05DFBF8FA00C /* HomeEconomicsMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HomeEconomicsMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B93C4666FA76203E682E2997 /* NavigationPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationPolicy.swift; sourceTree = "<group>"; };
+		CE70CE285A9B6C939404F117 /* WWWSchemeHandlerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WWWSchemeHandlerTests.swift; sourceTree = "<group>"; };
+		EC8AC5EBA44BDCD55211F704 /* MacEngineHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacEngineHost.swift; sourceTree = "<group>"; };
+		F2B5A64065E258F52B97291C /* HomeEconomicsMacTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HomeEconomicsMacTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F56578E475342A4B0B7EDA33 /* HomeEconomicsMac.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = HomeEconomicsMac.entitlements; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		4831585ABFFB6AC85D2A2E78 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				65449835F9DC761D489E1AAF /* NativeBridgeCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5BE9D8D1007682E831F35108 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				28EC592D58E47B867FCE83AB /* NativeBridgeCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		34A13533B5AD9F62758C2327 /* HomeEconomicsMac */ = {
+			isa = PBXGroup;
+			children = (
+				9232DFABC112DDBC56908FBF /* EngineLifecycle.swift */,
+				F56578E475342A4B0B7EDA33 /* HomeEconomicsMac.entitlements */,
+				20D5FA73EC2BF679AC0CC233 /* HomeEconomicsMacApp.swift */,
+				9252D5E08BD225D044CBECF4 /* Info.plist */,
+				EC8AC5EBA44BDCD55211F704 /* MacEngineHost.swift */,
+				B93C4666FA76203E682E2997 /* NavigationPolicy.swift */,
+				7F1C03BA71996E1EB62B964E /* WWWSchemeHandler.swift */,
+			);
+			path = HomeEconomicsMac;
+			sourceTree = "<group>";
+		};
+		6525618D14E306B0219120D7 = {
+			isa = PBXGroup;
+			children = (
+				34A13533B5AD9F62758C2327 /* HomeEconomicsMac */,
+				E7D5BD8953D79204817A8632 /* HomeEconomicsMacTests */,
+				95BF0B39CCE2184A60020C1B /* Packages */,
+				A013D4730DF2DD596D910899 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		95BF0B39CCE2184A60020C1B /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				A3AED3396C398BCDAFC0F786 /* NativeBridge */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		A013D4730DF2DD596D910899 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B7C932CF5A0D05DFBF8FA00C /* HomeEconomicsMac.app */,
+				F2B5A64065E258F52B97291C /* HomeEconomicsMacTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		E7D5BD8953D79204817A8632 /* HomeEconomicsMacTests */ = {
+			isa = PBXGroup;
+			children = (
+				A38DD33146BC5355A150EFF5 /* EngineLifecycleTests.swift */,
+				7C2AD8712ED066882131A5FE /* EngineSpikeTests.swift */,
+				6F65F9272B94E505672B77A6 /* MacEngineHostTests.swift */,
+				CE70CE285A9B6C939404F117 /* WWWSchemeHandlerTests.swift */,
+			);
+			path = HomeEconomicsMacTests;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		56522A3F7F36AFA11C53E547 /* HomeEconomicsMac */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C37C5044FAFB4E41222ACE4F /* Build configuration list for PBXNativeTarget "HomeEconomicsMac" */;
+			buildPhases = (
+				D850FB8F0DCE1C6BDDF391E6 /* Sources */,
+				5BE9D8D1007682E831F35108 /* Frameworks */,
+				F5077DC007050EA60292AB8C /* Copy staged web build */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = HomeEconomicsMac;
+			packageProductDependencies = (
+				ABB2EF3E62534EA3458FC777 /* NativeBridgeCore */,
+			);
+			productName = HomeEconomicsMac;
+			productReference = B7C932CF5A0D05DFBF8FA00C /* HomeEconomicsMac.app */;
+			productType = "com.apple.product-type.application";
+		};
+		BC2FFE5235DD6D9608507B36 /* HomeEconomicsMacTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9B64A7BEFFA079FE34FB04DB /* Build configuration list for PBXNativeTarget "HomeEconomicsMacTests" */;
+			buildPhases = (
+				3ED4441F9E2A2B0BB7C0D688 /* Sources */,
+				4831585ABFFB6AC85D2A2E78 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C0B38BA5CC299BF2C20D9385 /* PBXTargetDependency */,
+			);
+			name = HomeEconomicsMacTests;
+			packageProductDependencies = (
+				9289CC55CB52500C91B5219D /* NativeBridgeCore */,
+			);
+			productName = HomeEconomicsMacTests;
+			productReference = F2B5A64065E258F52B97291C /* HomeEconomicsMacTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		83421EFDF62EA3990863547E /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					56522A3F7F36AFA11C53E547 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = D05C59C7F469673EA2955D30 /* Build configuration list for PBXProject "HomeEconomicsMac" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 6525618D14E306B0219120D7;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				78AA896662EDCC68D3E34D0F /* XCLocalSwiftPackageReference "../ios/NativeBridge" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = A013D4730DF2DD596D910899 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				56522A3F7F36AFA11C53E547 /* HomeEconomicsMac */,
+				BC2FFE5235DD6D9608507B36 /* HomeEconomicsMacTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		F5077DC007050EA60292AB8C /* Copy staged web build */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Copy staged web build";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "src=\"$SRCROOT/../www\"\ndest=\"$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/www\"\nif [ ! -d \"$src\" ]; then\n  echo \"note: no staged www at $src; the app will show no page\"\n  exit 0\nfi\nrm -rf \"$dest\"\nmkdir -p \"$dest\"\nrsync -a --exclude '*.map' \"$src/\" \"$dest/\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		3ED4441F9E2A2B0BB7C0D688 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F3CDC31ACE9D1C98C9301252 /* EngineLifecycleTests.swift in Sources */,
+				4D6B1D6CA58D0DA0283D6194 /* EngineSpikeTests.swift in Sources */,
+				F6FDC8769B0DEB3E2FC16ECB /* MacEngineHostTests.swift in Sources */,
+				E2ABA8D1A32401500743525F /* WWWSchemeHandlerTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D850FB8F0DCE1C6BDDF391E6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D6673CBB0E01CEBA7D44FA28 /* EngineLifecycle.swift in Sources */,
+				DA9C537FB7C598492264F7D8 /* HomeEconomicsMacApp.swift in Sources */,
+				59229A47A7A9270AD340FD46 /* MacEngineHost.swift in Sources */,
+				0AE479F0C3B3CECFA0884FA3 /* NavigationPolicy.swift in Sources */,
+				E644DA7DFD4183C213063A62 /* WWWSchemeHandler.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		C0B38BA5CC299BF2C20D9385 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 56522A3F7F36AFA11C53E547 /* HomeEconomicsMac */;
+			targetProxy = DFE38F3030129A0A53ABBF9C /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		1F5E040274F91DF7CBEDEBD2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.homeeconomics.budget.mac.tests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Home Economics.app/Contents/MacOS/Home Economics";
+			};
+			name = Release;
+		};
+		2974959AB0500C572062DAE8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 26.10.1;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		2D5626F321CB05A5B39A8226 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 26.10.1;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		5A1FD9E4FF579E18452E3E00 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.homeeconomics.budget.mac.tests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Home Economics.app/Contents/MacOS/Home Economics";
+			};
+			name = Debug;
+		};
+		A6BDD7E235B6925FD908B5FF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = HomeEconomicsMac/HomeEconomicsMac.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				INFOPLIST_FILE = HomeEconomicsMac/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.homeeconomics.budget.mac;
+				PRODUCT_MODULE_NAME = HomeEconomicsMac;
+				PRODUCT_NAME = "Home Economics";
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		B787297AF9BA6AB95D964259 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = HomeEconomicsMac/HomeEconomicsMac.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				INFOPLIST_FILE = HomeEconomicsMac/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.homeeconomics.budget.mac;
+				PRODUCT_MODULE_NAME = HomeEconomicsMac;
+				PRODUCT_NAME = "Home Economics";
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		9B64A7BEFFA079FE34FB04DB /* Build configuration list for PBXNativeTarget "HomeEconomicsMacTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5A1FD9E4FF579E18452E3E00 /* Debug */,
+				1F5E040274F91DF7CBEDEBD2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C37C5044FAFB4E41222ACE4F /* Build configuration list for PBXNativeTarget "HomeEconomicsMac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A6BDD7E235B6925FD908B5FF /* Debug */,
+				B787297AF9BA6AB95D964259 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D05C59C7F469673EA2955D30 /* Build configuration list for PBXProject "HomeEconomicsMac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2974959AB0500C572062DAE8 /* Debug */,
+				2D5626F321CB05A5B39A8226 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		78AA896662EDCC68D3E34D0F /* XCLocalSwiftPackageReference "../ios/NativeBridge" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../ios/NativeBridge;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		9289CC55CB52500C91B5219D /* NativeBridgeCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = NativeBridgeCore;
+		};
+		ABB2EF3E62534EA3458FC777 /* NativeBridgeCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = NativeBridgeCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 83421EFDF62EA3990863547E /* Project object */;
+}

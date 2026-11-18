@@ -1,0 +1,77 @@
+# Fork-only (sc-4942, add-mac-app-shell). The SwiftUI Mac app. The checked-in
+# HomeEconomicsMac.xcodeproj is generated from this file:
+#   cd packages/mobile-client/macos && xcodegen generate
+# Edit this file, not the project, and commit both.
+name: HomeEconomicsMac
+options:
+  bundleIdPrefix: app.homeeconomics
+  deploymentTarget:
+    macOS: '14.0'
+  createIntermediateGroups: true
+packages:
+  NativeBridge:
+    path: ../ios/NativeBridge
+settings:
+  base:
+    SWIFT_VERSION: '5.0'
+    MARKETING_VERSION: '26.10.1'
+    CURRENT_PROJECT_VERSION: '1'
+targets:
+  HomeEconomicsMac:
+    type: application
+    platform: macOS
+    sources:
+      - path: HomeEconomicsMac
+    dependencies:
+      - package: NativeBridge
+        product: NativeBridgeCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.homeeconomics.budget.mac
+        PRODUCT_NAME: Home Economics
+        PRODUCT_MODULE_NAME: HomeEconomicsMac
+        INFOPLIST_FILE: HomeEconomicsMac/Info.plist
+        CODE_SIGN_ENTITLEMENTS: HomeEconomicsMac/HomeEconomicsMac.entitlements
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_HARDENED_RUNTIME: YES
+        # The www copy phase reads a folder outside the target's inputs
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+    postBuildScripts:
+      - name: Copy staged web build
+        basedOnDependencyAnalysis: false
+        # Staged by `yarn workspace mobile-client stage:www`. Skipped when
+        # missing, so CI builds and tests the app without a web build.
+        script: |
+          src="$SRCROOT/../www"
+          dest="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/www"
+          if [ ! -d "$src" ]; then
+            echo "note: no staged www at $src; the app will show no page"
+            exit 0
+          fi
+          rm -rf "$dest"
+          mkdir -p "$dest"
+          rsync -a --exclude '*.map' "$src/" "$dest/"
+  HomeEconomicsMacTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: HomeEconomicsMacTests
+    dependencies:
+      - target: HomeEconomicsMac
+      - package: NativeBridge
+        product: NativeBridgeCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.homeeconomics.budget.mac.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Home Economics.app/Contents/MacOS/Home Economics
+        BUNDLE_LOADER: $(TEST_HOST)
+schemes:
+  HomeEconomicsMac:
+    build:
+      targets:
+        HomeEconomicsMac: all
+        HomeEconomicsMacTests: [test]
+    test:
+      targets:
+        - HomeEconomicsMacTests

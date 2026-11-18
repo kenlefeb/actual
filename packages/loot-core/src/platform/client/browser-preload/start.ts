@@ -27,6 +27,13 @@ export type StartBackendOptions = {
    * Typically wired to platform flags (e.g. Playwright tests, iOS).
    */
   forceDirectWorker?: boolean;
+  /**
+   * fork: sc-4942. Always run in the SharedArrayBuffer fallback mode, as
+   * inside Capacitor: for a native shell that serves the page from a custom
+   * URL scheme (the SwiftUI Mac app), where WebKit does not expose
+   * SharedArrayBuffer even if crossOriginIsolated reports true.
+   */
+  sharedArrayBufferFallback?: boolean;
 };
 
 export type StartBackendHandle = Worker | WorkerBridge;
@@ -39,12 +46,13 @@ export function startBrowserBackend(
     initPayload,
     createSharedWorker,
     forceDirectWorker,
+    sharedArrayBufferFallback,
   } = opts;
 
   // Capacitor serves the app from a custom URL scheme, which WebKit never
   // treats as cross-origin isolated, so SharedArrayBuffer is unavailable in
   // the native mobile app. Always run it in the fallback mode there.
-  if ('Capacitor' in window) {
+  if ('Capacitor' in window || sharedArrayBufferFallback) {
     localStorage.setItem('SharedArrayBufferOverride', 'true');
   }
 

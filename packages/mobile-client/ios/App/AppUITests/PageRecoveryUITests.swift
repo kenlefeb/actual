@@ -27,6 +27,39 @@ final class PageRecoveryUITests: XCTestCase {
         XCTAssertFalse(after.contains("code="), report.label)
     }
 
+    // sc-5220
+    private var notice: XCUIElement { app.staticTexts["pageNotice.text"] }
+    private static let noticeText =
+        "The app restarted just now, so your last change may not have been saved. Check it, and make it again if it’s missing."
+
+    private func disappears(_ element: XCUIElement, within timeout: TimeInterval) -> Bool {
+        let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: element)
+        return XCTWaiter.wait(for: [gone], timeout: timeout) == .completed
+    }
+
+    func testAnAutomaticReloadShowsTheNoticeAndDismissRemovesIt() {
+        launch(deaths: 1)
+        XCTAssertTrue(notice.waitForExistence(timeout: 60), "no notice after the reload")
+        XCTAssertEqual(notice.label, Self.noticeText)
+        let dismiss = app.buttons["pageNotice.dismiss"]
+        XCTAssertEqual(dismiss.label, "Dismiss this notice")
+        XCTAssertGreaterThanOrEqual(dismiss.frame.height, 44)
+        dismiss.tap()
+        XCTAssertTrue(disappears(notice, within: 3), "Dismiss left the notice up")
+    }
+
+    func testTheNoticeHidesByItself() {
+        launch(deaths: 1)
+        XCTAssertTrue(notice.waitForExistence(timeout: 60))
+        XCTAssertTrue(disappears(notice, within: 25), "the notice stayed")
+    }
+
+    func testAPlainLaunchShowsNoNotice() {
+        launch(deaths: 0, startPath: "/")
+        XCTAssertTrue(app.staticTexts["uiTestPageRecoveryReady"].waitForExistence(timeout: 60))
+        XCTAssertFalse(notice.exists)
+    }
+
     func testThreeReloadsDoNotAsk() {
         launch(deaths: 3)
         XCTAssertTrue(app.staticTexts["uiTestPageRecovery"].waitForExistence(timeout: 90))
@@ -40,6 +73,7 @@ final class PageRecoveryUITests: XCTestCase {
         // By label: an element query by string is limited to 128 characters
         let message = "Reload to open it again. A change you made in the last moment may not have been saved. Check it, and make it again if it’s missing."
         XCTAssertTrue(alert.staticTexts.matching(NSPredicate(format: "label == %@", message)).firstMatch.exists, "the alert's message changed")
+        XCTAssertFalse(notice.exists, "the alert replaces the notice")
         // sc-5287: on CI the first tap can have no effect. The recording shows the
         // alert fully on screen and untouched while the page behind it is still
         // starting. So allow one more tap, and log how many it took.
@@ -57,5 +91,6 @@ final class PageRecoveryUITests: XCTestCase {
         }
         print("page recovery UI test: Reload took \(taps) tap(s)")
         XCTAssertEqual(result, .completed, "Reload did not dismiss the alert after \(taps) taps")
+        XCTAssertFalse(notice.waitForExistence(timeout: 5), "the person's own Reload shows no notice")
     }
 }

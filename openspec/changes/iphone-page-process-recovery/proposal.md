@@ -7,7 +7,7 @@ When iOS ends the iPhone app's web page process, Capacitor reloads whatever URL 
 - The iPhone app reloads its own start page after the page's process ends, never the last URL.
 - It shares the Mac app's cap: three automatic reloads in a minute, then an alert with a Reload button.
 - `ReloadGuard` moves into `NativeBridgeCore`, so both apps use the same one.
-- The notice on each automatic reload is not part of this change; it follows in story 5220.
+- Each automatic reload shows a brief notice at the top of the screen that the last change may not have been saved (story 5220). The Mac app's notice is specified in `mac-app`.
 
 ## Capabilities
 
@@ -17,7 +17,7 @@ None.
 
 ### Modified Capabilities
 
-- `native-bridge`: adds how the iPhone app recovers when its page's process ends.
+- `native-bridge`: adds how the iPhone app recovers when its page's process ends, and the notice it then shows.
 
 ## Impact
 

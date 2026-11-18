@@ -10,6 +10,7 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
     private var router = NativeTabRouter()
     private var containers: [NativeTab: TabContainerViewController] = [:]
     private var foregroundObserver: NSObjectProtocol?
+    private var pageNoticeWindow: PageNoticeWindow?
     // The native Budget tab (sc-3751) lies over the web Budget screen while the
     // switch is on and the page shows /budget with the tab bar; otherwise the web screen below shows as before
     private var budgetOverlay: NativeBudgetViewController?
@@ -89,6 +90,44 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
         foregroundObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
         ) { [weak self] _ in self?.bridgeController.nativeChrome.reportRoute() }
+    }
+
+    // sc-5220: the window exists from here on
+    override func viewIsAppearing(_ animated: Bool) {
+        super.viewIsAppearing(animated)
+        guard pageNoticeWindow == nil, let window = view.window, let scene = window.windowScene else { return }
+        pageNoticeWindow = PageNoticeWindow(
+            notices: bridgeController.pageNotices, scene: scene, mainWindow: window,
+            reserve: { [weak self] in self?.reserveNoticeSpace($0) })
+    }
+
+    // Everything below the strip starts under it, sheets included.
+    // shortcut: a sheet presented while the strip is up gets no room until the
+    // strip next changes; it is up 15 seconds and has Dismiss.
+    private func reserveNoticeSpace(_ height: CGFloat) {
+        additionalSafeAreaInsets.top = height
+        var presented = presentedViewController
+        while let screen = presented {
+            screen.additionalSafeAreaInsets.top = height
+            presented = screen.presentedViewController
+        }
+        // The storage line's window (sc-5219) ends below the strip too, so the
+        // two never overlap, however large the text
+        view.window?.windowScene?.windows.filter { $0.windowLevel == .alert }
+            .forEach { $0.rootViewController?.additionalSafeAreaInsets.top = height }
+        // A list under a large title keeps its old inset until its navigation
+        // view is laid out again, which would leave a gap when the strip goes
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            guard let self else { return }
+            Self.navigationControllers(in: self).forEach {
+                $0.view.setNeedsLayout()
+                $0.view.layoutIfNeeded()
+            }
+        }
+    }
+
+    private static func navigationControllers(in controller: UIViewController) -> [UINavigationController] {
+        controller.children.flatMap { navigationControllers(in: $0) } + [controller as? UINavigationController].compactMap { $0 }
     }
 
     // MARK: Tabs

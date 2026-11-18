@@ -76,19 +76,52 @@ final class StoredWriteTests: XCTestCase {
         XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
     }
 
-    // With the storage guard off a failed write still answers stored, so nothing
-    // may present that answer as saved. Remove when the guard turns on.
-    func testNoAppCodeReadsTheStoredAnswerBeforeTheGuardIsOn() throws {
-        let client = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let roots = ["ios/NativeBridge/Sources", "ios/App/App", "macos/HomeEconomicsMac"]
-        for root in roots {
-            let files = FileManager.default.enumerator(at: client.appendingPathComponent(root), includingPropertiesForKeys: nil)
-            while let file = files?.nextObject() as? URL {
-                guard file.pathExtension == "swift", file.lastPathComponent != "NativeBridgeClient.swift" else { continue }
-                let text = try String(contentsOf: file, encoding: .utf8)
-                XCTAssertFalse(text.contains("StoredWrite"), file.path)
-                XCTAssertFalse(text.contains(".write(\""), file.path)
+    // A later number's writes include every earlier one's
+    func testAStoredEventCoversEarlierNumbers() {
+        let status = WriteStorageStatus()
+        status.record(PersistedAnswer(stored: false, seq: 1), ticket: status.nextTicket())
+        status.record(PersistedAnswer(stored: false, seq: 2), ticket: status.nextTicket())
+        status.storedEvent(seq: 2)
+        XCTAssertNil(status.message)
+    }
+
+    // The call timed out, its retry answered not stored, and that retry's writes landed
+    func testARetrysStoredEventClearsTheTimedOutWrite() {
+        let status = WriteStorageStatus()
+        status.record(.notStored, ticket: status.nextTicket())
+        status.record(PersistedAnswer(stored: false, seq: 3), ticket: status.nextTicket())
+        XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
+        status.storedEvent(seq: 3)
+        XCTAssertNil(status.message)
+    }
+
+    func testARetrysStoredEventCountsEvenBeforeItsAnswer() {
+        let status = WriteStorageStatus()
+        status.record(.notStored, ticket: status.nextTicket())
+        status.storedEvent(seq: 3)
+        status.record(PersistedAnswer(stored: false, seq: 3), ticket: status.nextTicket())
+        XCTAssertNil(status.message)
+    }
+
+    func testAWriteAfterTheRetryIsNotCovered() {
+        let status = WriteStorageStatus()
+        let retry = status.nextTicket()
+        let later = status.nextTicket()
+        status.record(.notStored, ticket: later)
+        status.record(PersistedAnswer(stored: false, seq: 3), ticket: retry)
+        status.storedEvent(seq: 3)
+        XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
+    }
+
+    // Only the client asks, so no caller can read an answer the guard doesn't back yet
+    func testTheStorageCallsCannotBeMadeDirectly() async {
+        let bridge = NativeBridgeClient { _, _ in #"{"stored":true}"# }
+        for name in NativeBridgeAllowlist.storage {
+            do {
+                _ = try await bridge.call(name)
+                XCTFail(name)
+            } catch {
+                XCTAssertEqual(error as? NativeBridgeError, .notAllowlisted(name))
             }
         }
     }

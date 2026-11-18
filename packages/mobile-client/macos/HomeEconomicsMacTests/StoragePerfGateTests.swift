@@ -59,7 +59,7 @@ final class StoragePerfGateTests: XCTestCase {
             let elapsed = try await write(bare)
             _ = try await page.run("window.__forkTestBarrierOff = false; return 'ok';")
             // Not timed: the next write must not wait for this one's commit
-            _ = try await host.client.call("native/persisted")
+            _ = try await page.bridgeCall(name: "native/persisted", argsJSON: "{}")
             return elapsed
         }
         // Alternating, so drift on the machine falls on both sides alike

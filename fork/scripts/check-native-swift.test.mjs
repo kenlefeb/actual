@@ -101,6 +101,42 @@ void test('Native Swift: passes on bridge code', () => {
   );
 });
 
+// mac-app: "The web view is never weakened" (sc-4942)
+void test('Native Swift: fails on file-URL access or a private WebKit setting', () => {
+  for (const line of [
+    'prefs.setValue(true, forKey: "allowFileAccessFromFileURLs")',
+    'config.setValue(true, forKey: "allowUniversalAccessFromFileURLs")',
+    'webView.configuration.preferences.setValue(true, forKey: "_developerExtrasEnabled")',
+    'webView.perform(NSSelectorFromString("_setDrawsBackground:"), with: false)',
+    'let s = Selector(("_privateThing"))',
+  ]) {
+    const found = problems({ 'macos/Mac/Bad.swift': `${line}\n` });
+    assert.equal(found.length, 1, line);
+    assert.match(found[0], /macos\/Mac\/Bad\.swift: weakens WebKit/);
+  }
+  assert.deepEqual(
+    problems({
+      'macos/Mac/Ok.swift':
+        'configuration.preferences.javaScriptCanOpenWindowsAutomatically = false\ndefaults.set(true, forKey: "budgetWasOpen")\n',
+    }),
+    [],
+  );
+});
+
+// mac-app: "Swift never opens a budget file" (sc-4942 task 1.10)
+void test('Native Swift: covers the Mac app sources', () => {
+  const root = mkdtempSync(join(tmpdir(), 'native-swift-'));
+  const mac = join(root, 'packages/mobile-client/macos/HomeEconomicsMac');
+  mkdirSync(mac, { recursive: true });
+  writeFileSync(join(mac, 'Bad.swift'), 'import SQLite3\n');
+  const found = problems(findNativeSources(root));
+  assert.equal(found.length, 1);
+  assert.match(
+    found[0],
+    /packages\/mobile-client\/macos\/HomeEconomicsMac\/Bad\.swift/,
+  );
+});
+
 void test('Native Swift: scans Swift, headers and Objective-C, skipping vendored code', () => {
   const root = mkdtempSync(join(tmpdir(), 'native-swift-'));
   const app = join(root, 'packages/mobile-client/ios/App');

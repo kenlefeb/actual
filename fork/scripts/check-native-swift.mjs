@@ -48,6 +48,10 @@ const USER_SCRIPT_ALLOWED = new Set([
 const PAGE_CALL =
   /\b(?:callAsyncJavaScript|evaluateJavaScript|triggerJSEvent|triggerWindowJSEvent|triggerDocumentJSEvent|notifyListeners)\b|\beval\(\s*js\s*:/;
 const USER_SCRIPT = /\bWKUserScript\s*\(/;
+// sc-4942 (mac-app): no file-URL access and no private WebKit API, reached
+// by key-value coding or by an underscored selector
+const WEAKENS_WEBKIT =
+  /\b(?:allowFileAccessFromFileURLs|allowUniversalAccessFromFileURLs)\b|forKey:\s*"_|(?:NSSelectorFromString|Selector)\(\s*\(?\s*"_/;
 
 // files: { path: contents }. Returns failure messages; empty means pass.
 export function problems(files) {
@@ -62,6 +66,11 @@ export function problems(files) {
       : []),
     ...(!USER_SCRIPT_ALLOWED.has(path) && USER_SCRIPT.test(text)
       ? [`${path}: adds a WKUserScript outside the allowlist`]
+      : []),
+    ...(WEAKENS_WEBKIT.test(text)
+      ? [
+          `${path}: weakens WebKit (file-URL access or a private API); see add-mac-app-shell`,
+        ]
       : []),
   ]);
 }

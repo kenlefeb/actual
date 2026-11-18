@@ -104,6 +104,11 @@ export async function transactionSave(
   if (!isAdd && draft.id === undefined) {
     throw invalid('an add needs its new id, an edit its id');
   }
+  // An add's children are all new: the engine creates their ids, so a draft
+  // can never name an existing row as one (PR 451 review)
+  if (isAdd && draft.splits.some(s => s.id !== undefined)) {
+    throw invalid("a new transaction's split rows have no ids");
+  }
   const payee = await resolvePayee(draft);
   if (payee.id !== null) {
     draft.payee = payee.id;
@@ -166,19 +171,26 @@ export async function transactionSave(
         `${NAME}: the transaction changed since the form was read`,
       );
     }
+    // As the form read: a live top-level row of an open account
     const parent = await db.first<{ id: string }>(
-      'SELECT id FROM transactions WHERE id = ? AND tombstone = 0 AND isChild = 0',
+      `SELECT t.id FROM transactions t JOIN accounts a ON a.id = t.acct
+       WHERE t.id = ? AND t.tombstone = 0 AND t.isChild = 0 AND a.closed = 0 AND a.tombstone = 0`,
       [id],
     );
     if (!parent) {
       throw nativeRefusal('not-found', `${NAME}: no such transaction`);
     }
     before = await readEditRows(id);
+    // A child id names one of this transaction's own live children, once
     const own = new Set(
-      before.filter(r => r.id === id || r.parent_id === id).map(r => r.id),
+      before.filter(r => r.is_child && r.parent_id === id).map(r => r.id),
     );
-    if (draft.splits.some(s => s.id !== undefined && !own.has(s.id))) {
-      throw invalid('a split row belongs to another transaction');
+    const named = draft.splits.flatMap(s => (s.id === undefined ? [] : [s.id]));
+    if (
+      named.some(childId => !own.has(childId)) ||
+      new Set(named).size !== named.length
+    ) {
+      throw invalid("a split row is not one of this transaction's own");
     }
   }
 

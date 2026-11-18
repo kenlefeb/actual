@@ -15,6 +15,7 @@ import {
 import { clearUndo } from '#server/undo';
 
 import { app } from './app';
+import { transactionDigest } from './transaction-form';
 
 const h = app.handlers;
 const NEW_ID = '0b5f2c1e-8d3a-4f6b-9c2d-1a2b3c4d5e6f';
@@ -616,6 +617,111 @@ describe('native/transaction-save: an edit', () => {
     await undo();
     expect((await row('split'))?.amount).toBe(-3000);
     expect((await row('split/b'))?.tombstone).toBe(0);
+  });
+
+  // PR 451 review: a child id can only name one of this transaction's own
+  // children; an add's children are all new, with ids the engine creates
+  it('refuses an add that names any existing row as a child, changing nothing', async () => {
+    await db.insertTransaction({
+      id: 'rec',
+      account: 'savings',
+      date: '2016-12-20',
+      amount: -9999,
+      cleared: true,
+      reconciled: true,
+    });
+    await addSplit();
+    await db.insertTransaction({
+      id: 'dead',
+      account: 'checking',
+      date: '2016-12-20',
+      amount: -1,
+      tombstone: 1,
+    });
+    const before = await db.all('SELECT * FROM transactions ORDER BY id');
+    const child = (id: string) => ({
+      id,
+      category: null,
+      notes: '',
+      inflow: false,
+      amountText: '6',
+    });
+    for (const id of ['rec', 'split/a', 'dead', 'nope']) {
+      await expect(
+        save({
+          draft: draft({ amountText: '12', splits: [child(id), child('x')] }),
+          confirmedReconciled: true,
+        }),
+      ).rejects.toThrow(/^\[native:invalid-draft\] /);
+    }
+    expect(await db.all('SELECT * FROM transactions ORDER BY id')).toEqual(
+      before,
+    );
+    expect(await row('rec')).toMatchObject({
+      acct: 'savings',
+      amount: -9999,
+      reconciled: 1,
+      isChild: 0,
+      parent_id: null,
+    });
+  });
+
+  it('refuses an edit whose child id is not one of its own live children', async () => {
+    await addSplit();
+    await db.insertTransaction({
+      id: 'other',
+      account: 'savings',
+      date: '2016-12-20',
+      amount: -1000,
+    });
+    await db.insertTransaction({
+      id: 'gone',
+      account: 'checking',
+      date: '2016-12-20',
+      amount: -1000,
+      is_child: true,
+      parent_id: 'split',
+      tombstone: 1,
+    });
+    const { transaction } = await form('split');
+    const before = await db.all('SELECT * FROM transactions ORDER BY id');
+    const child = (id: string) => ({
+      id,
+      category: 'groceries',
+      notes: '',
+      inflow: false,
+      amountText: '10',
+    });
+    for (const ids of [
+      ['split/a', 'other'],
+      ['split/a', 'gone'],
+      ['split/a', 'split'],
+      ['split/a', 'split/a'],
+    ]) {
+      await expect(
+        saveDraft(editDraft({ amountText: '20', splits: ids.map(child) }), {
+          digest: transaction?.digest,
+        }),
+      ).rejects.toThrow(/^\[native:invalid-draft\] /);
+    }
+    expect(await db.all('SELECT * FROM transactions ORDER BY id')).toEqual(
+      before,
+    );
+  });
+
+  it('refuses an edit of a row in a closed account', async () => {
+    await db.insertTransaction({
+      id: 'shut',
+      account: 'old',
+      date: '2016-12-20',
+      amount: -1000,
+    });
+    const digest = await transactionDigest('shut');
+    const { newId: _n, ...edit } = draft({ id: 'shut', notes: 'x' });
+    await expect(saveDraft(edit, { digest })).rejects.toThrow(
+      /^\[native:not-found\] /,
+    );
+    expect((await row('shut'))?.notes).toBeNull();
   });
 
   it('runs no rules on an edit', async () => {

@@ -265,8 +265,8 @@ private struct RegisterList: View {
                 retry: { Task { await model.retryUpcoming() } }, open: openUpcoming)
             if content.rows.isEmpty {
                 Text(
-                    !search.isEmpty ? String(format: RegisterWords.noMatches, search)
-                        : model.scope != .all ? RegisterWords.noFilterMatches : RegisterWords.noTransactions)
+                    RegisterEmptyWords.text(
+                        search: search, scope: model.scope, upcomingShown: !(model.upcoming.read?.upcoming.isEmpty ?? true)))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
@@ -673,8 +673,6 @@ extension AccountRegisterContent {
 }
 
 enum RegisterWords {
-    static let noFilterMatches = NSLocalizedString(
-        "No transactions match this filter.", comment: "Native Accounts register: a scope chip with no rows")
     static let clearedAmount = NSLocalizedString("Cleared %@", comment: "Native Accounts register: header, large text")
     static let unclearedAmount = NSLocalizedString("Uncleared %@", comment: "Native Accounts register: header, large text")
     static let categoriesFailed = NSLocalizedString(
@@ -702,8 +700,6 @@ enum RegisterWords {
     static let detailAmount = NSLocalizedString("Amount", comment: "Native Accounts register: scheduled row detail")
     static let detailAccount = NSLocalizedString("Account", comment: "Native Accounts register: scheduled row detail")
     static let detailNotes = NSLocalizedString("Notes", comment: "Native Accounts register: scheduled row detail")
-    static let noTransactions = NSLocalizedString("No transactions yet.", comment: "Native Accounts register: an empty account")
-    static let noMatches = NSLocalizedString("No transactions match “%@”.", comment: "Native Accounts register: no search results")
     static let all = NSLocalizedString("All", comment: "Native Accounts register: scope chip")
     static let uncleared = NSLocalizedString("Uncleared", comment: "Native Accounts register: scope chip")
     static let uncategorized = NSLocalizedString("Uncategorized", comment: "Native Accounts register: scope chip")

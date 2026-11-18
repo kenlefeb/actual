@@ -86,7 +86,7 @@ public enum UpcomingWords {
         read.upcomingCapDays.map {
             String(
                 format: NSLocalizedString(
-                    "Scheduled rows shown up to %d days; change this in Settings > Limits.",
+                    "Scheduled rows shown up to %d days; change this in Settings > Advanced > Limits.",
                     comment: "Native Accounts register: the days-ahead limit hid rows"), $0)
         }
     }
@@ -116,6 +116,28 @@ public enum UpcomingWords {
         return String(
             format: NSLocalizedString("Fields set by rules: %@", comment: "Native Accounts register: upcoming row detail"),
             names.joined(separator: ", "))
+    }
+}
+
+// The posted section when it has no rows. When upcoming rows matched, it says
+// "posted", so it never reads as if nothing matched (sc-4973 comment 5197).
+public enum RegisterEmptyWords {
+    public static func text(search: String, scope: AccountRegisterScope, upcomingShown: Bool) -> String {
+        if !search.isEmpty {
+            return String(
+                format: upcomingShown
+                    ? NSLocalizedString(
+                        "No posted transactions match “%@”.", comment: "Native Accounts register: only scheduled rows match the search")
+                    : NSLocalizedString("No transactions match “%@”.", comment: "Native Accounts register: no search results"),
+                search)
+        }
+        if scope != .all {
+            return upcomingShown
+                ? NSLocalizedString(
+                    "No posted transactions match this filter.", comment: "Native Accounts register: only scheduled rows match the chip")
+                : NSLocalizedString("No transactions match this filter.", comment: "Native Accounts register: a scope chip with no rows")
+        }
+        return NSLocalizedString("No transactions yet.", comment: "Native Accounts register: an empty account")
     }
 }
 

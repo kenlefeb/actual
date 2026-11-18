@@ -654,8 +654,22 @@ final class AccountRegisterViewModelTests: XCTestCase {
         XCTAssertEqual(
             UpcomingWords.moreNotice(capped),
             "More scheduled rows are not shown or searched. To see more, raise Scheduled rows: most shown in Settings > Advanced > Limits (up to 500).")
-        XCTAssertEqual(UpcomingWords.capNotice(capped), "Scheduled rows shown up to 92 days; change this in Settings > Limits.")
+        // PO decision (sc-4973 comment 5197): both notices name Settings > Advanced > Limits
+        XCTAssertEqual(
+            UpcomingWords.capNotice(capped), "Scheduled rows shown up to 92 days; change this in Settings > Advanced > Limits.")
         XCTAssertEqual(UpcomingWords.ruleFields(["payee", "category"]), "Fields set by rules: payee, category")
         XCTAssertNil(UpcomingWords.ruleFields([]))
+    }
+
+    // PO decision (sc-4973 comment 5197): when only upcoming rows match, the posted
+    // section says so, so it never reads as if nothing matched
+    func testTheEmptyPostedSectionSaysWhetherScheduledRowsMatched() {
+        XCTAssertEqual(RegisterEmptyWords.text(search: "rent", scope: .all, upcomingShown: false), "No transactions match “rent”.")
+        XCTAssertEqual(
+            RegisterEmptyWords.text(search: "rent", scope: .all, upcomingShown: true), "No posted transactions match “rent”.")
+        XCTAssertEqual(RegisterEmptyWords.text(search: "", scope: .uncleared, upcomingShown: false), "No transactions match this filter.")
+        XCTAssertEqual(
+            RegisterEmptyWords.text(search: "", scope: .uncleared, upcomingShown: true), "No posted transactions match this filter.")
+        XCTAssertEqual(RegisterEmptyWords.text(search: "", scope: .all, upcomingShown: true), "No transactions yet.")
     }
 }

@@ -314,7 +314,7 @@ private struct AccountsListBody: View {
 
     var body: some View {
         List {
-            Section(header: SyncSubtitle(status: isSyncing ? .syncing : status, staleError: staleError) { Task { await model.refresh() } }) {
+            Section(header: SyncSubtitle(status: isSyncing && status != .waitingForStorage ? .syncing : status, staleError: staleError) { Task { await model.refresh() } }) {
                 if let reconcileMonth { ReconcileBanner(month: reconcileMonth) { actions.reconcile(nil) } }
                 Button { actions.navigate("/accounts/all") } label: {
                     LinkRow { AccountTexts(name: AccountsWords.allAccounts, detail: AccountsWords.allAccountsDetail) }
@@ -432,6 +432,7 @@ private struct SyncSubtitle: View {
         case .offline: return (AccountsWords.offline, false)
         case .failed: return (AccountsWords.syncFailed, true)
         case .local: return (AccountsWords.localFile, false)
+        case .waitingForStorage: return (NativeSyncStatus.waitingMessage, false)
         }
     }
 }

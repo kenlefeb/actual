@@ -4,6 +4,8 @@
 // every write with `native/persisted`, and the page asks
 // `native/storage-state` before forwarding one. Off the shells both answer
 // at once: writes there are durable when they return.
+import { v4 as uuidv4 } from 'uuid';
+
 import * as connection from '#platform/server/connection';
 import * as fs from '#platform/server/fs';
 import type { StorageState } from '#platform/server/fs/storage-state';
@@ -38,6 +40,9 @@ export function storageFailed(): boolean {
 }
 
 let lastPersistSeq = 0;
+// This page load. A restart loses whatever was not stored, so native code must
+// not let a new page's answers vouch for an old page's writes.
+const epoch = uuidv4();
 
 /**
  * Stored once every pending write fired complete, or not yet stored after
@@ -45,19 +50,23 @@ let lastPersistSeq = 0;
  * follows once the writes this call waited for are stored. Later writes may
  * still be pending then. Refuses once the failed latch is set.
  */
-export async function persisted(): Promise<{ stored: boolean; seq?: number }> {
+export async function persisted(): Promise<{
+  stored: boolean;
+  seq?: number;
+  epoch: string;
+}> {
   if (storageFailed()) throw notStored();
   const outcome = await waitForStorage().catch(() => {
     throw notStored();
   });
-  if (!('pending' in outcome)) return { stored: true };
+  if (!('pending' in outcome)) return { stored: true, epoch };
   const seq = ++lastPersistSeq;
   // A failure instead latches and sends storage-failed
   outcome.pending.then(
-    () => connection.send('storage-stored', { seq }),
+    () => connection.send('storage-stored', { seq, epoch }),
     () => undefined,
   );
-  return { stored: false, seq };
+  return { stored: false, seq, epoch };
 }
 
 /**

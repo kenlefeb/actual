@@ -21,15 +21,17 @@ export function MobileSyncStatus() {
     syncState === 'offline' || (syncState === null && server === 'offline');
   const label = local
     ? t('Local file — not syncing')
-    : isSyncing
-      ? t('Syncing…')
-      : offline
-        ? t('Offline — changes saved on this device')
-        : syncState === 'error'
-          ? t('Sync failed — try again')
-          : syncState === 'synced'
-            ? t('Synced')
-            : t('Server online');
+    : syncState === 'waiting'
+      ? t('Waiting for this device to finish saving')
+      : isSyncing
+        ? t('Syncing…')
+        : offline
+          ? t('Offline — changes saved on this device')
+          : syncState === 'error'
+            ? t('Sync failed — try again')
+            : syncState === 'synced'
+              ? t('Synced')
+              : t('Server online');
 
   return (
     <View

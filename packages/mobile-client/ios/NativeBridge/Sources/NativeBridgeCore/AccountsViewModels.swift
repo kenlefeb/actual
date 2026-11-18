@@ -68,6 +68,7 @@ private func pullSync(_ client: NativeBridgeClient, settled: @escaping () -> Voi
         case .ok: return nil
         case .failed(.network): return .offline
         case .failed(.unauthorized): return .signedOut
+        case .failed(.storageSlow): return .waitingForStorage
         case .failed: return .failed
         }
     } catch {
@@ -280,6 +281,7 @@ public final class AccountsListViewModel: ObservableObject {
         refreshError = nil
         let failure = await pullSync(client, settled: { Task { @MainActor [weak self] in self?.isSyncing = false } })
         syncStatus = syncStatus.after(pull: failure, now: Date())
+        if failure == .waitingForStorage { return }
         if let failure {
             refreshError = failure
             if let good = state.value { state = .stale(good, failure == .timedOut ? .timedOut : .other) }
@@ -575,6 +577,7 @@ public final class AccountRegisterViewModel: ObservableObject {
         isSyncing = true
         refreshError = nil
         if let failure = await pullSync(client, settled: { Task { @MainActor [weak self] in self?.isSyncing = false } }) {
+            if failure == .waitingForStorage { return }
             refreshError = failure
             if let good = state.value { state = .stale(good, failure == .timedOut ? .timedOut : .other) }
             return

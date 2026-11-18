@@ -83,6 +83,11 @@ public enum NativeSyncStatus: Equatable {
     case unknown, syncing, synced(Date), offline, failed
     // No server, or syncing is off
     case local
+    // sc-5219: held back until this device finishes saving; it retries by itself
+    case waitingForStorage
+
+    public static let waitingMessage = NSLocalizedString(
+        "Waiting for this device to finish saving", comment: "Native sync status: sync is held until local storage catches up")
 
     // A page event's body ({event, payload}); anything but a sync outcome keeps the status
     public func next(after body: Any, now: Date) -> NativeSyncStatus {
@@ -90,9 +95,15 @@ public enum NativeSyncStatus: Equatable {
             let payload = (body as? [String: Any])?["payload"] as? [String: Any]
         else { return self }
         switch payload["type"] as? String {
-        case "start": return .syncing
+        // A held sync's retry keeps saying it is waiting
+        case "start": return self == .waitingForStorage ? self : .syncing
         case "success": return payload["syncDisabled"] as? Bool == true ? .local : .synced(now)
-        case "error": return payload["subtype"] as? String == "network" ? .offline : .failed
+        case "error":
+            switch payload["subtype"] as? String {
+            case "network": return .offline
+            case "storage-slow": return .waitingForStorage
+            default: return .failed
+            }
         case "unauthorized": return .failed
         default: return self
         }
@@ -105,6 +116,7 @@ public enum NativeSyncStatus: Equatable {
         case .offline: return .offline
         case .signedOut, .failed: return .failed
         case .timedOut: return .syncing
+        case .waitingForStorage: return .waitingForStorage
         }
     }
 }

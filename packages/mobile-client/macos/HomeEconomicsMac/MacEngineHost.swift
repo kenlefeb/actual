@@ -124,8 +124,11 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
             if let state = BudgetState.parse(body) { onBudgetState?(state) }
             return
         }
-        if let seq = NativeBridgeEvent.storedSeq(of: body) {
-            Task { @MainActor [writeStorage] in writeStorage.storedEvent(seq: seq) }
+        if let stored = NativeBridgeEvent.stored(of: body) {
+            Task { @MainActor [writeStorage] in writeStorage.storedEvent(seq: stored.seq, epoch: stored.epoch) }
+        }
+        if event == "ready" {
+            Task { @MainActor [writeStorage] in writeStorage.pageLoaded() }
         }
         onEvent?(event)
         coalescer.notify()

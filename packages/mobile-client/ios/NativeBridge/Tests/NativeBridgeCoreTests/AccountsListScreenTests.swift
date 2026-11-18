@@ -68,6 +68,18 @@ final class NativeSyncStatusTests: XCTestCase {
         XCTAssertEqual(NativeSyncStatus.failed.next(after: event(["type": "success", "tables": []]), now: now), .synced(now))
     }
 
+    // native-durable-writes: "A held sync never reports success" (sc-5219)
+    func testAHeldSyncSaysItIsWaitingThroughItsRetries() {
+        let held = NativeSyncStatus.syncing.next(after: event(["type": "error", "subtype": "storage-slow"]), now: now)
+        XCTAssertEqual(held, .waitingForStorage)
+        XCTAssertEqual(held.next(after: event(["type": "start"]), now: now), .waitingForStorage)
+        XCTAssertEqual(held.next(after: event(["type": "error", "subtype": "storage-slow"]), now: now), .waitingForStorage)
+        XCTAssertEqual(held.next(after: event(["type": "success", "tables": []]), now: now), .synced(now))
+        XCTAssertEqual(held.next(after: event(["type": "error", "subtype": "storage-failed"]), now: now), .failed)
+        XCTAssertEqual(NativeSyncStatus.synced(now).after(pull: .waitingForStorage, now: now), .waitingForStorage)
+        XCTAssertEqual(NativeSyncStatus.waitingMessage, "Waiting for this device to finish saving")
+    }
+
     func testAPullsOutcome() {
         XCTAssertEqual(NativeSyncStatus.unknown.after(pull: nil, now: now), .synced(now))
         XCTAssertEqual(NativeSyncStatus.unknown.after(pull: .offline, now: now), .offline)
@@ -118,6 +130,7 @@ private struct Boom: Error {}
 private final class FakeListPage {
     var calls: [(name: String, args: String)] = []
     var failures: [String: Error] = [:]
+    var syncReply = "null"
     let list: String
 
     init() throws { list = try listFixture() }
@@ -127,6 +140,7 @@ private final class FakeListPage {
             try await MainActor.run {
                 self.calls.append((name, args))
                 if let failure = self.failures[name] { throw failure }
+                if name == "sync" { return self.syncReply }
                 return name == "native/accounts-list" ? self.list : "null"
             }
         }
@@ -302,6 +316,18 @@ final class AccountsListWriteTests: XCTestCase {
         model.syncStatus = .synced(Date(timeIntervalSince1970: 0))
         await model.refresh()
         XCTAssertEqual(model.syncStatus, .failed)
+    }
+
+    func testAHeldPullIsNotAFailure() async throws {
+        let page = try FakeListPage()
+        page.syncReply = #"{"ok":false,"reason":"storage-slow"}"#
+        let model = model(page)
+        await model.load()
+        let shown = model.state
+        await model.refresh()
+        XCTAssertEqual(model.syncStatus, .waitingForStorage)
+        XCTAssertNil(model.refreshError)
+        XCTAssertEqual(model.state, shown)
     }
 }
 

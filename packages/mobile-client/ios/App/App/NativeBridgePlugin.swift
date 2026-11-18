@@ -44,8 +44,11 @@ public class NativeBridgePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
         let origin = message.frameInfo.securityOrigin
         guard PageOriginGuard.accepts(isMainFrame: message.frameInfo.isMainFrame, scheme: origin.protocol, host: origin.host, port: origin.port, serverURL: bridge?.config.serverURL),
               let event = NativeBridgeEvent.name(of: message.body) else { return }
-        if let seq = NativeBridgeEvent.storedSeq(of: message.body) {
-            Task { @MainActor [writeStorage] in writeStorage.storedEvent(seq: seq) }
+        if let stored = NativeBridgeEvent.stored(of: message.body) {
+            Task { @MainActor [writeStorage] in writeStorage.storedEvent(seq: stored.seq, epoch: stored.epoch) }
+        }
+        if event == "ready" {
+            Task { @MainActor [writeStorage] in writeStorage.pageLoaded() }
         }
         onEvent?(event)
         onPaychecksEvent?(event, NativeBridgeEvent.tables(of: message.body))

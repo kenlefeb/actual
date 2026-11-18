@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 
 // Fork-only (sc-3584, ADR 11). Native code reads loot-core only through these
@@ -120,10 +121,13 @@ public enum NativeBridgeEvent {
         return tables.compactMap { $0 as? String }
     }
 
-    // sc-5219: the number of the native/persisted call whose writes are now stored
-    public static func storedSeq(of body: Any) -> Int? {
-        guard name(of: body) == "stored" else { return nil }
-        return ((body as? [String: Any])?["payload"] as? [String: Any])?["seq"] as? Int
+    // sc-5219: which native/persisted call, of which page load, is now stored
+    public static func stored(of body: Any) -> (seq: Int, epoch: String)? {
+        guard name(of: body) == "stored",
+            let payload = (body as? [String: Any])?["payload"] as? [String: Any],
+            let seq = payload["seq"] as? Int, let epoch = payload["epoch"] as? String
+        else { return nil }
+        return (seq, epoch)
     }
 }
 
@@ -134,38 +138,93 @@ public final class WriteStorageStatus: ObservableObject {
     public static let savingMessage = NSLocalizedString("Saving…", comment: "Native screens: a change is being stored on this device")
     public static let notYetStoredMessage = NSLocalizedString(
         "Saved here, not yet stored on this device.", comment: "Native screens: a change was made but this device has not stored it yet")
+    public static let mayNotBeSavedMessage = NSLocalizedString(
+        "Some recent changes may not have been saved. Check them, and make again any that are missing.",
+        comment: "Native screens: the app restarted while changes were not yet stored")
 
-    @Published private var writesInProgress = 0
-    @Published private var isNotYetStored = false
-    private var awaitedSeq: Int?
+    @Published public private(set) var message: String?
+    private var writesInProgress = 0 { didSet { updateMessage() } }
+    // The current page's writes not known to be stored, by native/persisted
+    // number; nil when that call got no answer
+    private var unstored: [Int?] = [] { didSet { updateMessage() } }
+    // A restart came while writes were unstored. No later success can vouch
+    // for them, so only the person's acknowledgement clears this.
+    private var mayNotBeSaved = false { didSet { updateMessage() } }
+    private var currentEpoch: String?
+    private var retiredEpochs: Set<String> = []
 
     public nonisolated init() {}
 
-    public var message: String? {
-        if writesInProgress > 0 { return Self.savingMessage }
-        return isNotYetStored ? Self.notYetStoredMessage : nil
+    private func updateMessage() {
+        let next: String? =
+            if writesInProgress > 0 { Self.savingMessage } else if mayNotBeSaved { Self.mayNotBeSavedMessage } else if !unstored.isEmpty {
+                Self.notYetStoredMessage
+            } else { nil }
+        if next != message { message = next }
+    }
+
+    // What a screen shows. A normal write takes milliseconds, so "Saving…"
+    // appears only if it is still saving after `savingDelay`.
+    public func shownMessage(savingDelay: TimeInterval = 0.3) -> AnyPublisher<String?, Never> {
+        $message
+            .map { message -> AnyPublisher<String?, Never> in
+                let now = Just(message)
+                return message == Self.savingMessage
+                    ? now.delay(for: .seconds(savingDelay), scheduler: RunLoop.main).eraseToAnyPublisher()
+                    : now.eraseToAnyPublisher()
+            }
+            .switchToLatest()
+            .removeDuplicates()
+            .eraseToAnyPublisher()
     }
 
     func writeBegan() { writesInProgress += 1 }
     func writeEnded() { writesInProgress -= 1 }
 
-    // A stored answer covers every write before it
+    // A stored answer covers every earlier write of its own page load
     func record(_ answer: PersistedAnswer) {
-        isNotYetStored = !answer.stored
-        awaitedSeq = answer.stored ? nil : answer.seq ?? awaitedSeq
+        guard isCurrentPage(answer.epoch) else {
+            if !answer.stored { mayNotBeSaved = true }
+            return
+        }
+        if answer.stored { unstored = [] } else { unstored.append(answer.seq) }
     }
 
     // The engine's storage-stored, which the page forwards as `stored`
-    public func storedEvent(seq: Int) {
-        guard let awaitedSeq, seq >= awaitedSeq else { return }
-        self.awaitedSeq = nil
-        isNotYetStored = false
+    public func storedEvent(seq: Int, epoch: String) {
+        guard isCurrentPage(epoch) else { return }
+        unstored.removeAll { $0.map { $0 <= seq } ?? false }
+    }
+
+    // The page loaded again: what it had not stored may be gone
+    public func pageLoaded() {
+        if let currentEpoch { retiredEpochs.insert(currentEpoch) }
+        currentEpoch = nil
+        if !unstored.isEmpty {
+            unstored = []
+            mayNotBeSaved = true
+        }
+    }
+
+    public func acknowledgeMayNotBeSaved() { mayNotBeSaved = false }
+
+    // An answer with no page load named (no answer at all) counts as the current one
+    private func isCurrentPage(_ epoch: String?) -> Bool {
+        guard let epoch else { return true }
+        if retiredEpochs.contains(epoch) { return false }
+        if epoch != currentEpoch {
+            if currentEpoch != nil { pageLoaded() }
+            currentEpoch = epoch
+        }
+        return true
     }
 }
 
 struct PersistedAnswer: Decodable, Equatable {
     let stored: Bool
     var seq: Int?
+    // The engine's page load
+    var epoch: String?
 
     static let notStored = PersistedAnswer(stored: false)
 }

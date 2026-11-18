@@ -1,3 +1,5 @@
+import Combine
+import NativeBridgeCore
 import UIKit
 
 // Fork-only (sc-3514, ADR 11). The iPhone app's root: a system tab bar with
@@ -10,6 +12,9 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
     private var router = NativeTabRouter()
     private var containers: [NativeTab: TabContainerViewController] = [:]
     private var foregroundObserver: NSObjectProtocol?
+    // sc-5219: "Saving…" and "Saved here, not yet stored on this device.", above the tab bar
+    private let writeStorageLine = UIView()
+    private var writeStorageObserver: AnyCancellable?
     // The native Budget tab (sc-3751) lies over the web Budget screen while the
     // switch is on and the page shows /budget with the tab bar; otherwise the web screen below shows as before
     private var budgetOverlay: NativeBudgetViewController?
@@ -85,10 +90,48 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
         chrome.onPresentReconcile = { [weak self] body in self?.presentReconcile(body) }
         // Hidden until a budget is open (sign-in and the budget list have none)
         setTabBarVisible(false)
+        showWriteStorageLine()
 
         foregroundObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
         ) { [weak self] _ in self?.bridgeController.nativeChrome.reportRoute() }
+    }
+
+    // One line for every native screen, since a write can come from any of them
+    private func showWriteStorageLine() {
+        let label = UILabel()
+        label.font = .preferredFont(forTextStyle: .footnote)
+        label.adjustsFontForContentSizeCategory = true
+        label.textColor = .secondaryLabel
+        label.textAlignment = .center
+        label.numberOfLines = 0
+        label.translatesAutoresizingMaskIntoConstraints = false
+
+        let line = writeStorageLine
+        line.backgroundColor = .secondarySystemBackground
+        line.layer.cornerRadius = 8
+        line.isUserInteractionEnabled = false
+        line.isHidden = true
+        line.translatesAutoresizingMaskIntoConstraints = false
+        line.addSubview(label)
+        view.addSubview(line)
+        NSLayoutConstraint.activate([
+            label.topAnchor.constraint(equalTo: line.topAnchor, constant: 6),
+            label.bottomAnchor.constraint(equalTo: line.bottomAnchor, constant: -6),
+            label.leadingAnchor.constraint(equalTo: line.leadingAnchor, constant: 12),
+            label.trailingAnchor.constraint(equalTo: line.trailingAnchor, constant: -12),
+            line.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            line.bottomAnchor.constraint(equalTo: tabBar.topAnchor, constant: -8),
+            line.leadingAnchor.constraint(greaterThanOrEqualTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
+            line.trailingAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
+        ])
+        writeStorageObserver = bridgeController.nativeBridge.writeStorage.shownMessage().sink { [weak self] message in
+            guard let self else { return }
+            label.text = message
+            line.isHidden = message == nil
+            self.view.bringSubviewToFront(line)
+            if let message { UIAccessibility.post(notification: .announcement, argument: message) }
+        }
     }
 
     // MARK: Tabs

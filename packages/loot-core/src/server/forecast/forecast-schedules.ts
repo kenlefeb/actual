@@ -247,6 +247,7 @@ export async function buildFutureScheduleOccurrences(
       const sourceTransaction = await runRules(
         baseTransaction,
         ruleAccountsById,
+        { createPayees: false },
       );
       simulatedTransactions.push(sourceTransaction);
       occurrences.push({
@@ -296,6 +297,7 @@ export async function buildFutureScheduleOccurrences(
           cleared: false,
         },
         ruleAccountsById,
+        { createPayees: false },
       );
 
       const sourceAccount = accountsById.get(sourceTransaction.account);

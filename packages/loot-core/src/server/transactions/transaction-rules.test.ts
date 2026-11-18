@@ -1,6 +1,7 @@
 import { aqlQuery } from '#server/aql';
 import * as db from '#server/db';
 import { loadMappings } from '#server/db/mappings';
+import { app as rulesApp } from '#server/rules/app';
 // @ts-strict-ignore
 import { q } from '#shared/query';
 import { extractTagsFromText, makeExactTagSetQueryFilter } from '#shared/tags';
@@ -256,6 +257,89 @@ describe('Transaction rules', () => {
 
     expect(transaction.payee).toBe('amazon_id');
     expect(transaction.category).toBe('shopping');
+  });
+
+  describe('a rule that renames the payee to a new name', () => {
+    async function countPayeeRows() {
+      const payees = await db.first<{ count: number }>(
+        'SELECT count(*) AS count FROM payees',
+      );
+      const mappings = await db.first<{ count: number }>(
+        'SELECT count(*) AS count FROM payee_mapping',
+      );
+      return { payees: payees.count, mappings: mappings.count };
+    }
+
+    beforeEach(async () => {
+      await loadRules();
+      await insertRule({
+        stage: null,
+        conditionsOp: 'and',
+        conditions: [{ op: 'is', field: 'imported_payee', value: 'ACME' }],
+        actions: [{ op: 'set', field: 'payee_name', value: 'Acme Corp' }],
+      });
+    });
+
+    test('creates the payee by default', async () => {
+      const before = await countPayeeRows();
+      const transaction = await runRules({
+        imported_payee: 'ACME',
+        payee: null,
+      });
+
+      const payee = await db.getPayeeByName('Acme Corp');
+      expect(payee).toBeTruthy();
+      expect(transaction.payee).toBe(payee.id);
+      expect(await countPayeeRows()).toEqual({
+        payees: before.payees + 1,
+        mappings: before.mappings + 1,
+      });
+    });
+
+    test('does not create the payee when createPayees is false', async () => {
+      const before = await countPayeeRows();
+      const transaction = await runRules(
+        { imported_payee: 'ACME', payee: null },
+        null,
+        { createPayees: false },
+      );
+
+      expect(transaction.payee).toBe(null);
+      expect(transaction).not.toHaveProperty('payee_name');
+      expect(await db.getPayeeByName('Acme Corp')).toBeFalsy();
+      expect(await countPayeeRows()).toEqual(before);
+    });
+
+    test('still resolves an existing payee when createPayees is false', async () => {
+      const id = await db.insertPayee({ name: 'Acme Corp' });
+      const before = await countPayeeRows();
+      const transaction = await runRules(
+        { imported_payee: 'ACME', payee: null },
+        null,
+        { createPayees: false },
+      );
+
+      expect(transaction.payee).toBe(id);
+      expect(await countPayeeRows()).toEqual(before);
+    });
+
+    test('rules-run passes createPayees through', async () => {
+      const before = await countPayeeRows();
+      const transaction = await rulesApp.handlers['rules-run']({
+        transaction: {
+          id: 'preview',
+          account: 'acct',
+          amount: 0,
+          date: '2024-01-01',
+          imported_payee: 'ACME',
+          payee: null,
+        },
+        createPayees: false,
+      });
+
+      expect(transaction.payee).toBe(null);
+      expect(await countPayeeRows()).toEqual(before);
+    });
   });
 
   test('loadRules loads all the rules', async () => {

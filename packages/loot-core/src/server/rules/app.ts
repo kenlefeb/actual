@@ -186,8 +186,10 @@ async function getRules() {
 
 async function runRules({
   transaction,
+  createPayees,
 }: {
   transaction: TransactionEntity;
+  createPayees?: boolean;
 }): Promise<TransactionEntity> {
-  return rules.runRules(transaction);
+  return rules.runRules(transaction, null, { createPayees });
 }

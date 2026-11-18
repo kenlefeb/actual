@@ -804,6 +804,49 @@ describe('forecast app', () => {
     });
   });
 
+  it('does not create payees named by schedule rules', async () => {
+    const accountId = await db.insertAccount({ id: 'acct', name: 'Checking' });
+    const scheduleId = await createSchedule({
+      conditions: [
+        { op: 'is', field: 'account', value: accountId },
+        { op: 'is', field: 'amount', value: -75 },
+        {
+          op: 'is',
+          field: 'date',
+          value: { start: '2024-03-15', frequency: 'monthly' },
+        },
+      ] satisfies RuleConditionEntity[],
+    });
+    const scheduleRule = await getRuleForSchedule(scheduleId);
+    await updateRule({
+      ...scheduleRule.serialize(),
+      actions: [
+        { op: 'link-schedule', value: scheduleId },
+        { op: 'set', field: 'payee_name', value: 'Brand New Payee' },
+      ],
+    });
+    await loadRules();
+
+    const countRows = async () => [
+      (await db.first<{ n: number }>('SELECT count(*) AS n FROM payees'))?.n,
+      (await db.first<{ n: number }>('SELECT count(*) AS n FROM payee_mapping'))
+        ?.n,
+    ];
+    const before = await countRows();
+
+    const result = await generateForecast({
+      accountIds: [accountId],
+      startDate: '2024-03-01',
+      endDate: '2024-04-30',
+    });
+
+    expect(await db.getPayeeByName('Brand New Payee')).toBeFalsy();
+    expect(await countRows()).toEqual(before);
+    expect(
+      result.dataPoints.find(dataPoint => dataPoint.date === '2024-03-15'),
+    ).toMatchObject({ balance: -75 });
+  });
+
   it('does not over-restrict accounts when filters use mixed OR conditions', async () => {
     const checkingId = await db.insertAccount({
       id: 'checking',

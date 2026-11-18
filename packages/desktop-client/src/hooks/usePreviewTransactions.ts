@@ -102,7 +102,7 @@ export function usePreviewTransactions({
     Promise.all(
       scheduleTransactions.map(transaction =>
         // Kick off an async rules application
-        send('rules-run', { transaction }),
+        send('rules-run', { transaction, createPayees: false }),
       ),
     )
       .then(newTrans => {

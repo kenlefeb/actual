@@ -333,6 +333,9 @@ const NULLABLE_RULE_FIELDS = ['payee', 'category'] as const;
 export async function runRules(
   trans,
   accounts: Map<string, db.DbAccount> | null = null,
+  // Previews pass `createPayees: false` so that merely looking at the
+  // result never adds a payee; a new payee name then resolves to `null`.
+  { createPayees = true }: { createPayees?: boolean } = {},
 ) {
   await ensureFormulaPreferencesLoaded();
 
@@ -420,7 +423,7 @@ export async function runRules(
         await ensureBalanceFor(rules[i]);
         const changes = rules[i].execActions(finalTrans);
         finalTrans = Object.assign({}, finalTrans, changes);
-        await resolvePayeeNameForRules(finalTrans);
+        await resolvePayeeNameForRules(finalTrans, createPayees);
         lastCategoryIdForGroup = await refreshCategoryGroupIfChanged(
           finalTrans,
           lastCategoryIdForGroup,
@@ -438,7 +441,7 @@ export async function runRules(
             rules[i].execActions(finalTrans),
           );
         }
-        await resolvePayeeNameForRules(finalTrans);
+        await resolvePayeeNameForRules(finalTrans, createPayees);
         lastCategoryIdForGroup = await refreshCategoryGroupIfChanged(
           finalTrans,
           lastCategoryIdForGroup,
@@ -457,7 +460,7 @@ export async function runRules(
           rules[i].execActions(finalTrans),
         );
       }
-      await resolvePayeeNameForRules(finalTrans);
+      await resolvePayeeNameForRules(finalTrans, createPayees);
       lastCategoryIdForGroup = await refreshCategoryGroupIfChanged(
         finalTrans,
         lastCategoryIdForGroup,
@@ -465,7 +468,7 @@ export async function runRules(
     }
   }
 
-  const result = await finalizeTransactionForRules(finalTrans);
+  const result = await finalizeTransactionForRules(finalTrans, createPayees);
   for (const field of missingNullableFields) {
     if (result[field] === null) {
       delete result[field];
@@ -1226,16 +1229,17 @@ export async function prepareTransactionForRules(
 
 async function resolvePayeeNameForRules(
   trans: TransactionEntity | TransactionForRules,
+  createPayees: boolean,
 ): Promise<void> {
   if (!('payee_name' in trans) || trans.payee !== 'new') {
     return;
   }
 
   if (trans.payee_name) {
-    let payee_id = (await getPayeeByName(trans.payee_name))?.id;
-    payee_id ??= await insertPayee({
-      name: trans.payee_name,
-    });
+    let payee_id = (await getPayeeByName(trans.payee_name))?.id ?? null;
+    if (payee_id === null && createPayees) {
+      payee_id = await insertPayee({ name: trans.payee_name });
+    }
 
     trans.payee = payee_id;
   } else {
@@ -1274,9 +1278,10 @@ async function refreshCategoryGroupIfChanged(
 
 export async function finalizeTransactionForRules(
   trans: TransactionEntity | TransactionForRules,
+  createPayees = true,
 ): Promise<TransactionEntity> {
   if ('payee_name' in trans) {
-    await resolvePayeeNameForRules(trans);
+    await resolvePayeeNameForRules(trans, createPayees);
     delete trans.payee_name;
   }
 

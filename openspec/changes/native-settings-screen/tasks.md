@@ -35,6 +35,7 @@
   - the deadline limit uses its default for out-of-range values.
 - [ ] 1.4 `native/settings-save` (design D1), as one exported engine function that every caller uses. Write failing tests first:
   - each key's closed set, compared with what web Settings stores for the same choice;
+  - the upcoming length accepts the web's presets and custom `N-day|week|month|year` with N at least 1, and refuses anything else;
   - limits from 1 to the ceiling, and null resets;
   - `[native:invalid-setting]` for an unknown key, a bad value, an MCP limit or grant key, or an empty change, with nothing written;
   - a two-key save with one bad key changes neither key;
@@ -89,11 +90,11 @@
 **Before 3.1:** the UX Designer supplies these frames in Figma file 2Ts4fUoFzCWfvubD9vgTWx (node 46-2):
 
 - the Native screens section, with the Settings row and its footer;
-- the hand-off row style ("Opens in the web view");
+- the hand-off row style ("Opens the web version");
 - the This iPhone section, with the Native screens switches and the Language row;
 - the local-only Sync section (text and Set up sync, no Sign out or Encryption) and the local-only About;
 - the Settings loading state (redacted) and the first-read error with Retry;
-- the copy table (frame, element, text), approved by the Product Owner;
+- the copy table: approved (node 90:1489, story comment 5151);
 - the Budget type confirmation;
 - the Sign out confirmation, with and without the unsynced-changes warning and Sync now;
 - About with the server unreachable and Retry;
@@ -103,7 +104,7 @@
 
 - [ ] 3.1 The tab (design D10):
   - budget card;
-  - Budget, with the Formatting drill-down, Budget type, Learn categories and Upcoming length;
+  - Budget, with the Formatting drill-down, Budget type, Learn categories, and Upcoming length with exactly the web's choices;
   - This iPhone, with the Native screens switches and the Language hand-off;
   - Sync, with server, encryption and Sign out, or for a local-only budget the local-only text and Set up sync;
   - Features and Data hand-off rows;

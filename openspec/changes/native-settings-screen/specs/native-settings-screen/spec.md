@@ -44,6 +44,14 @@ On iPhone, changing date format, number format, hide decimals, first day of week
 - **WHEN** the person changes the budget type to tracking
 - **THEN** a confirmation explains the change, and only on Confirm is the type stored and the budget recalculated
 
+#### Scenario: Upcoming length choices
+- **WHEN** the person opens Upcoming length
+- **THEN** it offers 1 day, 1 week, 2 weeks, 1 month, End of the current month and Custom length, as the web does
+
+#### Scenario: A custom length
+- **WHEN** the person chooses Custom length, 3 weeks
+- **THEN** the synced preference is `3-week`, as web Settings stores it
+
 #### Scenario: Undo
 - **WHEN** the person changes the number format and taps Undo in the toast
 - **THEN** the earlier number format is restored
@@ -95,7 +103,7 @@ On iPhone, a setting with no native screen yet SHALL be a row that opens its exi
 - **THEN** the web language setting opens, and closing it returns to native Settings
 
 ### Requirement: Per-device settings are grouped under This iPhone
-On iPhone, Settings SHALL show a This iPhone section holding the native-screen switches and the Language row, which hands off to the web and says it opens in the web view. Language SHALL not appear under Features.
+On iPhone, Settings SHALL show a This iPhone section holding the native-screen switches and the Language row, which hands off to the web and says it opens the web version. Language SHALL not appear under Features.
 
 #### Scenario: Section contents
 - **WHEN** the person opens Settings
@@ -178,7 +186,7 @@ Limits that bound the MCP server itself (grant rows, cells, deletes, reconcile, 
 - **THEN** the call fails with `[native:invalid-setting]` and nothing changes
 
 ### Requirement: Keyboard, VoiceOver and Dynamic Type
-On iPhone, Settings SHALL be fully usable with a hardware keyboard (Tab and arrows move, Space toggles, Return opens, Esc goes back, ⌘, selects the Settings tab). VoiceOver SHALL read each row's label, value and state, and say when a row opens the web view. Up to AX5, values SHALL wrap below labels and never truncate.
+On iPhone, Settings SHALL be fully usable with a hardware keyboard (Tab and arrows move, Space toggles, Return opens, Esc goes back, ⌘, selects the Settings tab). VoiceOver SHALL read each row's label, value and state, and say when a row opens the web version. Up to AX5, values SHALL wrap below labels and never truncate.
 
 #### Scenario: Keyboard toggle
 - **GIVEN** a hardware keyboard
@@ -187,7 +195,7 @@ On iPhone, Settings SHALL be fully usable with a hardware keyboard (Tab and arro
 
 #### Scenario: VoiceOver on a hand-off row
 - **WHEN** VoiceOver focuses the Language row
-- **THEN** it reads "Language, opens in the web view"
+- **THEN** it reads "Language, opens the web version"
 
 #### Scenario: AX5 versions
 - **GIVEN** the text size is AX5

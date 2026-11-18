@@ -62,3 +62,16 @@
 - [ ] 4.5 The closed-budget notice in the shells, with the Product Owner's wording in the copy table; the restart notices' approved wording goes there too
 - [ ] 4.6 Failing tests first, then the status lines (`NativeAccountsViewController` and its Accounts sync state; `MobileSyncStatus.tsx`): "Waiting for this device to finish saving" on `storage-slow`, kept through held retries, and normal again when the wait clears
 - [x] 4.7 The patch as specified in D2 and D7: rejection from `trans.onabort` only; a `Set` of files; the per-database queue with the guard on or off; the 60 s deadline covering only the wait for pending writes, with a test that a read slower than the deadline still opens; `initialFullSync` completing under `storage-slow`
+
+## 5. Reconcile search field and the storage line (sc-5296)
+
+- [ ] 5.1 Failing UI or screenshot check first: on Reconcile step 2, with the line showing, the line and the search field's text are both fully readable and the field takes taps, in light, dark and at the largest text size ("The storage status line never covers what a person needs")
+
+## 6. Turning the storage line on in Release (sc-5297)
+
+- [ ] 6.1 The last row of a sheet scrolls clear of the line: show it on the Categorize sheet, and fix it if it can't
+- [ ] 6.2 A context menu opened from a row near the bottom has no item under the line: show it, and fix it if one is covered
+- [ ] 6.3 One UI test: with the line showing, open a sheet and close it, and the line is back above the tab bar ("The storage status line keeps its place")
+- [ ] 6.4 In a Release build with the switch on, repeat the placement screenshots for both storage line requirements: tab bar, Undo bar, keyboard, sheets, context menu, alerts and Reconcile step 2
+- [ ] 6.5 VoiceOver on a real iPhone: rows stay reachable, the line can be read, and the announcement is heard once and not during an alert. This needs Ken's device, so `ready-for-human` goes on only once the build exists
+- [ ] 6.6 Turn the line on in Release (`WriteStorageLineRollout.isOnInRelease`, PR #485's task 3.10) only after 5.1, 6.1 to 6.5 and the iPhone gate in task 3.7. The PR links them, and the UX Designer approves the Release placement

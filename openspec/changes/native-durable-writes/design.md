@@ -84,6 +84,8 @@ Every answer and `storage-stored` carries `seq`: an epoch fixed for that page lo
 
 The status line is for transient saving states only (Product Owner and UX Designer, PR #485). It shows "Saving…" and "Still saving to this device. Keep the app open."; once shown, "Saving…" stays at least 0.6 s so it can't flash. That is display timing, not a limit, and no reply waits for it. "Some recent changes may not have been saved" is never in the line: a line takes no touches and could not be acknowledged, so it is a restart notice with OK. When no failure notice is showing, that notice takes the reload notice's place. "Offline — changes saved on this iPhone" shows only with nothing pending.
 
+Where the line sits (read from PR #485 at 38e817e39, with the UX Designer's approval). It has its own window at alert level and takes no touches, so it stays visible over sheets and the keyboard. While it shows, tab screens and presented sheets get its height as extra bottom safe area, which is what lifts the Undo bar and lets rows end above it. A 0.1 s follower re-places it as sheets and the tab bar change, and it hides when the key window presents a `UIAlertController`. Reserved space can't solve the two remaining cases: the system search field on Reconcile step 2 ignores the safe area, and a context menu is drawn by the system below the line's window. Those fixes, and whether the Categorize sheet needs one, are left to the developer.
+
 Deadline arithmetic: the wait ceiling is 4000 ms (D7), so `native/persisted` answers within 4 s plus a page round trip, inside its own 5 s deadline. The write call itself no longer contains any wait.
 
 ### D5. The failed latch, from any source

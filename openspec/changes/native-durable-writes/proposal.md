@@ -46,6 +46,8 @@ None.
   - "The storage barrier waits for complete"
   - "A not-yet-stored write belongs to its page load"
   - "The storage status line shows only saving states"
+  - "The storage status line never covers what a person needs"
+  - "The storage status line keeps its place"
   - "A restart with unconfirmed writes tells the person"
   - "Offline never claims saved while a write is pending"
   - "Any storage failure latches and is shown app-wide"

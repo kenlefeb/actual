@@ -75,6 +75,47 @@ The native storage status line SHALL show only "Saving…" while a write awaits 
 - **WHEN** the client returns `stored: false`
 - **THEN** the line changes to "Still saving to this device. Keep the app open."
 
+### Requirement: The storage status line never covers what a person needs
+On iPhone, while the storage status line shows, it SHALL NOT cover content or controls a person needs, in light, dark or at the largest text size. The last row of a screen or sheet SHALL be able to scroll clear of it. A control that does not follow the screen's safe area, and every context menu item, SHALL stay fully readable.
+
+#### Scenario: Reconcile search field
+- **GIVEN** the line showing on Reconcile step 2
+- **WHEN** the search field is at the bottom of the sheet
+- **THEN** the line and the field's text are both fully readable, and the field takes taps
+
+#### Scenario: The last row of a sheet
+- **GIVEN** the line showing over the Categorize sheet
+- **WHEN** the person scrolls to the end of the list
+- **THEN** the last row, such as "Internet", sits clear of the line
+
+#### Scenario: A context menu from a low row
+- **GIVEN** the line showing
+- **WHEN** the person long-presses a row near the bottom of the screen
+- **THEN** no item of the menu is under the line
+
+### Requirement: The storage status line keeps its place
+On iPhone the line SHALL sit above the tab bar and below the Undo bar, and rest above the keyboard without covering the field being edited. It SHALL return above the tab bar after a sheet closes, hide while an alert or confirmation shows, and take no touches.
+
+#### Scenario: With the Undo bar
+- **GIVEN** a write that shows both the line and the Undo bar
+- **WHEN** the screen shows them
+- **THEN** the line is above the tab bar and the Undo bar is above the line, with neither covered
+
+#### Scenario: Editing with the keyboard up
+- **GIVEN** the line showing
+- **WHEN** the person edits a budget amount
+- **THEN** the line is above the keyboard, or moves to the top if it would cover the field
+
+#### Scenario: After a sheet closes
+- **GIVEN** the line showing over a sheet
+- **WHEN** the sheet closes
+- **THEN** the line is back above the tab bar
+
+#### Scenario: An alert or confirmation
+- **GIVEN** the line showing
+- **WHEN** an alert or the delete confirmation appears
+- **THEN** the line is hidden until it closes
+
 ### Requirement: A restart with unconfirmed writes tells the person
 If a restart leaves a write "may not have been saved" and no failure notice is showing, Swift SHALL show, with OK and in place of the reload notice, "The app restarted. Some recent changes may not have been saved. Check them, and make again any that are missing." This text SHALL appear nowhere else. A failure notice's restart form SHALL take priority.
 

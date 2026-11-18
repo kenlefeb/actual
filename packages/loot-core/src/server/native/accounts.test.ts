@@ -166,9 +166,12 @@ describe('native/account-register', () => {
       });
     }
   }
-  async function readAll(over: Partial<Args> = {}) {
+  async function readAll(
+    over: Partial<Args> = {},
+    start: string | null = null,
+  ) {
     const ids: string[] = [];
-    let cursor: string | null = null;
+    let cursor: string | null = start;
     do {
       const page = await register({ ...over, cursor });
       ids.push(...page.rows.map(r => r.id));
@@ -177,17 +180,56 @@ describe('native/account-register', () => {
     return ids;
   }
 
-  it('orders newest first as the web does and pages every row once', async () => {
-    await seedMany();
+  // The web reads the transactions view, which orders by date desc,
+  // starting_balance_flag, sort_order desc, id (aql/schema/index.ts)
+  const webOrder = async (account = 'checking') => {
     const { data } = (await aqlQuery(
       q('transactions')
-        .filter({ account: 'checking' })
+        .filter({ account })
         .select('id')
-        .orderBy([{ date: 'desc' }, { sort_order: 'desc' }, 'id']),
+        .options({ splits: 'none' }),
     )) as { data: { id: string }[] };
+    return data.map(r => r.id);
+  };
+
+  it('orders newest first as the web does and pages every row once', async () => {
+    await seedMany();
     const ids = await readAll();
     expect(ids).toHaveLength(ROWS);
-    expect(ids).toEqual(data.map(r => r.id));
+    expect(ids).toEqual(await webOrder());
+  });
+
+  it('puts a starting balance after the other rows of its date, as the web does, across a page boundary', async () => {
+    await setPref('accounts-register-page-size', '5');
+    // Eight rows on one date; the starting balances have the highest sort
+    // order, which would put them first without the flag
+    for (let i = 0; i < 8; i++) {
+      await addTxn(`s${i}`, { date: '2016-06-01', sort_order: 100 - i });
+    }
+    await addTxn('start-a', {
+      date: '2016-06-01',
+      sort_order: 900,
+      starting_balance_flag: true,
+    });
+    await addTxn('start-b', {
+      date: '2016-06-01',
+      sort_order: 800,
+      starting_balance_flag: true,
+    });
+    await addTxn('older', { date: '2016-05-01' });
+    const expected = await webOrder();
+    expect(expected.slice(0, 5)).not.toContain('start-a');
+    const first = await register();
+    expect(first.nextCursor).not.toBeNull();
+    expect(first.rows.map(r => r.id)).toEqual(expected.slice(0, 5));
+    expect(await readAll()).toEqual(expected);
+  });
+
+  it('refuses a tombstoned account', async () => {
+    await addAccount('gone', 'Gone');
+    await addTxn('g1', { account: 'gone' });
+    await db.update('accounts', { id: 'gone', tombstone: 1 });
+    await expect(register({ account_id: 'gone' })).rejects.toThrow(/account/);
   });
 
   it('uses the default page size, a changed one, and falls back on bad values', async () => {
@@ -215,15 +257,73 @@ describe('native/account-register', () => {
     );
   });
 
+  it('stays consistent when rows are edited or deleted between pages', async () => {
+    await seedMany();
+    const first = await register();
+    const before = await webOrder();
+    const cutId = first.rows[first.rows.length - 1].id;
+    // Edit a first-page row to a newer date, delete one on the second page and
+    // move a later row ahead of the cursor
+    await db.updateTransaction({ id: first.rows[3].id, date: '2017-01-05' });
+    await db.deleteTransaction({ id: before[55] });
+    await db.updateTransaction({ id: before[80], date: '2016-12-31' });
+    const now = await webOrder();
+    const rest = await readAll({}, first.nextCursor);
+    expect(rest).toEqual(now.slice(now.indexOf(cutId) + 1));
+    expect(rest).not.toContain(before[55]);
+    expect(rest).not.toContain(before[80]);
+  });
+
   it.each([
     ['not base64', '%%%'],
     ['not JSON', btoa('nope')],
-    ['a string date', encode({ date: '20161220', sort_order: 1, id: 'a' })],
-    ['a fractional date', encode({ date: 1.5, sort_order: 1, id: 'a' })],
-    ['a missing id', encode({ date: 20161220, sort_order: 1 })],
-    ['an extra key', encode({ date: 20161220, sort_order: 1, id: 'a', x: 1 })],
-    ['a numeric id', encode({ date: 20161220, sort_order: 1, id: 1 })],
-    ['an array', encode([20161220, 1, 'a'])],
+    [
+      'a string date',
+      encode({
+        date: '20161220',
+        starting_balance_flag: -1,
+        sort_order: 1,
+        id: 'a',
+      }),
+    ],
+    [
+      'a fractional date',
+      encode({ date: 1.5, starting_balance_flag: -1, sort_order: 1, id: 'a' }),
+    ],
+    [
+      'a missing id',
+      encode({ date: 20161220, starting_balance_flag: -1, sort_order: 1 }),
+    ],
+    [
+      'an extra key',
+      encode({
+        date: 20161220,
+        starting_balance_flag: -1,
+        sort_order: 1,
+        id: 'a',
+        x: 1,
+      }),
+    ],
+    [
+      'a numeric id',
+      encode({
+        date: 20161220,
+        starting_balance_flag: -1,
+        sort_order: 1,
+        id: 1,
+      }),
+    ],
+    ['a missing flag', encode({ date: 20161220, sort_order: 1, id: 'a' })],
+    [
+      'a string flag',
+      encode({
+        date: 20161220,
+        starting_balance_flag: '1',
+        sort_order: 1,
+        id: 'a',
+      }),
+    ],
+    ['an array', encode([20161220, -1, 1, 'a'])],
   ])('refuses a forged cursor: %s', async (_, cursor) => {
     await seedMany();
     await expect(register({ cursor })).rejects.toThrow(/cursor/);
@@ -234,6 +334,11 @@ describe('native/account-register', () => {
       /search/,
     );
     expect((await register({ search: 'x'.repeat(100) })).rows).toEqual([]);
+    // The cap counts UTF-16 units (JS length), which Swift counts the same way
+    await expect(register({ search: '😀'.repeat(51) })).rejects.toThrow(
+      /search/,
+    );
+    expect((await register({ search: '😀'.repeat(50) })).rows).toEqual([]);
     await expect(register({ scope: 'bogus' as never })).rejects.toThrow(
       /scope/,
     );

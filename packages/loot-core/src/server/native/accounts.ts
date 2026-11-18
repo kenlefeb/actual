@@ -140,13 +140,25 @@ export async function accountsList(): Promise<NativeAccountsList> {
   return result;
 }
 
-type Cursor = { date: number; sort_order: number; id: string };
+type Cursor = {
+  date: number;
+  starting_balance_flag: number;
+  sort_order: number;
+  id: string;
+};
 
-function encodeCursor(row: { d: number; so: number; id: string }) {
-  return btoa(JSON.stringify({ date: row.d, sort_order: row.so, id: row.id }));
+function encodeCursor(row: { d: number; sb: number; so: number; id: string }) {
+  return btoa(
+    JSON.stringify({
+      date: row.d,
+      starting_balance_flag: row.sb,
+      sort_order: row.so,
+      id: row.id,
+    }),
+  );
 }
 
-/** Strict: base64 of JSON with exactly an integer date, a numeric sort_order and a string id. */
+/** Strict: base64 of JSON with exactly an integer date, numeric flag and sort_order and a string id. */
 function decodeCursor(cursor: unknown): Cursor {
   const fail = () => new Error('native/account-register: invalid cursor');
   if (typeof cursor !== 'string') throw fail();
@@ -159,26 +171,34 @@ function decodeCursor(cursor: unknown): Cursor {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw fail();
   }
-  const { date, sort_order, id, ...rest } = value as Record<string, unknown>;
+  const { date, starting_balance_flag, sort_order, id, ...rest } =
+    value as Record<string, unknown>;
   if (
     Object.keys(rest).length > 0 ||
     !Number.isInteger(date) ||
+    typeof starting_balance_flag !== 'number' ||
+    !Number.isFinite(starting_balance_flag) ||
     typeof sort_order !== 'number' ||
     !Number.isFinite(sort_order) ||
     typeof id !== 'string'
   ) {
     throw fail();
   }
-  return { date: date as number, sort_order, id };
+  return { date: date as number, starting_balance_flag, sort_order, id };
 }
 
 const SORT_ORDER = 'IFNULL(t.sort_order, 0)';
-// Rows after the cursor in the register's order: date and sort order newest
-// first, then id
-const AFTER = `(t.date < ? OR (t.date = ? AND (${SORT_ORDER} < ? OR (${SORT_ORDER} = ? AND t.id > ?))))`;
+// SQLite sorts NULL before every number; -1 keeps that order when the cursor
+// compares the flag, so it matches the web's `starting_balance_flag` sort
+const FLAG = 'IFNULL(t.starting_balance_flag, -1)';
+// Rows after the cursor in the web's view order: date newest first, then the
+// flag, sort order newest first, then id
+const AFTER = `(t.date < ? OR (t.date = ? AND (${FLAG} > ? OR (${FLAG} = ? AND (${SORT_ORDER} < ? OR (${SORT_ORDER} = ? AND t.id > ?))))))`;
 const afterParams = (c: Cursor) => [
   c.date,
   c.date,
+  c.starting_balance_flag,
+  c.starting_balance_flag,
   c.sort_order,
   c.sort_order,
   c.id,
@@ -283,6 +303,7 @@ export async function accountRegister({
   const found = await db.all<{
     id: string;
     d: number;
+    sb: number;
     so: number;
     payee: string | null;
     category: string | null;
@@ -296,7 +317,7 @@ export async function accountRegister({
     transfer_account_name: string | null;
     partner_reconciled: number | null;
   }>(
-    `SELECT t.id, t.date AS d, ${SORT_ORDER} AS so, p.name AS payee, c.name AS category,
+    `SELECT t.id, t.date AS d, ${FLAG} AS sb, ${SORT_ORDER} AS so, p.name AS payee, c.name AS category,
        t.notes, t.amount, t.cleared, t.reconciled,
        CASE WHEN t.is_parent = 1 THEN
          (SELECT COUNT(*) FROM transactions ch WHERE ch.parent_id = t.id AND ch.isChild = 1 AND ch.tombstone = 0)
@@ -310,7 +331,7 @@ export async function accountRegister({
      LEFT JOIN accounts ta ON ta.id = p.transfer_acct AND ta.tombstone = 0
      LEFT JOIN transactions pt ON pt.id = t.transfer_id AND pt.tombstone = 0
      WHERE t.account = ? AND t.is_child = 0${filter.sql}${after ? ` AND ${AFTER}` : ''}
-     ORDER BY t.date DESC, ${SORT_ORDER} DESC, t.id
+     ORDER BY t.date DESC, ${FLAG}, ${SORT_ORDER} DESC, t.id
      LIMIT ?`,
     [
       account.id,
@@ -340,6 +361,7 @@ export async function accountRegister({
                   account.id,
                   ...afterParams({
                     date: last.d,
+                    starting_balance_flag: last.sb,
                     sort_order: last.so,
                     id: last.id,
                   }),

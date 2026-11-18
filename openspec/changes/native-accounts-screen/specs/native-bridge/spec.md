@@ -40,7 +40,7 @@
 - **THEN** a page holds 50 rows
 
 #### Scenario: A forged cursor
-- **WHEN** the cursor is not base64 JSON with exactly an integer `date`, a numeric `sort_order` and a string `id`
+- **WHEN** the cursor is not base64 JSON with exactly an integer `date`, a numeric `starting_balance_flag`, a numeric `sort_order` and a string `id`
 - **THEN** the call fails and returns no rows
 
 ### Requirement: Register scope and search match the web

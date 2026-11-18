@@ -19,14 +19,14 @@ ADR 11 rule 3 allows paging through `query` or a keyset. Upcoming rows, names, s
 
 ## D2. Keyset paging and configurable limits
 
-The cursor is opaque to Swift and encodes the last row's (date, sort_order, id). A sync that inserts rows mid-scroll then neither repeats nor skips a page.
+The cursor is opaque to Swift and encodes the last row's (date, starting_balance_flag, sort_order, id), the web view's order. A sync that inserts rows mid-scroll then neither repeats nor skips a page.
 
 - The page size is the synced preference `accounts-register-page-size`: default 50, ceiling 200, read with `readLimit` from `server/native/reconcile-lock.ts` (a value that is not a whole number from 1 to the ceiling uses the default). Swift sends no size. The ceiling is a code constant beside the default, as for the reconcile limits.
 - The search debounce (250 ms) is a named constant in `NativeBridgeCore`.
 - Inputs are checked in loot-core (Security, PR #408):
   - `search` is text of at most 100 characters, as in `native/reconcile-rows`.
   - `%`, `_` and `\` are escaped before a LIKE match.
-  - The cursor is decoded strictly: base64 of JSON with exactly `date` (integer), `sort_order` (number) and `id` (string). Anything else fails the call.
+  - The cursor is decoded strictly: base64 of JSON with exactly `date` (integer), `starting_balance_flag` (number), `sort_order` (number) and `id` (string). Anything else fails the call.
   - Every value is a bound parameter; no input is spliced into SQL.
 - `runningBalance` is filled only for scope `all` with no search and the account's `show-balances-<id>` preference on. Elsewhere it is null, as the web hides it when filtering. For each page loot-core computes it from one sum over the rows older than the page.
 

@@ -142,17 +142,15 @@ Every write tool SHALL be in exactly one code table: undoable, or not undoable w
 - **WHEN** a client calls `write_apply_budget_templates` without `confirm`
 - **THEN** nothing changes and the result lists the cells with a `confirm`
 
-## MODIFIED Requirements
-
-### Requirement: What undo reverses
-`write_undo` SHALL reverse `write_update_transactions` by restoring fields, `write_create_transactions` by deleting its rows, every budget-cell tool by restoring the cells, category and group updates by restoring name, hidden and group, their creates by deleting while unused, transaction, category and group deletes by restoring them, and moves by moving them back. It SHALL replay only allowlisted fields of logged ids, and refuse any other write, an old line or a split edit.
+### Requirement: Which writes undo reverses
+`write_undo` SHALL reverse `write_update_transactions` by restoring fields, `write_create_transactions` by deleting them, every budget-cell tool (single and many amounts, copy, average) by restoring the cells, category and group updates by restoring their fields, their creates by deleting while unused, transaction, category and group deletes by restoring rows, and moves by moving back. It replays only allowlisted fields of logged ids and SHALL refuse any other write, old line or split edit.
 
 #### Scenario: Undo a move
 - **GIVEN** a category moved by `write_move_category` and unchanged since
 - **WHEN** a client calls `write_undo` for it
 - **THEN** the category is back in its old group and place
 
-#### Scenario: A move is not undoable yet
+#### Scenario: An old move line is not undoable
 - **GIVEN** a `write_move_category` line logged before moves recorded their place (`schema: 2`, no `next_category_id` change)
 - **WHEN** a client calls `list_writes`, then `write_undo` for it
 - **THEN** both say it is not undoable because it was logged before moves recorded their place, and nothing changed
@@ -175,6 +173,43 @@ Every write tool SHALL be in exactly one code table: undoable, or not undoable w
 #### Scenario: Carryover is not undoable yet
 - **WHEN** a client calls `write_undo` for a `write_set_budget_carryover` write
 - **THEN** the call is refused as not undoable and nothing changed
+
+## MODIFIED Requirements
+
+### Requirement: Account delete
+`write_delete_account` SHALL need `structure:write`, `accounts:delete` and `transactions:write` and be annotated destructive. It SHALL delete an open account and all its transactions, as the app's forced close does, and refuse a closed account ("A closed account can't be deleted; reopen it first"). Its outcome SHALL be `failed` unless a read-back shows the account gone.
+
+#### Scenario: Delete a closed account
+- **WHEN** a client calls `write_delete_account` for a closed account
+- **THEN** the call is refused saying to reopen it first, and nothing changed
+
+#### Scenario: Delete an open account
+- **GIVEN** an open account that is not bank-linked, with 40 unreconciled transactions, one a transfer to "Checking", and a grant with `structure:write accounts:delete transactions:write` and `confirm_destructive` off
+- **WHEN** a client calls `write_delete_account` for it
+- **THEN** the account and its 40 transactions are gone, the transfer's other side in "Checking" remains with no transfer payee, and the audit line records the count 40 and the partner transaction id
+
+#### Scenario: Delete needs transactions:write
+- **GIVEN** a connection granted `budget:read structure:write accounts:delete`
+- **WHEN** the client calls `write_delete_account`
+- **THEN** the call fails naming `transactions:write` as missing, and the account is unchanged
+
+### Requirement: Account close and delete are confirmed and audited
+Close and delete SHALL follow "Confirm before a destructive write" under `confirm_destructive`, and always for a bank-linked account ("Permanent actions always confirm"); the dry run gives the balance, transaction and reconciled counts. Descriptions, dry runs and audit lines SHALL say the call unlinks bank sync, which cannot be undone. The attempt line SHALL carry what is needed to reconstruct the account, and the outcome line SHALL record the closing transfer's id in `created`.
+
+#### Scenario: Dry run then confirm
+- **GIVEN** a grant with `structure:write accounts:delete transactions:write` and `confirm_destructive`
+- **WHEN** the client calls `write_delete_account` for an open account without `confirm`, then again with the returned `confirm`
+- **THEN** the first call changes nothing and returns the balance, transaction counts, reconciled counts and `confirm`, and the second deletes the account
+
+#### Scenario: A stale confirm
+- **GIVEN** a `confirm` from a dry run of deleting an open account, or of closing one, or of deleting an account group
+- **WHEN** a transaction is added to that account (or an account is added to the group) and the client calls with the old `confirm`
+- **THEN** the call is refused and the account or group still exists
+
+#### Scenario: The audit line can reconstruct
+- **WHEN** a client closes or deletes a bank-linked account
+- **THEN** the attempt line records the account's name, off-budget flag, group id, balance, transaction count, bank-link state with the provider name and no token, and the partner transaction ids, and the outcome line records the closing transfer's id in `created`
+
 
 ### Requirement: Undo a write
 `write_undo { write_id }` SHALL reverse the caller's own earlier write by replaying its audit line, not the engine's undo stack. It SHALL first check, with one refusal text, that the write exists and is the caller's (`subject` and `user_id` both match; `unknown` never matches alone). For the caller's own write it SHALL then give the fixed reason when the line or tool is not undoable, and only then check the reversed tool's scopes from a code table keyed by tool, never from the line.
@@ -228,3 +263,9 @@ A write whose attempt audit line would exceed the audit line limit (a setting, d
 - **GIVEN** an update whose own line fits the limit but whose undo's line, with `undoes`, would not
 - **WHEN** a client makes the update
 - **THEN** the call is refused before any audit line, naming the limit, and nothing changed
+
+## REMOVED Requirements
+
+### Requirement: What undo reverses
+**Reason**: Replaced by "Which writes undo reverses", which adds moves and drops the scenario "A move is not undoable yet", now false.
+**Migration**: None; the new requirement keeps every other scenario.

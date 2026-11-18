@@ -26,7 +26,7 @@ None.
 
 ### Modified Capabilities
 
-- `mcp-server`: new requirements "Moves log their old place", "Undo of a move", "Undo of a move refuses on any conflict", "Undo of a move applies the move's own rules", "Undo of a move reads only a well-formed line", "Bank-linked is read at each call", "Every write declares whether it is undoable" and "Permanent actions always confirm". Modified requirements: "What undo reverses", "Undo a write", "List my writes" and "One write cannot fill the audit tail".
+- `mcp-server`: new requirements "Moves log their old place", "Undo of a move", "Undo of a move refuses on any conflict", "Undo of a move applies the move's own rules", "Undo of a move reads only a well-formed line", "Bank-linked is read at each call", "Every write declares whether it is undoable" and "Permanent actions always confirm" and "Which writes undo reverses", which replaces the removed "What undo reverses" (its scenario "A move is not undoable yet" is no longer true). Modified requirements: "Account delete" (its confirm-off scenario names an account that is not bank-linked), "Account close and delete are confirmed and audited" (always confirmed when bank-linked), "Undo a write", "List my writes" and "One write cannot fill the audit tail".
 
 ## Impact
 

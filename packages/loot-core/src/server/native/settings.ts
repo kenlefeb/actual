@@ -170,7 +170,9 @@ async function validate(changes: unknown) {
   let currency: boolean | undefined;
   return Promise.all(
     entries.map(async ([key, value]) => {
-      if (isLimitId(key)) {
+      // A limit nothing reads falls through to "unknown key": it would do
+      // nothing, and the refusal does not reveal that the id exists
+      if (isLimitId(key) && LIMITS[key].hasReader) {
         // null resets to the default
         if (
           value !== null &&

@@ -329,7 +329,33 @@ describe('native/settings-save', () => {
     });
   });
 
-  it.each(Object.keys(LIMITS))(
+  const readIds = Object.keys(LIMITS).filter(
+    id => LIMITS[id as keyof typeof LIMITS].hasReader,
+  );
+  const unreadIds = Object.keys(LIMITS).filter(id => !readIds.includes(id));
+
+  // A limit nothing reads is refused exactly like an unknown key, so the
+  // refusal does not even reveal that the id exists
+  it.each(unreadIds)(
+    '%s, which nothing reads, refuses every value and a reset like an unknown key',
+    async id => {
+      let unknown = '';
+      await save({ 'no-such-limit': 5 }).catch(e => (unknown = e.message));
+      expect(unknown).toMatch(refused);
+      const { ceiling } = LIMITS[id as keyof typeof LIMITS];
+      for (const value of [1, ceiling, ceiling + 1, -1, Number.NaN, null]) {
+        await expect(save({ [id]: value })).rejects.toThrow(unknown);
+      }
+      // Together with a valid key: nothing is written
+      await expect(save({ [id]: 1, dateFormat: 'yyyy-MM-dd' })).rejects.toThrow(
+        unknown,
+      );
+      expect(await pref(id)).toBeNull();
+      expect(await pref('dateFormat')).toBeNull();
+    },
+  );
+
+  it.each(readIds)(
     '%s: takes 1 and its ceiling, refuses ceiling + 1, and null resets it',
     async id => {
       const { ceiling } = LIMITS[id as keyof typeof LIMITS];

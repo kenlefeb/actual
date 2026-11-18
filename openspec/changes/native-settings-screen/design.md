@@ -56,7 +56,7 @@
 
 **`native/settings-save {changes, undoToken}`** replaces sc-4643's working name `native/budget-prefs-save`, because it writes limits too.
 
-- **Input.** `changes` maps keys from a closed list to values. The list is the `prefs` keys above plus every limit id.
+- **Input.** `changes` maps keys from a closed list to values. The list is the `prefs` keys above plus every limit id that engine code reads (`hasReader`). A limit nothing reads is refused exactly like an unknown key.
 - **Validation:**
   - Each value is checked against its closed set: date formats, number formats, budget types, day 0 to 6, booleans, the currency codes and positions, and upcoming lengths from the web's list.
   - A limit value must be a whole number from 1 to its ceiling, or null, which resets it to the default by deleting the preference.

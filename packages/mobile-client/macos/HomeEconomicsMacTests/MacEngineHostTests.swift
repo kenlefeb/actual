@@ -9,19 +9,28 @@ import XCTest
 final class MacEngineHostTests: XCTestCase {
     private let hosts: Set<String> = ["actual-staging.owl-becrux.ts.net", "actual-staging.us.auth0.com"]
 
-    private func decide(_ string: String, mainFrame: Bool = true, userClicked: Bool = false) -> NavigationDecision {
-        NavigationPolicy(allowedHosts: hosts).decide(URL(string: string)!, isMainFrame: mainFrame, userClicked: userClicked)
+    private func decide(_ string: String, mainFrame: Bool = true, userClicked: Bool = false, fromAppPage: Bool = true)
+        -> NavigationDecision
+    {
+        NavigationPolicy(allowedHosts: hosts).decide(
+            URL(string: string)!, isMainFrame: mainFrame, userClicked: userClicked, fromAppPage: fromAppPage)
     }
+
+    private static let appPage = PageOrigin(scheme: "homeeconomics", host: "localhost", port: 0, isMainFrame: true)
+    private static let providerPage = PageOrigin(scheme: "https", host: "actual-staging.us.auth0.com", port: 0, isMainFrame: true)
 
     // A navigation as WebKit reports it: a click (link, mouse button) or not
     private final class FakeAction: WKNavigationAction {
         private let fakeRequest: URLRequest
         private let fakeType: WKNavigationType
         private let fakeButton: Int
-        init(_ url: String, type: WKNavigationType, button: Int = 0) {
+        // The page that showed the link (WKSecurityOrigin can't be made in a test)
+        let source: PageOrigin?
+        init(_ url: String, type: WKNavigationType, button: Int = 0, source: PageOrigin? = MacEngineHostTests.appPage) {
             fakeRequest = URLRequest(url: URL(string: url)!)
             fakeType = type
             fakeButton = button
+            self.source = source
             super.init()
         }
         override var request: URLRequest { fakeRequest }
@@ -39,6 +48,7 @@ final class MacEngineHostTests: XCTestCase {
             www: FileManager.default.temporaryDirectory, version: "test", policy: NavigationPolicy(allowedHosts: hosts),
             openInBrowser: { [unowned self] in self.opened.append($0) })
         host.onRefusedSignIn = { [unowned self] in self.refusedSignIns += 1 }
+        host.sourceOrigin = { ($0 as? FakeAction)?.source }
         return host
     }
 
@@ -84,6 +94,34 @@ final class MacEngineHostTests: XCTestCase {
     func testAnUnclickedNavigationToAnotherHostIsRefusedNotOpened() {
         XCTAssertEqual(decide("https://idp.example/authorize?code=x"), .refuseSignIn)
         XCTAssertEqual(decide("https://evil.example/", mainFrame: false, userClicked: true), .cancel)
+    }
+
+    // Story 5014: a click on the provider's or server's page could carry sign-in on outside the app
+    func testAClickedLinkOnAnotherPageIsCancelled() {
+        XCTAssertEqual(decide("https://accounts.google.com/o/oauth2/auth?x=1", userClicked: true, fromAppPage: false), .cancel)
+    }
+
+    func testTheDelegateCancelsAClickOnTheProvidersPage() async {
+        let host = host()
+        let link = FakeAction("https://accounts.google.com/o/oauth2/auth?state=SECRET", type: .linkActivated, source: Self.providerPage)
+        let policy = await navigate(host, link)
+        XCTAssertEqual(policy, .cancel)
+        XCTAssertTrue(opened.isEmpty)
+        XCTAssertEqual(refusedSignIns, 0)
+    }
+
+    func testTheDelegateCancelsAClickWithNoKnownSourcePage() async {
+        let host = host()
+        let policy = await navigate(host, FakeAction("https://actualbudget.org/", type: .linkActivated, source: nil))
+        XCTAssertEqual(policy, .cancel)
+        XCTAssertTrue(opened.isEmpty)
+    }
+
+    func testANewWindowFromTheProvidersPageOpensNothing() {
+        let host = host()
+        let action = FakeAction("https://accounts.google.com/", type: .linkActivated, source: Self.providerPage)
+        XCTAssertNil(host.webView(host.webView, createWebViewWith: WKWebViewConfiguration(), for: action, windowFeatures: WKWindowFeatures()))
+        XCTAssertTrue(opened.isEmpty)
     }
 
     func testAClickedHttpLinkIsRefused() {

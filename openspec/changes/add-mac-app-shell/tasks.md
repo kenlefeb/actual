@@ -96,6 +96,10 @@ Test-first: write each test, run it and see it fail before writing the code. One
   Hide it for tracking budgets. Test failing first. Verify: balances and the summary match the web screen after a move.
 - [ ] 3.6 Keyboard flow (arrow keys between cells, Space on a group) and VoiceOver announcements of the new to-budget after a change. Verify with VoiceOver; the UX Designer reviews against the menu bar, keyboard and VoiceOver frame.
 
+## 4. Links clicked on other pages (sc-5014)
+
+- [x] 4.1 Open the default browser for a clicked link only when the page showing it is the app's own page; cancel a click on any other page to an unlisted host, open nothing and log no part of the address. Test failing first: a click on the provider's page, a click with no known source page, and a new-window request from the provider's page. Verify: the Mac tests pass.
+
 ## Workflow follow-up
 
 - When sc-4952 merges, archive this change, and point sc-4942, sc-4951 and sc-4952 at the archive path.

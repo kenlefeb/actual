@@ -99,8 +99,10 @@ async function touchedRows(rows: Row[], withChildren: boolean) {
   ];
   const partners = partnerIds.length
     ? await db.all<Touch>(
-        `SELECT id, reconciled, isChild FROM transactions
-         WHERE tombstone = 0 AND id IN (${marks(partnerIds)})`,
+        // A split child counts as reconciled when its parent is
+        `SELECT t.id, (t.reconciled OR COALESCE(p.reconciled, 0)) AS reconciled, t.isChild
+         FROM transactions t LEFT JOIN transactions p ON p.id = t.parent_id AND p.tombstone = 0
+         WHERE t.tombstone = 0 AND t.id IN (${marks(partnerIds)})`,
         partnerIds,
       )
     : [];
@@ -270,7 +272,7 @@ export async function readTouchedState(touched: Touched) {
   return {
     transactions: transactions.length
       ? await db.all(
-          `SELECT id, category, tombstone, reconciled, cleared, notes, amount, description, acct, date, transferred_id FROM transactions
+          `SELECT id, category, tombstone, reconciled, cleared, notes, amount, description, acct, date, transferred_id, schedule FROM transactions
            WHERE id IN (${marks(transactions)}) ORDER BY id`,
           transactions,
         )

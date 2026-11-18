@@ -2,6 +2,7 @@
 // The contract for the native Add transaction sheet's reads: the form, the
 // payee search and the preview. The Swift package decodes the fixtures this
 // file writes. Regenerate with `vitest -u`.
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -25,20 +26,23 @@ const h = app.handlers;
 const form = (args: Record<string, unknown> = {}) =>
   h['native/transaction-form'](args as never);
 const payees = (search: unknown) => h['native/payees']({ search } as never);
-const previewRaw = (
-  draft: Record<string, unknown>,
-  changedField: string | null = null,
-) => h['native/transaction-preview']({ draft, changedField } as never);
+const previewRaw = (draft: Record<string, unknown>) =>
+  h['native/transaction-preview']({ draft } as never);
 // The errors as bare codes, for the behaviour tests; `raw` is the contract shape
-const preview = async (
-  draft: Record<string, unknown>,
-  changedField: string | null = null,
-) => {
-  const raw = await previewRaw(draft, changedField);
+const preview = async (draft: Record<string, unknown>, _changed?: string) => {
+  const raw = await previewRaw(draft);
   const errors: Record<string, string> = Object.fromEntries(
     Object.entries(raw.errors).map(([field, error]) => [field, error.code]),
   );
-  return { ...raw, errors, raw };
+  // Shorthands for the result's amounts
+  return {
+    ...raw,
+    errors,
+    raw,
+    draft: raw.result,
+    amount: raw.result.amount,
+    splitAmounts: raw.result.splits.map(s => s.amount),
+  };
 };
 const setPref = (id: string, value: string) =>
   db.update('preferences', { id, value });
@@ -603,10 +607,10 @@ describe('native/transaction-preview', () => {
     },
   );
 
-  it('runs the rules on a new draft, as rules-run does, and writes nothing', async () => {
+  it('runs the rules once on the input, as rules-run does, and writes nothing', async () => {
     await costcoRule();
     const before = await transactionCount();
-    const result = await preview(draft({ payee: 'costco' }), 'payee');
+    const result = await preview(draft({ payee: 'costco' }));
     const ruled = await runRules({
       id: 'temp',
       account: 'checking',
@@ -617,10 +621,11 @@ describe('native/transaction-preview', () => {
       cleared: false,
       amount: -1000,
     });
-    expect(result.draft.category).toBe(ruled.category);
-    expect(result.draft.notes).toBe(ruled.notes);
-    expect(result.ruleFields.sort()).toEqual(['category', 'notes']);
-    expect(result.replaced).toEqual([]);
+    expect(result.result.category).toBe(ruled.category);
+    expect(result.result.notes).toBe(ruled.notes);
+    expect(result.result.amountText).toBe('10.00');
+    expect(result.ruleFields).toEqual(['category', 'notes']);
+    expect(result.suggestions).toEqual([]);
     expect(result.errors).toEqual({});
     expect(await transactionCount()).toBe(before);
     await expect(
@@ -628,15 +633,59 @@ describe('native/transaction-preview', () => {
     ).toMatchFileSnapshot('./fixtures/transaction-preview.json');
   });
 
-  it("keeps listing a rule's field on a later preview", async () => {
+  it('gives the same input the same result and digest every time', async () => {
     await costcoRule();
-    const first = await preview(draft({ payee: 'costco' }), 'payee');
-    const second = await preview(
-      { ...first.draft, amountText: '20' },
-      'amount',
+    const first = await preview(draft({ payee: 'costco' }));
+    const second = await preview(draft({ payee: 'costco' }));
+    expect(second.result).toEqual(first.result);
+    expect(second.ruleFields).toEqual(['category', 'notes']);
+    expect(second.resultDigest).toBe(first.resultDigest);
+    expect(
+      (await preview(draft({ payee: 'costco', amountText: '11' })))
+        .resultDigest,
+    ).not.toBe(first.resultDigest);
+  });
+
+  it('hashes the rows a save would store, by the canonical form of D2', async () => {
+    await costcoRule();
+    const result = await preview(
+      draft({
+        payee: 'costco',
+        amountText: '30',
+        splits: [
+          { category: 'dining', notes: '', inflow: false, amountText: '10' },
+          {
+            payee: 'to-savings',
+            category: null,
+            notes: 'x',
+            inflow: false,
+            amountText: '20',
+          },
+        ],
+      }),
     );
-    expect(second.draft.category).toBe('groceries');
-    expect(second.ruleFields).toContain('category');
+    const row = (over: Record<string, unknown>) => ({
+      account: 'checking',
+      amount: -3000,
+      category: null,
+      cleared: false,
+      date: '2016-12-20',
+      notes: 'Bulk',
+      payee: { id: 'costco' },
+      schedule: null,
+      ...over,
+    });
+    const rows = [
+      // The rule sets the parent's category too; the save would refuse it
+      row({ category: 'groceries' }),
+      row({ amount: -1000, category: 'dining', notes: null }),
+      row({ amount: -2000, notes: 'x', payee: { id: 'to-savings' } }),
+    ];
+    const expected = createHash('sha256')
+      .update(JSON.stringify(rows))
+      .digest('hex');
+    expect(result.errors).toMatchObject({ category: 'category-not-allowed' });
+    expect(result.resultDigest).toBe(expected);
   });
 
   // PR 447 review, finding 1: a rule that sets a payee by name must not
@@ -667,67 +716,122 @@ describe('native/transaction-preview', () => {
         ),
       );
     const before = await counts();
-    const result = await preview(draft({ notes: 'zz' }), 'notes');
-    expect(result.draft.payee).toBeNull();
-    expect(result.draft.payeeName).toBe('Brand New Payee');
-    expect(result.ruleFields).toContain('payee');
-    // The ruleFields re-run: notes and the payee already hold the rule's values
-    await preview(result.draft, 'amount');
-    await preview(draft({ notes: 'zz', payee: 'costco' }), 'payee');
+    for (let i = 0; i < 10; i++) {
+      const result = await preview(draft({ notes: 'zz' }));
+      expect(result.result.payee).toBeNull();
+      expect(result.result.payeeName).toBe('Brand New Payee');
+      expect(result.ruleFields).toContain('payee');
+    }
+    await preview(
+      draft({ notes: 'zz', payee: 'costco', userFields: ['payee'] }),
+    );
     expect(await counts()).toEqual(before);
   });
 
   it('runs no rules on a draft with an id', async () => {
     await costcoRule();
     const { newId: _n, ...rest } = draft({ payee: 'costco' });
-    const result = await preview({ ...rest, id: 'existing' }, 'payee');
-    expect(result.draft.category).toBeNull();
+    const result = await preview({ ...rest, id: 'existing' });
+    expect(result.result.category).toBeNull();
     expect(result.ruleFields).toEqual([]);
   });
 
-  it('on another change fills only empty fields', async () => {
+  it('fills every field the person never touched, whatever it holds', async () => {
     await costcoRule();
     const result = await preview(
       draft({ payee: 'costco', category: 'dining', notes: 'Mine' }),
-      'amount',
     );
-    expect(result.draft.category).toBe('dining');
-    expect(result.draft.notes).toBe('Mine');
+    expect(result.result.category).toBe('groceries');
+    expect(result.result.notes).toBe('Bulk');
   });
 
-  it('keeps a field the person cleared empty, even on a payee change', async () => {
+  // PR 453: a hand-set field is never changed, on any change; the rule's
+  // value comes back as a suggestion instead
+  it("never changes a hand-set field, and suggests the rule's value", async () => {
     await costcoRule();
     const result = await preview(
-      draft({ payee: 'costco', userFields: ['category'] }),
-      'payee',
+      draft({
+        payee: 'costco',
+        category: 'dining',
+        notes: 'Mine',
+        userFields: ['payee', 'category', 'notes'],
+      }),
     );
-    expect(result.draft.category).toBeNull();
-    expect(result.draft.notes).toBe('Bulk');
-    const later = await preview(
-      draft({ payee: 'costco', userFields: ['category'] }),
-      'amount',
+    expect(result.result.category).toBe('dining');
+    expect(result.result.notes).toBe('Mine');
+    expect(result.ruleFields).toEqual([]);
+    expect(result.suggestions).toEqual([
+      {
+        field: 'category',
+        row: 0,
+        value: { id: 'groceries', name: 'Groceries' },
+      },
+      { field: 'notes', row: 0, value: { text: 'Bulk' } },
+    ]);
+    // Taking a suggestion: the field leaves userFields and the rule sets it
+    const taken = await preview(
+      draft({
+        payee: 'costco',
+        category: 'dining',
+        notes: 'Mine',
+        userFields: ['payee', 'notes'],
+      }),
     );
-    expect(later.draft.category).toBeNull();
-  });
-
-  it('lets a payee change replace a field the person set, and lists its previous value', async () => {
-    await costcoRule();
-    const result = await preview(
-      draft({ payee: 'costco', category: 'dining', userFields: ['category'] }),
-      'payee',
-    );
-    expect(result.draft.category).toBe('groceries');
-    expect(result.replaced).toEqual([{ field: 'category', value: 'dining' }]);
-    expect(result.ruleFields).toContain('category');
-    const other = await preview(
-      draft({ payee: 'costco', category: 'dining', userFields: ['category'] }),
-      'amount',
-    );
-    expect(other.draft.category).toBe('dining');
-    expect(other.ruleFields).not.toContain('category');
+    expect(taken.result.category).toBe('groceries');
+    expect(taken.ruleFields).toEqual(['category']);
     await expect(
       JSON.stringify(result.raw, null, 2) + '\n',
-    ).toMatchFileSnapshot('./fixtures/transaction-preview-replaced.json');
+    ).toMatchFileSnapshot('./fixtures/transaction-preview-suggestions.json');
+  });
+
+  it('keeps a field the person cleared empty', async () => {
+    await costcoRule();
+    const result = await preview(
+      draft({ payee: 'costco', userFields: ['payee', 'category'] }),
+    );
+    expect(result.result.category).toBeNull();
+    expect(result.result.notes).toBe('Bulk');
+    expect(result.suggestions.map(s => s.field)).toEqual(['category']);
+  });
+
+  it("suggests the amount a rule would set, with the engine's text", async () => {
+    await insertRule({
+      stage: null,
+      conditionsOp: 'and',
+      conditions: [{ op: 'is', field: 'payee', value: 'costco' }],
+      actions: [{ op: 'set', field: 'amount', value: -2500 }],
+    });
+    const result = await preview(
+      draft({ payee: 'costco', userFields: ['payee', 'amount'] }),
+    );
+    expect(result.result.amount).toBe(-1000);
+    expect(result.suggestions).toEqual([
+      {
+        field: 'amount',
+        row: 0,
+        value: { amount: -2500, amountText: '25.00' },
+      },
+    ]);
+    const ruled = await preview(draft({ payee: 'costco' }));
+    expect(ruled.result).toMatchObject({
+      amount: -2500,
+      amountText: '25.00',
+      inflow: false,
+    });
+  });
+
+  it("ignores only the budget's own currency symbol once a currency is set", async () => {
+    await setPref('defaultCurrencyCode', 'AUD');
+    for (const amountText of ['A$12.50', '$12.50', '12.50 A$']) {
+      expect((await preview(draft({ amountText }))).amount, amountText).toBe(
+        -1250,
+      );
+    }
+    for (const amountText of ['€12', '£12']) {
+      expect((await preview(draft({ amountText }))).errors, amountText).toEqual(
+        { amount: 'amount-invalid' },
+      );
+    }
   });
 
   it('applies a split rule, and returns the children and the remainder', async () => {
@@ -1018,6 +1122,20 @@ describe('native/transaction-preview', () => {
     [{ splits: [{ amountText: '1', reconciled: true }] }],
     [{ splits: [{ category: 5, notes: '', inflow: false, amountText: '1' }] }],
     [{ splits: 'x' }],
+    // An add's children are all new (PR 453)
+    [
+      {
+        splits: [
+          {
+            id: 'x',
+            category: null,
+            notes: '',
+            inflow: false,
+            amountText: '1',
+          },
+        ],
+      },
+    ],
     [{ newId: 'ABC' }],
     [{ newId: NEW_ID.toUpperCase() }],
     [{ newId: '../x' }],
@@ -1029,10 +1147,7 @@ describe('native/transaction-preview', () => {
     );
   });
 
-  it('refuses an unknown changed field and a draft that is not an object', async () => {
-    await expect(preview(draft(), 'reconciled')).rejects.toThrow(
-      /^\[native:invalid-draft\] /,
-    );
+  it('refuses a draft that is not an object', async () => {
     await expect(
       h['native/transaction-preview']({ draft: null } as never),
     ).rejects.toThrow(/^\[native:invalid-draft\] /);

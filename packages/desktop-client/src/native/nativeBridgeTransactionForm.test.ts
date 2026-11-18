@@ -55,7 +55,8 @@ describe('the Add transaction calls through the page bridge', () => {
         learnCategories: false,
         extra: 1,
       },
-      { draft: { account: 'a' }, changedField: 'payee' },
+      // PR 453: the preview takes the draft only
+      { draft: { account: 'a' } },
     ],
   ])('forwards %s with only its own fields', async (name, args, forwarded) => {
     const { bridge, send } = setup();

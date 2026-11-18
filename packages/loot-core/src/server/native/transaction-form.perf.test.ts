@@ -158,7 +158,6 @@ describe('native transaction form reads', () => {
       payee: 'p1',
       amountText: String(CHILDREN),
       splits: children.map(c => ({
-        id: c.id,
         payee: c.payee,
         category: c.category,
         notes: '',
@@ -183,9 +182,8 @@ describe('native transaction form reads', () => {
       await time('native/transaction-preview, payee change', async () => {
         const result = await h['native/transaction-preview']({
           draft,
-          changedField: 'payee',
         });
-        expect(result.draft.splits).toHaveLength(2);
+        expect(result.result.splits).toHaveLength(2);
       }),
     ).toBeLessThan(50);
     expect(
@@ -194,9 +192,43 @@ describe('native transaction form reads', () => {
         async () => {
           const result = await h['native/transaction-preview']({
             draft: splitDraft,
-            changedField: 'amount',
           });
           expect(result.remaining).toBe(0);
+        },
+      ),
+    ).toBeLessThan(50);
+    // PR 453: suggestions for hand-set fields, on a single row and on the split
+    expect(
+      await time(
+        'native/transaction-preview, payee change with three hand-set fields',
+        async () => {
+          const result = await h['native/transaction-preview']({
+            draft: {
+              ...draft,
+              category: 'c1',
+              notes: 'mine',
+              cleared: true,
+              userFields: ['payee', 'category', 'notes', 'cleared'],
+            },
+          });
+          expect(result.suggestions.length).toBeGreaterThan(0);
+        },
+      ),
+    ).toBeLessThan(50);
+    expect(
+      await time(
+        'native/transaction-preview, the 50-child split with three hand-set fields',
+        async () => {
+          const result = await h['native/transaction-preview']({
+            draft: {
+              ...splitDraft,
+              payee: 'p3',
+              notes: 'mine',
+              cleared: true,
+              userFields: ['payee', 'notes', 'cleared', 'splits'],
+            },
+          });
+          expect(result.result.splits).toHaveLength(CHILDREN);
         },
       ),
     ).toBeLessThan(50);

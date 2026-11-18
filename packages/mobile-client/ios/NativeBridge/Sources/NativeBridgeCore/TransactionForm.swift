@@ -167,67 +167,52 @@ public struct TransactionDraft: Codable, Equatable {
     public var userFields: [TransactionUserField]
 }
 
+// The preview (D2, PR 453): one rules run on the person's input. Swift shows
+// `result` beside the input and sends the input, never the result.
 public struct TransactionPreview: Codable, Equatable {
-    // A replaced field's previous value, as Restore puts it back (D2a)
-    public enum PreviousValue: Codable, Equatable {
-        case text(String?)
-        case flag(Bool)
-        case amount(amountText: String, inflow: Bool)
-        case splits([TransactionDraft.Split])
-
-        private enum AmountKeys: String, CodingKey { case amountText, inflow }
-
-        public init(from decoder: Decoder) throws {
-            if let amount = try? decoder.container(keyedBy: AmountKeys.self),
-                let text = try? amount.decode(String.self, forKey: .amountText)
-            {
-                self = .amount(amountText: text, inflow: try amount.decode(Bool.self, forKey: .inflow))
-                return
-            }
-            let value = try decoder.singleValueContainer()
-            if value.decodeNil() {
-                self = .text(nil)
-            } else if let flag = try? value.decode(Bool.self) {
-                self = .flag(flag)
-            } else if let splits = try? value.decode([TransactionDraft.Split].self) {
-                self = .splits(splits)
-            } else {
-                self = .text(try value.decode(String.self))
-            }
-        }
-
-        public func encode(to encoder: Encoder) throws {
-            switch self {
-            case .amount(let text, let inflow):
-                var container = encoder.container(keyedBy: AmountKeys.self)
-                try container.encode(text, forKey: .amountText)
-                try container.encode(inflow, forKey: .inflow)
-            case .text(let text):
-                var value = encoder.singleValueContainer()
-                try value.encode(text)
-            case .flag(let flag):
-                var value = encoder.singleValueContainer()
-                try value.encode(flag)
-            case .splits(let splits):
-                var value = encoder.singleValueContainer()
-                try value.encode(splits)
-            }
-        }
+    public struct ResultSplit: Codable, Equatable {
+        public let payee: String?
+        // A payee name a rule set that no payee has yet; the save creates it
+        public let payeeName: String?
+        public let category: String?
+        public let notes: String
+        public let inflow: Bool
+        // Signed minor units, nil while the amount text is not a valid amount
+        public let amount: Int?
+        // The engine's formatting, which "Keep this value" copies into the input
+        public let amountText: String?
     }
 
-    public struct Replaced: Codable, Equatable {
+    public struct Result: Codable, Equatable {
+        public let account: String
+        public let date: String
+        public let payee: String?
+        public let payeeName: String?
+        public let category: String?
+        public let notes: String
+        public let cleared: Bool
+        public let inflow: Bool
+        public let amount: Int?
+        public let amountText: String?
+        public let splits: [ResultSplit]
+    }
+
+    // A rule's value for a hand-set field, as the engine shows it
+    public struct Suggestion: Codable, Equatable {
+        public struct Value: Codable, Equatable {
+            public let id: String?
+            public let name: String?
+            public let text: String?
+            public let flag: Bool?
+            public let amount: Int?
+            public let amountText: String?
+        }
+
         public let field: TransactionUserField
-        public let value: PreviousValue
+        public let row: Int
+        public let value: Value
     }
 
-    public let draft: TransactionDraft
-    // Signed minor units, nil while the amount text is not a valid amount
-    public let amount: Int?
-    public let splitAmounts: [Int?]
-    public let ruleFields: [TransactionUserField]
-    public let replaced: [Replaced]
-    // The parent minus the children's sum, for a split
-    public let remaining: Int?
     // One field's error. Only amount-invalid carries a detail: the budget's
     // decimal separator, never what was typed (PR 450)
     public struct FieldError: Codable, Equatable {
@@ -239,6 +224,13 @@ public struct TransactionPreview: Codable, Equatable {
         public let detail: Detail?
     }
 
+    public let result: Result
+    // Opaque: the save sends it back as previewDigest
+    public let resultDigest: String
+    public let ruleFields: [TransactionUserField]
+    public let suggestions: [Suggestion]
+    // The parent minus the children's sum, for a split
+    public let remaining: Int?
     // By field: "amount", or "splits.<index>.<field>" for a child
     public let errors: [String: FieldError]
 }
@@ -260,9 +252,8 @@ public struct TransactionFormRequest: Encodable, Equatable {
 
 public struct TransactionPreviewRequest: Encodable, Equatable {
     public let draft: TransactionDraft
-    public let changedField: TransactionUserField?
 
-    public init(draft: TransactionDraft, changedField: TransactionUserField?) {
-        (self.draft, self.changedField) = (draft, changedField)
+    public init(draft: TransactionDraft) {
+        self.draft = draft
     }
 }

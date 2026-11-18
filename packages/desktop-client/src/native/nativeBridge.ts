@@ -283,7 +283,7 @@ const ACCOUNTS_WRITE_FIELDS = new Map([
 const TRANSACTION_FIELDS = new Map([
   ['native/transaction-form', ['id', 'account_id']],
   ['native/payees', ['search']],
-  ['native/transaction-preview', ['draft', 'changedField']],
+  ['native/transaction-preview', ['draft']],
 ]);
 
 function pickFields(args: unknown, fields: string[]) {

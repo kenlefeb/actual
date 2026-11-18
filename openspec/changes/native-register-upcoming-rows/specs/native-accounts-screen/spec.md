@@ -18,6 +18,11 @@ The native register on iPhone SHALL show each upcoming scheduled row as it will 
 - **WHEN** the user opens the Checking register
 - **THEN** one upcoming row shows "Split (n)" with the schedule's amount
 
+#### Scenario: A split's payee
+- **GIVEN** a split schedule whose lines keep the schedule's payee "Power Co"
+- **WHEN** the user opens the account's register on iPhone
+- **THEN** the upcoming row's payee is "Power Co", as the web register shows it
+
 ### Requirement: Upcoming rows follow scope and search
 On iPhone, a scope chip or search SHALL show the upcoming rows the posted row would match and hide the rest, by the same predicate as posted rows. Upcoming rows stay above the posted rows and grey, marked "Scheduled". This differs from the web, which hides them while filtered. When only upcoming rows match, the posted section SHALL say "No posted transactions match"; when nothing matches, "No transactions match".
 

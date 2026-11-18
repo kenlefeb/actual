@@ -61,6 +61,20 @@ public enum UpcomingWords {
     public static let updating = NSLocalizedString("Updating…", comment: "Native Accounts register: upcoming rows being re-read")
     public static let scheduled = NSLocalizedString("Scheduled", comment: "Native Accounts register: an upcoming row, in words")
 
+    // sc-5224: as the web names a row; a split reads as its lines' payee
+    public static func payee(_ row: AccountUpcoming.Row) -> String {
+        let name = [row.payee, row.transferAccount?.name, row.notes].compactMap { $0 }.first { !$0.isEmpty }
+        guard let name else {
+            return row.splitCount > 0
+                ? NSLocalizedString("Split (no payee)", comment: "Native Accounts register: a split with no payee on any line")
+                : NSLocalizedString("No payee", comment: "Native Accounts register: a row without a payee")
+        }
+        guard let others = row.otherPayees, others > 0 else { return name }
+        return String(
+            format: NSLocalizedString("%1$@ (+%2$d more)", comment: "Native Accounts register: a split with several payees"), name,
+            others)
+    }
+
     public static func summary(_ read: AccountUpcoming, filtered: Bool) -> String {
         guard read.upcomingMore == true, let kept = read.upcomingKept else {
             return String(format: NSLocalizedString("%d scheduled", comment: "Native Accounts register: upcoming count"), read.upcomingCount)

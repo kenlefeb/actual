@@ -128,7 +128,7 @@ Relevance (`isScheduleRelevantToAccount`) needs no status, so it runs first. Sta
 
 ### D11. Answers to the developer's questions
 
-- **A split schedule's parent row has payee null:** intended. `runRules` with split actions leaves the parent without a payee, the web preview shows the same, and so does the posted split. The row shows "Split (n)" as posted split parents do.
+- **A split schedule's parent row shows the payee the web shows** (corrected by sc-5224): `runRules` leaves the parent without a payee, and the web names it from its lines (`useDisplayPayee`: the most common line payee, "(+N more)" for the others, "Split (no payee)" when none has one), so loot-core returns that payee and `otherPayees`.
 - **A formula on the payee field does nothing:** right. The rules engine does not apply formulas to `payee`. Relevance still treats a formula or template line as maybe relevant. The spec scenario now uses a template action, as the test does.
 - **No label field in `LIMITS`:** both limits join story 4643's registry with a name and help line when it lands:
   - `accounts-register-upcoming-max-days`: "Scheduled rows: days ahead", help "Caps the budget's upcoming scheduled length in the native register."

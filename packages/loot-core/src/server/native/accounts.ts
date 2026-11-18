@@ -126,6 +126,9 @@ export type NativeUpcomingRow = {
   amount: number;
   cleared: boolean;
   splitCount: number;
+  // sc-5224: a split shows its lines' most common payee, as the web does;
+  // this counts its lines' other payees (0 unless a split)
+  otherPayees: number;
   transferAccount: { id: string; name: string } | null;
   status: 'due' | 'upcoming' | 'missed';
   ruleFields: NativeRuleField[];
@@ -753,9 +756,14 @@ async function upcomingRows(account: string) {
     }));
     for (const t of [after, ...(lines ?? [])]) {
       status.set(t.id, rowStatus);
+      // A split's payee is the one it shows, its lines' (sc-5224)
+      const shown =
+        t === after && lines?.length
+          ? { ...t, payee: splitPayee(lines).top?.payee ?? null }
+          : t;
       ruleFields.set(
         t.id,
-        ruleFieldsOf(preview, t, t === after && Boolean(lines?.length)),
+        ruleFieldsOf(preview, shown, t === after && Boolean(lines?.length)),
       );
     }
     ran.push({
@@ -815,21 +823,26 @@ async function upcomingRows(account: string) {
       const categoryId = inverted ? null : (t.category ?? null);
       const transfer = transferAccountOf(t.payee);
       const lines = linesOf.get(t.id) ?? [];
+      const split = lines.length > 0 ? splitPayee(lines) : null;
+      // A transfer payee reads as its account, as the web shows it
+      const nameOf = (row: TransactionEntity) =>
+        (row.payee === 'new'
+          ? (row as { payee_name?: string }).payee_name
+          : (transferAccountOf(row.payee)?.name ??
+            (row.payee && payeeById.get(row.payee)?.name))) || null;
       return {
         row: {
           id,
           scheduleId: t.schedule ?? '',
           date: t.date,
-          payee:
-            (t.payee === 'new'
-              ? (t as { payee_name?: string }).payee_name
-              : t.payee && payeeById.get(t.payee)?.name) || null,
+          payee: split ? split.top && nameOf(split.top) : nameOf(t),
           category: (categoryId && categories.get(categoryId)) || null,
           categoryId,
           notes: t.notes || null,
           amount: t.amount,
           cleared: Boolean(t.cleared),
           splitCount: lines.length,
+          otherPayees: split?.others ?? 0,
           transferAccount: transfer
             ? { id: transfer.id, name: transfer.name }
             : null,
@@ -852,6 +865,30 @@ async function upcomingRows(account: string) {
     capDays: capped ? capDays : null,
     kept: more ? kept.length : null,
   };
+}
+
+/**
+ * The payee the web shows for a split (useDisplayPayee): its lines' most
+ * common payee, the first line to reach the top count winning a tie, and the
+ * number of its lines' other payees (sc-5224). A name no payee has yet counts
+ * by that name.
+ */
+function splitPayee(lines: readonly TransactionEntity[]) {
+  const keyOf = (line: TransactionEntity) =>
+    line.payee === 'new'
+      ? `new:${(line as { payee_name?: string }).payee_name ?? ''}`
+      : line.payee;
+  const counts = new Map<string, number>();
+  let top: TransactionEntity | null = null;
+  let max = 0;
+  for (const line of lines) {
+    const key = keyOf(line);
+    if (!key) continue;
+    const count = (counts.get(key) ?? 0) + 1;
+    counts.set(key, count);
+    if (count > max) [max, top] = [count, line];
+  }
+  return { top, others: top ? counts.size - 1 : 0 };
 }
 
 /**

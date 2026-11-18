@@ -666,12 +666,9 @@ final class AccountRegisterViewModelTests: XCTestCase {
         XCTAssertEqual(UpcomingWords.summary(capped, filtered: false), "First 100 scheduled; more not shown")
         XCTAssertEqual(UpcomingWords.summary(capped, filtered: true), "2 scheduled in the first 100; more not shown or searched")
         XCTAssertEqual(UpcomingWords.totalLabel(capped), "Total of the rows shown: ")
-        XCTAssertEqual(
-            UpcomingWords.moreNotice(capped),
-            "More scheduled rows are not shown or searched. To see more, raise Scheduled rows: most shown in Settings > Advanced > Limits (up to 500).")
-        // PO decision (sc-4973 comment 5197): both notices name Settings > Advanced > Limits
-        XCTAssertEqual(
-            UpcomingWords.capNotice(capped), "Scheduled rows shown up to 92 days; change this in Settings > Advanced > Limits.")
+        // PO decision (sc-3611 comment 5251): no pointer to a Limits screen until it ships (task 2.4)
+        XCTAssertEqual(UpcomingWords.moreNotice(capped), "More scheduled rows are not shown or searched.")
+        XCTAssertEqual(UpcomingWords.capNotice(capped), "Scheduled rows are shown up to 92 days.")
         XCTAssertEqual(UpcomingWords.ruleFields(["payee", "category"]), "Fields set by rules: payee, category")
         XCTAssertNil(UpcomingWords.ruleFields([]))
     }

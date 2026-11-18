@@ -78,12 +78,12 @@ When loot-core returns `upcomingMore`, the iPhone register SHALL label the count
 - **THEN** the section says "12 scheduled" with no "First" wording
 
 ### Requirement: The register says when the cap hides scheduled rows
-When loot-core reports that the horizon cap hid upcoming rows, the iPhone register SHALL say so below the upcoming rows: "Scheduled rows shown up to N days; change this in Settings > Advanced > Limits.", with N from loot-core. It SHALL say nothing when no row was hidden.
+When loot-core reports that the horizon cap hid upcoming rows, the iPhone register SHALL say so below the upcoming rows: "Scheduled rows are shown up to N days.", with N from loot-core. It SHALL say nothing when no row was hidden.
 
 #### Scenario: A schedule beyond the cap
 - **GIVEN** a schedule length of 6 months and the default cap of 92 days
 - **WHEN** the user opens the register
-- **THEN** the notice says scheduled rows are shown up to 92 days and points to Settings > Advanced > Limits
+- **THEN** the notice says "Scheduled rows are shown up to 92 days." and names no Settings screen
 
 #### Scenario: Nothing hidden
 - **GIVEN** the default upcoming length of 1 week
@@ -158,12 +158,12 @@ While upcoming rows are marked "Updating…", tapping one SHALL open its read-on
 - **THEN** the upcoming section shows "Loading scheduled…" until the reply
 
 ### Requirement: The register says when the row cap hides scheduled rows
-When loot-core returns `upcomingMore`, the iPhone register SHALL say below the upcoming rows: "More scheduled rows are not shown or searched. To see more, raise Scheduled rows: most shown in Settings > Advanced > Limits (up to 500).", and nothing otherwise.
+When loot-core returns `upcomingMore`, the iPhone register SHALL say below the upcoming rows: "More scheduled rows are not shown or searched.", and nothing otherwise.
 
 #### Scenario: Fifty daily schedules
 - **GIVEN** an upcoming read returning `upcomingMore` true
 - **WHEN** the user opens the register
-- **THEN** the notice says more scheduled rows are not shown or searched, and to raise "Scheduled rows: most shown" in Settings > Advanced > Limits, up to 500
+- **THEN** the notice says "More scheduled rows are not shown or searched." and names no Settings screen
 
 ### Requirement: The cap is a labelled limit in Settings
 The Limits section of native Settings (story 4643) SHALL list `accounts-register-upcoming-max-days` as "Scheduled rows: days ahead" (it caps the budget's upcoming scheduled length in the native register; default 92, ceiling 366) and `accounts-upcoming-max-rows` as "Scheduled rows: most shown" (help: the most scheduled rows the native register shows and searches; default 100, ceiling 500), each with its value, default and ceiling, as for every limit there.
@@ -177,3 +177,11 @@ The Limits section of native Settings (story 4643) SHALL list `accounts-register
 - **GIVEN** the Limits section of native Settings and an account with 150 upcoming previews
 - **WHEN** the user sets "Scheduled rows: most shown" to 200 and reopens the register
 - **THEN** all 150 show and no "more" notice shows
+
+### Requirement: The cap notices point to the Limits section once it ships
+Once the Limits section is in native Settings, the register's cap notices SHALL point to it: "Scheduled rows shown up to N days; change this in Settings > Advanced > Limits." and "More scheduled rows are not shown or searched. To see more, raise Scheduled rows: most shown in Settings > Advanced > Limits (up to 500)."
+
+#### Scenario: The Limits section has shipped
+- **GIVEN** the Limits section is in native Settings
+- **WHEN** a cap hides scheduled rows
+- **THEN** the notice names Settings > Advanced > Limits

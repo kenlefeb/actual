@@ -63,9 +63,9 @@ Upcoming rows are never part of the register read or its keyset (D7), so cursors
 
 ### D5. Horizon
 
-The window stays the budget's `upcomingScheduledTransactionLength` preference (default 7 days) and each schedule's `custom_upcoming_length`, as on the web. It is capped by `accounts-register-upcoming-max-days` in `LIMITS` (default 92, ceiling 366). Rows dated after today plus the cap are dropped before rules run. A missing or bad value falls back to 92. No refusal is added. When the cap dropped any row, the upcoming read returns `upcomingCapDays`, and the register shows "Scheduled rows shown up to N days; change this in Settings > Advanced > Limits." The web equality holds only within the cap.
+The window stays the budget's `upcomingScheduledTransactionLength` preference (default 7 days) and each schedule's `custom_upcoming_length`, as on the web. It is capped by `accounts-register-upcoming-max-days` in `LIMITS` (default 92, ceiling 366). Rows dated after today plus the cap are dropped before rules run. A missing or bad value falls back to 92. No refusal is added. When the cap dropped any row, the upcoming read returns `upcomingCapDays`, and the register shows "Scheduled rows are shown up to N days." The web equality holds only within the cap.
 
-The limit is listed in native Settings' Limits section with the label "Scheduled rows: days ahead" and text saying it caps the budget's upcoming length. That section is story 4643's: it lists every entry in `LIMITS`, so this change adds the entry and its label, and depends on 4643 for the screen (Product Owner review, item 1).
+The limit is listed in native Settings' Limits section with the label "Scheduled rows: days ahead" and text saying it caps the budget's upcoming length. That section is story 4643's: it lists every entry in `LIMITS`, so this change adds the entry and its label, and depends on 4643 for the screen (Product Owner review, item 1). Until that screen ships, the two cap notices name no Settings location, and task 2.4 restores the pointer (Product Owner, sc-3611 comment 5251).
 
 ### D5a. Tapping an upcoming row
 
@@ -114,7 +114,7 @@ The handler joins the allowlist (Swift list, page list, `coverage.json` skip). T
 
 When the cap stops generation with an occurrence left, the read returns `upcomingKept` (K, occurrences kept) and `upcomingMore: true`. It does not count the rest (D12). The rows shown can differ from K after inversion and filtering; `upcomingCount` counts those rows.
 
-The register labels the count and total as partial ("First K scheduled; more not shown", the total labelled as the shown rows' total), so a capped total is never read as the whole (Product Owner reviews, PRs #445 and #452). It also says how to see more: "More scheduled rows are not shown or searched. To see more, raise Scheduled rows: most shown in Settings > Advanced > Limits (up to 500)." `upcomingCount` and `upcomingTotal` cover returned rows only. Rows past the cap are not searched, because searching them would mean running their rules.
+The register labels the count and total as partial ("First K scheduled; more not shown", the total labelled as the shown rows' total), so a capped total is never read as the whole (Product Owner reviews, PRs #445 and #452). It also says so in a notice: "More scheduled rows are not shown or searched." `upcomingCount` and `upcomingTotal` cover returned rows only. Rows past the cap are not searched, because searching them would mean running their rules.
 
 ### D9. Statuses in one query, for relevant schedules only
 

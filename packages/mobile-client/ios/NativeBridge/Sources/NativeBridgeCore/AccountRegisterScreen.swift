@@ -97,11 +97,12 @@ public enum UpcomingWords {
             : NSLocalizedString("Scheduled total: ", comment: "Native Accounts register: upcoming total")
     }
 
+    // Neither notice names the Limits screen until it ships (task 2.4)
     public static func capNotice(_ read: AccountUpcoming) -> String? {
         read.upcomingCapDays.map {
             String(
                 format: NSLocalizedString(
-                    "Scheduled rows shown up to %d days; change this in Settings > Advanced > Limits.",
+                    "Scheduled rows are shown up to %d days.",
                     comment: "Native Accounts register: the days-ahead limit hid rows"), $0)
         }
     }
@@ -109,7 +110,7 @@ public enum UpcomingWords {
     public static func moreNotice(_ read: AccountUpcoming) -> String? {
         guard read.upcomingMore == true else { return nil }
         return NSLocalizedString(
-            "More scheduled rows are not shown or searched. To see more, raise Scheduled rows: most shown in Settings > Advanced > Limits (up to 500).",
+            "More scheduled rows are not shown or searched.",
             comment: "Native Accounts register: the most-shown limit hid rows")
     }
 

@@ -50,7 +50,8 @@
       - the same input gives the same digest, and key order does not matter;
       - one canonical hash helper is shared with the edit digest, over separate inputs;
     - each result row carries the engine's `amountText`;
-    - suggestions are found with one unprotected run and confirmed per candidate; taking one (field removed from `userFields`) gives exactly the suggested value; no extra run when nothing is hand-set;
+    - protected fields are restored after each rule's actions, before the next rule's conditions (the rule A / rule B scenario: Dining kept, notes untouched, suggestion Groceries);
+    - suggestions are found with one unprotected run, and each candidate field is confirmed with one run that frees it on all rows; taking one (field removed from `userFields`) gives exactly the suggested value; no extra run when nothing is hand-set;
     - `changedField` is gone from the preview's shape, and the page's argument list is `draft` only;
     - a trailing decimal separator (`12.`, `12,` in comma-decimal formats) reads as no fraction, in the preview and the save; a trailing grouping separator is refused;
     - `ruleFields` lists fields a rule set that the person did not touch;
@@ -81,7 +82,7 @@
     - split ids: an add naming any existing row's id as a child (a reconciled row in another account in the test) is `[native:invalid-draft]`, and that row is unchanged; an edit naming a row that is not its own live child is refused the same way; its own children update in place;
     - an edit of a row whose account was closed after the form read is `[native:not-found]`;
     - currency symbols: with a currency set, only its symbol (and its final sign alone) is ignored, and `€12` in a USD budget is `amount-invalid`; with none set, any one currency symbol is ignored;
-    - an edit checks both digests, each with its own refusal;
+    - an edit is checked by the edit digest only: a stale one refuses with `changed-since`, and `previewDigest` is neither required nor checked;
     - loop tests: notes typed before a payee whose rule sets notes save on the first attempt; an append-notes rule saves "lunch #bulk" on the first attempt with a digest, and on the second without one, never appending twice;
     - the touched set (children removed, partners old and new) is computed on the post-rules draft before any write;
     - `[native:invalid-draft:<codes>]` for each validation rule, with only fixture codes in the message;

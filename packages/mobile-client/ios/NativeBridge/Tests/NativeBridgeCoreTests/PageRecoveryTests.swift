@@ -13,12 +13,28 @@ final class PageRecoveryTests: XCTestCase {
     private var reloads = 0
     private var gaveUp = 0
     private var clock = Date(timeIntervalSince1970: 1_000_000)
+    private var alertCanShow = true
+    private var scheduled: [(delay: TimeInterval, work: () -> Void)] = []
 
     private func recovery() -> PageRecovery {
         PageRecovery(
             now: { [unowned self] in self.clock },
+            schedule: { [unowned self] in self.scheduled.append(($0, $1)) },
             reload: { [unowned self] in self.reloads += 1 },
-            giveUp: { [unowned self] in self.gaveUp += 1 })
+            giveUp: { [unowned self] in
+                self.gaveUp += 1
+                return self.alertCanShow
+            })
+    }
+
+    private func reachTheCap(_ recovery: PageRecovery) {
+        for _ in 0..<4 { recovery.processEnded() }
+    }
+
+    private func runScheduled() {
+        let due = scheduled
+        scheduled = []
+        due.forEach { $0.work() }
     }
 
     func testTheGuardAllowsALimitWithinItsWindow() {
@@ -70,6 +86,63 @@ final class PageRecoveryTests: XCTestCase {
         recovery.processEnded()
         XCTAssertEqual(reloads, 5)
         XCTAssertEqual(gaveUp, 1)
+    }
+
+    func testAShownAlertNeedsNoRetry() {
+        reachTheCap(recovery())
+        XCTAssertEqual(gaveUp, 1)
+        XCTAssertTrue(scheduled.isEmpty)
+    }
+
+    func testAnAlertThatCannotShowIsTriedAgain() {
+        let recovery = recovery()
+        alertCanShow = false
+        reachTheCap(recovery)
+        XCTAssertEqual(gaveUp, 1)
+        XCTAssertEqual(scheduled.map(\.delay), [PageRecovery.alertRetryDelay])
+        alertCanShow = true
+        runScheduled()
+        XCTAssertEqual(gaveUp, 2)
+        XCTAssertTrue(scheduled.isEmpty)
+        XCTAssertEqual(reloads, 3, "the alert showed, so the app waits for the person")
+    }
+
+    // The page must not stay dead with nothing on screen
+    func testAnAlertThatNeverShowsFallsBackToAReload() {
+        let recovery = recovery()
+        alertCanShow = false
+        reachTheCap(recovery)
+        while !scheduled.isEmpty { runScheduled() }
+        XCTAssertEqual(gaveUp, PageRecovery.alertAttempts)
+        XCTAssertEqual(reloads, 4)
+    }
+
+    func testTheCountStartsOverAfterTheFallback() {
+        let recovery = recovery()
+        alertCanShow = false
+        reachTheCap(recovery)
+        while !scheduled.isEmpty { runScheduled() }
+        recovery.processEnded()
+        XCTAssertEqual(reloads, 5)
+    }
+
+    func testAnotherEndWhileRetryingDoesNotStartASecondRetry() {
+        let recovery = recovery()
+        alertCanShow = false
+        reachTheCap(recovery)
+        recovery.processEnded()
+        XCTAssertEqual(scheduled.count, 1)
+        XCTAssertEqual(gaveUp, 1)
+    }
+
+    func testTheUsersReloadCancelsAPendingRetry() {
+        let recovery = recovery()
+        alertCanShow = false
+        reachTheCap(recovery)
+        recovery.userReload()
+        runScheduled()
+        XCTAssertEqual(gaveUp, 1)
+        XCTAssertEqual(reloads, 4)
     }
 
     #if canImport(WebKit)

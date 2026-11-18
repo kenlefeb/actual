@@ -30,25 +30,30 @@ final class PageRecoveryUITests: XCTestCase {
     func testThreeReloadsDoNotAsk() {
         launch(deaths: 3)
         XCTAssertTrue(app.staticTexts["uiTestPageRecovery"].waitForExistence(timeout: 90))
-        XCTAssertFalse(app.alerts["The budget page stopped working"].exists)
+        XCTAssertFalse(app.alerts["The app stopped working"].exists)
     }
 
     func testAFourthEndAsksAndReloadStartsOver() {
         launch(deaths: 4)
-        let alert = app.alerts["The budget page stopped working"]
+        let alert = app.alerts["The app stopped working"]
         XCTAssertTrue(alert.waitForExistence(timeout: 90), "no sheet after the fourth end")
-        // On CI the first tap can have no effect: the recording shows the alert
-        // fully on screen and untouched while the page behind it is still
-        // starting. So tap again, and log how many it took.
+        // By label: an element query by string is limited to 128 characters
+        let message = "Reload to open it again. A change you made in the last moment may not have been saved. Check it, and make it again if it’s missing."
+        XCTAssertTrue(alert.staticTexts.matching(NSPredicate(format: "label == %@", message)).firstMatch.exists, "the alert's message changed")
+        // sc-5287: on CI the first tap can have no effect. The recording shows the
+        // alert fully on screen and untouched while the page behind it is still
+        // starting. So allow one more tap, and log how many it took.
         var taps = 0
+        var waits = 0
         var result = XCTWaiter.Result.timedOut
-        while taps < 5 && result != .completed {
+        while taps < 2 && waits < 6 && result != .completed {
             if alert.buttons["Reload"].isHittable {
                 alert.buttons["Reload"].tap()
                 taps += 1
             }
             let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: alert)
             result = XCTWaiter.wait(for: [gone], timeout: 4)
+            waits += 1
         }
         print("page recovery UI test: Reload took \(taps) tap(s)")
         XCTAssertEqual(result, .completed, "Reload did not dismiss the alert after \(taps) taps")

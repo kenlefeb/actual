@@ -12,11 +12,12 @@ class AppBridgeViewController: CAPBridgeViewController {
     private var benchmarkTrigger: NativeBridgeBenchmarkTrigger?
     // The web view holds its navigation delegate weakly
     private var pageProcessDelegate: PageProcessDelegate?
+    private weak var reloadAlert: UIAlertController?
     // sc-5247: `loadWebView` loads the app's own start page, never the URL the
     // page last showed, which can be a used one-time sign-in callback
     private lazy var pageRecovery = PageRecovery(
         reload: { [weak self] in self?.loadWebView() },
-        giveUp: { [weak self] in self?.askToReload() })
+        giveUp: { [weak self] in self?.askToReload() ?? false })
 
     override func capacitorDidLoad() {
         bridge?.registerPluginInstance(nativeBridge)
@@ -41,20 +42,30 @@ class AppBridgeViewController: CAPBridgeViewController {
         #endif
     }
 
-    // The page's process kept ending, so the app stopped reloading it
-    private func askToReload() {
-        var presenter = view.window?.rootViewController
-        while let next = presenter?.presentedViewController { presenter = next }
+    // The page's process kept ending, so the app stopped reloading it. Returns
+    // whether the alert is on screen. This controller's own view has no window
+    // while a native tab shows, so the alert goes on the active scene's window.
+    private func askToReload() -> Bool {
+        if reloadAlert?.presentingViewController != nil { return true }
+        let scene = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }
+        guard var presenter = scene?.keyWindow?.rootViewController else { return false }
+        while let next = presenter.presentedViewController, !next.isBeingDismissed { presenter = next }
+        guard presenter.presentedViewController == nil, !presenter.isBeingPresented else { return false }
         let alert = UIAlertController(
-            title: NSLocalizedString("The budget page stopped working", comment: "Alert after repeated page failures"),
+            title: NSLocalizedString("The app stopped working", comment: "Alert after repeated page failures"),
             message: NSLocalizedString(
-                "Reload to open it again. A change made in the last moment before it stopped may need to be made again.",
+                "Reload to open it again. A change you made in the last moment may not have been saved. Check it, and make it again if it’s missing.",
                 comment: "Alert after repeated page failures"),
             preferredStyle: .alert)
         alert.addAction(
             UIAlertAction(title: NSLocalizedString("Reload", comment: "Alert button: load the page again"), style: .default) {
                 [weak self] _ in self?.pageRecovery.userReload()
             })
-        presenter?.present(alert, animated: true)
+        presenter.present(alert, animated: true)
+        guard presenter.presentedViewController === alert else { return false }
+        reloadAlert = alert
+        return true
     }
 }

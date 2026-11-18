@@ -18,7 +18,12 @@ When iOS ends the page's process, the iPhone app SHALL reload its own start page
 #### Scenario: The process keeps ending
 - **GIVEN** the app reloaded its page three times within a minute
 - **WHEN** the process ends again
-- **THEN** the app does not reload and shows the alert
+- **THEN** the app does not reload and shows an alert titled "The app stopped working" with the message "Reload to open it again. A change you made in the last moment may not have been saved. Check it, and make it again if it’s missing."
+
+#### Scenario: The alert cannot be shown
+- **GIVEN** the app reached the cap and cannot show the alert, for example because no window is active
+- **WHEN** repeated attempts over a few seconds all fail
+- **THEN** the app loads its start page and starts the count again, so the page does not stay dead with nothing on screen
 
 #### Scenario: The person presses Reload
 - **GIVEN** the alert is showing

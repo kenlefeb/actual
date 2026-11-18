@@ -411,7 +411,8 @@ describe('native/account-upcoming', () => {
       });
     });
 
-    it('shows its lines payee over a different one a rule sets on the parent', async () => {
+    // Can't tell "parent wins" from "lines win": the engine clears a split parent's payee after rules
+    it('takes a split payee from its lines when a rule sets a different payee on the parent', async () => {
       await addSchedule('Differs', {
         date: '2017-01-03',
         amount: -9000,

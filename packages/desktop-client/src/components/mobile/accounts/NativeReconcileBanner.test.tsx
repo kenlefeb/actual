@@ -33,12 +33,17 @@ const account = (id: string, status: string) => ({
   last_reconciled: null,
 });
 
+// The web banner shows only with the native Accounts screen off (D8); it is on
+// when unset since task 3.8, so these tests turn it off unless they say otherwise
 function inApp(reconcile?: boolean) {
   const postMessage = vi.fn();
   (window as unknown as ChromeWindow).webkit = {
     messageHandlers: { actualNativeChrome: { postMessage } },
   };
-  if (reconcile !== undefined) window.__actualNativeScreens = { reconcile };
+  window.__actualNativeScreens = {
+    accounts: false,
+    ...(reconcile !== undefined && { reconcile }),
+  };
   return postMessage;
 }
 
@@ -109,15 +114,21 @@ describe('NativeReconcileBanner', () => {
     expect(empty.container).toBeEmptyDOMElement();
   });
 
-  // native-accounts-screen D8: the native list carries its own entry
-  it('is hidden while the native Accounts screen is on, and shows with it off or unset', async () => {
+  // native-accounts-screen D8: the native list carries its own entry. The
+  // Accounts switch reads on when unset (task 3.8), so unset hides it too.
+  it('is hidden while the native Accounts screen is on or unset, and shows with it off', async () => {
     inApp();
     window.__actualNativeScreens = { accounts: true, reconcile: true };
     state.month = { month: '2026-11', accounts: [account('a', 'due')] };
     const on = renderBanner();
     expect(on.container).toBeEmptyDOMElement();
-    expect(state.send).not.toHaveBeenCalled();
     on.unmount();
+
+    window.__actualNativeScreens = {};
+    const unset = renderBanner();
+    expect(unset.container).toBeEmptyDOMElement();
+    expect(state.send).not.toHaveBeenCalled();
+    unset.unmount();
 
     window.__actualNativeScreens = { accounts: false };
     renderBanner();

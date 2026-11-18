@@ -13,10 +13,12 @@ final class NativeAccountsRouteTests: XCTestCase {
         return defaults
     }
 
-    func testTheAccountsTabHasANativeScreenBehindAnOffByDefaultSwitch() {
+    // Task 3.8 (D4): on when unset; Settings stores false to turn it off
+    func testTheAccountsTabHasANativeScreenOnWhenUnset() {
         let defaults = defaults()
         XCTAssertTrue(NativeScreenSwitch.nativeTabs.contains(.accounts))
-        XCTAssertEqual(NativeScreenSwitch.screen(for: .accounts, defaults: defaults), .web)
+        XCTAssertEqual(NativeScreenSwitch.screen(for: .accounts, defaults: defaults), .native)
+        XCTAssertTrue(NativeScreenSwitch.isAccountsNative(defaults: defaults))
         defaults.set(true, forKey: "NativeScreen.accounts")
         XCTAssertEqual(NativeScreenSwitch.screen(for: .accounts, defaults: defaults), .native)
         defaults.set(false, forKey: "NativeScreen.accounts")

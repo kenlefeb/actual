@@ -1,6 +1,6 @@
 {
   "budget": true,
-  "accounts": false,
+  "accounts": true,
   "paychecks": true,
   "reconcile": true
 }

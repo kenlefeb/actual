@@ -125,9 +125,10 @@ public enum NativeBridgeEvent {
     public static func stored(of body: Any) -> (seq: Int, epoch: String)? {
         guard name(of: body) == "stored",
             let payload = (body as? [String: Any])?["payload"] as? [String: Any],
-            let seq = payload["seq"] as? Int, let epoch = payload["epoch"] as? String
+            let seq = payload["seq"] as? [String: Any],
+            let number = seq["n"] as? Int, let epoch = seq["epoch"] as? String
         else { return nil }
-        return (seq, epoch)
+        return (number, epoch)
     }
 }
 
@@ -152,6 +153,8 @@ public final class WriteStorageStatus: ObservableObject {
     private var mayNotBeSaved = false { didSet { updateMessage() } }
     private var currentEpoch: String?
     private var retiredEpochs: Set<String> = []
+    // Counts page loads here, for a write that never got a `seq`
+    private var generation = 0
 
     public nonisolated init() {}
 
@@ -178,16 +181,23 @@ public final class WriteStorageStatus: ObservableObject {
             .eraseToAnyPublisher()
     }
 
-    func writeBegan() { writesInProgress += 1 }
+    // The page load this write was made in
+    @discardableResult
+    func writeBegan() -> Int {
+        writesInProgress += 1
+        return generation
+    }
+
     func writeEnded() { writesInProgress -= 1 }
 
     // A stored answer covers every earlier write of its own page load
-    func record(_ answer: PersistedAnswer) {
-        guard isCurrentPage(answer.epoch) else {
+    func record(_ answer: PersistedAnswer, madeIn writeGeneration: Int? = nil) {
+        let isOlderWrite = writeGeneration.map { $0 != generation } ?? false
+        guard isCurrentPage(answer.seq?.epoch), !isOlderWrite else {
             if !answer.stored { mayNotBeSaved = true }
             return
         }
-        if answer.stored { unstored = [] } else { unstored.append(answer.seq) }
+        if answer.stored { unstored = [] } else { unstored.append(answer.seq?.n) }
     }
 
     // The engine's storage-stored, which the page forwards as `stored`
@@ -198,6 +208,7 @@ public final class WriteStorageStatus: ObservableObject {
 
     // The page loaded again: what it had not stored may be gone
     public func pageLoaded() {
+        generation += 1
         if let currentEpoch { retiredEpochs.insert(currentEpoch) }
         currentEpoch = nil
         if !unstored.isEmpty {
@@ -220,11 +231,15 @@ public final class WriteStorageStatus: ObservableObject {
     }
 }
 
+// The engine's page load, and this call's place in it
+struct PersistedSeq: Decodable, Equatable {
+    let epoch: String
+    let n: Int
+}
+
 struct PersistedAnswer: Decodable, Equatable {
     let stored: Bool
-    var seq: Int?
-    // The engine's page load
-    var epoch: String?
+    var seq: PersistedSeq?
 
     static let notStored = PersistedAnswer(stored: false)
 }
@@ -434,7 +449,7 @@ public struct NativeBridgeClient {
     // its own. The write is never retried. A failure of the second call only
     // means not stored: the write has already been applied.
     public func write<Args: Encodable>(_ name: String, args: Args) async throws -> StoredWrite {
-        await storage?.writeBegan()
+        let generation = await storage?.writeBegan()
         let data: Data
         do {
             data = try await send(name, args: args)
@@ -442,19 +457,19 @@ public struct NativeBridgeClient {
             await storage?.writeEnded()
             throw error
         }
-        let answer = await persisted()
-        await storage?.record(answer)
+        let answer = await persisted(madeIn: generation)
+        await storage?.record(answer, madeIn: generation)
         await storage?.writeEnded()
         return StoredWrite(data: data, stored: answer.stored)
     }
 
-    private func persisted() async -> PersistedAnswer {
+    private func persisted(madeIn generation: Int?) async -> PersistedAnswer {
         do {
             return try await askPersisted()
         } catch NativeBridgeError.timedOut {
             // The one call that may be repeated: it changes nothing
             Task {
-                if let answer = try? await askPersisted() { await storage?.record(answer) }
+                if let answer = try? await askPersisted() { await storage?.record(answer, madeIn: generation) }
             }
             return .notStored
         } catch {

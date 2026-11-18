@@ -39,6 +39,8 @@ export function storageFailed(): boolean {
   return fs.storageState().failed;
 }
 
+type PersistSeq = { epoch: string; n: number };
+
 let lastPersistSeq = 0;
 // This page load. A restart loses whatever was not stored, so native code must
 // not let a new page's answers vouch for an old page's writes.
@@ -52,21 +54,20 @@ const epoch = uuidv4();
  */
 export async function persisted(): Promise<{
   stored: boolean;
-  seq?: number;
-  epoch: string;
+  seq: PersistSeq;
 }> {
   if (storageFailed()) throw notStored();
   const outcome = await waitForStorage().catch(() => {
     throw notStored();
   });
-  if (!('pending' in outcome)) return { stored: true, epoch };
-  const seq = ++lastPersistSeq;
+  const seq = { epoch, n: ++lastPersistSeq };
+  if (!('pending' in outcome)) return { stored: true, seq };
   // A failure instead latches and sends storage-failed
   outcome.pending.then(
-    () => connection.send('storage-stored', { seq, epoch }),
+    () => connection.send('storage-stored', { seq }),
     () => undefined,
   );
-  return { stored: false, seq, epoch };
+  return { stored: false, seq };
 }
 
 /**

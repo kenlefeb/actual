@@ -63,7 +63,8 @@ struct NativeTransactionRow: View {
             Text(amount)
                 .font(.body.monospacedDigit())
                 .foregroundColor(isScheduled ? .secondary : isIncome ? NativeReconcileTokens.positive : .primary)
-                .fixedSize(horizontal: false, vertical: true)
+                // Beside the payee it keeps its width, so the payee wraps, not the number
+                .fixedSize(horizontal: !typeSize.isAccessibilitySize, vertical: true)
             statusLabel
         }
     }

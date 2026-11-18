@@ -1,4 +1,4 @@
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -165,6 +165,46 @@ describe('AccountPage', () => {
     );
     await vi.waitFor(() => expect(state.pushModal).toHaveBeenCalledTimes(1));
     expect(state.pushModal.mock.lastCall?.[0].modal.name).toBe('account-menu');
+  });
+
+  // sc-3611 hands-on pass: Modals closes every sheet when the location changes,
+  // so the hand-off must not navigate after opening the menu, and coming back
+  // to the same history entry must not open it again
+  it('keeps the handed-off menu open: no navigation after it opens, none again on return', async () => {
+    state.pushModal.mockClear();
+    const seen: string[] = [];
+    function Probe() {
+      const location = useLocation();
+      seen.push(`${location.key}:${JSON.stringify(location.state)}`);
+      return null;
+    }
+    const page = (
+      <TestProviders>
+        <MemoryRouter
+          initialEntries={[
+            {
+              pathname: '/accounts/checking',
+              state: { openAccountMenu: true },
+              key: 'handoff-entry',
+            },
+          ]}
+        >
+          <Probe />
+          <Routes>
+            <Route path="/accounts/:id" element={<AccountPage />} />
+          </Routes>
+        </MemoryRouter>
+      </TestProviders>
+    );
+    const first = render(page);
+    await vi.waitFor(() => expect(state.pushModal).toHaveBeenCalledTimes(1));
+    expect(new Set(seen)).toEqual(
+      new Set(['handoff-entry:{"openAccountMenu":true}']),
+    );
+    first.unmount();
+    render(page);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(state.pushModal).toHaveBeenCalledTimes(1);
   });
 
   it('does not open the menu without the hand-off', () => {

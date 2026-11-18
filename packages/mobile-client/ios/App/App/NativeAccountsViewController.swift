@@ -175,15 +175,21 @@ struct AccountsScreen: View {
     @ObservedObject var nav: AccountsNavigation
     @ObservedObject var reconcileMonth: ReconcileMonthViewModel
     let actions: AccountsActions
+    // Owned here and handed to the list: a toolbar EditButton's own edit mode
+    // never reached the List (sc-3611 hands-on pass)
+    @State private var editMode: EditMode = .inactive
 
     var body: some View {
         NavigationView {
             content
+                .environment(\.editMode, $editMode)
                 .navigationBarTitle(Text(AccountsWords.title), displayMode: .large)
                 .toolbar {
                     ToolbarItem(placement: .navigationBarLeading) {
                         if let list = model.state.value, !list.sections.onBudget.accounts.isEmpty || !list.sections.offBudget.accounts.isEmpty {
-                            EditButton()
+                            Button(editMode.isEditing ? AccountsWords.done : AccountsWords.edit) {
+                                withAnimation { editMode = editMode.isEditing ? .inactive : .active }
+                            }
                         }
                     }
                     ToolbarItem(placement: .navigationBarTrailing) { addMenu }
@@ -285,6 +291,8 @@ struct UndoBar: View {
             }
             .padding()
             .background(.regularMaterial)
+            // The bar sits outside the screen's tint (a safe-area inset), so it takes the accent itself
+            .tint(Color(NativeTabBarController.accent))
         }
     }
 }
@@ -489,7 +497,9 @@ private struct AccountRow: View {
         Text(amountText)
             .font(.body.monospacedDigit())
             .foregroundColor(account.balance < 0 ? Money.negative : .primary)
-            .fixedSize(horizontal: false, vertical: true)
+            // Beside the name it keeps its width, so the name wraps instead of
+            // the amount breaking mid-number (sc-3611 hands-on pass)
+            .fixedSize(horizontal: !typeSize.isAccessibilitySize, vertical: true)
     }
 
     private var detail: String { AccountsWords.detail(AccountDetail(account), style: style) }
@@ -524,6 +534,7 @@ private struct AmountLine: View {
         Text(BudgetAmountFormat.string(amount, style: style))
             .font(.body.monospacedDigit())
             .foregroundColor(amount < 0 ? Money.negative : .secondary)
+            .fixedSize(horizontal: !typeSize.isAccessibilitySize, vertical: true)
     }
 }
 
@@ -617,6 +628,8 @@ enum AccountsWords {
     static let retry = NSLocalizedString("Retry", comment: "Native Accounts: read again after a failure")
     static let retryHint = NSLocalizedString("Syncs again", comment: "Native Accounts: VoiceOver hint on a failed sync")
     static let ok = NSLocalizedString("OK", comment: "Native Accounts: close an error")
+    static let edit = NSLocalizedString("Edit", comment: "Native Accounts: start reordering accounts")
+    static let done = NSLocalizedString("Done", comment: "Native Accounts: stop reordering accounts")
     static let undo = NSLocalizedString("Undo", comment: "Native Accounts: undo the last change")
     static let reopen = NSLocalizedString("Reopen", comment: "Native Accounts: reopen a closed account")
     static let reopened = NSLocalizedString("Reopened \"%@\".", comment: "Native Accounts: after a reopen")

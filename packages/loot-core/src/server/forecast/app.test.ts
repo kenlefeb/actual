@@ -9,7 +9,11 @@ import {
   getRuleForSchedule,
 } from '#server/schedules/app';
 import * as sheet from '#server/sheet';
-import { loadRules, updateRule } from '#server/transactions/transaction-rules';
+import {
+  insertRule,
+  loadRules,
+  updateRule,
+} from '#server/transactions/transaction-rules';
 import { summarizeForecastContributors } from '#shared/forecast-contributors';
 import type { RuleConditionEntity } from '#types/models';
 
@@ -845,6 +849,56 @@ describe('forecast app', () => {
     expect(
       result.dataPoints.find(dataPoint => dataPoint.date === '2024-03-15'),
     ).toMatchObject({ balance: -75 });
+  });
+
+  it('does not create payees named by rules on the transfer side', async () => {
+    const checkingId = await db.insertAccount({ id: 'checking', name: 'C' });
+    const savingsId = await db.insertAccount({ id: 'savings', name: 'S' });
+    const transferPayeeId = await db.insertPayee({
+      id: 'transfer-payee',
+      name: 'Transfer to savings',
+      transfer_acct: savingsId,
+    });
+    await createSchedule({
+      conditions: [
+        { op: 'is', field: 'account', value: checkingId },
+        { op: 'is', field: 'payee', value: transferPayeeId },
+        { op: 'is', field: 'amount', value: -250 },
+        {
+          op: 'is',
+          field: 'date',
+          value: { start: '2024-03-20', frequency: 'monthly' },
+        },
+      ] satisfies RuleConditionEntity[],
+    });
+    await insertRule({
+      stage: null,
+      conditionsOp: 'and',
+      conditions: [{ op: 'is', field: 'account', value: savingsId }],
+      actions: [{ op: 'set', field: 'payee_name', value: 'Savings Payee' }],
+    });
+
+    const countRows = async () => [
+      (await db.first<{ n: number }>('SELECT count(*) AS n FROM payees'))?.n,
+      (await db.first<{ n: number }>('SELECT count(*) AS n FROM payee_mapping'))
+        ?.n,
+    ];
+    const before = await countRows();
+
+    const result = await generateForecast({
+      accountIds: [checkingId, savingsId],
+      startDate: '2024-03-01',
+      endDate: '2024-04-30',
+    });
+
+    expect(await db.getPayeeByName('Savings Payee')).toBeFalsy();
+    expect(await countRows()).toEqual(before);
+    expect(
+      result.dataPoints.find(
+        dataPoint =>
+          dataPoint.accountId === savingsId && dataPoint.date === '2024-03-20',
+      ),
+    ).toMatchObject({ balance: 250 });
   });
 
   it('does not over-restrict accounts when filters use mixed OR conditions', async () => {

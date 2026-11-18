@@ -468,7 +468,9 @@ export async function runRules(
     }
   }
 
-  const result = await finalizeTransactionForRules(finalTrans, createPayees);
+  const result = await finalizeTransactionForRules(finalTrans, {
+    createPayees,
+  });
   for (const field of missingNullableFields) {
     if (result[field] === null) {
       delete result[field];
@@ -1278,7 +1280,7 @@ async function refreshCategoryGroupIfChanged(
 
 export async function finalizeTransactionForRules(
   trans: TransactionEntity | TransactionForRules,
-  createPayees = true,
+  { createPayees = true }: { createPayees?: boolean } = {},
 ): Promise<TransactionEntity> {
   if ('payee_name' in trans) {
     await resolvePayeeNameForRules(trans, createPayees);

@@ -616,13 +616,13 @@ async function createNewPayees(payeesToCreate, addsAndUpdates) {
 
 export type MatchTransactionsOptions = {
   isBankSyncAccount?: boolean;
+  isPreview?: boolean;
   strictIdChecking?: boolean;
   reimportDeleted?: boolean;
   payeeNameNormalization?: PayeeNameNormalization;
 };
 
 export type ReconcileTransactionsOptions = MatchTransactionsOptions & {
-  isPreview?: boolean;
   defaultCleared?: boolean;
   updateDates?: boolean;
 };
@@ -665,6 +665,7 @@ export async function reconcileTransactions(
     transactionsStep3,
   } = await matchTransactions(acctId, transactions, {
     isBankSyncAccount,
+    isPreview,
     strictIdChecking,
     reimportDeleted,
     payeeNameNormalization,
@@ -839,6 +840,7 @@ export async function matchTransactions(
   transactions,
   {
     isBankSyncAccount = false,
+    isPreview = false,
     strictIdChecking = true,
     reimportDeleted: reimportDeletedOverride,
     payeeNameNormalization,
@@ -875,7 +877,9 @@ export async function matchTransactions(
     subtransactions,
   } of normalized) {
     // Run the rules
-    const trans = await runRules(originalTrans, accountsMap);
+    const trans = await runRules(originalTrans, accountsMap, {
+      createPayees: !isPreview,
+    });
 
     let match = null;
     let fuzzyDataset = null;

@@ -13,7 +13,7 @@ final class NativeAccountsUITests: XCTestCase {
 
     override func setUp() {
         continueAfterFailure = false
-        app.launchArguments = ["-UITestAccounts", "YES", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launchArguments = ["-UITestAccounts", "YES", "-UITestNoAnimations", "YES", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
     }
 

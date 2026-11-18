@@ -6,7 +6,11 @@ import { join } from 'node:path';
 // oxlint-disable-next-line actual/no-extraneous-dependencies -- node:test is a builtin that exists only with the node: prefix, so Module.builtinModules omits it
 import { test } from 'node:test';
 
-import { findNativeSources, problems } from './check-native-swift.mjs';
+import {
+  findNativeSources,
+  missingFromProject,
+  problems,
+} from './check-native-swift.mjs';
 
 // native-bridge: "Only loot-core touches the budget data" (sc-3584)
 void test('Native Swift: fails on a database import and names the file', () => {
@@ -122,4 +126,16 @@ void test('Native Swift: this checkout is clean', () => {
   const files = findNativeSources(root);
   assert.ok(Object.keys(files).length > 0);
   assert.deepEqual(problems(files), []);
+});
+
+// The App target lists its NativeBridgeCore sources one by one in the Xcode
+// project, so a source added without an entry builds under `swift test` but
+// breaks the iPhone app build (sc-4931).
+void test('Native Swift: names a NativeBridgeCore source missing from the Xcode project', () => {
+  const project = '/* Reconcile.swift in Sources */\n/* Reconcile.swift */\n';
+  assert.deepEqual(
+    missingFromProject(['Reconcile.swift', 'Accounts.swift'], project),
+    ['Accounts.swift'],
+  );
+  assert.deepEqual(missingFromProject(['Reconcile.swift'], project), []);
 });

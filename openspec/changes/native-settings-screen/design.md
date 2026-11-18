@@ -177,8 +177,14 @@ It stays page-driven because sign-out changes the origin and the session, and th
 
 **Server address and encryption.** Both are read-only rows with a hand-off to change them:
 
-- The server address shows the host, or "Local only — not syncing".
+- The server address shows the host.
 - Encryption shows "End-to-end encrypted" or "Not encrypted".
+
+**A local-only budget** (`server` is null; decision of 2026-11-18, story comment 5149):
+
+- The Sync section shows "Server: Local only, not syncing", the line "This budget is stored only on this iPhone. Set up sync to keep a copy on your server.", and a "Set up sync" row. That row hands off with the existing `sync-server` action (sc-4637).
+- There is no Sign out row and no Encryption row: there is nothing to sign out of, and an encryption state would mislead.
+- About shows "Server: not syncing", with no Retry. `native/server-info` is not called.
 
 ## D9. AI
 
@@ -188,7 +194,9 @@ No AI-use setting exists in the app today, and nothing in this change uses AI. W
 
 **`SettingsViewModel`** (`NativeBridgeCore`) is tested against the fake transport and the fixtures:
 
-- The first load is redacted.
+- The first load is redacted: every section on its real layout, with placeholder values and no spinner (Reduce Motion: no shimmer). VoiceOver reads "Loading settings".
+- If the first read fails, the tab shows an error with Retry instead of the sections.
+- The native-screen switches show at once, because Swift stores them.
 - A re-read keeps the old values.
 - Events for `preferences` and `sync` coalesce into one re-read.
 - It makes no calls in the background.
@@ -200,11 +208,13 @@ No AI-use setting exists in the app today, and nothing in this change uses AI. W
 
 - **Budget card:** the budget name, and Switch budget (hand-off).
 - **Budget:** Formatting drill-down (date, number, hide decimals, first day of week, currency when flagged), Budget type (with a confirmation that explains the change), Learn categories, and Upcoming length.
-- **Native screens.**
-- **Sync:** server, encryption, Sign out.
-- **Features and Data:** the hand-off rows.
+- **This iPhone:** the Native screens switches, and Language (hand-off, "Opens in the web view"). Both are per-device settings. Language is not a feature.
+- **Sync:** server, encryption, Sign out. For a local-only budget, the local-only rows above instead.
+- **Features and Data:** the remaining hand-off rows.
 - **Advanced:** budget and sync ids, which can be copied, and Limits (group 4).
 - **About:** the client version, the iPhone app version and build (from the bundle), the server version, or "Server unreachable" with Retry, and Notifications (hand-off).
+
+**Copy.** Exact text comes from the Designer's copy table (frame, element, text) once the Product Owner approves it. Each string is a localized string. Wording quoted here is illustrative until then.
 
 ## D11. Limits (group 4, sc-4643)
 

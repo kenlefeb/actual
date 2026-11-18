@@ -287,6 +287,9 @@
   "native/account-register": {
     "skip": "Native iOS bridge keyset-paged read of one account's register (sc-4386, ADR 11); MCP reads transactions through list_transactions"
   },
+  "native/account-upcoming": {
+    "skip": "Native iOS bridge read of one account's upcoming scheduled rows as they will post (sc-4973); MCP reads of upcoming rows are story 5098"
+  },
   "native/reconcile-list-set": {
     "skip": "Native iOS bridge write of the person's own Reconcile checklist exclusions (sc-4801); a display preference, not budget data"
   },

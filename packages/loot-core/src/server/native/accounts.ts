@@ -20,7 +20,7 @@ import {
 import {
   computeSchedulePreviewTransactions,
   DEFAULT_UPCOMING_SCHEDULE_DAYS,
-  getHasTransactionsQuery,
+  getScheduleOccurrenceMatchStartDate,
   getStatus,
 } from '#shared/schedules';
 import type { ScheduleStatuses } from '#shared/schedules';
@@ -55,6 +55,22 @@ export type NativeAccount = {
 };
 
 type Section = { total: number; accounts: NativeAccount[] };
+
+// sc-4973 (D4, D5, D7, D8): `native/account-upcoming`, read after the
+// register's first page
+export type NativeAccountUpcoming = {
+  upcoming: NativeUpcomingRow[];
+  // The returned rows' number and amounts' sum, never rows past the caps
+  upcomingCount: number;
+  upcomingTotal: number;
+  // The day cap, only when it hid a scheduled row
+  upcomingCapDays?: number;
+  // Only when the row cap dropped previews, all counting occurrences: every
+  // preview in the window (without rules), those kept, those dropped
+  upcomingAll?: number;
+  upcomingKept?: number;
+  upcomingMore?: number;
+};
 
 export type NativeAccountsList = {
   sections: { onBudget: Section; offBudget: Section };
@@ -118,13 +134,6 @@ export type NativeAccountRegister = {
   nextCursor: string | null;
   // First page only
   header?: { balance: number; cleared: number; uncleared: number };
-  upcoming?: NativeUpcomingRow[];
-  // Present exactly when `upcoming` is: its rows' number and amounts' sum,
-  // never part of resultCount and resultTotal (D4)
-  upcomingCount?: number;
-  upcomingTotal?: number;
-  // The horizon cap in days, only when it hid a scheduled row (D5)
-  upcomingCapDays?: number;
   // First page, only while a search or a scope other than all is set: how
   // many top-level rows match on every page, and their amounts' sum. A split
   // counts once, at its parent's amount; its children are never counted.
@@ -286,10 +295,11 @@ async function registerFilter(
   account: string,
   scope: NativeRegisterScope,
   search: unknown,
+  handler = 'native/account-register',
 ) {
   if (!SCOPES.includes(scope)) {
     throw new Error(
-      'native/account-register: scope must be all, uncleared or uncategorized',
+      `${handler}: scope must be all, uncleared or uncategorized`,
     );
   }
   if (
@@ -298,7 +308,7 @@ async function registerFilter(
     (typeof search !== 'string' || search.length > MAX_SEARCH)
   ) {
     throw new Error(
-      `native/account-register: search must be text of at most ${MAX_SEARCH} characters`,
+      `${handler}: search must be text of at most ${MAX_SEARCH} characters`,
     );
   }
   const text = typeof search === 'string' ? search.trim() : '';
@@ -331,6 +341,18 @@ async function registerFilter(
   };
 }
 
+async function openAccountFor(account_id: unknown, handler: string) {
+  const account =
+    typeof account_id === 'string'
+      ? await db.first<{ id: string }>(
+          'SELECT id FROM accounts WHERE id = ? AND tombstone = 0',
+          [account_id],
+        )
+      : null;
+  if (!account) throw new Error(`${handler}: no such account`);
+  return account;
+}
+
 export async function accountRegister({
   account_id,
   scope,
@@ -342,14 +364,7 @@ export async function accountRegister({
   search?: string | null;
   cursor?: string | null;
 }): Promise<NativeAccountRegister> {
-  const account =
-    typeof account_id === 'string'
-      ? await db.first<{ id: string }>(
-          'SELECT id FROM accounts WHERE id = ? AND tombstone = 0',
-          [account_id],
-        )
-      : null;
-  if (!account) throw new Error('native/account-register: no such account');
+  const account = await openAccountFor(account_id, 'native/account-register');
   const after = cursor == null ? null : decodeCursor(cursor);
   const filter = await registerFilter(account.id, scope, search);
   const limit = await readLimit('accounts-register-page-size');
@@ -463,18 +478,10 @@ export async function accountRegister({
   );
   const balance = header?.balance ?? 0;
   const cleared = header?.cleared ?? 0;
-  const scheduled = await upcomingRows(account.id);
-  const upcoming = filter.filtered
-    ? await filterUpcoming(scheduled.rows, filter)
-    : scheduled.rows.map(r => r.row);
   const firstPage: NativeAccountRegister = {
     rows,
     nextCursor,
     header: { balance, cleared, uncleared: balance - cleared },
-    upcoming,
-    upcomingCount: upcoming.length,
-    upcomingTotal: upcoming.reduce((sum, r) => sum + r.amount, 0),
-    ...(scheduled.capDays !== null && { upcomingCapDays: scheduled.capDays }),
   };
   if (!filter.filtered) return firstPage;
   // The rows' own filter, over the whole set (the search footer)
@@ -547,17 +554,100 @@ function ruleFieldsOf(
 }
 
 /**
+ * The relevant schedules with a transaction in their occurrence window, in one
+ * query (D9): the same answer as `getHasTransactionsQuery`'s `$or`, each
+ * schedule's latest date compared with its match start date.
+ */
+export async function schedulesWithTransactions(
+  schedules: readonly ScheduleEntity[],
+): Promise<Set<string>> {
+  if (schedules.length === 0) return new Set();
+  const latest = new Map(
+    (
+      await db.all<{ schedule: string; last: number }>(
+        `SELECT schedule, MAX(date) AS last FROM ${ALIVE}
+         WHERE schedule IN (SELECT value FROM json_each(?)) GROUP BY schedule`,
+        [JSON.stringify(schedules.map(s => s.id))],
+      )
+    ).map(r => [r.schedule, r.last]),
+  );
+  return new Set(
+    schedules
+      .filter(s => {
+        const last = latest.get(s.id);
+        return (
+          last != null &&
+          s.next_date != null &&
+          last >=
+            toDateRepr(getScheduleOccurrenceMatchStartDate(s, s.next_date))
+        );
+      })
+      .map(s => s.id),
+  );
+}
+
+/**
+ * At most `max` previews, kept in rounds: every schedule's next occurrence,
+ * then every schedule's second, each round in the web's preview order (D8).
+ */
+function keepInRounds(
+  previews: TransactionEntity[],
+  max: number,
+): TransactionEntity[] {
+  if (previews.length <= max) return previews;
+  const bySchedule = new Map<string, TransactionEntity[]>();
+  for (const t of [...previews].sort((a, b) => a.date.localeCompare(b.date))) {
+    const key = t.schedule ?? '';
+    bySchedule.set(key, [...(bySchedule.get(key) ?? []), t]);
+  }
+  const kept: TransactionEntity[] = [];
+  for (let round = 0; kept.length < max; round++) {
+    const next = [...bySchedule.values()]
+      .flatMap(list => (round < list.length ? [list[round]] : []))
+      .sort(comparePreviewTransactions);
+    kept.push(...next.slice(0, max - kept.length));
+  }
+  return kept;
+}
+
+/**
  * The account's scheduled rows as they will post, by the web preview's own
  * steps: relevance, the schedule's rules, sort and per-line inversion (D1,
- * D2), inside the upcoming window cut at the horizon cap (D5).
+ * D2), inside the day cap (D5) and the row cap (D8), both before rules run.
  */
-async function upcomingRows(
-  account: string,
-): Promise<{ rows: Upcoming[]; capDays: number | null }> {
-  const { data: schedules } = (await aqlQuery(q('schedules').select('*'))) as {
-    data: ScheduleEntity[];
+async function upcomingRows(account: string) {
+  const { data: allSchedules } = (await aqlQuery(
+    q('schedules').select('*'),
+  )) as { data: ScheduleEntity[] };
+  const payees = await db.all<{
+    id: string;
+    name: string;
+    transfer_acct: string | null;
+  }>('SELECT id, name, transfer_acct FROM payees WHERE tombstone = 0');
+  const payeeById = new Map(payees.map(p => [p.id, p]));
+  const payeeByAccount = new Map(payees.map(p => [p.transfer_acct, p]));
+  const accounts = new Map((await db.getAccounts()).map(a => [a.id, a]));
+  const transferAccountOf = (payee?: string | null) => {
+    const id = payee ? payeeById.get(payee)?.transfer_acct : null;
+    return (id && accounts.get(id)) || null;
   };
-  if (schedules.length === 0) return { rows: [], capDays: null };
+  // The shared functions read only the account's id and the payee's id
+  const getTransferAccountByPayee = (payee?: string | null) =>
+    transferAccountOf(payee) as unknown as AccountEntity | null;
+  const getPayeeByTransferAccount = (id?: string | null) => {
+    const payee = payeeByAccount.get(id ?? null);
+    return payee ? { id: payee.id, name: payee.name } : null;
+  };
+
+  // Relevance needs no status, so statuses cover only these (D9)
+  const schedules = allSchedules.filter(schedule =>
+    isScheduleRelevantToAccount({
+      accountId: account,
+      schedule,
+      getTransferAccountByPayee,
+    }),
+  );
+  if (schedules.length === 0) return { rows: [], capDays: null, more: null };
   await refreshScheduleDateLookup();
   setBusinessCalendars(
     await businessCalendarsApp.handlers['business-calendars-get'](),
@@ -568,10 +658,7 @@ async function upcomingRows(
         "SELECT value FROM preferences WHERE id = 'upcomingScheduledTransactionLength'",
       )
     )?.value ?? DEFAULT_UPCOMING_SCHEDULE_DAYS;
-  const { data: hasTransRows } = (await aqlQuery(
-    getHasTransactionsQuery(schedules),
-  )) as { data: Pick<TransactionEntity, 'schedule'>[] };
-  const hasTrans = new Set(hasTransRows.map(row => row.schedule));
+  const hasTrans = await schedulesWithTransactions(schedules);
   const statuses: ScheduleStatuses = new Map(
     schedules.map(s => [
       s.id,
@@ -583,14 +670,18 @@ async function upcomingRows(
       ),
     ]),
   );
-  const payees = await db.all<{
-    id: string;
-    name: string;
-    transfer_acct: string | null;
-  }>('SELECT id, name, transfer_acct FROM payees WHERE tombstone = 0');
-  const payeeById = new Map(payees.map(p => [p.id, p]));
-  const payeeByAccount = new Map(payees.map(p => [p.transfer_acct, p]));
-  const accounts = new Map((await db.getAccounts()).map(a => [a.id, a]));
+  const sortOrder = new Map(schedules.map(s => [s.id, s.sort_order]));
+  const previews = computeSchedulePreviewTransactions(
+    schedules,
+    statuses,
+    String(upcomingLength),
+  ).map(t => ({ ...t, sort_order: sortOrder.get(t.schedule) }));
+  const capDays = await readLimit('accounts-register-upcoming-max-days');
+  const last = monthUtils.addDays(monthUtils.currentDay(), capDays);
+  const inWindow = previews.filter(t => t.date <= last) as TransactionEntity[];
+  const maxRows = await readLimit('accounts-upcoming-max-rows');
+  const kept = keepInRounds(inWindow, maxRows);
+
   const categories = new Map(
     (
       await db.all<{ id: string; name: string }>(
@@ -598,36 +689,10 @@ async function upcomingRows(
       )
     ).map(c => [c.id, c.name]),
   );
-  const transferAccountOf = (payee?: string | null) => {
-    const id = payee ? payeeById.get(payee)?.transfer_acct : null;
-    return (id && accounts.get(id)) || null;
-  };
-  // The shared functions read only the account's id and the payee's id
-  const getTransferAccountByPayee = (payee?: string | null) =>
-    transferAccountOf(payee) as unknown as AccountEntity | null;
-  const getPayeeByTransferAccount = (id?: string | null) =>
-    payeeByAccount.get(id ?? null) ?? null;
-
-  const previews = computeSchedulePreviewTransactions(
-    schedules,
-    statuses,
-    String(upcomingLength),
-    schedule =>
-      isScheduleRelevantToAccount({
-        accountId: account,
-        schedule,
-        getTransferAccountByPayee,
-      }),
-  );
-  const capDays = await readLimit('accounts-register-upcoming-max-days');
-  const last = monthUtils.addDays(monthUtils.currentDay(), capDays);
-  // Cut before the rules run
-  const inWindow = previews.filter(t => t.date <= last);
-  const sortOrder = new Map(schedules.map(s => [s.id, s.sort_order]));
   const status = new Map<string, NativeUpcomingRow['status']>();
   const ruleFields = new Map<string, NativeRuleField[]>();
   const ran: TransactionEntity[] = [];
-  for (const preview of inWindow as TransactionEntity[]) {
+  for (const preview of kept) {
     const after: TransactionEntity = await runRules(preview, accounts);
     const scheduleStatus = preview.forceUpcoming
       ? 'upcoming'
@@ -733,6 +798,10 @@ async function upcomingRows(
   return {
     rows,
     capDays: inWindow.length < previews.length ? capDays : null,
+    more:
+      kept.length < inWindow.length
+        ? { all: inWindow.length, kept: kept.length }
+        : null,
   };
 }
 
@@ -762,4 +831,34 @@ async function filterUpcoming(
   );
   const ids = new Set(matched.map(r => r.id));
   return rows.filter(r => ids.has(r.row.id)).map(r => r.row);
+}
+
+/** `native/account-upcoming` (D7): the upcoming section, read after the register's first page. */
+export async function accountUpcoming({
+  account_id,
+  scope,
+  search,
+}: {
+  account_id: string;
+  scope: NativeRegisterScope;
+  search?: string | null;
+}): Promise<NativeAccountUpcoming> {
+  const handler = 'native/account-upcoming';
+  const account = await openAccountFor(account_id, handler);
+  const filter = await registerFilter(account.id, scope, search, handler);
+  const scheduled = await upcomingRows(account.id);
+  const upcoming = filter.filtered
+    ? await filterUpcoming(scheduled.rows, filter)
+    : scheduled.rows.map(r => r.row);
+  return {
+    upcoming,
+    upcomingCount: upcoming.length,
+    upcomingTotal: upcoming.reduce((sum, r) => sum + r.amount, 0),
+    ...(scheduled.capDays !== null && { upcomingCapDays: scheduled.capDays }),
+    ...(scheduled.more && {
+      upcomingAll: scheduled.more.all,
+      upcomingKept: scheduled.more.kept,
+      upcomingMore: scheduled.more.all - scheduled.more.kept,
+    }),
+  };
 }

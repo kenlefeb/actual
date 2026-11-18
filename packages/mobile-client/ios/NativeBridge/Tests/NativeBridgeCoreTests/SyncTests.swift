@@ -74,7 +74,10 @@ final class SyncAllowlistTests: XCTestCase {
                 "native/reconcile-lock",
             ])
         // sc-4386
-        XCTAssertEqual(NativeBridgeAllowlist.accountsReads, ["native/accounts-list", "native/account-register"])
+        // sc-4973: the upcoming section is its own read
+        XCTAssertEqual(
+            NativeBridgeAllowlist.accountsReads,
+            ["native/accounts-list", "native/account-register", "native/account-upcoming"])
         // sc-4931
         XCTAssertEqual(
             NativeBridgeAllowlist.accountsWrites,

@@ -1,10 +1,11 @@
+import { describe, expect, test } from 'vitest';
+
 import type {
   AccountEntity,
   PayeeEntity,
   ScheduleEntity,
   TransactionEntity,
 } from '#types/models';
-import { describe, expect, test } from 'vitest';
 
 import {
   comparePreviewTransactions,

@@ -30,11 +30,13 @@ function setup() {
 }
 
 describe('accounts reads through the page bridge', () => {
-  it('lists the two reads and the four writes, but not the raw reopen or batch update', () => {
+  it('lists the three reads and the four writes, but not the raw reopen or batch update', () => {
     expect(allowlist).toEqual(
       expect.arrayContaining([
         'native/accounts-list',
         'native/account-register',
+        // sc-4973 (native-register-upcoming-rows D7)
+        'native/account-upcoming',
         'native/transactions-categorize',
         'native/transactions-delete',
         'native/account-reopen',
@@ -116,6 +118,11 @@ describe('accounts reads through the page bridge', () => {
         extra: 1,
       },
       { account_id: 'a', scope: 'all', search: 'x', cursor: 'c' },
+    ],
+    [
+      'native/account-upcoming',
+      { account_id: 'a', scope: 'all', search: 'x', cursor: 'c', extra: 1 },
+      { account_id: 'a', scope: 'all', search: 'x' },
     ],
   ])('forwards %s with only its own fields', async (name, args, forwarded) => {
     const { bridge, send } = setup();

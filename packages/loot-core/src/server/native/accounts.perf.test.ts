@@ -1,3 +1,5 @@
+import os from 'node:os';
+
 // Run: yarn workspace @actual-app/core run perf (excluded from `yarn test`).
 // Fork-only (sc-4386). Times `native/accounts-list` on 50 accounts and
 // `native/account-register` for a first page and a page 10,000 rows deep of a
@@ -146,10 +148,11 @@ describe('native accounts reads', () => {
     ).toBeLessThan(50);
   }, 600_000);
 
-  // sc-4973 (native-register-upcoming-rows D6): the first page with 200
-  // schedules in the window, every upcoming row through the schedule's rules,
-  // and a worst case of 50 daily schedules across the full 92-day cap
-  it('load the first page with schedules within the 50 ms gate', async () => {
+  // sc-4973 (native-register-upcoming-rows D6): with 200 schedules in the
+  // window and a worst case of 50 daily schedules across the 92-day cap, the
+  // register's first page within 50 ms, and the upcoming read within 100 ms
+  // and 150 ms. Prints the load average: time on a quiet machine
+  it('load with schedules within their gates', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date(2017, 0, 1));
     await loadMappings();
@@ -245,37 +248,54 @@ describe('native accounts reads', () => {
     }
     for (; i < 200; i++) await schedule(i, day(i), 'a0', [category, notes(i)]);
 
-    const read = app.handlers['native/account-register'];
-    const page = (scope: 'all' | 'uncleared', search: string | null) =>
-      read({ account_id: 'a0', scope, search, cursor: null });
-    const firstPage = await page('all', null);
-    expect(firstPage.upcomingCount).toBeGreaterThan(200);
-    // Every case is timed and printed before the gate fails any of them
+    const register = app.handlers['native/account-register'];
+    const upcoming = app.handlers['native/account-upcoming'];
+    type Scope = 'all' | 'uncleared';
+    const page = (scope: Scope, search: string | null) =>
+      register({ account_id: 'a0', scope, search, cursor: null });
+    const scheduled = (scope: Scope, search: string | null) =>
+      upcoming({ account_id: 'a0', scope, search });
+    const load = `load ${os.loadavg()[0].toFixed(1)} on ${os.cpus().length} cores`;
+    console.error(`native accounts reads with schedules: ${load}`);
+    // More previews than the row cap: rules run for the cap's worth
+    expect((await scheduled('all', null)).upcomingAll).toBeGreaterThan(200);
+    // Every case is timed and printed before the gates fail any of them
     const over: string[] = [];
-    const gate = async (label: string, run: () => Promise<unknown>) => {
+    const gate = async (
+      label: string,
+      limit: number,
+      run: () => Promise<unknown>,
+    ) => {
       const median = await time(label, run);
-      if (median >= 50) over.push(`${label}: ${median.toFixed(1)} ms`);
+      if (median >= limit) over.push(`${label}: ${median.toFixed(1)} ms`);
     };
-    const cases = async (label: string) => {
-      await gate(`${label}: first page`, () => page('all', null));
-      await gate(`${label}: first page, search`, () =>
-        page('all', 'scheduled 1'),
-      );
-      await gate(`${label}: first page, uncleared`, () =>
-        page('uncleared', null),
-      );
+    const cases = async (label: string, limit: number) => {
+      for (const [name, scope, search] of [
+        ['no filter', 'all', null],
+        ['search', 'all', 'scheduled 1'],
+        ['uncleared', 'uncleared', null],
+      ] as const) {
+        // D7: the register read does no schedule work
+        await gate(`native/account-register ${label}, ${name}`, 50, () =>
+          page(scope, search),
+        );
+        await gate(`native/account-upcoming ${label}, ${name}`, limit, () =>
+          scheduled(scope, search),
+        );
+      }
     };
-    await cases('native/account-register with 200 schedules');
+    await cases('with 200 schedules', 100);
 
     // Worst case: 50 daily schedules over the full 92-day cap, about 4,600
-    // rows through the rules
+    // previews, cut to the row cap before rules run
     for (; i < 250; i++) {
       await schedule(i, daily('2017-01-01'), 'a0', [category, notes(i)], {
         custom_upcoming_length: '92-day',
       });
     }
-    expect((await page('all', null)).upcomingCount).toBeGreaterThan(4600);
-    await cases('native/account-register worst case, 50 daily over 92 days');
+    expect((await scheduled('all', null)).upcomingAll).toBeGreaterThan(4600);
+    await cases('worst case, 50 daily over 92 days', 150);
+    console.error(`native accounts reads with schedules: ${load}`);
     expect(over).toEqual([]);
   }, 600_000);
 });

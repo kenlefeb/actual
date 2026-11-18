@@ -61,7 +61,8 @@ final class AccountsContractTests: XCTestCase {
         XCTAssertNotNil(page.rows[0].runningBalance)
         XCTAssertNil(page.nextCursor)
         XCTAssertEqual(page.header?.balance, page.rows.first?.runningBalance)
-        XCTAssertEqual(page.upcoming, [])
+        // sc-4973: upcoming rows are their own read
+        XCTAssertNil(page.upcoming)
         XCTAssertNil(page.resultCount)
         XCTAssertNil(page.resultTotal)
         XCTAssertTrue(try roundTrips(AccountRegister.self, data))

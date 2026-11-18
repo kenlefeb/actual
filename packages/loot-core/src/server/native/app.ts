@@ -58,7 +58,7 @@ import type {
   TransactionEntity,
 } from '#types/models';
 
-import { accountRegister, accountsList } from './accounts';
+import { accountRegister, accountsList, accountUpcoming } from './accounts';
 import {
   accountMove,
   accountReopen,
@@ -237,6 +237,7 @@ export type NativeHandlers = {
   'native/reconcile-lock': typeof reconcileLock;
   'native/accounts-list': typeof accountsListRead;
   'native/account-register': typeof accountRegisterRead;
+  'native/account-upcoming': typeof accountUpcoming;
   'native/transactions-categorize': typeof transactionsCategorize;
   'native/transactions-delete': typeof transactionsDelete;
   'native/account-reopen': typeof accountReopen;
@@ -284,6 +285,8 @@ app.method(
 // sc-4386 (native-accounts-screen D1)
 app.method('native/accounts-list', accountsListRead);
 app.method('native/account-register', accountRegisterRead);
+// sc-4973 (native-register-upcoming-rows D7): read after the first page
+app.method('native/account-upcoming', accountUpcoming);
 // sc-4931 (D3): each write is one undo step carrying Swift's token
 app.method(
   'native/transactions-categorize',

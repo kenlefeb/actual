@@ -439,19 +439,19 @@ describe('native/account-register', () => {
         cleared: 4180 * -1 + 2500,
         uncleared: -500 - 3000 - 7000,
       });
-      expect(page.upcoming).toEqual([]);
+      // sc-4973 (D7): upcoming rows are their own read
+      expect(page).not.toHaveProperty('upcoming');
       await expect(JSON.stringify(page, null, 2) + '\n').toMatchFileSnapshot(
         './fixtures/account-register.json',
       );
     });
 
-    it('sends the header and upcoming on the first page only', async () => {
+    it('sends the header on the first page only', async () => {
       await setPref('accounts-register-page-size', '2');
       const first = await register();
       expect(first.header).toBeDefined();
       const second = await register({ cursor: first.nextCursor });
       expect(second.header).toBeUndefined();
-      expect(second.upcoming).toBeUndefined();
     });
 
     it('filters by scope', async () => {
@@ -571,26 +571,5 @@ describe('native/account-register', () => {
       } while (cursor);
       return rows;
     }
-  });
-
-  it('lists the schedules due in the upcoming window on the first page', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(new Date(2017, 0, 1));
-    await setPref('upcomingScheduledTransactionLength', '30');
-    await schedulesApp.handlers['schedule/create']({
-      schedule: { name: 'Rent' },
-      conditions: [
-        { op: 'is', field: 'date', value: '2017-01-10' },
-        { op: 'is', field: 'amount', value: -150000 },
-        { op: 'is', field: 'account', value: 'checking' },
-      ],
-    });
-    const page = await register();
-    expect(page.upcoming).toHaveLength(1);
-    expect(page.upcoming?.[0]).toMatchObject({
-      date: '2017-01-10',
-      amount: -150000,
-    });
-    expect((await register({ account_id: 'savings' })).upcoming).toEqual([]);
   });
 });

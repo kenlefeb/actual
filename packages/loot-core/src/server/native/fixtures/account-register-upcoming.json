@@ -1,19 +1,5 @@
 {
   "checking": {
-    "currencyCode": "",
-    "currencyDecimalPlaces": 2,
-    "currencySymbol": "",
-    "currencySymbolPosition": "before",
-    "currencySpace": false,
-    "numberFormat": "comma-dot",
-    "hideFraction": false,
-    "rows": [],
-    "nextCursor": null,
-    "header": {
-      "balance": 0,
-      "cleared": 0,
-      "uncleared": 0
-    },
     "upcoming": [
       {
         "id": "preview/schedule-save/2017-01-06",
@@ -56,20 +42,6 @@
     "upcomingTotal": -57000
   },
   "savings": {
-    "currencyCode": "",
-    "currencyDecimalPlaces": 2,
-    "currencySymbol": "",
-    "currencySymbolPosition": "before",
-    "currencySpace": false,
-    "numberFormat": "comma-dot",
-    "hideFraction": false,
-    "rows": [],
-    "nextCursor": null,
-    "header": {
-      "balance": 0,
-      "cleared": 0,
-      "uncleared": 0
-    },
     "upcoming": [
       {
         "id": "preview/schedule-save/2017-01-06",

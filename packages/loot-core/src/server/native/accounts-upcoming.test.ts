@@ -1,6 +1,6 @@
 // Fork-only (sc-4973, openspec/changes/native-register-upcoming-rows). The
-// contract for the upcoming rows of `native/account-register`: rows as they
-// will post, filtered by the posted rows' own predicate. The Swift tests decode
+// contract for `native/account-upcoming`, read after the register's first
+// page: rows as they will post, filtered by the posted rows' own predicate. The Swift tests decode
 // fixtures/account-register-upcoming.json. Regenerate with `vitest -u`.
 import { aqlQuery } from '#server/aql';
 import * as db from '#server/db';
@@ -17,24 +17,34 @@ import {
 } from '#shared/schedule-preview';
 import {
   computeSchedulePreviewTransactions,
+  getHasTransactionsQuery,
   getStatus,
 } from '#shared/schedules';
 import type { ScheduleStatuses } from '#shared/schedules';
 import { ungroupTransactions } from '#shared/transactions';
 import type { AccountEntity, ScheduleEntity } from '#types/models';
 
+import { schedulesWithTransactions } from './accounts';
 import { app } from './app';
 
 const h = app.handlers;
-type Args = Parameters<(typeof h)['native/account-register']>[0];
-const register = (over: Partial<Args> = {}) =>
+type Args = Parameters<(typeof h)['native/account-upcoming']>[0];
+const upcoming = (over: Partial<Args> = {}) =>
+  h['native/account-upcoming']({
+    account_id: 'checking',
+    scope: 'all',
+    search: null,
+    ...over,
+  } as Args);
+type RegisterArgs = Parameters<(typeof h)['native/account-register']>[0];
+const register = (over: Partial<RegisterArgs> = {}) =>
   h['native/account-register']({
     account_id: 'checking',
     scope: 'all',
     search: null,
     cursor: null,
     ...over,
-  } as Args);
+  } as RegisterArgs);
 const setPref = (id: string, value: string) =>
   db.update('preferences', { id, value });
 
@@ -167,7 +177,7 @@ afterEach(() => {
   global.currentMonth = null;
 });
 
-describe('native/account-register upcoming rows', () => {
+describe('native/account-upcoming', () => {
   it('runs the schedule rules and names the fields they set', async () => {
     const id = await addSchedule('Power', {
       date: '2017-01-03',
@@ -182,7 +192,7 @@ describe('native/account-register upcoming rows', () => {
       amount: -100,
       payee: 'grocer',
     });
-    expect((await register()).upcoming).toEqual([
+    expect((await upcoming()).upcoming).toEqual([
       expect.objectContaining({
         id: expect.stringMatching(/^preview\/.+\/2017-01-04$/),
         payee: 'Grocer',
@@ -208,7 +218,7 @@ describe('native/account-register upcoming rows', () => {
 
   it('shows a split on its own account, and only its line into another account, inverted', async () => {
     const id = await addSplit();
-    expect((await register()).upcoming).toEqual([
+    expect((await upcoming()).upcoming).toEqual([
       expect.objectContaining({
         id: `preview/${id}/2017-01-05`,
         amount: -50000,
@@ -218,7 +228,7 @@ describe('native/account-register upcoming rows', () => {
         ruleFields: ['payee', 'splits'],
       }),
     ]);
-    expect((await register({ account_id: 'savings' })).upcoming).toEqual([
+    expect((await upcoming({ account_id: 'savings' })).upcoming).toEqual([
       expect.objectContaining({
         id: `preview/${id}/2017-01-05/1`,
         scheduleId: id,
@@ -230,7 +240,7 @@ describe('native/account-register upcoming rows', () => {
         ruleFields: ['payee', 'amount'],
       }),
     ]);
-    expect((await register({ account_id: 'card' })).upcoming).toEqual([]);
+    expect((await upcoming({ account_id: 'card' })).upcoming).toEqual([]);
   });
 
   it('inverts a plain transfer into the account, naming the other account', async () => {
@@ -239,7 +249,7 @@ describe('native/account-register upcoming rows', () => {
       amount: -7000,
       payee: 'to-savings',
     });
-    expect((await register({ account_id: 'savings' })).upcoming).toEqual([
+    expect((await upcoming({ account_id: 'savings' })).upcoming).toEqual([
       expect.objectContaining({
         id: `preview/${id}/2017-01-06`,
         amount: 7000,
@@ -247,7 +257,7 @@ describe('native/account-register upcoming rows', () => {
         transferAccount: { id: 'checking', name: 'Checking' },
       }),
     ]);
-    expect((await register()).upcoming).toEqual([
+    expect((await upcoming()).upcoming).toEqual([
       expect.objectContaining({
         amount: -7000,
         payee: 'Savings',
@@ -276,7 +286,7 @@ describe('native/account-register upcoming rows', () => {
         },
       ],
     });
-    expect((await register({ account_id: 'card' })).upcoming).toEqual([
+    expect((await upcoming({ account_id: 'card' })).upcoming).toEqual([
       expect.objectContaining({
         id: `preview/${id}/2017-01-07/1`,
         amount: 3000,
@@ -290,7 +300,7 @@ describe('native/account-register upcoming rows', () => {
     await addSchedule('Soon', { date: '2017-01-02', amount: -2 });
     await addSchedule('Missed', { date: '2016-12-30', amount: -3 });
     const status = Object.fromEntries(
-      ((await register()).upcoming ?? []).map(r => [r.amount, r.status]),
+      ((await upcoming()).upcoming ?? []).map(r => [r.amount, r.status]),
     );
     expect(status).toEqual({ '-1': 'due', '-2': 'upcoming', '-3': 'missed' });
   });
@@ -303,8 +313,8 @@ describe('native/account-register upcoming rows', () => {
       payee: 'to-savings',
     });
     const read = async () => ({
-      checking: await register(),
-      savings: await register({ account_id: 'savings' }),
+      checking: await upcoming(),
+      savings: await upcoming({ account_id: 'savings' }),
     });
     const first = await read();
     expect(await read()).toEqual(first);
@@ -348,42 +358,41 @@ describe('native/account-register upcoming rows', () => {
     for (const account of ['checking', 'savings']) {
       const web = await webPreview(account);
       expect(web.length).toBeGreaterThan(0);
-      expect((await register({ account_id: account })).upcoming).toEqual(
+      expect((await upcoming({ account_id: account })).upcoming).toEqual(
         web.map(row => expect.objectContaining(row)),
       );
     }
   });
 
-  it('is on the first page only and leaves posted pages and cursors unchanged', async () => {
-    for (let i = 0; i < 5; i++) {
-      await addTxn(`p${i}`, { date: `2016-12-1${i}` });
-    }
-    await setPref('accounts-register-page-size', '2');
-    const later = async () => {
-      const out = [];
-      let cursor = (await register()).nextCursor;
-      while (cursor) {
-        const page = await register({ cursor });
-        out.push(page);
-        cursor = page.nextCursor;
-      }
-      return out;
-    };
-    const before = await later();
-    const firstBefore = await register();
+  it('is its own read: the register read has no upcoming fields', async () => {
+    await addTxn('p0', { date: '2016-12-10' });
     await addSchedule('Soon', { date: '2017-01-02', amount: -2 });
-    const first = await register();
-    expect(first.upcoming).toHaveLength(1);
-    expect(first.rows).toEqual(firstBefore.rows);
-    expect(first.nextCursor).toBe(firstBefore.nextCursor);
-    const after = await later();
-    expect(after).toEqual(before);
-    for (const page of after) {
-      expect(page).not.toHaveProperty('upcoming');
-      expect(page).not.toHaveProperty('upcomingCount');
-      expect(page).not.toHaveProperty('upcomingTotal');
-      expect(page).not.toHaveProperty('upcomingCapDays');
+    expect((await upcoming()).upcoming).toHaveLength(1);
+    for (const page of [
+      await register(),
+      await register({ scope: 'uncleared', search: 'x' }),
+    ]) {
+      for (const key of [
+        'upcoming',
+        'upcomingCount',
+        'upcomingTotal',
+        'upcomingCapDays',
+      ]) {
+        expect(page).not.toHaveProperty(key);
+      }
     }
+  });
+
+  it('refuses the arguments the register read refuses', async () => {
+    await expect(upcoming({ account_id: 'nope' })).rejects.toThrow(
+      'native/account-upcoming: no such account',
+    );
+    await expect(upcoming({ scope: 'paid' as never })).rejects.toThrow(
+      'native/account-upcoming: scope must be all, uncleared or uncategorized',
+    );
+    await expect(upcoming({ search: 'x'.repeat(101) })).rejects.toThrow(
+      'native/account-upcoming: search must be text of at most 100 characters',
+    );
   });
 
   describe('scope and search', () => {
@@ -409,12 +418,10 @@ describe('native/account-register upcoming rows', () => {
       });
     });
     const amounts = async (over: Partial<Args>) =>
-      ((await register(over)).upcoming ?? []).map(r => r.amount);
+      ((await upcoming(over)).upcoming ?? []).map(r => r.amount);
 
     it('shows the upcoming rows the posted rows filter would match', async () => {
-      const uncleared = await register({ scope: 'uncleared' });
-      expect(uncleared.upcoming?.map(r => r.amount)).toEqual([-150000, -1599]);
-      expect(uncleared.rows.map(r => r.id)).not.toContain('cleared-rent');
+      expect(await amounts({ scope: 'uncleared' })).toEqual([-150000, -1599]);
       expect(await amounts({ search: 'netflix' })).toEqual([-1599]);
       expect(await amounts({ search: 'rent' })).toEqual([-150000]);
       expect(await amounts({ search: 'utilities' })).toEqual([-1599]);
@@ -440,14 +447,15 @@ describe('native/account-register upcoming rows', () => {
         amount: -2000,
         actions: [{ op: 'set', field: 'notes', value: 'xyz' }],
       });
-      const page = await register({ search: 'xyz' });
-      expect(page).toMatchObject({
+      expect(await register({ search: 'xyz' })).toMatchObject({
         resultCount: 2,
         resultTotal: -1500,
+      });
+      expect(await upcoming({ search: 'xyz' })).toMatchObject({
         upcomingCount: 1,
         upcomingTotal: -2000,
       });
-      expect(await register({ search: 'nothing like it' })).toMatchObject({
+      expect(await upcoming({ search: 'nothing like it' })).toMatchObject({
         upcoming: [],
         upcomingCount: 0,
         upcomingTotal: 0,
@@ -456,41 +464,200 @@ describe('native/account-register upcoming rows', () => {
   });
 
   it('counts an inverted line once, and is empty with nothing upcoming', async () => {
-    expect(await register()).toMatchObject({
+    expect(await upcoming()).toMatchObject({
       upcoming: [],
       upcomingCount: 0,
       upcomingTotal: 0,
     });
     await addSplit();
-    expect(await register({ account_id: 'savings' })).toMatchObject({
+    expect(await upcoming({ account_id: 'savings' })).toMatchObject({
       upcomingCount: 1,
       upcomingTotal: 20000,
     });
-    expect(await register()).toMatchObject({
+    expect(await upcoming()).toMatchObject({
       upcomingCount: 1,
       upcomingTotal: -50000,
     });
   });
 
   it('filters more rows than SQLite binds as variables, as one JSON parameter', async () => {
-    // 40 daily schedules over 366 days: about 14,600 rows, past both 999 and
-    // 32,766 variables' worth at 12 a row
-    await setPref('accounts-register-upcoming-max-days', '366');
-    await setPref('upcomingScheduledTransactionLength', '400-day');
-    for (let i = 0; i < 40; i++) {
+    // A row cap of 500: 500 split rows of 3 SQL rows each, past 999
+    // variables' worth at 12 a row
+    await setPref('accounts-upcoming-max-rows', '500');
+    await setPref('accounts-register-upcoming-max-days', '120');
+    // 5 daily schedules over 101 days: 505 previews, 500 kept
+    await setPref('upcomingScheduledTransactionLength', '100-day');
+    for (let i = 0; i < 5; i++) {
       await addSchedule(`Daily ${i}`, {
         date: daily('2017-01-01'),
-        amount: -(i + 1),
-        actions: [{ op: 'set', field: 'notes', value: `daily ${i}` }],
+        amount: -(i + 1) * 1000,
+        actions: [
+          {
+            op: 'set-split-amount',
+            field: 'amount',
+            value: -100,
+            options: { splitIndex: 1, method: 'fixed-amount' },
+          },
+          {
+            op: 'set',
+            field: 'notes',
+            value: `daily ${i}`,
+            options: { splitIndex: 1 },
+          },
+          {
+            op: 'set-split-amount',
+            field: 'amount',
+            options: { splitIndex: 2, method: 'remainder' },
+          },
+        ],
       });
     }
-    expect((await register()).upcomingCount).toBeGreaterThan(14_000);
-    const found = await register({ scope: 'uncleared', search: 'daily 7' });
-    // Every day from today through the cap
-    expect(found.upcomingCount).toBe(367);
-    expect(found.upcoming).toHaveLength(367);
-    expect(new Set(found.upcoming?.map(r => r.amount))).toEqual(new Set([-8]));
+    const all = await upcoming();
+    expect(all.upcomingCount).toBe(500);
+    expect(all.upcoming.every(r => r.splitCount === 2)).toBe(true);
+    const found = await upcoming({ scope: 'uncleared', search: 'daily 3' });
+    expect(found.upcomingCount).toBe(100);
+    expect(new Set(found.upcoming.map(r => r.amount))).toEqual(
+      new Set([-4000]),
+    );
   }, 300_000);
+
+  describe('row cap', () => {
+    it('keeps every schedule before any later occurrence, and says how many it dropped', async () => {
+      await setPref('accounts-upcoming-max-rows', '10');
+      const weekly = (start: string) => ({
+        ...daily(start),
+        frequency: 'weekly',
+      });
+      for (let i = 0; i < 12; i++) {
+        await addSchedule(`Weekly ${i}`, {
+          date: weekly('2017-01-02'),
+          amount: -(i + 1),
+          schedule: { custom_upcoming_length: '1-month' },
+        });
+      }
+      await addSchedule('Bill', {
+        date: '2017-01-21',
+        amount: -99999,
+        schedule: { custom_upcoming_length: '1-month' },
+      });
+      const read = await upcoming();
+      expect(read.upcoming).toHaveLength(10);
+      expect(read.upcoming.map(r => r.amount)).toContain(-99999);
+      // Only next occurrences: every kept weekly row is on its first date
+      expect(
+        read.upcoming.filter(r => r.amount !== -99999).map(r => r.date),
+      ).toEqual(Array(9).fill('2017-01-02'));
+      // 12 weekly schedules, 5 dates each in a month, and the bill
+      expect(read).toMatchObject({
+        upcomingAll: 61,
+        upcomingKept: 10,
+        upcomingMore: 51,
+      });
+    });
+
+    it('runs rules only for the kept previews: 50 daily schedules over 92 days', async () => {
+      for (let i = 0; i < 50; i++) {
+        await addSchedule(`Daily ${i}`, {
+          date: daily('2017-01-01'),
+          amount: -(i + 1),
+          schedule: { custom_upcoming_length: '92-day' },
+        });
+      }
+      const read = await upcoming();
+      expect(read.upcoming).toHaveLength(100);
+      expect(read).toMatchObject({
+        upcomingAll: 50 * 93,
+        upcomingKept: 100,
+        upcomingMore: 50 * 93 - 100,
+      });
+      // Two rounds: every schedule's first two dates
+      expect(new Set(read.upcoming.map(r => r.date))).toEqual(
+        new Set(['2017-01-01', '2017-01-02']),
+      );
+    }, 120_000);
+
+    it('says nothing under the cap', async () => {
+      for (let i = 0; i < 12; i++) {
+        await addSchedule(`S${i}`, { date: '2017-01-03', amount: -(i + 1) });
+      }
+      const read = await upcoming();
+      expect(read.upcoming).toHaveLength(12);
+      for (const key of ['upcomingAll', 'upcomingKept', 'upcomingMore']) {
+        expect(read).not.toHaveProperty(key);
+      }
+    });
+
+    it('falls back to 100 rows on a bad value', async () => {
+      await addSchedule('Long', {
+        date: daily('2017-01-01'),
+        amount: -1,
+        schedule: { custom_upcoming_length: '1-year' },
+      });
+      await setPref('accounts-register-upcoming-max-days', '366');
+      for (const value of ['0', '600', 'abc']) {
+        await setPref('accounts-upcoming-max-rows', value);
+        expect((await upcoming()).upcomingKept).toBe(100);
+      }
+    });
+  });
+
+  it('finds paid schedules in one query, as getHasTransactionsQuery does', async () => {
+    await db.insertAccount({ id: 'closed', name: 'Closed', closed: 1 });
+    const ids = {
+      paid: await addSchedule('Paid', { date: '2017-01-03', amount: -1 }),
+      unpaid: await addSchedule('Unpaid', { date: '2017-01-03', amount: -2 }),
+      child: await addSchedule('Child', { date: '2017-01-03', amount: -3 }),
+      dead: await addSchedule('Dead', { date: '2017-01-03', amount: -4 }),
+      closed: await addSchedule('Closed', {
+        date: '2017-01-03',
+        amount: -5,
+        account: 'closed',
+      }),
+      early: await addSchedule('Early', { date: '2017-01-03', amount: -6 }),
+      transfer: await addSchedule('Transfer', {
+        date: '2017-01-03',
+        amount: -7,
+        payee: 'to-savings',
+      }),
+    };
+    await addTxn('t-paid', { date: '2017-01-03', schedule: ids.paid });
+    await addTxn('t-parent', { date: '2017-01-03', is_parent: true });
+    await addTxn('t-child', {
+      date: '2017-01-03',
+      is_child: true,
+      parent_id: 't-parent',
+      schedule: ids.child,
+    });
+    await addTxn('t-dead', {
+      date: '2017-01-03',
+      schedule: ids.dead,
+      tombstone: 1,
+    });
+    await addTxn('t-closed', {
+      account: 'closed',
+      date: '2017-01-03',
+      schedule: ids.closed,
+    });
+    // Before the occurrence: not paid
+    await addTxn('t-early', { date: '2016-12-01', schedule: ids.early });
+    await addTxn('t-transfer', {
+      date: '2017-01-03',
+      schedule: ids.transfer,
+      payee: 'to-savings',
+    });
+    const { data: schedules } = (await aqlQuery(
+      q('schedules').select('*'),
+    )) as { data: ScheduleEntity[] };
+    const { data: web } = (await aqlQuery(
+      getHasTransactionsQuery(schedules),
+    )) as { data: { schedule: string }[] };
+    const expected = new Set(web.map(r => r.schedule));
+    expect(expected).toEqual(
+      new Set([ids.paid, ids.child, ids.closed, ids.transfer]),
+    );
+    expect(await schedulesWithTransactions(schedules)).toEqual(expected);
+  });
 
   describe('horizon cap', () => {
     it('cuts a longer window at the cap and says so', async () => {
@@ -499,18 +666,18 @@ describe('native/account-register upcoming rows', () => {
         amount: -1,
         schedule: { custom_upcoming_length: '6-month' },
       });
-      const page = await register();
+      const page = await upcoming();
       expect(page.upcomingCapDays).toBe(92);
       const dates = page.upcoming?.map(r => r.date);
       expect(dates).toContain('2017-04-03');
       expect(dates).not.toContain('2017-04-04');
       await setPref('accounts-register-upcoming-max-days', '120');
-      expect((await register()).upcomingCapDays).toBe(120);
+      expect((await upcoming()).upcomingCapDays).toBe(120);
     });
 
     it('says nothing when no row was cut', async () => {
       await addSchedule('Soon', { date: daily('2017-01-01'), amount: -1 });
-      expect(await register()).not.toHaveProperty('upcomingCapDays');
+      expect(await upcoming()).not.toHaveProperty('upcomingCapDays');
     });
 
     it('falls back to 92 days on a bad value', async () => {
@@ -521,7 +688,7 @@ describe('native/account-register upcoming rows', () => {
       });
       for (const value of ['0', '400', 'abc']) {
         await setPref('accounts-register-upcoming-max-days', value);
-        expect((await register()).upcomingCapDays).toBe(92);
+        expect((await upcoming()).upcomingCapDays).toBe(92);
       }
     });
   });
@@ -565,7 +732,9 @@ async function webPreview(account: string) {
       a => a.id === payees.find(p => p.id === id)?.transfer_acct,
     ) as unknown as AccountEntity) ?? null;
   const getPayeeByTransferAccount = (id?: string | null) =>
-    payees.find(p => p.transfer_acct === id) ?? null;
+    payees
+      .filter(p => p.transfer_acct === id)
+      .map(p => ({ id: p.id, name: p.name }))[0] ?? null;
   const previews = computeSchedulePreviewTransactions(
     schedules,
     statuses,

@@ -105,9 +105,19 @@ only expense groups can be created.
   updates, category and group creates (deleted while unused), and category and group moves (it syncs
   first and puts the row back before its old next sibling, or last; it refuses, naming what changed and
   what to do instead, when the row, its old group or that sibling moved or is gone; a move logged before
-  moves recorded their place is not undoable). **Not undoable:** budget templates (they also write goals and the automation store; each cell's goal before and after is in the audit line),
-  paycheck skip, `write_move_on_budget`, deletes, account tools, an undo, and any
-  line written before audit `schema: 2`. Writes (and undos) run one at a time per process.
+  moves recorded their place is not undoable). Every other write tool is declared **not undoable**
+  with a fixed reason, which `list_writes`, `write_undo` (for your own write) and the tool's
+  description give: budget templates (they also store goals and template automations); carryover
+  (only the first month is logged; planned in sc-5097); hold and reset hold (each clears the other);
+  paycheck skip (the engine cannot put back a skipped date); account create (delete it instead),
+  update, reopen, group create and update (planned in sc-5097); account group delete (regroup by
+  hand); account close (the bank-sync unlink cannot be undone); account delete (every row goes with
+  no snapshot, and the unlink); `write_move_on_budget` (no move-off-budget action); business days
+  (regenerating paychecks can clear skips); reconcile (MCP cannot unlock rows); and an undo. A line
+  written before audit `schema: 2` is not undoable either. A test fails when a write tool is added
+  without a declaration. An undoable write whose undo's audit line would exceed the audit line limit
+  is refused up front, so every undoable write that runs can be undone. Writes (and undos) run one
+  at a time per process.
   Under `confirm_destructive`, undoing a create goes through the dry run and `confirm` like a delete.
 - **Ids only.** Accounts, transactions, payees, categories and paychecks are named by the ids the
   read tools return. A name where an id belongs is refused, never looked up.
@@ -227,6 +237,11 @@ scopes it needs (its description ends `Needs: …`):
   values are unchanged; otherwise it is refused. This protects against mistakes only: a
   compromised or prompt-injected model can run the dry run itself. Keep destructive tools on
   prompt in your client.
+- **Always confirmed.** `write_apply_budget_templates`, and `write_close_account` and
+  `write_delete_account` for a bank-linked account (a bank sync link read at each call; a link that
+  cannot be read counts as linked), always answer the first call with a dry run and a `confirm`,
+  even when `confirm_destructive` is off. A `confirm` passed to either is always checked, so a change of
+  link makes an old one stale.
 - **`accounts:delete` and `delete` are independent.** `delete` does not imply `accounts:delete` and
   the reverse: a grant with `delete` gains no account deletes, and one with `accounts:delete` gains
   no transaction, category or group deletes. A grants file that names `accounts:delete` is invalid

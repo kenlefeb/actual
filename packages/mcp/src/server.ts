@@ -19,6 +19,7 @@ import { registerCalendarTools } from './tools/read/calendars';
 import { registerCoreTools } from './tools/read/core';
 import { registerPaycheckTools } from './tools/read/paychecks';
 import { registerReconciliationTools } from './tools/read/reconciliation';
+import { declaration } from './tools/write/declarations';
 import { registerWriteTools } from './tools/write/register';
 import type { Access, WriteLog } from './tools/write/shared';
 import { registerUndoTools } from './tools/write/undo';
@@ -78,6 +79,11 @@ export function createServer(
     ) => {
       if (access.scopes.length === 0) {
         throw new Error(`${name} declares no scope.`);
+      }
+      // Every write tool says whether write_undo reverses it (design D4)
+      const declared = suffix === WRITE_NOTE ? declaration(name) : '';
+      if (declared === undefined) {
+        throw new Error(`${name} is not declared undoable or not undoable.`);
       }
       const callback = async (
         args: z.infer<z.ZodObject<S>>,
@@ -158,7 +164,7 @@ export function createServer(
       server.registerTool(
         name,
         {
-          description: `${description}${suffix} Needs: ${access.scopes.join(' ')}.`,
+          description: `${description}${declared ? ` ${declared}` : ''}${suffix} Needs: ${access.scopes.join(' ')}.`,
           inputSchema: (access.strict ? z.object(shape).strict() : shape) as S,
           annotations: {
             readOnlyHint: access === READ,

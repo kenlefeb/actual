@@ -361,9 +361,10 @@ extension NativeTab {
     }
 }
 
-// sc-5219: whether the storage line is in this build. Off in Release until the
-// final group 3 PR, which turns it on with the restart and failure notices and
-// the storage guard (task 3.10; `yarn check:native-swift` keeps them together).
+// sc-5219: whether the storage line, and the Accounts offline wording that goes
+// with it, can show in this build. Off in Release until the final group 3 PR,
+// which turns it on with the restart and failure notices and the storage guard
+// (task 3.10; `yarn check:native-swift` keeps them together).
 enum WriteStorageLineRollout {
     static let isOnInRelease = false
 

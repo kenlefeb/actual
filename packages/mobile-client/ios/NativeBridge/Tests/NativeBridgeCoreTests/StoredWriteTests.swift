@@ -354,6 +354,35 @@ final class StoredWriteTests: XCTestCase {
         XCTAssertTrue(status.isPending)
     }
 
+    // This publisher is what the Accounts screen follows
+    func testPendingChangesIncludeAPossibleLoss() {
+        let status = WriteStorageStatus()
+        var seen: [Bool] = []
+        let watching = status.pendingChanges.sink { seen.append($0) }
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "old", n: 1)))
+        status.pageLoaded(epoch: "new")
+        XCTAssertNil(status.message)
+        XCTAssertEqual(seen.last, true)
+        status.acknowledgeMayNotBeSaved()
+        XCTAssertEqual(seen.last, false)
+        watching.cancel()
+    }
+
+    func testAStalePagesStoredEventIsIgnored() {
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "old")
+        status.pageLoaded(epoch: "new")
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "new", n: 1)))
+        status.storedEvent(seq: 5, epoch: "old")
+        XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
+        // Nor does it count against this page's later writes
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "new", n: 2)))
+        status.storedEvent(seq: 1, epoch: "new")
+        XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
+        status.storedEvent(seq: 2, epoch: "new")
+        XCTAssertNil(status.message)
+    }
+
     func testReadyCarriesOnlyThePageLoad() {
         XCTAssertEqual(NativeBridgeEvent.readyEpoch(of: ["event": "ready", "payload": ["epoch": "e"]]), "e")
         XCTAssertNil(NativeBridgeEvent.readyEpoch(of: ["event": "ready", "payload": NSNull()]))

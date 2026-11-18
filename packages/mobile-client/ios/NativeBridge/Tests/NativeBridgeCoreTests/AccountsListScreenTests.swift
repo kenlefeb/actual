@@ -82,9 +82,14 @@ final class NativeSyncStatusTests: XCTestCase {
 
     // Product Owner, PR #485: "saved on this iPhone" must not be said too early
     func testOfflineDoesNotClaimSavedWhileAWriteIsPending() {
-        XCTAssertEqual(NativeSyncStatus.offlineWords("Offline", isWritePending: false), "Offline")
-        XCTAssertEqual(
-            NativeSyncStatus.offlineWords("Offline", isWritePending: true), WriteStorageStatus.notYetStoredMessage)
+        func words(pending: Bool, lineOn: Bool) -> String {
+            NativeSyncStatus.offlineWords("Offline, saved here", plain: "Offline", isWritePending: pending, storageLineIsOn: lineOn)
+        }
+        XCTAssertEqual(words(pending: false, lineOn: true), "Offline, saved here")
+        XCTAssertEqual(words(pending: false, lineOn: false), "Offline, saved here")
+        XCTAssertEqual(words(pending: true, lineOn: true), WriteStorageStatus.notYetStoredMessage)
+        // With the line off nothing can clear a possible loss yet, so don't ask the person to wait for it
+        XCTAssertEqual(words(pending: true, lineOn: false), "Offline")
     }
 
     func testAPullsOutcome() {

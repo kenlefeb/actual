@@ -105,12 +105,22 @@ loot-core SHALL accept a draft and its splits only with the listed keys and type
 - **THEN** "Brand New Payee" is created in the save's undo step, and undo removes it
 
 ### Requirement: Rules keep the person's own fields
-In a preview of a new draft, rules SHALL not change a field the person set or cleared by hand, except that a payee change may replace it, as on the web; each field so replaced SHALL be returned with its previous value. A draft with an id SHALL run no rules.
+The person's fields SHALL be every field they set or cleared by hand in the sheet. A preview's rules SHALL not change them, except that a payee change may replace one, returned with its previous value; the save SHALL never change them. A field whose rule value was refused SHALL be returned as overridden. A draft with an id SHALL run no rules.
 
 #### Scenario: A cleared category
 - **GIVEN** the Costco rule filled Groceries, then the person cleared the category
 - **WHEN** the amount changes
 - **THEN** the category stays empty
+
+#### Scenario: Typed before any rule touched it
+- **GIVEN** the person typed notes "lunch" before choosing a payee, and a rule "payee is Costco → notes Bulk run"
+- **WHEN** the person picks Costco and saves
+- **THEN** the notes stay "lunch", the preview lists notes as overridden, and the first save succeeds with no `preview-stale`
+
+#### Scenario: Two attempts at most
+- **GIVEN** a save refused with `[native:preview-stale]` because a rule changed after the last preview
+- **WHEN** the client saves the new preview's draft with its person's fields, and no rule changes in between
+- **THEN** the save succeeds
 
 #### Scenario: Replaced by a payee change
 - **GIVEN** the person chose category Dining by hand
@@ -123,6 +133,14 @@ Preview and save SHALL read each number by the budget's format: grouping only be
 #### Scenario: comma-dot
 - **GIVEN** the budget's format is `comma-dot`
 - **THEN** `1,234.56` reads as 1234.56, and `12,34` and `1.234,56` are `amount-invalid`
+
+#### Scenario: A decimal separator at either end
+- **GIVEN** the format is `comma-dot`
+- **THEN** `12.` reads as 12.00 and `.5` as 0.50 in the preview and the save, and `12,` is `amount-invalid`
+
+#### Scenario: Trailing comma in a comma-decimal format
+- **GIVEN** the format is `dot-comma`
+- **THEN** `12,` reads as 12.00, and `12.` is `amount-invalid`
 
 #### Scenario: dot-comma
 - **GIVEN** the format is `dot-comma`

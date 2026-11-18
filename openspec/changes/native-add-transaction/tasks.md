@@ -43,7 +43,8 @@
     - the remainder;
     - each field-error code;
     - the draft-key whitelist refuses unlisted keys and wrong types with `[native:invalid-draft]`;
-    - `userFields`: a field the person set is never changed except by a payee change, and is then listed in `replaced` with its previous value;
+    - `userFields` (every field the person edited): such a field is never changed except by a preview's payee change, and is then listed in `replaced` with its previous value; a rule value refused for it is listed in `overridden`;
+    - a trailing decimal separator (`12.`, `12,` in comma-decimal formats) reads as no fraction, in the preview and the save; a trailing grouping separator is refused;
     - `ruleFields` lists rule-filled fields;
     - amount text over 100 characters, non-finite, fractional minor units and values beyond `MAX_SAFE_INTEGER` are `amount-invalid`;
     - dates outside 1900-01-01 to 2999-12-31 are `date-invalid`, and future dates are allowed;
@@ -67,7 +68,8 @@
       - a `newId` that is not a lowercase UUID (`ABC`, `../x`, upper case, 500 characters) is `[native:invalid-draft]`;
       - an undone or deleted row is `[native:changed-since]` with no id;
     - an edit without a digest, or with a changed parent, child, partner, link or schedule, is `[native:changed-since]`;
-    - for an add, rules run first with `userFields` honoured, and any difference from the draft is `[native:preview-stale]`, including a rule that sets a closed account;
+    - for an add, rules run first with every `userFields` field kept (no payee-change exception at save), and any difference from the draft is `[native:preview-stale]`, including a rule that sets a closed account;
+    - the loop test: notes typed before a payee whose rule sets notes save on the first attempt; after a `preview-stale`, saving the new preview's draft succeeds;
     - the touched set (children removed, partners old and new) is computed on the post-rules draft before any write;
     - `[native:invalid-draft:<codes>]` for each validation rule, with only fixture codes in the message;
     - `[native:needs-confirmed-reconciled]` for a reconciled row, child, partner or split parent (`"true"` and `1` refused);
@@ -121,7 +123,7 @@
   - `newId` is kept for the sheet's lifetime and reused by Retry;
   - an edit retry that gets `changed-since` re-reads and finishes when the stored values equal the draft;
   - `preview-stale` shows "Rules changed this; check and save again.", previews again and shows the rule's result;
-  - `ruleFields` drives the indicator, and the person's edits join `userFields`;
+  - every field the person edits joins `userFields`, whether or not a rule touched it; a field leaves it only when a payee change replaces it without Restore; `overridden` shows "Set by a rule" as overridden;
   - replaced fields offer Restore;
   - a form-read `not-found` shows the unavailable state;
   - the preset account comes from the register on screen, else `AddTransaction.lastAccountId` if still open, else empty and required; the key is written after each successful add;

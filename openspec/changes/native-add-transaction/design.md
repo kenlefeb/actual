@@ -93,11 +93,16 @@ The page forwards `draft` as one object, so loot-core accepts only these keys an
 
 Keys such as `reconciled`, `imported_id` and `tombstone` never reach `batchUpdateTransactions`.
 
-**`userFields`** names each field the person set or cleared by hand after a rule touched it (D2a). It replaces the web's `clearedFields`. Allowed names: `account`, `date`, `payee`, `category`, `notes`, `cleared`, `amount`, `splits`.
+**`userFields`** names every field the person has set or cleared by hand in this sheet, whether or not a rule had touched it yet (D2a, amended 2026-11-18 after PR #451). It replaces the web's `clearedFields`. Allowed names: `account`, `date`, `payee`, `category`, `notes`, `cleared`, `amount`, `splits`.
+
+The view model:
+- adds a field when the person edits or clears it;
+- removes it only when a preview's payee change replaces it (it is in `replaced`) and the person does not tap Restore;
+- keeps it after Restore.
 
 ### `native/transaction-preview {draft, changedField}`
 
-It returns `{draft, ruleFields, replaced, remaining, errors}` and has no side effects. It writes to no table, creates no payee, and makes no undo step (amended 2026-11-18 after the review of PR #447).
+It returns `{draft, ruleFields, overridden, replaced, remaining, errors}` and has no side effects. `overridden` lists each field in `userFields` that a rule would have set to a different value; the person's value was kept (added 2026-11-18). The sheet marks such a field as overriding a rule, with wording from the copy table. It writes to no table, creates no payee, and makes no undo step (amended 2026-11-18 after the review of PR #447).
 
 - **Payee names.** The rules run with payee names left unresolved. This is the change's only upstream edit:
   - in `packages/loot-core/src/server/transactions/transaction-rules.ts`, `runRules` gets one optional parameter (`{ resolvePayeeNames: false }`);
@@ -114,7 +119,7 @@ It returns `{draft, ruleFields, replaced, remaining, errors}` and has no side ef
   - `×` (U+00D7) reads as `*`, `÷` (U+00F7) as `/`, and `−` (U+2212) as `-`.
   - One currency symbol (`\p{Sc}`, such as `$` or `€`), directly before or after a number with optional space, is ignored, as the web ignores it.
 
-  **Numbers, by the budget's format.** Grouping separators may appear only between digits of the integer part, at the format's group positions. A number may start with the decimal separator.
+  **Numbers, by the budget's format.** Grouping separators may appear only between digits of the integer part, at the format's group positions. A number may start with the decimal separator (`.5`) or end with it (`12.`, or `12,` in a comma-decimal format), meaning no fraction digits, as the web's `currencyToAmount` reads them. This holds in both the preview and the save (amended 2026-11-18 after PR #451). A trailing grouping separator is still refused (`12,` in `comma-dot`). The preview runs on a field commit, not on every keystroke, so a half-typed amount never flashes an error.
 
   | Format | Grouping | Decimal | Groups |
   | --- | --- | --- | --- |
@@ -200,11 +205,13 @@ Every step refuses with no write.
 
    The row itself is the durable record, so a reload, an engine restart or a trimmed undo history cannot cause a second save. Nothing else is kept, so no retention setting is needed.
 3. **Edit digest.** An edit without `digest`, or with one that no longer equals the recomputed digest, refuses with `[native:changed-since]`.
-4. **Rules, for an add only.** The engine first evaluates the submitted draft as the preview does: amounts from `amountText`. That evaluation is not a difference. Then the rules run, with `userFields` honoured as in D2. The result is compared with the evaluated draft over every field a rule can set, on the parent and every child: account, date, payee, category, notes, cleared and amount.
+4. **Rules, for an add only.** The engine first evaluates the submitted draft as the preview does: amounts from `amountText`. That evaluation is not a difference. Then the rules run. At save, every field in `userFields` keeps the person's value with no exception: the preview's payee-change replacement belongs to a field commit, not to the save. The result is compared with the evaluated draft over every field a rule can set, on the parent and every child: account, date, payee, category, notes, cleared and amount.
    - Any difference refuses with `[native:preview-stale]` before anything is written. The view model then previews again, shows the result with "Rules changed this; check and save again.", and the person saves again.
    - No difference: the save continues.
 
    This holds whether or not the last preview answered, so nothing the person did not see is stored, even while a field is unchecked.
+
+   **No refusal loop.** After a `preview-stale`, the view model takes the new preview's draft as the form and adds nothing to it beyond what the person edits. The next save then submits exactly what the rules produce, with the person's fields kept. So a correct client reaches a stored save in at most two attempts, unless the rules or the budget change again between them, which refuses again for the same honest reason.
 5. **Touched set.** It is computed on the draft as it now stands: the parent, its children (added, kept and removed), and every transfer partner, old and new.
 6. **Validation** with the preview's checks: an open account and open transfer accounts; the category rules; children summing to the parent; the children cap; amount, notes, date and payee-name bounds. Any failure refuses with `[native:invalid-draft:<codes>]`, where `<codes>` holds only field codes from the fixture, never text the person typed.
 7. **Reconciled rows.** A touched row counts as reconciled when it, or the split parent of a touched child, is reconciled. Any such row needs `confirmedReconciled === true`, or the save refuses with `[native:needs-confirmed-reconciled]`.

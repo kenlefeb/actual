@@ -124,7 +124,7 @@ The mobile web Budget, Accounts and account transactions screens SHALL keep thei
 - **THEN** their behaviour is unchanged
 
 ### Requirement: The native Budget tab has a per-screen switch and a web fallback
-The iOS app SHALL show the native Budget tab only while a per-screen switch is on. The switch SHALL default to off, and Settings in the iOS app SHALL offer it. While it is off, the Budget tab SHALL show the web Budget screen exactly as before. While it is on, the tab SHALL show the current month of an envelope budget, read-only: every group and category with its budgeted, spent and balance, and to-budget. A bridge call that fails or times out SHALL show an error state with a retry.
+The iOS app SHALL show the native Budget tab only while a per-screen switch is on. The switch SHALL read on when it has never been set, and an explicit off SHALL be kept, and Settings in the iOS app SHALL offer it. While it is off, the Budget tab SHALL show the web Budget screen exactly as before. A bridge call that fails or times out SHALL show an error state with a retry.
 
 #### Scenario: Switch on
 - **GIVEN** an envelope budget open in the iOS app and the switch on
@@ -137,9 +137,9 @@ The iOS app SHALL show the native Budget tab only while a per-screen switch is o
 - **THEN** the web Budget screen is shown
 
 #### Scenario: Default
-- **GIVEN** a fresh install of the iOS app
+- **GIVEN** a fresh install of the iOS app, or a device that never set the switch
 - **WHEN** the user opens the Budget tab
-- **THEN** the web Budget screen is shown, and Settings offers the switch
+- **THEN** the native Budget screen is shown, and Settings offers the switch to turn it off
 
 #### Scenario: The read times out
 - **GIVEN** the switch is on and the engine does not answer
@@ -369,3 +369,11 @@ The native Budget tab's month picker SHALL mark the row of the month the tab sho
 - **WHEN** the user opens the picker
 - **THEN** that month's row carries a checkmark and no other row does, and after a step or a pick the checkmark is on the new month
 - **AND** VoiceOver announces the marked row as selected
+
+### Requirement: The native Budget tab shows the current month
+While the per-screen switch is on, the tab SHALL show the current month of an envelope budget, read-only: every group and category with its budgeted, spent and balance, and to-budget.
+
+#### Scenario: Current month
+- **GIVEN** an envelope budget open in the iOS app and the switch on
+- **WHEN** the user opens the Budget tab
+- **THEN** every group and category shows its budgeted, spent and balance, and the to-budget amount is shown

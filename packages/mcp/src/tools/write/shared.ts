@@ -5,11 +5,14 @@ import { z } from 'zod';
 
 import { appendAudit } from '#audit';
 import type { AuditChange, AuditIdentity } from '#audit';
+import { SCOPES } from '#grants';
 import type { Grant, Scope } from '#grants';
 import { cellLimit, deleteLimit, reconcileLimit, rowLimit } from '#limits';
 import type { Limits } from '#limits';
 import { Refusal } from '#refusal';
 import { withText } from '#sanitize';
+
+import { UNDOABLE } from './declarations';
 
 const MAX_AMOUNT = 1e12;
 
@@ -70,38 +73,97 @@ const LINE_FIELDS = () => ({
   schema: 2,
 });
 
+const norm = (v: unknown) => (v === undefined ? null : v);
+
+/** A transaction's row key, as a create's undo logs and matches it (a JSON string). */
+export const rowKey = (
+  r: Record<string, unknown>,
+  account: unknown,
+  cleared: unknown,
+) =>
+  JSON.stringify([
+    account,
+    r.date,
+    r.amount,
+    norm(r.payee),
+    norm(r.category),
+    norm(r.notes),
+    Boolean(cleared),
+  ]);
+
 /**
- * Refuses (fixed text, before any audit line) a delete whose own attempt line
- * or whose undo's attempt line would exceed the audit line limit, so every
- * delete that runs can be undone. The undo's line holds the same ids and
- * values with before and after swapped, plus `undoes` and its own tool name.
+ * The bytes of an undoable write's own attempt line and of its undo's attempt
+ * line (design D5). The undo's line holds the same changes with before and
+ * after swapped, plus `undoes` and its own tool name, under the widest scopes.
+ * A created row (`new...`) is named by an id of its own; a created
+ * transaction's undo logs the planner's own `rowKey` string, so quotes and
+ * backslashes are counted escaped twice, as written. A budget cell is also
+ * named `category:month`. Every planner logs these changes or a subset.
  */
-export async function requireUndoableLine(
-  log: WriteLog,
+export function lineBytes(
+  identity: AuditIdentity,
+  budget_id: string,
   tool: string,
   entry: { ids: string[]; changes: AuditChange[] },
 ) {
-  const budget_id = await budgetId();
+  const changes = entry.changes.map(c => {
+    if (!c.id.startsWith('new')) return c;
+    const id = randomUUID();
+    return tool === 'write_create_transactions' &&
+      c.after &&
+      typeof c.after === 'object'
+      ? {
+          id,
+          field: c.field,
+          before: null,
+          after: rowKey(c.after as Record<string, unknown>, entry.ids[0], true),
+        }
+      : { ...c, id };
+  });
   const size = (line: object) =>
     Buffer.byteLength(JSON.stringify({ ...LINE_FIELDS(), ...line }));
-  const own = size({ ...log.identity, tool, budget_id, ...entry });
+  const own = size({ ...identity, tool, budget_id, ...entry });
   const undo = size({
-    ...log.identity,
+    ...identity,
+    scopes: SCOPES,
     tool: 'write_undo',
     budget_id,
-    // The undo logs every id it restores, which can include rows beyond the delete's own ids
-    ids: [...new Set([...entry.ids, ...entry.changes.map(c => c.id)])],
-    changes: entry.changes.map(c => ({
+    // The undo logs every id it restores, which can include rows beyond the write's own ids
+    ids: [
+      ...new Set([
+        ...entry.ids,
+        ...changes.map(c => c.id),
+        ...changes.flatMap(c => {
+          const month = /^budgeted:(\d{4}-\d{2})$/.exec(c.field)?.[1];
+          return month ? [`${c.id}:${month}`] : [];
+        }),
+      ]),
+    ],
+    changes: changes.map(c => ({
       ...c,
       before: c.after,
       after: c.before,
     })),
     undoes: randomUUID(),
   });
+  return { own, undo };
+}
+
+/**
+ * Refuses (fixed text, before any audit line) an undoable write whose own
+ * attempt line or whose undo's attempt line would exceed the audit line
+ * limit, so every undoable write that runs can be undone (design D5).
+ */
+async function requireUndoableLine(
+  log: WriteLog,
+  tool: string,
+  entry: { ids: string[]; changes: AuditChange[] },
+) {
+  const { own, undo } = lineBytes(log.identity, await budgetId(), tool, entry);
   const cap = log.limits.maxAuditLineBytes;
   if (own > cap || undo > cap) {
     throw new Refusal(
-      `This delete or its undo would make an audit line of ${Math.max(own, undo)} bytes, above the limit of ${cap}; a delete must be undoable. Nothing changed. Split it into smaller calls.`,
+      `This write or its undo would make an audit line of ${Math.max(own, undo)} bytes, above the limit of ${cap}; an undoable write must stay undoable. Nothing changed. Split it into smaller calls.`,
     );
   }
 }
@@ -256,6 +318,7 @@ export async function loggedWrite<R extends object>(
 > {
   // One write may not fill the audit tail an undo reads (it would evict the
   // undo history and its own line); refused before anything is written.
+  if (tool in UNDOABLE) await requireUndoableLine(log, tool, entry);
   const budget_id = await budgetId();
   const lineBytes = Buffer.byteLength(
     JSON.stringify({

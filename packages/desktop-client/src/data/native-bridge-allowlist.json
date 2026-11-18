@@ -29,5 +29,8 @@
   "native/transactions-categorize",
   "native/transactions-delete",
   "native/account-reopen",
-  "native/account-move"
+  "native/account-move",
+  "native/settings",
+  "native/server-info",
+  "native/settings-save"
 ]

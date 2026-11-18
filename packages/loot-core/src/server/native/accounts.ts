@@ -33,7 +33,8 @@ import type {
   TransactionEntity,
 } from '#types/models';
 
-import { decimalPlaces, readLimit } from './reconcile-lock';
+import { readLimit } from './limits';
+import { decimalPlaces } from './reconcile-lock';
 
 const MAX_SEARCH = 100;
 const SCOPES = ['all', 'uncleared', 'uncategorized'] as const;

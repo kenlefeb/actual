@@ -276,6 +276,17 @@ function isNumberFormat(input: string = ''): input is NumberFormats {
   return (NUMBER_FORMATS as readonly string[]).includes(input);
 }
 
+// The date formats Settings offers (fork, sc-4643: shared so web Settings and
+// native/settings-save store the same values)
+export const dateFormats = [
+  { value: 'MM/dd/yyyy', label: 'MM/DD/YYYY' },
+  { value: 'dd/MM/yyyy', label: 'DD/MM/YYYY' },
+  { value: 'yyyy-MM-dd', label: 'YYYY-MM-DD' },
+  { value: 'MM.dd.yyyy', label: 'MM.DD.YYYY' },
+  { value: 'dd.MM.yyyy', label: 'DD.MM.YYYY' },
+  { value: 'dd-MM-yyyy', label: 'DD-MM-YYYY' },
+] as const;
+
 export const numberFormats: Array<{
   value: NumberFormats;
   label: string;

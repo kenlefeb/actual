@@ -17,7 +17,6 @@ import {
   requireDeleteRows,
   requireIds,
   requireRows,
-  requireUndoableLine,
   stderrLine,
 } from './shared';
 import type { RegisterWriteTool } from './shared';
@@ -317,7 +316,7 @@ export function registerTransactionWriteTools(
 
   tool(
     'write_delete_transactions',
-    `Delete transactions by id, as the app does, at most ${limits.maxDeleteRows} rows by default counting every row it removes. Deleting a split parent deletes its children; deleting a transfer deletes its other side (when that side is a split child it is unlinked, not deleted); attachments go with their rows. A split child cannot be deleted on its own. A reconciled row, or a row whose transfer partner, child's partner or unlinked partner child is reconciled, needs allow_reconciled true, which the connection's grant must allow. When this connection must confirm deletes, the first call changes nothing and returns a dry run listing every row, with \`confirm\`; call again with it within 5 minutes. Undoable with write_undo.`,
+    `Delete transactions by id, as the app does, at most ${limits.maxDeleteRows} rows by default counting every row it removes. Deleting a split parent deletes its children; deleting a transfer deletes its other side (when that side is a split child it is unlinked, not deleted); attachments go with their rows. A split child cannot be deleted on its own. A reconciled row, or a row whose transfer partner, child's partner or unlinked partner child is reconciled, needs allow_reconciled true, which the connection's grant must allow. When this connection must confirm deletes, the first call changes nothing and returns a dry run listing every row, with \`confirm\`; call again with it within 5 minutes.`,
     {
       ids: z.array(id).min(1).max(limits.rowsCeiling),
       allow_reconciled: z.boolean().optional(),
@@ -434,7 +433,6 @@ export function registerTransactionWriteTools(
         ids: [...deleted.keys(), ...unlinked.keys()],
         changes,
       };
-      await requireUndoableLine(auditLog, 'write_delete_transactions', entry);
 
       // The partner children actually unlinked, read back after a failure
       const unlinkedDone = new Set<string>();

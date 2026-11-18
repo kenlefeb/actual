@@ -4,8 +4,7 @@ import { Trans, useTranslation } from 'react-i18next';
 
 import { Select } from '@actual-app/components/select';
 import { theme } from '@actual-app/components/theme';
-import { numberFormats } from '@actual-app/core/shared/util';
-import type { SyncedPrefs } from '@actual-app/core/types/prefs';
+import { dateFormats, numberFormats } from '@actual-app/core/shared/util';
 import { css } from '@emotion/css';
 
 import { Checkbox } from '#components/forms';
@@ -17,15 +16,6 @@ import { useDispatch } from '#redux';
 
 import { SettingsGroup } from './SettingsGroup';
 import { SettingsRow } from './SettingsRow';
-
-const dateFormats: { value: SyncedPrefs['dateFormat']; label: string }[] = [
-  { value: 'MM/dd/yyyy', label: 'MM/DD/YYYY' },
-  { value: 'dd/MM/yyyy', label: 'DD/MM/YYYY' },
-  { value: 'yyyy-MM-dd', label: 'YYYY-MM-DD' },
-  { value: 'MM.dd.yyyy', label: 'MM.DD.YYYY' },
-  { value: 'dd.MM.yyyy', label: 'DD.MM.YYYY' },
-  { value: 'dd-MM-yyyy', label: 'DD-MM-YYYY' },
-];
 
 export function FormatSettings() {
   const { t } = useTranslation();

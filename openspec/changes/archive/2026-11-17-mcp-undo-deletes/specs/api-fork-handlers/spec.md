@@ -27,6 +27,21 @@
 - **WHEN** a script sets a mapping's `transferId` to a category not un-deleted in the call
 - **THEN** the call rejects and nothing changed
 
+### Requirement: Undelete cannot rewire live rows
+`undelete-rows` SHALL reject the whole call when a mapping row it sets belongs to a live category, when a restored category would not map to itself, when the live split child it relinks is linked, has a payee or is reconciled, or when a transfer side's payee is not the other account's transfer payee.
+
+#### Scenario: A cycle
+- **WHEN** a script restores a category and sets a live category's mapping to it
+- **THEN** the call rejects and no mapping changed
+
+#### Scenario: A child linked elsewhere
+- **WHEN** a script relinks a live split child that still names another row
+- **THEN** the call rejects and nothing changed
+
+#### Scenario: Unrelated deleted rows
+- **WHEN** a script pairs two deleted rows whose payees are not each other's transfer payees
+- **THEN** the call rejects and nothing changed
+
 ### Requirement: Undelete restores rows and cells together
 `undelete-rows` SHALL set the named budget cells through the budget actions in the same batch as the rows, so all apply or none do. With `check: true` it SHALL change nothing and return each named row's existence, deleted state and the columns it may set. The API test's handler list grows by one.
 

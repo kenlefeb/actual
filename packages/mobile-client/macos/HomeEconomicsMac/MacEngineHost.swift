@@ -90,10 +90,13 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
     // flushed (measured: 1 s and 5 s after a write it survived; killed at once,
     // the last changes were gone). A bridge call in flight fails, usually at
     // once with `.pageOrigin` (else with its timeout), and is not retried.
+    var onAutomaticReload: (() -> Void)?
+
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         if reloads.allowsReload(at: now()) {
             Self.logger.notice("page process ended; reloading the app's page")
             load()
+            onAutomaticReload?()
         } else {
             Self.logger.notice("page process ended again; asking before reloading")
             onPageGone?()

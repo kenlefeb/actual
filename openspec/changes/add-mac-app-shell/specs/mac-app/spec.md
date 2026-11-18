@@ -55,6 +55,24 @@ The app's scheme SHALL serve only files inside the bundled web build. It decodes
 - **WHEN** the scheme handles it
 - **THEN** it answers not found, not `index.html`
 
+### Requirement: A page whose process ended is reloaded, and the user is told
+When WebKit ends the page's process, the app SHALL reload its own page, never the address the window last showed. Each automatic reload SHALL show a brief notice at the top of the window that the page restarted and a change made just before may need checking. The notice SHALL not take focus or block input, SHALL be announced to VoiceOver, and SHALL hide itself. After three automatic reloads within a minute the app SHALL stop and ask, with a Reload button.
+
+#### Scenario: The page's process ends
+- **GIVEN** the app is showing its page
+- **WHEN** WebKit ends the page's process
+- **THEN** the app reloads its own page and shows the notice, which VoiceOver announces and which hides itself after a few seconds
+
+#### Scenario: The person keeps working
+- **GIVEN** the notice is showing
+- **WHEN** the person clicks or types in the page
+- **THEN** the page gets the input, and the notice did not take focus
+
+#### Scenario: The process keeps ending
+- **GIVEN** the app reloaded its page three times within a minute
+- **WHEN** the process ends again
+- **THEN** the app does not reload, and asks with a Reload button; pressing Reload shows no notice
+
 ### Requirement: Sign-in URLs and tokens are never logged
 The Mac app's native code SHALL NOT log, store or send a URL's query or fragment, including the OpenID return, which carries the sign-in token. The scheme handler and the navigation handler SHALL log at most the path of a refused request.
 

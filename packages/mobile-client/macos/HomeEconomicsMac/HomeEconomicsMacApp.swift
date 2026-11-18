@@ -29,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var rereads: ChangeCoalescer?
     private lazy var lifecycle = EngineLifecycle { [weak self] in self?.rereads?.notify() }
     private var running = false
+    private var notices: WindowNotices?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let www = Bundle.main.resourceURL!.appendingPathComponent("www")
@@ -55,6 +56,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let content = NSView(frame: window.contentRect(forFrameRect: window.frame))
         host.webView.frame = content.bounds
         content.addSubview(host.webView)
+        // Story 5220: brief notices over the top of the page
+        let banner = NoticeBanner(frame: NSRect(x: 16, y: content.bounds.height - 60, width: content.bounds.width - 32, height: 44))
+        banner.autoresizingMask = [.width, .minYMargin]
+        content.addSubview(banner)
+        let notices = WindowNotices(
+            schedule: { delay, work in DispatchQueue.main.asyncAfter(deadline: .now() + delay) { work() } },
+            announce: { text in
+                NSAccessibility.post(
+                    element: NSApp as Any, notification: .announcementRequested,
+                    userInfo: [.announcement: text, .priority: NSAccessibilityPriorityLevel.high.rawValue])
+            })
+        notices.onChange = { banner.show($0?.text) }
+        host.onAutomaticReload = { notices.show(.pageRestarted) }
+        self.notices = notices
         window.contentView = content
         window.center()
         window.makeKeyAndOrderFront(nil)

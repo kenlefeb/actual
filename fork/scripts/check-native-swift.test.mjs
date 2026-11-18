@@ -133,6 +133,45 @@ void test('Native Swift: fails on file-URL access or a private WebKit setting', 
   );
 });
 
+// PR 413 re-review: other import forms, other private-API routes, and any
+// file in the Mac app whatever it imports
+void test('Native Swift: the Mac app gets the WebKit deny rule in every file', () => {
+  const MAC = 'packages/mobile-client/macos/HomeEconomicsMac';
+  for (const [file, text] of [
+    [
+      'A.swift',
+      '@preconcurrency import WebKit\nprefs.setValue(true, forKey: "developerExtrasEnabled")\n',
+    ],
+    [
+      'B.swift',
+      'import class WebKit.WKPreferences\nprefs.setValue(true, forKey: k)\n',
+    ],
+    ['C.swift', 'import Foundation\nprefs.setValuesForKeys(["a": true])\n'],
+    ['D.swift', 'import Darwin\nlet f = dlsym(handle, "WKThing")\n'],
+    [
+      'E.m',
+      '#import <WebKit/WebKit.h>\n[prefs setValue:@YES forKey:@"developerExtrasEnabled"];\n',
+    ],
+    [
+      'F.swift',
+      'import Foundation\nfunc tweak(_ o: NSObject) { o.setValue(true, forKey: "x") }\n',
+    ],
+    ['G.m', 'id v = [prefs valueForKey:@"x"];\n'],
+    ['H.swift', 'import ObjectiveC\nmethod_exchangeImplementations(a, b)\n'],
+  ]) {
+    const found = problems({ [`${MAC}/${file}`]: text });
+    assert.equal(found.length, 1, file);
+    assert.match(found[0], /weakens WebKit/, file);
+  }
+  assert.deepEqual(
+    problems({
+      [`${MAC}/Flag.swift`]:
+        'import Foundation\ndefaults.set(true, forKey: "budgetWasOpen")\nlet id = defaults.string(forKey: "cloudFileId")\ndefaults.removeObject(forKey: "cloudFileId")\n',
+    }),
+    [],
+  );
+});
+
 void test('Native Swift: key-value coding is checked only where WebKit is imported', () => {
   assert.deepEqual(
     problems({

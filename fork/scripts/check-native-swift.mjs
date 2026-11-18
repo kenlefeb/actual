@@ -55,14 +55,20 @@ const USER_SCRIPT = /\bWKUserScript\s*\(/;
 // `set(_:forKey:)` and `string(forKey:)` stay allowed.
 const FILE_URL_SETTING =
   /(?:FileAccessFromFileURLs|UniversalAccessFromFileURLs)/;
-const IMPORTS_WEBKIT = /^\s*(?:@testable\s+)?import\s+WebKit\b/m;
+// Any attributes, and `import class WebKit.X`; Objective-C's #import too
+const IMPORTS_WEBKIT =
+  /^\s*(?:@\w+\s+)*import\s+(?:(?:struct|class|enum|func|var|let|typealias|protocol)\s+)?WebKit\b|^\s*#\s*import\s*<WebKit\//m;
 const WEBKIT_DENIED =
-  /\bloadFileURL\b|\.setValue\(|\bvalue\(\s*forKey|forKeyPath:|\bNSClassFromString\b|\bNSSelectorFromString\b|\bSelector\(\s*\(/;
+  /\bloadFileURL\b|\.setValue\(|\bsetValuesForKeys\b|\bvalue\(\s*forKey|forKeyPath:|\bsetValue:|\bvalueForKey:|\bNSClassFromString\b|\bNSSelectorFromString\b|\bSelector\(\s*\(|\bdlsym\b|\bobjc_msgSend\b|\bclass_getInstanceMethod\b|\bmethod_exchangeImplementations\b/;
+// The Mac app has no legitimate key-value coding, so every file there is
+// checked, whatever it imports (PR 413 re-review)
+const MAC_ROOT = 'packages/mobile-client/macos/';
 
-function weakensWebKit(text) {
+function weakensWebKit(path, text) {
   return (
     FILE_URL_SETTING.test(text) ||
-    (IMPORTS_WEBKIT.test(text) && WEBKIT_DENIED.test(text))
+    ((path.startsWith(MAC_ROOT) || IMPORTS_WEBKIT.test(text)) &&
+      WEBKIT_DENIED.test(text))
   );
 }
 
@@ -80,7 +86,7 @@ export function problems(files) {
     ...(!USER_SCRIPT_ALLOWED.has(path) && USER_SCRIPT.test(text)
       ? [`${path}: adds a WKUserScript outside the allowlist`]
       : []),
-    ...(weakensWebKit(text)
+    ...(weakensWebKit(path, text)
       ? [
           `${path}: weakens WebKit (file-URL access or a private API); see add-mac-app-shell`,
         ]

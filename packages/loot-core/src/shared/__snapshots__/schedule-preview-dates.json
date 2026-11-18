@@ -1,0 +1,416 @@
+[
+  {
+    "id": "preview/relative/2017-02-02",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-02-02",
+    "schedule": "relative",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/weekly/2017-01-30",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-30",
+    "schedule": "weekly",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/businessDays/2017-01-30",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-30",
+    "schedule": "businessDays",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/relative/2017-01-26",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-26",
+    "schedule": "relative",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/weekly/2017-01-23",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-23",
+    "schedule": "weekly",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/businessDays/2017-01-23",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-23",
+    "schedule": "businessDays",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/relative/2017-01-19",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-19",
+    "schedule": "relative",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/businessDays/2017-01-17",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-17",
+    "schedule": "businessDays",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/weekly/2017-01-16",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-16",
+    "schedule": "weekly",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/weekends/2017-01-13",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-13",
+    "schedule": "weekends",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/weekends/2017-01-12",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-12",
+    "schedule": "weekends",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/relative/2017-01-12",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-12",
+    "schedule": "relative",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/weekends/2017-01-11",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-11",
+    "schedule": "weekends",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/weekends/2017-01-10",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-10",
+    "schedule": "weekends",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/weekly/2017-01-09",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-09",
+    "schedule": "weekly",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/weekends/2017-01-09",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-09",
+    "schedule": "weekends",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/businessDays/2017-01-09",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-09",
+    "schedule": "businessDays",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/daily/2017-01-08",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-08",
+    "schedule": "daily",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/paid/2017-01-08",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-08",
+    "schedule": "paid",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/daily/2017-01-07",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-07",
+    "schedule": "daily",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/paid/2017-01-07",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-07",
+    "schedule": "paid",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/daily/2017-01-06",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-06",
+    "schedule": "daily",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/weekends/2017-01-06",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-06",
+    "schedule": "weekends",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/paid/2017-01-06",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-06",
+    "schedule": "paid",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/daily/2017-01-05",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-05",
+    "schedule": "daily",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/weekends/2017-01-05",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-05",
+    "schedule": "weekends",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/relative/2017-01-05",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-05",
+    "schedule": "relative",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/paid/2017-01-05",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-05",
+    "schedule": "paid",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/oneOff/2017-01-05",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-05",
+    "schedule": "oneOff",
+    "forceUpcoming": false
+  },
+  {
+    "id": "preview/daily/2017-01-04",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-04",
+    "schedule": "daily",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/weekends/2017-01-04",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-04",
+    "schedule": "weekends",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/relative/2017-01-04",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-04",
+    "schedule": "relative",
+    "forceUpcoming": false
+  },
+  {
+    "id": "preview/paid/2017-01-04",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-04",
+    "schedule": "paid",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/daily/2017-01-03",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-03",
+    "schedule": "daily",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/weekends/2017-01-03",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-03",
+    "schedule": "weekends",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/businessDays/2017-01-03",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-03",
+    "schedule": "businessDays",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/ending/2017-01-03",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-03",
+    "schedule": "ending",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/paid/2017-01-03",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-03",
+    "schedule": "paid",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/daily/2017-01-02",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-02",
+    "schedule": "daily",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/weekly/2017-01-02",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-02",
+    "schedule": "weekly",
+    "forceUpcoming": false
+  },
+  {
+    "id": "preview/weekends/2017-01-02",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-02",
+    "schedule": "weekends",
+    "forceUpcoming": false
+  },
+  {
+    "id": "preview/businessDays/2017-01-02",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-02",
+    "schedule": "businessDays",
+    "forceUpcoming": false
+  },
+  {
+    "id": "preview/ending/2017-01-02",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-02",
+    "schedule": "ending",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/paid/2017-01-02",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-02",
+    "schedule": "paid",
+    "forceUpcoming": true
+  },
+  {
+    "id": "preview/daily/2017-01-01",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-01",
+    "schedule": "daily",
+    "forceUpcoming": false
+  },
+  {
+    "id": "preview/ending/2017-01-01",
+    "payee": "payee",
+    "account": "account",
+    "amount": -1000,
+    "date": "2017-01-01",
+    "schedule": "ending",
+    "forceUpcoming": false
+  }
+]

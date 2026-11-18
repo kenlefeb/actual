@@ -33,7 +33,10 @@ public enum NativeBridgeAllowlist {
         "native/reconcile-lock",
     ]
     // sc-4386 (native-accounts-screen D1): the Accounts screen's batched reads
-    public static let accountsReads: Set<String> = ["native/accounts-list", "native/account-register"]
+    // sc-4973 (native-register-upcoming-rows D7): the upcoming section, read after the first page
+    public static let accountsReads: Set<String> = [
+        "native/accounts-list", "native/account-register", "native/account-upcoming",
+    ]
     // sc-4931 (D3): sent only as TransactionsCategorize, TransactionsDelete, AccountReopen and
     // AccountMove. The raw account-reopen, account-move and transactions-batch-update stay off.
     public static let accountsWrites: Set<String> = [

@@ -58,6 +58,18 @@
       "ceiling": 500
     },
     {
+      "id": "accounts-register-upcoming-max-days",
+      "value": 92,
+      "default": 92,
+      "ceiling": 366
+    },
+    {
+      "id": "accounts-upcoming-max-rows",
+      "value": 100,
+      "default": 100,
+      "ceiling": 500
+    },
+    {
       "id": "payee-picker-max-results",
       "value": 50,
       "default": 50,

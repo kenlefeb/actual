@@ -260,6 +260,8 @@ const RECONCILE_FIELDS = new Map([
 // checks the values and the page size is the synced preference, never an argument
 const ACCOUNTS_FIELDS = new Map([
   ['native/account-register', ['account_id', 'scope', 'search', 'cursor']],
+  // sc-4973 (native-register-upcoming-rows D7): read after the first page
+  ['native/account-upcoming', ['account_id', 'scope', 'search']],
 ]);
 
 // sc-4931 (D3): the Accounts screen's writes. loot-core validates the whole

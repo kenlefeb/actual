@@ -55,7 +55,15 @@ export const LIMITS = {
     help: "Keeps the register's upcoming list bounded",
     default: 92,
     ceiling: 366,
-    hasReader: false,
+    hasReader: true,
+  },
+  // story 4973 (native-register-upcoming-rows D8, D11)
+  'accounts-upcoming-max-rows': {
+    name: 'Scheduled rows: most shown',
+    help: 'The most scheduled rows the native register shows and searches (up to 500).',
+    default: 100,
+    ceiling: 500,
+    hasReader: true,
   },
   // story 3602 (native-add-transaction)
   'payee-picker-max-results': {

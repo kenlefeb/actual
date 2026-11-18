@@ -25,6 +25,7 @@
   "native/reconcile-lock",
   "native/accounts-list",
   "native/account-register",
+  "native/account-upcoming",
   "native/transactions-categorize",
   "native/transactions-delete",
   "native/account-reopen",

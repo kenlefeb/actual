@@ -54,6 +54,14 @@ const D11 = [
     92,
     366,
   ],
+  // story 4973 (native-register-upcoming-rows D8, D11)
+  [
+    'accounts-upcoming-max-rows',
+    'Scheduled rows: most shown',
+    'The most scheduled rows the native register shows and searches (up to 500).',
+    100,
+    500,
+  ],
   [
     'payee-picker-max-results',
     'Payee search: results shown',

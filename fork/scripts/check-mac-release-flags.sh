@@ -1,15 +1,26 @@
 #!/bin/sh
 # Fork-only (story 5186). The Mac app's Release build must not define DEBUG:
 # Debug builds open the page to Safari's Web Inspector (MacEngineHost), and
-# Release builds ship. Fails, naming the setting, when the Release
-# configuration of the app target sets DEBUG in its Swift conditions, its
-# preprocessor definitions or its Swift flags.
-# Usage: fork/scripts/check-mac-release-flags.sh [path/to/HomeEconomicsMac.xcodeproj]
+# Release builds ship. Reads the app target's Release build settings and
+# fails, naming the setting, when the value of SWIFT_ACTIVE_COMPILATION_CONDITIONS,
+# GCC_PREPROCESSOR_DEFINITIONS or OTHER_SWIFT_FLAGS defines DEBUG: a word
+# `DEBUG`, `DEBUG=…`, `-DDEBUG` or `-D DEBUG`. Setting names that contain DEBUG
+# (DEBUG_INFORMATION_FORMAT) and other macros (NDEBUG, DEBUG_MENU) pass.
+# Usage: check-mac-release-flags.sh [path/to/HomeEconomicsMac.xcodeproj]
+#        check-mac-release-flags.sh --settings-file FILE   (tests)
 set -eu
-project="${1:-packages/mobile-client/macos/HomeEconomicsMac.xcodeproj}"
-settings=$(xcodebuild -showBuildSettings -project "$project" -target HomeEconomicsMac -configuration Release)
-found=$(printf '%s\n' "$settings" |
-  grep -E '^[[:space:]]*(SWIFT_ACTIVE_COMPILATION_CONDITIONS|GCC_PREPROCESSOR_DEFINITIONS|OTHER_SWIFT_FLAGS) = (.*[^A-Za-z0-9_])?DEBUG([^A-Za-z0-9_]|$)' || true)
+if [ "${1:-}" = "--settings-file" ]; then
+  settings=$(cat "$2")
+else
+  project="${1:-packages/mobile-client/macos/HomeEconomicsMac.xcodeproj}"
+  settings=$(xcodebuild -showBuildSettings -project "$project" -target HomeEconomicsMac -configuration Release)
+fi
+found=$(printf '%s\n' "$settings" | awk '
+  $1 ~ /^(SWIFT_ACTIVE_COMPILATION_CONDITIONS|GCC_PREPROCESSOR_DEFINITIONS|OTHER_SWIFT_FLAGS)$/ && $2 == "=" {
+    for (i = 3; i <= NF; i++) {
+      if ($i ~ /^(-D)?DEBUG(=.*)?$/) { print; break }
+    }
+  }')
 if [ -n "$found" ]; then
   echo "Release build of the Mac app defines DEBUG:" >&2
   printf '%s\n' "$found" >&2

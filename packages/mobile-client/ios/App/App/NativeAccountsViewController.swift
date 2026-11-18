@@ -90,8 +90,11 @@ final class NativeAccountsViewController: UIHostingController<AccountsScreen> {
     // loot-core's sync outcome, as NativeBridgePlugin follows it
     func syncStatusChanged(_ status: NativeSyncStatus) { model.syncStatus = status }
 
-    // sc-5219: whether a change is still being stored on this device
-    func writePendingChanged(_ isPending: Bool) { model.isWritePending = isPending }
+    // sc-5219: whether a change is unconfirmed, and the line's words if one is being saved
+    func writePendingChanged(_ isPending: Bool, savingLine: String?) {
+        model.isWritePending = isPending
+        model.writeSavingLine = savingLine
+    }
 
     // The closed set of web flows (D7a); an action or account it does not allow is dropped
     func handOff(_ action: String, accountId: String? = nil) {
@@ -277,7 +280,7 @@ struct AccountsScreen: View {
 
     @ViewBuilder private func loaded(_ list: AccountsList, staleError: AccountsLoadError?) -> some View {
         if list.isEmpty {
-            AccountsEmpty(status: model.syncStatus, isWritePending: model.isWritePending, staleError: staleError, handOff: actions.handOff) { Task { await model.refresh() } }
+            AccountsEmpty(status: model.syncStatus, isWritePending: model.isWritePending, savingLine: model.writeSavingLine, staleError: staleError, handOff: actions.handOff) { Task { await model.refresh() } }
         } else {
             AccountsListBody(
                 list: list, status: model.syncStatus, isSyncing: model.isSyncing, staleError: staleError, model: model,
@@ -338,7 +341,7 @@ private struct AccountsListBody: View {
         List {
             Group {
             if hasSubtitle {
-                Section(header: SyncSubtitle(status: isSyncing && status != .waitingForStorage ? .syncing : status, isWritePending: model.isWritePending, staleError: staleError) { Task { await model.refresh() } }) {
+                Section(header: SyncSubtitle(status: isSyncing && status != .waitingForStorage ? .syncing : status, isWritePending: model.isWritePending, savingLine: model.writeSavingLine, staleError: staleError) { Task { await model.refresh() } }) {
                     firstRows
                 }
             } else {
@@ -429,6 +432,7 @@ struct OptionalAccessibilityAction: ViewModifier {
 private struct SyncSubtitle: View {
     let status: NativeSyncStatus
     let isWritePending: Bool
+    let savingLine: String?
     let staleError: AccountsLoadError?
     let retry: () -> Void
 
@@ -458,8 +462,8 @@ private struct SyncSubtitle: View {
         case .synced(let date): return (AccountsWords.synced(date, now: now), false)
         case .offline:
             let words = NativeSyncStatus.offlineWords(
-                AccountsWords.offline, plain: AccountsWords.offlinePlain, isWritePending: isWritePending,
-                storageLineIsOn: WriteStorageLineRollout.isOn)
+                AccountsWords.offline, plain: AccountsWords.offlinePlain, savingLine: savingLine,
+                mayNotBeSaved: isWritePending, storageLineIsOn: WriteStorageLineRollout.isOn)
             return (words, false)
         case .failed: return (AccountsWords.syncFailed, true)
         case .local: return (AccountsWords.localFile, false)
@@ -610,13 +614,14 @@ private struct ClosedAccountsView: View {
 private struct AccountsEmpty: View {
     let status: NativeSyncStatus
     let isWritePending: Bool
+    let savingLine: String?
     let staleError: AccountsLoadError?
     let handOff: (String, String?) -> Void
     let retry: () -> Void
 
     var body: some View {
         List {
-            Section(header: SyncSubtitle(status: status, isWritePending: isWritePending, staleError: staleError, retry: retry)) {
+            Section(header: SyncSubtitle(status: status, isWritePending: isWritePending, savingLine: savingLine, staleError: staleError, retry: retry)) {
                 VStack(spacing: 12) {
                     Text(AccountsWords.firstAccount).font(.headline).accessibilityAddTraits(.isHeader)
                     Text(AccountsWords.firstAccountDetail).foregroundColor(.secondary).multilineTextAlignment(.center)

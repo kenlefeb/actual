@@ -221,6 +221,10 @@ public final class WriteStorageStatus: ObservableObject {
         $line.combineLatest($mayNotBeSaved).map { $0 != nil || $1 }.removeDuplicates().eraseToAnyPublisher()
     }
 
+    // The line's words while a change is really being saved, unlike a possible loss
+    public var savingLine: String? { line }
+    public var savingLineChanges: AnyPublisher<String?, Never> { $line.removeDuplicates().eraseToAnyPublisher() }
+
     // The page load this write was made in, kept for a write that never gets an answer
     @discardableResult
     func writeBegan() -> WriteOrigin {

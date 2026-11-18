@@ -351,6 +351,7 @@ final class StoredWriteTests: XCTestCase {
         status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "old", n: 1)))
         status.pageLoaded(epoch: "new")
         XCTAssertNil(status.message)
+        XCTAssertNil(status.savingLine)
         XCTAssertTrue(status.isPending)
     }
 

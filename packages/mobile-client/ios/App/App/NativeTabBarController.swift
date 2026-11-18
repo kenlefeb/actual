@@ -122,8 +122,9 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
     }
 
     private func followPendingWrites() {
-        writePendingObserver = bridgeController.nativeBridge.writeStorage.pendingChanges
-            .sink { [weak self] in self?.accountsOverlay?.writePendingChanged($0) }
+        let storage = bridgeController.nativeBridge.writeStorage
+        writePendingObserver = storage.pendingChanges.combineLatest(storage.savingLineChanges)
+            .sink { [weak self] in self?.accountsOverlay?.writePendingChanged($0, savingLine: $1) }
     }
 
     // MARK: Tabs
@@ -204,7 +205,8 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
             let screen = NativeAccountsViewController(
                 client: bridgeController.nativeBridge.client, chrome: chrome, syncStatus: bridgeController.nativeBridge.syncStatus,
                 presentReconcile: { [weak self] in self?.presentReconcile($0) })
-            screen.writePendingChanged(bridgeController.nativeBridge.writeStorage.isPending)
+            let storage = bridgeController.nativeBridge.writeStorage
+            screen.writePendingChanged(storage.isPending, savingLine: storage.savingLine)
             accountsOverlay = screen
             container.setOverlay(screen)
         }

@@ -82,14 +82,22 @@ final class NativeSyncStatusTests: XCTestCase {
 
     // Product Owner, PR #485: "saved on this iPhone" must not be said too early
     func testOfflineDoesNotClaimSavedWhileAWriteIsPending() {
-        func words(pending: Bool, lineOn: Bool) -> String {
-            NativeSyncStatus.offlineWords("Offline, saved here", plain: "Offline", isWritePending: pending, storageLineIsOn: lineOn)
+        func words(saving: String? = nil, mayNotBeSaved: Bool = false, lineOn: Bool) -> String {
+            NativeSyncStatus.offlineWords(
+                "Offline, saved here", plain: "Offline", savingLine: saving, mayNotBeSaved: mayNotBeSaved, storageLineIsOn: lineOn)
         }
-        XCTAssertEqual(words(pending: false, lineOn: true), "Offline, saved here")
-        XCTAssertEqual(words(pending: false, lineOn: false), "Offline, saved here")
-        XCTAssertEqual(words(pending: true, lineOn: true), WriteStorageStatus.notYetStoredMessage)
-        // With the line off nothing can clear a possible loss yet, so don't ask the person to wait for it
-        XCTAssertEqual(words(pending: true, lineOn: false), "Offline")
+        let stillSaving = WriteStorageStatus.notYetStoredMessage
+        XCTAssertEqual(words(lineOn: true), "Offline, saved here")
+        XCTAssertEqual(words(lineOn: false), "Offline, saved here")
+        XCTAssertEqual(words(saving: stillSaving, lineOn: true), stillSaving)
+        XCTAssertEqual(words(saving: WriteStorageStatus.savingMessage, lineOn: true), WriteStorageStatus.savingMessage)
+        XCTAssertEqual(words(saving: stillSaving, lineOn: false), "Offline")
+        // After a restart nothing is still saving, so it must not say so
+        XCTAssertEqual(words(mayNotBeSaved: true, lineOn: true), "Offline")
+        XCTAssertEqual(words(mayNotBeSaved: true, lineOn: false), "Offline")
+        // A new write after the restart really is saving
+        XCTAssertEqual(words(saving: stillSaving, mayNotBeSaved: true, lineOn: true), stillSaving)
+        XCTAssertEqual(words(saving: stillSaving, mayNotBeSaved: true, lineOn: false), "Offline")
     }
 
     func testAPullsOutcome() {

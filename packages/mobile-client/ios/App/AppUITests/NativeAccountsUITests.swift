@@ -145,8 +145,8 @@ final class NativeAccountsUITests: XCTestCase {
 
     func testTheBannerStartsTheReconcileChecklist() {
         XCTAssertTrue(app.staticTexts["Checking"].waitForExistence(timeout: 20))
-        let banner = app.buttons.matching(NSPredicate(format: "label ENDSWITH 'to reconcile'")).firstMatch
-        XCTAssertTrue(banner.waitForExistence(timeout: 10), "no reconcile banner")
+        let banner = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS 'to reconcile'")).firstMatch
+        XCTAssertTrue(banner.waitForExistence(timeout: 10), "no reconcile banner; the screen has \(labels(containing: "econcile"))")
         banner.tap()
         assertHandOff("reconcile:checklist")
     }

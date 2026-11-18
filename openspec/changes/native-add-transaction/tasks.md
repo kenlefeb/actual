@@ -49,7 +49,14 @@
     - dates outside 1900-01-01 to 2999-12-31 are `date-invalid`, and future dates are allowed;
     - notes over `transaction-notes-max-length` on any row are `notes-too-long`;
     - a transfer payee with a closed or deleted account is `account-closed`;
-    - no payee is ever created, and nothing is written.
+    - no payee is ever created, and nothing is written, including for a rule that sets a payee by name: the payee count is unchanged after many previews and after the `ruleFields` re-run (`runRules` with payee names unresolved);
+    - the amount grammar (design D2), with every accept and refuse scenario of the spec run in each of the five number formats;
+    - `amount-invalid` errors carry `detail.decimalSeparator` (`.` or `,`, from the format, never typed text); the other codes have no detail;
+    - NBSP, U+202F and U+2019 grouping; Indian grouping; `× ÷ −` mapped; one currency symbol ignored; surrounding whitespace dropped;
+    - `1e20`, `0x10`, `1_000`, `^`, `1..5`, `12abc`, a trailing operator, a misplaced group and a leading `+` are `amount-invalid`;
+    - a leading `-` or `−` and a negative result are `amount-negative`, with the direction unchanged;
+    - the upstream edit is only `runRules`'s optional parameter and the branch around `insertPayee` in `transaction-rules.ts`, with `rules-run` and the default unchanged (a test that the default still creates the payee);
+    - the split count is checked before any child is evaluated or looked up;
   - Add the fixtures `transaction-preview.json` and `transaction-field-errors.json`, with a test that the field codes and the refusal codes share no code.
 - [ ] 1.4 `native/transaction-save` (design D3), in the order of D3.
   - Write failing tests first:
@@ -146,7 +153,9 @@
 - the Transfer state: the Expense / Income / Transfer control, the To account row, the direction wording, and the category hidden with its reason;
 - Reload keeping the person's edits, with the both-changed list and "Use other device's";
 - "Couldn't check this yet." with Check Again;
-- the copy table (frame, element, text), approved by the Product Owner;
+- the copy table (frame, element, text), approved by the Product Owner, including two new rows for approval:
+  - Amount / `amount-invalid`: a sentence naming the budget's decimal separator with an example ("Use . for decimals, like 12.50"; "Use , for decimals, like 12,50");
+  - Amount / `amount-negative`: a sentence that points to the Expense and Income control;
 - "Set by a rule", the replaced-fields notice and Restore;
 - the "Not checked" state after a preview timeout;
 - Cancel's discard confirmation;

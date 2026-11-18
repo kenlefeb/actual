@@ -97,12 +97,54 @@ Keys such as `reconciled`, `imported_id` and `tombstone` never reach `batchUpdat
 
 ### `native/transaction-preview {draft, changedField}`
 
-It returns `{draft, ruleFields, replaced, remaining, errors}` and writes nothing. It never creates a payee.
+It returns `{draft, ruleFields, replaced, remaining, errors}` and has no side effects. It writes to no table, creates no payee, and makes no undo step (amended 2026-11-18 after the review of PR #447).
 
-- **Amounts.** loot-core evaluates each `amountText` with `evalArithmetic` in the budget's number format, applies `inflow`, and returns integer minor units. Swift never parses, adds or rounds money.
-  - Amount text longer than 100 characters is `amount-invalid`.
-  - So is a result that is not finite, not a whole number of minor units, or larger in magnitude than `Number.MAX_SAFE_INTEGER`.
-  - The 100-character bound is input validation, not a tunable limit: no amount needs more.
+- **Payee names.** The rules run with payee names left unresolved. This is the change's only upstream edit:
+  - in `packages/loot-core/src/server/transactions/transaction-rules.ts`, `runRules` gets one optional parameter (`{ resolvePayeeNames: false }`);
+  - `resolvePayeeNameForRules` gets one branch around its `insertPayee` call (near line 1291), so a rule action that sets a payee by name creates nothing when the option is false;
+  - the default, `rules-run` and every other caller are unchanged.
+  - The preview maps such a name to a live payee with the same name, ignoring case, or returns it as `payeeName`.
+  - The save resolves or creates it under D3's payee rules, inside its own undo step.
+  - This holds for the second rules run that `ruleFields` needs, too.
+- **Split count first.** Before evaluating any child, the preview and the save compare the number of `splits` with `transaction-split-max-children`, which is never above its ceiling of 200. Over it, the preview reports only `split-limit`, and the save refuses with `[native:invalid-draft:split-limit]`. No child is evaluated and no id is looked up.
+- **Amounts.** loot-core reads each `amountText` with the grammar below, which follows the budget's number format (`getNumberFormat`). It accepts the text only when the grammar consumes all of it, evaluates the operators, applies the sign from the control (D8a), and returns integer minor units. Swift never parses, adds or rounds money.
+
+  **Before parsing:**
+  - Whitespace at the start and end is dropped.
+  - `×` (U+00D7) reads as `*`, `÷` (U+00F7) as `/`, and `−` (U+2212) as `-`.
+  - One currency symbol (`\p{Sc}`, such as `$` or `€`), directly before or after a number with optional space, is ignored, as the web ignores it.
+
+  **Numbers, by the budget's format.** Grouping separators may appear only between digits of the integer part, at the format's group positions. A number may start with the decimal separator.
+
+  | Format | Grouping | Decimal | Groups |
+  | --- | --- | --- | --- |
+  | `comma-dot` | `,` | `.` | 3 digits (`1,234.56`) |
+  | `dot-comma` | `.` | `,` | 3 digits (`1.234,56`) |
+  | `space-comma` | space, NBSP or U+202F, interchangeably | `,` | 3 digits (`1 234,56`) |
+  | `apostrophe-dot` | `'` or U+2019, interchangeably | `.` | 3 digits (`1'234.56`, `1’234.56`) |
+  | `comma-dot-in` | `,` | `.` | last group 3, others 2 (`1,00,000.50`) |
+
+  **Spaces.** In `space-comma`, a space between two digits is grouping, and must sit at a group position: `1 234,56` is accepted, `12 34` is not. In every other format, a space between two digits is refused (`12 34`). Spaces next to an operator or a parenthesis only separate tokens (`1 000 + 2`).
+
+  **Operators.** `+ - * /` between two operands, and parentheses.
+  - No sign before a number or a parenthesis.
+  - A leading `-` or `−` is `amount-negative`, so the message can point to Expense and Income.
+  - A leading `+` is `amount-invalid`, as the web refuses it too.
+
+  **Refused as `amount-invalid`:** anything else, including:
+  - `1e20`, `0x10`, `1_000`, `^`, letters, and a second decimal separator (`1..5`);
+  - a misplaced group (`12,34` in `comma-dot`, `1,000,00` in `comma-dot-in`);
+  - another format's separators (`1,234.56` in `dot-comma`);
+  - a trailing operator;
+  - a currency symbol anywhere but next to a number;
+  - text longer than 100 characters, which is input validation, not a tunable limit;
+  - a result that is not finite, not whole minor units, or beyond `Number.MAX_SAFE_INTEGER` in magnitude.
+
+  A result below zero (`3-8`) is `amount-negative`. Zero is allowed, as on the web.
+
+  **Deliberate differences from the web.** The web's `evalArithmetic` strips all whitespace, accepts `^` and a unary minus, and lets `currencyToAmount` guess whether a lone `,` or `.` is decimal or grouping. That lets the text's sign flip the direction. The native engine follows the format exactly and takes the sign only from the control, so no amount is silently regrouped, truncated or reversed.
+
+  **The keypad.** Its decimal key types the budget's decimal separator, not the phone locale's. Its accessory row types `+ − × ÷`, and the engine maps them. Swift only inserts characters.
 - **Rules.** For a draft with no `id`, rules run as on the web:
   - a payee change applies every field the rules set;
   - any other change fills only empty fields and notes;
@@ -110,8 +152,15 @@ It returns `{draft, ruleFields, replaced, remaining, errors}` and writes nothing
   - `ruleFields` lists every field whose value currently comes from a rule.
   - A draft with an `id` runs no rules.
 - **The split remainder.** `remaining` is the parent minus the children's sum.
-- **Errors.** `errors` maps each field (with a child index for splits) to a code from `transaction-field-errors.json`:
+- **Errors.** `errors` maps each field (with a child index for splits) to `{code, detail?}`.
+  - `code` comes from `transaction-field-errors.json`.
+  - `detail` is present only for `amount-invalid`: `{decimalSeparator}`, `"."` or `","`, taken from the budget's number format (`.` for `comma-dot`, `apostrophe-dot` and `comma-dot-in`; `,` for `dot-comma` and `space-comma`). It is never text the person typed (added 2026-11-18, story 3602 PR #450).
+  - The screen builds the message from a translated string with that separator and an example in the same format ("Use . for decimals, like 12.50"). `amount-negative`'s message tells the person to choose Expense or Income.
+  - A save refusal still carries codes only (`[native:invalid-draft:amount-invalid]`). The view model then previews once more to get the detail.
+
+  The codes:
   - `amount-invalid`, `amount-required`;
+  - `amount-negative`: a leading minus sign, or a result below zero. The message, from the copy table, says in plain words to choose Expense or Income instead (added 2026-11-18);
   - `account-required`, `account-closed` (the transaction's account, or a transfer payee's account that is closed or deleted);
   - `transfer-same-account`: a transfer payee of the transaction's own account (added 2026-11-18, as the web refuses it);
   - `category-not-allowed`, `category-unknown`;

@@ -2,43 +2,88 @@ import Combine
 import SwiftUI
 import UIKit
 
-// Fork-only (sc-4931, sc-3611; native-accounts-screen D4 to D7a). The native
+// Fork-only (sc-4931, sc-3611; native-accounts-screen D4 to D8). The native
 // Accounts screen's host: NativeTabBarController lays it over the web Accounts
-// screens while the switch is on and the page shows `/accounts` or
-// `/accounts/<id>` with the tab bar. It stays hidden, so the web screen shows,
-// until loot-core has answered and knows the account. The switch is off by
-// default until task 3.8; developers set the UserDefaults key
+// screens while the switch is on. One screen serves `/accounts` (the list) and
+// `/accounts/<id>` (a register pushed over it). It steps aside, keeping its
+// place, while the web shows, and re-reads when the page comes back. It stays
+// hidden until loot-core has answered and knows the account. The switch is off
+// by default until task 3.8; developers set the UserDefaults key
 // `NativeScreen.accounts` (NativeScreenSwitch.accountsKey) to true.
 final class NativeAccountsViewController: UIHostingController<AccountsScreen> {
-    let route: NativeAccountsRoute
+    private(set) var route: NativeAccountsRoute?
     private let model: AccountsListViewModel
+    private let nav: AccountsNavigation
+    private let reconcileMonth: ReconcileMonthViewModel
+    private let client: NativeBridgeClient
     private let chrome: NativeChromePlugin
     private var lifecycleObservers: [NSObjectProtocol] = []
     private var stateObserver: AnyCancellable?
+    private var hasShown = false
 
-    init(client: NativeBridgeClient, route: NativeAccountsRoute, chrome: NativeChromePlugin, syncStatus: NativeSyncStatus) {
-        self.route = route
+    init(client: NativeBridgeClient, chrome: NativeChromePlugin, syncStatus: NativeSyncStatus, presentReconcile: @escaping (Any) -> Void) {
+        self.client = client
         self.chrome = chrome
         let model = AccountsListViewModel(client: client)
         model.syncStatus = syncStatus
         self.model = model
-        weak var handOff: NativeAccountsViewController?
-        super.init(
-            rootView: AccountsScreen(
-                model: model, navigate: { [weak chrome] in chrome?.navigate(to: $0) },
-                handOff: { handOff?.handOff($0, accountId: $1) }))
-        handOff = self
+        let nav = AccountsNavigation()
+        self.nav = nav
+        reconcileMonth = ReconcileMonthViewModel(client: client)
+        weak var host: NativeAccountsViewController?
+        let actions = AccountsActions(
+            navigate: { [weak chrome] in chrome?.navigate(to: $0) },
+            handOff: { host?.handOff($0, accountId: $1) },
+            openRegister: { host?.openRegister($0) },
+            closeRegister: { host?.closeRegister() },
+            // sc-4801: the flow is native only while its own switch is on, as the page's message
+            reconcile: { id in
+                guard NativeScreenSwitch.isReconcileNative() else { return }
+                presentReconcile(id.map { ["type": "presentReconcile", "account_id": $0] } ?? ["type": "presentReconcile", "checklist": true])
+            })
+        super.init(rootView: AccountsScreen(model: model, nav: nav, reconcileMonth: reconcileMonth, actions: actions))
+        host = self
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    // The page's route, or nil while the web screen should show
+    func show(_ route: NativeAccountsRoute?) {
+        let returning = self.route == nil && hasShown
+        self.route = route
+        guard let route else {
+            model.leave()
+            nav.register?.leave()
+            updateVisibility()
+            return
+        }
+        hasShown = true
+        switch route {
+        case .list: nav.register = nil
+        case .register(let id): openRegister(id, fromPage: true)
+        }
+        updateVisibility()
+        // Back from the web (the editor, a sheet): the visible view reads again
+        if returning {
+            Task {
+                await model.load()
+                await nav.register?.reload()
+            }
+        }
+    }
+
     // A page event (NativeBridgePlugin.onPaychecksEvent): "ready" is the page back after a refused call
     func eventReceived(_ event: String, tables: [String]) {
         if event == "ready" {
-            Task { await model.pageReady() }
+            Task {
+                await model.pageReady()
+                await nav.register?.pageReady()
+            }
         } else {
             model.eventReceived(event, tables: tables)
+            nav.register?.eventReceived(event, tables: tables)
+            reconcileMonth.eventReceived(event, tables: tables)
         }
     }
 
@@ -53,49 +98,83 @@ final class NativeAccountsViewController: UIHostingController<AccountsScreen> {
         chrome.handOff(hand)
     }
 
+    // Pushes the register at once and tells the page, which reports the route back
+    private func openRegister(_ id: String, fromPage: Bool = false) {
+        if nav.register?.accountId != id {
+            nav.register = AccountRegisterViewModel(client: client, accountId: id)
+        }
+        if !fromPage { chrome.navigate(to: "/accounts/\(id)") }
+    }
+
+    // The register's back button: the list, here and on the page
+    private func closeRegister() {
+        guard nav.register != nil else { return }
+        nav.register?.leave()
+        nav.register = nil
+        chrome.navigate(to: "/accounts")
+    }
+
+    private func updateVisibility() {
+        guard let route else {
+            view.isHidden = true
+            return
+        }
+        view.isHidden = !route.showsNative(model.state)
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemGroupedBackground
         view.accessibilityViewIsModal = true
         UIView.appearance(whenContainedInInstancesOf: [UIAlertController.self]).tintColor = NativeTabBarController.accent
-        // The web screen shows until the list is read; a failed first read shows the native error
         view.isHidden = true
-        stateObserver = model.$state.sink { [weak self] state in
-            guard let self else { return }
-            // shortcut: the native register is the next piece of story 3611; until it lands,
-            // `/accounts/<id>` stays the web register
-            guard self.route == .list else { return }
-            switch state {
-            case .loading: self.view.isHidden = true
-            case .loaded, .stale, .failed: self.view.isHidden = false
-            }
+        stateObserver = model.$state.sink { [weak self] _ in
+            DispatchQueue.main.async { self?.updateVisibility() }
         }
         let center = NotificationCenter.default
         for (name, active) in [(UIApplication.didBecomeActiveNotification, true), (UIApplication.willResignActiveNotification, false)] {
             lifecycleObservers.append(
                 center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                    guard let model = self?.model else { return }
-                    Task { await model.setSceneActive(active) }
+                    guard let self else { return }
+                    let register = self.nav.register
+                    Task {
+                        await self.model.setSceneActive(active)
+                        await register?.setSceneActive(active)
+                    }
                 })
         }
-        Task { await model.load() }
-    }
-
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        model.leave()
+        Task {
+            await model.load()
+            if NativeScreenSwitch.isReconcileNative() { await reconcileMonth.load() }
+        }
     }
 
     deinit { lifecycleObservers.forEach(NotificationCenter.default.removeObserver) }
 }
 
-// D7: the list. Every balance and total is loot-core's; Swift formats them.
-struct AccountsScreen: View {
-    @ObservedObject var model: AccountsListViewModel
+// Which register is pushed over the list (D5)
+@MainActor
+final class AccountsNavigation: ObservableObject {
+    @Published var register: AccountRegisterViewModel?
+}
+
+// What the screens ask of their host
+struct AccountsActions {
     let navigate: (String) -> Void
     // A web flow (D7a): the action and, for the account ones, its id
     let handOff: (String, String?) -> Void
-    @Environment(\.editMode) private var editMode
+    let openRegister: (String) -> Void
+    let closeRegister: () -> Void
+    // An account's Reconcile flow, or the checklist for nil (D8)
+    let reconcile: (String?) -> Void
+}
+
+// D7: the list. Every balance and total is loot-core's; Swift formats them.
+struct AccountsScreen: View {
+    @ObservedObject var model: AccountsListViewModel
+    @ObservedObject var nav: AccountsNavigation
+    @ObservedObject var reconcileMonth: ReconcileMonthViewModel
+    let actions: AccountsActions
 
     var body: some View {
         NavigationView {
@@ -109,10 +188,13 @@ struct AccountsScreen: View {
                     }
                     ToolbarItem(placement: .navigationBarTrailing) { addMenu }
                 }
+                .background(registerLink)
         }
         .navigationViewStyle(.stack)
         .tint(Color(NativeTabBarController.accent))
-        .safeAreaInset(edge: .bottom) { undoBar }
+        .safeAreaInset(edge: .bottom) {
+            if nav.register == nil { UndoBar(offer: model.undoOffer, isWorking: model.writes.isWorking) { Task { await model.undo() } } }
+        }
         .alert(model.actionError?.message ?? "", isPresented: isErrorShown) {
             Button(AccountsWords.ok, role: .cancel) {}
         }
@@ -121,14 +203,30 @@ struct AccountsScreen: View {
         }
     }
 
+    // The register, pushed by the route (D5); the system back pops it to the list
+    private var registerLink: some View {
+        NavigationLink(
+            isActive: Binding(get: { nav.register != nil }, set: { if !$0 { actions.closeRegister() } }),
+            destination: {
+                if let register = nav.register {
+                    AccountRegisterView(
+                        model: register, list: model.state.value, actions: actions,
+                        reconcileOn: NativeScreenSwitch.isReconcileNative())
+                }
+            },
+            label: { EmptyView() }
+        )
+        .hidden()
+    }
+
     private var isErrorShown: Binding<Bool> {
         Binding(get: { model.actionError != nil }, set: { if !$0 { model.clearActionError() } })
     }
 
     private var addMenu: some View {
         Menu {
-            Button { handOff("add-account", nil) } label: { Label(AccountsWords.addAccount, systemImage: "plus") }
-            Button { handOff("link-account", nil) } label: { Label(AccountsWords.linkAccount, systemImage: "building.columns") }
+            Button { actions.handOff("add-account", nil) } label: { Label(AccountsWords.addAccount, systemImage: "plus") }
+            Button { actions.handOff("link-account", nil) } label: { Label(AccountsWords.linkAccount, systemImage: "building.columns") }
         } label: {
             Image(systemName: "plus").frame(minWidth: 44, minHeight: 44)
         }
@@ -139,10 +237,12 @@ struct AccountsScreen: View {
         switch model.state {
         case .loading:
             // The real layout, redacted; no spinner and no shimmer (D6)
-            AccountsListBody(list: .placeholder, status: .syncing, isSyncing: true, staleError: nil, model: model, navigate: { _ in }, handOff: { _, _ in })
-                .redacted(reason: .placeholder)
-                .disabled(true)
-                .accessibilityLabel(Text(AccountsWords.loading))
+            AccountsListBody(
+                list: .placeholder, status: .syncing, isSyncing: true, staleError: nil, model: model, reconcileMonth: nil, actions: actions
+            )
+            .redacted(reason: .placeholder)
+            .disabled(true)
+            .accessibilityLabel(Text(AccountsWords.loading))
         case .loaded(let list):
             loaded(list, staleError: nil)
         case .stale(let list, let error):
@@ -159,32 +259,32 @@ struct AccountsScreen: View {
 
     @ViewBuilder private func loaded(_ list: AccountsList, staleError: AccountsLoadError?) -> some View {
         if list.isEmpty {
-            AccountsEmpty(status: model.syncStatus, staleError: staleError, handOff: handOff) { Task { await model.refresh() } }
+            AccountsEmpty(status: model.syncStatus, staleError: staleError, handOff: actions.handOff) { Task { await model.refresh() } }
         } else {
             AccountsListBody(
-                list: list, status: model.syncStatus, isSyncing: model.isSyncing, staleError: staleError, model: model, navigate: navigate,
-                handOff: handOff)
+                list: list, status: model.syncStatus, isSyncing: model.isSyncing, staleError: staleError, model: model,
+                reconcileMonth: NativeScreenSwitch.isReconcileNative() ? reconcileMonth : nil, actions: actions)
         }
     }
+}
 
-    @ViewBuilder private var undoBar: some View {
-        if let offer = model.undoOffer {
+// The brief Undo after a write, over the tab bar
+struct UndoBar: View {
+    let offer: AccountsUndoOffer?
+    let isWorking: Bool
+    let undo: () -> Void
+
+    var body: some View {
+        if let offer {
             HStack {
-                Text(undoText(offer)).fixedSize(horizontal: false, vertical: true)
+                Text(AccountsWords.undoText(offer)).fixedSize(horizontal: false, vertical: true)
                 Spacer()
-                Button(AccountsWords.undo) { Task { await model.undo() } }
+                Button(AccountsWords.undo, action: undo)
                     .buttonStyle(.borderedProminent)
-                    .disabled(model.isWorking)
+                    .disabled(isWorking)
             }
             .padding()
             .background(.regularMaterial)
-        }
-    }
-
-    private func undoText(_ offer: AccountsUndoOffer) -> String {
-        switch offer.action {
-        case .reopen: String(format: AccountsWords.reopened, offer.accountName)
-        case .move: String(format: AccountsWords.moved, offer.accountName)
         }
     }
 }
@@ -195,13 +295,15 @@ private struct AccountsListBody: View {
     let isSyncing: Bool
     let staleError: AccountsLoadError?
     @ObservedObject var model: AccountsListViewModel
-    let navigate: (String) -> Void
-    let handOff: (String, String?) -> Void
+    // nil while the Reconcile flow's switch is off
+    let reconcileMonth: ReconcileMonthViewModel?
+    let actions: AccountsActions
 
     var body: some View {
         List {
             Section(header: SyncSubtitle(status: isSyncing ? .syncing : status, staleError: staleError) { Task { await model.refresh() } }) {
-                Button { navigate("/accounts/all") } label: {
+                if let reconcileMonth { ReconcileBanner(month: reconcileMonth) { actions.reconcile(nil) } }
+                Button { actions.navigate("/accounts/all") } label: {
                     LinkRow { AccountTexts(name: AccountsWords.allAccounts, detail: AccountsWords.allAccountsDetail) }
                 }
                 .foregroundColor(.primary)
@@ -211,9 +313,9 @@ private struct AccountsListBody: View {
             if !list.closed.accounts.isEmpty {
                 Section {
                     NavigationLink {
-                        ClosedAccountsView(model: model, navigate: navigate)
+                        ClosedAccountsView(model: model, open: actions.openRegister)
                     } label: {
-                        AccountTexts(name: AccountsWords.closedAccounts, detail: String(format: AccountsWords.accountCount, list.closed.accounts.count))
+                        AccountTexts(name: AccountsWords.closedAccounts, detail: AccountsCountWords.accounts(list.closed.accounts.count))
                     }
                 }
             }
@@ -229,10 +331,17 @@ private struct AccountsListBody: View {
         if !section.accounts.isEmpty {
             Section(header: AmountLine(title: title, amount: section.total, style: list.amountStyle, isHeadline: true).textCase(nil)) {
                 ForEach(section.accounts) { account in
-                    Button { navigate("/accounts/\(account.id)") } label: {
+                    Button { actions.openRegister(account.id) } label: {
                         LinkRow { AccountRow(account: account, style: list.amountStyle) }
                     }
                     .foregroundColor(.primary)
+                    // D8: long-press opens Reconcile for this account
+                    .contextMenu {
+                        if reconcileMonth != nil {
+                            Button { actions.reconcile(account.id) } label: { Label(AccountsWords.reconcile, systemImage: "checkmark.seal") }
+                        }
+                    }
+                    .modifier(OptionalAccessibilityAction(name: AccountsWords.reconcile, isOn: reconcileMonth != nil) { actions.reconcile(account.id) })
                 }
                 .onMove { from, to in
                     guard let first = from.first else { return }
@@ -240,6 +349,39 @@ private struct AccountsListBody: View {
                 }
             }
         }
+    }
+}
+
+// D8: "2 accounts to reconcile", collapsing to "November reconciled ✓" once the month is done
+private struct ReconcileBanner: View {
+    @ObservedObject var month: ReconcileMonthViewModel
+    let open: () -> Void
+
+    var body: some View {
+        if let read = month.state.read, !read.accounts.isEmpty {
+            if month.due.isEmpty {
+                Label(String(format: AccountsWords.monthReconciled, Dates.monthName(read.month)), systemImage: "checkmark.circle.fill")
+                    .foregroundColor(.secondary)
+            } else {
+                Button(action: open) {
+                    LinkRow {
+                        Label(AccountsCountWords.toReconcile(month.due.count), systemImage: "checkmark.seal")
+                            .foregroundColor(Color(NativeTabBarController.accent))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct OptionalAccessibilityAction: ViewModifier {
+    let name: String
+    let isOn: Bool
+    let action: () -> Void
+
+    func body(content: Content) -> some View {
+        if isOn { content.accessibilityAction(named: Text(name), action) } else { content }
     }
 }
 
@@ -388,13 +530,13 @@ private struct AmountLine: View {
 // D7: closed accounts in secondary text; Reopen in teal on a trailing swipe and in the context menu
 private struct ClosedAccountsView: View {
     @ObservedObject var model: AccountsListViewModel
-    let navigate: (String) -> Void
+    let open: (String) -> Void
 
     var body: some View {
         List {
             Section(footer: Text(AccountsWords.closedFooter)) {
                 ForEach(model.state.value?.closed.accounts ?? []) { account in
-                    Button { navigate("/accounts/\(account.id)") } label: {
+                    Button { open(account.id) } label: {
                         LinkRow { AccountRow(account: account, style: model.state.value?.amountStyle ?? AccountsList.placeholder.amountStyle, isSecondary: true) }
                     }
                     .foregroundColor(.primary)
@@ -471,7 +613,6 @@ enum AccountsWords {
     static let onBudget = NSLocalizedString("On budget", comment: "Native Accounts: section")
     static let offBudget = NSLocalizedString("Off budget", comment: "Native Accounts: section")
     static let closedAccounts = NSLocalizedString("Closed accounts", comment: "Native Accounts: closed accounts row and screen")
-    static let accountCount = NSLocalizedString("%d accounts", comment: "Native Accounts: closed accounts count")
     static let netWorth = NSLocalizedString("Net worth", comment: "Native Accounts: footer")
     static let retry = NSLocalizedString("Retry", comment: "Native Accounts: read again after a failure")
     static let retryHint = NSLocalizedString("Syncs again", comment: "Native Accounts: VoiceOver hint on a failed sync")
@@ -480,6 +621,25 @@ enum AccountsWords {
     static let reopen = NSLocalizedString("Reopen", comment: "Native Accounts: reopen a closed account")
     static let reopened = NSLocalizedString("Reopened \"%@\".", comment: "Native Accounts: after a reopen")
     static let moved = NSLocalizedString("Moved \"%@\".", comment: "Native Accounts: after a reorder")
+    static let cleared = NSLocalizedString("Cleared \"%@\".", comment: "Native Accounts: after clearing a transaction")
+    static let uncleared = NSLocalizedString("Marked \"%@\" pending.", comment: "Native Accounts: after unclearing a transaction")
+    static let categorized = NSLocalizedString("Changed the category of \"%@\".", comment: "Native Accounts: after categorizing")
+    static let deleted = NSLocalizedString("Deleted \"%@\".", comment: "Native Accounts: after deleting a transaction")
+    static let reconcile = NSLocalizedString("Reconcile", comment: "Native Accounts: open the Reconcile flow")
+    static let monthReconciled = NSLocalizedString("%@ reconciled", comment: "Native Accounts: reconcile banner, the month is done")
+
+    static func undoText(_ offer: AccountsUndoOffer) -> String {
+        let format: String =
+            switch offer.action {
+            case .reopen: reopened
+            case .move: moved
+            case .clear: cleared
+            case .unclear: uncleared
+            case .categorize: categorized
+            case .delete: deleted
+            }
+        return String(format: format, offer.name)
+    }
     static let closedFooter = NSLocalizedString(
         "Swipe left or long-press to reopen. Closed accounts keep their transactions and reports.",
         comment: "Native Accounts: closed accounts footer")

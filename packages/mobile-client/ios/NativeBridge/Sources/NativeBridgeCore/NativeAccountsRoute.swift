@@ -33,6 +33,17 @@ public enum NativeAccountsRoute: Equatable {
         }
     }
 
+    // Whether the native screen lies over the web one for this read: not before
+    // loot-core answers; the native error with Retry after a failed first read
+    // (PR 424 review); an account the list does not hold stays web
+    public func showsNative(_ state: AccountsLoad<AccountsList>) -> Bool {
+        switch state {
+        case .loading: return false
+        case .failed: return true
+        case .loaded(let list), .stale(let list, _): return isKnown(in: list)
+        }
+    }
+
     // What a web hand-off may name: the open accounts only (D7a)
     public static func openAccountIds(in list: AccountsList) -> Set<String> {
         Set((list.sections.onBudget.accounts + list.sections.offBudget.accounts).map(\.id))

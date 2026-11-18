@@ -70,7 +70,9 @@ private func pullSync(_ client: NativeBridgeClient, settled: @escaping () -> Voi
 
 // sc-3611: what a list write failed with. Fixed local words only.
 public enum AccountsActionError: Equatable {
-    case reopenFailed, moveFailed, timedOut, changedSince, undoTimedOut
+    case reopenFailed, moveFailed, clearFailed, categorizeFailed, deleteFailed, timedOut
+    // Undo: a touched row changed since (D3a), the step is no longer the latest, or anything else
+    case changedSince, nothingToUndo, undoFailed, undoTimedOut
 
     public var message: String {
         switch self {
@@ -78,27 +80,111 @@ public enum AccountsActionError: Equatable {
             return NSLocalizedString("The account could not be reopened. Nothing changed.", comment: "Native Accounts: reopen failed")
         case .moveFailed:
             return NSLocalizedString("The account could not be moved. Nothing changed.", comment: "Native Accounts: move failed")
+        case .clearFailed:
+            return NSLocalizedString("The transaction could not be changed. Nothing changed.", comment: "Native Accounts: clear failed")
+        case .categorizeFailed:
+            return NSLocalizedString(
+                "The category could not be changed. Nothing changed.", comment: "Native Accounts: categorize failed")
+        case .deleteFailed:
+            return NSLocalizedString("The transaction could not be deleted. Nothing changed.", comment: "Native Accounts: delete failed")
         case .timedOut:
             return NSLocalizedString("The budget did not answer in time. Nothing changed.", comment: "Native Accounts: write timed out")
         case .changedSince:
             return NSLocalizedString("Changed since — can't undo.", comment: "Native Accounts: undo refused, a touched row changed")
+        case .nothingToUndo:
+            return NSLocalizedString("There is nothing to undo.", comment: "Native Accounts: undo refused, no matching step")
+        case .undoFailed:
+            return NSLocalizedString("Couldn't undo. Nothing was undone.", comment: "Native Accounts: undo failed")
         case .undoTimedOut:
             return NSLocalizedString("The budget did not answer in time. Nothing was undone.", comment: "Native Accounts: undo timed out")
         }
     }
 }
 
-// What the brief Undo after a list write reverses: loot-core undoes it only if
+// What the brief Undo after a write reverses: loot-core undoes it only if
 // its latest step still carries `token` and nothing it touched changed since (D3a)
 public struct AccountsUndoOffer: Equatable {
-    public enum Action: Equatable { case reopen, move }
+    public enum Action: Equatable { case reopen, move, clear, unclear, categorize, delete }
 
     public let token: String
     public let action: Action
-    public let accountName: String
+    // The account or the transaction's payee, for the Undo bar
+    public let name: String
 
-    public init(token: String, action: Action, accountName: String) {
-        (self.token, self.action, self.accountName) = (token, action, accountName)
+    public init(token: String, action: Action, name: String) {
+        (self.token, self.action, self.name) = (token, action, name)
+    }
+}
+
+// A screen's writes and their brief Undo, shared by the list and the register
+@MainActor
+public final class AccountsWrites: ObservableObject {
+    @Published public private(set) var undoOffer: AccountsUndoOffer?
+    @Published public private(set) var actionError: AccountsActionError?
+    @Published public private(set) var isWorking = false
+
+    private let client: NativeBridgeClient
+    private let window: UndoWindow
+
+    init(client: NativeBridgeClient, undoInterval: TimeInterval, undoSleep: AccountsSleep?) {
+        self.client = client
+        window = UndoWindow(interval: undoInterval, sleep: undoSleep ?? realSleep)
+    }
+
+    public func clearActionError() { actionError = nil }
+
+    public func withdraw() {
+        window.close()
+        undoOffer = nil
+    }
+
+    // The write, then `reread`, then the offer; a refusal changes nothing and says so
+    func perform(failed: AccountsActionError, offer: AccountsUndoOffer, reread: () async -> Void, _ write: () async throws -> Void) async {
+        guard !isWorking else { return }
+        withdraw()
+        actionError = nil
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            try await write()
+        } catch {
+            actionError = Self.isTimeout(error) ? .timedOut : failed
+            return
+        }
+        await reread()
+        undoOffer = offer
+        window.open { [weak self] in self?.undoOffer = nil }
+    }
+
+    // Only from a tap on the offered Undo
+    func undo(reread: () async -> Void) async {
+        guard let offer = undoOffer, !isWorking else { return }
+        withdraw()
+        actionError = nil
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            try await client.undo(try NativeUndo(token: offer.token))
+        } catch {
+            actionError = Self.undoError(error)
+            return
+        }
+        await reread()
+    }
+
+    // loot-core's native/undo says which refusal it is (server/native/app.ts)
+    private static func undoError(_ error: Error) -> AccountsActionError {
+        switch error {
+        case NativeBridgeError.timedOut: return .undoTimedOut
+        case NativeBridgeError.page(let message) where message.contains("changed since"): return .changedSince
+        case NativeBridgeError.page(let message) where message.contains("nothing to undo"): return .nothingToUndo
+        default: return .undoFailed
+        }
+    }
+
+    private static func isTimeout(_ error: Error) -> Bool {
+        if case NativeBridgeError.timedOut = error { return true }
+        return false
     }
 }
 
@@ -112,29 +198,27 @@ public final class AccountsListViewModel: ObservableObject {
     @Published public private(set) var isSyncing = false
     // The subtitle: the app passes on loot-core's sync events; a pull sets it too
     @Published public var syncStatus: NativeSyncStatus = .unknown
-    @Published public private(set) var undoOffer: AccountsUndoOffer?
-    @Published public private(set) var actionError: AccountsActionError?
-    @Published public private(set) var isWorking = false
+    public let writes: AccountsWrites
+    public var undoOffer: AccountsUndoOffer? { writes.undoOffer }
+    public var actionError: AccountsActionError? { writes.actionError }
 
     private let client: NativeBridgeClient
-    private let undoInterval: TimeInterval
-    private let undoSleep: AccountsSleep
     private var coalescer: ChangeCoalescer?
     private var isSceneActive = true
     private var generation = 0
-    private var offerGeneration = 0
+    private var writesChange: AnyCancellable?
 
     public init(
         client: NativeBridgeClient, changeInterval: TimeInterval = 1.0 / 60, schedule: ChangeSchedule? = nil,
         undoInterval: TimeInterval = 10, undoSleep: AccountsSleep? = nil
     ) {
         self.client = client
-        self.undoInterval = undoInterval
-        self.undoSleep = undoSleep ?? realSleep
+        writes = AccountsWrites(client: client, undoInterval: undoInterval, undoSleep: undoSleep)
         coalescer = ChangeCoalescer(interval: changeInterval, schedule: schedule) { [weak self] in
             guard let self, self.isSceneActive else { return }
             Task { @MainActor in await self.load() }
         }
+        writesChange = writes.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
     }
 
     // A page event: only a sync-event names its changed tables
@@ -187,18 +271,18 @@ public final class AccountsListViewModel: ObservableObject {
         if case .stale = state { refreshError = .refreshFailed }
     }
 
-    public func clearActionError() { actionError = nil }
+    public func clearActionError() { writes.clearActionError() }
 
     // The screen went away: no Undo survives it
-    public func leave() { withdrawOffer() }
+    public func leave() { writes.withdraw() }
 
     // A closed account back to its section (D7), undoable
     public func reopen(_ id: String) async {
         let name = state.value?.closed.accounts.first { $0.id == id }?.name ?? ""
         guard let write = try? AccountReopen(id: id) else { return }
-        await perform(failed: .reopenFailed, offer: AccountsUndoOffer(token: write.undoToken, action: .reopen, accountName: name)) {
-            try await self.client.reopenAccount(write)
-        }
+        await writes.perform(
+            failed: .reopenFailed, offer: AccountsUndoOffer(token: write.undoToken, action: .reopen, name: name), reread: load
+        ) { try await self.client.reopenAccount(write) }
     }
 
     // An Edit-mode drop within one section. The new order shows at once and
@@ -210,62 +294,16 @@ public final class AccountsListViewModel: ObservableObject {
         let account = accounts[from]
         let targetId: String? = if case .before(let id) = target { id } else { nil }
         guard let write = try? AccountMove(id: account.id, targetId: targetId) else { return }
-        state = .loaded(list.moving(account.id, before: targetId))
-        await perform(failed: .moveFailed, offer: AccountsUndoOffer(token: write.undoToken, action: .move, accountName: account.name)) {
-            try await self.client.moveAccount(write)
-        }
-        if actionError != nil, let shown = state.value, shown == list.moving(account.id, before: targetId) { state = .loaded(list) }
+        let shown = list.moving(account.id, before: targetId)
+        state = .loaded(shown)
+        await writes.perform(
+            failed: .moveFailed, offer: AccountsUndoOffer(token: write.undoToken, action: .move, name: account.name), reread: load
+        ) { try await self.client.moveAccount(write) }
+        if actionError != nil, state.value == shown { state = .loaded(list) }
     }
 
     // Only from a tap on the offered Undo
-    public func undo() async {
-        guard let offer = undoOffer, !isWorking else { return }
-        withdrawOffer()
-        actionError = nil
-        isWorking = true
-        defer { isWorking = false }
-        do {
-            try await client.undo(try NativeUndo(token: offer.token))
-        } catch {
-            actionError = Self.isTimeout(error) ? .undoTimedOut : .changedSince
-            return
-        }
-        await load()
-    }
-
-    private func perform(failed: AccountsActionError, offer: AccountsUndoOffer, _ write: () async throws -> Void) async {
-        guard !isWorking else { return }
-        withdrawOffer()
-        actionError = nil
-        isWorking = true
-        defer { isWorking = false }
-        do {
-            try await write()
-        } catch {
-            actionError = Self.isTimeout(error) ? .timedOut : failed
-            return
-        }
-        await load()
-        offerGeneration += 1
-        let mine = offerGeneration
-        undoOffer = offer
-        let (pause, wait) = (undoInterval, undoSleep)
-        Task { [weak self] in
-            try? await wait(pause)
-            guard let self, self.offerGeneration == mine else { return }
-            self.undoOffer = nil
-        }
-    }
-
-    private func withdrawOffer() {
-        offerGeneration += 1
-        undoOffer = nil
-    }
-
-    private static func isTimeout(_ error: Error) -> Bool {
-        if case NativeBridgeError.timedOut = error { return true }
-        return false
-    }
+    public func undo() async { await writes.undo(reread: load) }
 }
 
 // The register as the pages loaded so far have built it
@@ -292,11 +330,17 @@ public final class AccountRegisterViewModel: ObservableObject {
     @Published public private(set) var isSyncing = false
     @Published public private(set) var scope: AccountRegisterScope = .all
     @Published public private(set) var search = ""
+    // The Categorize picker's groups (D3: from native/budget-month), visible ones only
+    @Published public private(set) var categoryGroups: [BudgetMonth.Group]?
+    public let writes: AccountsWrites
+    public var undoOffer: AccountsUndoOffer? { writes.undoOffer }
+    public var actionError: AccountsActionError? { writes.actionError }
 
     public var hasMore: Bool { state.value?.nextCursor != nil }
+    public let accountId: String
 
     private let client: NativeBridgeClient
-    private let accountId: String
+    private var writesChange: AnyCancellable?
     private let searchInterval: TimeInterval
     private let sleep: AccountsSleep
     private var coalescer: ChangeCoalescer?
@@ -307,16 +351,18 @@ public final class AccountRegisterViewModel: ObservableObject {
 
     public init(
         client: NativeBridgeClient, accountId: String, searchInterval: TimeInterval = 0.3, changeInterval: TimeInterval = 1.0 / 60,
-        schedule: ChangeSchedule? = nil, sleep: AccountsSleep? = nil
+        schedule: ChangeSchedule? = nil, sleep: AccountsSleep? = nil, undoInterval: TimeInterval = 10, undoSleep: AccountsSleep? = nil
     ) {
         self.client = client
         self.accountId = accountId
         self.searchInterval = searchInterval
         self.sleep = sleep ?? realSleep
+        writes = AccountsWrites(client: client, undoInterval: undoInterval, undoSleep: undoSleep)
         coalescer = ChangeCoalescer(interval: changeInterval, schedule: schedule) { [weak self] in
             guard let self, self.isSceneActive else { return }
             Task { @MainActor in await self.reload() }
         }
+        writesChange = writes.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
     }
 
     public func eventReceived(_ event: String, tables: [String]) {
@@ -445,5 +491,48 @@ public final class AccountRegisterViewModel: ObservableObject {
         guard isSceneActive else { return }
         await reload()
         if case .stale = state { refreshError = .refreshFailed }
+    }
+
+    public func clearActionError() { writes.clearActionError() }
+
+    // The screen went away: no Undo survives it
+    public func leave() { writes.withdraw() }
+
+    // Clear or Unclear through native/reconcile-tick, which refuses a reconciled row
+    public func setCleared(_ row: AccountRegister.Row, _ cleared: Bool) async {
+        guard let write = try? ReconcileTick(accountId: accountId, ids: [row.id], cleared: cleared) else { return }
+        let offer = AccountsUndoOffer(token: write.undoToken, action: cleared ? .clear : .unclear, name: Self.name(of: row))
+        await writes.perform(failed: .clearFailed, offer: offer, reread: reload) { _ = try await self.client.reconcileTick(write) }
+    }
+
+    // A nil category makes the row uncategorized. `confirmed`: the person agreed to change a reconciled row.
+    public func categorize(_ row: AccountRegister.Row, category: String?, confirmed: Bool) async {
+        guard let write = try? TransactionsCategorize(accountId: accountId, ids: [row.id], category: category, confirmedReconciled: confirmed)
+        else { return }
+        let offer = AccountsUndoOffer(token: write.undoToken, action: .categorize, name: Self.name(of: row))
+        await writes.perform(failed: .categorizeFailed, offer: offer, reread: reload) { try await self.client.categorizeTransactions(write) }
+    }
+
+    // A transfer's partner goes with it (loot-core)
+    public func delete(_ row: AccountRegister.Row, confirmed: Bool) async {
+        guard let write = try? TransactionsDelete(accountId: accountId, ids: [row.id], confirmedReconciled: confirmed) else { return }
+        let offer = AccountsUndoOffer(token: write.undoToken, action: .delete, name: Self.name(of: row))
+        await writes.perform(failed: .deleteFailed, offer: offer, reread: reload) { try await self.client.deleteTransactions(write) }
+    }
+
+    public func undo() async { await writes.undo(reread: reload) }
+
+    // The month's groups for the picker; a failed read leaves the picker empty
+    public func loadCategories(month: String) async {
+        guard let read = try? await client.budgetMonth(month) else { return }
+        categoryGroups = read.groups.filter { !$0.hidden && !$0.visibleCategories.isEmpty }.map {
+            BudgetMonth.Group(
+                id: $0.id, name: $0.name, isIncome: $0.isIncome, hidden: false, budgeted: nil, spent: nil, balance: nil,
+                categories: $0.visibleCategories)
+        }
+    }
+
+    private static func name(of row: AccountRegister.Row) -> String {
+        [row.payee, row.transferAccount?.name, row.notes].compactMap { $0 }.first { !$0.isEmpty } ?? ""
     }
 }

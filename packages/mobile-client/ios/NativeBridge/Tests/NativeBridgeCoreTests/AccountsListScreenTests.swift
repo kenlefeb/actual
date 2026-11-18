@@ -169,7 +169,7 @@ final class AccountsListWriteTests: XCTestCase {
         XCTAssertEqual(page.calls.map(\.name), ["native/accounts-list", "native/account-reopen", "native/accounts-list"])
         let token = try XCTUnwrap(page.args("native/account-reopen")["undoToken"] as? String)
         XCTAssertEqual(try page.args("native/account-reopen")["id"] as? String, "old")
-        XCTAssertEqual(model.undoOffer, AccountsUndoOffer(token: token, action: .reopen, accountName: "Old"))
+        XCTAssertEqual(model.undoOffer, AccountsUndoOffer(token: token, action: .reopen, name: "Old"))
         XCTAssertNil(model.actionError)
     }
 
@@ -191,11 +191,28 @@ final class AccountsListWriteTests: XCTestCase {
         let model = model(page)
         await model.load()
         await model.reopen("old")
-        page.failures["native/undo"] = Boom()
+        page.failures["native/undo"] = NativeBridgeError.page("native/undo: changed since, can't undo")
         await model.undo()
         XCTAssertEqual(model.actionError, .changedSince)
         XCTAssertEqual(model.actionError?.message, "Changed since — can't undo.")
         XCTAssertNil(model.undoOffer)
+    }
+
+    // PR 424 review: only a conflict says "Changed since"
+    func testOtherUndoRefusalsSayWhatHappened() async throws {
+        let page = try FakeListPage()
+        let model = model(page)
+        await model.load()
+        await model.reopen("old")
+        page.failures["native/undo"] = NativeBridgeError.page("native/undo: nothing to undo")
+        await model.undo()
+        XCTAssertEqual(model.actionError, .nothingToUndo)
+        XCTAssertEqual(model.actionError?.message, "There is nothing to undo.")
+        await model.reopen("old")
+        page.failures["native/undo"] = Boom()
+        await model.undo()
+        XCTAssertEqual(model.actionError, .undoFailed)
+        XCTAssertEqual(model.actionError?.message, "Couldn't undo. Nothing was undone.")
     }
 
     func testAFailedWriteChangesNothingAndSaysSo() async throws {
@@ -246,7 +263,7 @@ final class AccountsListWriteTests: XCTestCase {
         XCTAssertEqual(args["id"] as? String, "card")
         XCTAssertEqual(args["targetId"] as? String, "checking")
         XCTAssertEqual(model.undoOffer?.action, .move)
-        XCTAssertEqual(model.undoOffer?.accountName, "Card")
+        XCTAssertEqual(model.undoOffer?.name, "Card")
         XCTAssertEqual(page.calls.last?.name, "native/accounts-list")
     }
 
@@ -285,5 +302,15 @@ final class AccountsListWriteTests: XCTestCase {
         model.syncStatus = .synced(Date(timeIntervalSince1970: 0))
         await model.refresh()
         XCTAssertEqual(model.syncStatus, .failed)
+    }
+}
+
+// PR 424 review: counts agree with their noun
+final class AccountsCountWordsTests: XCTestCase {
+    func testOneAccountAndSeveral() {
+        XCTAssertEqual(AccountsCountWords.accounts(1), "1 account")
+        XCTAssertEqual(AccountsCountWords.accounts(2), "2 accounts")
+        XCTAssertEqual(AccountsCountWords.toReconcile(1), "1 account to reconcile")
+        XCTAssertEqual(AccountsCountWords.toReconcile(3), "3 accounts to reconcile")
     }
 }

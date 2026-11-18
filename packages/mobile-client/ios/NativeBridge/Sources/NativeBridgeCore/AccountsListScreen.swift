@@ -122,3 +122,17 @@ extension AccountMove {
         return to < ids.count ? .before(ids[to]) : .end
     }
 }
+
+// Counts that agree with their noun ("1 account", "2 accounts"), through
+// Foundation's grammar agreement, so each language inflects its own way
+public enum AccountsCountWords {
+    public static func accounts(_ count: Int) -> String {
+        String(AttributedString(localized: "^[\(count) account](inflect: true)", comment: "Native Accounts: closed accounts count").characters)
+    }
+
+    public static func toReconcile(_ count: Int) -> String {
+        String(
+            AttributedString(localized: "^[\(count) account](inflect: true) to reconcile", comment: "Native Accounts: reconcile banner")
+                .characters)
+    }
+}

@@ -10,10 +10,11 @@ This change ships story sc-3602 in epic 470. Adding a transaction is the most fr
 ## What Changes
 
 - **Group 1, engine (sc-3602):** four new native handlers.
-  - Reads: `native/transaction-form` (accounts, transfer targets, categories, and for edit the whole transaction with a digest) and `native/payees` (capped payee search).
+  - Reads: `native/transaction-form` (accounts, transfer targets, categories, and for edit the whole transaction with a digest) and `native/payees` (capped search of live payees).
   - `native/transaction-preview` runs the same rules as the web form and evaluates the amount arithmetic in loot-core.
-  - `native/transaction-save` is one undoable, all-or-nothing write. It refuses with `[native:changed-since]` when anything it would touch changed after the form was read.
-  - Also in this group: two new limits, the refusal-code fixture entry, contract fixtures, perf gates and both allowlists.
+  - `native/transaction-save` is one undoable, all-or-nothing write. It refuses with `[native:changed-since]` when anything it would touch changed after the form was read, and with `[native:preview-stale]` when rules would store something other than what the person saw.
+  - A native-chosen id makes a retried add safe.
+  - Also in this group: five new limits, the shared refusal codes, contract fixtures, perf gates, both allowlists, and the reconciled-split-parent rule added to `native/transactions-delete`.
 - **Group 2, view model (sc-3602):** `TransactionFormViewModel` in `NativeBridgeCore`, tested against the fake transport with an injected clock.
 - **Group 3, iPhone sheet (sc-3602):**
   - **The form:** add and edit, the payee, category and account pickers, the amount field with sign and arithmetic, splits, transfers, date, notes and cleared.

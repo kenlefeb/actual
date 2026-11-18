@@ -6,6 +6,7 @@
 
 ## 1. Engine: form reads, preview, save, limits and gates (sc-3602)
 
+- [ ] 1.0 Shared row state (design D1): add `parent_id`, `is_parent`, `is_child` and `sort_order` to `readTouchedState`, additively. The accounts-write tests must stay green. The digest is the SHA-256 of that state over the touched set, with no second reader.
 - [ ] 1.1 `native/transaction-form` in `server/native/transaction-form.ts` (design D1).
   - Write failing contract tests first on a seed that has:
     - on-budget, off-budget and closed accounts;
@@ -15,16 +16,18 @@
   - The tests check:
     - names resolved;
     - the digest covers the parent, children and partners;
-    - a deleted id fails, and a closed account's transaction fails.
+    - a deleted id or a closed account's transaction fails with `[native:not-found]`;
+    - a child added, or a transfer relinked, changes the digest.
   - Add the fixture `transaction-form.json`.
 - [ ] 1.2 `native/payees` (design D1).
   - Write failing tests first:
     - favourites first, then by name;
+    - only live payees, and only `{id, name, favorite}`;
     - transfer payees excluded;
-    - search over 100 characters fails;
+    - `payee-search-max-length` (default 100, ceiling 200) refuses longer text;
     - `%`, `_` and `\` match literally;
     - `payee-picker-max-results` defaults to 50, has a ceiling of 500, and malformed values fall back.
-  - Add the limit to the `LIMITS` registry.
+  - Add both limits to the `LIMITS` registry.
   - Add the fixture `payees.json`.
 - [ ] 1.3 `native/transaction-preview` (design D2).
   - Write failing tests first, each comparing against `rules-run` with the web form's application rules:
@@ -37,15 +40,32 @@
     - a grouped split under a split rule;
     - the remainder;
     - each field-error code;
-    - nothing is written.
-  - Add the fixtures `transaction-preview.json` and `transaction-field-errors.json`.
-- [ ] 1.4 `native/transaction-save` (design D3).
+    - the draft-key whitelist refuses unlisted keys and wrong types with `[native:invalid-draft]`;
+    - `userFields`: a field the person set is never changed except by a payee change, and is then listed in `replaced` with its previous value;
+    - `ruleFields` lists rule-filled fields;
+    - amount text over 100 characters, non-finite, fractional minor units and values beyond `MAX_SAFE_INTEGER` are `amount-invalid`;
+    - dates outside 1900-01-01 to 2999-12-31 are `date-invalid`, and future dates are allowed;
+    - notes over `transaction-notes-max-length` on any row are `notes-too-long`;
+    - a transfer payee with a closed or deleted account is `account-closed`;
+    - no payee is ever created, and nothing is written.
+  - Add the fixtures `transaction-preview.json` and `transaction-field-errors.json`, with a test that the field codes and the refusal codes share no code.
+- [ ] 1.4 `native/transaction-save` (design D3), in the order of D3.
   - Write failing tests first:
-    - the touched set (children removed, partners old and new) is computed before any write;
-    - no undo token is refused;
-    - `[native:changed-since]` for a changed parent, child or partner;
-    - `[native:invalid-draft]` for each validation rule;
-    - `[native:needs-confirmed-reconciled]` for a reconciled child or partner (`"true"` and `1` refused);
+    - no undo token, or a bad shape, is `[native:invalid-draft]`;
+    - a repeated `newId`:
+      - a live matching row returns its id and writes nothing, including after an engine restart (reload the budget in the test);
+      - a different draft is `[native:invalid-draft]`;
+      - an undone or deleted row is `[native:changed-since]` with no id;
+    - an edit without a digest, or with a changed parent, child, partner, link or schedule, is `[native:changed-since]`;
+    - for an add, rules run first with `userFields` honoured, and any difference from the draft is `[native:preview-stale]`, including a rule that sets a closed account;
+    - the touched set (children removed, partners old and new) is computed on the post-rules draft before any write;
+    - `[native:invalid-draft:<codes>]` for each validation rule, with only fixture codes in the message;
+    - `[native:needs-confirmed-reconciled]` for a reconciled row, child, partner or split parent (`"true"` and `1` refused);
+    - payee names:
+      - trimmed and non-empty, within `payee-name-max-length`;
+      - a case-insensitive match reuses the live payee;
+      - a transfer payee's name refuses;
+    - `transaction-notes-max-length` applies to every row;
     - `transaction-split-max-children` defaults to 50, has a ceiling of 200, and malformed values fall back;
     - a new payee is created in the same undo step;
     - rules run again on add;
@@ -53,14 +73,16 @@
     - an equal-input comparison with `transactions-batch-update` as the web calls it;
     - a repeated token returns the same id;
     - nothing changes on any refusal.
-  - Add `changed-since` to `native-refusal-codes.json`.
-- [ ] 1.5 Undo conflict check for saves (design D3). The save records the digest fields it left. `native/undo` refuses with `[native:undo-changed-since]` after a later change to a touched row.
+  - Add `changed-since`, `preview-stale` and `not-found` to the shared `native-refusal-codes.json`.
+- [ ] 1.4a Add the reconciled-split-parent rule to `native/transactions-delete`. Write failing tests first: a partner inside a reconciled split needs `confirmedReconciled`.
+- [ ] 1.5 Undo conflict check for saves (design D3). The save records `readTouchedState`. `native/undo` refuses with `[native:undo-changed-since]` after a later change to a touched row.
   - Write failing tests first, with an edit applied after the save, as a sync would apply it.
-- [ ] 1.6 `transaction-form.perf.test.ts` (design D5). Use the stated seed and the five measurements, each with a median under 50 ms. Print the median and p95.
+- [ ] 1.6 `transaction-form.perf.test.ts` (design D5). Use the stated seed and the six measurements, each with a median under 50 ms. Print the median and p95. If the rules cases miss 50 ms, stop and report the numbers to the Director before changing the design.
 - [ ] 1.7 Allowlists (design D4):
   - add the four names to `native-bridge-allowlist.json` and the Swift client list, with a test that the lists are equal;
   - add the page argument lists in `nativeBridge.ts`, with a test that extra fields are dropped;
   - add the origin-guard names;
+  - the page-side checks for `webTransactionAction`: the closed action set, an id matching `[A-Za-z0-9_-]+` that is a live transaction, and `encodeURIComponent` in the path;
   - add a test that `transactions-batch-update`, `transaction-add`, `rules-run` and `payee-create` are refused natively;
   - add four `coverage.json` skips;
   - add Swift decode tests for every fixture.
@@ -80,7 +102,13 @@
   - a save timeout then Retry with the same token;
   - the Undo toast window;
   - no calls in the background, and a re-read on return that keeps the draft;
-  - Delete goes through `native/transactions-delete` with the same confirmation.
+  - Delete goes through `native/transactions-delete`, and its dialog names the partner account and says when it is closed;
+  - `newId` is kept for the sheet's lifetime and reused by Retry;
+  - an edit retry that gets `changed-since` re-reads and finishes when the stored values equal the draft;
+  - `preview-stale` previews again and shows the rule's result;
+  - `ruleFields` drives the indicator, and the person's edits join `userFields`;
+  - replaced fields offer Restore;
+  - a form-read `not-found` shows the unavailable state.
 - [ ] 2.2 `NativeScreen.addTransaction` (design D7):
   - add the switch, the script entry, and the router paths (`/transactions/new`, `/transactions/<id>`);
   - add the `webTransactionAction` chrome message with its closed actions, origin check and live-id check.
@@ -96,9 +124,18 @@
 - split editor remainder states;
 - amount expression display and keypad accessory;
 - inline errors;
+- category row disabled, with its reason (off-budget, on-budget transfer);
+- "Set by a rule", the replaced-fields notice and Restore;
+- the "Not checked" state after a preview timeout;
+- Cancel's discard confirmation;
+- Delete's confirmation, naming the partner and a closed account;
 - reconciled confirm;
-- "changed on another device";
+- "changed on another device" and Reload's "what changed" view;
+- "Can't undo — changed since" after the Undo toast;
 - "Save didn't finish";
+- form-read failure ("no longer available");
+- the loading state while the form reads;
+- the Documents row and hand-off rows, including "documents can be added once it is saved";
 - AX5 layouts.
 
 Then:
@@ -112,10 +149,11 @@ Then:
   - Save with haptic and the Undo toast;
   - Cancel with the discard confirmation.
   - Verify in the Simulator against the Add and Edit frames (node 25-2), light and dark.
+- [ ] 3.1a The rule indicator, the person's overrides, and the replaced-fields notice with Restore (design D2a). Add UI tests and VoiceOver announcements.
 - [ ] 3.2 Splits: add and remove a child, the remainder in words, the `split-limit` state.
 - [ ] 3.3 Transfers and category rules: the off-budget and on-budget transfer wording.
 - [ ] 3.4 Edit mode:
-  - Delete, confirmed;
+  - Delete, confirmed by a dialog that names the partner account, says when it is closed, says both sides go and that Undo restores both;
   - the reconciled dialog;
   - changed on another device, with Reload;
   - "Make recurring" and "Add document" hand-offs that return to the native screen.
@@ -136,7 +174,7 @@ Then:
 - **sc-5091, attachments:** `native/attachment-add` and the native pickers replace the "Add document" hand-off. A new transaction gets held documents.
 - **sc-5092, Mac inspector:** under the Mac app (sc-3629), on these handlers and this view model. Ken's save-as-you-go question is settled there.
 - **sc-4617:** the native schedule editor replaces "Make recurring". **sc-4618:** native rules.
-- **sc-4643:** the Settings screen edits `payee-picker-max-results` and `transaction-split-max-children`.
+- **sc-4643:** the Settings screen edits `payee-picker-max-results`, `payee-search-max-length`, `payee-name-max-length`, `transaction-notes-max-length` and `transaction-split-max-children`.
 - **sc-4877:** extend the Swift-minted nonce to `confirmedReconciled` on the save.
 
 ## Workflow follow-up

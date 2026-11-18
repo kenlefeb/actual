@@ -69,6 +69,29 @@ On iPhone, while adding, the sheet SHALL show the rules' result after each field
 - **WHEN** the person edits its amount
 - **THEN** the category stays Dining
 
+### Requirement: A rule's change is shown and can be undone
+On iPhone, a field filled by a rule SHALL read "Set by a rule" in words and to VoiceOver. The person's edit to it SHALL be kept until the next payee change. When a payee change replaces fields the person set by hand, the sheet SHALL name them and offer Restore, which puts back their values and is announced to VoiceOver.
+
+#### Scenario: The indicator
+- **GIVEN** a rule "payee is Costco → category Groceries"
+- **WHEN** the person picks Costco on a new transaction
+- **THEN** the category shows Groceries with "Set by a rule", and VoiceOver reads "Category, Groceries, set by a rule"
+
+#### Scenario: The person's override is kept
+- **GIVEN** the rule filled Groceries
+- **WHEN** the person picks Dining and then changes the amount
+- **THEN** the category stays Dining without the indicator
+
+#### Scenario: Restore after a payee change
+- **GIVEN** the person chose Dining by hand
+- **WHEN** they change the payee to Costco and the rule sets Groceries
+- **THEN** the sheet says the category was changed by a rule, and Restore puts back Dining
+
+#### Scenario: A rule changed before saving
+- **GIVEN** the sheet showed Groceries, then the rule was edited on another device
+- **WHEN** the person saves
+- **THEN** nothing is stored, the sheet shows the rule's new result with "Set by a rule", and the person saves again
+
 ### Requirement: Amount entry with sign and arithmetic
 On iPhone, the amount field SHALL accept a number or an arithmetic expression with + − × ÷ in the budget's number format, and an Outflow or Inflow sign. The engine SHALL evaluate the expression; the sheet SHALL show the result and SHALL never compute money itself. An expression that does not evaluate SHALL show an inline error and block saving.
 
@@ -142,7 +165,7 @@ On iPhone, saving an edit SHALL fail with "This transaction changed on another d
 - **THEN** nothing is written and the same message shows
 
 ### Requirement: Reconciled rows ask first
-On iPhone, saving or deleting a transaction SHALL first ask the person to confirm when any row it would touch is reconciled, children and transfer partners included. The dialog SHALL name each affected account. Without that confirmation, nothing SHALL be written.
+On iPhone, saving or deleting a transaction SHALL first ask the person to confirm when any row it would touch is reconciled, children and transfer partners included, and a row inside a reconciled split counts as reconciled. The dialog SHALL name each affected account. Without that confirmation, nothing SHALL be written.
 
 #### Scenario: Reconciled transfer partner
 - **GIVEN** a transfer whose partner in Savings is reconciled
@@ -154,7 +177,12 @@ On iPhone, saving or deleting a transaction SHALL first ask the person to confir
 - **THEN** nothing is written and the sheet keeps the draft
 
 ### Requirement: Delete from the edit sheet
-On iPhone, the edit sheet SHALL offer Delete, which asks first, and deletes the transaction with its children and transfer partners as one undo step.
+On iPhone, the edit sheet SHALL offer Delete, which asks first and deletes the transaction with its children and transfer partners as one undo step. For a transfer, the dialog SHALL name the partner's account, say when that account is closed, say both sides are deleted, and say Undo restores both.
+
+#### Scenario: Partner in a closed account
+- **GIVEN** a transfer whose partner is in the closed account "Old Savings"
+- **WHEN** the person taps Delete
+- **THEN** the dialog names "Old Savings (closed)", says both sides are deleted and that Undo restores both
 
 #### Scenario: Deleting a split transfer
 - **GIVEN** a split with one child that is a transfer to Savings
@@ -162,12 +190,25 @@ On iPhone, the edit sheet SHALL offer Delete, which asks first, and deletes the 
 - **THEN** the parent, its children and the Savings partner are gone, and Undo restores all of them
 
 ### Requirement: A save that does not finish can be retried safely
-On iPhone, when a save or delete times out, the sheet SHALL say it did not finish, keep the draft and offer Retry. A retry SHALL never store the transaction twice.
+On iPhone, when a save or delete times out, the sheet SHALL say it did not finish, keep the draft and offer Retry. A retry SHALL never store the transaction twice, even after the app reloads its engine.
 
 #### Scenario: Timeout then Retry
 - **GIVEN** the first save reached the engine but its answer timed out
 - **WHEN** the person taps Retry
 - **THEN** exactly one transaction exists and the sheet closes
+
+#### Scenario: Retry after the app was suspended
+- **GIVEN** a save landed, then iOS suspended the app and the engine reloaded before the answer arrived
+- **WHEN** the person taps Retry
+- **THEN** exactly one transaction exists
+
+### Requirement: A missing transaction says so
+On iPhone, when the sheet cannot read a transaction because it was deleted or its account was closed, the sheet SHALL say "This transaction is no longer available" with Close, and SHALL write nothing.
+
+#### Scenario: Deleted elsewhere
+- **GIVEN** a transaction deleted on another device
+- **WHEN** the person opens it from a register that has not refreshed yet
+- **THEN** the sheet shows that it is no longer available
 
 ### Requirement: Schedules and documents hand off until their native screens ship
 On iPhone, the edit sheet SHALL show a linked schedule's name, read-only. Until native screens replace them, "Make recurring" and "Add document" SHALL open the web editor for the saved transaction. A transaction being added SHALL say documents can be added after saving.

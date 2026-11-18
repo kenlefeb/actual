@@ -2,222 +2,295 @@
 
 ## Facts
 
-Read on origin/development 2645aa42 and in Figma (Accounts page, node 25-2):
+Read on origin/development 2645aa42 and in Figma (Accounts page, node 25-2).
 
-- **The web save path:** the web form (`components/mobile/transactions/TransactionEdit.tsx`) saves through `transactions-batch-update {added, updated, deleted, learnCategories}`, not `transaction-add`.
-- **Rules in the web form:**
-  - For a new transaction only, it calls `rules-run` on every field commit, after grouping splits (`transactionForRulesFromList`).
-  - When the payee changes, every field the rules return is applied. Otherwise only empty fields and notes rules are applied (`shouldApplyRuleChange`).
+**The web form** (`components/mobile/transactions/TransactionEdit.tsx`):
+
+- It saves through `transactions-batch-update {added, updated, deleted, learnCategories}`, not `transaction-add`.
+- For a new transaction only, it calls `rules-run` on every field commit, with splits grouped first (`transactionForRulesFromList`).
+  - A payee change applies every field the rules return.
+  - Any other change fills only empty fields and notes (`shouldApplyRuleChange`).
   - A field the user cleared stays empty (`clearedFields`).
   - Editing a saved transaction runs no rules.
-- **Amount entry:** a sign toggle (`negate`) and, behind the `mobileCalculator` flag, `evalArithmetic` from `shared/arithmetic`.
-- **Schedule:** the web's Schedule button creates a single-time schedule from the transaction (`createSingleTimeScheduleFromTransaction`), and does nothing when it is already linked.
-- **Attachments:** held by `usePendingAttachments` and attached after the save.
-- **loot-core precedent:** `native/reconcile-adjust` (`server/native/reconcile-lock.ts`) builds a draft, runs `runRules`, writes with `batchUpdateTransactions`, and is one undo step with a Swift token.
-  - `accountsWrite` (`server/native/app.ts`) records the state each touched row was left in, so `native/undo` refuses after a later change (native-accounts-screen D3a).
-  - The reconcile lock binds a write to what was shown with `plan_digest`.
-- **Limits:** the `LIMITS` registry and `readLimit` (`reconcile-lock.ts`). Each limit is a synced preference with a default and a ceiling.
+- Amount entry has a sign toggle (`negate`). Behind the `mobileCalculator` flag, it evaluates arithmetic with `evalArithmetic` from `shared/arithmetic`.
+- Schedule creates a single-time schedule from the transaction (`createSingleTimeScheduleFromTransaction`).
+- Attachments are held by `usePendingAttachments` and attached after the save.
+
+**loot-core precedents:**
+
+- `native/reconcile-adjust` (`server/native/reconcile-lock.ts`) builds a draft, runs `runRules`, writes with `batchUpdateTransactions`, and is one undo step with a Swift token.
+- `readTouchedState` (`server/native/accounts-writes.ts`) reads each touched row's category, tombstone, reconciled, cleared, notes, amount, payee, account, date, transfer link and schedule. `changedSince` compares that state for `native/undo` (native-accounts-screen D3a).
+- The undo history (`MESSAGE_HISTORY`, `server/undo.ts`) lives in memory only, is trimmed, and is reset when a budget loads. Anything that must survive a reload cannot live there.
+- **Limits:** `LIMITS` and `readLimit` (`reconcile-lock.ts`). Each limit is a synced preference with a default and a ceiling.
 - **Refusal codes:** stable codes in `server/native/fixtures/native-refusal-codes.json`, matched by the Swift side.
-- **Native routing:** `NativeTabBarController.openAdd()` routes to the web `/transactions/new` (marked "shortcut"). The native register (native-accounts-screen D5) leaves `/transactions/<id>` to the web.
+- `native/transactions-delete` treats a row as reconciled only by its own flag. A child whose split parent is reconciled is not caught (Security, #416 finding C).
 
-## D1. Two reads
+**Native routing:** `NativeTabBarController.openAdd()` routes to the web `/transactions/new` and is marked "shortcut". The native register (native-accounts-screen D5) leaves `/transactions/<id>` to the web.
 
-- **`native/transaction-form {id?, account_id?}`**, read once when the sheet opens. It returns:
-  - the currency fields that `native/budget-month` carries;
-  - `accounts`, open accounts as `{id, name, offbudget}` in the web's order;
-  - `categoryGroups`, the non-hidden groups and categories, income included, as the web picker shows them;
-  - `defaults` for add: the account (`account_id`, if open), today's date, and `cleared` from the web's default;
-  - for edit, `transaction`, the parent and its children, with:
-    - names resolved;
-    - `transferAccount` and `reconciled` on each row;
-    - `schedule` as `{id, name}` or null;
-    - `attachments` as `{id, name}`;
-    - `digest`.
-  - **The digest** is a SHA-256 over every row a save could touch: the parent, its children, and every transfer partner. Each row contributes its account, date, payee, category, amount, notes, cleared, reconciled, tombstone and sort order. It is computed as the reconcile lock computes `plan_digest`.
-  - An `id` that is not a live top-level transaction, or that belongs to a closed account, fails.
-- **`native/payees {search}`** returns `{payees: [{id, name, favorite}]}`:
-  - favourites first, then by name;
-  - transfer payees excluded (they are in `accounts`);
-  - search escaped as the register's is (D2 of native-accounts-screen), at most 100 characters;
-  - capped by the limit `payee-picker-max-results`: default 50, ceiling 500.
+## D1. Two reads and one shared state reader
 
-Rejected: payees inside the form read. A budget can have thousands of payees, and the picker searches as the user types.
+### `native/transaction-form {id?, account_id?}`
 
-## D2. Preview
+It returns:
 
-**`native/transaction-preview {draft, changedField, clearedFields}`** returns `{draft, remaining, errors}`.
+- the currency fields `native/budget-month` carries;
+- `accounts`: open accounts as `{id, name, offbudget}`, in the web's order;
+- `categoryGroups`: the non-hidden groups and categories, as the web picker shows them;
+- `defaults` for an add: the account (`account_id` if open), today, and the web's `cleared` default;
+- for an edit, `transaction`: the parent and children with names resolved, `transferAccount`, `transferAccountClosed` and `reconciled` on each row, `schedule {id, name}` or null, attachment names, and `digest`.
 
-The draft:
+An `id` that is not a live top-level transaction, or that belongs to a closed account, fails with `[native:not-found]`. The sheet then shows "This transaction is no longer available" (D8).
 
-- `{id?, account, date, payee | payeeName, category, notes, cleared, inflow, amountText, splits}`;
-- each split is `{id?, payee?, category, notes, inflow, amountText}`.
+### One state reader for the digest and for undo
 
-What it does:
+`readTouchedState(touched)` stays the only reader of row state.
 
-- **Amounts:** loot-core evaluates each `amountText` with `evalArithmetic` in the budget's number format, applies `inflow` for the sign, and returns integer minor units. Swift never parses, adds or rounds money.
-- **Remainder:** `remaining` is the parent amount minus the children's sum, so the split editor can show "left to split" and "over".
-- **Rules:** for a draft with no `id`, it runs the rules exactly as the web form does:
-  - the grouped split;
-  - every field re-applied after a payee change;
-  - otherwise only empty fields and notes;
-  - never a field in `clearedFields`.
+- This change adds `parent_id`, `is_parent`, `is_child` and `sort_order` to its transaction columns. The addition is additive: the accounts writes keep passing their tests.
+- **The digest** is the SHA-256 of `readTouchedState` over the touched set. The touched set is the parent, its children, and every transfer partner of any of them, with ids sorted.
+- **The undo metadata** of a save stores the same state.
+- The digest therefore covers the row ids, `parent_id`, the transfer link and the schedule. A child added on another device, or a relinked transfer, changes it.
 
-  A draft with an `id` runs no rules.
-- **Errors:** `errors` maps each field to a code from the closed set in the fixture `transaction-field-errors.json`:
+### `native/payees {search}`
+
+It returns `{payees: [{id, name, favorite}]}`, and only those fields:
+
+- live payees only (no tombstoned);
+- favourites first, then by name;
+- transfer payees excluded (they are in `accounts`);
+- the search uses a bound LIKE with `%`, `_` and `\` escaped.
+
+Two limits apply, both through `readLimit`:
+
+- The search text is at most `payee-search-max-length` characters (default 100, ceiling 200). Longer text fails the call.
+- Results are capped by `payee-picker-max-results` (default 50, ceiling 500).
+
+## D2. The draft and the preview
+
+### The draft is a trust boundary
+
+The page forwards `draft` as one object, so loot-core accepts only these keys and types, and refuses anything else with `[native:invalid-draft]`:
+
+| Key | Type |
+| --- | --- |
+| `newId` | string, add only (D3) |
+| `id` | string, edit only |
+| `account` | string |
+| `date` | string `YYYY-MM-DD` |
+| `payee` | string id or null |
+| `payeeName` | string or null |
+| `category` | string or null |
+| `notes` | string |
+| `cleared` | boolean |
+| `inflow` | boolean |
+| `amountText` | string |
+| `splits` | array of `{id?, payee?, category, notes, inflow, amountText}` |
+| `userFields` | array of field names, from the closed list below |
+
+Keys such as `reconciled`, `imported_id` and `tombstone` never reach `batchUpdateTransactions`.
+
+**`userFields`** names each field the person set or cleared by hand after a rule touched it (D2a). It replaces the web's `clearedFields`. Allowed names: `account`, `date`, `payee`, `category`, `notes`, `cleared`, `amount`, `splits`.
+
+### `native/transaction-preview {draft, changedField}`
+
+It returns `{draft, ruleFields, replaced, remaining, errors}` and writes nothing. It never creates a payee.
+
+- **Amounts.** loot-core evaluates each `amountText` with `evalArithmetic` in the budget's number format, applies `inflow`, and returns integer minor units. Swift never parses, adds or rounds money.
+  - Amount text longer than 100 characters is `amount-invalid`.
+  - So is a result that is not finite, not a whole number of minor units, or larger in magnitude than `Number.MAX_SAFE_INTEGER`.
+  - The 100-character bound is input validation, not a tunable limit: no amount needs more.
+- **Rules.** For a draft with no `id`, rules run as on the web:
+  - a payee change applies every field the rules set;
+  - any other change fills only empty fields and notes;
+  - a field in `userFields` is never changed, except that a payee change may replace it (web parity), and then it is listed in `replaced` with its previous value.
+  - `ruleFields` lists every field whose value currently comes from a rule.
+  - A draft with an `id` runs no rules.
+- **The split remainder.** `remaining` is the parent minus the children's sum.
+- **Errors.** `errors` maps each field (with a child index for splits) to a code from `transaction-field-errors.json`:
   - `amount-invalid`, `amount-required`;
-  - `account-required`, `account-closed`;
+  - `account-required`, `account-closed` (the transaction's account, or a transfer payee's account that is closed or deleted);
   - `category-not-allowed`, `category-unknown`;
-  - `date-invalid`;
+  - `date-invalid`: not a real date, or outside 1900-01-01 to 2999-12-31. A future date is allowed.
   - `split-mismatch`, `split-limit`;
   - `payee-too-long`, `notes-too-long`.
-- **Writes nothing.**
-- **Swift's side:** Swift sends the preview after a field commits, debounced (`TransactionFormViewModel.previewDebounce`, 150 ms, a named constant). A newer preview supersedes an older one.
+
+**Why a second fixture.** The field codes describe one field each, so they live in their own fixture beside `native-refusal-codes.json`, which holds call refusals. A test checks that the two files share no code. Rejected: one merged list, which would let Swift mistake a field code for a call refusal.
+
+**Debounce.** Swift sends the preview after a field commits, debounced by the named constant `TransactionFormViewModel.previewDebounce` (150 ms). A newer preview supersedes an older one.
+
+### D2a. Rules the person can see and undo
+
+- Each field in `ruleFields` shows "Set by a rule" in words, and VoiceOver reads it with the field.
+- The person's own edit to such a field adds it to `userFields`. Their value is then kept until the next payee change.
+- When a payee change replaces fields in `userFields`, the sheet names them ("Category and notes were changed by a rule") with Restore. Restore puts back the previous values from `replaced`, keeps them in `userFields`, and is announced to VoiceOver.
 
 ## D3. Save
 
-**`native/transaction-save {draft, digest, undoToken, confirmedReconciled}`** returns `{id}`. It is one undo step, all or nothing.
+`native/transaction-save {draft, digest, undoToken, confirmedReconciled}` returns `{id}`. It is one undo step, and all or nothing.
 
-Before any write, it computes the full set of rows the save touches:
+### Add or edit
 
-- the parent;
-- its existing and new children, and the children it removes;
-- every transfer partner of any of these, old and new.
+- An **add** carries `newId`, a UUID that Swift creates when the sheet opens and keeps across retries. No `id` and no `digest`.
+- An **edit** carries `id` and the form's `digest`.
 
-Then it checks, in order, changing nothing on any refusal:
+### Order of work
 
-1. **Undo token:** `undoToken` is required. If a save with this token already landed (found in the undo metadata), it returns that save's `{id}` and writes nothing.
-2. **Edit digest:** for an edit, the recomputed digest must equal `digest`. Otherwise it refuses with `[native:changed-since]`, a new fixture code.
-3. **Validation:** the draft goes through the preview's checks. Any error refuses with `[native:invalid-draft]`. The rules are:
-   - the account is open;
-   - the category exists and is not hidden;
-   - there is no category on an off-budget account's rows or on a transfer between two on-budget accounts;
-   - the children sum to the parent;
-   - the children number at most `transaction-split-max-children` (default 50, ceiling 200);
-   - notes are at most 10,000 characters;
-   - a new payee name is at most 200 characters;
-   - the date is a real calendar date.
-4. **Reconciled rows:** if any touched row is reconciled, `confirmedReconciled === true` is required, or it refuses with `[native:needs-confirmed-reconciled]`.
+Every step refuses with no write.
 
-Then it writes:
+1. **Shape.** The draft has the keys and types of D2, and `undoToken` is present. Otherwise `[native:invalid-draft]`.
+2. **Repeat of an add.** A row with id `newId` may already exist.
+   - **Live**, with the same account, date, amount, payee, category and child count as the draft evaluates to: return `{id: newId}` and write nothing.
+   - **Live but different:** `[native:invalid-draft]`.
+   - **Tombstoned** (the save was undone or deleted): `[native:changed-since]`, and no id is returned.
 
-- **New payee:** a new `payeeName` creates the payee in the same undo step.
-- **Rules:** for an add, it runs the rules once more on the server, so the stored result equals the web form's even if a rule changed after the last preview.
-- **The write:** one `batchUpdateTransactions` with `learnCategories` from the synced preference `learn-categories`.
-- **Undo metadata:** it records the state it left for every touched row (the digest's fields), so `native/undo` refuses with `[native:undo-changed-since]` after a later change. This extends `readTouchedState` to those fields.
+   The row itself is the durable record, so a reload, an engine restart or a trimmed undo history cannot cause a second save. Nothing else is kept, so no retention setting is needed.
+3. **Edit digest.** An edit without `digest`, or with one that no longer equals the recomputed digest, refuses with `[native:changed-since]`.
+4. **Rules, for an add only.** The rules run on the server first, with `userFields` honoured as in D2. If the result differs in any field from the draft as submitted, the save refuses with `[native:preview-stale]`. The view model then previews again and shows the person the change. A save therefore stores exactly the draft the person last saw.
+5. **Touched set.** It is computed on the draft as it now stands: the parent, its children (added, kept and removed), and every transfer partner, old and new.
+6. **Validation** with the preview's checks: an open account and open transfer accounts; the category rules; children summing to the parent; the children cap; amount, notes, date and payee-name bounds. Any failure refuses with `[native:invalid-draft:<codes>]`, where `<codes>` holds only field codes from the fixture, never text the person typed.
+7. **Reconciled rows.** A touched row counts as reconciled when it, or the split parent of a touched child, is reconciled. Any such row needs `confirmedReconciled === true`, or the save refuses with `[native:needs-confirmed-reconciled]`.
 
-Swift sends `confirmedReconciled: true` only after the person confirms the native dialog. That dialog names every reconciled row and partner account the save touches.
+### Then it writes
 
-The page-script risk is the same as native-accounts-screen D3. It is accepted until production hardening; sc-4877's nonce is to cover it.
+- **Payee.** `payeeName`, trimmed, must be non-empty and within `payee-name-max-length` (default 200, ceiling 500).
+  - A name equal, ignoring case, to a live payee uses that payee.
+  - A name equal to an account's transfer payee creates nothing and is `[native:invalid-draft]`.
+  - Otherwise the payee is created in the same undo step.
+- **Notes** are at most `transaction-notes-max-length` (default 10,000, ceiling 50,000) on every row, children included.
+- **Write.** One `batchUpdateTransactions`, with `learnCategories` from the synced `learn-categories`.
+- **Undo metadata** stores `readTouchedState` of the touched set, so `native/undo` refuses with `[native:undo-changed-since]` after a later change.
 
-**Delete** reuses `native/transactions-delete {account_id, ids: [parentId], confirmedReconciled}`. It already takes children and transfer partners, and refuses a reconciled row without confirmation. Its confirmation dialog is the same as the save's.
+Swift sends `confirmedReconciled: true` only after the person confirms the native dialog, which names every reconciled row's account. The page-script risk is as in native-accounts-screen D3: accepted until sc-4877's nonce covers it.
+
+### Delete
+
+Delete reuses `native/transactions-delete {account_id, ids: [parentId], confirmedReconciled}`. This change adds the reconciled-parent rule of step 7 to it.
+
+Its native confirmation:
+
+- names the transfer partner's account, and says when that account is closed (decision on sc-5013);
+- says both sides are deleted;
+- says Undo restores both.
+
+### Limits
+
+All are in the `LIMITS` registry and read through `readLimit`. Malformed values use the default. sc-4643's Settings makes them editable.
+
+| Limit | Default | Ceiling |
+| --- | --- | --- |
+| `payee-picker-max-results` | 50 | 500 |
+| `payee-search-max-length` | 100 | 200 |
+| `payee-name-max-length` | 200 | 500 |
+| `transaction-notes-max-length` | 10,000 | 50,000 |
+| `transaction-split-max-children` | 50 | 200 |
 
 ## D4. Allowlists and the page
 
-- **The new names:** the four new handlers join `native-bridge-allowlist.json` and the Swift client allowlist, with a test that the two lists are equal.
-- **The page's argument lists:** `nativeBridge.ts` forwards only the listed fields for each name:
+- **The four new names** join `native-bridge-allowlist.json` and the Swift client allowlist, with a test that the two lists are equal.
+- **The page's argument lists.** `nativeBridge.ts` forwards only the listed fields, and drops anything else before loot-core:
   - form: `id`, `account_id`;
   - payees: `search`;
-  - preview: `draft`, `changedField`, `clearedFields`;
+  - preview: `draft`, `changedField`;
   - save: `draft`, `digest`, `undoToken`, `confirmedReconciled`.
-
-  Anything else is dropped before loot-core.
-- **Origin guard:** the save and the preview join the origin-guard write names.
-- **Raw handlers:** `transactions-batch-update`, `transaction-add`, `rules-run` and `payee-create` stay refused natively, with a test.
-- **MCP:** gets `coverage.json` skips; agents already have `write_create_transactions` and `write_update_transactions`.
+- **Origin guard.** The save and the preview join the origin-guard write names.
+- **Raw handlers stay refused natively, with a test:** `transactions-batch-update`, `transaction-add`, `rules-run` and `payee-create`.
+- **New refusal codes.** `changed-since`, `preview-stale` and `not-found` join the shared `native-refusal-codes.json`, with the fixture tests both sides already run.
 
 ## D5. Latency gates
 
-`transaction-form.perf.test.ts` runs in Fork CI's "Native perf gates". The seed:
+`transaction-form.perf.test.ts` runs in Fork CI's "Native perf gates".
 
-- 5,000 payees, 40 accounts and 150 categories;
-- 300 rules, with payee, notes and amount conditions and a split action;
-- a 50-child split.
+**Seed:** 5,000 payees, 40 accounts, 150 categories, 300 rules (with payee, notes and amount conditions and a split action) and a 50-child split.
 
-Gates, each with a median under 50 ms on the loot-core side and both median and p95 printed:
+**Measured,** each with median and p95 printed, and the median gated under 50 ms:
 
-- `native/payees` with a two-letter search and with an empty search;
-- `native/transaction-preview` for a payee change on a new transaction (rules run);
-- the same preview for an amount change on the 50-child split;
-- `native/transaction-form` for that split.
+- `native/payees` with a two-letter search, and with an empty one;
+- a payee-change preview on a new transaction;
+- an amount-change preview on the split;
+- the form read of the split;
+- a save of a new transaction (rules run).
+
+If the rules cases cannot meet 50 ms on this seed, stop and report the measured numbers to the Director before changing the design, as ADR 11's gate did.
 
 ## D6. View model
 
-`TransactionFormViewModel` (`NativeBridgeCore`) holds the draft, the last preview and the field errors. It is tested against the fake transport and the contract fixtures.
+`TransactionFormViewModel` (`NativeBridgeCore`) is tested against the fake transport and the contract fixtures, with an injected sleep for every time-based case.
 
-- **Clock:** the debounce and the undo window use an injected sleep, as `AccountsViewModels` does. The tests never wait on the wall clock.
-- **Previews:** a preview that times out keeps the last values and marks the field "not checked". Save stays enabled only when the last preview has no errors and matches the current draft.
-- **A save that times out** shows "Save didn't finish" with Retry, as the native-bridge backgrounding rules require. Retry sends the same token and draft. If the first save did land, the retry returns its id and writes nothing (D3), so a retry never adds the transaction twice.
-- **Background:** no calls while the app is in the background. On returning, an open edit sheet re-reads the form and keeps the user's draft.
+- **Draft state.** It keeps `newId` for the sheet's lifetime, along with `userFields`, `ruleFields` and the last preview.
+- **Save enabled.** Save is enabled only while the last preview has no errors and matches the draft. A timed-out preview marks the field "Not checked".
+- **Save timeout.** The sheet shows "Save didn't finish" with Retry. Retry sends the same `newId`, token and draft.
+  - For an add, D3 step 2 makes the retry safe.
+  - For an edit that did land, the retry gets `changed-since`. The view model re-reads, and if the stored values equal the draft it treats the save as done.
+- **`preview-stale`.** It previews again and shows what the rule changed (D2a).
+- **Background.** No calls while the app is in the background. On return, an open edit sheet re-reads and keeps the draft.
 
-## D7. Route and switch
+## D7. Route, switch and hand-offs
 
-- **The switch:** `NativeScreen.addTransaction` in UserDefaults, with an entry in the `NativeScreensScript` and a toggle in web Settings › Native screens.
-- **Default:** it reads off while unset, until the Simulator pass in task 3.9. That task flips the default to on (Ken, 2026-11-15) and shows the toggle. Native Settings (sc-4300) shows it later.
-- **While on:**
-  - the Add tab presents the native sheet, with the account preset when a native register is on screen;
-  - a native register row's tap opens the edit sheet;
-  - a page route to `/transactions/new` or `/transactions/<id>` opens the sheet over the current screen, not the web form.
-- **While off:** everything is the web form, exactly as today.
-- **Hand-offs:** "Make recurring" and "Add document" send the chrome message `webTransactionAction {action, transaction_id}`.
-  - `action` is `make-recurring` or `documents`.
-  - The page opens the web editor for that saved transaction. The chrome checks the origin, the closed action set, and that the id is a live transaction.
+- **The switch.** `NativeScreen.addTransaction` in UserDefaults, with a `NativeScreensScript` entry and a toggle in web Settings › Native screens.
+  - It reads off while unset until the Simulator pass in task 3.9.
+  - That task flips the default to on (Ken, 2026-11-15) and shows the toggle.
+- **While the switch is on:**
+  - the Add tab presents the sheet, with the account preset from a native register on screen;
+  - a native register row opens the edit sheet;
+  - a page route to `/transactions/new` or `/transactions/<id>` opens the sheet over the current screen.
+- **While it is off:** the web form, exactly as today.
+- **Hand-offs.** "Make recurring" and "Add document" send `webTransactionAction {action, transaction_id}`.
+  - Swift sends only a saved, live id taken from the form read.
+  - The page checks again that `action` is `make-recurring` or `documents`.
+  - The page accepts only an id matching `[A-Za-z0-9_-]+` that is a live transaction, and `encodeURIComponent`s it into the path (the `..` lesson from #423). Anything else is ignored.
   - These hand-offs are temporary: sc-4617 and sc-5091 replace them.
 
 ## D8. Screen (iPhone)
 
 A sheet with large detents, following the Figma Add and Edit frames.
 
-- **Amount:** first, focused on open, with the sign shown as Outflow or Inflow.
-  - The decimal keypad gains an accessory row with + − × ÷ and the sign toggle.
-  - The field shows the expression while editing and the evaluated amount from the preview after it.
-- **Payee picker:** search, favourites, a "Create “…”" row, and a Transfers section listing open accounts other than the current one.
-- **Category picker:**
-  - groups from the form read;
-  - hidden for an off-budget account and for an on-budget to on-budget transfer, with the reason in words.
-- **Other fields:**
-  - account, date (the system picker);
-  - notes (multiline, transaction-notes);
-  - cleared (a toggle);
-  - a schedule line, read-only, when linked;
-  - documents (D7).
-- **Split:**
-  - each child has its amount, category, payee and notes;
-  - the remaining amount comes from the preview, in words ("$12.00 left to split", "$3.00 over"), never colour alone.
-- **Save:** Save in the toolbar, with a success haptic and the sheet closing. An Undo toast follows for the undo window, through `native/undo`.
-- **Cancel:** asks first when the draft has changes. Edit mode adds Delete (destructive, confirmed).
-- **Errors:** shown inline under each field. `changed-since` shows "This transaction changed on another device" with Reload. Reload keeps nothing silently: it shows what changed.
+- **Amount.**
+  - It comes first and is focused on open, with Outflow or Inflow shown.
+  - The keypad accessory has + − × ÷ and the sign toggle.
+  - The field shows the expression while editing and the evaluated amount after the preview.
+- **Payee picker.** Search, favourites, "Create “…”", and Transfers (open accounts other than the current one).
+- **Category picker.** Groups from the form read. The row is disabled, with its reason in words, for an off-budget account and for an on-budget to on-budget transfer.
+- **Other fields.** Account, date, notes (multiline), cleared, a read-only schedule line, and the Documents row (D7).
+- **Rule indicator.** "Set by a rule" on rule-filled fields, and the replaced-fields notice with Restore (D2a).
+- **Splits.** Each child has amount, category, payee and notes. The remainder shows in words ("$12.00 left to split", "$3.00 over").
+- **Saving and leaving.**
+  - Save gives a success haptic, closes the sheet, and shows an Undo toast. If the undo is refused, the toast reads "Can't undo — changed since".
+  - Cancel asks first when the draft has changes.
+  - Edit mode adds Delete, which asks first (D3).
+- **States.**
+  - Loading while the form reads, redacted.
+  - Form-read failure: "This transaction is no longer available" with Close.
+  - Field errors inline.
+  - `changed-since` shows "This transaction changed on another device" with Reload. Reload lists what changed before showing the current values.
 
 ## D9. Keyboard and accessibility
 
 These are requirements, not polish.
 
-- **Hardware keyboard:**
-  - In the amount field, the digits, `+ - * /`, the decimal separator and Backspace work. Return evaluates.
-  - Tab and Shift-Tab move amount → payee → category → account → date → notes → cleared → Save. Inside splits, Tab moves through each child's fields in order.
-  - In the pickers, typing filters, the arrows move and Return chooses.
-  - Cmd-Return saves, Esc cancels (asking first when changed), and Cmd-Delete deletes in edit mode (confirmed).
-- **VoiceOver:**
-  - every field reads its label, value and error;
-  - the amount reads as currency with its direction;
-  - the remainder is announced when it changes;
-  - split children are grouped as "Split 2 of 4";
-  - Delete and Remove split are custom actions.
-- **Dynamic Type to AX5:** labels stack above values, and the amount never truncates.
-- **Theme:** Dark Mode through the HE colour variables, tabular digits, and all text localized.
+- **Hardware keyboard.**
+  - In the amount field: digits, `+ - * /`, the decimal separator and Backspace. Return evaluates.
+  - Tab and Shift-Tab move: amount → payee → category → account → date → notes → cleared → Save. Inside splits, through each child in order.
+  - Pickers: typing filters, the arrows move, Return chooses.
+  - Cmd-Return saves. Esc cancels, asking first when there are changes. Cmd-Delete deletes, with confirmation.
+- **VoiceOver.**
+  - Each field reads its label, its value, "Set by a rule" when that applies, and any error.
+  - The amount reads as currency with its direction.
+  - The remainder, replaced fields and Restore are announced.
+  - Split children are grouped as "Split 2 of 4".
+- **Dynamic Type to AX5.** Labels stack above values, and the amount never truncates.
+- **Appearance and language.** Dark Mode through the HE variables, tabular digits, and localized text.
 
 ## D10. Mac
 
-The Mac right-side inspector is sc-5092, under the Mac app (sc-3629). It uses these handlers and `TransactionFormViewModel`, so the Mac adds views and commands only.
-
-Ken's open question (save as you go, or a Save button) is decided there. Save as you go would send `native/transaction-save` per field commit with the same digest rule, so no handler changes either way.
+The Mac right-side inspector is sc-5092, under sc-3629. It uses these handlers and `TransactionFormViewModel`. Ken's open question (save as you go, or a Save button) is settled there. Save as you go would send a save per field commit with the same digest rule, so no handler changes either way.
 
 ## Risks
 
-- **Rules round trip:** every field commit is one bridge call when rules run. The perf gate and the debounce cover it. A slow preview never blocks typing.
-- **Digest scope:** a sync that changes only a transfer partner refuses an edit. This is deliberate: the save would overwrite it.
-- **Hand-offs:** "Make recurring" and adding documents leave the native sheet until sc-4617 and sc-5091.
-- **Accepted:** page script can pass `confirmedReconciled` (D3), as in native-accounts-screen.
+- **Rule latency.** Every field commit makes one rules round trip. It is covered by the gate and the debounce, and a slow preview never blocks typing.
+- **Digest scope.** A sync that changes only a transfer partner refuses an edit. This is deliberate.
+- **`preview-stale`.** A rule edited on another device between the preview and the save refuses the save once. The re-preview shows why.
+- **Hand-offs.** "Make recurring" and documents leave the native sheet until sc-4617 and sc-5091.
+- **Accepted:** page script can pass `confirmedReconciled` (D3).
 
 ## Decisions for Ken
 
-None in this change. Mac save as you go or a Save button belongs to sc-5092.
+None in this change. The Mac save model belongs to sc-5092.

@@ -19,12 +19,19 @@ enum UITestAccounts {
 
     @MainActor static func makeRoot() -> UIViewController {
         let client = NativeBridgeClient { name, args in
+            // Launch arguments that hold a read in flight or make it fail, to see the loading and failed states
+            let defaults = UserDefaults.standard
+            if name == "native/accounts-list" || name == "native/account-register" {
+                let key = name == "native/accounts-list" ? "List" : "Register"
+                if defaults.bool(forKey: "UITestSlow\(key)") { try await Task.sleep(nanoseconds: 120_000_000_000) }
+                if defaults.bool(forKey: "UITestFail\(key)") { throw NSError(domain: "UITest", code: 1) }
+            }
             switch name {
-            case "native/accounts-list": accountsList
-            case "native/account-register": registerPage(args.contains("\"search\"") ? registerSearch : register, args: args)
-            case "native/budget-month": budgetMonth
-            case "native/reconcile-month": reconcileMonth
-            default: "null"
+            case "native/accounts-list": return accountsList
+            case "native/account-register": return registerPage(args.contains("\"search\"") ? registerSearch : register, args: args)
+            case "native/budget-month": return budgetMonth
+            case "native/reconcile-month": return reconcileMonth
+            default: return "null"
             }
         }
         let model = AccountsListViewModel(client: client)
@@ -80,17 +87,102 @@ final class HandOffLabel: ObservableObject {
     @Published var text = ""
 }
 
+// The custom actions (the actions rotor) each accessibility element offers, read from
+// the live accessibility tree of the window: XCUITest cannot list them. "<label>=[a|b]; ..."
+@MainActor
+enum UITestActionsProbe {
+    // The accessibility elements VoiceOver can land on, as "label|value" in tree order: a view or
+    // element hidden from accessibility, and everything under it, is skipped
+    static func elements() -> String {
+        guard let window = UIApplication.shared.connectedScenes.compactMap({ ($0 as? UIWindowScene)?.windows.first(where: \.isKeyWindow) }).first else { return "no window" }
+        var found: [String] = []
+        var seen = Set<ObjectIdentifier>()
+        func visit(_ object: NSObject) {
+            guard seen.insert(ObjectIdentifier(object)).inserted else { return }
+            if let view = object as? UIView, view.accessibilityElementsHidden || view.isHidden || view.alpha == 0 { return }
+            if object.isAccessibilityElement {
+                found.append("\(object.accessibilityLabel ?? "")|\(object.accessibilityValue ?? "")")
+                return
+            }
+            if let elements = object.accessibilityElements as? [NSObject] {
+                elements.forEach(visit)
+                return
+            }
+            let count = object.accessibilityElementCount()
+            if count != NSNotFound, count > 0 {
+                for index in 0..<count {
+                    if let element = object.accessibilityElement(at: index) as? NSObject { visit(element) }
+                }
+                return
+            }
+            (object as? UIView)?.subviews.forEach(visit)
+        }
+        visit(window)
+        return found.joined(separator: "; ")
+    }
+
+    static func dump() -> String {
+        guard let window = UIApplication.shared.connectedScenes.compactMap({ ($0 as? UIWindowScene)?.windows.first(where: \.isKeyWindow) }).first else { return "no window" }
+        var found: [String] = []
+        var seen = Set<ObjectIdentifier>()
+        func visit(_ object: NSObject) {
+            guard seen.insert(ObjectIdentifier(object)).inserted else { return }
+            if let actions = object.accessibilityCustomActions, !actions.isEmpty {
+                found.append("\(object.accessibilityLabel ?? "?")=[\(actions.map(\.name).joined(separator: "|"))]")
+            }
+            if let view = object as? UIView {
+                view.subviews.forEach(visit)
+            }
+            if let elements = object.accessibilityElements as? [NSObject] {
+                elements.forEach(visit)
+            }
+            let count = object.accessibilityElementCount()
+            if count != NSNotFound, count > 0 {
+                for index in 0..<count {
+                    if let element = object.accessibilityElement(at: index) as? NSObject { visit(element) }
+                }
+            }
+        }
+        visit(window)
+        return found.joined(separator: "; ")
+    }
+}
+
+// What the screens asked VoiceOver to announce (AccessibilityAnnouncer), for the tests to read
+@MainActor
+final class UITestAnnouncements: ObservableObject {
+    static let shared = UITestAnnouncements()
+    @Published private(set) var log: [String] = []
+
+    func record(_ text: String) {
+        guard UITestAccounts.isOn else { return }
+        log.append(text)
+    }
+}
+
 // The screen, with the last hand-off written over it for the tests to read
 private struct UITestAccountsRoot: View {
     let screen: AccountsScreen
     @ObservedObject var handOff: HandOffLabel
     let model: AccountsListViewModel
     let month: ReconcileMonthViewModel
+    @ObservedObject private var announcements = UITestAnnouncements.shared
+    @State private var actionsDump = ""
+    @State private var elementsDump = ""
 
     var body: some View {
         screen
             .overlay(alignment: .bottom) {
-                Text(verbatim: handOff.text).font(.caption2).accessibilityIdentifier("uitest.handoff")
+                VStack(spacing: 0) {
+                    Text(verbatim: handOff.text).font(.caption2).accessibilityIdentifier("uitest.handoff")
+                    // "<how many>|<the last one>"
+                    Text(verbatim: "\(announcements.log.count)|\(announcements.log.last ?? "")").font(.caption2)
+                        .accessibilityIdentifier("uitest.announcements")
+                    Button("dump") { actionsDump = UITestActionsProbe.dump() }.font(.caption2).accessibilityIdentifier("uitest.dumpActions")
+                    Text(verbatim: actionsDump).font(.system(size: 1)).accessibilityIdentifier("uitest.actions")
+                    Button("elements") { elementsDump = UITestActionsProbe.elements() }.font(.caption2).accessibilityIdentifier("uitest.dumpElements")
+                    Text(verbatim: elementsDump).font(.system(size: 1)).accessibilityIdentifier("uitest.elements")
+                }
             }
             // As NativeAccountsViewController does when the screen becomes active: the list, then the Reconcile banner's month
             .task {

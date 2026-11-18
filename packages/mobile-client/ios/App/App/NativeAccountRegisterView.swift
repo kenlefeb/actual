@@ -42,7 +42,7 @@ struct AccountRegisterView: View {
                 if let error { UIAccessibility.post(notification: .announcement, argument: error.message) }
             }
             .onChange(of: model.state.error) { error in
-                if let error { UIAccessibility.post(notification: .announcement, argument: error.registerMessage) }
+                if let error { AccessibilityAnnouncer.post(error.registerMessage) }
             }
             .onChange(of: model.undoOffer) { offer in
                 if let offer { UIAccessibility.post(notification: .announcement, argument: AccountsWords.undoText(offer)) }
@@ -122,7 +122,9 @@ struct AccountRegisterView: View {
             RegisterList(content: .placeholder, model: model, search: "", rowActions: { _ in .none }, actions: rowHandlers)
                 .redacted(reason: .placeholder)
                 .disabled(true)
-                .accessibilityLabel(Text(RegisterWords.loading))
+                // Each made-up row is hidden from VoiceOver (hiddenWhilePlaceholder), with one
+                // "Loading" element in their place (sc-3611 task 3.6)
+                .overlay { Color.clear.accessibilityElement().accessibilityLabel(Text(RegisterWords.loading)) }
         case .loaded(let content):
             RegisterList(
                 content: content, model: model, search: model.search, rowActions: rowActions, actions: rowHandlers,
@@ -251,6 +253,7 @@ private struct RegisterList: View {
 
     var body: some View {
         List {
+            Group {
             if let staleError {
                 Text(verbatim: staleError.registerMessage).foregroundColor(Money.warning).font(.subheadline)
                     .fixedSize(horizontal: false, vertical: true)
@@ -293,6 +296,8 @@ private struct RegisterList: View {
                 LabelledAmount(label: RegisterWords.resultsTotal, amount: BudgetAmountFormat.string(results.total, style: style))
                     .font(.footnote).foregroundColor(.secondary).listRowBackground(Color.clear)
             }
+            }
+            .hiddenWhilePlaceholder()
         }
         .listStyle(.insetGrouped)
         // Cancel (the field closing) restores the whole register, scope included
@@ -527,6 +532,7 @@ private struct RegisterHeader: View {
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
+        .hiddenWhilePlaceholder()
     }
 }
 

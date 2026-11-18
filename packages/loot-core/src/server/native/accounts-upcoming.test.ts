@@ -263,6 +263,22 @@ describe('native/account-upcoming', () => {
     expect((await upcoming({ account_id: 'card' })).upcoming).toEqual([]);
   });
 
+  it('creates no payee when a rule names a new one: the read writes nothing', async () => {
+    await addSchedule('Named', {
+      date: '2017-01-03',
+      amount: -500,
+      actions: [{ op: 'set', field: 'payee_name', value: 'Brand New Payee' }],
+    });
+    const payees = async () =>
+      (await db.all<{ n: number }>('SELECT COUNT(*) AS n FROM payees'))[0].n;
+    const before = await payees();
+    const read = await upcoming();
+    expect(await payees()).toBe(before);
+    expect(read.upcoming).toEqual([
+      expect.objectContaining({ payee: 'Brand New Payee', amount: -500 }),
+    ]);
+  });
+
   it('inverts a plain transfer into the account, naming the other account', async () => {
     const id = await addSchedule('Save', {
       date: '2017-01-06',

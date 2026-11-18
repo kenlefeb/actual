@@ -729,7 +729,10 @@ async function upcomingRows(account: string) {
   const ruleFields = new Map<string, NativeRuleField[]>();
   const ran: TransactionEntity[] = [];
   for (const preview of kept) {
-    const after: TransactionEntity = await runRules(preview, accounts);
+    // A read writes nothing: a payee name no payee has yet stays a name
+    const after: TransactionEntity = await runRules(preview, accounts, {
+      resolvePayeeNames: false,
+    });
     const scheduleStatus = preview.forceUpcoming
       ? 'upcoming'
       : statuses.get(preview.schedule ?? '');
@@ -807,7 +810,10 @@ async function upcomingRows(account: string) {
           id,
           scheduleId: t.schedule ?? '',
           date: t.date,
-          payee: (t.payee && payeeById.get(t.payee)?.name) || null,
+          payee:
+            (t.payee === 'new'
+              ? (t as { payee_name?: string }).payee_name
+              : t.payee && payeeById.get(t.payee)?.name) || null,
           category: (categoryId && categories.get(categoryId)) || null,
           categoryId,
           notes: t.notes || null,

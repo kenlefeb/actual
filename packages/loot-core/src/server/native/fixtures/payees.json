@@ -1,0 +1,34 @@
+{
+  "payees": [
+    {
+      "id": "corner",
+      "name": "Corner Store",
+      "favorite": true
+    },
+    {
+      "id": "sale",
+      "name": "50% Off",
+      "favorite": false
+    },
+    {
+      "id": "under",
+      "name": "a_b",
+      "favorite": false
+    },
+    {
+      "id": "plain",
+      "name": "aXb 5000 Off",
+      "favorite": false
+    },
+    {
+      "id": "slash",
+      "name": "back\\slash",
+      "favorite": false
+    },
+    {
+      "id": "costco",
+      "name": "Costco",
+      "favorite": false
+    }
+  ]
+}

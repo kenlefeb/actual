@@ -111,7 +111,9 @@ It returns `{result, resultDigest, ruleFields, suggestions, remaining, errors}` 
   - Each row has exactly these fields, with keys sorted: `account` (id), `amount` (integer minor units), `category` (id or null), `cleared` (boolean), `date` (`YYYY-MM-DD`), `notes` (string or null), `payee` (`{"id": …}`, `{"name": …}` for an unresolved name, or null), and `schedule` (id or null).
   - There is no whitespace, and strings are JSON-escaped.
   - Swift treats the digest as opaque.
-- **Two digests, two purposes.** `resultDigest` says what the person saw: the proposed rows after rules, checked at save. The edit conflict digest (D1, from `readTouchedState`) says what was in the database when the form opened: stored rows, checked for edits and undo. They share no input and are never compared with each other; both are hashed by one canonical helper. An edit sends both. For an edit, no rules run, so its result is the evaluated input.
+- **Two digests, two purposes.** `resultDigest` says what the person saw: the proposed rows after rules, checked at save. The edit conflict digest (D1, from `readTouchedState`) says what was in the database when the form opened: stored rows, checked for edits and undo. They share no input and are never compared with each other; both are hashed by one canonical helper.
+  - An add is checked by `resultDigest`.
+  - An edit is checked by the edit digest only. On an edit, `previewDigest` is neither required nor checked: an edit runs no rules, so it stores only what the person typed, and the edit digest already refuses a row that changed (`changed-since`). This was amended 2026-11-18 to match the built save; Security agreed.
 - **`ruleFields`** lists the fields of `result` that a rule set (the input left them empty or defaulted). The sheet marks them "Set by a rule".
 - **`suggestions`** lists `{field, row, value}` for each field in `userFields` that the rules would set to a different value. `value` is the rule's value, as the engine shows it: a category id and name, a payee id or name, notes text, or an amount in minor units. It replaces the earlier `replaced` and `overridden` (PR #453).
 
@@ -163,9 +165,16 @@ It returns `{result, resultDigest, ruleFields, suggestions, remaining, errors}` 
   **Deliberate differences from the web.** The web's `evalArithmetic` strips all whitespace, accepts `^` and a unary minus, and lets `currencyToAmount` guess whether a lone `,` or `.` is decimal or grouping. That lets the text's sign flip the direction. The native engine follows the format exactly and takes the sign only from the control, so no amount is silently regrouped, truncated or reversed.
 
   **The keypad.** Its decimal key types the budget's decimal separator, not the phone locale's. Its accessory row types `+ − × ÷`, and the engine maps them. Swift only inserts characters.
-- **Rules.** For a draft with no `id`, the rules run once on the input. They fill every field not in `userFields`, and leave every field in `userFields` as the person set it. A draft with an `id` runs no rules.
+- **Rules.** For a draft with no `id`, the rules run once on the input, in their usual rank order. They fill every field not in `userFields`, and leave every field in `userFields` as the person set it. A draft with an `id` runs no rules.
+  - **Protection within a run (amended 2026-11-18; the first build got it wrong).**
+    - After each rule's actions are applied, every protected field is restored to the person's value before the next rule's conditions are evaluated. No rule ever fires on a value the person does not have.
+    - Example: rule A is "payee Costco → category Groceries"; rule B is "category is Groceries → notes 'food'". With input Costco and Dining set by hand, the result is Dining with notes untouched, and the category suggestion is Groceries.
+    - This lives in `server/native`, which runs the ranked rules one at a time. If that needs anything from `runRules`, the only addition allowed in `transaction-rules.ts` is an optional per-rule hook beside the payee-name option.
   - **Deliberate difference from the web.** The web re-applies every field on a payee change, replacing a hand-set field. Here a hand-set field stays, and the rule's value is offered as a suggestion (Product Owner, PR #453).
-  - **Finding suggestions.** The preview makes one extra rules run with no field protected, keeping the person's values as the starting point. Every hand-set field whose value that run changes is a candidate. Each candidate is then confirmed with a run that unprotects only that field, and the confirmed value is the suggestion, so taking it yields exactly that value. The extra runs are unprotected in the sense of ignoring `userFields`; they write nothing. With no hand-set fields, there are no extra runs.
+  - **Finding suggestions.**
+    - **Candidates.** The preview makes one extra run with no field protected, starting from the person's values. Every hand-set field whose value that run changes, on any row, is a candidate.
+    - **Confirmation.** Each candidate field is confirmed with one run that frees that field on all rows at once, not one run per row, while every other hand-set field stays protected. The confirmed values are the suggestions, so taking one yields exactly that value.
+    - **Cost.** The extra runs ignore `userFields` and write nothing. With no hand-set fields there are no extra runs. Otherwise there is one candidate run, plus one run per candidate field.
 - **The split remainder.** `remaining` is the parent minus the children's sum.
 - **Errors.** `errors` maps each field (with a child index for splits) to `{code, detail?}`.
   - `code` comes from `transaction-field-errors.json`.
@@ -198,7 +207,9 @@ It returns `{result, resultDigest, ruleFields, suggestions, remaining, errors}` 
 
 ## D3. Save
 
-`native/transaction-save {draft, previewDigest, digest, undoToken, confirmedReconciled}` returns `{id}`. It is one undo step, and all or nothing. For an add, `draft` is the same input the last preview received, and `previewDigest` is that preview's `resultDigest` (null while the preview is unchecked).
+`native/transaction-save {draft, previewDigest, digest, undoToken, confirmedReconciled}` returns `{id}`. It is one undo step, and all or nothing.
+- **An add:** `draft` is the same input the last preview received, and `previewDigest` is that preview's `resultDigest` (null while the preview is unchecked).
+- **An edit:** `previewDigest` is ignored.
 
 ### Add or edit
 
@@ -296,6 +307,7 @@ All are in the `LIMITS` registry and read through `readLimit`. Malformed values 
 
 - `native/payees` with a two-letter search, and with an empty one;
 - a payee-change preview on a new transaction with three hand-set fields that the rules would set differently, so the suggestion runs are included;
+- the same preview on the 50-child split with three hand-set fields;
 - an amount-change preview on the split;
 - the form read of the split;
 - a save of a new transaction (rules run).

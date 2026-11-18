@@ -6,8 +6,8 @@
 
 ## 1. Engine: form reads, preview, save, limits and gates (sc-3602)
 
-- [ ] 1.0 Shared row state (design D1): add `parent_id`, `is_parent`, `is_child` and `sort_order` to `readTouchedState`, additively. The accounts-write tests must stay green. The digest is the SHA-256 of that state over the touched set, with no second reader.
-- [ ] 1.1 `native/transaction-form` in `server/native/transaction-form.ts` (design D1).
+- [x] 1.0 Shared row state (design D1): add `parent_id`, `is_parent`, `is_child` and `sort_order` to `readTouchedState`, additively. The accounts-write tests must stay green. The digest is the SHA-256 of that state over the touched set, with no second reader.
+- [x] 1.1 `native/transaction-form` in `server/native/transaction-form.ts` (design D1).
   - Each open account carries its `transferPayee` id, and each transfer row carries its `partner` fields (design D1, added 2026-11-18).
   - Categories include hidden ones, marked `hidden` (added 2026-11-18).
   - Write failing contract tests first on a seed that has:
@@ -21,7 +21,7 @@
     - a deleted id or a closed account's transaction fails with `[native:not-found]`;
     - a child added, or a transfer relinked, changes the digest.
   - Add the fixture `transaction-form.json`.
-- [ ] 1.2 `native/payees` (design D1).
+- [x] 1.2 `native/payees` (design D1).
   - Write failing tests first:
     - favourites first, then by name;
     - only live payees, and only `{id, name, favorite}`;
@@ -31,7 +31,7 @@
     - `payee-picker-max-results` defaults to 50, has a ceiling of 500, and malformed values fall back.
   - Add both limits to the `LIMITS` registry.
   - Add the fixture `payees.json`.
-- [ ] 1.3 `native/transaction-preview` (design D2).
+- [x] 1.3 `native/transaction-preview` (design D2).
   - Write failing tests first, each comparing against `rules-run` with the web form's application rules:
     - arithmetic in each number format;
     - Inflow and Outflow;
@@ -50,7 +50,8 @@
       - the same input gives the same digest, and key order does not matter;
       - one canonical hash helper is shared with the edit digest, over separate inputs;
     - each result row carries the engine's `amountText`;
-    - suggestions are found with one unprotected run and confirmed per candidate; taking one (field removed from `userFields`) gives exactly the suggested value; no extra run when nothing is hand-set;
+    - protected fields are restored after each rule's actions, before the next rule's conditions (the rule A / rule B scenario: Dining kept, notes untouched, suggestion Groceries);
+    - suggestions are found with one unprotected run, and each candidate field is confirmed with one run that frees it on all rows; taking one (field removed from `userFields`) gives exactly the suggested value; no extra run when nothing is hand-set;
     - `changedField` is gone from the preview's shape, and the page's argument list is `draft` only;
     - a trailing decimal separator (`12.`, `12,` in comma-decimal formats) reads as no fraction, in the preview and the save; a trailing grouping separator is refused;
     - `ruleFields` lists fields a rule set that the person did not touch;
@@ -67,7 +68,7 @@
     - the upstream edit is only `runRules`'s optional parameter and the branch around `insertPayee` in `transaction-rules.ts`, with `rules-run` and the default unchanged (a test that the default still creates the payee);
     - the split count is checked before any child is evaluated or looked up;
   - Add the fixtures `transaction-preview.json` and `transaction-field-errors.json`, with a test that the field codes and the refusal codes share no code.
-- [ ] 1.4 `native/transaction-save` (design D3), in the order of D3.
+- [x] 1.4 `native/transaction-save` (design D3), in the order of D3.
   - Write failing tests first:
     - no undo token, or a bad shape, is `[native:invalid-draft]`;
     - a repeated `newId`:
@@ -81,7 +82,7 @@
     - split ids: an add naming any existing row's id as a child (a reconciled row in another account in the test) is `[native:invalid-draft]`, and that row is unchanged; an edit naming a row that is not its own live child is refused the same way; its own children update in place;
     - an edit of a row whose account was closed after the form read is `[native:not-found]`;
     - currency symbols: with a currency set, only its symbol (and its final sign alone) is ignored, and `€12` in a USD budget is `amount-invalid`; with none set, any one currency symbol is ignored;
-    - an edit checks both digests, each with its own refusal;
+    - an edit is checked by the edit digest only: a stale one refuses with `changed-since`, and `previewDigest` is neither required nor checked;
     - loop tests: notes typed before a payee whose rule sets notes save on the first attempt; an append-notes rule saves "lunch #bulk" on the first attempt with a digest, and on the second without one, never appending twice;
     - the touched set (children removed, partners old and new) is computed on the post-rules draft before any write;
     - `[native:invalid-draft:<codes>]` for each validation rule, with only fixture codes in the message;
@@ -104,10 +105,10 @@
     - evaluating `amountText` is not a difference;
     - a rule change to any rule-settable field on any row refuses with `preview-stale` before any write, whether or not a preview was answered.
   - Tests that a transfer payee of the transaction's own account is refused with `transfer-same-account`, and one of a closed account with `account-closed`.
-- [ ] 1.4a Add the reconciled-split-parent rule to `native/transactions-delete`. Write failing tests first: a partner inside a reconciled split needs `confirmedReconciled`.
-- [ ] 1.5 Undo conflict check for saves (design D3). The save records `readTouchedState`. `native/undo` refuses with `[native:undo-changed-since]` after a later change to a touched row.
+- [x] 1.4a Add the reconciled-split-parent rule to `native/transactions-delete`. Write failing tests first: a partner inside a reconciled split needs `confirmedReconciled`.
+- [x] 1.5 Undo conflict check for saves (design D3). The save records `readTouchedState`. `native/undo` refuses with `[native:undo-changed-since]` after a later change to a touched row.
   - Write failing tests first, with an edit applied after the save, as a sync would apply it.
-- [ ] 1.6 `transaction-form.perf.test.ts` (design D5). Use the stated seed and the six measurements, each with a median under 50 ms. Print the median and p95. If the rules cases miss 50 ms, stop and report the numbers to the Director before changing the design.
+- [x] 1.6 `transaction-form.perf.test.ts` (design D5). Use the stated seed and the six measurements, each with a median under 50 ms. Print the median and p95. If the rules cases miss 50 ms, stop and report the numbers to the Director before changing the design.
 - [ ] 1.7 Allowlists (design D4):
   - add the four names to `native-bridge-allowlist.json` and the Swift client list, with a test that the lists are equal;
   - add the page argument lists in `nativeBridge.ts`, with a test that extra fields are dropped;

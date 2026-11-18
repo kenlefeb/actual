@@ -1,0 +1,23 @@
+{
+  "result": {
+    "account": "checking",
+    "date": "2016-12-20",
+    "payee": "costco",
+    "payeeName": null,
+    "category": "groceries",
+    "notes": "Bulk",
+    "cleared": false,
+    "inflow": false,
+    "amount": -1000,
+    "amountText": "10.00",
+    "splits": []
+  },
+  "resultDigest": "24c2ca675f7d0981d8f5a0c4df921fc85228542d5ab24175a9cfa111c0f8264a",
+  "ruleFields": [
+    "category",
+    "notes"
+  ],
+  "suggestions": [],
+  "remaining": null,
+  "errors": {}
+}

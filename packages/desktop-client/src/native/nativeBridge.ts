@@ -279,6 +279,21 @@ const ACCOUNTS_WRITE_FIELDS = new Map([
   ['native/account-move', ['id', 'targetId', 'undoToken']],
 ]);
 
+// sc-3602 (native-add-transaction D4): the Add transaction sheet's reads and
+// preview. loot-core checks the draft's keys and types; the page forwards
+// only each call's own fields.
+const TRANSACTION_FIELDS = new Map([
+  ['native/transaction-form', ['id', 'account_id']],
+  ['native/payees', ['search']],
+  ['native/transaction-preview', ['draft']],
+  // D3: loot-core refuses a missing token as invalid-draft and reads
+  // learn-categories from the budget; previewDigest binds an add to its preview
+  [
+    'native/transaction-save',
+    ['draft', 'previewDigest', 'digest', 'undoToken', 'confirmedReconciled'],
+  ],
+]);
+
 function pickFields(args: unknown, fields: string[]) {
   const given = (args ?? {}) as Record<string, unknown>;
   return Object.fromEntries(
@@ -372,6 +387,8 @@ export function createNativeBridge({
         args = pickFields(args, ['changes', 'undoToken']);
       } else if (ACCOUNTS_FIELDS.has(name)) {
         args = pickFields(args, ACCOUNTS_FIELDS.get(name) ?? []);
+      } else if (TRANSACTION_FIELDS.has(name)) {
+        args = pickFields(args, TRANSACTION_FIELDS.get(name) ?? []);
       } else if (ACCOUNTS_WRITE_FIELDS.has(name)) {
         readToken((args as Record<string, unknown> | null)?.undoToken);
         args = pickFields(args, ACCOUNTS_WRITE_FIELDS.get(name) ?? []);

@@ -11,6 +11,11 @@ export const NATIVE_REFUSAL_CODES = [
   'no-budget-for-month',
   'invalid-draft',
   'invalid-setting',
+  // sc-3602 (native-add-transaction D1)
+  'not-found',
+  // sc-3602 (D3): the save
+  'changed-since',
+  'preview-stale',
 ] as const;
 
 export type NativeRefusalCode = (typeof NATIVE_REFUSAL_CODES)[number];

@@ -39,7 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         host.onChange = { [weak self] in self?.rereads?.notify() }
         // The page stays on its sign-in screen; nothing went to the browser
         host.onRefusedSignIn = { [weak self] in self?.showSignInNotSupported() }
-        let storage = StorageLossMonitor(defaults: .standard) { [weak self] in self?.showStorageLost() }
+        let storage = StorageLossMonitor(defaults: UserDefaults.standard) { [weak self] in self?.showStorageLost() }
         host.onBudgetState = { storage.handle($0) }
         self.host = host
 

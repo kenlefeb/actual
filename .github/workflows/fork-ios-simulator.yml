@@ -28,7 +28,8 @@ jobs:
   fork-ios-simulator:
     if: github.repository == 'kenlefeb/actual'
     runs-on: macos-26
-    timeout-minutes: 25
+    # A cold runner spends minutes on the first simulator boot, the web build and the build
+    timeout-minutes: 45
     env:
       # CocoaPods fails on a non-UTF-8 locale
       LANG: en_US.UTF-8

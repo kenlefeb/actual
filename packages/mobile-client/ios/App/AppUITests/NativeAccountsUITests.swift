@@ -30,9 +30,15 @@ final class NativeAccountsUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["On Budget"].exists || app.staticTexts["On budget"].exists)
     }
 
-    // The drag handle is a button the row labels "Reorder <name>, <balance>, ..."
+    // The drag handle is an element the row labels "Reorder <name>, <balance>, ..."; its
+    // type differs between iOS versions, so match any type
     private func handle(_ name: String) -> XCUIElement {
-        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Reorder \(name),")).firstMatch
+        app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", "Reorder \(name),")).firstMatch
+    }
+
+    // What the screen offers, for a failure message: a CI failure has no screenshot to look at
+    private func labels(containing word: String) -> [String] {
+        app.descendants(matching: .any).allElementsBoundByIndex.map { "\($0.elementType.rawValue):\($0.label)" }.filter { $0.contains(word) }
     }
 
     // PR 458: Edit showed no drag handles
@@ -42,7 +48,7 @@ final class NativeAccountsUITests: XCTestCase {
         app.buttons["Edit"].tap()
         XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 5), "Edit did not become Done")
         for name in ["Checking", "Savings", "Card", "House"] {
-            XCTAssertTrue(handle(name).waitForExistence(timeout: 5), "no drag handle for \(name)")
+            XCTAssertTrue(handle(name).waitForExistence(timeout: 5), "no drag handle for \(name); the screen has \(labels(containing: "Reorder") + labels(containing: name))")
         }
         app.buttons["Done"].tap()
         let gone = NSPredicate(format: "exists == false")

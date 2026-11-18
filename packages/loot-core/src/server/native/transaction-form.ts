@@ -988,68 +988,83 @@ export async function evaluateDraft(
         })),
       }),
     } as TransactionEntity;
-    // A read: a payee a rule names stays a name (PR 447 review)
-    const after = (await runRules(before, null, {
-      resolvePayeeNames: false,
-    })) as TransactionEntity & { payee_name?: string; tombstone?: boolean };
+    // One run, with every hand-set field protected after each rule, so no
+    // rule sees a value the transaction will never have (PR 447 review). A
+    // read: a payee a rule names stays a name.
+    const entityField = (field: string) =>
+      field === 'splits' ? 'subtransactions' : field;
+    const run = async (protect: string[]) =>
+      (await runRules(before, null, {
+        resolvePayeeNames: false,
+        protectedFields: protect.map(entityField),
+      })) as TransactionEntity & { payee_name?: string; tombstone?: boolean };
+    // The rule's value for each parent field, in the result's terms
+    const ruledOf = (after: TransactionEntity & { payee_name?: string }) => {
+      const named = after.payee === 'new';
+      return {
+        named,
+        name: named ? (after.payee_name ?? null) : null,
+        value: {
+          account: after.account ?? '',
+          date: after.date,
+          payee: named ? null : (after.payee ?? null),
+          category: after.category ?? null,
+          notes: after.notes ?? '',
+          cleared: Boolean(after.cleared),
+          amount: after.amount,
+        } as Record<RuleField, unknown>,
+      };
+    };
+    const differs = (ruled: ReturnType<typeof ruledOf>, field: RuleField) =>
+      field === 'payee'
+        ? !sameValue(ruled.value.payee, input.payee) ||
+          (ruled.named && !sameValue(ruled.name, input.payeeName))
+        : field === 'amount'
+          ? input.amount !== null && ruled.value.amount !== input.amount
+          : !sameValue(ruled.value[field], input[field]);
+    // Whether a rule run changed the children
+    const childrenDiffer = (after: TransactionEntity) => {
+      const ruledSplits = after.subtransactions ?? [];
+      return (
+        ruledSplits.length !== input.splits.length ||
+        ruledSplits.some(
+          (c, i) =>
+            !sameValue(
+              c.payee ?? input.payee,
+              input.splits[i].payee ?? input.payee,
+            ) ||
+            !sameValue(c.category, input.splits[i].category) ||
+            !sameValue(c.notes ?? '', input.splits[i].notes) ||
+            c.amount !== (input.splits[i].amount ?? 0),
+        )
+      );
+    };
+
+    const handSet = [...draft.userFields];
+    const after = await run(handSet);
     deleted = Boolean(after.tombstone);
     schedule = after.schedule ?? null;
-    const named = after.payee === 'new';
-    // The rule's value for each parent field, in the result's terms
-    const ruled: Partial<Record<RuleField, unknown>> = {
-      account: after.account ?? '',
-      date: after.date,
-      payee: named ? null : (after.payee ?? null),
-      category: after.category ?? null,
-      notes: after.notes ?? '',
-      cleared: Boolean(after.cleared),
-      amount: after.amount,
-    };
-    const ruledName = named ? (after.payee_name ?? null) : null;
-    const differs = (field: RuleField) =>
-      field === 'payee'
-        ? !sameValue(ruled.payee, input.payee) ||
-          (named && !sameValue(ruledName, input.payeeName))
-        : field === 'amount'
-          ? input.amount !== null && ruled.amount !== input.amount
-          : !sameValue(ruled[field], input[field]);
+    const ruled = ruledOf(after);
     for (const field of RULE_FIELDS) {
-      if (!differs(field)) continue;
-      if (user.has(field)) {
-        suggestions.push({ field, row: 0, value: { [field]: ruled[field] } });
-        continue;
-      }
+      if (user.has(field) || !differs(ruled, field)) continue;
       ruleFields.add(field);
       if (field === 'payee') {
-        result.payee = ruled.payee as string | null;
-        result.payeeName = ruledName;
+        result.payee = ruled.value.payee as string | null;
+        result.payeeName = ruled.name;
       } else if (field === 'amount') {
-        const amount = ruled.amount as number;
+        const amount = ruled.value.amount as number;
         result.amount = amount;
         result.inflow = amount > 0;
         result.amountText = textOf(amount);
         resultAmounts = { ...resultAmounts, parent: { amount } };
       } else {
-        (result as Record<string, unknown>)[field] = ruled[field];
+        (result as Record<string, unknown>)[field] = ruled.value[field];
       }
     }
     // The children a rule set, unless the person set them by hand
-    const ruledSplits = after.subtransactions ?? [];
-    const childChanged =
-      ruledSplits.length !== input.splits.length ||
-      ruledSplits.some(
-        (c, i) =>
-          !sameValue(
-            c.payee ?? input.payee,
-            input.splits[i].payee ?? input.payee,
-          ) ||
-          !sameValue(c.category, input.splits[i].category) ||
-          !sameValue(c.notes ?? '', input.splits[i].notes) ||
-          c.amount !== (input.splits[i].amount ?? 0),
-      );
-    if (childChanged && !user.has('splits')) {
+    if (!user.has('splits') && childrenDiffer(after)) {
       ruleFields.add('splits');
-      result.splits = ruledSplits.map(c => ({
+      result.splits = (after.subtransactions ?? []).map(c => ({
         payee: c.payee === 'new' ? null : (c.payee ?? null),
         payeeName: null,
         category: c.category ?? null,
@@ -1062,8 +1077,36 @@ export async function evaluateDraft(
         ...resultAmounts,
         children: result.splits.map(c => ({ amount: c.amount as number })),
       };
-    } else if (childChanged) {
-      suggestions.push({ field: 'splits', row: 0, value: {} });
+    }
+
+    // Suggestions (D2): one run with nothing protected finds the candidates;
+    // each is confirmed by a run freeing only that field, on every row at
+    // once. At most one run per hand-set field; none when nothing is hand-set.
+    if (handSet.length > 0) {
+      const free = await run([]);
+      const freeRuled = ruledOf(free);
+      for (const field of handSet) {
+        const candidate =
+          field === 'splits'
+            ? childrenDiffer(free)
+            : differs(freeRuled, field as RuleField);
+        if (!candidate) continue;
+        const confirmed = await run(handSet.filter(f => f !== field));
+        if (field === 'splits') {
+          if (childrenDiffer(confirmed)) {
+            suggestions.push({ field, row: 0, value: {} });
+          }
+          continue;
+        }
+        const value = ruledOf(confirmed);
+        if (differs(value, field as RuleField)) {
+          suggestions.push({
+            field,
+            row: 0,
+            value: { [field]: value.value[field as RuleField] },
+          });
+        }
+      }
     }
   }
   await describeSuggestions(suggestions, textOf);

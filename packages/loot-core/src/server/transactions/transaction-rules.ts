@@ -328,7 +328,12 @@ export async function runRules(
   accounts: Map<string, db.DbAccount> | null = null,
   // Fork-only (sc-3602): false leaves a payee name no payee has yet as
   // `payee: 'new'` with its `payee_name`, so a preview creates nothing
-  { resolvePayeeNames = true }: { resolvePayeeNames?: boolean } = {},
+  // Fork-only (sc-3602): fields no rule may change. They are put back after
+  // each rule, so no later rule's conditions see a value they never had
+  {
+    resolvePayeeNames = true,
+    protectedFields = [],
+  }: { resolvePayeeNames?: boolean; protectedFields?: string[] } = {},
 ) {
   await ensureFormulaPreferencesLoaded();
 
@@ -403,8 +408,24 @@ export async function runRules(
     accountsMap,
     formulaStrings,
   );
+  // A protected category keeps its group, and a protected payee its name
+  const kept = protectedFields
+    .flatMap(field =>
+      field === 'category'
+        ? [field, 'category_group']
+        : field === 'payee'
+          ? [field, 'payee_name']
+          : [field],
+    )
+    .map(field => [field, finalTrans[field]]);
+  const restore = () => {
+    if (kept.length > 0) {
+      finalTrans = Object.assign({}, finalTrans, Object.fromEntries(kept));
+    }
+  };
 
   for (let i = 0; i < rules.length; i++) {
+    restore();
     // If there is a scheduleRuleID (meaning this transaction came from a schedule) then exclude rules linked to other schedules.
     if (scheduleRuleID !== '') {
       if (rules[i].id === scheduleRuleID) {
@@ -454,6 +475,7 @@ export async function runRules(
     }
   }
 
+  restore();
   const result = await finalizeTransactionForRules(
     finalTrans,
     resolvePayeeNames,

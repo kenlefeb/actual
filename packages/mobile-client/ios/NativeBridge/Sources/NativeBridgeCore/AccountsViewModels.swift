@@ -68,6 +68,40 @@ private func pullSync(_ client: NativeBridgeClient, settled: @escaping () -> Voi
     }
 }
 
+// sc-3611: what a list write failed with. Fixed local words only.
+public enum AccountsActionError: Equatable {
+    case reopenFailed, moveFailed, timedOut, changedSince, undoTimedOut
+
+    public var message: String {
+        switch self {
+        case .reopenFailed:
+            return NSLocalizedString("The account could not be reopened. Nothing changed.", comment: "Native Accounts: reopen failed")
+        case .moveFailed:
+            return NSLocalizedString("The account could not be moved. Nothing changed.", comment: "Native Accounts: move failed")
+        case .timedOut:
+            return NSLocalizedString("The budget did not answer in time. Nothing changed.", comment: "Native Accounts: write timed out")
+        case .changedSince:
+            return NSLocalizedString("Changed since — can't undo.", comment: "Native Accounts: undo refused, a touched row changed")
+        case .undoTimedOut:
+            return NSLocalizedString("The budget did not answer in time. Nothing was undone.", comment: "Native Accounts: undo timed out")
+        }
+    }
+}
+
+// What the brief Undo after a list write reverses: loot-core undoes it only if
+// its latest step still carries `token` and nothing it touched changed since (D3a)
+public struct AccountsUndoOffer: Equatable {
+    public enum Action: Equatable { case reopen, move }
+
+    public let token: String
+    public let action: Action
+    public let accountName: String
+
+    public init(token: String, action: Action, accountName: String) {
+        (self.token, self.action, self.accountName) = (token, action, accountName)
+    }
+}
+
 @MainActor
 public final class AccountsListViewModel: ObservableObject {
     public static let watchedTables = accountsWatchedTables
@@ -76,14 +110,27 @@ public final class AccountsListViewModel: ObservableObject {
     @Published public private(set) var refreshError: BudgetRefreshError?
     // From a pull until its page call settles, which can be after the deadline
     @Published public private(set) var isSyncing = false
+    // The subtitle: the app passes on loot-core's sync events; a pull sets it too
+    @Published public var syncStatus: NativeSyncStatus = .unknown
+    @Published public private(set) var undoOffer: AccountsUndoOffer?
+    @Published public private(set) var actionError: AccountsActionError?
+    @Published public private(set) var isWorking = false
 
     private let client: NativeBridgeClient
+    private let undoInterval: TimeInterval
+    private let undoSleep: AccountsSleep
     private var coalescer: ChangeCoalescer?
     private var isSceneActive = true
     private var generation = 0
+    private var offerGeneration = 0
 
-    public init(client: NativeBridgeClient, changeInterval: TimeInterval = 1.0 / 60, schedule: ChangeSchedule? = nil) {
+    public init(
+        client: NativeBridgeClient, changeInterval: TimeInterval = 1.0 / 60, schedule: ChangeSchedule? = nil,
+        undoInterval: TimeInterval = 10, undoSleep: AccountsSleep? = nil
+    ) {
         self.client = client
+        self.undoInterval = undoInterval
+        self.undoSleep = undoSleep ?? realSleep
         coalescer = ChangeCoalescer(interval: changeInterval, schedule: schedule) { [weak self] in
             guard let self, self.isSceneActive else { return }
             Task { @MainActor in await self.load() }
@@ -128,7 +175,9 @@ public final class AccountsListViewModel: ObservableObject {
         guard isSceneActive, !isSyncing else { return }
         isSyncing = true
         refreshError = nil
-        if let failure = await pullSync(client, settled: { Task { @MainActor [weak self] in self?.isSyncing = false } }) {
+        let failure = await pullSync(client, settled: { Task { @MainActor [weak self] in self?.isSyncing = false } })
+        syncStatus = syncStatus.after(pull: failure, now: Date())
+        if let failure {
             refreshError = failure
             if let good = state.value { state = .stale(good, failure == .timedOut ? .timedOut : .other) }
             return
@@ -136,6 +185,86 @@ public final class AccountsListViewModel: ObservableObject {
         guard isSceneActive else { return }
         await load()
         if case .stale = state { refreshError = .refreshFailed }
+    }
+
+    public func clearActionError() { actionError = nil }
+
+    // The screen went away: no Undo survives it
+    public func leave() { withdrawOffer() }
+
+    // A closed account back to its section (D7), undoable
+    public func reopen(_ id: String) async {
+        let name = state.value?.closed.accounts.first { $0.id == id }?.name ?? ""
+        guard let write = try? AccountReopen(id: id) else { return }
+        await perform(failed: .reopenFailed, offer: AccountsUndoOffer(token: write.undoToken, action: .reopen, accountName: name)) {
+            try await self.client.reopenAccount(write)
+        }
+    }
+
+    // An Edit-mode drop within one section. The new order shows at once and
+    // the re-read replaces it; a refusal puts the last order back.
+    public func move(in section: AccountsListSection, from: Int, to: Int) async {
+        guard let list = state.value else { return }
+        let accounts = list.accounts(in: section)
+        guard let target = AccountMove.target(in: accounts.map(\.id), from: from, to: to) else { return }
+        let account = accounts[from]
+        let targetId: String? = if case .before(let id) = target { id } else { nil }
+        guard let write = try? AccountMove(id: account.id, targetId: targetId) else { return }
+        state = .loaded(list.moving(account.id, before: targetId))
+        await perform(failed: .moveFailed, offer: AccountsUndoOffer(token: write.undoToken, action: .move, accountName: account.name)) {
+            try await self.client.moveAccount(write)
+        }
+        if actionError != nil, let shown = state.value, shown == list.moving(account.id, before: targetId) { state = .loaded(list) }
+    }
+
+    // Only from a tap on the offered Undo
+    public func undo() async {
+        guard let offer = undoOffer, !isWorking else { return }
+        withdrawOffer()
+        actionError = nil
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            try await client.undo(try NativeUndo(token: offer.token))
+        } catch {
+            actionError = Self.isTimeout(error) ? .undoTimedOut : .changedSince
+            return
+        }
+        await load()
+    }
+
+    private func perform(failed: AccountsActionError, offer: AccountsUndoOffer, _ write: () async throws -> Void) async {
+        guard !isWorking else { return }
+        withdrawOffer()
+        actionError = nil
+        isWorking = true
+        defer { isWorking = false }
+        do {
+            try await write()
+        } catch {
+            actionError = Self.isTimeout(error) ? .timedOut : failed
+            return
+        }
+        await load()
+        offerGeneration += 1
+        let mine = offerGeneration
+        undoOffer = offer
+        let (pause, wait) = (undoInterval, undoSleep)
+        Task { [weak self] in
+            try? await wait(pause)
+            guard let self, self.offerGeneration == mine else { return }
+            self.undoOffer = nil
+        }
+    }
+
+    private func withdrawOffer() {
+        offerGeneration += 1
+        undoOffer = nil
+    }
+
+    private static func isTimeout(_ error: Error) -> Bool {
+        if case NativeBridgeError.timedOut = error { return true }
+        return false
     }
 }
 

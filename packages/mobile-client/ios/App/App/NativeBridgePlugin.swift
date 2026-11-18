@@ -19,6 +19,10 @@ public class NativeBridgePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
     // sync-event's changed table names; it coalesces its own re-reads
     var onPaychecksEvent: ((String, [String]) -> Void)?
     var onChange: (() -> Void)?
+    // sc-3611: the budget's sync outcome for the Accounts subtitle, kept while
+    // the screen comes and goes; main queue
+    private(set) var syncStatus = NativeSyncStatus.unknown
+    var onSyncStatus: ((NativeSyncStatus) -> Void)?
     private lazy var coalescer = ChangeCoalescer { [weak self] in self?.onChange?() }
 
     lazy var client = NativeBridgeClient { [weak self] name, argsJSON in
@@ -39,6 +43,11 @@ public class NativeBridgePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
               let event = NativeBridgeEvent.name(of: message.body) else { return }
         onEvent?(event)
         onPaychecksEvent?(event, NativeBridgeEvent.tables(of: message.body))
+        let status = syncStatus.next(after: message.body, now: Date())
+        if status != syncStatus {
+            syncStatus = status
+            onSyncStatus?(status)
+        }
         coalescer.notify()
     }
 

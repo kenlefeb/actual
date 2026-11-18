@@ -220,4 +220,19 @@ final class MacEngineHostTests: XCTestCase {
         XCTAssertTrue(configuration.websiteDataStore.isPersistent)
         XCTAssertFalse(configuration.preferences.javaScriptCanOpenWindowsAutomatically)
     }
+
+    // Story 5186: Safari's Web Inspector can attach only to Debug builds
+    func testOnlyADebugBuildIsInspectable() {
+        XCTAssertFalse(MacEngineHost.isInspectable(debugBuild: false))
+        XCTAssertTrue(MacEngineHost.isInspectable(debugBuild: true))
+    }
+
+    func testTheWebViewFollowsItsBuild() {
+        let host = MacEngineHost(www: FileManager.default.temporaryDirectory, version: "1.2.3")
+        #if DEBUG
+        XCTAssertTrue(host.webView.isInspectable)
+        #else
+        XCTAssertFalse(host.webView.isInspectable)
+        #endif
+    }
 }

@@ -46,6 +46,7 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
         configuration.applicationNameForUserAgent = "HomeEconomicsMac/\(version)"
         configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
         webView = WKWebView(frame: .zero, configuration: configuration)
+        webView.isInspectable = Self.isInspectable(debugBuild: Self.isDebugBuild)
         self.policy = policy
         self.openInBrowser = openInBrowser
         super.init()
@@ -53,6 +54,17 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
         webView.navigationDelegate = self
         webView.uiDelegate = self
     }
+
+    #if DEBUG
+    static let isDebugBuild = true
+    #else
+    static let isDebugBuild = false
+    #endif
+
+    // Story 5186: Safari's Web Inspector may attach to a Debug build only, to
+    // diagnose a stalled page. It can read everything the page holds, the
+    // sign-in token included, so a Release build is never inspectable.
+    nonisolated static func isInspectable(debugBuild: Bool) -> Bool { debugBuild }
 
     func load() {
         webView.load(URLRequest(url: WWWSchemeHandler.appURL))

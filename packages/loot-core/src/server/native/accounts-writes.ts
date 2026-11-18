@@ -7,6 +7,9 @@ import { batchUpdateTransactions } from '#server/transactions';
 
 import { readLimit } from './reconcile-lock';
 
+// What a write touched, for the undo conflict check (D3a)
+export type Touched = { transactions: string[]; accounts: string[] };
+
 type Row = {
   id: string;
   acct: string;
@@ -128,13 +131,16 @@ function checkReconciled(
   }
 }
 
-export async function transactionsCategorize(args: {
-  account_id: string;
-  ids: string[];
-  category: string | null;
-  confirmedReconciled?: boolean;
-  undoToken: string;
-}) {
+export async function transactionsCategorize(
+  args: {
+    account_id: string;
+    ids: string[];
+    category: string | null;
+    confirmedReconciled?: boolean;
+    undoToken: string;
+  },
+  touched?: Touched,
+) {
   const name = 'native/transactions-categorize';
   const { account_id, ids, category, confirmedReconciled, undoToken } =
     args ?? ({} as typeof args);
@@ -170,12 +176,9 @@ export async function transactionsCategorize(args: {
     }
   }
   // Updating a transfer rewrites its partner row too, so that is touched
-  checkFullSet(
-    name,
-    (await touchedRows(rows, false)).all,
-    max,
-    confirmedReconciled,
-  );
+  const { all } = await touchedRows(rows, false);
+  checkFullSet(name, all, max, confirmedReconciled);
+  touched?.transactions.push(...all.map(r => r.id));
   await batchUpdateTransactions({
     // null clears the category, which the entity type does not name
     updated: rows.map(r => ({ id: r.id, category: category as string })),
@@ -183,12 +186,15 @@ export async function transactionsCategorize(args: {
   return { updated: rows.length };
 }
 
-export async function transactionsDelete(args: {
-  account_id: string;
-  ids: string[];
-  confirmedReconciled?: boolean;
-  undoToken: string;
-}) {
+export async function transactionsDelete(
+  args: {
+    account_id: string;
+    ids: string[];
+    confirmedReconciled?: boolean;
+    undoToken: string;
+  },
+  touched?: Touched,
+) {
   const name = 'native/transactions-delete';
   const { account_id, ids, confirmedReconciled, undoToken } =
     args ?? ({} as typeof args);
@@ -196,6 +202,7 @@ export async function transactionsDelete(args: {
   const { rows, max } = await readRows(name, account_id, ids);
   const { children, partners, all } = await touchedRows(rows, true);
   checkFullSet(name, all, max, confirmedReconciled);
+  touched?.transactions.push(...all.map(r => r.id));
   await batchUpdateTransactions({ deleted: rows.map(r => ({ id: r.id })) });
   // A partner that is a split child is unlinked and kept, not deleted
   return {
@@ -204,7 +211,10 @@ export async function transactionsDelete(args: {
   };
 }
 
-export async function accountReopen(args: { id: string; undoToken: string }) {
+export async function accountReopen(
+  args: { id: string; undoToken: string },
+  touched?: Touched,
+) {
   const name = 'native/account-reopen';
   const { id, undoToken } = args ?? ({} as typeof args);
   checkToken(name, undoToken);
@@ -216,14 +226,18 @@ export async function accountReopen(args: { id: string; undoToken: string }) {
         )
       : null;
   if (!closed) throw new Error(`${name}: no such closed account`);
+  touched?.accounts.push(id);
   await db.update('accounts', { id, closed: 0 });
 }
 
-export async function accountMove(args: {
-  id: string;
-  targetId: string | null;
-  undoToken: string;
-}) {
+export async function accountMove(
+  args: {
+    id: string;
+    targetId: string | null;
+    undoToken: string;
+  },
+  touched?: Touched,
+) {
   const name = 'native/account-move';
   const { id, targetId, undoToken } = args ?? ({} as typeof args);
   checkToken(name, undoToken);
@@ -236,5 +250,46 @@ export async function accountMove(args: {
       );
     }
   }
+  // The move shoves the sort order of every account in the section, closed ones
+  // included, as db.moveAccount does
+  touched?.accounts.push(
+    ...(
+      await db.all<{ id: string }>(
+        'SELECT id FROM accounts WHERE tombstone = 0 AND offbudget = ?',
+        [account.offbudget ? 1 : 0],
+      )
+    ).map(a => a.id),
+  );
   await db.moveAccount(account.id, targetId);
+}
+
+/** The fields a later change would alter, for the rows and accounts a write touched. */
+export async function readTouchedState(touched: Touched) {
+  const transactions = [...new Set(touched.transactions)].sort();
+  const accounts = [...new Set(touched.accounts)].sort();
+  return {
+    transactions: transactions.length
+      ? await db.all(
+          `SELECT id, category, tombstone, reconciled, cleared, notes, amount, description, acct, date, transferred_id FROM transactions
+           WHERE id IN (${marks(transactions)}) ORDER BY id`,
+          transactions,
+        )
+      : [],
+    accounts: accounts.length
+      ? await db.all(
+          `SELECT id, closed, tombstone, sort_order FROM accounts
+           WHERE id IN (${marks(accounts)}) ORDER BY id`,
+          accounts,
+        )
+      : [],
+  };
+}
+
+export type RecordedState = Awaited<ReturnType<typeof readTouchedState>>;
+
+/** True when anything the write touched differs from what it left. */
+export async function changedSince(touched: Touched, state: RecordedState) {
+  return (
+    JSON.stringify(await readTouchedState(touched)) !== JSON.stringify(state)
+  );
 }

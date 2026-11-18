@@ -15,7 +15,11 @@ type ChromeMessage =
 // The screens that have a native version behind a per-screen switch: the
 // Budget tab (sc-3751), Schedules & Paychecks (sc-4341) and the Reconcile
 // flow (sc-4801)
-export type NativeScreenName = 'budget' | 'paychecks' | 'reconcile';
+export type NativeScreenName =
+  | 'budget'
+  | 'accounts'
+  | 'paychecks'
+  | 'reconcile';
 
 type NativeChrome = {
   navigate: (path: string) => void;

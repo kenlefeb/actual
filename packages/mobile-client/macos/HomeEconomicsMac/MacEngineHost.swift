@@ -24,6 +24,8 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
     var onChange: (() -> Void)?
     var onRefusedSignIn: (() -> Void)?
     var onBudgetState: ((BudgetState) -> Void)?
+    // The page that showed a link; replaceable in tests
+    var sourceOrigin: (WKNavigationAction) -> PageOrigin? = MacEngineHost.sourceOrigin
     private lazy var coalescer = ChangeCoalescer { [weak self] in self?.onChange?() }
     private let policy: NavigationPolicy
     private let openInBrowser: (URL) -> Void
@@ -85,7 +87,7 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
 
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction) async -> WKNavigationActionPolicy {
         guard let url = action.request.url else { return .cancel }
-        switch policy.decide(url, isMainFrame: action.targetFrame?.isMainFrame ?? true, userClicked: Self.userClicked(action)) {
+        switch policy.decide(url, isMainFrame: action.targetFrame?.isMainFrame ?? true, userClicked: Self.userClicked(action), fromAppPage: isFromAppPage(action)) {
         case .allow:
             return .allow
         case .openInBrowser:
@@ -111,6 +113,19 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
         action.navigationType == .linkActivated
     }
 
+    // WebKit can hand over no source frame, so read it as optional
+    static func sourceOrigin(_ action: WKNavigationAction) -> PageOrigin? {
+        guard let frame = action.sourceFrame as WKFrameInfo? else { return nil }
+        let origin = frame.securityOrigin
+        return PageOrigin(scheme: origin.protocol, host: origin.host, port: origin.port, isMainFrame: frame.isMainFrame)
+    }
+
+    // The link was on the app's own page, in its main frame
+    private func isFromAppPage(_ action: WKNavigationAction) -> Bool {
+        guard let origin = sourceOrigin(action) else { return false }
+        return Self.acceptsMessage(isMainFrame: origin.isMainFrame, scheme: origin.scheme, host: origin.host, port: origin.port)
+    }
+
     // MARK: WKUIDelegate
 
     // A link that asks for a new window opens in the browser, never in a second web view
@@ -118,7 +133,9 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
         _ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for action: WKNavigationAction,
         windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
-        if let url = action.request.url, url.scheme?.lowercased() == "https", Self.userClicked(action) { openInBrowser(url) }
+        if let url = action.request.url, url.scheme?.lowercased() == "https", Self.userClicked(action), isFromAppPage(action) {
+            openInBrowser(url)
+        }
         return nil
     }
 }

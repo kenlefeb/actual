@@ -114,7 +114,7 @@ public struct AccountRegisterRequest: Encodable, Equatable {
 
     public init(accountId: String, scope: AccountRegisterScope = .all, search: String? = nil, cursor: String? = nil) throws {
         guard !accountId.isEmpty else { throw NativeBridgeError.invalidWrite("account_id") }
-        guard (search?.count ?? 0) <= Self.maxSearch else { throw NativeBridgeError.invalidWrite("search") }
+        guard (search?.utf16.count ?? 0) <= Self.maxSearch else { throw NativeBridgeError.invalidWrite("search") }
         (self.accountId, self.scope, self.search, self.cursor) = (accountId, scope, search, cursor)
     }
 

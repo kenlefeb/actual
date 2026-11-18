@@ -22,6 +22,15 @@ public enum NativeScreenSwitch {
         defaults.bool(forKey: paychecksKey)
     }
 
+    // sc-4931 (native-accounts-screen D4): the Accounts screen. It reads OFF while unset: the
+    // default flips to on in story 3611's PR, which ships the screens. Until then a person can
+    // turn it on in Settings; with it off the Accounts tab is the web screens as today.
+    public static let accountsKey = "NativeScreen.accounts"
+
+    public static func isAccountsNative(defaults: UserDefaults = .standard) -> Bool {
+        defaults.bool(forKey: accountsKey)
+    }
+
     // sc-4801: the Reconcile flow ships on, so unset reads as on (Ken,
     // 2026-11-15); Settings stores false to turn it off
     public static let reconcileKey = "NativeScreen.reconcile"
@@ -42,6 +51,7 @@ public enum NativeScreensScript {
         let screens = NativeTab.allCases.filter(NativeScreenSwitch.nativeTabs.contains).map {
             "\"\($0.rawValue)\": \(NativeScreenSwitch.screen(for: $0, defaults: defaults) == .native)"
         } + [
+            "\"accounts\": \(NativeScreenSwitch.isAccountsNative(defaults: defaults))",
             "\"paychecks\": \(NativeScreenSwitch.isPaychecksNative(defaults: defaults))",
             "\"reconcile\": \(NativeScreenSwitch.isReconcileNative(defaults: defaults))",
         ]

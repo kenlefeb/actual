@@ -21,6 +21,7 @@
 		FB3584000000000000000104 /* BudgetMonth.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000004 /* BudgetMonth.swift */; };
 		FB3584000000000000000105 /* NativeBridgeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000005 /* NativeBridgeClient.swift */; };
 		FB3584000000000000000106 /* ChangeCoalescer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000006 /* ChangeCoalescer.swift */; };
+		FB4942000000000000000101 /* BudgetState.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB4942000000000000000001 /* BudgetState.swift */; };
 		FB3584000000000000000110 /* NativeBridgeBenchmarkTrigger.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000010 /* NativeBridgeBenchmarkTrigger.swift */; };
 		FB3584000000000000000111 /* NativeBridgeBenchmark.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000011 /* NativeBridgeBenchmark.swift */; };
 		FB3514000000000000000101 /* NativeChromePlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3514000000000000000001 /* NativeChromePlugin.swift */; };
@@ -33,6 +34,7 @@
 		FB3751000000000000000104 /* NativeBudgetViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3751000000000000000004 /* NativeBudgetViewController.swift */; };
 		FB434100000000000000101 /* SchedulesPaychecks.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB434100000000000000001 /* SchedulesPaychecks.swift */; };
 		FB430900000000000000101 /* PaycheckSummaryRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB430900000000000000001 /* PaycheckSummaryRow.swift */; };
+		FB493100000000000000101 /* Accounts.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB493100000000000000001 /* Accounts.swift */; };
 		FB480100000000000000101 /* Reconcile.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB480100000000000000001 /* Reconcile.swift */; };
 		FB482500000000000000102 /* NativeReconcileLockViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB482500000000000000002 /* NativeReconcileLockViews.swift */; };
 		FB482500000000000000101 /* ReconcileLock.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB482500000000000000001 /* ReconcileLock.swift */; };
@@ -66,6 +68,7 @@
 		FB3584000000000000000004 /* BudgetMonth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetMonth.swift; sourceTree = "<group>"; };
 		FB3584000000000000000005 /* NativeBridgeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBridgeClient.swift; sourceTree = "<group>"; };
 		FB3584000000000000000006 /* ChangeCoalescer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeCoalescer.swift; sourceTree = "<group>"; };
+		FB4942000000000000000001 /* BudgetState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetState.swift; sourceTree = "<group>"; };
 		FB3584000000000000000010 /* NativeBridgeBenchmarkTrigger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBridgeBenchmarkTrigger.swift; sourceTree = "<group>"; };
 		FB3584000000000000000011 /* NativeBridgeBenchmark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBridgeBenchmark.swift; sourceTree = "<group>"; };
 		FB3514000000000000000001 /* NativeChromePlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeChromePlugin.swift; sourceTree = "<group>"; };
@@ -78,6 +81,7 @@
 		FB3751000000000000000004 /* NativeBudgetViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBudgetViewController.swift; sourceTree = "<group>"; };
 		FB434100000000000000001 /* SchedulesPaychecks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchedulesPaychecks.swift; sourceTree = "<group>"; };
 		FB430900000000000000001 /* PaycheckSummaryRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaycheckSummaryRow.swift; sourceTree = "<group>"; };
+		FB493100000000000000001 /* Accounts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Accounts.swift; sourceTree = "<group>"; };
 		FB480100000000000000001 /* Reconcile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Reconcile.swift; sourceTree = "<group>"; };
 		FB482500000000000000002 /* NativeReconcileLockViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeReconcileLockViews.swift; sourceTree = "<group>"; };
 		FB482500000000000000001 /* ReconcileLock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReconcileLock.swift; sourceTree = "<group>"; };
@@ -174,6 +178,7 @@
 				FB3584000000000000000004 /* BudgetMonth.swift */,
 				FB3584000000000000000005 /* NativeBridgeClient.swift */,
 				FB3584000000000000000006 /* ChangeCoalescer.swift */,
+				FB4942000000000000000001 /* BudgetState.swift */,
 				FB3584000000000000000011 /* NativeBridgeBenchmark.swift */,
 				FB3514000000000000000003 /* NativeTabRouter.swift */,
 				FB3697000000000000000001 /* PageOriginGuard.swift */,
@@ -185,6 +190,7 @@
 				FB434300000000000000002 /* PaycheckEditorViewModel.swift */,
 				FB434100000000000000001 /* SchedulesPaychecks.swift */,
 				FB430900000000000000001 /* PaycheckSummaryRow.swift */,
+				FB493100000000000000001 /* Accounts.swift */,
 				FB480100000000000000001 /* Reconcile.swift */,
 				FB482500000000000000001 /* ReconcileLock.swift */,
 				FB480100000000000000002 /* ReconcileViewModels.swift */,
@@ -316,6 +322,7 @@
 				FB3584000000000000000104 /* BudgetMonth.swift in Sources */,
 				FB3584000000000000000105 /* NativeBridgeClient.swift in Sources */,
 				FB3584000000000000000106 /* ChangeCoalescer.swift in Sources */,
+				FB4942000000000000000101 /* BudgetState.swift in Sources */,
 				5C3E1A022EBC000100A1B2C3 /* SceneDelegate.swift in Sources */,
 				FB3514000000000000000101 /* NativeChromePlugin.swift in Sources */,
 				FB3514000000000000000102 /* NativeTabBarController.swift in Sources */,
@@ -332,6 +339,7 @@
 				FB434300000000000000102 /* PaycheckEditorViewModel.swift in Sources */,
 				FB434300000000000000103 /* NativePaycheckEditorView.swift in Sources */,
 				FB430900000000000000101 /* PaycheckSummaryRow.swift in Sources */,
+				FB493100000000000000101 /* Accounts.swift in Sources */,
 				FB480100000000000000101 /* Reconcile.swift in Sources */,
 				FB482500000000000000102 /* NativeReconcileLockViews.swift in Sources */,
 				FB482500000000000000101 /* ReconcileLock.swift in Sources */,

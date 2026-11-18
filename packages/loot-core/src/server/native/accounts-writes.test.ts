@@ -375,6 +375,54 @@ describe('native/account-move', () => {
   });
 });
 
+// Design D3a: native/undo refuses, changing nothing, when a row or account the
+// write touched differs from the state the write left (a sync edit since).
+describe('native/undo after an accounts write', () => {
+  it('refuses when a touched row was edited since, and changes nothing', async () => {
+    await categorize({ ids: ['t1', 't2'] });
+    await db.updateTransaction({ id: 't2', category: 'dining' });
+    await expect(undo()).rejects.toThrow(/changed since/);
+    expect((await row('t1'))?.category).toBe('groceries');
+    expect((await row('t2'))?.category).toBe('dining');
+  });
+
+  it('undoes when only an untouched row changed', async () => {
+    await categorize({ ids: ['t1'] });
+    await db.updateTransaction({ id: 't2', category: 'groceries' });
+    await undo();
+    expect((await row('t1'))?.category).toBeNull();
+    expect((await row('t2'))?.category).toBe('groceries');
+  });
+
+  it('refuses a delete undo when the row, a child or the partner changed since', async () => {
+    await addTxn('p', { is_parent: 1 });
+    await addTxn('c', { is_child: 1, parent_id: 'p' });
+    await remove({ ids: ['t1', 'p'] });
+    await db.updateTransaction({ id: 'c', category: 'dining' });
+    await expect(undo()).rejects.toThrow(/changed since/);
+    expect((await row('t1'))?.tombstone).toBe(1);
+    expect((await row('p'))?.tombstone).toBe(1);
+  });
+
+  it('refuses a reopen undo when the account changed since', async () => {
+    await h['native/account-reopen']({ id: 'old', undoToken: 'T' } as never);
+    await db.update('accounts', { id: 'old', sort_order: 77 });
+    await expect(undo()).rejects.toThrow(/changed since/);
+    expect((await account('old'))?.closed).toBe(0);
+  });
+
+  it('refuses a move undo when an account of the section moved since', async () => {
+    await h['native/account-move']({
+      id: 'savings',
+      targetId: 'checking',
+      undoToken: 'T',
+    } as never);
+    await db.update('accounts', { id: 'card', sort_order: 12345 });
+    await expect(undo()).rejects.toThrow(/changed since/);
+    expect((await account('card'))?.sort_order).toBe(12345);
+  });
+});
+
 // The full set a write touches: split children and every transfer partner,
 // including the partners of a split's children. The reconciled check and the
 // cap apply to all of it, and the count reported is the true one.
@@ -524,5 +572,139 @@ describe('the full set of rows a write touches', () => {
       updated: 1,
     });
     expect(await remove({ ids: ['t2', 't2'] })).toEqual({ deleted: 1 });
+  });
+});
+// Review of the undo check: the whole set a write touched, and every column a
+// later change could alter
+describe('native/undo refuses after a later change to anything the write touched', () => {
+  async function transferRow() {
+    await batchUpdateTransactions({
+      added: [
+        {
+          id: 'x2',
+          account: 'checking',
+          payee: 'to-house',
+          amount: -700,
+          date: '2016-12-20',
+          notes: 'orig',
+        },
+      ] as never,
+    });
+    return (
+      await db.first<{ transferred_id: string }>(
+        'SELECT transferred_id FROM transactions WHERE id = ?',
+        ['x2'],
+      )
+    )?.transferred_id as string;
+  }
+  const partnerState = (id: string) =>
+    db.first<{ notes: string; amount: number }>(
+      'SELECT notes, amount FROM transactions WHERE id = ?',
+      [id],
+    );
+
+  it('refuses a categorize undo after the transfer partner`s notes and amount were edited', async () => {
+    const partner = await transferRow();
+    await categorize({ ids: ['x2'] });
+    await db.updateTransaction({
+      id: partner,
+      notes: 'edited elsewhere',
+      amount: 999,
+    });
+    await expect(undo()).rejects.toThrow(/changed since/);
+    expect(await partnerState(partner)).toEqual({
+      notes: 'edited elsewhere',
+      amount: 999,
+    });
+  });
+
+  it('refuses a delete undo after the transfer partner was edited', async () => {
+    const partner = await transferRow();
+    await remove({ ids: ['x2'] });
+    await db.updateTransaction({ id: partner, notes: 'edited elsewhere' });
+    await expect(undo()).rejects.toThrow(/changed since/);
+    expect((await row(partner))?.tombstone).toBe(1);
+  });
+
+  it('refuses a delete undo after a split child`s transfer partner was edited', async () => {
+    await batchUpdateTransactions({
+      added: [
+        {
+          id: 'p',
+          account: 'checking',
+          date: '2016-12-20',
+          amount: -400,
+          is_parent: true,
+        },
+        {
+          id: 'c1',
+          account: 'checking',
+          date: '2016-12-20',
+          amount: -400,
+          is_child: true,
+          parent_id: 'p',
+          payee: 'to-savings',
+        },
+      ] as never,
+    });
+    const partner = (
+      await db.first<{ transferred_id: string }>(
+        'SELECT transferred_id FROM transactions WHERE id = ?',
+        ['c1'],
+      )
+    )?.transferred_id as string;
+    await remove({ ids: ['p'] });
+    await db.updateTransaction({ id: partner, notes: 'edited elsewhere' });
+    await expect(undo()).rejects.toThrow(/changed since/);
+    expect((await row(partner))?.tombstone).toBe(1);
+  });
+
+  it('refuses when a touched row was reconciled since', async () => {
+    await categorize({ ids: ['t1'] });
+    await db.updateTransaction({ id: 't1', cleared: true, reconciled: 1 });
+    await expect(undo()).rejects.toThrow(/changed since/);
+    expect((await row('t1'))?.category).toBe('groceries');
+  });
+
+  it('refuses a reopen undo after the account was closed again or deleted', async () => {
+    await h['native/account-reopen']({ id: 'old', undoToken: 'T' } as never);
+    await db.update('accounts', { id: 'old', closed: 1 });
+    await expect(undo()).rejects.toThrow(/changed since/);
+  });
+
+  it('refuses a reopen undo after the account was deleted', async () => {
+    await h['native/account-reopen']({ id: 'old', undoToken: 'T' } as never);
+    await db.update('accounts', { id: 'old', tombstone: 1 });
+    await expect(undo()).rejects.toThrow(/changed since/);
+  });
+
+  it('refuses a move undo after a closed account of the section changed', async () => {
+    await h['native/account-move']({
+      id: 'savings',
+      targetId: 'checking',
+      undoToken: 'T',
+    } as never);
+    // `old` is closed and on budget: the move reorders it with the section
+    await db.update('accounts', { id: 'old', sort_order: 4242 });
+    await expect(undo()).rejects.toThrow(/changed since/);
+    expect((await account('old'))?.sort_order).toBe(4242);
+  });
+
+  it('undoes a categorize, delete, reopen and move when nothing changed since', async () => {
+    await categorize({ ids: ['t1'] });
+    await undo();
+    expect((await row('t1'))?.category).toBeNull();
+    await remove({ ids: ['t1'] });
+    await undo();
+    expect((await row('t1'))?.tombstone).toBe(0);
+    await h['native/account-reopen']({ id: 'old', undoToken: 'T' } as never);
+    await undo();
+    expect((await account('old'))?.closed).toBe(1);
+    await h['native/account-move']({
+      id: 'savings',
+      targetId: 'checking',
+      undoToken: 'T',
+    } as never);
+    await undo();
   });
 });

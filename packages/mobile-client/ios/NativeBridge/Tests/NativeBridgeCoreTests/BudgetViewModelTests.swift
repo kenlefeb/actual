@@ -636,6 +636,18 @@ final class NativeScreenSwitchTests: XCTestCase {
         XCTAssertEqual(NativeScreenSwitch.screen(for: .budget, defaults: defaults), .web)
     }
 
+    // sc-4931 (design D4): the Accounts switch reads off while unset until story 3611 ships the
+    // screens and turns it on by default; a person can turn it on in Settings meanwhile
+    func testTheAccountsSwitchIsOffUnsetAndOnWhenTurnedOn() {
+        let defaults = defaults()
+        XCTAssertEqual(NativeScreenSwitch.accountsKey, "NativeScreen.accounts")
+        XCTAssertFalse(NativeScreenSwitch.isAccountsNative(defaults: defaults))
+        defaults.set(true, forKey: NativeScreenSwitch.accountsKey)
+        XCTAssertTrue(NativeScreenSwitch.isAccountsNative(defaults: defaults))
+        defaults.set(false, forKey: NativeScreenSwitch.accountsKey)
+        XCTAssertFalse(NativeScreenSwitch.isAccountsNative(defaults: defaults))
+    }
+
     func testOtherTabsStayWebWhileOnlyBudgetIsSwitchedOn() {
         let defaults = defaults()
         defaults.set(true, forKey: "NativeScreen.budget")
@@ -712,8 +724,10 @@ final class NativeScreensScriptTests: XCTestCase {
         let suite = "NativeScreensScriptTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         addTeardownBlock { defaults.removePersistentDomain(forName: suite) }
-        XCTAssertTrue(NativeScreensScript.source(defaults: defaults, expectedOrigin: "capacitor://localhost").contains(#"window.__actualNativeScreens = {"budget": false, "paychecks": false, "reconcile": true};"#))
+        XCTAssertTrue(NativeScreensScript.source(defaults: defaults, expectedOrigin: "capacitor://localhost").contains(#"window.__actualNativeScreens = {"budget": false, "accounts": false, "paychecks": false, "reconcile": true};"#))
         defaults.set(true, forKey: "NativeScreen.budget")
-        XCTAssertTrue(NativeScreensScript.source(defaults: defaults, expectedOrigin: "capacitor://localhost").contains(#"window.__actualNativeScreens = {"budget": true, "paychecks": false, "reconcile": true};"#))
+        XCTAssertTrue(NativeScreensScript.source(defaults: defaults, expectedOrigin: "capacitor://localhost").contains(#"window.__actualNativeScreens = {"budget": true, "accounts": false, "paychecks": false, "reconcile": true};"#))
+        defaults.set(true, forKey: "NativeScreen.accounts")
+        XCTAssertTrue(NativeScreensScript.source(defaults: defaults, expectedOrigin: "capacitor://localhost").contains(#""accounts": true"#))
     }
 }

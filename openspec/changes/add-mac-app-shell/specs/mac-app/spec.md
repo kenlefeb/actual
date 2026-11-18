@@ -72,7 +72,7 @@ The Mac app SHALL NOT use a private WebKit API, or enable file-URL access or uni
 - **THEN** the app refuses the in-frame navigation
 
 #### Scenario: Another host
-- **GIVEN** an `https` link to a host that is neither the sync server nor the provider
+- **GIVEN** an `https` link on the app's own page to a host that is neither the sync server nor the provider
 - **WHEN** the user clicks it
 - **THEN** it opens in the default browser, not in the app's web view
 
@@ -80,6 +80,19 @@ The Mac app SHALL NOT use a private WebKit API, or enable file-URL access or uni
 - **GIVEN** an `http` link to any host
 - **WHEN** the user clicks it
 - **THEN** the app refuses it, and nothing opens
+
+### Requirement: Only links on the app's own page open in the browser
+A link the user clicks SHALL open in the default browser only when the page showing it is the app's own page, at `homeeconomics://localhost`. A click on any other page, such as the sync server's or the sign-in provider's, to a host outside the app's list SHALL be cancelled: nothing opens, and no part of the address is logged.
+
+#### Scenario: A link on the provider's page
+- **GIVEN** the sign-in provider's page is showing in the app and offers a link to another sign-in service
+- **WHEN** the user clicks it
+- **THEN** the app cancels it, nothing opens in the browser, and no part of the address is logged
+
+#### Scenario: A link on the app's own page
+- **GIVEN** the app's own page shows an `https` link to a host outside the list
+- **WHEN** the user clicks it
+- **THEN** it opens in the default browser
 
 ### Requirement: In-frame sign-in hosts are a fixed list in this milestone
 Until story 4984, the hosts allowed in-frame over `https` SHALL be a list fixed in the app's build: the fork's sync servers and their OpenID provider. A user whose server or sign-in provider is not listed, or whose provider sends them to another host, SHALL sign in only with a password. Choosing OpenID SHALL keep the app on its sign-in screen with a message that this sign-in isn't supported yet and to use a password, and hand nothing to the browser.

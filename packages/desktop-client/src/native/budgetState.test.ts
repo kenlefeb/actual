@@ -73,7 +73,10 @@ describe('budget-state (sc-4942)', () => {
   // PR 421 review: a last budget that fails to open is still on this Mac
   it('sends no none when the last budget fails to open but budgets are stored', () => {
     const page = start();
-    page.set({ loadingText: 'Opening last budget...', managerHasInitialized: true });
+    page.set({
+      loadingText: 'Opening last budget...',
+      managerHasInitialized: true,
+    });
     page.set({ loadingText: null, localBudgetCount: 2 });
     expect(page.sent()).toEqual([]);
   });
@@ -90,7 +93,10 @@ describe('budget-state (sc-4942)', () => {
     });
     expect(page.sent()).toEqual([
       { event: 'budget-state', payload: { state: 'open', cloudFileId: CLOUD } },
-      { event: 'budget-state', payload: { state: 'closed', cloudFileId: CLOUD } },
+      {
+        event: 'budget-state',
+        payload: { state: 'closed', cloudFileId: CLOUD },
+      },
     ]);
   });
 

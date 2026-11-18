@@ -12,6 +12,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
         let window = UIWindow(windowScene: windowScene)
+        #if DEBUG
         // Test-only (sc-5177): the UI tests launch the Accounts screen on fixtures
         if UITestAccounts.isOn {
             window.rootViewController = UITestAccounts.makeRoot()
@@ -19,6 +20,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             window.makeKeyAndVisible()
             return
         }
+        #endif
         window.rootViewController = NativeTabBarController()
         self.window = window
         window.makeKeyAndVisible()

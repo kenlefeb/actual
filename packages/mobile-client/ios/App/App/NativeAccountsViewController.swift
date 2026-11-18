@@ -209,8 +209,9 @@ struct AccountsScreen: View {
             if let error { AccessibilityAnnouncer.post(error.message) }
         }
         // The register announces its own reads while it is pushed over the list
-        .onChange(of: model.state.error) { error in
-            if let error, nav.register == nil { AccessibilityAnnouncer.post(error.message) }
+        // Once per failed read, including a retry that fails the same way
+        .onChange(of: model.failureCount) { _ in
+            if let error = model.state.error, nav.register == nil { AccessibilityAnnouncer.post(error.message) }
         }
     }
 

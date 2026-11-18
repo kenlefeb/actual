@@ -18,7 +18,9 @@ enum UITestAccounts {
     static var isOn: Bool { UserDefaults.standard.bool(forKey: "UITestAccounts") }
 
     @MainActor static func makeRoot() -> UIViewController {
-        let client = NativeBridgeClient { name, args in
+        // A held read must stay held: the default 5 s deadline would turn it into the error screen
+        let holding = ["UITestSlowList", "UITestSlowRegister"].contains { UserDefaults.standard.bool(forKey: $0) }
+        let client = NativeBridgeClient(timeout: holding ? 300 : NativeBridgeClient.defaultTimeout) { name, args in
             // Launch arguments that hold a read in flight or make it fail, to see the loading and failed states
             let defaults = UserDefaults.standard
             if name == "native/accounts-list" || name == "native/account-register" {
@@ -92,7 +94,8 @@ final class HandOffLabel: ObservableObject {
 @MainActor
 enum UITestActionsProbe {
     // The accessibility elements VoiceOver can land on, as "label|value" in tree order: a view or
-    // element hidden from accessibility, and everything under it, is skipped
+    // element hidden from accessibility, and everything under it, is skipped. XCUITest cannot be
+    // used for this: it lists accessibility-hidden elements too (checked with a hidden probe).
     static func elements() -> String {
         guard let window = UIApplication.shared.connectedScenes.compactMap({ ($0 as? UIWindowScene)?.windows.first(where: \.isKeyWindow) }).first else { return "no window" }
         var found: [String] = []

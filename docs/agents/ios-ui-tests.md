@@ -65,8 +65,9 @@ Run one build at a time on the shared Mac, and check `uptime` first.
 - What XCUITest cannot see, the Debug UI-test host reads from the live
   accessibility tree (`UITestActionsProbe` in `UITestAccounts.swift`): the custom
   actions (the actions rotor) of each row, and the elements VoiceOver can land on
-  (XCUITest also lists the parts inside a combined element, which VoiceOver does
-  not stop on). Tap `uitest.dumpActions` or `uitest.dumpElements` and read
+  (XCUITest's own tree also lists accessibility-hidden elements and the parts
+  inside a combined element, which VoiceOver does not stop on, so it cannot show
+  what is hidden). Tap `uitest.dumpActions` or `uitest.dumpElements` and read
   `uitest.actions` or `uitest.elements`.
 - Announcements: screens speak through `AccessibilityAnnouncer`; the host
   records what it was asked to say in `uitest.announcements` ("<how many>|<the

@@ -39,13 +39,14 @@ struct AccountRegisterView: View {
             }
             .alert(model.actionError?.message ?? "", isPresented: isErrorShown) { Button(AccountsWords.ok, role: .cancel) {} }
             .onChange(of: model.actionError) { error in
-                if let error { UIAccessibility.post(notification: .announcement, argument: error.message) }
+                if let error { AccessibilityAnnouncer.post(error.message) }
             }
-            .onChange(of: model.state.error) { error in
-                if let error { AccessibilityAnnouncer.post(error.registerMessage) }
+            // Once per failed read, including a retry that fails the same way
+            .onChange(of: model.failureCount) { _ in
+                if let error = model.state.error { AccessibilityAnnouncer.post(error.registerMessage) }
             }
             .onChange(of: model.undoOffer) { offer in
-                if let offer { UIAccessibility.post(notification: .announcement, argument: AccountsWords.undoText(offer)) }
+                if let offer { AccessibilityAnnouncer.post(AccountsWords.undoText(offer)) }
             }
             .confirmationDialog(confirming?.title ?? "", isPresented: isConfirming, titleVisibility: .visible, presenting: confirming) { ask in
                 Button(ask.action, role: ask.isDelete ? .destructive : nil) { confirmed(ask) }
@@ -406,7 +407,7 @@ private struct UpcomingSectionView: View {
             .accessibilityValue(updating ? Text(UpcomingWords.updating) : Text(""))
         }
         .onChange(of: updating) { isUpdating in
-            if isUpdating { UIAccessibility.post(notification: .announcement, argument: UpcomingWords.updating) }
+            if isUpdating { AccessibilityAnnouncer.post(UpcomingWords.updating) }
         }
     }
 

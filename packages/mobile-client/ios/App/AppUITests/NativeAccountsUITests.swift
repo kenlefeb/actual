@@ -247,9 +247,9 @@ final class NativeAccountsAccessibilityUITests: XCTestCase {
         XCTAssertEqual(offered("No payee, Split (2), -30.00, Pending"), ["Clear", "Delete"], "the screen has \(dump)")
     }
 
-    // The accessibility elements VoiceOver can land on, read from the live accessibility
-    // tree by the UI-test host (XCUITest also lists the parts inside a combined element,
-    // which VoiceOver does not stop on)
+    // The accessibility elements VoiceOver can land on, read from the live accessibility tree by
+    // the UI-test host. XCUITest's own tree cannot be used: it lists accessibility-hidden elements
+    // too, and the parts inside a combined element, which VoiceOver does not stop on.
     private func voiceOverStops() -> [String] {
         let dump = app.buttons["uitest.dumpElements"]
         XCTAssertTrue(dump.waitForExistence(timeout: 10))
@@ -257,26 +257,39 @@ final class NativeAccountsAccessibilityUITests: XCTestCase {
         return app.staticTexts["uitest.elements"].label.components(separatedBy: "; ")
     }
 
-    // Redacted placeholders show made-up names and numbers; VoiceOver must not stop on them
-    // while the first read runs, and gets one "Loading" element instead
-    private func assertOnlyLoading(_ loading: String, file: StaticString = #filePath, line: UInt = #line) {
-        let stops = voiceOverStops()
-        let made = stops.filter { $0.contains("Placeholder") || $0.contains("1,234.56") || $0.contains("12,345.67") }
-        XCTAssertEqual(made, [], "VoiceOver would read made-up rows while loading: \(stops)", file: file, line: line)
-        XCTAssertTrue(stops.contains { $0.hasPrefix("\(loading)|") }, "no \"\(loading)\" stop while loading: \(stops)", file: file, line: line)
+    // The read is held for two minutes by the host. The client's own deadline is 5 s, so the
+    // screen must still be loading after that: a flaky error screen here would pass for loading
+    private func assertStillLoadingPastTheClientDeadline() {
+        let retry = app.buttons["Retry"]
+        let appears = expectation(for: NSPredicate(format: "exists == true"), evaluatedWith: retry)
+        appears.isInverted = true
+        wait(for: [appears], timeout: 7)
     }
 
-    func testNoPlaceholderIsExposedWhileTheListLoads() {
+    // Redacted placeholders show made-up names and numbers, a "Syncing…" and "All accounts"; while the
+    // first read runs VoiceOver may stop only on the screen's own chrome and one "Loading" element.
+    // The expectation is the whole list, so any other stop fails it.
+    private func assertStops(_ expected: [String], file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertEqual(voiceOverStops(), expected, file: file, line: line)
+    }
+
+    func testOnlyLoadingIsExposedWhileTheListLoads() {
         launch(["-UITestSlowList", "YES"])
-        assertOnlyLoading("Loading accounts")
+        assertStillLoadingPastTheClientDeadline()
+        // The host's own labels, the "Loading accounts" element, and the bar's Add button and title
+        assertStops(["0||", "dump|", "elements|", "Loading accounts|", "Add|", "Accounts|"])
     }
 
-    func testNoPlaceholderIsExposedWhileTheRegisterLoads() {
+    func testOnlyLoadingIsExposedWhileTheRegisterLoads() {
         launch(["-UITestSlowRegister", "YES"])
         let row = app.buttons.containing(.staticText, identifier: "Checking").firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 20))
         row.tap()
-        assertOnlyLoading("Loading")
+        assertStillLoadingPastTheClientDeadline()
+        assertStops([
+            "0||", "dump|", "elements|", "Loading|", "Accounts|", "Checking|", "More|",
+            "Search payee, category, notes|Search payee, category, notes",
+        ])
     }
 
     // The scope chips say which one is chosen, to VoiceOver as a selected trait
@@ -311,20 +324,16 @@ final class NativeAccountsAccessibilityUITests: XCTestCase {
         XCTAssertEqual(announcements, first)
     }
 
-    // FINDING (sc-3611 task 3.6): Retry that fails the same way again changes no state, so
-    // nothing is announced and a VoiceOver user hears no result of their tap. When the
-    // screen announces every failed attempt this test passes and XCTExpectFailure fails
-    // it: delete the wrapper then.
+    // A Retry that fails the same way again changes no state, but it is a new failed attempt:
+    // a VoiceOver user must hear the result of their tap
     func testAFailedRetryIsAnnouncedAgain() {
         launch(["-UITestFailList", "YES"])
         let retry = app.buttons[RETRY]
         XCTAssertTrue(retry.waitForExistence(timeout: 20))
-        XCTAssertTrue(announcements.hasPrefix("1|"))
+        XCTAssertTrue(announcements.hasPrefix("1|"), "expected one announcement, the host has \(announcements)")
         retry.tap()
-        XCTExpectFailure("a retry that fails the same way is not announced again") {
-            expectation(for: NSPredicate(format: "label BEGINSWITH '2|'"), evaluatedWith: app.staticTexts["uitest.announcements"])
-            waitForExpectations(timeout: 5)
-        }
+        expectation(for: NSPredicate(format: "label BEGINSWITH '2|'"), evaluatedWith: app.staticTexts["uitest.announcements"])
+        waitForExpectations(timeout: 10)
     }
 
     func testAFailedRegisterReadIsAnnouncedOnce() {
@@ -337,6 +346,19 @@ final class NativeAccountsAccessibilityUITests: XCTestCase {
         XCTAssertTrue(said.hasPrefix("1|") && said.count > 2, "expected one announcement, the host has \(said)")
         app.swipeUp()
         XCTAssertEqual(announcements, said)
+    }
+
+    func testAFailedRegisterRetryIsAnnouncedAgain() {
+        launch(["-UITestFailRegister", "YES"])
+        let row = app.buttons.containing(.staticText, identifier: "Checking").firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 20))
+        row.tap()
+        let retry = app.buttons[RETRY]
+        XCTAssertTrue(retry.waitForExistence(timeout: 10))
+        XCTAssertTrue(announcements.hasPrefix("1|"), "expected one announcement, the host has \(announcements)")
+        retry.tap()
+        expectation(for: NSPredicate(format: "label BEGINSWITH '2|'"), evaluatedWith: app.staticTexts["uitest.announcements"])
+        waitForExpectations(timeout: 10)
     }
 
     private let RETRY = "Retry"

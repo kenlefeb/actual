@@ -9,6 +9,7 @@ import * as prefs from '#server/prefs';
 import { app as rulesApp } from '#server/rules/app';
 import { app as schedulesApp } from '#server/schedules/app';
 import { loadRules, updateRule } from '#server/transactions/transaction-rules';
+import { parseDateCondition } from '#shared/date-condition';
 import { q } from '#shared/query';
 import {
   comparePreviewTransactions,
@@ -26,6 +27,14 @@ import type { AccountEntity, ScheduleEntity } from '#types/models';
 
 import { schedulesWithTransactions } from './accounts';
 import { app } from './app';
+
+// Counts date condition parses: one per `getNextDate` (D12)
+vi.mock('#shared/date-condition', async importOriginal => {
+  const actual = await importOriginal<{
+    parseDateCondition: typeof parseDateCondition;
+  }>();
+  return { ...actual, parseDateCondition: vi.fn(actual.parseDateCondition) };
+});
 
 const h = app.handlers;
 type Args = Parameters<(typeof h)['native/account-upcoming']>[0];
@@ -523,40 +532,92 @@ describe('native/account-upcoming', () => {
   }, 300_000);
 
   describe('row cap', () => {
-    it('keeps every schedule before any later occurrence, and says how many it dropped', async () => {
-      await setPref('accounts-upcoming-max-rows', '10');
-      const weekly = (start: string) => ({
-        ...daily(start),
-        frequency: 'weekly',
-      });
-      for (let i = 0; i < 12; i++) {
+    const weekly = (start: string) => ({
+      ...daily(start),
+      frequency: 'weekly',
+    });
+    const month = { custom_upcoming_length: '1-month' };
+
+    it('keeps a monthly bill among weekly schedules: a round before any later one', async () => {
+      await setPref('accounts-upcoming-max-rows', '6');
+      for (let i = 0; i < 4; i++) {
         await addSchedule(`Weekly ${i}`, {
-          date: weekly('2017-01-02'),
+          date: weekly(`2017-01-0${i + 2}`),
           amount: -(i + 1),
-          schedule: { custom_upcoming_length: '1-month' },
+          schedule: month,
         });
       }
       await addSchedule('Bill', {
         date: '2017-01-21',
         amount: -99999,
-        schedule: { custom_upcoming_length: '1-month' },
+        schedule: month,
       });
       const read = await upcoming();
-      expect(read.upcoming).toHaveLength(10);
-      expect(read.upcoming.map(r => r.amount)).toContain(-99999);
-      // Only next occurrences: every kept weekly row is on its first date
-      expect(
-        read.upcoming.filter(r => r.amount !== -99999).map(r => r.date),
-      ).toEqual(Array(9).fill('2017-01-02'));
-      // 12 weekly schedules, 5 dates each in a month, and the bill
-      expect(read).toMatchObject({
-        upcomingAll: 61,
-        upcomingKept: 10,
-        upcomingMore: 51,
-      });
+      // All 5 next occurrences, the bill's included, and the nearest second
+      expect(read.upcoming.map(r => r.date)).toEqual([
+        '2017-01-21',
+        '2017-01-09',
+        '2017-01-05',
+        '2017-01-04',
+        '2017-01-03',
+        '2017-01-02',
+      ]);
+      expect(read).toMatchObject({ upcomingKept: 6, upcomingMore: true });
+      expect(read).not.toHaveProperty('upcomingAll');
     });
 
-    it('runs rules only for the kept previews: 50 daily schedules over 92 days', async () => {
+    it('keeps the nearest next occurrences when there are more schedules than the cap', async () => {
+      await setPref('accounts-upcoming-max-rows', '10');
+      for (let i = 0; i < 30; i++) {
+        const day = `2017-01-${String(i + 2).padStart(2, '0')}`;
+        await addSchedule(`S${i}`, {
+          date: day,
+          amount: -(i + 1),
+          schedule: month,
+        });
+      }
+      const read = await upcoming();
+      // Newest first, the 10 nearest of 30
+      expect(read.upcoming.map(r => r.amount)).toEqual(
+        [10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map(n => -n),
+      );
+      expect(read).toMatchObject({ upcomingKept: 10, upcomingMore: true });
+    });
+
+    it('keeps the nearest of a partial final round, newest first', async () => {
+      await setPref('accounts-upcoming-max-rows', '7');
+      for (let i = 0; i < 5; i++) {
+        await addSchedule(`Weekly ${i}`, {
+          date: weekly(`2017-01-0${i + 2}`),
+          amount: -(i + 1),
+          schedule: month,
+        });
+      }
+      const read = await upcoming();
+      expect(read.upcoming.map(r => r.date)).toEqual([
+        '2017-01-10',
+        '2017-01-09',
+        '2017-01-06',
+        '2017-01-05',
+        '2017-01-04',
+        '2017-01-03',
+        '2017-01-02',
+      ]);
+      expect(read).toMatchObject({ upcomingKept: 7, upcomingMore: true });
+    });
+
+    it('says nothing more exactly at the cap', async () => {
+      await setPref('accounts-upcoming-max-rows', '10');
+      for (let i = 0; i < 10; i++) {
+        await addSchedule(`S${i}`, { date: '2017-01-03', amount: -(i + 1) });
+      }
+      const read = await upcoming();
+      expect(read.upcoming).toHaveLength(10);
+      expect(read).not.toHaveProperty('upcomingMore');
+      expect(read).not.toHaveProperty('upcomingKept');
+    });
+
+    it('makes only the kept dates and one look-ahead each: 50 daily schedules over 92 days', async () => {
       for (let i = 0; i < 50; i++) {
         await addSchedule(`Daily ${i}`, {
           date: daily('2017-01-01'),
@@ -564,13 +625,13 @@ describe('native/account-upcoming', () => {
           schedule: { custom_upcoming_length: '92-day' },
         });
       }
+      await upcoming();
+      vi.mocked(parseDateCondition).mockClear();
       const read = await upcoming();
+      // 100 kept, plus each schedule's check for one more (was about 4,650)
+      expect(vi.mocked(parseDateCondition).mock.calls.length).toBeLessThan(200);
       expect(read.upcoming).toHaveLength(100);
-      expect(read).toMatchObject({
-        upcomingAll: 50 * 93,
-        upcomingKept: 100,
-        upcomingMore: 50 * 93 - 100,
-      });
+      expect(read).toMatchObject({ upcomingKept: 100, upcomingMore: true });
       // Two rounds: every schedule's first two dates
       expect(new Set(read.upcoming.map(r => r.date))).toEqual(
         new Set(['2017-01-01', '2017-01-02']),
@@ -671,6 +732,8 @@ describe('native/account-upcoming', () => {
       const dates = page.upcoming?.map(r => r.date);
       expect(dates).toContain('2017-04-03');
       expect(dates).not.toContain('2017-04-04');
+      // Under the row cap, so the day cap is what ends the dates
+      await setPref('accounts-upcoming-max-rows', '500');
       await setPref('accounts-register-upcoming-max-days', '120');
       expect((await upcoming()).upcomingCapDays).toBe(120);
     });

@@ -18,10 +18,12 @@ import {
   isScheduleRelevantToAccount,
 } from '#shared/schedule-preview';
 import {
-  computeSchedulePreviewTransactions,
   DEFAULT_UPCOMING_SCHEDULE_DAYS,
   getScheduleOccurrenceMatchStartDate,
   getStatus,
+  isForPreview,
+  schedulePreview,
+  schedulePreviewDates,
 } from '#shared/schedules';
 import type { ScheduleStatuses } from '#shared/schedules';
 import { ungroupTransactions } from '#shared/transactions';
@@ -65,11 +67,10 @@ export type NativeAccountUpcoming = {
   upcomingTotal: number;
   // The day cap, only when it hid a scheduled row
   upcomingCapDays?: number;
-  // Only when the row cap dropped previews, all counting occurrences: every
-  // preview in the window (without rules), those kept, those dropped
-  upcomingAll?: number;
+  // Only when the row cap stopped with an occurrence left: the occurrences
+  // kept; the rest is never generated or counted (D8, D12)
   upcomingKept?: number;
-  upcomingMore?: number;
+  upcomingMore?: true;
 };
 
 export type NativeAccountsList = {
@@ -587,27 +588,63 @@ export async function schedulesWithTransactions(
 }
 
 /**
- * At most `max` previews, kept in rounds: every schedule's next occurrence,
- * then every schedule's second, each round in the web's preview order (D8).
+ * Previews drawn from each schedule's lazy dates in rounds (D8, D12): every
+ * schedule's next occurrence, then every schedule's second. Within a round
+ * the nearest date goes first, so a cut round keeps the nearest. A date past
+ * the day cap ends its schedule's dates. Stops at `max`, with `more` when an
+ * occurrence was left; the rest is never generated or counted.
  */
-function keepInRounds(
-  previews: TransactionEntity[],
+function takeInRounds(
+  schedules: readonly ScheduleEntity[],
+  statuses: ScheduleStatuses,
+  upcomingLength: string,
+  last: string,
   max: number,
-): TransactionEntity[] {
-  if (previews.length <= max) return previews;
-  const bySchedule = new Map<string, TransactionEntity[]>();
-  for (const t of [...previews].sort((a, b) => a.date.localeCompare(b.date))) {
-    const key = t.schedule ?? '';
-    bySchedule.set(key, [...(bySchedule.get(key) ?? []), t]);
-  }
+) {
+  let capped = false;
+  const live = schedules.map(schedule => {
+    const dates = schedulePreviewDates(
+      schedule,
+      statuses.get(schedule.id),
+      upcomingLength,
+    );
+    return { schedule, dates, next: dates.next() };
+  });
+  const round = () =>
+    live.filter(g => {
+      if (g.next.done) return false;
+      if (g.next.value > last) {
+        capped = true;
+        return false;
+      }
+      return true;
+    });
   const kept: TransactionEntity[] = [];
-  for (let round = 0; kept.length < max; round++) {
-    const next = [...bySchedule.values()]
-      .flatMap(list => (round < list.length ? [list[round]] : []))
-      .sort(comparePreviewTransactions);
-    kept.push(...next.slice(0, max - kept.length));
+  for (let taking = round(); taking.length > 0; taking = round()) {
+    const previews = taking
+      .map(g => ({
+        g,
+        preview: {
+          ...schedulePreview(
+            g.schedule,
+            statuses.get(g.schedule.id),
+            g.next.value,
+          ),
+          sort_order: g.schedule.sort_order,
+        },
+      }))
+      .sort(
+        (a, b) =>
+          a.preview.date.localeCompare(b.preview.date) ||
+          comparePreviewTransactions(a.preview, b.preview),
+      );
+    for (const { g, preview } of previews) {
+      if (kept.length === max) return { kept, more: true, capped };
+      kept.push(preview);
+      g.next = g.dates.next();
+    }
   }
-  return kept;
+  return { kept, more: false, capped };
 }
 
 /**
@@ -647,7 +684,7 @@ async function upcomingRows(account: string) {
       getTransferAccountByPayee,
     }),
   );
-  if (schedules.length === 0) return { rows: [], capDays: null, more: null };
+  if (schedules.length === 0) return { rows: [], capDays: null, kept: null };
   await refreshScheduleDateLookup();
   setBusinessCalendars(
     await businessCalendarsApp.handlers['business-calendars-get'](),
@@ -671,16 +708,14 @@ async function upcomingRows(account: string) {
     ]),
   );
   const sortOrder = new Map(schedules.map(s => [s.id, s.sort_order]));
-  const previews = computeSchedulePreviewTransactions(
-    schedules,
+  const capDays = await readLimit('accounts-register-upcoming-max-days');
+  const { kept, more, capped } = takeInRounds(
+    schedules.filter(s => isForPreview(s, statuses)),
     statuses,
     String(upcomingLength),
-  ).map(t => ({ ...t, sort_order: sortOrder.get(t.schedule) }));
-  const capDays = await readLimit('accounts-register-upcoming-max-days');
-  const last = monthUtils.addDays(monthUtils.currentDay(), capDays);
-  const inWindow = previews.filter(t => t.date <= last) as TransactionEntity[];
-  const maxRows = await readLimit('accounts-upcoming-max-rows');
-  const kept = keepInRounds(inWindow, maxRows);
+    monthUtils.addDays(monthUtils.currentDay(), capDays),
+    await readLimit('accounts-upcoming-max-rows'),
+  );
 
   const categories = new Map(
     (
@@ -797,11 +832,8 @@ async function upcomingRows(account: string) {
     });
   return {
     rows,
-    capDays: inWindow.length < previews.length ? capDays : null,
-    more:
-      kept.length < inWindow.length
-        ? { all: inWindow.length, kept: kept.length }
-        : null,
+    capDays: capped ? capDays : null,
+    kept: more ? kept.length : null,
   };
 }
 
@@ -855,10 +887,9 @@ export async function accountUpcoming({
     upcomingCount: upcoming.length,
     upcomingTotal: upcoming.reduce((sum, r) => sum + r.amount, 0),
     ...(scheduled.capDays !== null && { upcomingCapDays: scheduled.capDays }),
-    ...(scheduled.more && {
-      upcomingAll: scheduled.more.all,
-      upcomingKept: scheduled.more.kept,
-      upcomingMore: scheduled.more.all - scheduled.more.kept,
+    ...(scheduled.kept !== null && {
+      upcomingKept: scheduled.kept,
+      upcomingMore: true,
     }),
   };
 }

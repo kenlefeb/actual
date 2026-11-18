@@ -504,74 +504,86 @@ export function computeSchedulePreviewTransactions(
     .filter(s => isForPreview(s, statuses))
     .filter(filter ? filter : () => true);
 
-  const today = d.startOfDay(monthUtils.parseDate(monthUtils.currentDay()));
-
   return schedulesForPreview
     .flatMap(schedule => {
-      const effectiveUpcomingLength =
-        schedule.custom_upcoming_length ?? upcomingLength;
-      const upcomingPeriodEnd = d.startOfDay(
-        monthUtils.parseDate(
-          monthUtils.addDays(today, getUpcomingDays(effectiveUpcomingLength)),
-        ),
-      );
-
-      const { date: dateConditions } = extractScheduleConds(
-        schedule._conditions,
-      );
-
       const status = statuses.get(schedule.id);
-      const isRecurring = scheduleIsRecurring(dateConditions);
-
-      const dates = [schedule.next_date];
-      let day = d.startOfDay(monthUtils.parseDate(schedule.next_date));
-      if (isRecurring) {
-        while (day <= upcomingPeriodEnd) {
-          const nextDate = getNextDate(dateConditions, day);
-
-          if (nextDate === null) {
-            break;
-          }
-
-          if (
-            d.startOfDay(monthUtils.parseDate(nextDate)) > upcomingPeriodEnd
-          ) {
-            break;
-          }
-
-          if (dates.includes(nextDate)) {
-            day = d.startOfDay(
-              monthUtils.parseDate(monthUtils.addDays(day, 1)),
-            );
-            continue;
-          }
-
-          dates.push(nextDate);
-          day = d.startOfDay(
-            monthUtils.parseDate(monthUtils.addDays(nextDate, 1)),
-          );
-        }
-      }
-
-      if (status === 'paid') {
-        dates.shift();
-      }
-
-      return dates.map(date => ({
-        id: 'preview/' + schedule.id + `/${date}`,
-        payee: schedule._payee,
-        account: schedule._account,
-        amount: getScheduledAmount(schedule._amount),
-        date,
-        schedule: schedule.id,
-        forceUpcoming:
-          (date !== schedule.next_date || status === 'paid') &&
-          date >= monthUtils.currentDay(),
-      }));
+      return Array.from(
+        schedulePreviewDates(schedule, status, upcomingLength),
+        date => schedulePreview(schedule, status, date),
+      );
     })
     .sort(
       (a, b) =>
         monthUtils.parseDate(b.date).getTime() -
           monthUtils.parseDate(a.date).getTime() || a.amount - b.amount,
     );
+}
+
+// Fork-only (sc-4973, native-register-upcoming-rows D12): the preview row of
+// one date, and the dates themselves as a lazy generator, so the native
+// register can take only the dates it keeps
+export function schedulePreview(
+  schedule: ScheduleEntity,
+  status: ScheduleStatusType | undefined,
+  date: string,
+) {
+  return {
+    id: 'preview/' + schedule.id + `/${date}`,
+    payee: schedule._payee,
+    account: schedule._account,
+    amount: getScheduledAmount(schedule._amount),
+    date,
+    schedule: schedule.id,
+    forceUpcoming:
+      (date !== schedule.next_date || status === 'paid') &&
+      date >= monthUtils.currentDay(),
+  };
+}
+
+/** A schedule's preview dates in its upcoming window, oldest first, one `getNextDate` at a time. */
+export function* schedulePreviewDates(
+  schedule: ScheduleEntity,
+  status: ScheduleStatusType | undefined,
+  upcomingLength?: string,
+): Generator<string> {
+  const today = d.startOfDay(monthUtils.parseDate(monthUtils.currentDay()));
+  const effectiveUpcomingLength =
+    schedule.custom_upcoming_length ?? upcomingLength;
+  const upcomingPeriodEnd = d.startOfDay(
+    monthUtils.parseDate(
+      monthUtils.addDays(today, getUpcomingDays(effectiveUpcomingLength)),
+    ),
+  );
+
+  const { date: dateConditions } = extractScheduleConds(schedule._conditions);
+  const isRecurring = scheduleIsRecurring(dateConditions);
+
+  const dates = [schedule.next_date];
+  // A paid schedule's first date is dropped
+  if (status !== 'paid') {
+    yield schedule.next_date;
+  }
+  let day = d.startOfDay(monthUtils.parseDate(schedule.next_date));
+  if (isRecurring) {
+    while (day <= upcomingPeriodEnd) {
+      const nextDate = getNextDate(dateConditions, day);
+
+      if (nextDate === null) {
+        break;
+      }
+
+      if (d.startOfDay(monthUtils.parseDate(nextDate)) > upcomingPeriodEnd) {
+        break;
+      }
+
+      if (dates.includes(nextDate)) {
+        day = d.startOfDay(monthUtils.parseDate(monthUtils.addDays(day, 1)));
+        continue;
+      }
+
+      dates.push(nextDate);
+      yield nextDate;
+      day = d.startOfDay(monthUtils.parseDate(monthUtils.addDays(nextDate, 1)));
+    }
+  }
 }

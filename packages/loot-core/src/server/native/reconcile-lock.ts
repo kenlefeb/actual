@@ -38,7 +38,7 @@ const LIMITS = {
   // length in the native register."
   'accounts-register-upcoming-max-days': { fallback: 92, ceiling: 366 },
   // sc-4973 (D8, D11): "Scheduled rows: most shown", help "The most scheduled
-  // rows the native register shows and searches."
+  // rows the native register shows and searches (up to 500)."
   'accounts-upcoming-max-rows': { fallback: 100, ceiling: 500 },
 } as const;
 

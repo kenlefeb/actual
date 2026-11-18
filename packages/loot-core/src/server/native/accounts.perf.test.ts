@@ -205,6 +205,7 @@ describe('native accounts reads', () => {
         id: rule,
         actions: [...actions, { op: 'link-schedule', value: id }],
       } as never);
+      return id;
     };
     const category = { op: 'set', field: 'category', value: 'bill' };
     const notes = (i: number) => ({
@@ -257,8 +258,8 @@ describe('native accounts reads', () => {
       upcoming({ account_id: 'a0', scope, search });
     const load = `load ${os.loadavg()[0].toFixed(1)} on ${os.cpus().length} cores`;
     console.error(`native accounts reads with schedules: ${load}`);
-    // More previews than the row cap: rules run for the cap's worth
-    expect((await scheduled('all', null)).upcomingAll).toBeGreaterThan(200);
+    // More occurrences than the row cap: rules run for the cap's worth
+    expect((await scheduled('all', null)).upcomingMore).toBe(true);
     // Every case is timed and printed before the gates fail any of them
     const over: string[] = [];
     const gate = async (
@@ -286,15 +287,32 @@ describe('native accounts reads', () => {
     };
     await cases('with 200 schedules', 100);
 
-    // Worst case: 50 daily schedules over the full 92-day cap, about 4,600
-    // previews, cut to the row cap before rules run
+    // Worst cases: 50 daily schedules over the full 92-day cap, about 4,600
+    // occurrences, then over the 366-day ceiling. Only the row cap's worth of
+    // dates is made, so the cost must not grow with the window (D12)
+    const dailies: string[] = [];
     for (; i < 250; i++) {
-      await schedule(i, daily('2017-01-01'), 'a0', [category, notes(i)], {
-        custom_upcoming_length: '92-day',
+      dailies.push(
+        await schedule(i, daily('2017-01-01'), 'a0', [category, notes(i)], {
+          custom_upcoming_length: '92-day',
+        }),
+      );
+    }
+    expect(await scheduled('all', null)).toMatchObject({
+      upcomingKept: 100,
+      upcomingMore: true,
+    });
+    await cases('worst case, 50 daily over 92 days', 150);
+    await db.update('preferences', {
+      id: 'accounts-register-upcoming-max-days',
+      value: '366',
+    });
+    for (const id of dailies) {
+      await schedulesApp.handlers['schedule/update']({
+        schedule: { id, custom_upcoming_length: '366-day' },
       });
     }
-    expect((await scheduled('all', null)).upcomingAll).toBeGreaterThan(4600);
-    await cases('worst case, 50 daily over 92 days', 150);
+    await cases('worst case, 50 daily over 366 days', 150);
     console.error(`native accounts reads with schedules: ${load}`);
     expect(over).toEqual([]);
   }, 600_000);

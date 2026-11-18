@@ -36,6 +36,11 @@ On iPhone, a scope chip or search SHALL show the upcoming rows the posted row wo
 - **WHEN** the user searches "rent"
 - **THEN** the Rent upcoming row shows, and the posted section says "No posted transactions match “rent”."
 
+#### Scenario: A payee name no payee has yet
+- **GIVEN** an upcoming row whose rule names the payee "Brand New Payee", which does not exist yet
+- **WHEN** the user searches "brand new"
+- **THEN** that upcoming row shows, and no payee is created
+
 #### Scenario: Uncategorized
 - **GIVEN** an upcoming row with no category after rules, and one whose rule sets a category
 - **WHEN** the user taps Uncategorized

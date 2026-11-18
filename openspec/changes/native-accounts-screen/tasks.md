@@ -22,7 +22,7 @@ Tests first: write the tests, see them fail, then write the code. One story per 
   - Done: `WebAccountAction`, the app's `handOff`, the page's `webAccountAction`, and the page flows it opens (the add-account dialog for add and link, the bank sync page, and the account page with its menu open). The overlay steps aside while a sheet or the web editor hides the tab bar and is built again, re-reading, on return.
 - [x] 2.5 `NativeReconcileBanner` renders only while the Accounts switch is off (design D8); failing test first
 - [x] 2.6 `AccountsListViewModel` and `AccountRegisterViewModel` against a fake transport and the fixtures (design D6). Failing tests first: redacted first load; re-reads, errors and timeouts keep the last values; coalesced re-reads; paging appends and stops at a null cursor; search debounce and scope reset the pages; no reads in the background and one on return; pull-to-refresh runs one `sync`
-- [ ] 2.7 Run the checks in 1.5; Security reviews the writes
+- [x] 2.7 Run the checks in 1.5; Security reviews the writes
 - [x] 2.8 Ask the PO, through the Director, to extend sc-4877 so the Swift-minted nonce also covers `confirmedReconciled` on these writes (design D3, accepted risk until then)
 
 ## 3. SwiftUI Accounts list and register on iPhone (sc-3611)

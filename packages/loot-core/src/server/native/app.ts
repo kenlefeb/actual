@@ -81,6 +81,11 @@ import {
   reconcileMatches,
 } from './reconcile-lock';
 import { nativeRefusal } from './refusal';
+import {
+  payeesSearch,
+  transactionForm,
+  transactionPreview,
+} from './transaction-form';
 
 // null: the value doesn't apply to this budget type (or row)
 type Amount = number | null;
@@ -241,6 +246,9 @@ export type NativeHandlers = {
   'native/transactions-delete': typeof transactionsDelete;
   'native/account-reopen': typeof accountReopen;
   'native/account-move': typeof accountMove;
+  'native/transaction-form': typeof transactionFormRead;
+  'native/payees': typeof payeesSearch;
+  'native/transaction-preview': typeof transactionPreview;
 };
 
 export const app = createApp<NativeHandlers>();
@@ -292,6 +300,10 @@ app.method(
 app.method('native/transactions-delete', accountsWrite(transactionsDelete));
 app.method('native/account-reopen', accountsWrite(accountReopen));
 app.method('native/account-move', accountsWrite(accountMove));
+// sc-3602 (native-add-transaction D1 and D2): reads only; the preview writes nothing
+app.method('native/transaction-form', transactionFormRead);
+app.method('native/payees', payeesSearch);
+app.method('native/transaction-preview', transactionPreview);
 
 type NativeUndoMeta = {
   nativeUndoToken?: string;
@@ -322,6 +334,12 @@ function accountsWrite<A extends { undoToken: string }, R>(
 
 async function accountsListRead() {
   return { ...(await readCurrency()), ...(await accountsList()) };
+}
+
+async function transactionFormRead(
+  args: Parameters<typeof transactionForm>[0],
+) {
+  return { ...(await readCurrency()), ...(await transactionForm(args ?? {})) };
 }
 
 async function accountRegisterRead(

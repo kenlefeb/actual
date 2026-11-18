@@ -39,8 +39,14 @@ public enum NativeBridgeAllowlist {
     public static let accountsWrites: Set<String> = [
         "native/transactions-categorize", "native/transactions-delete", "native/account-reopen", "native/account-move",
     ]
+    // sc-3602 (native-add-transaction D4): the Add transaction sheet's reads and its preview, which
+    // writes nothing. The raw transactions-batch-update, transaction-add, rules-run and payee-create stay off.
+    public static let transactionReads: Set<String> = [
+        "native/transaction-form", "native/payees", "native/transaction-preview",
+    ]
     public static let handlers: Set<String> = reads.union(writes).union(paycheckWrites).union(sync).union(reconcileReads)
         .union(reconcileWrites).union(accountsReads).union(accountsWrites)
+        .union(transactionReads)
 }
 
 // The page's reduced sync result (nativeBridge.ts): whether it worked, and a
@@ -99,6 +105,8 @@ public struct NativeRefusal: Equatable {
         case undoNothing = "undo-nothing"
         case noBudgetForMonth = "no-budget-for-month"
         case invalidDraft = "invalid-draft"
+        // sc-3602: a form read of a transaction that is gone or in a closed account
+        case notFound = "not-found"
     }
 
     public let code: Code

@@ -3,5 +3,6 @@
   "undo-changed-since",
   "undo-nothing",
   "no-budget-for-month",
-  "invalid-draft"
+  "invalid-draft",
+  "not-found"
 ]

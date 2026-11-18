@@ -37,6 +37,7 @@
 		FB493100000000000000101 /* Accounts.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB493100000000000000001 /* Accounts.swift */; };
 		FB4931000000000000000102 /* AccountsViewModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB4931000000000000000002 /* AccountsViewModels.swift */; };
 		FB4931000000000000000103 /* WebAccountAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB4931000000000000000003 /* WebAccountAction.swift */; };
+		FB3602000000000000000101 /* TransactionForm.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3602000000000000000001 /* TransactionForm.swift */; };
 		FB3611000000000000000101 /* AccountsListScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3611000000000000000001 /* AccountsListScreen.swift */; };
 		FB493100000000000000111 /* NativeAccountsRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB493100000000000000011 /* NativeAccountsRoute.swift */; };
 		FB480100000000000000101 /* Reconcile.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB480100000000000000001 /* Reconcile.swift */; };
@@ -91,6 +92,7 @@
 		FB493100000000000000001 /* Accounts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Accounts.swift; sourceTree = "<group>"; };
 		FB4931000000000000000002 /* AccountsViewModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsViewModels.swift; sourceTree = "<group>"; };
 		FB4931000000000000000003 /* WebAccountAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebAccountAction.swift; sourceTree = "<group>"; };
+		FB3602000000000000000001 /* TransactionForm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionForm.swift; sourceTree = "<group>"; };
 		FB3611000000000000000001 /* AccountsListScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsListScreen.swift; sourceTree = "<group>"; };
 		FB493100000000000000011 /* NativeAccountsRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAccountsRoute.swift; sourceTree = "<group>"; };
 		FB480100000000000000001 /* Reconcile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Reconcile.swift; sourceTree = "<group>"; };
@@ -209,6 +211,7 @@
 				FB493100000000000000001 /* Accounts.swift */,
 				FB4931000000000000000002 /* AccountsViewModels.swift */,
 				FB4931000000000000000003 /* WebAccountAction.swift */,
+				FB3602000000000000000001 /* TransactionForm.swift */,
 				FB3611000000000000000001 /* AccountsListScreen.swift */,
 				FB3611000000000000000003 /* AccountRegisterScreen.swift */,
 				FB493100000000000000011 /* NativeAccountsRoute.swift */,
@@ -364,6 +367,7 @@
 				FB493100000000000000101 /* Accounts.swift in Sources */,
 				FB4931000000000000000102 /* AccountsViewModels.swift in Sources */,
 				FB4931000000000000000103 /* WebAccountAction.swift in Sources */,
+				FB3602000000000000000101 /* TransactionForm.swift in Sources */,
 				FB3611000000000000000101 /* AccountsListScreen.swift in Sources */,
 				FB3611000000000000000103 /* AccountRegisterScreen.swift in Sources */,
 				FB493100000000000000111 /* NativeAccountsRoute.swift in Sources */,

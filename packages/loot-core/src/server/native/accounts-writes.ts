@@ -274,7 +274,8 @@ export async function readTouchedState(touched: Touched) {
   return {
     transactions: transactions.length
       ? await db.all(
-          `SELECT id, category, tombstone, reconciled, cleared, notes, amount, description, acct, date, transferred_id, schedule FROM transactions
+          `SELECT id, category, tombstone, reconciled, cleared, notes, amount, description, acct, date, transferred_id, schedule,
+             parent_id, isParent AS is_parent, isChild AS is_child, sort_order FROM transactions
            WHERE id IN (${marks(transactions)}) ORDER BY id`,
           transactions,
         )

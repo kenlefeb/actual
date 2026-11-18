@@ -79,12 +79,17 @@ final class SyncAllowlistTests: XCTestCase {
         XCTAssertEqual(
             NativeBridgeAllowlist.accountsWrites,
             ["native/transactions-categorize", "native/transactions-delete", "native/account-reopen", "native/account-move"])
+        // sc-3602
+        XCTAssertEqual(
+            NativeBridgeAllowlist.transactionReads,
+            ["native/transaction-form", "native/payees", "native/transaction-preview"])
         XCTAssertEqual(
             NativeBridgeAllowlist.handlers,
             NativeBridgeAllowlist.reads.union(NativeBridgeAllowlist.writes).union(NativeBridgeAllowlist.paycheckWrites)
                 .union(NativeBridgeAllowlist.sync).union(NativeBridgeAllowlist.reconcileReads)
                 .union(NativeBridgeAllowlist.reconcileWrites).union(NativeBridgeAllowlist.accountsReads)
-                .union(NativeBridgeAllowlist.accountsWrites))
+                .union(NativeBridgeAllowlist.accountsWrites)
+                .union(NativeBridgeAllowlist.transactionReads))
         XCTAssertFalse(NativeBridgeAllowlist.handlers.contains("undo"))
         XCTAssertFalse(NativeBridgeAllowlist.handlers.contains("redo"))
     }

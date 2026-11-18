@@ -1,0 +1,42 @@
+{
+  "draft": {
+    "newId": "0b5f2c1e-8d3a-4f6b-9c2d-1a2b3c4d5e6f",
+    "account": "checking",
+    "date": "2016-12-20",
+    "payee": null,
+    "payeeName": null,
+    "category": null,
+    "notes": "",
+    "cleared": false,
+    "inflow": false,
+    "amountText": "30",
+    "splits": [
+      {
+        "payee": null,
+        "category": "groceries",
+        "notes": "",
+        "inflow": false,
+        "amountText": "10"
+      },
+      {
+        "payee": null,
+        "category": "dining",
+        "notes": "",
+        "inflow": false,
+        "amountText": "5"
+      }
+    ],
+    "userFields": []
+  },
+  "amount": -3000,
+  "splitAmounts": [
+    -1000,
+    -500
+  ],
+  "ruleFields": [],
+  "replaced": [],
+  "remaining": -1500,
+  "errors": {
+    "splits": "split-mismatch"
+  }
+}

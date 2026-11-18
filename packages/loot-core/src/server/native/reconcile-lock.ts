@@ -33,6 +33,12 @@ const LIMITS = {
   'accounts-register-page-size': { fallback: 50, ceiling: 200 },
   // sc-4931 (D3): rows per categorize or delete call, children and partners counted
   'accounts-write-max-ids': { fallback: 100, ceiling: 500 },
+  // sc-3602 (native-add-transaction D1 and D3)
+  'payee-picker-max-results': { fallback: 50, ceiling: 500 },
+  'payee-search-max-length': { fallback: 100, ceiling: 200 },
+  'payee-name-max-length': { fallback: 200, ceiling: 500 },
+  'transaction-notes-max-length': { fallback: 10_000, ceiling: 50_000 },
+  'transaction-split-max-children': { fallback: 50, ceiling: 200 },
 } as const;
 
 export async function readLimit(id: keyof typeof LIMITS): Promise<number> {

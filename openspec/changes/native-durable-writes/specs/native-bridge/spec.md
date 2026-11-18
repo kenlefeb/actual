@@ -124,23 +124,28 @@ If a restart leaves a write "may not have been saved" and no failure notice is s
 - **WHEN** the page restarts on its own
 - **THEN** the line clears, this notice shows, no reload notice shows, and OK dismisses it
 
-### Requirement: Offline never claims saved while a write is pending
-The native "Offline — changes saved on this iPhone" status SHALL show only when no write is pending or "may not have been saved". While the storage status line is off in Release, the status SHALL read "Offline" in those cases. With the line on, it SHALL show the line's text while a write is pending, and "Offline" when a write only may not have been saved.
+### Requirement: The native Accounts offline status is constant
+On native Accounts, the offline status SHALL always read "Offline", whether or not a write is pending or "may not have been saved", and whether the storage status line is on or off. It SHALL promise nothing about saving or syncing and SHALL NOT change with writes, so the rows below it do not move. Only the storage status line and the restart and failure notices SHALL describe saving.
+
+#### Scenario: A write while offline
+- **GIVEN** native Accounts offline, at any text size
+- **WHEN** a write starts and finishes
+- **THEN** the status reads "Offline" throughout, and the rows below it do not move
+
+#### Scenario: Line on, slow storage
+- **GIVEN** the line on, the app offline, and a write that returned `stored: false`
+- **WHEN** the screen shows
+- **THEN** the status reads "Offline", and the line reads "Still saving to this device. Keep the app open."
 
 #### Scenario: Line off in Release
-- **GIVEN** a Release build with the line off, the app offline, and a write pending or "may not have been saved"
-- **WHEN** the Accounts status shows
-- **THEN** it reads "Offline", never "changes saved on this iPhone"
+- **GIVEN** a Release build with the line off, the app offline, and a write pending
+- **WHEN** the screen shows
+- **THEN** the status reads "Offline"
 
-#### Scenario: Line on, offline with slow storage
-- **GIVEN** the line on, the app offline, and a write that returned `stored: false`
-- **WHEN** the Accounts status shows
-- **THEN** it reads "Still saving to this device. Keep the app open.", never "changes saved on this iPhone", and returns to the offline text once the write is stored
-
-#### Scenario: Line on, after a restart
-- **GIVEN** the line on, the app offline, and a write that "may not have been saved"
-- **WHEN** the Accounts status shows
-- **THEN** it reads "Offline", and the line stays clear
+#### Scenario: After a restart
+- **GIVEN** the app offline and a write that "may not have been saved"
+- **WHEN** the screen shows
+- **THEN** the status reads "Offline", and the restart notice describes the write
 
 ### Requirement: Any storage failure latches and is shown app-wide
 With the storage guard on, any failed IndexedDB write of the open budget, from any source (bridge write, web-screen edit or sync), SHALL set a failed latch. The patched storage SHALL write nothing more, the page SHALL send a `storage-failed` event with `lastStoredFlushAt` (when the last write that stored was flushed), and Swift SHALL show a persistent app-level notice, whichever screen is showing, until the person reloads or, after a restart, taps OK.

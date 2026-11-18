@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Upcoming rows show what will post
-The native register on iPhone SHALL show each upcoming scheduled row as it will post to this account: payee, category, amount, notes and split count after the schedule's rules, the account's own rows, and transfers into it inverted per line with the other account's name. It SHALL show the rows and numbers loot-core returns, with no rule logic or arithmetic in Swift. Unfiltered and within the horizon cap, the rows SHALL equal the web register's.
+The native register on iPhone SHALL show each upcoming scheduled row as it will post to this account: payee, category, amount, notes and split count after the schedule's rules, the account's own rows, and transfers into it inverted per line with the other account's name. It SHALL show the rows and numbers loot-core returns, with no rule logic or arithmetic in Swift. Unfiltered and within the day and row caps, the rows SHALL equal the web register's.
 
 #### Scenario: A rule sets the category
 - **GIVEN** a schedule whose rule sets the category "Utilities"
@@ -69,10 +69,40 @@ Tapping an upcoming row on iPhone SHALL open a native read-only detail with its 
 - **WHEN** the user taps an upcoming row whose rules changed nothing
 - **THEN** the detail shows "Scheduled" and no "Fields set by rules" line
 
+### Requirement: The register does not wait for upcoming rows
+The iPhone register SHALL show its header and posted rows from the register read without waiting for upcoming rows, then fill the upcoming section from `native/account-upcoming`, showing "Loading scheduled…" in words until it arrives. A reply for an older scope, search or account SHALL be dropped, and a failed upcoming read SHALL leave the posted rows in place and say scheduled rows could not load.
+
+#### Scenario: Upcoming rows arrive later
+- **GIVEN** an upcoming read that answers after the register read
+- **WHEN** the user opens the register
+- **THEN** the posted rows show first, the upcoming section says "Loading scheduled…", then fills in
+
+#### Scenario: A stale reply
+- **GIVEN** the user types "rent" and then "rental" before the first upcoming reply arrives
+- **WHEN** both replies arrive, the older one last
+- **THEN** the upcoming section shows the "rental" rows only
+
+#### Scenario: The upcoming read fails
+- **WHEN** `native/account-upcoming` fails
+- **THEN** the posted rows stay, and the upcoming section says scheduled rows could not load
+
+### Requirement: The register says when the row cap hides scheduled rows
+When loot-core returns `upcomingMore`, the iPhone register SHALL say below the upcoming rows: "N more scheduled rows not shown or searched; change this in Settings > Limits.", with N from loot-core, and nothing otherwise.
+
+#### Scenario: Fifty daily schedules
+- **GIVEN** an upcoming read returning `upcomingMore` 4,500
+- **WHEN** the user opens the register
+- **THEN** the notice says 4,500 more scheduled rows are not shown or searched and points to Settings > Limits
+
 ### Requirement: The cap is a labelled limit in Settings
-The Limits section of native Settings (story 4643) SHALL list `accounts-register-upcoming-max-days` with the label "Scheduled rows: days ahead" and text saying it caps the budget's upcoming scheduled length in the native register, with its value, default 92 and ceiling 366, as for every limit there.
+The Limits section of native Settings (story 4643) SHALL list `accounts-register-upcoming-max-days` as "Scheduled rows: days ahead" (it caps the budget's upcoming scheduled length in the native register; default 92, ceiling 366) and `accounts-upcoming-max-rows` as "Scheduled rows: most shown" (default 100, ceiling 500), each with its value, default and ceiling, as for every limit there.
 
 #### Scenario: Changing the cap
 - **GIVEN** the Limits section of native Settings
 - **WHEN** the user sets "Scheduled rows: days ahead" to 200 and reopens a register whose schedule length is 6 months
 - **THEN** scheduled rows up to 200 days ahead show, and the notice says 200 days
+
+#### Scenario: Changing the row cap
+- **GIVEN** the Limits section of native Settings and an account with 150 upcoming previews
+- **WHEN** the user sets "Scheduled rows: most shown" to 200 and reopens the register
+- **THEN** all 150 show and no "more" notice shows

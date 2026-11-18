@@ -1,37 +1,53 @@
 # Tasks
 
+Amended 2026-11-18 (design D6 to D11). Built on branch `kenlefeb/sc-4973/native-register-upcoming-engine` (635366c1c). Tasks 1.1, 1.2 and 1.5 are kept as built. Task 1.4's `json_each` filter and counts are kept but move to the new read. Task 1.3 is reworked: it moves, gains the row cap and the one-query statuses, and leaves the register read. Task 1.6 is redone. Group 2 has not started.
+
 ## 1. loot-core: upcoming rows as they will post (sc-4973)
 
-- [ ] 1.1 Move the bodies of `isScheduleRelevantToAccount`, `inverseBasedOnAccount` and `comparePreviewTransactions` verbatim into `packages/loot-core/src/shared/` with their tests. `useAccountPreviewTransactions.ts` and `usePreviewTransactions.ts` change only their imports, and the web-only steps stay in the hooks. The web register's tests (desktop `Account` and mobile `AccountTransactions`) pass unchanged (design D1)
-- [ ] 1.2 Failing tests first for "The register's upcoming rows come from loot-core" and "Upcoming rows name the fields rules set":
+- [ ] 1.1 (built, keep) Move the bodies of `isScheduleRelevantToAccount`, `inverseBasedOnAccount` and `comparePreviewTransactions` verbatim into `packages/loot-core/src/shared/` with their tests. `useAccountPreviewTransactions.ts` and `usePreviewTransactions.ts` change only their imports, and the web-only steps stay in the hooks. The web register's tests (desktop `Account` and mobile `AccountTransactions`) pass unchanged (design D1)
+- [ ] 1.2 (built, keep; retarget the tests at `native/account-upcoming`) Failing tests first for "The upcoming read returns rows as they will post" and "Upcoming rows name the fields rules set":
   - rules set payee and category;
-  - a split's own row with `splitCount`;
+  - a split's own row with `splitCount` (parent payee null, design D11);
   - a split line into this account, inverted with `transferAccount`;
-  - a formula split line;
+  - a template split line;
   - status `due`, `upcoming` and `missed`;
-  - `ruleFields` for payee and category, and empty when no rule changes anything;
-  - stable ids in the documented format, asserted in fixture `account-register-upcoming.json`;
-  - native rows equal the web hook's output for the same budget, unfiltered and within the cap, comparing id, date, payee, category, notes, amount, account, split lines and transfer account;
-  - later pages have no `upcoming` and unchanged cursors.
-- [ ] 1.3 `upcomingRows` in `packages/loot-core/src/server/native/accounts.ts`: relevance, `runRules`, `ruleFields`, sort, inversion and the row fields of design D2
-- [ ] 1.4 Failing tests first for the filtered scenarios, "The register returns upcoming count and total" (separate totals, nothing upcoming, an inverted line counting once) and more rows than SQLite's variable limit (over 999 and over 32,766 variables' worth). Then the `json_each(?)` CTE source in `registerFilter` and the counts (design D3, D4)
-- [ ] 1.5 Failing tests first for "The upcoming horizon is a capped setting" (cut at the cap, `upcomingCapDays` present only when a row was cut, bad values). Then `accounts-register-upcoming-max-days` in `LIMITS` (default 92, ceiling 366), with its label and help text for the Limits section (design D5)
-- [ ] 1.6 `accounts.perf.test.ts`: the 200-schedule seed, the three first-page cases and the worst case of 50 daily schedules across the full 92-day cap (design D6). Run `yarn workspace @actual-app/core run perf`. Every median must be under 50 ms. If any is not, **stop and report** the medians and p95s to the Director; do not skip or loosen the gate. The remedy (a lower default cap, or a named row-cap limit) is decided by the Architect and the Product Owner
-- [ ] 1.7 Run `yarn typecheck`, `yarn lint` and the `@actual-app/core` and `@actual-app/web` tests; all pass
+  - `ruleFields`;
+  - stable ids asserted in fixture `account-register-upcoming.json`;
+  - native rows equal the web hook's output for the same budget, unfiltered and within the caps, comparing id, date, payee, category, notes, amount, account, split lines and transfer account.
+- [ ] 1.3 (rework) `native/account-upcoming {account_id, scope, search}` in `packages/loot-core/src/server/native/accounts.ts`, registered in the native app (design D7):
+  - argument checks shared with the register read;
+  - relevance first, then statuses in one query for the relevant schedules only (D9);
+  - the day cap, then the row cap `accounts-upcoming-max-rows` (default 100, ceiling 500, in `LIMITS`) before rules (D8);
+  - then `runRules`, `ruleFields`, sort, inversion, filter and counts.
+
+  Remove `upcoming`, `upcomingCount`, `upcomingTotal`, `upcomingCapDays` and all schedule work from `native/account-register`. Failing tests first for "Upcoming rows are their own read", "Upcoming rows are capped before rules run" (`upcomingMore`, nearest first, bad values) and "Schedule statuses cost one query" (same set as `getHasTransactionsQuery` on a fixture)
+- [ ] 1.4 (built, keep; move) The `json_each(?)` CTE source in `registerFilter`, and the counts of "The upcoming read returns its count and total", now on the upcoming read. Keep the test past the 999-variable limit
+- [ ] 1.5 (built, keep) `accounts-register-upcoming-max-days` (default 92, ceiling 366) and `upcomingCapDays`, now returned by the upcoming read. Label and help as code comments beside both limits until story 4643's registry lands (design D11)
+- [ ] 1.6 (redo) `accounts.perf.test.ts`: the same seeds; the register's first page at 50 ms and `native/account-upcoming` at 100 ms (200 schedules) and 150 ms (worst case), each with no filter, search and `uncleared` (design D6). Run on a quiet machine, with the load average below the core count, and report the load. If the upcoming read misses, lower the default of `accounts-upcoming-max-rows` to the largest value that meets it, down to 25. Below 25, **stop and report** to the Director with the medians, p95s and load. Never loosen a gate
+- [ ] 1.7 Bridge allowlist: `native/account-upcoming` in the Swift list and the page's list, and a `coverage.json` skip; the allowlist test passes
+- [ ] 1.8 Run `yarn typecheck`, `yarn lint` and the `@actual-app/core` and `@actual-app/web` tests; all pass
 
 ## 2. Native register on iPhone (sc-4973)
 
 - [ ] 2.1 Failing tests first in `AccountsBridgeTests` and `AccountsViewModelTests`:
-  - decode the new row fields, `ruleFields`, `upcomingCount`, `upcomingTotal` and `upcomingCapDays` (absent on later pages, and from an older loot-core);
+  - decode `native/account-upcoming`: rows, `ruleFields`, `upcomingCount`, `upcomingTotal`, `upcomingCapDays` and `upcomingMore`;
+  - the register shows posted rows before the upcoming reply, with "Loading scheduled…";
+  - a stale reply (older scope, search or account) is dropped by the request counter;
+  - a failed upcoming read keeps the posted rows and says scheduled rows could not load;
   - upcoming rows shown while a scope or search is set;
   - "N scheduled" and its total shown apart from the posted results;
-  - the cap notice shown only with `upcomingCapDays`;
+  - both notices (`upcomingCapDays`, `upcomingMore`);
   - no Swift arithmetic on amounts.
-- [ ] 2.2 `Accounts.swift` and `AccountsViewModels.swift` (`NativeBridgeCore`, the view model story 5101's Mac register will reuse) carry the fields. `NativeAccountRegisterView.swift` shows:
+- [ ] 2.2 `Accounts.swift` and `AccountsViewModels.swift` (`NativeBridgeCore`, the view model story 5101's Mac register will reuse) call the upcoming read after the first page and on every scope, search or change event. `NativeAccountRegisterView.swift` shows:
   - upcoming rows with category, split count, the transfer's other account and "Scheduled" in words, kept while filtered;
   - the scheduled count and total;
-  - the cap notice.
+  - the loading and failure text;
+  - both notices.
 - [ ] 2.3 Tapping an upcoming row opens the native read-only detail with "Scheduled" and "Fields set by rules: …", with no edit and no web hand-off (design D5a). UI test for a row with and without rule-set fields
-- [ ] 2.4 The Limits section row "Scheduled rows: days ahead": if story 4643's Limits section has merged, check the row shows with its label, text, default and ceiling, and that changing it changes the register and its notice. If not, comment the label and text on story 4643 so it lands there
-- [ ] 2.5 Check on the iPhone simulator against the web register, unfiltered and filtered, within the cap; record screenshots in the PR
+- [ ] 2.4 The Limits section rows "Scheduled rows: days ahead" and "Scheduled rows: most shown". If story 4643's Limits registry has merged, add both with their name and help line, and check that changing each changes the register and its notice. If not, comment both labels and help lines on story 4643 so they land there
+- [ ] 2.5 Check on the iPhone simulator against the web register, unfiltered and filtered, within the caps; record screenshots in the PR
 - [ ] 2.6 Run the `NativeBridgeCore` tests and the iOS build; all pass
+
+## 3. Archive (sc-4973)
+
+- [ ] 3.1 After `native-accounts-screen` archives, turn "Upcoming rows are their own read" into MODIFIED deltas of "A register page is one read with a keyset cursor" (the first page adds the header only) and "The accounts handlers are allowlisted" (adds `native/account-upcoming`), then validate and archive (design D7)

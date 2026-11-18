@@ -35,39 +35,66 @@ private func registerPage(ids: [String], next: String?, header: Bool) throws -> 
 private struct Boom: Error {}
 
 // Time under the test's control: the models take their change timer and their
-// typing pause from here, so no test waits on the wall clock.
-private final class ManualClock {
+// typing pause from here, so no test waits on the wall clock. The models call
+// these closures from tasks, so the state sits behind a lock, and a pause is
+// counted only once its continuation is stored (sc-5055): a test that sees
+// `pauses == n` can always end all n of them.
+private final class ManualClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private func locked<T>(_ body: () -> T) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return body()
+    }
+
     // Change coalescing: one timer per burst
-    private(set) var scheduled = 0
+    private var scheduledCount = 0
     private var changeTimers: [() -> Void] = []
+    var scheduled: Int { locked { scheduledCount } }
     var schedule: ChangeSchedule {
         { [self] _, work in
-            scheduled += 1
-            changeTimers.append(work)
+            locked {
+                scheduledCount += 1
+                changeTimers.append(work)
+            }
         }
     }
 
     func fireChanges() {
-        let timers = changeTimers
-        changeTimers = []
+        let timers = locked { () -> [() -> Void] in
+            defer { changeTimers = [] }
+            return changeTimers
+        }
         timers.forEach { $0() }
     }
 
     // The search pause: every pause waits here until the test ends it
-    private(set) var pauses = 0
+    private var pauseCount = 0
     private var waiting: [CheckedContinuation<Void, Never>] = []
+    var pauses: Int { locked { pauseCount } }
     var sleep: AccountsSleep {
         { [self] _ in
-            pauses += 1
-            await withCheckedContinuation { waiting.append($0) }
+            await withCheckedContinuation { continuation in
+                locked {
+                    waiting.append(continuation)
+                    pauseCount += 1
+                }
+            }
         }
     }
 
     func endPauses() {
-        let all = waiting
-        waiting = []
+        let all = locked { () -> [CheckedContinuation<Void, Never>] in
+            defer { waiting = [] }
+            return waiting
+        }
         all.forEach { $0.resume() }
     }
+}
+
+// A read by position that fails the test cleanly when it never happened
+private func read(_ requests: [[String: Any]], at index: Int) throws -> [String: Any] {
+    try XCTUnwrap(requests.indices.contains(index) ? requests[index] : nil, "read number \(index) never happened")
 }
 
 // Waits for what a started task will do, as soon as it has done it. A task the
@@ -280,7 +307,7 @@ final class AccountRegisterViewModelTests: XCTestCase {
         let model = model(page)
         XCTAssertEqual(model.state, .loading)
         await model.load()
-        let request = try page.requests()[0]
+        let request = try read(page.requests(), at: 0)
         XCTAssertEqual(request["account_id"] as? String, "checking")
         XCTAssertEqual(request["scope"] as? String, "all")
         XCTAssertNil(request["cursor"])
@@ -336,8 +363,9 @@ final class AccountRegisterViewModelTests: XCTestCase {
         await settle()
         let requests = try page.requests()
         XCTAssertEqual(requests.count, 3, "the cancelled search never read")
-        XCTAssertEqual(requests[2]["search"] as? String, "groc")
-        XCTAssertNil(requests[2]["cursor"])
+        let search = try read(requests, at: 2)
+        XCTAssertEqual(search["search"] as? String, "groc")
+        XCTAssertNil(search["cursor"])
     }
 
     // Typing calls arrive in order, but a slow read for an earlier search can finish after the
@@ -374,7 +402,7 @@ final class AccountRegisterViewModelTests: XCTestCase {
         try await eventually("the second pause started") { clock.pauses == 2 }
         clock.endPauses()
         try await eventually("clear") { (try? page.requests().count) == 2 }
-        XCTAssertNil(try page.requests()[1]["search"])
+        XCTAssertNil(try read(page.requests(), at: 1)["search"])
     }
 
     func testASearchOver100UTF16UnitsIsNotSent() async throws {
@@ -417,8 +445,8 @@ final class AccountRegisterViewModelTests: XCTestCase {
         await settle()
         let requests = try page.requests()
         XCTAssertEqual(requests.count, before + 2)
-        XCTAssertNil(requests[before]["cursor"])
-        XCTAssertEqual(requests[before + 1]["cursor"] as? String, "c1")
+        XCTAssertNil(try read(requests, at: before)["cursor"])
+        XCTAssertEqual(try read(requests, at: before + 1)["cursor"] as? String, "c1")
         XCTAssertEqual(model.state.value?.rows.map(\.id), ["a1", "a2", "b1", "b2"])
     }
 

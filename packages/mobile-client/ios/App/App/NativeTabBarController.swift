@@ -97,19 +97,25 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
     }
 
     private func attachWriteStorageLine() {
-        guard writeStorageLine == nil, let scene = view.window?.windowScene else { return }
+        guard WriteStorageLineRollout.isOn, writeStorageLine == nil, let scene = view.window?.windowScene else { return }
+        #if DEBUG
+        UITestAccounts.holdStorageLine(bridgeController.nativeBridge.writeStorage)
+        #endif
         writeStorageLine = WriteStorageLine(
             status: bridgeController.nativeBridge.writeStorage, scene: scene,
             barHeight: { [weak self] in
-                guard let self, self.tabBarShown, self.presentedViewController == nil else { return 0 }
-                return self.view.bounds.maxY - self.tabBar.frame.minY
+                guard let self, self.tabBarShown else { return 0 }
+                // A context menu is presented too, but only a sheet covers the tab bar
+                let coversTabBar = self.presentedViewController?.sheetPresentationController != nil
+                return coversTabBar ? 0 : self.view.bounds.maxY - self.tabBar.frame.minY
             },
-            reserve: { [weak self] height in
+            reserve: { [weak self] height, keyboard in
                 guard let self else { return }
                 self.containers.values.forEach { $0.reserveBottom(height) }
                 var presented = self.presentedViewController
                 while let screen = presented {
-                    screen.additionalSafeAreaInsets.bottom = height
+                    // A sheet's own keyboard room would otherwise swallow the line's
+                    screen.additionalSafeAreaInsets.bottom = height + keyboard
                     presented = screen.presentedViewController
                 }
             })
@@ -267,11 +273,17 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
         }
     }
 
-    #if DEBUG
-    // Test-only: `-ReconcileDemo checklist|step1|step2` shows the flow on sample data
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         attachWriteStorageLine()
+        #if DEBUG
+        showReconcileDemo()
+        #endif
+    }
+
+    #if DEBUG
+    // Test-only: `-ReconcileDemo checklist|step1|step2` shows the flow on sample data
+    private func showReconcileDemo() {
         guard let request = ReconcileDemo.request, reconcileFlow == nil else { return }
         let month = ReconcileMonthViewModel(client: ReconcileDemo.client)
         Task { @MainActor in
@@ -349,23 +361,41 @@ extension NativeTab {
     }
 }
 
+// sc-5219: whether the storage line is in this build. Off in Release until the
+// final group 3 PR, which turns it on with the restart and failure notices and
+// the storage guard (task 3.10; `yarn check:native-swift` keeps them together).
+enum WriteStorageLineRollout {
+    static let isOnInRelease = false
+
+    static var isOn: Bool {
+        #if DEBUG
+        true
+        #else
+        isOnInRelease
+        #endif
+    }
+}
+
 // sc-5219: "Saving…" and "Still saving to this device. Keep the app open." One
 // line for every native screen, in its own window, so it stays visible over
 // sheets and rides above the keyboard. It takes real space: the screens below
 // end above it, so it covers neither rows nor the Undo bar. It ignores touches.
-// shortcut: a sheet presented while the line is already up gets no reserved
-// space until the line next changes; observe presentation if that shows up.
 @MainActor
 final class WriteStorageLine {
     private let window: UIWindow
     private let screen = WriteStorageLineController()
     private var observer: AnyCancellable?
     private var shown: String?
+    // UIKit has no single signal for "a sheet came or went" or "the tab bar
+    // moved", so while the line is up it follows them by looking
+    private var follower: Timer?
+    private let scene: UIWindowScene
 
     init(
         status: WriteStorageStatus, scene: UIWindowScene, barHeight: @escaping () -> CGFloat,
-        reserve: @escaping (CGFloat) -> Void
+        reserve: @escaping (_ height: CGFloat, _ keyboard: CGFloat) -> Void
     ) {
+        self.scene = scene
         window = UIWindow(windowScene: scene)
         window.windowLevel = .alert
         window.isUserInteractionEnabled = false
@@ -383,18 +413,54 @@ final class WriteStorageLine {
             UIAccessibility.post(notification: .announcement, argument: queued)
         }
         shown = message
-        window.isHidden = message == nil
         screen.show(message)
+        follow()
+        follower?.invalidate()
+        follower = nil
+        guard message != nil else { return }
+        follower = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.follow() }
+        }
     }
+
+    private func follow() {
+        // A confirmation sits at the bottom and takes the person's whole attention;
+        // the line ignores touches, so it must not lie over its buttons
+        window.isHidden = shown == nil || isConfirmationUp
+        screen.follow()
+    }
+
+    private var isConfirmationUp: Bool {
+        var screen = scene.windows.first(where: \.isKeyWindow)?.rootViewController
+        while let presented = screen?.presentedViewController {
+            if presented is UIAlertController { return true }
+            screen = presented
+        }
+        return false
+    }
+}
+
+// The view being typed in, wherever it is
+private extension UIResponder {
+    private static weak var found: UIResponder?
+
+    static var current: UIResponder? {
+        found = nil
+        UIApplication.shared.sendAction(#selector(noteFirstResponder), to: nil, from: nil, for: nil)
+        return found
+    }
+
+    @objc private func noteFirstResponder() { UIResponder.found = self }
 }
 
 private final class WriteStorageLineController: UIViewController {
     var barHeight: () -> CGFloat = { 0 }
-    var onHeight: (CGFloat) -> Void = { _ in }
+    var onHeight: (_ height: CGFloat, _ keyboard: CGFloat) -> Void = { _, _ in }
     private let pill = UIView()
     private let label = UILabel()
     private var aboveBar: NSLayoutConstraint?
-    private var reserved: CGFloat = -1
+    private var atTop: NSLayoutConstraint?
+    private var reserved: CGFloat = 0
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -420,6 +486,7 @@ private final class WriteStorageLineController: UIViewController {
         resting.priority = .defaultLow
         let bar = pill.bottomAnchor.constraint(lessThanOrEqualTo: view.bottomAnchor)
         aboveBar = bar
+        atTop = pill.topAnchor.constraint(equalTo: safe.topAnchor, constant: 8)
         NSLayoutConstraint.activate([
             label.topAnchor.constraint(equalTo: pill.topAnchor, constant: 6),
             label.bottomAnchor.constraint(equalTo: pill.bottomAnchor, constant: -6),
@@ -443,22 +510,27 @@ private final class WriteStorageLineController: UIViewController {
     func show(_ message: String?) {
         loadViewIfNeeded()
         label.text = message
-        view.setNeedsLayout()
-        view.layoutIfNeeded()
-        report(isShown: message != nil)
     }
 
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
+    // Puts the line where it belongs now, and gives the screens under it,
+    // including a sheet that has just opened, the room it takes
+    func follow() {
+        guard label.text != nil else {
+            if reserved != 0 { onHeight(0, 0) }
+            reserved = 0
+            return
+        }
         aboveBar?.constant = -(barHeight() + 8)
-        report(isShown: label.text != nil)
-    }
-
-    private func report(isShown: Bool) {
-        let height = isShown ? pill.bounds.height + 8 : 0
-        guard height != reserved else { return }
-        reserved = height
-        onHeight(height)
+        view.layoutIfNeeded()
+        let keyboardTop = view.keyboardLayoutGuide.layoutFrame.minY
+        let keyboardIsUp = keyboardTop < view.safeAreaLayoutGuide.layoutFrame.maxY
+        let field = (UIResponder.current as? UIView).map { $0.convert($0.bounds, to: view) }
+        atTop?.isActive = keyboardIsUp
+            && WriteStorageLinePlacement.coversField(field, lineHeight: pill.bounds.height, keyboardTop: keyboardTop)
+        view.layoutIfNeeded()
+        reserved = pill.bounds.height + 8
+        let safeBottom = view.safeAreaLayoutGuide.layoutFrame.maxY
+        onHeight(reserved, keyboardIsUp && atTop?.isActive != true ? safeBottom - keyboardTop : 0)
     }
 }
 

@@ -21,15 +21,32 @@ enum UITestAccounts {
     // fixtures without slow storage. Kept alive with the window.
     private static var storageLine: WriteStorageLine?
 
-    @MainActor static func showStorageLine(over root: UIViewController, in scene: UIWindowScene) {
+    // Also on the real app shell, to see the line over real screens
+    @MainActor static func holdStorageLine(_ status: WriteStorageStatus) {
         guard let state = UserDefaults.standard.string(forKey: "UITestStorageLine") else { return }
+        if state == "saving" {
+            status.writeBegan()
+            return
+        }
+        status.record(.notStored)
+        // The page's load clears it, as a restart would: put it back
+        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+            MainActor.assumeIsolated {
+                status.acknowledgeMayNotBeSaved()
+                status.record(.notStored)
+            }
+        }
+    }
+
+    @MainActor static func showStorageLine(over root: UIViewController, in scene: UIWindowScene) {
+        guard UserDefaults.standard.string(forKey: "UITestStorageLine") != nil else { return }
         let status = WriteStorageStatus()
-        if state == "saving" { status.writeBegan() } else { status.record(.notStored) }
+        holdStorageLine(status)
         storageLine = WriteStorageLine(
             status: status, scene: scene, barHeight: { 0 },
-            reserve: { [weak root] height in
+            reserve: { [weak root] height, keyboard in
                 (root as? TabContainerViewController)?.reserveBottom(height)
-                root?.presentedViewController?.additionalSafeAreaInsets.bottom = height
+                root?.presentedViewController?.additionalSafeAreaInsets.bottom = height + keyboard
             })
     }
 

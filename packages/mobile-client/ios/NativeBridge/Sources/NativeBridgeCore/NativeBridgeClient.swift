@@ -123,6 +123,12 @@ public enum NativeBridgeEvent {
         return tables.compactMap { $0 as? String }
     }
 
+    // sc-5219: the page load announcing itself
+    public static func readyEpoch(of body: Any) -> String? {
+        guard name(of: body) == "ready" else { return nil }
+        return ((body as? [String: Any])?["payload"] as? [String: Any])?["epoch"] as? String
+    }
+
     // sc-5219: which native/persisted call, of which page load, is now stored
     public static func stored(of body: Any) -> (seq: Int, epoch: String)? {
         guard name(of: body) == "stored",
@@ -164,14 +170,11 @@ public final class WriteStorageStatus: ObservableObject {
     @Published public private(set) var mayNotBeSaved = false
     private var currentEpoch: String?
     private var retiredEpochs: Set<String> = []
-    // Counts page loads here, for a write that never got a `seq`
-    private var generation = 0
-    // A new epoch revealed the restart before the page's "ready" arrived
-    private var restartAlreadyHandled = false
 
     public nonisolated init() {}
 
-    public var isPending: Bool { line != nil }
+    // Pending too once a restart may have lost something: nothing may then say it is saved
+    public var isPending: Bool { line != nil || mayNotBeSaved }
 
     private func updateLine() {
         let next = writesInProgress > 0 ? Self.savingMessage : unstored.isEmpty ? nil : Self.notYetStoredMessage
@@ -215,14 +218,14 @@ public final class WriteStorageStatus: ObservableObject {
 
     // Whether a change is still being saved, for wording that must not claim otherwise
     public var pendingChanges: AnyPublisher<Bool, Never> {
-        $line.map { $0 != nil }.removeDuplicates().eraseToAnyPublisher()
+        $line.combineLatest($mayNotBeSaved).map { $0 != nil || $1 }.removeDuplicates().eraseToAnyPublisher()
     }
 
-    // The page load this write was made in
+    // The page load this write was made in, kept for a write that never gets an answer
     @discardableResult
-    func writeBegan() -> Int {
+    func writeBegan() -> WriteOrigin {
         writesInProgress += 1
-        return generation
+        return WriteOrigin(epoch: currentEpoch)
     }
 
     #if SWIFT_PACKAGE
@@ -240,13 +243,21 @@ public final class WriteStorageStatus: ObservableObject {
     }
 
     // A stored answer covers every write of its own page load asked about
-    // before it, and no later one
-    func record(_ answer: PersistedAnswer, ticket: Int? = nil, madeIn writeGeneration: Int? = nil) {
+    // before it, and no later one. Returns whether this write is known stored:
+    // a page can't vouch for a write made on the page before it.
+    @discardableResult
+    func record(_ answer: PersistedAnswer, ticket: Int? = nil, madeIn origin: WriteOrigin? = nil) -> Bool {
         let ticket = ticket ?? nextTicket()
-        let isOlderWrite = writeGeneration.map { $0 != generation } ?? false
-        guard isCurrentPage(answer.seq?.epoch), !isOlderWrite else {
+        let answeredBy = answer.seq?.epoch
+        let isLive = answeredBy.map(adopt) ?? true
+        if let origin, origin.epoch != (answeredBy ?? currentEpoch) {
+            mayNotBeSaved = true
+            return false
+        }
+        guard isLive else {
+            // The page before this one, about its own write
             if !answer.stored { mayNotBeSaved = true }
-            return
+            return answer.stored
         }
         if answer.stored {
             newestStoredTicket = max(newestStoredTicket, ticket)
@@ -257,28 +268,25 @@ public final class WriteStorageStatus: ObservableObject {
             if answer.seq != nil { unstored.removeAll { $0.seq == nil && $0.ticket < ticket } }
             if (answer.seq?.n ?? .max) > storedThroughSeq { unstored.append((ticket, answer.seq?.n)) }
         }
+        return answer.stored
     }
 
     // The engine's storage-stored, which the page forwards as `stored`. It can
     // arrive before the answer that carries its number. Writes are stored in
     // order, so it covers every earlier number of its page load too.
     public func storedEvent(seq: Int, epoch: String) {
-        guard isCurrentPage(epoch) else { return }
+        guard adopt(epoch) else { return }
         storedThroughSeq = max(storedThroughSeq, seq)
         unstored.removeAll { $0.seq.map { $0 <= seq } ?? false }
     }
 
-    // The page loaded again: what it had not stored may be gone
-    public func pageLoaded() {
-        if restartAlreadyHandled {
-            restartAlreadyHandled = false
-            return
-        }
-        retireCurrentPage()
+    // The page bridge's "ready". The same page may already be known from an answer.
+    public func pageLoaded(epoch: String) {
+        _ = adopt(epoch)
     }
 
+    // What a page that has gone had not stored may be lost with it
     private func retireCurrentPage() {
-        generation += 1
         if let currentEpoch { retiredEpochs.insert(currentEpoch) }
         currentEpoch = nil
         newestStoredTicket = 0
@@ -292,25 +300,36 @@ public final class WriteStorageStatus: ObservableObject {
 
     public func acknowledgeMayNotBeSaved() { mayNotBeSaved = false }
 
-    // An answer with no page load named (no answer at all) counts as the current one
-    private func isCurrentPage(_ epoch: String?) -> Bool {
-        guard let epoch else { return true }
+    // False for a page that has already gone
+    private func adopt(_ epoch: String) -> Bool {
         if retiredEpochs.contains(epoch) { return false }
         if epoch != currentEpoch {
-            if currentEpoch != nil {
-                retireCurrentPage()
-                restartAlreadyHandled = true
-            }
+            if currentEpoch != nil || !unstored.isEmpty { retireCurrentPage() }
             currentEpoch = epoch
         }
         return true
     }
 }
 
+// The page load a write was made in; nil before the page has announced itself
+struct WriteOrigin: Equatable {
+    let epoch: String?
+}
+
 // The engine's page load, and this call's place in it
 struct PersistedSeq: Decodable, Equatable {
     let epoch: String
     let n: Int
+}
+
+// sc-5219: where the storage line may rest while the keyboard is up
+public enum WriteStorageLinePlacement {
+    // The line rests just above the keyboard, unless that would cover the field being edited
+    public static func coversField(_ field: CGRect?, lineHeight: CGFloat, keyboardTop: CGFloat, gap: CGFloat = 8) -> Bool {
+        guard let field else { return false }
+        let bottom = keyboardTop - gap
+        return field.maxY > bottom - lineHeight && field.minY < bottom
+    }
 }
 
 struct PersistedAnswer: Decodable, Equatable {
@@ -527,7 +546,7 @@ public struct NativeBridgeClient {
     // its own. The write is never retried. A failure of the second call only
     // means not stored: the write has already been applied.
     private func sendThenPersist<Args: Encodable>(_ name: String, args: Args) async throws -> (data: Data, stored: Bool) {
-        let generation = await storage?.writeBegan()
+        let origin = await storage?.writeBegan()
         let data: Data
         do {
             data = try await send(name, args: args)
@@ -535,7 +554,7 @@ public struct NativeBridgeClient {
             await storage?.writeEnded()
             throw error
         }
-        let stored = await persisted(madeIn: generation)
+        let stored = await persisted(madeIn: origin)
         await storage?.writeEnded()
         return (data, stored)
     }
@@ -547,22 +566,21 @@ public struct NativeBridgeClient {
     }
     #endif
 
-    private func persisted(madeIn generation: Int?) async -> Bool {
+    private func persisted(madeIn origin: WriteOrigin?) async -> Bool {
         let ticket = await storage?.nextTicket() ?? 0
         do {
             let answer = try await askPersisted()
-            await storage?.record(answer, ticket: ticket, madeIn: generation)
-            return answer.stored
+            return await storage?.record(answer, ticket: ticket, madeIn: origin) ?? answer.stored
         } catch NativeBridgeError.timedOut {
-            await storage?.record(.notStored, ticket: ticket, madeIn: generation)
+            await storage?.record(.notStored, ticket: ticket, madeIn: origin)
             // The one call that may be repeated: it changes nothing
             Task {
                 let retry = await storage?.nextTicket() ?? 0
-                if let answer = try? await askPersisted() { await storage?.record(answer, ticket: retry, madeIn: generation) }
+                if let answer = try? await askPersisted() { await storage?.record(answer, ticket: retry, madeIn: origin) }
             }
             return false
         } catch {
-            await storage?.record(.notStored, ticket: ticket, madeIn: generation)
+            await storage?.record(.notStored, ticket: ticket, madeIn: origin)
             return false
         }
     }

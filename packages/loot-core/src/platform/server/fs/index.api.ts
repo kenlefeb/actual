@@ -158,3 +158,16 @@ export const getModifiedTime: typeof T.getModifiedTime = filepath => {
     });
   });
 };
+
+// Fork-only (sc-5219, native-durable-writes): better-sqlite3 writes are
+// durable when they return, so nothing waits and nothing fails here
+export const enableStorageLatch: typeof T.enableStorageLatch = () => undefined;
+
+export const whenPersisted: typeof T.whenPersisted = () => Promise.resolve();
+
+export const storageState: typeof T.storageState = () => ({
+  failed: false,
+  lastStoredFlushAt: null,
+  quota: false,
+  closeFailed: false,
+});

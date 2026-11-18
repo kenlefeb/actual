@@ -228,8 +228,12 @@ export async function openDatabase(pathOrBuffer?: string | Uint8Array) {
       if (path !== ':memory:') {
         if (typeof SharedArrayBuffer === 'undefined') {
           const stream = SQL.FS.open(SQL.FS.readlink(path), 'a+');
-          await stream.node.contents.readIfFallback();
-          SQL.FS.close(stream);
+          // Fork (sc-5219): a failed read must not leave the file looking open
+          try {
+            await stream.node.contents.readIfFallback();
+          } finally {
+            SQL.FS.close(stream);
+          }
         }
 
         db = new SQL.Database(

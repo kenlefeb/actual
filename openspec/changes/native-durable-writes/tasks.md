@@ -2,21 +2,21 @@
 
 ## 1. Storage barrier in loot-core (sc-5219)
 
-- [ ] 1.1 Failing tests first, importing the installed `absurd-sql/dist/indexeddb-backend` module on `fake-indexeddb`:
+- [x] 1.1 Failing tests first, importing the installed `absurd-sql/dist/indexeddb-backend` module on `fake-indexeddb`:
   - writes settle on `complete`, and on `abort` and `error`;
   - the chain advances in order with values captured at flush time;
   - `lastStoredFlushAt` is the last stored write's flush time, and `quota` is set on a quota error;
   - the latch stops writes and raises `storage-failed` (`fallback-write-error` only when the safety check fails);
   - `whenPersisted` and `storageState`;
   - SharedArrayBuffer mode resolves at once (design D2, D12).
-- [ ] 1.2 `yarn patch absurd-sql@0.0.54`: rewrite `Persistance.write` to settle on the transaction; capture values at flush time; the chain, the latch, `lastStoredFlushAt`, `quota`, `whenPersisted` and `storageState`; failures raise `onFallbackFailure`. Keep the MIT notice and a header naming sc-5219. Add the root `resolutions` entry. `yarn install --immutable` passes with the lock's patch hash (D1, D2)
-- [ ] 1.3 `whenPersisted()` and `storageState()` in `platform/server/fs/index.ts` (fork-marked), and resolving versions in `index.electron.ts` and `index.api.ts` (D2, "Durable platforms do not wait for storage")
-- [ ] 1.4 Failing tests first for `native/persisted` (stored, not stored on timeout, `[native:not-stored]`), `native/storage-state` and the limit with floor and ceiling. Then:
+- [x] 1.2 `yarn patch absurd-sql@0.0.54`: rewrite `Persistance.write` to settle on the transaction; capture values at flush time; the chain, the latch, `lastStoredFlushAt`, `quota`, `whenPersisted` and `storageState`; failures raise `onFallbackFailure`. Keep the MIT notice and a header naming sc-5219. Add the root `resolutions` entry. `yarn install --immutable` passes with the lock's patch hash (D1, D2)
+- [x] 1.3 `whenPersisted()` and `storageState()` in `platform/server/fs/index.ts` (fork-marked), and resolving versions in `index.electron.ts` and `index.api.ts` (D2, "Durable platforms do not wait for storage")
+- [x] 1.4 Failing tests first for `native/persisted` (stored, not stored on timeout, `[native:not-stored]`), `native/storage-state` and the limit with floor and ceiling. Then:
   - both handlers;
   - `not-stored` in `refusal.ts` and `native-refusal-codes.json`;
   - `native-persist-wait-ms` (default 2000, floor 100, ceiling 4000) and the registry's optional `floor` in `limits.ts` (D4, D7).
-- [ ] 1.5 Failing tests first for "Only stored changes reach the server" (nothing sent before persistence; on a hung store, nothing sent after the wait and a retry next round; nothing sent or received with the latch set; no duplicate after re-entry). Then the fork-marked gate in `_fullSync` (D6)
-- [ ] 1.6 Run `yarn typecheck`, `yarn lint` and the `@actual-app/core` tests; all pass
+- [x] 1.5 Failing tests first for "Only stored changes reach the server" (nothing sent before persistence; on a hung store, nothing sent after the wait and a retry next round; nothing sent or received with the latch set; no duplicate after re-entry). Then the fork-marked gate in `_fullSync` (D6)
+- [x] 1.6 Run `yarn typecheck`, `yarn lint` and the `@actual-app/core` tests; all pass
 
 ## 2. Page bridge (sc-5219)
 
@@ -24,6 +24,7 @@
 - [ ] 2.2 The latch check, the `storage-failed` event in `EVENTS`, `native-bridge-allowlist.json`, the Swift allowlist and `coverage.json` skips
 - [ ] 2.3 Test hooks behind `__FORK_TEST_HOOKS__` (false in production builds). A Fork CI step searches the production page and worker bundles for the hook marker and fails if found (D10)
 - [ ] 2.4 Run `yarn typecheck`, `yarn lint` and the `@actual-app/web` tests; all pass
+- [ ] 2.5 Failing test first: the bridge calls `native/enable-storage-guard` as it installs, before any budget opens. A failure from before the switch latches with a cut-off that can overstate the loss (Security, PR #473)
 
 ## 3. iPhone and Mac shells (sc-5219)
 
@@ -51,10 +52,10 @@
 
 ## 4. Review decisions from the engine PR (sc-5219)
 
-- [ ] 4.1 Failing tests first, then the engine: a timed-out sync wait raises `storage-slow`, emits no success, sends nothing and schedules a retry; `storage-stored` follows a timed-out `native/persisted`; `storage-close-failed` fires once for a closed file and does not latch (D4, D6, D7a)
+- [x] 4.1 Failing tests first, then the engine: a timed-out sync wait raises `storage-slow`, emits no success, sends nothing and schedules a retry; `storage-stored` follows a timed-out `native/persisted`; `storage-close-failed` fires once for a closed file and does not latch (D4, D6, D7a)
 - [ ] 4.2 The page bridge forwards `storage-stored` as `stored`; `storage-slow` and `storage-failed` join the sync reasons in the page and Swift
 - [ ] 4.3 The storage guard: a one-way engine switch, off by default and set when the native bridge installs. Tests that with it off a fallback-mode browser's sync, messages and `fallback-write-error` are as today (safety-check failures only, no `conflict` flag), that with it off the patched backend fails as stock does (no latch, no dropped queue, quota rejections unseen, `onFallbackFailure` only for the safety check), and that with it on the latch, refusal, gate and notices apply; on `storage-failed` the page asks `native/storage-state` (D7a)
 - [ ] 4.4 `floor` in `native/settings`, its fixture and Swift decoding; the native and web Limits screens bounded to floor through ceiling (D7)
 - [ ] 4.5 The closed-budget notice in the shells, with the Product Owner's wording in the copy table; the restart notices' approved wording goes there too
 - [ ] 4.6 Failing tests first, then the status lines (`NativeAccountsViewController` and its Accounts sync state; `MobileSyncStatus.tsx`): "Waiting for this device to finish saving" on `storage-slow`, kept through held retries, and normal again when the wait clears
-- [ ] 4.7 The patch as specified in D2 and D7: rejection from `trans.onabort` only; a `Set` of files; the per-database queue with the guard on or off; the 60 s deadline covering only the wait for pending writes, with a test that a read slower than the deadline still opens; `initialFullSync` completing under `storage-slow`
+- [x] 4.7 The patch as specified in D2 and D7: rejection from `trans.onabort` only; a `Set` of files; the per-database queue with the guard on or off; the 60 s deadline covering only the wait for pending writes, with a test that a read slower than the deadline still opens; `initialFullSync` completing under `storage-slow`

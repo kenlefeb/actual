@@ -212,6 +212,11 @@ export function listenForSyncEvent(store: AppStore, queryClient: QueryClient) {
         'https://github.com/actualbudget/actual/issues/new?assignees=&labels=bug&template=bug-report.yml&title=%5BBug%5D%3A+';
 
       switch (event.subtype) {
+        // Fork (sc-5219): sync retries by itself while storage is slow, and a
+        // storage failure has its own notice
+        case 'storage-slow':
+        case 'storage-failed':
+          break;
         case 'out-of-sync':
           if (attemptedSyncRepair) {
             notif = {

@@ -63,6 +63,8 @@ public enum NativeBridgeAllowlist {
 // reason from a closed set. Nothing else of loot-core's error crosses.
 public enum SyncFailureReason: String, Equatable {
     case network, unauthorized, outOfSync = "out-of-sync", clockDrift = "clock-drift", encryption, other
+    // sc-5219 (native-durable-writes)
+    case storageSlow = "storage-slow", storageFailed = "storage-failed"
 }
 
 public enum SyncResult: Decodable, Equatable {
@@ -121,6 +123,8 @@ public struct NativeRefusal: Equatable {
         // sc-3602 (D3): the save of an edit that changed elsewhere, or a draft rules changed since it was shown
         case changedSince = "changed-since"
         case previewStale = "preview-stale"
+        // sc-5219 (native-durable-writes D5): storage failed; nothing more is stored
+        case notStored = "not-stored"
     }
 
     public let code: Code

@@ -17,7 +17,7 @@ import { currencies } from '#shared/currencies';
 import { UPCOMING_LENGTH_PRESET_VALUES } from '#shared/schedules';
 import { dateFormats, numberFormats } from '#shared/util';
 
-import { isLimitId, LIMITS, readLimit, readLimits } from './limits';
+import { floorOf, isLimitId, LIMITS, readLimit, readLimits } from './limits';
 import { nativeRefusal } from './refusal';
 
 const BOOLEAN = ['true', 'false'];
@@ -178,12 +178,12 @@ async function validate(changes: unknown) {
           value !== null &&
           !(
             Number.isInteger(value) &&
-            value >= 1 &&
+            value >= floorOf(key) &&
             value <= LIMITS[key].ceiling
           )
         ) {
           throw invalid(
-            `${key} must be a whole number from 1 to ${LIMITS[key].ceiling}`,
+            `${key} must be a whole number from ${floorOf(key)} to ${LIMITS[key].ceiling}`,
           );
         }
         return { key, value: value === null ? null : String(value) };

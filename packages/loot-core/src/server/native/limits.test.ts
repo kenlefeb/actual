@@ -104,6 +104,14 @@ const D11 = [
     5,
     30,
   ],
+  // sc-5219 (native-durable-writes D7)
+  [
+    'native-persist-wait-ms',
+    'Saving: wait for device storage',
+    "How long a change waits to be stored on this device before the app says it isn't yet",
+    2000,
+    4000,
+  ],
 ] as const;
 
 // What the MCP server enforces itself (packages/mcp/src/limits.ts and the
@@ -219,11 +227,35 @@ describe('the limits registry', () => {
       id: 'accounts-register-page-size',
       value: 120,
       default: 50,
+      floor: 1,
       ceiling: 200,
     });
     expect(limits.find(l => l.id === 'accounts-write-max-ids')?.value).toBe(
       100,
     );
     expect(await readLimit('accounts-register-page-size')).toBe(120);
+  });
+
+  // sc-5219 (native-durable-writes D7): an optional floor; others keep 1
+  it('reads a value outside floor to ceiling as the default', async () => {
+    expect(LIMITS['native-persist-wait-ms']).toMatchObject({ floor: 100 });
+    const read = async (value: string) => {
+      await db.update('preferences', { id: 'native-persist-wait-ms', value });
+      return readLimit('native-persist-wait-ms');
+    };
+    for (const bad of ['50', '99', '5000', 'abc', '1e3']) {
+      expect(await read(bad), bad).toBe(2000);
+    }
+    expect(
+      (await readLimits()).find(l => l.id === 'native-persist-wait-ms'),
+    ).toMatchObject({ floor: 100, ceiling: 4000 });
+    expect(await read('100')).toBe(100);
+    expect(await read('3000')).toBe(3000);
+    expect(await read('4000')).toBe(4000);
+    await db.update('preferences', {
+      id: 'accounts-write-max-ids',
+      value: '1',
+    });
+    expect(await readLimit('accounts-write-max-ids')).toBe(1);
   });
 });

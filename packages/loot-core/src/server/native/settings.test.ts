@@ -22,7 +22,7 @@ import { UPCOMING_LENGTH_PRESET_VALUES } from '#shared/schedules';
 import { dateFormats, numberFormats } from '#shared/util';
 
 import { app } from './app';
-import { LIMITS } from './limits';
+import { floorOf, LIMITS } from './limits';
 import { saveSettings } from './settings';
 
 const h = app.handlers;
@@ -92,6 +92,7 @@ describe('native/settings', () => {
       id: 'accounts-register-page-size',
       value: 120,
       default: 50,
+      floor: 1,
       ceiling: 200,
     });
     // Only limits something reads: a setting that does nothing is not shown
@@ -356,11 +357,16 @@ describe('native/settings-save', () => {
   );
 
   it.each(readIds)(
-    '%s: takes 1 and its ceiling, refuses ceiling + 1, and null resets it',
+    '%s: takes its floor and its ceiling, refuses outside them, and null resets it',
     async id => {
       const { ceiling } = LIMITS[id as keyof typeof LIMITS];
-      await save({ [id]: 1 });
-      expect(await pref(id)).toBe('1');
+      // 1, unless the limit sets a floor (sc-5219)
+      const floor = floorOf(id as keyof typeof LIMITS);
+      await save({ [id]: floor });
+      expect(await pref(id)).toBe(String(floor));
+      if (floor > 1) {
+        await expect(save({ [id]: floor - 1 })).rejects.toThrow(refused);
+      }
       await save({ [id]: ceiling });
       expect(await pref(id)).toBe(String(ceiling));
       for (const bad of [ceiling + 1, -1, Number.NaN, Infinity, -Infinity]) {

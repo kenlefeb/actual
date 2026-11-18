@@ -19,6 +19,12 @@ import * as db from '#server/db';
 import { PostError, SyncError } from '#server/errors';
 import { app } from '#server/main-app';
 import { runMutator } from '#server/mutators';
+import {
+  setSyncHeld,
+  storageFailed,
+  storageGuardEnabled,
+  waitForStorage,
+} from '#server/native/persisted';
 import { postBinary } from '#server/post';
 import * as prefs from '#server/prefs';
 import { getServer } from '#server/server-config';
@@ -794,7 +800,8 @@ export async function initialFullSync(): Promise<{
   if (isError(result)) {
     // Make sure to wait for anything in the spreadsheet to process
     await sheet.waitOnSpreadsheet();
-    return result;
+    // Fork (sc-5219): only held back and retrying; the budget itself is fine
+    return result.error.reason === 'storage-slow' ? {} : result;
   }
   return {};
 }
@@ -835,6 +842,14 @@ export const fullSync = once(async function (): Promise<
           subtype: e.reason,
           meta: e.meta,
         });
+      } else if (e.reason === 'storage-failed') {
+        // Fork (sc-5219): the storage-failed event carries the notice
+        app.events.emit('sync', { type: 'error', subtype: 'storage-failed' });
+      } else if (e.reason === 'storage-slow') {
+        // Fork (sc-5219): held back, never "synced"; try again by itself
+        app.events.emit('sync', { type: 'error', subtype: 'storage-slow' });
+        clearFullSyncTimeout();
+        syncTimeout = setTimeout(fullSync, FULL_SYNC_DELAY);
       } else if (e.reason === 'clock-drift') {
         app.events.emit('sync', {
           type: 'error',
@@ -907,6 +922,26 @@ async function _fullSync(
     new Timestamp(Date.now() - 5 * 60 * 1000, 0, '0').toString();
 
   const messages = getMessagesSince(since);
+
+  // Fork (sc-5219, openspec/changes/native-durable-writes D6): only once the
+  // native bridge has turned the storage guard on, send only changes stored on
+  // this device. In the iPhone and Mac shells a write is stored when its
+  // IndexedDB transaction completes; wait for the writes behind these
+  // messages, at most native-persist-wait-ms. On expiry send nothing, report
+  // storage-slow rather than success, and retry. Once storage failed, send
+  // and receive nothing until reload.
+  if (storageGuardEnabled()) {
+    if (storageFailed()) {
+      throw new SyncError('storage-failed');
+    }
+    const storage = await waitForStorage().catch(() => {
+      throw new SyncError('storage-failed');
+    });
+    setSyncHeld(!storage.stored);
+    if (!storage.stored) {
+      throw new SyncError('storage-slow');
+    }
+  }
 
   const userToken = await asyncStorage.getItem('user-token');
 

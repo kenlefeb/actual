@@ -65,6 +65,10 @@ jobs:
       - name: Build the browser app
         if: steps.scope.outputs.run == 'true'
         run: yarn build:browser --skip-translations
+      # sc-5219 (native-durable-writes D10)
+      - name: Check production bundles hold no test hooks
+        if: steps.scope.outputs.run == 'true'
+        run: node fork/scripts/check-test-hooks.mjs
 
   # The MCP server is the eighth aligned release package (sc-1573): build its
   # dist/mcp.js artifact so a broken bundle shows up before merge. Same scope

@@ -21,10 +21,12 @@ public struct NativeSettings: Decodable, Equatable {
         public let id: String
         public let value: Int
         public let defaultValue: Int
+        // The smallest value a save accepts; 1 unless the limit sets one
+        public let floor: Int
         public let ceiling: Int
 
         enum CodingKeys: String, CodingKey {
-            case id, value, ceiling
+            case id, value, floor, ceiling
             case defaultValue = "default"
         }
     }

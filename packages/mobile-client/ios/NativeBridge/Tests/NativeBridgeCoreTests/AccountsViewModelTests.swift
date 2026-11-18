@@ -34,6 +34,62 @@ private func registerPage(ids: [String], next: String?, header: Bool) throws -> 
 
 private struct Boom: Error {}
 
+// Time under the test's control: the models take their change timer and their
+// typing pause from here, so no test waits on the wall clock.
+private final class ManualClock {
+    // Change coalescing: one timer per burst
+    private(set) var scheduled = 0
+    private var changeTimers: [() -> Void] = []
+    var schedule: ChangeSchedule {
+        { [self] _, work in
+            scheduled += 1
+            changeTimers.append(work)
+        }
+    }
+
+    func fireChanges() {
+        let timers = changeTimers
+        changeTimers = []
+        timers.forEach { $0() }
+    }
+
+    // The search pause: every pause waits here until the test ends it
+    private(set) var pauses = 0
+    private var waiting: [CheckedContinuation<Void, Never>] = []
+    var sleep: AccountsSleep {
+        { [self] _ in
+            pauses += 1
+            await withCheckedContinuation { waiting.append($0) }
+        }
+    }
+
+    func endPauses() {
+        let all = waiting
+        waiting = []
+        all.forEach { $0.resume() }
+    }
+}
+
+// Waits for what a started task will do, as soon as it has done it. A task the
+// model starts can need a pool thread first, which a loaded CI runner may delay,
+// so this polls up to a generous limit instead of counting yields. Nothing
+// asserts that time passed; the limit only ends a hang.
+private func eventually(
+    _ what: String, file: StaticString = #filePath, line: UInt = #line, _ condition: () -> Bool
+) async throws {
+    for _ in 0..<10_000 {
+        if condition() { return }
+        try await Task.sleep(nanoseconds: 1_000_000)
+    }
+    XCTFail("never happened: \(what)", file: file, line: line)
+}
+
+// Lets tasks that were already runnable finish; only for "nothing else happened" checks, which
+// a slow runner can only make pass sooner, never fail
+private func settle() async {
+    for _ in 0..<200 { await Task.yield() }
+}
+
 @MainActor
 private final class FakeAccountsPage {
     var calls: [(name: String, args: String)] = []
@@ -42,6 +98,25 @@ private final class FakeAccountsPage {
     var pages: [String?: String] = [:]
     var failures: [String: Error] = [:]
     var syncResult = #"{"ok":true}"#
+    // search text -> page, so a test can tell which search's rows it got
+    var searchPages: [String: String] = [:]
+    // A read for this search text waits here until `release` (a slow first search)
+    private var held: [String: CheckedContinuation<Void, Never>] = [:]
+    private var holding: Set<String> = []
+
+    func hold(_ search: String) { holding.insert(search) }
+
+    func isWaiting(_ search: String) -> Bool { held[search] != nil }
+
+    func release(_ search: String) {
+        holding.remove(search)
+        held.removeValue(forKey: search)?.resume()
+    }
+
+    fileprivate func waitIfHeld(_ search: String) async {
+        guard holding.contains(search) else { return }
+        await withCheckedContinuation { held[search] = $0 }
+    }
 
     init() throws {
         list = try fixture("accounts-list")
@@ -50,7 +125,13 @@ private final class FakeAccountsPage {
 
     var client: NativeBridgeClient {
         NativeBridgeClient(timeout: 1) { name, args in
-            try await MainActor.run {
+            if name == "native/account-register",
+               let request = try JSONSerialization.jsonObject(with: Data(args.utf8)) as? [String: Any],
+               let search = request["search"] as? String
+            {
+                await self.waitIfHeld(search)
+            }
+            return try await MainActor.run {
                 self.calls.append((name, args))
                 if let failure = self.failures[name] { throw failure }
                 switch name {
@@ -58,6 +139,7 @@ private final class FakeAccountsPage {
                 case "sync": return self.syncResult
                 default:
                     let request = try JSONSerialization.jsonObject(with: Data(args.utf8)) as! [String: Any]
+                    if let search = request["search"] as? String, let page = self.searchPages[search] { return page }
                     return self.pages[request["cursor"] as? String] ?? self.pages[nil]!
                 }
             }
@@ -74,8 +156,10 @@ private final class FakeAccountsPage {
 
 @MainActor
 final class AccountsListViewModelTests: XCTestCase {
+    private let clock = ManualClock()
+
     private func model(_ page: FakeAccountsPage) -> AccountsListViewModel {
-        AccountsListViewModel(client: page.client, changeInterval: 0.001)
+        AccountsListViewModel(client: page.client, schedule: clock.schedule)
     }
 
     private func expected(_ page: FakeAccountsPage) throws -> AccountsList {
@@ -124,9 +208,12 @@ final class AccountsListViewModelTests: XCTestCase {
         for table in ["transactions", "accounts", "preferences", "payees", "categories"] {
             model.eventReceived("sync-event", tables: [table])
         }
-        try await waitUntil("one re-read") { page.count("native/accounts-list") == 2 }
-        try await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertEqual(clock.scheduled, 1, "the burst shares one timer")
+        clock.fireChanges()
+        try await eventually("one re-read") { page.count("native/accounts-list") == 2 }
+        await settle()
         XCTAssertEqual(page.count("native/accounts-list"), 2)
+        XCTAssertEqual(clock.scheduled, 1)
     }
 
     func testEventsThatTouchNothingItShowsAreIgnored() async throws {
@@ -135,7 +222,7 @@ final class AccountsListViewModelTests: XCTestCase {
         await model.load()
         model.eventReceived("sync-event", tables: ["schedules"])
         model.eventReceived("sync-event", tables: [])
-        try await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertEqual(clock.scheduled, 0)
         XCTAssertEqual(page.count("native/accounts-list"), 1)
     }
 
@@ -145,7 +232,7 @@ final class AccountsListViewModelTests: XCTestCase {
         await model.load()
         await model.setSceneActive(false)
         model.eventReceived("sync-event", tables: ["accounts"])
-        try await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertEqual(clock.scheduled, 0)
         XCTAssertEqual(page.count("native/accounts-list"), 1)
         await model.setSceneActive(true)
         XCTAssertEqual(page.count("native/accounts-list"), 2)
@@ -176,8 +263,10 @@ final class AccountsListViewModelTests: XCTestCase {
 
 @MainActor
 final class AccountRegisterViewModelTests: XCTestCase {
-    private func model(_ page: FakeAccountsPage, searchInterval: TimeInterval = 0.01) -> AccountRegisterViewModel {
-        AccountRegisterViewModel(client: page.client, accountId: "checking", searchInterval: searchInterval, changeInterval: 0.001)
+    private let clock = ManualClock()
+
+    private func model(_ page: FakeAccountsPage) -> AccountRegisterViewModel {
+        AccountRegisterViewModel(client: page.client, accountId: "checking", schedule: clock.schedule, sleep: clock.sleep)
     }
 
     private func twoPages(_ page: FakeAccountsPage) throws {
@@ -238,25 +327,53 @@ final class AccountRegisterViewModelTests: XCTestCase {
         let model = model(page)
         await model.load()
         await model.loadMore()
-        async let first: Void = model.setSearch("gr")
-        async let second: Void = model.setSearch("groc")
-        _ = await (first, second)
-        try await waitUntil("the search read") { (try? page.requests().count) == 3 }
-        try await Task.sleep(nanoseconds: 30_000_000)
+        await model.setSearch("gr")
+        await model.setSearch("groc")
+        try await eventually("both pauses started") { clock.pauses == 2 }
+        clock.endPauses()
+        try await eventually("the search read") { (try? page.requests().count) == 3 }
+        try await eventually("the first page replaced the pages") { model.state.value?.rows.map(\.id) == ["a1", "a2"] }
+        await settle()
         let requests = try page.requests()
-        XCTAssertEqual(requests.count, 3)
+        XCTAssertEqual(requests.count, 3, "the cancelled search never read")
         XCTAssertEqual(requests[2]["search"] as? String, "groc")
         XCTAssertNil(requests[2]["cursor"])
-        XCTAssertEqual(model.state.value?.rows.map(\.id), ["a1", "a2"])
+    }
+
+    // Typing calls arrive in order, but a slow read for an earlier search can finish after the
+    // read for a later one: the later search's rows stay
+    func testALaterSearchWinsWhateverOrderTheReadsFinishIn() async throws {
+        let page = try FakeAccountsPage()
+        page.searchPages["gr"] = try registerPage(ids: ["old"], next: nil, header: false)
+        page.searchPages["groc"] = try registerPage(ids: ["new"], next: nil, header: false)
+        page.hold("gr")
+        let model = model(page)
+        await model.setSearch("gr")
+        try await eventually("the pause started") { clock.pauses == 1 }
+        clock.endPauses()
+        // The read for "gr" is now in flight and held
+        try await eventually("the first read started") { page.isWaiting("gr") }
+        await model.setSearch("groc")
+        try await eventually("the second pause started") { clock.pauses == 2 }
+        clock.endPauses()
+        try await eventually("the later read finished") { model.state.value?.rows.map(\.id) == ["new"] }
+        page.release("gr")
+        await settle()
+        XCTAssertEqual(model.state.value?.rows.map(\.id), ["new"])
+        XCTAssertEqual(model.search, "groc")
     }
 
     func testClearingTheSearchSendsNoSearch() async throws {
         let page = try FakeAccountsPage()
         let model = model(page)
         await model.setSearch("x")
-        try await waitUntil("search") { (try? page.requests().count) == 1 }
+        try await eventually("the pause started") { clock.pauses == 1 }
+        clock.endPauses()
+        try await eventually("search") { (try? page.requests().count) == 1 }
         await model.setSearch("")
-        try await waitUntil("clear") { (try? page.requests().count) == 2 }
+        try await eventually("the second pause started") { clock.pauses == 2 }
+        clock.endPauses()
+        try await eventually("clear") { (try? page.requests().count) == 2 }
         XCTAssertNil(try page.requests()[1]["search"])
     }
 
@@ -264,7 +381,10 @@ final class AccountRegisterViewModelTests: XCTestCase {
         let page = try FakeAccountsPage()
         let model = model(page)
         await model.setSearch(String(repeating: "😀", count: 51))
-        try await Task.sleep(nanoseconds: 40_000_000)
+        await settle()
+        XCTAssertEqual(clock.pauses, 0)
+        clock.endPauses()
+        await settle()
         XCTAssertEqual(page.count("native/account-register"), 0)
     }
 
@@ -291,8 +411,10 @@ final class AccountRegisterViewModelTests: XCTestCase {
         for table in ["transactions", "payees", "categories", "accounts", "preferences"] {
             model.eventReceived("sync-event", tables: [table])
         }
-        try await waitUntil("re-read of two pages") { (try? page.requests().count) == before + 2 }
-        try await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertEqual(clock.scheduled, 1, "the burst shares one timer")
+        clock.fireChanges()
+        try await eventually("re-read of two pages") { (try? page.requests().count) == before + 2 }
+        await settle()
         let requests = try page.requests()
         XCTAssertEqual(requests.count, before + 2)
         XCTAssertNil(requests[before]["cursor"])
@@ -318,7 +440,7 @@ final class AccountRegisterViewModelTests: XCTestCase {
         await model.load()
         await model.setSceneActive(false)
         model.eventReceived("sync-event", tables: ["transactions"])
-        try await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertEqual(clock.scheduled, 0)
         XCTAssertEqual(page.count("native/account-register"), 1)
         await model.loadMore()
         XCTAssertEqual(page.count("native/account-register"), 1)

@@ -43,6 +43,12 @@ public enum AccountsLoad<Value: Equatable>: Equatable {
     }
 }
 
+// How long the register waits for typing to pause: `Task.sleep` in the app,
+// the test's own pause in tests
+public typealias AccountsSleep = (TimeInterval) async throws -> Void
+
+private let realSleep: AccountsSleep = { try await Task.sleep(nanoseconds: UInt64($0 * 1_000_000_000)) }
+
 // The tables whose changes can change what either screen shows
 private let accountsWatchedTables: Set<String> = ["transactions", "accounts", "preferences", "payees", "categories"]
 
@@ -76,9 +82,9 @@ public final class AccountsListViewModel: ObservableObject {
     private var isSceneActive = true
     private var generation = 0
 
-    public init(client: NativeBridgeClient, changeInterval: TimeInterval = 1.0 / 60) {
+    public init(client: NativeBridgeClient, changeInterval: TimeInterval = 1.0 / 60, schedule: ChangeSchedule? = nil) {
         self.client = client
-        coalescer = ChangeCoalescer(interval: changeInterval) { [weak self] in
+        coalescer = ChangeCoalescer(interval: changeInterval, schedule: schedule) { [weak self] in
             guard let self, self.isSceneActive else { return }
             Task { @MainActor in await self.load() }
         }
@@ -163,17 +169,22 @@ public final class AccountRegisterViewModel: ObservableObject {
     private let client: NativeBridgeClient
     private let accountId: String
     private let searchInterval: TimeInterval
+    private let sleep: AccountsSleep
     private var coalescer: ChangeCoalescer?
     private var pendingSearch: Task<Void, Never>?
     private var isSceneActive = true
     private var generation = 0
     private var isLoadingMore = false
 
-    public init(client: NativeBridgeClient, accountId: String, searchInterval: TimeInterval = 0.3, changeInterval: TimeInterval = 1.0 / 60) {
+    public init(
+        client: NativeBridgeClient, accountId: String, searchInterval: TimeInterval = 0.3, changeInterval: TimeInterval = 1.0 / 60,
+        schedule: ChangeSchedule? = nil, sleep: AccountsSleep? = nil
+    ) {
         self.client = client
         self.accountId = accountId
         self.searchInterval = searchInterval
-        coalescer = ChangeCoalescer(interval: changeInterval) { [weak self] in
+        self.sleep = sleep ?? realSleep
+        coalescer = ChangeCoalescer(interval: changeInterval, schedule: schedule) { [weak self] in
             guard let self, self.isSceneActive else { return }
             Task { @MainActor in await self.reload() }
         }
@@ -284,9 +295,10 @@ public final class AccountRegisterViewModel: ObservableObject {
         guard text.utf16.count <= Self.maxSearch else { return }
         search = text
         pendingSearch?.cancel()
-        let nanoseconds = UInt64(searchInterval * 1_000_000_000)
+        let pause = searchInterval
+        let wait = sleep
         pendingSearch = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: nanoseconds)
+            try? await wait(pause)
             guard !Task.isCancelled, let self else { return }
             await self.load()
         }

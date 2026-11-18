@@ -138,8 +138,8 @@ Undoing an accounts write SHALL first check that every row or account it touched
 - **THEN** every row returns to its earlier state
 
 ### Requirement: Web hand-offs are a closed set of messages
-The native chrome SHALL accept `webAccountAction` only from the app's own page side, with `action` one of `add-account`, `link-account`, `account-settings` or `bank-sync`, and an `account_id` that is a known open account for the last two. It SHALL ignore anything else, and the page SHALL open only its existing flow for that action.
+The app SHALL send `webAccountAction` to its own page only, with `action` one of `add-account`, `link-account`, `account-settings` or `bank-sync`, and, for the last two, an `account_id` that is a known open account. The page SHALL check the action again, refuse anything else, and open only its existing flow.
 
 #### Scenario: An unknown action
-- **WHEN** native receives `webAccountAction` with action `delete-account`, or `account-settings` with an unknown id
-- **THEN** it is ignored and nothing opens
+- **WHEN** native code is asked to send `webAccountAction` with action `delete-account`, or `account-settings` with an unknown id
+- **THEN** nothing is sent, and the page refuses an action outside the set if one arrives

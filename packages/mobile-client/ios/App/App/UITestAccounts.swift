@@ -29,7 +29,7 @@ enum UITestAccounts {
         }
         let model = AccountsListViewModel(client: client)
         let nav = AccountsNavigation()
-        let reconcileMonth = ReconcileMonthViewModel(client: client)
+        let monthModel = ReconcileMonthViewModel(client: client)
         let handOff = HandOffLabel()
         // The system's context menu and sheets never report "animations complete" on the
         // simulator, so each UI-test step waited a minute for the idle timeout
@@ -42,8 +42,8 @@ enum UITestAccounts {
             reconcile: { handOff.text = "reconcile:\($0 ?? "checklist")" })
         return UIHostingController(
             rootView: UITestAccountsRoot(
-                screen: AccountsScreen(model: model, nav: nav, reconcileMonth: reconcileMonth, actions: actions),
-                handOff: handOff, model: model, reconcileMonth: reconcileMonth))
+                screen: AccountsScreen(model: model, nav: nav, reconcileMonth: monthModel, actions: actions),
+                handOff: handOff, model: model, month: monthModel))
     }
 
     // loot-core filters by scope on its side; the fake does the same to the fixture
@@ -85,7 +85,7 @@ private struct UITestAccountsRoot: View {
     let screen: AccountsScreen
     @ObservedObject var handOff: HandOffLabel
     let model: AccountsListViewModel
-    let reconcileMonth: ReconcileMonthViewModel
+    let month: ReconcileMonthViewModel
 
     var body: some View {
         screen
@@ -95,7 +95,7 @@ private struct UITestAccountsRoot: View {
             // As NativeAccountsViewController does when the screen becomes active: the list, then the Reconcile banner's month
             .task {
                 await model.load()
-                await reconcileMonth.load()
+                await month.load()
             }
     }
 }

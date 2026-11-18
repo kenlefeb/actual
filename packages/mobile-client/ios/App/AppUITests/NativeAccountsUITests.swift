@@ -52,9 +52,15 @@ final class NativeAccountsUITests: XCTestCase {
             XCTAssertTrue(app.staticTexts[name].exists, "\(name) is missing from the list")
         }
         // loot-core's numbers, formatted: each account, the on-budget total and the net worth
-        for amount in ["928.20", "500.00", "-250.00", "3,000.00", "1,178.20", "4,178.20"] {
-            XCTAssertTrue(app.staticTexts[amount].exists, "\(amount) is missing from the list")
+        func shows(_ amount: String) -> XCUIElement {
+            app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", amount, amount)).firstMatch
         }
+        for amount in ["928.20", "500.00", "-250.00", "3,000.00", "1,178.20"] {
+            XCTAssertTrue(shows(amount).exists, "\(amount) is missing from the list; the screen has \(labels(containing: ".").prefix(12))")
+        }
+        // The net worth is the last row, below the fold
+        app.swipeUp()
+        XCTAssertTrue(shows("4,178.20").waitForExistence(timeout: 5), "the net worth is missing; the screen has \(labels(containing: ".").prefix(12))")
         XCTAssertTrue(app.staticTexts["On Budget"].exists || app.staticTexts["On budget"].exists)
     }
 

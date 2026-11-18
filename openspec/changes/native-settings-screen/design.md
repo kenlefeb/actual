@@ -58,7 +58,9 @@
 
 - **Input.** `changes` maps keys from a closed list to values. The list is the `prefs` keys above plus every limit id.
 - **Validation:**
-  - Each value is checked against its closed set: date formats, number formats, budget types, day 0 to 6, booleans, the currency codes and positions, and the upcoming length as the web's picker stores it: a preset from `UPCOMING_LENGTH_PRESET_VALUES` (`1`, `7`, `14`, `oneMonth`, `currentMonth`), or a custom `N-day`, `N-week`, `N-month` or `N-year` with N a whole number of at least 1.
+  - Each value is checked against its closed set: date formats, number formats, budget types, day 0 to 6, booleans, the currency codes and positions, and the upcoming length as the web's picker stores it: a preset from `UPCOMING_LENGTH_PRESET_VALUES` (`1`, `7`, `14`, `oneMonth`, `currentMonth`), or a custom length matching exactly `^[1-9][0-9]{0,2}-(day|week|month|year)$`: 1 to 999 of a known unit, lower case, with no sign, space or leading zero. It is stored exactly as typed, as the web stores it, and the literal `custom` is never stored.
+    - The web's own picker (`CustomUpcomingLength.tsx`) can write values this pattern refuses. It saves `${parseInt(input)}-${unit}`, so an empty field writes `NaN-day`, a typed 0 writes `0-day`, a typed minus writes `-3-day`, and there is no upper bound (`1000-day`). Those come from typing outside the field's `min=1` and are not meaningful lengths, so the native save refuses them rather than widening the pattern. That web behaviour is upstream code.
+    - A value like that already stored is still returned by `native/settings` as it is, and shown as Custom. Because the save validates only the keys it changes, it never blocks saving another setting.
   - A limit value must be a whole number from 1 to its ceiling, or null, which resets it to the default by deleting the preference.
   - An unknown key, a bad value or an empty `changes` refuses the whole call with `[native:invalid-setting]`. The refusal names no value, and nothing is written.
 - **The write:**

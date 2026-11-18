@@ -50,7 +50,7 @@ On iPhone, changing date format, number format, hide decimals, first day of week
 
 #### Scenario: A custom length
 - **WHEN** the person chooses Custom length, 3 weeks
-- **THEN** the synced preference is `3-week`, as web Settings stores it
+- **THEN** the synced preference is `3-week`, as web Settings stores it, and never `custom`
 
 #### Scenario: Undo
 - **WHEN** the person changes the number format and taps Undo in the toast

@@ -35,7 +35,9 @@
   - the deadline limit uses its default for out-of-range values.
 - [ ] 1.4 `native/settings-save` (design D1), as one exported engine function that every caller uses. Write failing tests first:
   - each key's closed set, compared with what web Settings stores for the same choice;
-  - the upcoming length accepts the web's presets and custom `N-day|week|month|year` with N at least 1, and refuses anything else;
+  - the upcoming length accepts the web's presets and custom values matching `^[1-9][0-9]{0,2}-(day|week|month|year)$`, stored exactly as sent;
+  - it refuses `0-day`, `03-week`, `1000-day`, `3-weeks`, `3-Week`, ` 3-week`, `-1-day`, `NaN-day` and `custom`;
+  - an already-stored out-of-pattern value is returned as it is and never blocks saving another key;
   - limits from 1 to the ceiling, and null resets;
   - `[native:invalid-setting]` for an unknown key, a bad value, an MCP limit or grant key, or an empty change, with nothing written;
   - a two-key save with one bad key changes neither key;

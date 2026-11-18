@@ -687,4 +687,20 @@ final class AccountRegisterViewModelTests: XCTestCase {
             RegisterEmptyWords.text(search: "", scope: .uncleared, upcomingShown: true), "No posted transactions match this filter.")
         XCTAssertEqual(RegisterEmptyWords.text(search: "", scope: .all, upcomingShown: true), "No transactions yet.")
     }
+
+    // sc-5224: a split reads as the web shows it, from loot-core's payee and count
+    func testASplitShowsItsLinesPayeeAsTheWebDoes() throws {
+        func row(_ payee: String?, split: Int, others: Int?) throws -> AccountUpcoming.Row {
+            let payeeJSON = payee.map { "\"\($0)\"" } ?? "null"
+            let othersJSON = others.map { ",\"otherPayees\":\($0)" } ?? ""
+            let json = #"{"id":"preview/s/2017-01-03","scheduleId":"s","date":"2017-01-03","payee":\#(payeeJSON),"category":null,"categoryId":null,"notes":null,"amount":-1,"cleared":false,"splitCount":\#(split),"transferAccount":null,"status":"upcoming","ruleFields":[]\#(othersJSON)}"#
+            return try JSONDecoder().decode(AccountUpcoming.Row.self, from: Data(json.utf8))
+        }
+        XCTAssertEqual(UpcomingWords.payee(try row("Power Co", split: 2, others: 0)), "Power Co")
+        XCTAssertEqual(UpcomingWords.payee(try row("Grocer", split: 2, others: 1)), "Grocer (+1 more)")
+        XCTAssertEqual(UpcomingWords.payee(try row(nil, split: 2, others: 0)), "Split (no payee)")
+        XCTAssertEqual(UpcomingWords.payee(try row(nil, split: 0, others: nil)), "No payee")
+        // An older loot-core sends no count
+        XCTAssertEqual(UpcomingWords.payee(try row("Power Co", split: 2, others: nil)), "Power Co")
+    }
 }

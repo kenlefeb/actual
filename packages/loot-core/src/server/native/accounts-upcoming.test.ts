@@ -23,7 +23,11 @@ import {
 import type { ScheduleStatuses } from '#shared/schedules';
 import type * as Schedules from '#shared/schedules';
 import { ungroupTransactions } from '#shared/transactions';
-import type { AccountEntity, ScheduleEntity } from '#types/models';
+import type {
+  AccountEntity,
+  ScheduleEntity,
+  TransactionEntity,
+} from '#types/models';
 
 import { schedulesWithTransactions } from './accounts';
 import { app } from './app';
@@ -229,6 +233,7 @@ describe('native/account-upcoming', () => {
         amount: -9000,
         cleared: false,
         splitCount: 0,
+        otherPayees: 0,
         transferAccount: null,
         status: 'upcoming',
         ruleFields: ['payee', 'category'],
@@ -243,8 +248,10 @@ describe('native/account-upcoming', () => {
         id: `preview/${id}/2017-01-05`,
         amount: -50000,
         splitCount: 2,
-        // The rules clear a split parent's payee when its lines differ
-        payee: null,
+        // As the web shows a split (useDisplayPayee): its lines' most common
+        // payee, here a tie the first line wins, and how many others there are
+        payee: 'Savings',
+        otherPayees: 1,
         ruleFields: ['payee', 'splits'],
       }),
     ]);
@@ -324,6 +331,85 @@ describe('native/account-upcoming', () => {
     expect(await amounts({ scope: 'uncleared' })).toEqual([-900, -500]);
     expect(await amounts({ scope: 'uncategorized' })).toEqual([-500]);
     expect(await payees()).toBe(before);
+  });
+
+  // sc-5224: a split parent shows the payee the web shows for it
+  describe('a split parent', () => {
+    const lines = (one: Action[] = [], two: Action[] = []) => [
+      {
+        op: 'set-split-amount',
+        field: 'amount',
+        value: -4000,
+        options: { splitIndex: 1, method: 'fixed-amount' },
+      },
+      ...one.map(a => ({ ...a, options: { splitIndex: 1 } })),
+      {
+        op: 'set-split-amount',
+        field: 'amount',
+        options: { splitIndex: 2, method: 'remainder' },
+      },
+      ...two.map(a => ({ ...a, options: { splitIndex: 2 } })),
+    ];
+    const payeeOf = (to: string) => ({ op: 'set', field: 'payee', value: to });
+    const row = async () => (await upcoming()).upcoming[0];
+
+    it('keeps the payee both lines keep, with no rule-set payee', async () => {
+      await addSchedule('Kept', {
+        date: '2017-01-03',
+        amount: -9000,
+        payee: 'power',
+        actions: lines(),
+      });
+      expect(await row()).toMatchObject({
+        payee: 'Power Co',
+        otherPayees: 0,
+        splitCount: 2,
+        ruleFields: ['splits'],
+      });
+    });
+
+    it('shows the first of its lines payees and counts the others', async () => {
+      await addSchedule('Two', {
+        date: '2017-01-03',
+        amount: -9000,
+        payee: 'power',
+        actions: lines([payeeOf('grocer')], [payeeOf('power')]),
+      });
+      expect(await row()).toMatchObject({ payee: 'Grocer', otherPayees: 1 });
+    });
+
+    it('ignores a line with no payee', async () => {
+      await addSchedule('Half', {
+        date: '2017-01-03',
+        amount: -9000,
+        payee: 'power',
+        actions: lines([payeeOf(null as never)]),
+      });
+      expect(await row()).toMatchObject({ payee: 'Power Co', otherPayees: 0 });
+    });
+
+    it('has no payee when no line has one', async () => {
+      await addSchedule('None', {
+        date: '2017-01-03',
+        amount: -9000,
+        actions: lines(),
+      });
+      expect(await row()).toMatchObject({ payee: null, otherPayees: 0 });
+    });
+
+    it('shows a payee a rule sets on the whole split', async () => {
+      await addSchedule('Set', {
+        date: '2017-01-03',
+        amount: -9000,
+        payee: 'grocer',
+        actions: [payeeOf('power'), ...lines()],
+      });
+      expect(await row()).toMatchObject({
+        payee: 'Power Co',
+        otherPayees: 0,
+        ruleFields: ['payee', 'splits'],
+      });
+    });
   });
 
   it('inverts a plain transfer into the account, naming the other account', async () => {
@@ -423,6 +509,24 @@ describe('native/account-upcoming', () => {
 
   it('equals the web preview for the same budget, unfiltered and within the cap', async () => {
     await addSplit();
+    // sc-5224: a split whose lines keep the schedule's payee
+    await addSchedule('Kept', {
+      date: '2017-01-04',
+      amount: -3000,
+      payee: 'power',
+      actions: [
+        {
+          op: 'set-split-amount',
+          field: 'amount',
+          options: { splitIndex: 1, method: 'remainder' },
+        },
+        {
+          op: 'set-split-amount',
+          field: 'amount',
+          options: { splitIndex: 2, method: 'remainder' },
+        },
+      ],
+    });
     await addSchedule('Save', {
       date: '2017-01-06',
       amount: -7000,
@@ -908,6 +1012,32 @@ async function webPreview(account: string) {
     getPayeeByTransferAccount,
     getTransferAccountByPayee,
   });
+  // The web's split payee (useDisplayPayee): the lines' most common payee,
+  // the first to reach the top count winning a tie, and the other payees
+  const displayPayee = (t: TransactionEntity) => {
+    const lines = ungrouped.filter(c => c.parent_id === t.id);
+    const nameOf = (id?: string | null) => {
+      const payee = payees.find(p => p.id === id);
+      const account = accounts.find(a => a.id === payee?.transfer_acct);
+      return account?.name ?? payee?.name ?? null;
+    };
+    if (lines.length === 0) return { payee: nameOf(t.payee), otherPayees: 0 };
+    const counts = new Map<string, number>();
+    let top: string | null = null;
+    let max = 0;
+    for (const line of lines) {
+      if (!line.payee) continue;
+      counts.set(line.payee, (counts.get(line.payee) ?? 0) + 1);
+      if ((counts.get(line.payee) ?? 0) > max) {
+        max = counts.get(line.payee) ?? 0;
+        top = line.payee;
+      }
+    }
+    return {
+      payee: top ? nameOf(top) : null,
+      otherPayees: top ? counts.size - 1 : 0,
+    };
+  };
   return transactions
     .filter(t => !t.parent_id)
     .map(t => {
@@ -920,7 +1050,7 @@ async function webPreview(account: string) {
             )
           : t.id,
         date: t.date,
-        payee: payees.find(p => p.id === t.payee)?.name ?? null,
+        ...displayPayee(t),
         category: (t as { inversed?: boolean }).inversed
           ? null
           : (categories.find(c => c.id === t.category)?.name ?? null),

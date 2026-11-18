@@ -50,12 +50,17 @@ In the iPhone and Mac apps, the Swift bridge client SHALL follow every allowlist
 - **THEN** the row changes, the client returns `stored: false`, "Saved here, not yet stored on this device." shows, and it clears when the engine's `storage-stored` reaches Swift as `stored`
 
 ### Requirement: A not-yet-stored write belongs to its page load
-Swift SHALL track each "not yet stored" write by `seq`, which holds the page load's epoch and the write's order in it. A `stored: true` answer or `stored` event SHALL clear only writes of its own epoch. A restart SHALL turn every pending write of an older epoch into "may not have been saved", covered by the restart or reload notice, and no later success SHALL clear it.
+Swift SHALL track each unconfirmed write by its own page-load generation and, once answered, by `seq`, which holds the page load's epoch and the write's order in it. A `stored: true` answer or `stored` event SHALL clear only writes of its own epoch. A restart SHALL turn every pending write of an older epoch into "may not have been saved", covered by the restart or reload notice, and no later success SHALL clear it.
 
 #### Scenario: A success after a restart
 - **GIVEN** a write showing "Saved here, not yet stored on this device." when the page restarts
 - **WHEN** a write in the new page answers `stored: true`, or a `stored` event arrives with the same number in the new epoch
 - **THEN** the earlier write is not reported as stored, and it stays "may not have been saved"
+
+#### Scenario: No answer before the restart
+- **GIVEN** a write whose `native/persisted` call never answered, so it has no `seq`, when the page restarts
+- **WHEN** a write in the new page answers `stored: true`
+- **THEN** the earlier write's generation is older, so it is not reported as stored and stays "may not have been saved"
 
 ### Requirement: Any storage failure latches and is shown app-wide
 With the storage guard on, any failed IndexedDB write of the open budget, from any source (bridge write, web-screen edit or sync), SHALL set a failed latch. The patched storage SHALL write nothing more, the page SHALL send a `storage-failed` event with `lastStoredFlushAt` (when the last write that stored was flushed), and Swift SHALL show a persistent app-level notice, whichever screen is showing, until the person reloads or, after a restart, taps OK.
@@ -220,7 +225,7 @@ The latch, write refusal, sync gate, held-sync reporting and storage notices SHA
 - **THEN** sync runs as today, with no storage wait or storage notice, and the next locked write fails the safety check and shows today's one-tab message
 
 #### Scenario: The native shell
-- **GIVEN** the native bridge installed in the iPhone or Mac app
+- **GIVEN** the native bridge has turned the guard on in the iPhone or Mac app
 - **WHEN** a sync runs
 - **THEN** the guard is on, and sync sends only stored changes
 

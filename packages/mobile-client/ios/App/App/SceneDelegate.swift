@@ -1,6 +1,5 @@
 import UIKit
 import Capacitor
-import NativeBridgeCore
 
 // Apps built with the iOS 27 SDK must use the scene life cycle or they do not
 // launch. The window's root is the native tab bar (sc-3514), which owns the

@@ -1,3 +1,4 @@
+import NativeBridgeCore
 import WebKit
 import XCTest
 
@@ -57,6 +58,34 @@ final class MacEngineHostTests: XCTestCase {
         XCTAssertFalse(MacEngineHost.acceptsMessage(isMainFrame: true, scheme: "https", host: "actual-staging.owl-becrux.ts.net", port: 0))
         XCTAssertFalse(MacEngineHost.acceptsMessage(isMainFrame: true, scheme: "https", host: "localhost", port: 0))
         XCTAssertFalse(MacEngineHost.acceptsMessage(isMainFrame: false, scheme: "homeeconomics", host: "localhost", port: 0))
+    }
+
+    // MARK: Page messages (task 1.4a)
+
+    func testBudgetStateFromTheAppsPageIsDelivered() {
+        let host = host()
+        var states: [BudgetState] = []
+        host.onBudgetState = { states.append($0) }
+        host.receive(["event": "budget-state", "payload": ["state": "none"]], isMainFrame: true, scheme: "homeeconomics", host: "localhost", port: 0)
+        XCTAssertEqual(states, [BudgetState.none])
+    }
+
+    func testBudgetStateFromAnotherPageOrFrameIsIgnored() {
+        let host = host()
+        var states: [BudgetState] = []
+        host.onBudgetState = { states.append($0) }
+        let body = ["event": "budget-state", "payload": ["state": "none"]] as [String: Any]
+        host.receive(body, isMainFrame: true, scheme: "https", host: "actual-staging.us.auth0.com", port: 0)
+        host.receive(body, isMainFrame: false, scheme: "homeeconomics", host: "localhost", port: 0)
+        XCTAssertTrue(states.isEmpty)
+    }
+
+    func testAMalformedBudgetStateIsIgnored() {
+        let host = host()
+        var states: [BudgetState] = []
+        host.onBudgetState = { states.append($0) }
+        host.receive(["event": "budget-state", "payload": ["state": "none", "cloudFileId": "x"]], isMainFrame: true, scheme: "homeeconomics", host: "localhost", port: 0)
+        XCTAssertTrue(states.isEmpty)
     }
 
     // MARK: Navigation

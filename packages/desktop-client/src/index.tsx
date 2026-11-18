@@ -20,6 +20,7 @@ import * as budgetfilesSlice from './budgetfiles/budgetfilesSlice';
 import { App } from './components/App';
 import { ServerProvider } from './components/ServerContext';
 import * as modalsSlice from './modals/modalsSlice';
+import { installBudgetStateReporter } from './native/budgetState';
 import { installNativeBridge } from './native/nativeBridge';
 import * as notificationsSlice from './notifications/notificationsSlice';
 import * as prefsSlice from './prefs/prefsSlice';
@@ -82,6 +83,8 @@ window.$send = send;
 
 // Fork-only (sc-3584): native iOS screens read loot-core through this
 installNativeBridge(window);
+// Fork-only (sc-4942): the Mac app's storage-loss warning; nothing elsewhere
+installBudgetStateReporter(window, store);
 window.$query = aqlQuery;
 window.$q = q;
 

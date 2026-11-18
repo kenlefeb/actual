@@ -21,6 +21,7 @@
 		FB3584000000000000000104 /* BudgetMonth.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000004 /* BudgetMonth.swift */; };
 		FB3584000000000000000105 /* NativeBridgeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000005 /* NativeBridgeClient.swift */; };
 		FB3584000000000000000106 /* ChangeCoalescer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000006 /* ChangeCoalescer.swift */; };
+		FB5247000000000000000101 /* PageRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5247000000000000000001 /* PageRecovery.swift */; };
 		FB4942000000000000000101 /* BudgetState.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB4942000000000000000001 /* BudgetState.swift */; };
 		FB3584000000000000000110 /* NativeBridgeBenchmarkTrigger.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000010 /* NativeBridgeBenchmarkTrigger.swift */; };
 		FB3584000000000000000111 /* NativeBridgeBenchmark.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000011 /* NativeBridgeBenchmark.swift */; };
@@ -57,7 +58,9 @@
 		FB434300000000000000102 /* PaycheckEditorViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB434300000000000000002 /* PaycheckEditorViewModel.swift */; };
 		FB434300000000000000103 /* NativePaycheckEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB434300000000000000003 /* NativePaycheckEditorView.swift */; };
 		81468055292F86AB369B94B9 /* UITestAccounts.swift in Sources */ = {isa = PBXBuildFile; fileRef = D246F7DC88D369846186AFFB /* UITestAccounts.swift */; };
+		FB5247000000000000000102 /* UITestPageRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5247000000000000000002 /* UITestPageRecovery.swift */; };
 		820DB8ECE5803E95972A13EA /* NativeAccountsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9248F3DFD880A2634F9E61C9 /* NativeAccountsUITests.swift */; };
+		FB5247000000000000000103 /* PageRecoveryUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5247000000000000000003 /* PageRecoveryUITests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -89,6 +92,7 @@
 		FB3584000000000000000004 /* BudgetMonth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetMonth.swift; sourceTree = "<group>"; };
 		FB3584000000000000000005 /* NativeBridgeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBridgeClient.swift; sourceTree = "<group>"; };
 		FB3584000000000000000006 /* ChangeCoalescer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeCoalescer.swift; sourceTree = "<group>"; };
+		FB5247000000000000000001 /* PageRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageRecovery.swift; sourceTree = "<group>"; };
 		FB4942000000000000000001 /* BudgetState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetState.swift; sourceTree = "<group>"; };
 		FB3584000000000000000010 /* NativeBridgeBenchmarkTrigger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBridgeBenchmarkTrigger.swift; sourceTree = "<group>"; };
 		FB3584000000000000000011 /* NativeBridgeBenchmark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBridgeBenchmark.swift; sourceTree = "<group>"; };
@@ -126,7 +130,9 @@
 		FB434300000000000000003 /* NativePaycheckEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePaycheckEditorView.swift; sourceTree = "<group>"; };
 		6DF959A4FBDF81B19F0E9A09 /* AppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		9248F3DFD880A2634F9E61C9 /* NativeAccountsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAccountsUITests.swift; sourceTree = "<group>"; };
+		FB5247000000000000000003 /* PageRecoveryUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageRecoveryUITests.swift; sourceTree = "<group>"; };
 		D246F7DC88D369846186AFFB /* UITestAccounts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestAccounts.swift; sourceTree = "<group>"; };
+		FB5247000000000000000002 /* UITestPageRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestPageRecovery.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -176,6 +182,7 @@
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				D246F7DC88D369846186AFFB /* UITestAccounts.swift */,
+				FB5247000000000000000002 /* UITestPageRecovery.swift */,
 				FB3584000000000000000001 /* NativeBridgePlugin.swift */,
 				FB3584000000000000000002 /* AppBridgeViewController.swift */,
 				FB3584000000000000000003 /* NativeBridgeBenchmarkHarness.swift */,
@@ -216,6 +223,7 @@
 				FB3584000000000000000004 /* BudgetMonth.swift */,
 				FB3584000000000000000005 /* NativeBridgeClient.swift */,
 				FB3584000000000000000006 /* ChangeCoalescer.swift */,
+				FB5247000000000000000001 /* PageRecovery.swift */,
 				FB4942000000000000000001 /* BudgetState.swift */,
 				FB3584000000000000000011 /* NativeBridgeBenchmark.swift */,
 				FB3514000000000000000003 /* NativeTabRouter.swift */,
@@ -248,6 +256,7 @@
 			isa = PBXGroup;
 			children = (
 				9248F3DFD880A2634F9E61C9 /* NativeAccountsUITests.swift */,
+				FB5247000000000000000003 /* PageRecoveryUITests.swift */,
 			);
 			path = AppUITests;
 			sourceTree = "<group>";
@@ -387,6 +396,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				81468055292F86AB369B94B9 /* UITestAccounts.swift in Sources */,
+				FB5247000000000000000102 /* UITestPageRecovery.swift in Sources */,
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				FB3584000000000000000111 /* NativeBridgeBenchmark.swift in Sources */,
 				FB3584000000000000000110 /* NativeBridgeBenchmarkTrigger.swift in Sources */,
@@ -396,6 +406,7 @@
 				FB3584000000000000000104 /* BudgetMonth.swift in Sources */,
 				FB3584000000000000000105 /* NativeBridgeClient.swift in Sources */,
 				FB3584000000000000000106 /* ChangeCoalescer.swift in Sources */,
+				FB5247000000000000000101 /* PageRecovery.swift in Sources */,
 				FB4942000000000000000101 /* BudgetState.swift in Sources */,
 				5C3E1A022EBC000100A1B2C3 /* SceneDelegate.swift in Sources */,
 				FB3514000000000000000101 /* NativeChromePlugin.swift in Sources */,
@@ -438,6 +449,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				820DB8ECE5803E95972A13EA /* NativeAccountsUITests.swift in Sources */,
+				FB5247000000000000000103 /* PageRecoveryUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -294,6 +294,22 @@ describe('absurd-sql fallback reads', () => {
     }
   });
 
+  it('may take longer than the deadline once their turn has come', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const { file, ops } = fallbackFile({ guard: false });
+      vi.spyOn(ops.persistance, 'readAll').mockImplementation(async () => {
+        await new Promise(resolve => setTimeout(resolve, 120_000));
+        return new Map();
+      });
+      const read = file.readIfFallback();
+      await vi.advanceTimersByTimeAsync(120_000);
+      await expect(read).resolves.toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('after a reload, find the last write that stored', async () => {
     const { ops, name } = fallbackFile();
     ops.writeMeta({ size: BLOCK });

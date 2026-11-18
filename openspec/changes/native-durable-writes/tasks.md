@@ -42,7 +42,7 @@
   - iPhone: the background task with an expiration handler, ended at the earliest of the answer, the wait or expiry.
   - Mac: `.terminateLater` on quit, a deferred window close, and a best-effort flush in `EngineLifecycle.willSleep`.
   - Tests with a fake client (D8).
-- [ ] 3.3 Mac perf gate in `HomeEconomicsMacTests`: the end-to-end client write (`native/storage-state`, the write, `native/persisted`) against the bare write, 30 runs each, at most 50 ms added to the median and 250 ms to the p95, run in `fork-mac-native`. Record simulator timings in the PR, and a real iPhone's median and p95 before the native Accounts screen defaults on. If the gate misses, stop and report to the Director. Report any default below 2000 ms to the Product Owner (D7, D11)
+- [ ] 3.3 Mac perf gate in `HomeEconomicsMacTests`: the end-to-end client write (`native/storage-state`, the write, `native/persisted`) against the bare write, 30 runs each, at most 50 ms added to the median and 250 ms to the p95, run in `fork-mac-native`. Record simulator timings in the PR, and a real iPhone's median and p95 before the native Accounts screen defaults on, plus that iPhone's write time on the largest budget. If the gate misses, stop and report to the Director. Report any default below 2000 ms to the Product Owner (D7, D11)
 - [ ] 3.4 Kill tests, in the Atlas helper login only:
   - Mac: extend `PageProcessKillTests` with 20 kills after `stored: true`, all kept and `PRAGMA integrity_check` passing, plus one kill mid-write.
   - Control run: barrier hook off and a 300 ms commit delay; it must lose at least 1, or it fails as inconclusive.

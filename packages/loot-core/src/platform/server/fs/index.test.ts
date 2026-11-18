@@ -207,7 +207,12 @@ describe('storage state of the blocked fs', () => {
     // The blocked fs's own stream, which the sql.js types don't describe
     const blocked = stream as unknown as {
       node: {
-        contents: { lock(type: number): void; unlock(type: number): void };
+        contents: {
+          openHandles: number;
+          ops: { persistance: { readAll(): Promise<unknown> } };
+          lock(type: number): void;
+          unlock(type: number): void;
+        };
       };
       stream_ops: { fsync(stream: unknown): void };
     };
@@ -224,7 +229,12 @@ describe('storage state of the blocked fs', () => {
       write(byte);
       blocked.node.contents.unlock(1);
     };
-    return { write, lockedWrite, close: () => FS.close(stream) };
+    return {
+      write,
+      lockedWrite,
+      close: () => FS.close(stream),
+      contents: blocked.node.contents,
+    };
   }
 
   beforeEach(() => {
@@ -276,6 +286,18 @@ describe('storage state of the blocked fs', () => {
       lastStoredFlushAt: null,
       quota: true,
     });
+  });
+
+  // A handle left open would make this budget's later failure latch the open one
+  test('a budget that fails to open leaves no handle open', async () => {
+    const file = await openFile('failed-open');
+    file.close();
+    sqlite._getModule().FS.symlink('/blocked/failed-open', '/failed-open');
+    vi.spyOn(file.contents.ops.persistance, 'readAll').mockRejectedValue(
+      new Error('stuck'),
+    );
+    await expect(sqlite.openDatabase('/failed-open')).rejects.toThrow('stuck');
+    expect(file.contents.openHandles).toBe(0);
   });
 
   test('reports the flush time of the last stored write as the cut-off', async () => {

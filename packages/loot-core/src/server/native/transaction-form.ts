@@ -482,7 +482,7 @@ function separators(format: NumberFormats) {
   const grouping = [thousandsSeparator];
   // Characters people type for the same grouping
   if (format === 'space-comma') grouping.push(' ', ' ', ' ');
-  if (format === 'apostrophe-dot') grouping.push("'", '\'');
+  if (format === 'apostrophe-dot') grouping.push("'", "'");
   return { grouping, decimal: decimalSeparator };
 }
 

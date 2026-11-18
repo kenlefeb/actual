@@ -1,0 +1,68 @@
+# Fork-only (sc-5054). Builds the iPhone App target for the simulator, unsigned,
+# so a compile break in the Xcode project is caught on the PR. `swift test`
+# builds NativeBridgeCore as a package and misses what is specific to the
+# project (development's iPhone app stopped compiling on 2026-11-17 with every
+# check green). Never upstream (fork/README.md). Needs no secrets, no signing
+# and no upload, and it publishes nothing: fork-ios.yml stays the only release
+# path. Runs only when the iPhone app, the native bridge page code or this job
+# changes, because macOS runner time is the scarce resource.
+name: Fork iOS simulator
+
+on:
+  pull_request:
+    branches:
+      - development
+    paths:
+      - 'packages/mobile-client/ios/**'
+      - 'packages/desktop-client/src/native/**'
+      - '.github/workflows/fork-ios-simulator.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  fork-ios-simulator:
+    if: github.repository == 'kenlefeb/actual'
+    runs-on: macos-26
+    timeout-minutes: 25
+    env:
+      # CocoaPods fails on a non-UTF-8 locale
+      LANG: en_US.UTF-8
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up environment
+        uses: ./.github/actions/setup
+        with:
+          download-translations: 'false'
+
+      - name: Build web app
+        run: yarn build:browser --skip-translations
+
+      # The installed pods and CocoaPods' download cache, keyed on what pins them
+      - name: Cache CocoaPods
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: |
+            packages/mobile-client/ios/App/Pods
+            ~/Library/Caches/CocoaPods
+          key: pods-${{ runner.os }}-${{ hashFiles('packages/mobile-client/ios/App/Podfile.lock') }}
+          restore-keys: |
+            pods-${{ runner.os }}-
+
+      - name: Sync the native project
+        run: yarn workspace mobile-client sync:ios
+
+      - name: Build the iPhone app for the simulator, unsigned
+        working-directory: packages/mobile-client
+        run: >-
+          xcodebuild -workspace ios/App/App.xcworkspace -scheme App
+          -configuration Debug -sdk iphonesimulator
+          -destination 'generic/platform=iOS Simulator'
+          CODE_SIGNING_ALLOWED=NO build

@@ -226,11 +226,100 @@ void test('Native Swift: this checkout is clean', () => {
 // The App target lists its NativeBridgeCore sources one by one in the Xcode
 // project, so a source added without an entry builds under `swift test` but
 // breaks the iPhone app build (sc-4931).
+// A project with an App target and a second target, each with its own Sources
+// phase; `appSources` fill the App's, `otherSources` the other's.
+function project({
+  appSources = [],
+  otherSources = [],
+  extra = '',
+  files = '',
+}) {
+  const list = names =>
+    names.map((n, i) => `\t\t\t\tAA0${i} /* ${n} in Sources */,`).join('\n');
+  return `/* Begin PBXBuildFile section */
+${files}
+/* End PBXBuildFile section */
+/* Begin PBXNativeTarget section */
+\t\tT1 /* App */ = {
+\t\t\tisa = PBXNativeTarget;
+\t\t\tbuildPhases = (
+\t\t\t\tP1 /* Sources */,
+\t\t\t\tF1 /* Frameworks */,
+\t\t\t);
+\t\t\tname = App;
+\t\t};
+\t\tT2 /* AppTests */ = {
+\t\t\tisa = PBXNativeTarget;
+\t\t\tbuildPhases = (
+\t\t\t\tP2 /* Sources */,
+\t\t\t);
+\t\t\tname = AppTests;
+\t\t};
+/* End PBXNativeTarget section */
+/* Begin PBXSourcesBuildPhase section */
+\t\tP1 /* Sources */ = {
+\t\t\tisa = PBXSourcesBuildPhase;
+\t\t\tfiles = (
+${list(appSources)}
+\t\t\t);
+\t\t};
+\t\tP2 /* Sources */ = {
+\t\t\tisa = PBXSourcesBuildPhase;
+\t\t\tfiles = (
+${list(otherSources)}
+\t\t\t);
+\t\t};
+/* End PBXSourcesBuildPhase section */
+${extra}`;
+}
+
 void test('Native Swift: names a NativeBridgeCore source missing from the Xcode project', () => {
-  const project = '/* Reconcile.swift in Sources */\n/* Reconcile.swift */\n';
+  const p = project({ appSources: ['Reconcile.swift'] });
   assert.deepEqual(
-    missingFromProject(['Reconcile.swift', 'Accounts.swift'], project),
+    missingFromProject(['Reconcile.swift', 'Accounts.swift'], p),
     ['Accounts.swift'],
   );
-  assert.deepEqual(missingFromProject(['Reconcile.swift'], project), []);
+  assert.deepEqual(missingFromProject(['Reconcile.swift'], p), []);
+});
+
+// sc-5023: the ways the old substring check passed when it should fail
+void test('Native Swift: a build-file entry without a line in the App target`s Sources phase fails', () => {
+  const p = project({
+    files:
+      '\t\tBF1 /* Accounts.swift in Sources */ = {isa = PBXBuildFile; fileRef = FR1 /* Accounts.swift */; };',
+  });
+  assert.deepEqual(missingFromProject(['Accounts.swift'], p), [
+    'Accounts.swift',
+  ]);
+});
+
+void test('Native Swift: a name only in a comment fails', () => {
+  const p = project({
+    appSources: ['Other.swift'],
+    extra: '/* TODO: add Accounts.swift in Sources */\n',
+  });
+  assert.deepEqual(missingFromProject(['Accounts.swift'], p), [
+    'Accounts.swift',
+  ]);
+});
+
+void test('Native Swift: another file with the same ending does not count', () => {
+  const p = project({ appSources: ['XAccounts.swift'] });
+  assert.deepEqual(missingFromProject(['Accounts.swift'], p), [
+    'Accounts.swift',
+  ]);
+});
+
+void test('Native Swift: an entry in another target`s Sources phase does not count', () => {
+  const p = project({ otherSources: ['Accounts.swift'] });
+  assert.deepEqual(missingFromProject(['Accounts.swift'], p), [
+    'Accounts.swift',
+  ]);
+});
+
+void test('Native Swift: a project with no App target names every source', () => {
+  assert.deepEqual(
+    missingFromProject(['Accounts.swift'], '/* nothing here */'),
+    ['Accounts.swift'],
+  );
 });

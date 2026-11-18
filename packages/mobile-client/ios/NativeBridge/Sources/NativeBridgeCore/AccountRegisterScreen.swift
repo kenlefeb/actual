@@ -63,8 +63,9 @@ public enum UpcomingWords {
 
     // sc-5224: as the web names a row; a split reads as its lines' payee
     public static func payee(_ row: AccountUpcoming.Row) -> String {
-        let name = [row.payee, row.transferAccount?.name, row.notes].compactMap { $0 }.first { !$0.isEmpty }
-        guard let name else {
+        // The web names a split by its lines alone, never by its notes
+        let candidates = row.splitCount > 0 ? [row.payee] : [row.payee, row.transferAccount?.name, row.notes]
+        guard let name = candidates.compactMap({ $0 }).first(where: { !$0.isEmpty }) else {
             return row.splitCount > 0
                 ? NSLocalizedString("Split (no payee)", comment: "Native Accounts register: a split with no payee on any line")
                 : NSLocalizedString("No payee", comment: "Native Accounts register: a row without a payee")

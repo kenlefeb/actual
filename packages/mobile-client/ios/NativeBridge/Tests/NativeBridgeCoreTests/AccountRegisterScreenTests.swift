@@ -166,7 +166,8 @@ final class AccountRegisterWriteTests: XCTestCase {
         XCTAssertEqual(args["account_id"] as? String, "checking")
         XCTAssertEqual(args["ids"] as? [String], ["plain"])
         XCTAssertEqual(args["cleared"] as? Bool, true)
-        XCTAssertEqual(page.names().last, "native/account-register")
+        // The register re-read, then its upcoming section (sc-4973)
+        XCTAssertEqual(Array(page.names().suffix(2)), ["native/account-register", "native/account-upcoming"])
         XCTAssertEqual(model.undoOffer?.token, args["undoToken"] as? String)
         XCTAssertEqual(model.undoOffer?.action, .clear)
     }

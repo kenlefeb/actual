@@ -116,4 +116,22 @@ describe('NativeScreens', () => {
     expect(checkbox).not.toBeChecked();
     expect(win.__actualNativeScreens?.reconcile).toBe(false);
   });
+
+  // sc-4931 (native-accounts-screen D4): off until story 3611 ships the screens
+  it('offers the Accounts switch, off when unset, and turns it on', () => {
+    const postMessage = insideIosApp();
+    renderSettings();
+    const checkbox = screen.getByRole('checkbox', {
+      name: /Native Accounts screen/,
+    });
+    expect(checkbox).not.toBeChecked();
+    fireEvent.click(checkbox);
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'nativeScreen',
+      screen: 'accounts',
+      on: true,
+    });
+    expect(checkbox).toBeChecked();
+    expect(win.__actualNativeScreens?.accounts).toBe(true);
+  });
 });

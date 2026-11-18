@@ -11,6 +11,7 @@ import * as monthUtils from '@actual-app/core/shared/months';
 import { useLocale } from '#hooks/useLocale';
 import {
   isNativeReconcileOn,
+  isNativeScreenOn,
   presentNativeReconcile,
 } from '#native/nativeChrome';
 
@@ -29,7 +30,8 @@ const WATCHED = ['transactions', 'accounts', 'preferences'];
 export function NativeReconcileBanner() {
   const { t } = useTranslation();
   const locale = useLocale();
-  const isOn = isNativeReconcileOn();
+  // The native Accounts screen carries its own entry (native-accounts-screen D8)
+  const isOn = isNativeReconcileOn() && !isNativeScreenOn('accounts');
   const [checklist, setChecklist] = useState<Checklist | null>(null);
 
   useEffect(() => {

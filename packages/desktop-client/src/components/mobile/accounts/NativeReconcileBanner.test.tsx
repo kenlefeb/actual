@@ -108,4 +108,21 @@ describe('NativeReconcileBanner', () => {
     await vi.waitFor(() => expect(state.send).toHaveBeenCalled());
     expect(empty.container).toBeEmptyDOMElement();
   });
+
+  // native-accounts-screen D8: the native list carries its own entry
+  it('is hidden while the native Accounts screen is on, and shows with it off or unset', async () => {
+    inApp();
+    window.__actualNativeScreens = { accounts: true, reconcile: true };
+    state.month = { month: '2026-11', accounts: [account('a', 'due')] };
+    const on = renderBanner();
+    expect(on.container).toBeEmptyDOMElement();
+    expect(state.send).not.toHaveBeenCalled();
+    on.unmount();
+
+    window.__actualNativeScreens = { accounts: false };
+    renderBanner();
+    expect(
+      await screen.findByRole('button', { name: /Reconcile November/ }),
+    ).toBeInTheDocument();
+  });
 });

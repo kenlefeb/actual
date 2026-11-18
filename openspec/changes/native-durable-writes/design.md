@@ -82,9 +82,10 @@ Deadline arithmetic: the wait ceiling is 4000 ms (D7), so `native/persisted` ans
 - **Before forwarding any write**, the page bridge asks `native/storage-state` (a fork handler, instant, allowlisted, no arguments) and, if the latch is set, refuses with `[native:not-stored]` without forwarding. So nothing more is applied in memory (Security, 2a). `native/undo` is a write and is refused the same way.
 - There is one residual race: a write already forwarded when another source's write fails. That write gets `stored: false` from its `native/persisted` and is covered by D6, so it is nowhere but memory.
 - On latching, the page posts `storage-failed { lastStoredFlushAt, quota }` to Swift (a new entry in the bridge's `EVENTS`). Swift shows a persistent app-level notice above every screen until reload, not a screen toast (Architect, blocking 3).
-- Copy (copy table, wording for the Product Owner to approve). `<time>` is `lastStoredFlushAt` in the person's locale, and the notice offers Reload.
+- Copy (copy table; decided by the Product Owner at approval, PR #467 comment 6981240882). `<time>` is `lastStoredFlushAt` in the person's locale to the second (for example 3:42:10 PM), truncated, never rounded up (Security's approval nit), so a change stored at 3:42:05 is never re-entered as a duplicate. The notice offers Reload.
   - General: "Changes can't be saved on this device right now. Reload the app. Changes made after <time> weren't saved and need to be made again."
-  - Device full (`quota`): "This device is full, so changes can't be saved. Free up space, then reload the app. Changes made after <time> weren't saved and need to be made again; saved changes can't sync until there's space." Sync writes to local storage too, so it can't resume until there is space.
+  - Device full (`quota`): "This device is full, so changes can't be saved. Free up some space, then reload the app. Changes made after <time> weren't saved and need to be made again. Saved changes can't sync until there's space." Sync writes to local storage too, so it can't resume until there is space.
+  - No write stored since the app opened (`lastStoredFlushAt` null): the sentence with <time> becomes "Changes made since you opened the app weren't saved and need to be made again." in both notices.
 - Reads still show in-memory data until reload, and the notice says those changes are not kept (Architect, non-blocking 5). Writes whose replies were `stored: false` were already shown as "Saving…", never saved.
 
 ### D6. Sync sends only stored changes

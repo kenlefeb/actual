@@ -17,6 +17,22 @@ import UIKit
 enum UITestAccounts {
     static var isOn: Bool { UserDefaults.standard.bool(forKey: "UITestAccounts") }
 
+    // `-UITestStorageLine saving|unstored` holds the storage line up, to see it over the
+    // fixtures without slow storage. Kept alive with the window.
+    private static var storageLine: WriteStorageLine?
+
+    @MainActor static func showStorageLine(over root: UIViewController, in scene: UIWindowScene) {
+        guard let state = UserDefaults.standard.string(forKey: "UITestStorageLine") else { return }
+        let status = WriteStorageStatus()
+        if state == "saving" { status.writeBegan() } else { status.record(.notStored) }
+        storageLine = WriteStorageLine(
+            status: status, scene: scene, barHeight: { 0 },
+            reserve: { [weak root] height in
+                root?.additionalSafeAreaInsets.bottom = height
+                root?.presentedViewController?.additionalSafeAreaInsets.bottom = height
+            })
+    }
+
     @MainActor static func makeRoot() -> UIViewController {
         // A held read must stay held: the default 5 s deadline would turn it into the error screen
         let holding = ["UITestSlowList", "UITestSlowRegister"].contains { UserDefaults.standard.bool(forKey: $0) }

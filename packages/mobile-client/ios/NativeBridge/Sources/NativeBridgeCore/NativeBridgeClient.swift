@@ -66,14 +66,16 @@ public enum NativeBridgeAllowlist {
     // storage call changes nothing, so it is never a write.
     public enum Kind: Equatable { case read, write, sync, storage }
 
-    public static let allWrites: Set<String> = writes.union(paycheckWrites).union(reconcileWrites).union(accountsWrites)
-        .union(settingsWrites).union(transactionWrites)
+    public static let allReads: Set<String> = reads.union(reconcileReads).union(accountsReads).union(transactionReads)
+        .union(settingsReads)
 
+    // Anything not listed as a read is a write, as on the page, so a new
+    // handler cannot skip the barrier by being left off a list
     public static func kind(of name: String) -> Kind? {
         guard handlers.contains(name) else { return nil }
-        if allWrites.contains(name) { return .write }
         if sync.contains(name) { return .sync }
-        return storage.contains(name) ? .storage : .read
+        if storage.contains(name) { return .storage }
+        return allReads.contains(name) ? .read : .write
     }
 }
 
@@ -133,18 +135,29 @@ public enum NativeBridgeEvent {
 }
 
 // sc-5219 (native-durable-writes D3, D4): whether this device has stored the
-// writes made through the client. One per page; screens read `message`.
+// writes made through the client. One per page.
+//
+// With the storage guard off a failed write still answers stored, so app code
+// must not be able to read that yet. `message`, `write` and `StoredWrite` are
+// internal, which stops the Mac app (it imports this package), and exist only
+// in package builds, which stops the iPhone app (it compiles these sources
+// itself, so internal would not). The guard's PR opens them up.
 @MainActor
 public final class WriteStorageStatus: ObservableObject {
     public static let savingMessage = NSLocalizedString("Saving…", comment: "Native screens: a change is being stored on this device")
     public static let notYetStoredMessage = NSLocalizedString(
         "Still saving to this device. Keep the app open.", comment: "Native screens: a change was made but this device has not stored it yet")
 
-    @Published public private(set) var message: String?
-    private var writesInProgress = 0 { didSet { updateMessage() } }
-    // The current page's writes not known to be stored, by native/persisted
-    // number; nil when that call got no answer
-    private var unstored: [Int?] = [] { didSet { updateMessage() } }
+    // The line a screen may show: saving in progress, never that a change is stored
+    @Published private var line: String?
+    private var writesInProgress = 0 { didSet { updateLine() } }
+    // The current page's writes not known to be stored: when their
+    // native/persisted call was asked, and its number once answered
+    private var unstored: [(ticket: Int, seq: Int?)] = [] { didSet { updateLine() } }
+    // Keeps counting across page loads, so a late ticket can't pass for a new one
+    private var lastTicket = 0
+    private var newestStoredTicket = 0
+    private var storedThroughSeq = 0
     // A restart came while writes were unstored. No later success can vouch
     // for them, so only OK on the restart notice clears this. The notice says
     // so; the status line shows only saving in progress.
@@ -153,29 +166,56 @@ public final class WriteStorageStatus: ObservableObject {
     private var retiredEpochs: Set<String> = []
     // Counts page loads here, for a write that never got a `seq`
     private var generation = 0
+    // A new epoch revealed the restart before the page's "ready" arrived
+    private var restartAlreadyHandled = false
 
     public nonisolated init() {}
 
-    public var isPending: Bool { message != nil }
+    public var isPending: Bool { line != nil }
 
-    private func updateMessage() {
+    private func updateLine() {
         let next = writesInProgress > 0 ? Self.savingMessage : unstored.isEmpty ? nil : Self.notYetStoredMessage
-        if next != message { message = next }
+        if next != line { line = next }
     }
 
     // What a screen shows. A normal write takes milliseconds, so "Saving…"
-    // appears only if it is still saving after `savingDelay`.
-    public func shownMessage(savingDelay: TimeInterval = 0.3) -> AnyPublisher<String?, Never> {
-        $message
+    // appears only if it is still saving after `savingDelay`, and once it has
+    // appeared it stays for `savingMinimum` rather than flash.
+    public func shownMessage(savingDelay: TimeInterval = 0.3, savingMinimum: TimeInterval = 0.6) -> AnyPublisher<String?, Never> {
+        var savingShownAt: Date?
+        func later(_ message: String?, by delay: TimeInterval) -> AnyPublisher<String?, Never> {
+            guard delay > 0 else { return Just(message).eraseToAnyPublisher() }
+            return Just(message).delay(for: .seconds(delay), scheduler: RunLoop.main).eraseToAnyPublisher()
+        }
+        return $line
             .map { message -> AnyPublisher<String?, Never> in
-                let now = Just(message)
-                return message == Self.savingMessage
-                    ? now.delay(for: .seconds(savingDelay), scheduler: RunLoop.main).eraseToAnyPublisher()
-                    : now.eraseToAnyPublisher()
+                if message == Self.savingMessage {
+                    guard savingShownAt == nil else { return Just(message).eraseToAnyPublisher() }
+                    return later(message, by: savingDelay)
+                        .handleEvents(receiveOutput: { _ in savingShownAt = Date() })
+                        .eraseToAnyPublisher()
+                }
+                let shownFor = savingShownAt.map { Date().timeIntervalSince($0) } ?? savingMinimum
+                let wait = message == nil ? max(0, savingMinimum - shownFor) : 0
+                return later(message, by: wait)
+                    .handleEvents(receiveOutput: { _ in savingShownAt = nil })
+                    .eraseToAnyPublisher()
             }
             .switchToLatest()
             .removeDuplicates()
             .eraseToAnyPublisher()
+    }
+
+    // What VoiceOver says when the shown line changes: "Saving…" would talk over
+    // the person's own action. Nothing is said when the line clears, because
+    // until the storage guard is on that would claim more than is known.
+    public static func announcement(from old: String?, to new: String?) -> String? {
+        new == notYetStoredMessage && old != notYetStoredMessage ? notYetStoredMessage : nil
+    }
+
+    // Whether a change is still being saved, for wording that must not claim otherwise
+    public var pendingChanges: AnyPublisher<Bool, Never> {
+        $line.map { $0 != nil }.removeDuplicates().eraseToAnyPublisher()
     }
 
     // The page load this write was made in
@@ -185,29 +225,65 @@ public final class WriteStorageStatus: ObservableObject {
         return generation
     }
 
+    #if SWIFT_PACKAGE
+    var message: String? {
+        line
+    }
+    #endif
+
     func writeEnded() { writesInProgress -= 1 }
 
-    // A stored answer covers every earlier write of its own page load
-    func record(_ answer: PersistedAnswer, madeIn writeGeneration: Int? = nil) {
+    // Taken just before asking, because answers can arrive out of order
+    func nextTicket() -> Int {
+        lastTicket += 1
+        return lastTicket
+    }
+
+    // A stored answer covers every write of its own page load asked about
+    // before it, and no later one
+    func record(_ answer: PersistedAnswer, ticket: Int? = nil, madeIn writeGeneration: Int? = nil) {
+        let ticket = ticket ?? nextTicket()
         let isOlderWrite = writeGeneration.map { $0 != generation } ?? false
         guard isCurrentPage(answer.seq?.epoch), !isOlderWrite else {
             if !answer.stored { mayNotBeSaved = true }
             return
         }
-        if answer.stored { unstored = [] } else { unstored.append(answer.seq?.n) }
+        if answer.stored {
+            newestStoredTicket = max(newestStoredTicket, ticket)
+            unstored.removeAll { $0.ticket <= ticket }
+        } else if ticket > newestStoredTicket {
+            // This call waits for every write before it, so it speaks for any
+            // earlier call that never got an answer
+            if answer.seq != nil { unstored.removeAll { $0.seq == nil && $0.ticket < ticket } }
+            if (answer.seq?.n ?? .max) > storedThroughSeq { unstored.append((ticket, answer.seq?.n)) }
+        }
     }
 
-    // The engine's storage-stored, which the page forwards as `stored`
+    // The engine's storage-stored, which the page forwards as `stored`. It can
+    // arrive before the answer that carries its number. Writes are stored in
+    // order, so it covers every earlier number of its page load too.
     public func storedEvent(seq: Int, epoch: String) {
         guard isCurrentPage(epoch) else { return }
-        unstored.removeAll { $0.map { $0 <= seq } ?? false }
+        storedThroughSeq = max(storedThroughSeq, seq)
+        unstored.removeAll { $0.seq.map { $0 <= seq } ?? false }
     }
 
     // The page loaded again: what it had not stored may be gone
     public func pageLoaded() {
+        if restartAlreadyHandled {
+            restartAlreadyHandled = false
+            return
+        }
+        retireCurrentPage()
+    }
+
+    private func retireCurrentPage() {
         generation += 1
         if let currentEpoch { retiredEpochs.insert(currentEpoch) }
         currentEpoch = nil
+        newestStoredTicket = 0
+        // The new page's numbers start again
+        storedThroughSeq = 0
         if !unstored.isEmpty {
             unstored = []
             mayNotBeSaved = true
@@ -221,7 +297,10 @@ public final class WriteStorageStatus: ObservableObject {
         guard let epoch else { return true }
         if retiredEpochs.contains(epoch) { return false }
         if epoch != currentEpoch {
-            if currentEpoch != nil { pageLoaded() }
+            if currentEpoch != nil {
+                retireCurrentPage()
+                restartAlreadyHandled = true
+            }
             currentEpoch = epoch
         }
         return true
@@ -241,11 +320,13 @@ struct PersistedAnswer: Decodable, Equatable {
     static let notStored = PersistedAnswer(stored: false)
 }
 
+#if SWIFT_PACKAGE
 // A write's result, and whether this device has stored it
-public struct StoredWrite {
-    public let data: Data
-    public let stored: Bool
+struct StoredWrite {
+    let data: Data
+    let stored: Bool
 }
+#endif
 
 // sc-3611 (native-bridge: "Native refusals carry a stable code"). A loot-core
 // refusal native code reacts to starts with `[native:<code>]` or
@@ -437,7 +518,7 @@ public struct NativeBridgeClient {
 
     public func call<Args: Encodable>(_ name: String, args: Args) async throws -> Data {
         if storage != nil, NativeBridgeAllowlist.kind(of: name) == .write {
-            return try await write(name, args: args).data
+            return try await sendThenPersist(name, args: args).data
         }
         return try await send(name, args: args)
     }
@@ -445,7 +526,7 @@ public struct NativeBridgeClient {
     // sc-5219 (D3): the write with its own deadline, then native/persisted with
     // its own. The write is never retried. A failure of the second call only
     // means not stored: the write has already been applied.
-    public func write<Args: Encodable>(_ name: String, args: Args) async throws -> StoredWrite {
+    private func sendThenPersist<Args: Encodable>(_ name: String, args: Args) async throws -> (data: Data, stored: Bool) {
         let generation = await storage?.writeBegan()
         let data: Data
         do {
@@ -454,23 +535,35 @@ public struct NativeBridgeClient {
             await storage?.writeEnded()
             throw error
         }
-        let answer = await persisted(madeIn: generation)
-        await storage?.record(answer, madeIn: generation)
+        let stored = await persisted(madeIn: generation)
         await storage?.writeEnded()
-        return StoredWrite(data: data, stored: answer.stored)
+        return (data, stored)
     }
 
-    private func persisted(madeIn generation: Int?) async -> PersistedAnswer {
+    #if SWIFT_PACKAGE
+    func write<Args: Encodable>(_ name: String, args: Args) async throws -> StoredWrite {
+        let result = try await sendThenPersist(name, args: args)
+        return StoredWrite(data: result.data, stored: result.stored)
+    }
+    #endif
+
+    private func persisted(madeIn generation: Int?) async -> Bool {
+        let ticket = await storage?.nextTicket() ?? 0
         do {
-            return try await askPersisted()
+            let answer = try await askPersisted()
+            await storage?.record(answer, ticket: ticket, madeIn: generation)
+            return answer.stored
         } catch NativeBridgeError.timedOut {
+            await storage?.record(.notStored, ticket: ticket, madeIn: generation)
             // The one call that may be repeated: it changes nothing
             Task {
-                if let answer = try? await askPersisted() { await storage?.record(answer, madeIn: generation) }
+                let retry = await storage?.nextTicket() ?? 0
+                if let answer = try? await askPersisted() { await storage?.record(answer, ticket: retry, madeIn: generation) }
             }
-            return .notStored
+            return false
         } catch {
-            return .notStored
+            await storage?.record(.notStored, ticket: ticket, madeIn: generation)
+            return false
         }
     }
 
@@ -482,7 +575,8 @@ public struct NativeBridgeClient {
 
     // Arguments are any JSON value, so a number crosses as a number
     private func send<Args: Encodable>(_ name: String, args: Args) async throws -> Data {
-        guard NativeBridgeAllowlist.handlers.contains(name), !NativeBridgeAllowlist.sync.contains(name) else {
+        // sync and the storage calls have their own paths
+        guard let kind = NativeBridgeAllowlist.kind(of: name), kind != .sync, kind != .storage else {
             throw NativeBridgeError.notAllowlisted(name)
         }
         // Each write name takes only its own typed value
@@ -498,7 +592,7 @@ public struct NativeBridgeClient {
             || (args is AccountReopen && name == "native/account-reopen") || (args is AccountMove && name == "native/account-move")
             || (args is SettingsSave && name == "native/settings-save")
             || (args is TransactionSave && name == "native/transaction-save")
-        guard !NativeBridgeAllowlist.allWrites.contains(name) || isTyped else {
+        guard kind != .write || isTyped else {
             throw NativeBridgeError.invalidWrite(name)
         }
         let encoder = JSONEncoder()

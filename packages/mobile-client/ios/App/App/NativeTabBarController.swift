@@ -12,8 +12,7 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
     private var containers: [NativeTab: TabContainerViewController] = [:]
     private var foregroundObserver: NSObjectProtocol?
     // sc-5219: "Saving…" and "Still saving to this device. Keep the app open.", above the tab bar
-    private let writeStorageLine = UIView()
-    private var writeStorageObserver: AnyCancellable?
+    private var writeStorageLine: WriteStorageLine?
     private var writePendingObserver: AnyCancellable?
     // The native Budget tab (sc-3751) lies over the web Budget screen while the
     // switch is on and the page shows /budget with the tab bar; otherwise the web screen below shows as before
@@ -90,51 +89,34 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
         chrome.onPresentReconcile = { [weak self] body in self?.presentReconcile(body) }
         // Hidden until a budget is open (sign-in and the budget list have none)
         setTabBarVisible(false)
-        showWriteStorageLine()
+        followPendingWrites()
 
         foregroundObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
         ) { [weak self] _ in self?.bridgeController.nativeChrome.reportRoute() }
     }
 
-    // One line for every native screen, since a write can come from any of them
-    private func showWriteStorageLine() {
-        let label = UILabel()
-        label.font = .preferredFont(forTextStyle: .footnote)
-        label.adjustsFontForContentSizeCategory = true
-        label.textColor = .secondaryLabel
-        label.textAlignment = .center
-        label.numberOfLines = 0
-        label.translatesAutoresizingMaskIntoConstraints = false
+    private func attachWriteStorageLine() {
+        guard writeStorageLine == nil, let scene = view.window?.windowScene else { return }
+        writeStorageLine = WriteStorageLine(
+            status: bridgeController.nativeBridge.writeStorage, scene: scene,
+            barHeight: { [weak self] in
+                guard let self, self.tabBarShown, self.presentedViewController == nil else { return 0 }
+                return self.view.bounds.maxY - self.tabBar.frame.minY
+            },
+            reserve: { [weak self] height in
+                guard let self else { return }
+                self.containers.values.forEach { $0.additionalSafeAreaInsets.bottom = height }
+                var presented = self.presentedViewController
+                while let screen = presented {
+                    screen.additionalSafeAreaInsets.bottom = height
+                    presented = screen.presentedViewController
+                }
+            })
+    }
 
-        let line = writeStorageLine
-        line.backgroundColor = .secondarySystemBackground
-        line.layer.cornerRadius = 8
-        line.isUserInteractionEnabled = false
-        line.isHidden = true
-        line.translatesAutoresizingMaskIntoConstraints = false
-        line.addSubview(label)
-        view.addSubview(line)
-        NSLayoutConstraint.activate([
-            label.topAnchor.constraint(equalTo: line.topAnchor, constant: 6),
-            label.bottomAnchor.constraint(equalTo: line.bottomAnchor, constant: -6),
-            label.leadingAnchor.constraint(equalTo: line.leadingAnchor, constant: 12),
-            label.trailingAnchor.constraint(equalTo: line.trailingAnchor, constant: -12),
-            line.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            line.bottomAnchor.constraint(equalTo: tabBar.topAnchor, constant: -8),
-            line.leadingAnchor.constraint(greaterThanOrEqualTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
-            line.trailingAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
-        ])
-        writeStorageObserver = bridgeController.nativeBridge.writeStorage.shownMessage().sink { [weak self] message in
-            guard let self else { return }
-            label.text = message
-            line.isHidden = message == nil
-            self.view.bringSubviewToFront(line)
-            if let message { UIAccessibility.post(notification: .announcement, argument: message) }
-        }
-        writePendingObserver = bridgeController.nativeBridge.writeStorage.$message
-            .map { $0 != nil }
-            .removeDuplicates()
+    private func followPendingWrites() {
+        writePendingObserver = bridgeController.nativeBridge.writeStorage.pendingChanges
             .sink { [weak self] in self?.accountsOverlay?.writePendingChanged($0) }
     }
 
@@ -289,6 +271,7 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
     // Test-only: `-ReconcileDemo checklist|step1|step2` shows the flow on sample data
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        attachWriteStorageLine()
         guard let request = ReconcileDemo.request, reconcileFlow == nil else { return }
         let month = ReconcileMonthViewModel(client: ReconcileDemo.client)
         Task { @MainActor in
@@ -363,6 +346,119 @@ extension NativeTab {
         case .reports: "chart.bar"
         case .settings: "gearshape"
         }
+    }
+}
+
+// sc-5219: "Saving…" and "Still saving to this device. Keep the app open." One
+// line for every native screen, in its own window, so it stays visible over
+// sheets and rides above the keyboard. It takes real space: the screens below
+// end above it, so it covers neither rows nor the Undo bar. It ignores touches.
+// shortcut: a sheet presented while the line is already up gets no reserved
+// space until the line next changes; observe presentation if that shows up.
+@MainActor
+final class WriteStorageLine {
+    private let window: UIWindow
+    private let screen = WriteStorageLineController()
+    private var observer: AnyCancellable?
+    private var shown: String?
+
+    init(
+        status: WriteStorageStatus, scene: UIWindowScene, barHeight: @escaping () -> CGFloat,
+        reserve: @escaping (CGFloat) -> Void
+    ) {
+        window = UIWindow(windowScene: scene)
+        window.windowLevel = .alert
+        window.isUserInteractionEnabled = false
+        window.backgroundColor = .clear
+        window.rootViewController = screen
+        screen.barHeight = barHeight
+        screen.onHeight = reserve
+        observer = status.shownMessage().sink { [weak self] message in self?.show(message) }
+    }
+
+    private func show(_ message: String?) {
+        if let words = WriteStorageStatus.announcement(from: shown, to: message) {
+            // Queued, so it does not cut across what VoiceOver is reading
+            let queued = NSAttributedString(string: words, attributes: [.accessibilitySpeechQueueAnnouncement: true])
+            UIAccessibility.post(notification: .announcement, argument: queued)
+        }
+        shown = message
+        window.isHidden = message == nil
+        screen.show(message)
+    }
+}
+
+private final class WriteStorageLineController: UIViewController {
+    var barHeight: () -> CGFloat = { 0 }
+    var onHeight: (CGFloat) -> Void = { _ in }
+    private let pill = UIView()
+    private let label = UILabel()
+    private var aboveBar: NSLayoutConstraint?
+    private var reserved: CGFloat = -1
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .clear
+        // DESIGN.native.md: label/primary on the opaque bg/grouped-secondary, with a hairline
+        label.font = .preferredFont(forTextStyle: .footnote)
+        label.adjustsFontForContentSizeCategory = true
+        label.textColor = .label
+        label.textAlignment = .center
+        label.numberOfLines = 0
+        label.accessibilityIdentifier = "storage.line"
+        label.translatesAutoresizingMaskIntoConstraints = false
+        pill.backgroundColor = .secondarySystemGroupedBackground
+        pill.layer.cornerRadius = 8
+        pill.layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
+        pill.layer.borderColor = UIColor.separator.resolvedColor(with: traitCollection).cgColor
+        pill.translatesAutoresizingMaskIntoConstraints = false
+        pill.addSubview(label)
+        view.addSubview(pill)
+        let safe = view.safeAreaLayoutGuide
+        let keyboardTop = view.keyboardLayoutGuide.topAnchor
+        let resting = pill.bottomAnchor.constraint(equalTo: keyboardTop, constant: -8)
+        resting.priority = .defaultLow
+        let bar = pill.bottomAnchor.constraint(lessThanOrEqualTo: view.bottomAnchor)
+        aboveBar = bar
+        NSLayoutConstraint.activate([
+            label.topAnchor.constraint(equalTo: pill.topAnchor, constant: 6),
+            label.bottomAnchor.constraint(equalTo: pill.bottomAnchor, constant: -6),
+            label.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 12),
+            label.trailingAnchor.constraint(equalTo: pill.trailingAnchor, constant: -12),
+            pill.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            pill.leadingAnchor.constraint(greaterThanOrEqualTo: safe.leadingAnchor, constant: 16),
+            pill.trailingAnchor.constraint(lessThanOrEqualTo: safe.trailingAnchor, constant: -16),
+            pill.topAnchor.constraint(greaterThanOrEqualTo: safe.topAnchor, constant: 8),
+            pill.bottomAnchor.constraint(lessThanOrEqualTo: keyboardTop, constant: -8),
+            bar, resting,
+        ])
+    }
+
+    // A layer's colour does not follow light, dark or Increase Contrast by itself
+    override func traitCollectionDidChange(_ previous: UITraitCollection?) {
+        super.traitCollectionDidChange(previous)
+        pill.layer.borderColor = UIColor.separator.resolvedColor(with: traitCollection).cgColor
+    }
+
+    func show(_ message: String?) {
+        loadViewIfNeeded()
+        label.text = message
+        view.setNeedsLayout()
+        view.layoutIfNeeded()
+        report(isShown: message != nil)
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        aboveBar?.constant = -(barHeight() + 8)
+        report(isShown: label.text != nil)
+    }
+
+    private func report(isShown: Bool) {
+        let height = isShown ? pill.bounds.height + 8 : 0
+        guard height != reserved else { return }
+        reserved = height
+        onHeight(height)
     }
 }
 

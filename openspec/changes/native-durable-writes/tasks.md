@@ -31,7 +31,7 @@
 - [ ] 3.1 Failing Swift tests first:
   - the read/write table in `NativeBridgeClient` (every allowlisted name classified);
   - the two-call write returning `stored`, with only `native/persisted` retried;
-  - "Saving…" until stored, and "Saved here, not yet stored on this device." on `stored: false`, cleared on `stored`;
+  - "Saving…" until stored, and "Still saving to this device. Keep the app open." on `stored: false`, cleared on `stored`;
   - the persistent app-level failure notice with `lastStoredFlushAt` and Reload, and the device-full variant (the Product Owner's four sentences), the time to the second and truncated, and the no-time sentence when nothing stored this session;
   - the restart notice on iPhone and Mac: its copy with a time, with none and for a full device, OK, no Reload, repeated restarts, and a manual Reload showing no restart notice unless one is waiting for OK (D5a);
   - the failure notice replacing the reload notice at once, and no reload notice while it shows;
@@ -50,8 +50,9 @@
   - Put the before and after counts in the PR (D12).
 - [ ] 3.5 Run the `NativeBridgeCore` tests, the Mac tests and the iOS build; all pass. The next TestFlight build carries this change (Product Owner, comment 5222)
 - [x] 3.6 Failing test first for "A not-yet-stored write belongs to its page load": `seq` carries the page load's epoch; Swift also records each write's page-load generation, for a write with no answer and so no `seq`; `stored: true` and `stored` clear only their own epoch; a restart turns older pending writes into "may not have been saved", and no later success clears them (D4)
-- [ ] 3.8 Failing test first, in the PR that adds the restart notice and before the guard turns on: OK on the restart notice calls `acknowledgeMayNotBeSaved()`, so "may not have been saved" does not last the whole session (Product Owner, PR #485)
+- [ ] 3.9 Failing tests first, in the PR that adds the restart notice and turns the guard on: OK on the notice calls `acknowledgeMayNotBeSaved()`, so "may not have been saved" does not last the whole session (Product Owner, PR #485); VoiceOver is told when pending writes finish storing, which can't be claimed while the guard is off (Designer, PR #485)
 - [ ] 3.7 **Gate:** do not turn the storage guard on in the iPhone app until sc-5247 (iPhone page-death reload) and the iPhone part of sc-5220 (reload notice) have merged. The PR that turns it on links both merged PRs (Product Owner, sc-5219 comment 5277; design D7a)
+- [ ] 3.8 Failing tests first for "The storage status line shows only saving states", "A restart with unconfirmed writes tells the person" and "Offline never claims saved while a write is pending": the two line states, "Saving…" held 0.6 s without delaying a reply, the line clearing at a restart, the notice with OK in place of the reload notice, and the offline text only with nothing pending (D4)
 
 ## 4. Review decisions from the engine PR (sc-5219)
 

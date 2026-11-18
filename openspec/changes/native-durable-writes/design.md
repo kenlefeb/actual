@@ -80,7 +80,9 @@ A fork loot-core handler, allowlisted in both lists as a call with no arguments,
 - `{ stored: false }` on timeout. The engine keeps waiting and sends `storage-stored` when the writes covered by that call finish, and the page bridge forwards it to Swift as `stored`;
 - `[native:not-stored]` when the latch is set.
 
-Every answer and `storage-stored` carries `seq`: an epoch fixed for that page load, and a number that restarts with it. Numbers alone can't be compared across a restart, so a success from the new page could otherwise clear a write the old page lost. Swift tracks unconfirmed writes per page load. A write whose `native/persisted` call never answered before a restart has no `seq`, so Swift also records its own page-load generation for every write when it is made. A success clears only its own epoch, and a restart turns older pending writes into "may not have been saved", which only the restart or reload notice covers (Architect, PR #482).
+Every answer and `storage-stored` carries `seq`: an epoch fixed for that page load, and a number that restarts with it. Numbers alone can't be compared across a restart, so a success from the new page could otherwise clear a write the old page lost. Swift tracks unconfirmed writes per page load. A write whose `native/persisted` call never answered before a restart has no `seq`, so Swift also records its own page-load generation for every write when it is made. A success clears only its own epoch, and a restart turns older pending writes into "may not have been saved", which only the restart notice covers (Architect, PR #482).
+
+The status line is for transient saving states only (Product Owner and UX Designer, PR #485). It shows "Saving…" and "Still saving to this device. Keep the app open."; once shown, "Saving…" stays at least 0.6 s so it can't flash. That is display timing, not a limit, and no reply waits for it. "Some recent changes may not have been saved" is never in the line: a line takes no touches and could not be acknowledged, so it is a restart notice with OK. When no failure notice is showing, that notice takes the reload notice's place. "Offline — changes saved on this iPhone" shows only with nothing pending.
 
 Deadline arithmetic: the wait ceiling is 4000 ms (D7), so `native/persisted` answers within 4 s plus a page round trip, inside its own 5 s deadline. The write call itself no longer contains any wait.
 
@@ -112,6 +114,7 @@ Copy-table wording (Product Owner, PR #474):
 |---|---|
 | Restart | The app restarted. Changes made after <A> may not have been saved. Check them, and make again any that are missing. |
 | Restart, no cut-off | The app restarted. Changes made since you opened the app may not have been saved. Check them, and make again any that are missing. |
+| Restart, unconfirmed writes, no failure notice | The app restarted. Some recent changes may not have been saved. Check them, and make again any that are missing. |
 | Restart, device full | The app restarted, and this device is out of space. Free up some space. Changes made after <A> may not have been saved. Check them, and make again any that are missing. |
 
 <A> is the time to the second, cut off, never rounded up.

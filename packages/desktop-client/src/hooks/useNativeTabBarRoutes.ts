@@ -1,6 +1,9 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router';
 
+import { useQuery } from '@tanstack/react-query';
+
+import { accountQueries } from '#accounts';
 import { useNavigate } from '#hooks/useNavigate';
 import { replaceModal } from '#modals/modalsSlice';
 import {
@@ -18,6 +21,7 @@ import { useDispatch, useSelector } from '#redux';
 export function useNativeTabBarRoutes() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
+  const { data: openAccounts = [] } = useQuery(accountQueries.listActive());
   const { pathname, state } = useLocation();
   const hasSheet = useSelector(s => s.modals.modalStack.length > 0);
   const tabBar = showsNativeTabBar(pathname, hasSheet);
@@ -32,6 +36,15 @@ export function useNativeTabBarRoutes() {
         () => postNativeRoute(window, pathname, tabBar),
         // The native Accounts screen's hand-offs (D7a): only the web's own flows
         (action, accountId) => {
+          // The id becomes part of a route, so only a known open account's does
+          if (
+            (action === 'account-settings' || action === 'bank-sync') &&
+            !openAccounts.some(a => a.id === accountId)
+          ) {
+            throw new Error(
+              'native chrome: the account is not a known open account',
+            );
+          }
           if (action === 'add-account' || action === 'link-account') {
             dispatch(
               replaceModal({ modal: { name: 'add-account', options: {} } }),
@@ -45,7 +58,7 @@ export function useNativeTabBarRoutes() {
           }
         },
       ),
-    [navigate, dispatch, pathname, tabBar],
+    [navigate, dispatch, pathname, tabBar, openAccounts],
   );
   useEffect(
     () => postNativeRoute(window, pathname, tabBar),

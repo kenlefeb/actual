@@ -96,9 +96,32 @@ export function problems(files) {
 
 // The App target compiles NativeBridgeCore from the Xcode project's own list of
 // files, so `swift test` passes on a source the iPhone build never sees.
-// names: the sources' file names; project: the project.pbxproj text.
+// names: the sources' file names; project: the project.pbxproj text. A name
+// counts only as an entry in the App target's own Sources build phase (sc-5023):
+// not a file reference, a comment, another target, or a name with the same ending.
+function appSourceEntries(project) {
+  const target = /isa = PBXNativeTarget;(?:(?!isa = PBX)[^]*?)name = App;/.exec(
+    project,
+  );
+  const phaseId = target && /(\w+) \/\* Sources \*\//.exec(target[0])?.[1];
+  const phase =
+    phaseId &&
+    new RegExp(
+      `^\\s*${phaseId} /\\* Sources \\*/ = \\{\\s*isa = PBXSourcesBuildPhase;[^]*?files = \\(([^)]*)\\);`,
+      'm',
+    ).exec(project);
+  return new Set(
+    [
+      ...(phase?.[1] ?? '').matchAll(
+        /^\s*\w+ \/\* (.+) in Sources \*\/,\s*$/gm,
+      ),
+    ].map(m => m[1]),
+  );
+}
+
 export function missingFromProject(names, project) {
-  return names.filter(name => !project.includes(`${name} in Sources`));
+  const entries = appSourceEntries(project);
+  return names.filter(name => !entries.has(name));
 }
 
 export function findNativeSources(root) {

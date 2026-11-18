@@ -514,6 +514,31 @@ describe('the full set of rows a write touches', () => {
     expect((await row('pc'))?.tombstone).toBe(0);
   });
 
+  it('refuses unlinking a partner inside a reconciled split without confirmation', async () => {
+    await addTxn('pp', { account: 'savings', is_parent: 1 });
+    await addTxn('pc', { account: 'savings', is_child: 1, parent_id: 'pp' });
+    await batchUpdateTransactions({
+      added: [
+        {
+          id: 'x1',
+          account: 'checking',
+          payee: 'to-savings',
+          amount: -500,
+          date: '2016-12-20',
+        },
+      ] as never,
+    });
+    await db.updateTransaction({ id: 'x1', transfer_id: 'pc' });
+    await db.updateTransaction({ id: 'pc', transfer_id: 'x1' });
+    // Only the parent carries the reconciled flag
+    await db.updateTransaction({ id: 'pp', cleared: true, reconciled: 1 });
+    await expect(remove({ ids: ['x1'] })).rejects.toThrow(/reconciled/);
+    expect((await row('x1'))?.tombstone).toBe(0);
+    expect(await remove({ ids: ['x1'], confirmedReconciled: true })).toEqual({
+      deleted: 1,
+    });
+  });
+
   it('refuses categorizing a transfer whose partner is reconciled without confirmation, and counts the partner', async () => {
     await batchUpdateTransactions({
       added: [
@@ -662,6 +687,13 @@ describe('native/undo refuses after a later change to anything the write touched
   it('refuses when a touched row was reconciled since', async () => {
     await categorize({ ids: ['t1'] });
     await db.updateTransaction({ id: 't1', cleared: true, reconciled: 1 });
+    await expect(undo()).rejects.toThrow(/changed since/);
+    expect((await row('t1'))?.category).toBe('groceries');
+  });
+
+  it('refuses when a touched row was linked to a schedule since', async () => {
+    await categorize({ ids: ['t1'] });
+    await db.update('transactions', { id: 't1', schedule: 'sched1' });
     await expect(undo()).rejects.toThrow(/changed since/);
     expect((await row('t1'))?.category).toBe('groceries');
   });

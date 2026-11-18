@@ -4,7 +4,8 @@ import { MemoryRouter, useLocation } from 'react-router';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { TestProviders } from '#mocks';
+import { accountQueries } from '#accounts';
+import { createTestQueryClient, TestProviders } from '#mocks';
 import { nativeParentPath, resetNativeRoutes } from '#native/nativeChrome';
 import { useSelector } from '#redux';
 
@@ -48,8 +49,13 @@ describe('useNativeTabBarRoutes', () => {
       (window as unknown as { webkit: unknown }).webkit = {
         messageHandlers: { actualNativeChrome: { postMessage: vi.fn() } },
       };
+      const queryClient = createTestQueryClient();
+      queryClient.setQueryData(accountQueries.list().queryKey, [
+        { id: 'c1', name: 'Checking', closed: 0 },
+        { id: 'old', name: 'Old', closed: 1 },
+      ] as never);
       const wrapper = ({ children }: { children: ReactNode }) => (
-        <TestProviders>
+        <TestProviders queryClient={queryClient}>
           <MemoryRouter initialEntries={['/accounts']}>{children}</MemoryRouter>
         </TestProviders>
       );
@@ -96,17 +102,30 @@ describe('useNativeTabBarRoutes', () => {
       });
     });
 
-    it('encodes the account id, so it cannot change the route', () => {
+    it.each(['..', '../settings a/b', 'old', 'nope'])(
+      'refuses %s, which is not a known open account, and goes nowhere',
+      accountId => {
+        const { result } = renderInApp();
+        expect(() =>
+          act(() =>
+            window.__actualNativeChrome?.webAccountAction?.(
+              'account-settings',
+              accountId,
+            ),
+          ),
+        ).toThrow(/not a known open account/);
+        expect(result.current.location.pathname).toBe('/accounts');
+      },
+    );
+
+    it('refuses an unknown account for bank sync too', () => {
       const { result } = renderInApp();
-      act(() =>
-        window.__actualNativeChrome?.webAccountAction?.(
-          'account-settings',
-          '../settings a/b',
+      expect(() =>
+        act(() =>
+          window.__actualNativeChrome?.webAccountAction?.('bank-sync', 'nope'),
         ),
-      );
-      expect(result.current.location.pathname).toBe(
-        '/accounts/..%2Fsettings%20a%2Fb',
-      );
+      ).toThrow(/not a known open account/);
+      expect(result.current.location.pathname).toBe('/accounts');
     });
   });
 });

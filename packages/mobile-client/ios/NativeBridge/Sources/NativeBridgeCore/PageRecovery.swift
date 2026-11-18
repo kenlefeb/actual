@@ -32,9 +32,11 @@ public struct ReloadGuard {
 
 // Fork-only (sc-5247). What the iPhone app does when WebKit ends the page's
 // process: reload, until the guard says to ask the user. `giveUp` returns
-// whether the alert is on screen. It can't always be (no active window, another
-// presentation under way), so it is tried again, and if it never shows the app
-// reloads anyway: the page must not stay dead with nothing on screen.
+// whether the alert is on screen. It can't always be (the app isn't active,
+// another presentation is under way), so it is tried every second, and at once
+// when the app becomes active. After `alertAttempts` tries the app also reloads
+// when the guard has a free slot, so the page doesn't stay dead with nothing on
+// screen. Only the person's Reload resets the count: the cap always holds.
 @MainActor
 public final class PageRecovery {
     public static let alertAttempts = 5
@@ -45,9 +47,10 @@ public final class PageRecovery {
     private let schedule: (TimeInterval, @escaping @MainActor () -> Void) -> Void
     private let reload: () -> Void
     private let giveUp: () -> Bool
-    // The ask under way, if the alert hasn't shown yet
-    private var pendingAsk: Int?
-    private var nextAsk = 0
+    // The alert is wanted and hasn't shown yet
+    private var asking = false
+    private var attempts = 0
+    private var retryScheduled = false
 
     public init(
         now: @escaping () -> Date = Date.init,
@@ -66,31 +69,42 @@ public final class PageRecovery {
     }
 
     public func processEnded() {
-        guard pendingAsk == nil else { return }
+        guard !asking else { return }
         if reloads.allowsReload(at: now()) {
             reload()
         } else {
-            nextAsk += 1
-            pendingAsk = nextAsk
-            ask(nextAsk, attempt: 1)
+            asking = true
+            attempts = 0
+            ask()
         }
     }
 
     // The user's Reload, after the app stopped reloading on its own
     public func userReload() {
-        pendingAsk = nil
+        asking = false
         reloads.reset()
         reload()
     }
 
-    private func ask(_ id: Int, attempt: Int) {
-        guard pendingAsk == id else { return }
+    // The alert can show now, if one is waiting
+    public func appBecameActive() {
+        if asking { ask() }
+    }
+
+    private func ask() {
+        attempts += 1
         if giveUp() {
-            pendingAsk = nil
-        } else if attempt < Self.alertAttempts {
-            schedule(Self.alertRetryDelay) { [weak self] in self?.ask(id, attempt: attempt + 1) }
-        } else {
-            userReload()
+            asking = false
+        } else if attempts >= Self.alertAttempts, reloads.allowsReload(at: now()) {
+            asking = false
+            reload()
+        } else if !retryScheduled {
+            retryScheduled = true
+            schedule(Self.alertRetryDelay) { [weak self] in
+                guard let self else { return }
+                self.retryScheduled = false
+                if self.asking { self.ask() }
+            }
         }
     }
 }

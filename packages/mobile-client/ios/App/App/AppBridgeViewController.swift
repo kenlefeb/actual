@@ -13,6 +13,7 @@ class AppBridgeViewController: CAPBridgeViewController {
     // The web view holds its navigation delegate weakly
     private var pageProcessDelegate: PageProcessDelegate?
     private weak var reloadAlert: UIAlertController?
+    private var activeObserver: NSObjectProtocol?
     // sc-5247: `loadWebView` loads the app's own start page, never the URL the
     // page last showed, which can be a used one-time sign-in callback
     private lazy var pageRecovery = PageRecovery(
@@ -35,6 +36,12 @@ class AppBridgeViewController: CAPBridgeViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         benchmarkTrigger = NativeBridgeBenchmarkTrigger(controller: self, client: nativeBridge.client)
+        // A page that died while the app wasn't active still needs its alert
+        activeObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.pageRecovery.appBecameActive() }
+        }
         #if DEBUG
         if let webView, let pageProcessDelegate, let serverURL = bridge?.config.serverURL {
             UITestPageRecovery.startIfRequested(webView: webView, delegate: pageProcessDelegate, serverURL: serverURL)

@@ -107,23 +107,82 @@ final class PageRecoveryTests: XCTestCase {
         XCTAssertEqual(reloads, 3, "the alert showed, so the app waits for the person")
     }
 
-    // The page must not stay dead with nothing on screen
-    func testAnAlertThatNeverShowsFallsBackToAReload() {
+    // The page must not stay dead with nothing on screen, within the cap
+    func testAnAlertThatNeverShowsReloadsOnceASlotIsFree() {
         let recovery = recovery()
         alertCanShow = false
         reachTheCap(recovery)
-        while !scheduled.isEmpty { runScheduled() }
-        XCTAssertEqual(gaveUp, PageRecovery.alertAttempts)
+        for _ in 0..<(PageRecovery.alertAttempts + 3) { runScheduled() }
+        XCTAssertEqual(reloads, 3, "no slot is free yet")
+        XCTAssertEqual(scheduled.count, 1, "it keeps trying the alert")
+        clock += 61
+        runScheduled()
         XCTAssertEqual(reloads, 4)
+        XCTAssertTrue(scheduled.isEmpty)
     }
 
-    func testTheCountStartsOverAfterTheFallback() {
+    func testAReloadBeforeTheLastAttemptWaitsEvenWithAFreeSlot() {
         let recovery = recovery()
         alertCanShow = false
         reachTheCap(recovery)
-        while !scheduled.isEmpty { runScheduled() }
+        clock += 61
+        runScheduled()
+        XCTAssertEqual(reloads, 3, "the alert gets its attempts first")
+    }
+
+    // Security's probe (PR 484): the page dies right after every load and the
+    // alert never shows, as when the app isn't active
+    func testAPageThatKeepsDyingStaysWithinTheCapWhenTheAlertCannotShow() {
+        var queue: [(at: Date, work: () -> Void)] = []
+        var loads: [Date] = []
+        var recovery: PageRecovery!
+        recovery = PageRecovery(
+            now: { [unowned self] in self.clock },
+            schedule: { [unowned self] delay, work in queue.append((self.clock + delay, work)) },
+            reload: { [unowned self] in
+                loads.append(self.clock)
+                queue.append((self.clock + 0.2, { recovery.processEnded() }))
+            },
+            giveUp: { false })
+        let start = clock
         recovery.processEnded()
-        XCTAssertEqual(reloads, 5)
+        while let next = queue.indices.min(by: { queue[$0].at < queue[$1].at }), queue[next].at < start + 3_600 {
+            let item = queue.remove(at: next)
+            clock = item.at
+            item.work()
+        }
+        XCTAssertGreaterThan(loads.count, 3, "it keeps trying to recover")
+        for (index, load) in loads.enumerated() {
+            let inWindow = loads[index...].prefix { $0.timeIntervalSince(load) < 60 }.count
+            XCTAssertLessThanOrEqual(inWindow, 3, "at \(load.timeIntervalSince(start)) s")
+        }
+    }
+
+    func testReturningToTheAppShowsTheWaitingAlertAtOnce() {
+        let recovery = recovery()
+        alertCanShow = false
+        reachTheCap(recovery)
+        alertCanShow = true
+        recovery.appBecameActive()
+        XCTAssertEqual(gaveUp, 2)
+        runScheduled()
+        XCTAssertEqual(gaveUp, 2, "the alert is up, so the retry stops")
+        XCTAssertEqual(reloads, 3)
+    }
+
+    func testReturningToTheAppDoesNotStartASecondRetry() {
+        let recovery = recovery()
+        alertCanShow = false
+        reachTheCap(recovery)
+        recovery.appBecameActive()
+        XCTAssertEqual(scheduled.count, 1)
+    }
+
+    func testReturningToTheAppWithNothingWaitingDoesNothing() {
+        let recovery = recovery()
+        recovery.appBecameActive()
+        XCTAssertEqual(gaveUp, 0)
+        XCTAssertEqual(reloads, 0)
     }
 
     func testAnotherEndWhileRetryingDoesNotStartASecondRetry() {

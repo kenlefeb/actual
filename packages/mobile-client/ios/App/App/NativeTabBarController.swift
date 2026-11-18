@@ -148,22 +148,31 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
         updateAccountsOverlay()
     }
 
-    // sc-4931 (D5): the route decides; a sheet or the web editor hides the bar, so the
-    // screen is removed and built again, re-reading, when the page comes back
+    // sc-4931, sc-3611 (D5): the route decides. One screen serves the list and the
+    // registers, so a register pushes over the list. It steps aside, keeping its
+    // place, while the web shows (a sheet, the editor, another path) and re-reads
+    // when the page comes back; it goes only when the switch is off.
     private func updateAccountsOverlay() {
         let container = containers[.accounts]!
-        let route = NativeAccountsRoute.wanted(
-            switchOn: NativeScreenSwitch.isAccountsNative(), tabBarShown: tabBarShown, path: pagePath, selected: router.selected)
-        if let current = accountsOverlay, route != current.route {
-            accountsOverlay = nil
-            container.setOverlay(nil)
+        let switchOn = NativeScreenSwitch.isAccountsNative()
+        guard switchOn, !container.hostsNativeScreen else {
+            if accountsOverlay != nil {
+                accountsOverlay = nil
+                container.setOverlay(nil)
+            }
+            return
         }
-        guard let route, accountsOverlay == nil, !container.hostsNativeScreen else { return }
-        let screen = NativeAccountsViewController(
-            client: bridgeController.nativeBridge.client, route: route, chrome: bridgeController.nativeChrome,
-            syncStatus: bridgeController.nativeBridge.syncStatus)
-        accountsOverlay = screen
-        container.setOverlay(screen)
+        let route = NativeAccountsRoute.wanted(switchOn: switchOn, tabBarShown: tabBarShown, path: pagePath, selected: router.selected)
+        if accountsOverlay == nil {
+            guard route != nil else { return }
+            let chrome = bridgeController.nativeChrome
+            let screen = NativeAccountsViewController(
+                client: bridgeController.nativeBridge.client, chrome: chrome, syncStatus: bridgeController.nativeBridge.syncStatus,
+                presentReconcile: { [weak self] in self?.presentReconcile($0) })
+            accountsOverlay = screen
+            container.setOverlay(screen)
+        }
+        accountsOverlay?.show(route)
     }
 
     private func updatePaychecksOverlay() {

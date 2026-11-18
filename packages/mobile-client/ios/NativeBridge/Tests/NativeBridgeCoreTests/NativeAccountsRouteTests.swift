@@ -75,6 +75,18 @@ final class NativeAccountsRouteTests: XCTestCase {
         XCTAssertFalse(NativeAccountsRoute.register("nope").isKnown(in: known))
     }
 
+    // PR 424 review (D5): with the switch on, a failed first read shows the native
+    // error with Retry, not the web screen; an unknown account still stays web
+    func testWhenTheNativeScreenShowsOverTheWeb() throws {
+        let known = try list(["c1"], closed: [])
+        XCTAssertFalse(NativeAccountsRoute.list.showsNative(.loading))
+        XCTAssertTrue(NativeAccountsRoute.list.showsNative(.failed(.other)))
+        XCTAssertTrue(NativeAccountsRoute.register("c1").showsNative(.failed(.timedOut)))
+        XCTAssertTrue(NativeAccountsRoute.list.showsNative(.loaded(known)))
+        XCTAssertTrue(NativeAccountsRoute.register("c1").showsNative(.stale(known, .other)))
+        XCTAssertFalse(NativeAccountsRoute.register("nope").showsNative(.loaded(known)))
+    }
+
     func testTheOpenAccountIdsAreWhatAHandOffMayName() throws {
         XCTAssertEqual(NativeAccountsRoute.openAccountIds(in: try list(["a", "b"], closed: ["old"])), ["a", "b"])
     }

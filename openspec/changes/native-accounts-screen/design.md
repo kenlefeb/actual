@@ -63,6 +63,8 @@ Cleared and uncleared reuse `native/reconcile-tick`, which already refuses recon
 
 The native Accounts screen lies over the Accounts container while the page shows `/accounts` or `/accounts/<id>` for a known account with the tab bar, as the Budget overlay does. The register is pushed inside a native NavigationStack, so a page route to `/accounts/<id>` (a budget drill-down) opens the native register. Other paths stay web: `/accounts/all` until sc-4387, and `/transactions/<id>`, where tapping a row opens the web editor until sc-3602. Back from the web editor returns to the native register at its scroll position, as the Budget overlay keeps its month.
 
+The web screen shows until loot-core has answered the first list read. If that read fails while the switch is on, the native screen shows its error with Retry rather than falling back to the web screen (PR 424 review, 2026-11-17): the person chose the native screen, and Retry recovers without leaving it. An `/accounts/<id>` the list does not hold still stays web.
+
 ## D6. View models
 
 `AccountsListViewModel` and `AccountRegisterViewModel` follow the Budget and Paychecks view models: tested against a fake transport and the contract fixtures.

@@ -1,5 +1,4 @@
 import Combine
-import NativeBridgeCore
 import UIKit
 
 // Fork-only (sc-3514, ADR 11). The iPhone app's root: a system tab bar with

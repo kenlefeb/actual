@@ -218,6 +218,24 @@ final class AccountsListViewModelTests: XCTestCase {
         try JSONDecoder().decode(AccountsList.self, from: Data(page.list.utf8))
     }
 
+    // sc-3611 task 3.6: the screens announce a failed read once per failed attempt. A retry that
+    // fails the same way leaves `state` as it was, so the count is what tells them
+    func testEveryFailedReadCountsOnceEvenWhenItFailsTheSameWay() async throws {
+        let page = try FakeAccountsPage()
+        let model = model(page)
+        XCTAssertEqual(model.failureCount, 0)
+        page.failures["native/accounts-list"] = Boom()
+        await model.load()
+        XCTAssertEqual(model.failureCount, 1)
+        let failed = model.state
+        await model.load()
+        XCTAssertEqual(model.state, failed, "the same failure leaves the state as it was")
+        XCTAssertEqual(model.failureCount, 2)
+        page.failures["native/accounts-list"] = nil
+        await model.load()
+        XCTAssertEqual(model.failureCount, 2, "a read that works is not a failure")
+    }
+
     func testTheFirstLoadIsRedactedThenShowsWhatLootCoreSent() async throws {
         let page = try FakeAccountsPage()
         let model = model(page)
@@ -555,6 +573,19 @@ final class AccountRegisterViewModelTests: XCTestCase {
 
     // The register read failed: there are no posted rows to keep, so the section
     // does not stay on Loading (it is not shown with the failed register)
+    func testEveryFailedRegisterReadCountsOnce() async throws {
+        let page = try FakeAccountsPage()
+        let model = model(page)
+        page.failures["native/account-register"] = Boom()
+        await model.load()
+        XCTAssertEqual(model.failureCount, 1)
+        await model.load()
+        XCTAssertEqual(model.failureCount, 2)
+        page.failures["native/account-register"] = nil
+        await model.load()
+        XCTAssertEqual(model.failureCount, 2)
+    }
+
     func testAFailedRegisterReadLeavesNoUpcomingLoading() async throws {
         let page = try FakeAccountsPage()
         page.failures["native/account-register"] = Boom()

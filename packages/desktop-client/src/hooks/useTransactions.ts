@@ -2,6 +2,7 @@ import { useEffect, useEffectEvent, useState } from 'react';
 
 import { listen } from '@actual-app/core/platform/client/connection';
 import type { Query } from '@actual-app/core/shared/query';
+import { calculateRunningBalancesBottomUp } from '@actual-app/core/shared/schedule-preview';
 import type { IntegerAmount } from '@actual-app/core/shared/util';
 import type { TransactionEntity } from '@actual-app/core/types/models';
 import type { ServerEvents } from '@actual-app/core/types/server-events';
@@ -12,6 +13,8 @@ import type {
 } from '@tanstack/react-query';
 
 import { transactionQueries } from '#transactions';
+
+export { calculateRunningBalancesBottomUp };
 
 // Mirrors the `splits` AQL option from the server
 type TransactionSplitsOption = 'all' | 'inline' | 'grouped' | 'none';
@@ -176,44 +179,6 @@ function getCalculateRunningBalancesFn(
     : typeof calculateRunningBalances === 'function'
       ? calculateRunningBalances
       : undefined;
-}
-
-export function calculateRunningBalancesBottomUp(
-  transactions: readonly TransactionEntity[],
-  splits: TransactionSplitsOption,
-  startingBalance: IntegerAmount = 0,
-) {
-  return (
-    transactions
-      .filter(t => {
-        switch (splits) {
-          case 'all':
-            // Only calculate parent/non-split amounts
-            return !t.parent_id;
-          default:
-            // inline
-            // grouped
-            // none
-            return true;
-        }
-      })
-      // We're using `reduceRight` here to calculate the running balance in reverse order (bottom up).
-      .reduceRight((acc, transaction, index, arr) => {
-        const previousTransactionIndex = index + 1;
-        if (previousTransactionIndex >= arr.length) {
-          // This is the last transaction in the list,
-          // so we set the running balance to the starting balance + the amount of the transaction
-          acc.set(transaction.id, startingBalance + transaction.amount);
-          return acc;
-        }
-        const previousTransaction = arr[previousTransactionIndex];
-        const previousRunningBalance = acc.get(previousTransaction.id) ?? 0;
-        const currentRunningBalance =
-          previousRunningBalance + transaction.amount;
-        acc.set(transaction.id, currentRunningBalance);
-        return acc;
-      }, new Map<TransactionEntity['id'], IntegerAmount>())
-  );
 }
 
 export function calculateRunningBalancesTopDown(

@@ -1,0 +1,117 @@
+{
+  "checking": {
+    "currencyCode": "",
+    "currencyDecimalPlaces": 2,
+    "currencySymbol": "",
+    "currencySymbolPosition": "before",
+    "currencySpace": false,
+    "numberFormat": "comma-dot",
+    "hideFraction": false,
+    "rows": [],
+    "nextCursor": null,
+    "header": {
+      "balance": 0,
+      "cleared": 0,
+      "uncleared": 0
+    },
+    "upcoming": [
+      {
+        "id": "preview/schedule-save/2017-01-06",
+        "scheduleId": "schedule-save",
+        "date": "2017-01-06",
+        "payee": "Savings",
+        "category": null,
+        "categoryId": null,
+        "notes": null,
+        "amount": -7000,
+        "cleared": false,
+        "splitCount": 0,
+        "transferAccount": {
+          "id": "savings",
+          "name": "Savings"
+        },
+        "status": "upcoming",
+        "ruleFields": []
+      },
+      {
+        "id": "preview/schedule-split/2017-01-05",
+        "scheduleId": "schedule-split",
+        "date": "2017-01-05",
+        "payee": null,
+        "category": null,
+        "categoryId": null,
+        "notes": null,
+        "amount": -50000,
+        "cleared": false,
+        "splitCount": 2,
+        "transferAccount": null,
+        "status": "upcoming",
+        "ruleFields": [
+          "payee",
+          "splits"
+        ]
+      }
+    ],
+    "upcomingCount": 2,
+    "upcomingTotal": -57000
+  },
+  "savings": {
+    "currencyCode": "",
+    "currencyDecimalPlaces": 2,
+    "currencySymbol": "",
+    "currencySymbolPosition": "before",
+    "currencySpace": false,
+    "numberFormat": "comma-dot",
+    "hideFraction": false,
+    "rows": [],
+    "nextCursor": null,
+    "header": {
+      "balance": 0,
+      "cleared": 0,
+      "uncleared": 0
+    },
+    "upcoming": [
+      {
+        "id": "preview/schedule-save/2017-01-06",
+        "scheduleId": "schedule-save",
+        "date": "2017-01-06",
+        "payee": "Checking",
+        "category": null,
+        "categoryId": null,
+        "notes": null,
+        "amount": 7000,
+        "cleared": false,
+        "splitCount": 0,
+        "transferAccount": {
+          "id": "checking",
+          "name": "Checking"
+        },
+        "status": "upcoming",
+        "ruleFields": []
+      },
+      {
+        "id": "preview/schedule-split/2017-01-05/1",
+        "scheduleId": "schedule-split",
+        "date": "2017-01-05",
+        "payee": "Checking",
+        "category": null,
+        "categoryId": null,
+        "notes": null,
+        "amount": 20000,
+        "cleared": false,
+        "splitCount": 0,
+        "transferAccount": {
+          "id": "checking",
+          "name": "Checking"
+        },
+        "status": "upcoming",
+        "ruleFields": [
+          "payee",
+          "amount"
+        ]
+      }
+    ],
+    "upcomingCount": 2,
+    "upcomingTotal": 27000
+  }
+}

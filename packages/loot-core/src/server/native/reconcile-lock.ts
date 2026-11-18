@@ -33,6 +33,10 @@ const LIMITS = {
   'accounts-register-page-size': { fallback: 50, ceiling: 200 },
   // sc-4931 (D3): rows per categorize or delete call, children and partners counted
   'accounts-write-max-ids': { fallback: 100, ceiling: 500 },
+  // sc-4973 (native-register-upcoming-rows D5). Limits section (story 4643):
+  // "Scheduled rows: days ahead", "Caps how far ahead the native register
+  // shows scheduled rows, whatever the budget's upcoming length."
+  'accounts-register-upcoming-max-days': { fallback: 92, ceiling: 366 },
 } as const;
 
 export async function readLimit(id: keyof typeof LIMITS): Promise<number> {

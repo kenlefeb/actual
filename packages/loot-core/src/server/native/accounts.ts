@@ -5,11 +5,18 @@
 import { aqlQuery } from '#server/aql';
 import { app as businessCalendarsApp } from '#server/business-calendars/app';
 import * as db from '#server/db';
-import { fromDateRepr } from '#server/models';
+import { fromDateRepr, toDateRepr } from '#server/models';
 import { getPaychecks } from '#server/paychecks/app';
 import { refreshScheduleDateLookup } from '#server/schedules/app';
+import { runRules } from '#server/transactions/transaction-rules';
 import { setBusinessCalendars } from '#shared/business-calendar-lookup';
+import * as monthUtils from '#shared/months';
 import { q } from '#shared/query';
+import {
+  comparePreviewTransactions,
+  inverseBasedOnAccount,
+  isScheduleRelevantToAccount,
+} from '#shared/schedule-preview';
 import {
   computeSchedulePreviewTransactions,
   DEFAULT_UPCOMING_SCHEDULE_DAYS,
@@ -17,7 +24,12 @@ import {
   getStatus,
 } from '#shared/schedules';
 import type { ScheduleStatuses } from '#shared/schedules';
-import type { ScheduleEntity, TransactionEntity } from '#types/models';
+import { ungroupTransactions } from '#shared/transactions';
+import type {
+  AccountEntity,
+  ScheduleEntity,
+  TransactionEntity,
+} from '#types/models';
 
 import { decimalPlaces, readLimit } from './reconcile-lock';
 
@@ -69,12 +81,36 @@ export type NativeRegisterRow = {
   runningBalance: number | null;
 };
 
+// D2: the fields a schedule's rules can set, in this order
+const RULE_FIELDS = [
+  'payee',
+  'category',
+  'amount',
+  'notes',
+  'date',
+  'cleared',
+  'splits',
+] as const;
+export type NativeRuleField = (typeof RULE_FIELDS)[number];
+
+// sc-4973 (native-register-upcoming-rows D2): a scheduled row as it will post
+// to this account. Id `preview/<schedule>/<date>`, or `preview/` plus the line
+// id `<schedule>/<date>/<n>` for a split line inverted into this account.
 export type NativeUpcomingRow = {
   id: string;
   scheduleId: string;
   date: string;
   payee: string | null;
+  category: string | null;
+  categoryId: string | null;
+  notes: string | null;
+  // Signed for this account
   amount: number;
+  cleared: boolean;
+  splitCount: number;
+  transferAccount: { id: string; name: string } | null;
+  status: 'due' | 'upcoming' | 'missed';
+  ruleFields: NativeRuleField[];
 };
 
 export type NativeAccountRegister = {
@@ -83,6 +119,12 @@ export type NativeAccountRegister = {
   // First page only
   header?: { balance: number; cleared: number; uncleared: number };
   upcoming?: NativeUpcomingRow[];
+  // Present exactly when `upcoming` is: its rows' number and amounts' sum,
+  // never part of resultCount and resultTotal (D4)
+  upcomingCount?: number;
+  upcomingTotal?: number;
+  // The horizon cap in days, only when it hid a scheduled row (D5)
+  upcomingCapDays?: number;
   // First page, only while a search or a scope other than all is set: how
   // many top-level rows match on every page, and their amounts' sum. A split
   // counts once, at its parent's amount; its children are never counted.
@@ -261,6 +303,7 @@ async function registerFilter(
   }
   const text = typeof search === 'string' ? search.trim() : '';
   let sql = '';
+  let children = '';
   const params: (string | number)[] = [];
   if (scope === 'uncleared') {
     sql += ' AND t.cleared = 0';
@@ -273,14 +316,19 @@ async function registerFilter(
     const own = await searchMatch(text);
     const child = await searchMatch(text);
     // A matching split child returns its parent
-    sql += ` AND (${own.sql('t', 'p', 'c')} OR t.id IN (
-      SELECT t.parent_id FROM ${ALIVE} t
+    sql += ` AND (${own.sql('t', 'p', 'c')} OR t.id IN (SELECT t.parent_id FROM `;
+    children = ` t
       LEFT JOIN payees p ON p.id = t.payee
       LEFT JOIN categories c ON c.id = t.category
       WHERE t.is_child = 1 AND t.account = ? AND ${child.sql('t', 'p', 'c')}))`;
     params.push(...own.params, account, ...child.params);
   }
-  return { sql, params, filtered: scope !== 'all' || text !== '' };
+  return {
+    // `source`: the rows the child subquery reads, posted or upcoming
+    sql: (source: string) => (children ? sql + source + children : sql),
+    params,
+    filtered: scope !== 'all' || text !== '',
+  };
 }
 
 export async function accountRegister({
@@ -337,7 +385,7 @@ export async function accountRegister({
      LEFT JOIN categories c ON c.id = t.category
      LEFT JOIN accounts ta ON ta.id = p.transfer_acct AND ta.tombstone = 0
      LEFT JOIN transactions pt ON pt.id = t.transfer_id AND pt.tombstone = 0
-     WHERE t.account = ? AND t.is_child = 0${filter.sql}${after ? ` AND ${AFTER}` : ''}
+     WHERE t.account = ? AND t.is_child = 0${filter.sql(ALIVE)}${after ? ` AND ${AFTER}` : ''}
      ORDER BY t.date DESC, ${FLAG}, ${SORT_ORDER} DESC, t.id
      LIMIT ?`,
     [
@@ -415,12 +463,18 @@ export async function accountRegister({
   );
   const balance = header?.balance ?? 0;
   const cleared = header?.cleared ?? 0;
+  const scheduled = await upcomingRows(account.id);
+  const upcoming = filter.filtered
+    ? await filterUpcoming(scheduled.rows, filter)
+    : scheduled.rows.map(r => r.row);
   const firstPage: NativeAccountRegister = {
     rows,
     nextCursor,
     header: { balance, cleared, uncleared: balance - cleared },
-    // The web shows scheduled rows only in the unfiltered register
-    upcoming: filter.filtered ? [] : await upcomingRows(account.id),
+    upcoming,
+    upcomingCount: upcoming.length,
+    upcomingTotal: upcoming.reduce((sum, r) => sum + r.amount, 0),
+    ...(scheduled.capDays !== null && { upcomingCapDays: scheduled.capDays }),
   };
   if (!filter.filtered) return firstPage;
   // The rows' own filter, over the whole set (the search footer)
@@ -431,7 +485,7 @@ export async function accountRegister({
      LEFT JOIN payees p ON p.id = t.payee
      LEFT JOIN categories c ON c.id = t.category
      LEFT JOIN accounts ta ON ta.id = p.transfer_acct AND ta.tombstone = 0
-     WHERE t.account = ? AND t.is_child = 0${filter.sql}`,
+     WHERE t.account = ? AND t.is_child = 0${filter.sql(ALIVE)}`,
     [account.id, ...filter.params],
   );
   return {
@@ -441,12 +495,69 @@ export async function accountRegister({
   };
 }
 
-/** The account's scheduled rows inside the upcoming window, from the helper the web's preview uses. */
-async function upcomingRows(account: string): Promise<NativeUpcomingRow[]> {
+// What the posted rows' filter reads, for one upcoming row or one of its lines
+type UpcomingSql = {
+  id: string;
+  account: string;
+  date: number;
+  payee: string | null;
+  category: string | null;
+  notes: string | null;
+  amount: number;
+  cleared: number;
+  is_parent: number;
+  is_child: number;
+  parent_id: string | null;
+};
+const UPCOMING_COLUMNS = [
+  'id',
+  'account',
+  'date',
+  'payee',
+  'category',
+  'notes',
+  'amount',
+  'cleared',
+  'is_parent',
+  'is_child',
+  'parent_id',
+] as const satisfies readonly (keyof UpcomingSql)[];
+
+type Upcoming = { row: NativeUpcomingRow; sql: UpcomingSql[] };
+
+const PREVIEW = 'preview/';
+
+/** The fields whose value after the schedule's rules differs from the preview before them (D2). */
+function ruleFieldsOf(
+  before: TransactionEntity,
+  after: TransactionEntity,
+  split: boolean,
+): NativeRuleField[] {
+  const value = {
+    payee: (t: TransactionEntity) => t.payee ?? null,
+    category: (t: TransactionEntity) => t.category ?? null,
+    amount: (t: TransactionEntity) => t.amount,
+    notes: (t: TransactionEntity) => t.notes || null,
+    date: (t: TransactionEntity) => t.date,
+    cleared: (t: TransactionEntity) => Boolean(t.cleared),
+  };
+  return RULE_FIELDS.filter(field =>
+    field === 'splits' ? split : value[field](before) !== value[field](after),
+  );
+}
+
+/**
+ * The account's scheduled rows as they will post, by the web preview's own
+ * steps: relevance, the schedule's rules, sort and per-line inversion (D1,
+ * D2), inside the upcoming window cut at the horizon cap (D5).
+ */
+async function upcomingRows(
+  account: string,
+): Promise<{ rows: Upcoming[]; capDays: number | null }> {
   const { data: schedules } = (await aqlQuery(q('schedules').select('*'))) as {
     data: ScheduleEntity[];
   };
-  if (schedules.length === 0) return [];
+  if (schedules.length === 0) return { rows: [], capDays: null };
   await refreshScheduleDateLookup();
   setBusinessCalendars(
     await businessCalendarsApp.handlers['business-calendars-get'](),
@@ -477,20 +588,178 @@ async function upcomingRows(account: string): Promise<NativeUpcomingRow[]> {
     name: string;
     transfer_acct: string | null;
   }>('SELECT id, name, transfer_acct FROM payees WHERE tombstone = 0');
-  const payee = new Map(payees.map(p => [p.id, p]));
-  // A schedule is this account's by its account, or as a transfer into it
-  const intoThis = (s: ScheduleEntity) =>
-    payee.get(s._payee)?.transfer_acct === account;
-  return computeSchedulePreviewTransactions(
+  const payeeById = new Map(payees.map(p => [p.id, p]));
+  const payeeByAccount = new Map(payees.map(p => [p.transfer_acct, p]));
+  const accounts = new Map((await db.getAccounts()).map(a => [a.id, a]));
+  const categories = new Map(
+    (
+      await db.all<{ id: string; name: string }>(
+        'SELECT id, name FROM categories WHERE tombstone = 0',
+      )
+    ).map(c => [c.id, c.name]),
+  );
+  const transferAccountOf = (payee?: string | null) => {
+    const id = payee ? payeeById.get(payee)?.transfer_acct : null;
+    return (id && accounts.get(id)) || null;
+  };
+  // The shared functions read only the account's id and the payee's id
+  const getTransferAccountByPayee = (payee?: string | null) =>
+    transferAccountOf(payee) as unknown as AccountEntity | null;
+  const getPayeeByTransferAccount = (id?: string | null) =>
+    payeeByAccount.get(id ?? null) ?? null;
+
+  const previews = computeSchedulePreviewTransactions(
     schedules,
     statuses,
     String(upcomingLength),
-    s => s._account === account || intoThis(s),
-  ).map(t => ({
-    id: t.id,
-    scheduleId: t.schedule,
-    date: t.date,
-    payee: payee.get(t.payee)?.name ?? null,
-    amount: t.account === account ? t.amount : -t.amount,
-  }));
+    schedule =>
+      isScheduleRelevantToAccount({
+        accountId: account,
+        schedule,
+        getTransferAccountByPayee,
+      }),
+  );
+  const capDays = await readLimit('accounts-register-upcoming-max-days');
+  const last = monthUtils.addDays(monthUtils.currentDay(), capDays);
+  // Cut before the rules run
+  const inWindow = previews.filter(t => t.date <= last);
+  const sortOrder = new Map(schedules.map(s => [s.id, s.sort_order]));
+  const status = new Map<string, NativeUpcomingRow['status']>();
+  const ruleFields = new Map<string, NativeRuleField[]>();
+  const ran: TransactionEntity[] = [];
+  for (const preview of inWindow as TransactionEntity[]) {
+    const after: TransactionEntity = await runRules(preview, accounts);
+    const scheduleStatus = preview.forceUpcoming
+      ? 'upcoming'
+      : statuses.get(preview.schedule ?? '');
+    const rowStatus =
+      scheduleStatus === 'due' || scheduleStatus === 'missed'
+        ? scheduleStatus
+        : 'upcoming';
+    // Stable line ids: the rules make random ones
+    const lines = after.subtransactions?.map((line, i) => ({
+      ...line,
+      id: `${preview.id.slice(PREVIEW.length)}/${i + 1}`,
+      parent_id: after.id,
+      schedule: after.schedule,
+    }));
+    for (const t of [after, ...(lines ?? [])]) {
+      status.set(t.id, rowStatus);
+      ruleFields.set(
+        t.id,
+        ruleFieldsOf(preview, t, t === after && Boolean(lines?.length)),
+      );
+    }
+    ran.push({
+      ...after,
+      sort_order: sortOrder.get(preview.schedule ?? ''),
+      subtransactions: lines,
+    });
+  }
+  ran.sort(comparePreviewTransactions);
+  const { transactions } = inverseBasedOnAccount({
+    accountId: account,
+    transactions: ungroupTransactions(ran),
+    runningBalances: new Map(),
+    startingBalance: 0,
+    getPayeeByTransferAccount,
+    getTransferAccountByPayee,
+  });
+
+  const linesOf = new Map<string, TransactionEntity[]>();
+  for (const t of transactions) {
+    if (t.parent_id) {
+      linesOf.set(t.parent_id, [...(linesOf.get(t.parent_id) ?? []), t]);
+    }
+  }
+  const sqlOf = (
+    t: TransactionEntity,
+    id: string,
+    category: string | null,
+    over: Partial<UpcomingSql>,
+  ): UpcomingSql => ({
+    id,
+    account,
+    date: toDateRepr(t.date),
+    payee: t.payee || null,
+    category,
+    notes: t.notes || null,
+    amount: t.amount,
+    cleared: t.cleared ? 1 : 0,
+    is_parent: 0,
+    is_child: 0,
+    parent_id: null,
+    ...over,
+  });
+  const rows = transactions
+    .filter(t => !t.parent_id)
+    .map((t): Upcoming => {
+      const inverted = 'inversed' in t && t.inversed === true;
+      // An inverted line keeps its line's id
+      const id = t.id.startsWith(PREVIEW) ? t.id : PREVIEW + t.id;
+      // The account's side of a transfer has no category
+      const categoryId = inverted ? null : (t.category ?? null);
+      const transfer = transferAccountOf(t.payee);
+      const lines = linesOf.get(t.id) ?? [];
+      return {
+        row: {
+          id,
+          scheduleId: t.schedule ?? '',
+          date: t.date,
+          payee: (t.payee && payeeById.get(t.payee)?.name) || null,
+          category: (categoryId && categories.get(categoryId)) || null,
+          categoryId,
+          notes: t.notes || null,
+          amount: t.amount,
+          cleared: Boolean(t.cleared),
+          splitCount: lines.length,
+          transferAccount: transfer
+            ? { id: transfer.id, name: transfer.name }
+            : null,
+          status: status.get(t.id) ?? 'upcoming',
+          ruleFields: ruleFields.get(t.id) ?? [],
+        },
+        sql: [
+          sqlOf(t, id, categoryId, { is_parent: lines.length > 0 ? 1 : 0 }),
+          ...lines.map(line =>
+            sqlOf(line, line.id, line.category ?? null, {
+              is_child: 1,
+              parent_id: id,
+            }),
+          ),
+        ],
+      };
+    });
+  return {
+    rows,
+    capDays: inWindow.length < previews.length ? capDays : null,
+  };
+}
+
+/**
+ * The upcoming rows the posted rows' own filter matches (D3): the rows go to
+ * SQLite as one JSON parameter, so no row count reaches the variable limit,
+ * and nothing is written.
+ */
+async function filterUpcoming(
+  rows: Upcoming[],
+  filter: Awaited<ReturnType<typeof registerFilter>>,
+): Promise<NativeUpcomingRow[]> {
+  if (rows.length === 0) return [];
+  const columns = UPCOMING_COLUMNS.map(
+    c => `json_extract(value, '$.${c}') AS ${c}`,
+  ).join(', ');
+  const matched = await db.all<{ id: string }>(
+    `WITH upcoming AS MATERIALIZED (SELECT ${columns} FROM json_each(?))
+     SELECT t.id
+     FROM upcoming t
+     JOIN accounts a ON a.id = t.account
+     LEFT JOIN payees p ON p.id = t.payee
+     LEFT JOIN categories c ON c.id = t.category
+     LEFT JOIN accounts ta ON ta.id = p.transfer_acct AND ta.tombstone = 0
+     WHERE t.is_child = 0${filter.sql('upcoming')}`,
+    [JSON.stringify(rows.flatMap(r => r.sql)), ...filter.params],
+  );
+  const ids = new Set(matched.map(r => r.id));
+  return rows.filter(r => ids.has(r.row.id)).map(r => r.row);
 }

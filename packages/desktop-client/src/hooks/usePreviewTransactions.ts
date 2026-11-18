@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { send } from '@actual-app/core/platform/client/connection';
-import * as monthUtils from '@actual-app/core/shared/months';
+import { comparePreviewTransactions } from '@actual-app/core/shared/schedule-preview';
 import { computeSchedulePreviewTransactions } from '@actual-app/core/shared/schedules';
 import { ungroupTransactions } from '@actual-app/core/shared/transactions';
 import type { IntegerAmount } from '@actual-app/core/shared/util';
@@ -40,25 +40,6 @@ type UsePreviewTransactionsResult = {
   isLoading: boolean;
   error?: Error;
 };
-
-export function comparePreviewTransactions(
-  a: Pick<TransactionEntity, 'date' | 'amount'> & {
-    sort_order?: number | null;
-  },
-  b: Pick<TransactionEntity, 'date' | 'amount'> & {
-    sort_order?: number | null;
-  },
-): number {
-  const dateDiff =
-    monthUtils.parseDate(b.date).getTime() -
-    monthUtils.parseDate(a.date).getTime();
-  if (dateDiff !== 0) return dateDiff;
-
-  const sortOrderDiff = (b.sort_order ?? 0) - (a.sort_order ?? 0);
-  if (sortOrderDiff !== 0) return sortOrderDiff;
-
-  return a.amount - b.amount;
-}
 
 export function usePreviewTransactions({
   filter,

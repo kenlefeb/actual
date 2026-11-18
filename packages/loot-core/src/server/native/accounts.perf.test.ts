@@ -3,8 +3,13 @@
 // `native/account-register` for a first page and a page 10,000 rows deep of a
 // 20,000-row account, with and without search (ADR 11 gate: one round trip
 // under 50 ms). The loot-core half only. Prints the median and p95 every run.
+import { aqlQuery } from '#server/aql';
 import * as db from '#server/db';
+import { loadMappings } from '#server/db/mappings';
 import * as prefs from '#server/prefs';
+import { app as schedulesApp } from '#server/schedules/app';
+import { loadRules, updateRule } from '#server/transactions/transaction-rules';
+import { q } from '#shared/query';
 
 import { app } from './app';
 
@@ -40,6 +45,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   global.currentMonth = null;
 });
 
@@ -138,5 +144,138 @@ describe('native accounts reads', () => {
         first('note', deepSearch),
       ),
     ).toBeLessThan(50);
+  }, 600_000);
+
+  // sc-4973 (native-register-upcoming-rows D6): the first page with 200
+  // schedules in the window, every upcoming row through the schedule's rules,
+  // and a worst case of 50 daily schedules across the full 92-day cap
+  it('load the first page with schedules within the 50 ms gate', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2017, 0, 1));
+    await loadMappings();
+    await loadRules();
+    schedulesApp.startServices();
+    await db.insertCategoryGroup({ id: 'bills', name: 'Bills' });
+    await db.insertCategory({ id: 'bill', name: 'Bill', cat_group: 'bills' });
+    for (let a = 0; a < 21; a++) {
+      await db.insertAccount({ id: `a${a}`, name: `Account ${a}` });
+      await db.insertPayee({
+        id: `to-a${a}`,
+        name: `Account ${a}`,
+        transfer_acct: `a${a}`,
+      });
+    }
+    for (let i = 0; i < ROWS; i++) {
+      db.runQuery(
+        'INSERT INTO transactions (id, acct, date, sort_order, amount, notes, cleared, isParent, isChild, tombstone, reconciled) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 0, 0)',
+        [
+          `t${i}`,
+          'a0',
+          20000000 + (i % 17) * 10000 + ((i % 12) + 1) * 100 + ((i % 27) + 1),
+          i,
+          -100 * (i + 1),
+          i % 3 === 0 ? `note ${i}` : null,
+          i % 2,
+        ],
+      );
+    }
+    const day = (i: number) => `2017-01-0${(i % 7) + 1}`;
+    const schedule = async (
+      i: number,
+      date: unknown,
+      account: string,
+      actions: Record<string, unknown>[],
+      extra: Record<string, unknown> = {},
+    ) => {
+      const id = await schedulesApp.handlers['schedule/create']({
+        schedule: { name: `S${i}`, ...extra },
+        conditions: [
+          { op: 'is', field: 'date', value: date },
+          { op: 'is', field: 'amount', value: -(i + 1) * 100 },
+          { op: 'is', field: 'account', value: account },
+        ] as never,
+      });
+      const { data: rule } = (await aqlQuery(
+        q('schedules').filter({ id }).calculate('rule'),
+      )) as { data: string };
+      await updateRule({
+        id: rule,
+        actions: [...actions, { op: 'link-schedule', value: id }],
+      } as never);
+    };
+    const category = { op: 'set', field: 'category', value: 'bill' };
+    const notes = (i: number) => ({
+      op: 'set',
+      field: 'notes',
+      value: `scheduled ${i}`,
+    });
+    const split = (into: string) => [
+      {
+        op: 'set-split-amount',
+        field: 'amount',
+        value: -50,
+        options: { splitIndex: 1, method: 'fixed-amount' },
+      },
+      { op: 'set', field: 'payee', value: into, options: { splitIndex: 1 } },
+      {
+        op: 'set-split-amount',
+        field: 'amount',
+        options: { splitIndex: 2, method: 'remainder' },
+      },
+    ];
+    const daily = (start: string) => ({
+      start,
+      frequency: 'daily',
+      patterns: [],
+      skipWeekend: false,
+      weekendSolveMode: 'after',
+    });
+    // 200 schedules: 20 splits (10 with a line into a0), 20 transfers into
+    // a0, 5 daily and 155 plain ones on a0, all inside the default 7 days
+    let i = 0;
+    for (; i < 10; i++) await schedule(i, day(i), 'a0', split('to-a1'));
+    for (; i < 20; i++) await schedule(i, day(i), 'a1', split('to-a0'));
+    for (; i < 40; i++) {
+      await schedule(i, day(i), `a${(i % 20) + 1}`, [
+        { op: 'set', field: 'payee', value: 'to-a0' },
+      ]);
+    }
+    for (; i < 45; i++) {
+      await schedule(i, daily('2017-01-01'), 'a0', [category, notes(i)]);
+    }
+    for (; i < 200; i++) await schedule(i, day(i), 'a0', [category, notes(i)]);
+
+    const read = app.handlers['native/account-register'];
+    const page = (scope: 'all' | 'uncleared', search: string | null) =>
+      read({ account_id: 'a0', scope, search, cursor: null });
+    const firstPage = await page('all', null);
+    expect(firstPage.upcomingCount).toBeGreaterThan(200);
+    // Every case is timed and printed before the gate fails any of them
+    const over: string[] = [];
+    const gate = async (label: string, run: () => Promise<unknown>) => {
+      const median = await time(label, run);
+      if (median >= 50) over.push(`${label}: ${median.toFixed(1)} ms`);
+    };
+    const cases = async (label: string) => {
+      await gate(`${label}: first page`, () => page('all', null));
+      await gate(`${label}: first page, search`, () =>
+        page('all', 'scheduled 1'),
+      );
+      await gate(`${label}: first page, uncleared`, () =>
+        page('uncleared', null),
+      );
+    };
+    await cases('native/account-register with 200 schedules');
+
+    // Worst case: 50 daily schedules over the full 92-day cap, about 4,600
+    // rows through the rules
+    for (; i < 250; i++) {
+      await schedule(i, daily('2017-01-01'), 'a0', [category, notes(i)], {
+        custom_upcoming_length: '92-day',
+      });
+    }
+    expect((await page('all', null)).upcomingCount).toBeGreaterThan(4600);
+    await cases('native/account-register worst case, 50 daily over 92 days');
+    expect(over).toEqual([]);
   }, 600_000);
 });

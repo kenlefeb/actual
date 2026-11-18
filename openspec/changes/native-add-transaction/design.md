@@ -72,7 +72,7 @@ The page forwards `draft` as one object, so loot-core accepts only these keys an
 
 | Key | Type |
 | --- | --- |
-| `newId` | string, add only (D3) |
+| `newId` | lowercase UUID (8-4-4-4-12 hex), add only (D3) |
 | `id` | string, edit only |
 | `account` | string |
 | `date` | string `YYYY-MM-DD` |
@@ -137,10 +137,10 @@ It returns `{draft, ruleFields, replaced, remaining, errors}` and writes nothing
 Every step refuses with no write.
 
 1. **Shape.** The draft has the keys and types of D2, and `undoToken` is present. Otherwise `[native:invalid-draft]`.
-2. **Repeat of an add.** A row with id `newId` may already exist.
-   - **Live**, with the same account, date, amount, payee, category and child count as the draft evaluates to: return `{id: newId}` and write nothing.
-   - **Live but different:** `[native:invalid-draft]`.
-   - **Tombstoned** (the save was undone or deleted): `[native:changed-since]`, and no id is returned.
+2. **Repeat of an add.** `newId` must be a lowercase UUID, or the save refuses with `[native:invalid-draft]`. The hand-off's `[A-Za-z0-9_-]+` check therefore always accepts the person's own transaction. A row with id `newId` may already exist:
+   - **Live, top-level and in the draft's account**, with the same date, amount, payee, category and child count as the draft evaluates to: return `{id: newId}` and write nothing.
+   - **Live, but a split child, in another account, or different:** `[native:invalid-draft]`, with no id returned.
+   - **Tombstoned** (the save was undone or deleted): `[native:changed-since]`, with no id returned.
 
    The row itself is the durable record, so a reload, an engine restart or a trimmed undo history cannot cause a second save. Nothing else is kept, so no retention setting is needed.
 3. **Edit digest.** An edit without `digest`, or with one that no longer equals the recomputed digest, refuses with `[native:changed-since]`.
@@ -220,7 +220,7 @@ If the rules cases cannot meet 50 ms on this seed, stop and report the measured 
 - **Save timeout.** The sheet shows "Save didn't finish" with Retry. Retry sends the same `newId`, token and draft.
   - For an add, D3 step 2 makes the retry safe.
   - For an edit that did land, the retry gets `changed-since`. The view model re-reads, and if the stored values equal the draft it treats the save as done.
-- **`preview-stale`.** It previews again and shows what the rule changed (D2a).
+- **`preview-stale`.** It shows "Rules changed this; check and save again.", previews again, and shows what the rule changed (D2a).
 - **Background.** No calls while the app is in the background. On return, an open edit sheet re-reads and keeps the draft.
 
 ## D7. Route, switch and hand-offs

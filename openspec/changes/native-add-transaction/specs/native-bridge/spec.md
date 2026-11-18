@@ -159,7 +159,7 @@ A save and `native/transactions-delete` SHALL treat a touched row as reconciled 
 - **THEN** the call fails with `[native:needs-confirmed-reconciled]` and nothing changes
 
 ### Requirement: A repeated add never stores twice
-An add SHALL carry a new id chosen by native code. If a live row with that id already matches the draft's account, date, amount, payee, category and child count, the save SHALL return that id and write nothing; if it differs, `[native:invalid-draft]`; if it was undone or deleted, `[native:changed-since]` with no id. This SHALL hold across reloads and engine restarts.
+An add SHALL carry a new id chosen by native code: a lowercase UUID (8-4-4-4-12 hex), or the save SHALL refuse with `[native:invalid-draft]`. A repeat SHALL match only a live top-level row in the draft's account with the same date, amount, payee, category and child count: it returns that id and writes nothing. Any other row with that id SHALL refuse, `[native:changed-since]` if deleted, else `[native:invalid-draft]`. This SHALL hold across restarts.
 
 #### Scenario: Retry after an engine restart
 - **GIVEN** a save of new id N landed, then the engine restarted before its answer arrived
@@ -174,6 +174,15 @@ An add SHALL carry a new id chosen by native code. If a live row with that id al
 #### Scenario: Same id, different draft
 - **WHEN** native code saves N again with a different amount
 - **THEN** the call fails with `[native:invalid-draft]` and the first transaction is unchanged
+
+#### Scenario: A malformed id
+- **WHEN** native code saves a new draft whose id is `ABC`, `../x`, an upper-case UUID or 500 characters long
+- **THEN** the call fails with `[native:invalid-draft]` and nothing is stored
+
+#### Scenario: The id of a split child or another account's row
+- **GIVEN** id N belongs to a split child, or to a live row in another account
+- **WHEN** native code saves a new draft with N
+- **THEN** the call fails with `[native:invalid-draft]`, returns no id, and nothing changes
 
 ### Requirement: A save stores the web form's result as one undo step
 A save that passes its checks SHALL create a new payee only from a trimmed, non-empty name within `payee-name-max-length` (default 200, ceiling 500), reuse a live payee whose name matches ignoring case, refuse a name equal to a transfer payee, write with the synced `learn-categories` preference, and be one undo step that `native/undo` reverses only while no touched row has changed.

@@ -90,7 +90,7 @@ On iPhone, a field filled by a rule SHALL read "Set by a rule" in words and to V
 #### Scenario: A rule changed before saving
 - **GIVEN** the sheet showed Groceries, then the rule was edited on another device
 - **WHEN** the person saves
-- **THEN** nothing is stored, the sheet shows the rule's new result with "Set by a rule", and the person saves again
+- **THEN** nothing is stored, the sheet says "Rules changed this; check and save again.", shows the rule's new result with "Set by a rule", and the person saves again
 
 ### Requirement: Amount entry with sign and arithmetic
 On iPhone, the amount field SHALL accept a number or an arithmetic expression with + − × ÷ in the budget's number format, and an Outflow or Inflow sign. The engine SHALL evaluate the expression; the sheet SHALL show the result and SHALL never compute money itself. An expression that does not evaluate SHALL show an inline error and block saving.

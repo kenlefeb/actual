@@ -54,7 +54,8 @@
     - no undo token, or a bad shape, is `[native:invalid-draft]`;
     - a repeated `newId`:
       - a live matching row returns its id and writes nothing, including after an engine restart (reload the budget in the test);
-      - a different draft is `[native:invalid-draft]`;
+      - a different draft, a split child's id, or another account's row is `[native:invalid-draft]`;
+      - a `newId` that is not a lowercase UUID (`ABC`, `../x`, upper case, 500 characters) is `[native:invalid-draft]`;
       - an undone or deleted row is `[native:changed-since]` with no id;
     - an edit without a digest, or with a changed parent, child, partner, link or schedule, is `[native:changed-since]`;
     - for an add, rules run first with `userFields` honoured, and any difference from the draft is `[native:preview-stale]`, including a rule that sets a closed account;
@@ -105,7 +106,7 @@
   - Delete goes through `native/transactions-delete`, and its dialog names the partner account and says when it is closed;
   - `newId` is kept for the sheet's lifetime and reused by Retry;
   - an edit retry that gets `changed-since` re-reads and finishes when the stored values equal the draft;
-  - `preview-stale` previews again and shows the rule's result;
+  - `preview-stale` shows "Rules changed this; check and save again.", previews again and shows the rule's result;
   - `ruleFields` drives the indicator, and the person's edits join `userFields`;
   - replaced fields offer Restore;
   - a form-read `not-found` shows the unavailable state.

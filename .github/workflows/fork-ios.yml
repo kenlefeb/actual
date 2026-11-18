@@ -125,6 +125,21 @@ jobs:
             MARKETING_VERSION="$MARKETING_VERSION" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             CODE_SIGNING_ALLOWED=NO archive
 
+      # sc-5177: the UI tests launch the app through a Debug-only hook
+      # (UITest<Screen> types and the -UITest<Screen> launch argument). A Release
+      # archive must hold none of it; this only reads the archive, so what is
+      # signed and uploaded does not change.
+      - name: Check the archive holds no UI-test hook
+        working-directory: packages/mobile-client
+        run: |
+          APP="build/App.xcarchive/Products/Applications/App.app"
+          test -x "$APP/App" || { echo "::error::No app binary in $APP"; exit 1; }
+          # Every file in the app, so a debug dylib or a resource is covered too
+          if grep -rlaE 'UITest[A-Z][A-Za-z]*' "$APP"; then
+            echo "::error::The Release archive contains the UI-test hook; it must stay inside #if DEBUG"
+            exit 1
+          fi
+
       - name: Export the signed app
         working-directory: packages/mobile-client
         env:

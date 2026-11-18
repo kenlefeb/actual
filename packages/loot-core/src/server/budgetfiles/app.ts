@@ -150,7 +150,7 @@ async function getRemoteFiles() {
   return cloudStorage.listRemoteFiles();
 }
 
-async function resetBudgetCache() {
+export async function resetBudgetCache() {
   const spreadsheet = sheet.get();
 
   // Hold the cache dirty for the whole reset so an interrupted one doesn't

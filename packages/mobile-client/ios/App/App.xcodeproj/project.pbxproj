@@ -47,6 +47,7 @@
 		FB480100000000000000104 /* NativeTransactionRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB480100000000000000004 /* NativeTransactionRow.swift */; };
 		FB3611000000000000000102 /* NativeAccountRegisterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3611000000000000000002 /* NativeAccountRegisterView.swift */; };
 		FB3611000000000000000103 /* AccountRegisterScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3611000000000000000003 /* AccountRegisterScreen.swift */; };
+		FB4643000000000000000101 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB4643000000000000000001 /* Settings.swift */; };
 		FB480100000000000000103 /* NativeReconcileViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB480100000000000000003 /* NativeReconcileViewController.swift */; };
 		FB480100000000000000102 /* ReconcileViewModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB480100000000000000002 /* ReconcileViewModels.swift */; };
 		FB434100000000000000102 /* PaychecksViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB434100000000000000002 /* PaychecksViewModel.swift */; };
@@ -102,6 +103,7 @@
 		FB480100000000000000004 /* NativeTransactionRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeTransactionRow.swift; sourceTree = "<group>"; };
 		FB3611000000000000000002 /* NativeAccountRegisterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAccountRegisterView.swift; sourceTree = "<group>"; };
 		FB3611000000000000000003 /* AccountRegisterScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountRegisterScreen.swift; sourceTree = "<group>"; };
+		FB4643000000000000000001 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
 		FB480100000000000000003 /* NativeReconcileViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeReconcileViewController.swift; sourceTree = "<group>"; };
 		FB480100000000000000002 /* ReconcileViewModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReconcileViewModels.swift; sourceTree = "<group>"; };
 		FB434100000000000000002 /* PaychecksViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaychecksViewModel.swift; sourceTree = "<group>"; };
@@ -214,6 +216,7 @@
 				FB3602000000000000000001 /* TransactionForm.swift */,
 				FB3611000000000000000001 /* AccountsListScreen.swift */,
 				FB3611000000000000000003 /* AccountRegisterScreen.swift */,
+				FB4643000000000000000001 /* Settings.swift */,
 				FB493100000000000000011 /* NativeAccountsRoute.swift */,
 				FB480100000000000000001 /* Reconcile.swift */,
 				FB482500000000000000001 /* ReconcileLock.swift */,
@@ -370,6 +373,7 @@
 				FB3602000000000000000101 /* TransactionForm.swift in Sources */,
 				FB3611000000000000000101 /* AccountsListScreen.swift in Sources */,
 				FB3611000000000000000103 /* AccountRegisterScreen.swift in Sources */,
+				FB4643000000000000000101 /* Settings.swift in Sources */,
 				FB493100000000000000111 /* NativeAccountsRoute.swift in Sources */,
 				FB480100000000000000101 /* Reconcile.swift in Sources */,
 				FB482500000000000000102 /* NativeReconcileLockViews.swift in Sources */,

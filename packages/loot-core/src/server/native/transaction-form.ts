@@ -19,7 +19,7 @@ import type { NumberFormats } from '#shared/util';
 import type { TransactionEntity } from '#types/models';
 
 import { readTouchedState } from './accounts-writes';
-import { readLimit } from './reconcile-lock';
+import { readLimit } from './limits';
 import { nativeRefusal } from './refusal';
 
 // The per-field codes (fixtures/transaction-field-errors.json). Kept apart

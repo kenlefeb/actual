@@ -7,13 +7,7 @@ import { withText } from '#sanitize';
 
 import { checkRows, deleteSnapshot, rowKey } from './delete-snapshot';
 import type { RegisterWriteTool } from './shared';
-import {
-  confirm,
-  id,
-  loggedWrite,
-  requireDeleteRows,
-  requireUndoableLine,
-} from './shared';
+import { confirm, id, loggedWrite, requireDeleteRows } from './shared';
 
 export type Cat = {
   id: string;
@@ -436,7 +430,7 @@ export function registerCategoryWriteTools(
 
   tool(
     'write_delete_category',
-    'Delete a category, by category id (never a name). When it has transactions or budgeted amounts, transfer_category_id (another category of the same kind) is required and receives them; without it the call is refused with the counts. When this connection must confirm deletes, the first call changes nothing and returns a dry run with `confirm`; call again with it within 5 minutes. Undoable with write_undo.',
+    'Delete a category, by category id (never a name). When it has transactions or budgeted amounts, transfer_category_id (another category of the same kind) is required and receives them; without it the call is refused with the counts. When this connection must confirm deletes, the first call changes nothing and returns a dry run with `confirm`; call again with it within 5 minutes.',
     {
       category_id: id,
       transfer_category_id: id.optional(),
@@ -496,7 +490,6 @@ export function registerCategoryWriteTools(
           ...snapshot,
         ],
       };
-      await requireUndoableLine(auditLog, 'write_delete_category', entry);
       return loggedWrite(
         auditLog,
         'write_delete_category',
@@ -523,7 +516,7 @@ export function registerCategoryWriteTools(
 
   tool(
     'write_delete_category_group',
-    `Delete an expense category group and its categories (hidden ones too), by group id (never a name). When any category has transactions or budgeted amounts, transfer_category_id (an expense category outside the group) is required and receives them all; without it the call is refused naming the categories in use. At most ${limits.maxDeleteRows} categories by default. When this connection must confirm deletes, the first call changes nothing and returns a dry run with \`confirm\`; call again with it within 5 minutes. Undoable with write_undo.`,
+    `Delete an expense category group and its categories (hidden ones too), by group id (never a name). When any category has transactions or budgeted amounts, transfer_category_id (an expense category outside the group) is required and receives them all; without it the call is refused naming the categories in use. At most ${limits.maxDeleteRows} categories by default. When this connection must confirm deletes, the first call changes nothing and returns a dry run with \`confirm\`; call again with it within 5 minutes.`,
     { group_id: id, transfer_category_id: id.optional(), confirm },
     async ({ group_id, transfer_category_id }, auditLog) => {
       const groups = await load();
@@ -599,7 +592,6 @@ export function registerCategoryWriteTools(
           ...snapshot,
         ],
       };
-      await requireUndoableLine(auditLog, 'write_delete_category_group', entry);
       return loggedWrite(
         auditLog,
         'write_delete_category_group',

@@ -10,6 +10,7 @@ export const NATIVE_REFUSAL_CODES = [
   'undo-nothing',
   'no-budget-for-month',
   'invalid-draft',
+  'invalid-setting',
   // sc-3602 (native-add-transaction D1)
   'not-found',
 ] as const;

@@ -27,7 +27,7 @@ The Product Owner's decision (comment 5222): Propose now, top of the native queu
   - Mac: on quit and window close, and best-effort on sleep.
 - **Test hooks stay out of production.** A build-time constant removes them, and Fork CI checks the bundles.
 
-Mobile scope: the iPhone app and the Mac app, the two native shells. The web screens inside them get the lifecycle flushes only. The web app served by our server, Electron and MCP are not at risk and do not change. A browser that falls back to the same storage mode keeps today's sync and messages; protecting it is a separate story (design D7a).
+Mobile scope: the iPhone app and the Mac app, the two native shells. The web screens inside them get the lifecycle flushes only. The web app served by our server, Electron and MCP are not at risk and do not change. A browser that falls back to the same storage mode keeps today's sync and messages; protecting it is story 5249 (design D7a).
 
 Not in this change:
 - offering the absurd-sql change upstream (a later, separate decision);

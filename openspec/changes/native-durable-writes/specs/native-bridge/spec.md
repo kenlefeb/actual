@@ -50,7 +50,7 @@ In the iPhone and Mac apps, the Swift bridge client SHALL follow every allowlist
 - **THEN** the row changes, the client returns `stored: false`, "Saved here, not yet stored on this device." shows, and it clears when the engine's `storage-stored` reaches Swift as `stored`
 
 ### Requirement: Any storage failure latches and is shown app-wide
-Any failed IndexedDB write of the open budget, from any source (bridge write, web-screen edit or sync), SHALL set a failed latch. The patched storage SHALL write nothing more, the page SHALL send a `storage-failed` event with `lastStoredFlushAt` (when the last write that stored was flushed), and Swift SHALL show a persistent app-level notice, whichever screen is showing, until the person reloads or, after a restart, taps OK.
+With the storage guard on, any failed IndexedDB write of the open budget, from any source (bridge write, web-screen edit or sync), SHALL set a failed latch. The patched storage SHALL write nothing more, the page SHALL send a `storage-failed` event with `lastStoredFlushAt` (when the last write that stored was flushed), and Swift SHALL show a persistent app-level notice, whichever screen is showing, until the person reloads or, after a restart, taps OK.
 
 #### Scenario: A web-screen edit fails on quota
 - **GIVEN** a web-screen edit whose IndexedDB write fails with a quota error
@@ -194,12 +194,12 @@ When sync's storage wait expires, the engine SHALL NOT emit sync success. It SHA
 - **THEN** the status line keeps the waiting text and never shows "Syncing…" or "Sync failed" for it
 
 ### Requirement: The storage guard is for the native shells
-The write refusal, sync gate, held-sync reporting and storage notices SHALL stay off until the native bridge turns on the storage guard, a one-way engine switch set when the bridge installs. Browsers never set it and keep today's sync and messages. `fallback-write-error` SHALL keep its one meaning, another tab changed the file. The patched storage SHALL still stop writing after a failure on every platform, to protect the file.
+The latch, write refusal, sync gate, held-sync reporting and storage notices SHALL stay off until the native bridge turns on the storage guard, a one-way engine switch set when the bridge installs. Browsers never set it. With it off, the patched storage SHALL fail as stock absurd-sql does: no latch, no dropped queue, unseen quota rejections, and `onFallbackFailure` only for the safety check.
 
 #### Scenario: A browser after a failed write
 - **GIVEN** a fallback-mode browser, with no native bridge, whose write fails with a quota error
 - **WHEN** the next sync runs
-- **THEN** sync runs as today, with no storage wait, and no storage notice or "another tab" message shows
+- **THEN** sync runs as today, with no storage wait or storage notice, and the next locked write fails the safety check and shows today's one-tab message
 
 #### Scenario: The native shell
 - **GIVEN** the native bridge installed in the iPhone or Mac app

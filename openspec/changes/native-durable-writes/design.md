@@ -48,9 +48,11 @@ Alternative rejected: vendoring absurd-sql. It is larger to review and hides the
 
 `FileOpsFallback.flush()` captures the queue, `cachedFirstBlock` and the lock state **at flush time** into constants, and only then chains them: `this.pending = this.pending.then(() => persistance.write(queue, first, locked))`. So writes keep their order and run with the values of their own flush, not later ones. Each write records the time it was flushed (captured), and a write that stores sets `lastStoredFlushAt` to its own flush time. That is when its contents were fixed, not when it completed, so a change made while it was in flight is never reported as saved (Security, final review).
 
-On the first rejection:
+With the storage guard on (D7a), on the first rejection:
 - `this.failed` is set to the error. Later flushes drop their queue and write nothing, so IndexedDB stays at the last good commit.
 - `onFallbackFailure` is called for every kind of failure, not only the safety check, so the new `storage-failed` (D5) fires for quota, abort and error too. `fallback-write-error` keeps its existing meaning, the safety check alone (D7a).
+
+With the guard off, a rejection is only caught, so the chain carries on and the backend fails exactly as stock does: no latch, no dropped queue, quota failures unseen, and `onFallbackFailure` only for the safety check.
 
 The patched module also adds:
 - `whenPersisted()`, which returns the chain and rejects with `this.failed` if it is set;
@@ -135,9 +137,8 @@ The ceiling stays under the 5 s bridge deadline (D4). The floor avoids a meaning
 ### D7a. Other platforms, and closed budgets
 
 - **Durable platforms** (SharedArrayBuffer mode, Electron, the API): `whenPersisted` resolves at once, so nothing changes.
-- **The storage guard is native-only** (Security's review of PR #473, ruled by the Architect). Merging the engine alone must not change what anyone sees, and a latched browser would stop syncing with no honest notice. So the engine has a one-way switch, off by default. The native page bridge turns it on when it installs (group 2); nothing turns it off, and browsers have no bridge. While it is off there is no write refusal, sync gate, `storage-slow` or storage notice, and sync behaves as it does today.
-- **Fallback-mode browsers keep today's behaviour.** `fallback-write-error` keeps its one meaning: the safety check failed because another tab changed the file. There is no `conflict` flag and no browser storage notice. Protecting browsers is a separate story.
-- **One exception, for the Architect to confirm:** the patched storage stops writing after a failed write everywhere, as Security advised, because a later commit on top of a failed one can damage the file. In a browser this differs from today only after such a failure.
+- **The storage guard is native-only** (Security's review of PR #473, ruled by the Architect). Merging the engine alone must not change what anyone sees, and a latched browser would stop syncing with no honest notice. So the engine has a one-way switch, off by default. The native page bridge turns it on when it installs (group 2); nothing turns it off, and browsers have no bridge. It also tells the patched backend to latch. While it is off there is no latch, write refusal, sync gate, `storage-slow` or storage notice, and the backend and sync behave as they do today. Stock absurd-sql already keeps a later commit off a failed one: memory's block 0 has moved on, so the next write under a lock fails `isSafeToWrite` (Architect, PR #474).
+- **Fallback-mode browsers keep today's behaviour.** `fallback-write-error` keeps its one meaning: the safety check failed because another tab changed the file. There is no `conflict` flag and no browser storage notice. Protecting browsers is story 5249.
 - **`storage-failed` is a prompt.** The event can come from a closed file or a copy, so with the guard on the page asks `native/storage-state` before it treats the open budget as failed.
 - **Closed budgets (native shells):** `close()` flushes and then drops the handle, so the last write of a closed budget can fail with no open file to latch. It must not latch, because it says nothing about the budget now open. The engine sends `storage-close-failed` once, and the shells show the Product Owner's wording: "Some recent changes to the budget you closed weren't saved. Open it and make them again." The sync gate means those changes were not sent. If the failure notice is showing, it keeps priority and this notice follows.
 

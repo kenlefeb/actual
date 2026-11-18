@@ -63,6 +63,8 @@ public enum NativeBridgeAllowlist {
 // reason from a closed set. Nothing else of loot-core's error crosses.
 public enum SyncFailureReason: String, Equatable {
     case network, unauthorized, outOfSync = "out-of-sync", clockDrift = "clock-drift", encryption, other
+    // sc-5219 (native-durable-writes)
+    case storageSlow = "storage-slow", storageFailed = "storage-failed"
 }
 
 public enum SyncResult: Decodable, Equatable {

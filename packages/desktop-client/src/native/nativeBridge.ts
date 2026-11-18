@@ -310,6 +310,9 @@ const SYNC_REASONS = new Map([
   ['unauthorized', 'unauthorized'],
   ['out-of-sync', 'out-of-sync'],
   ['clock-drift', 'clock-drift'],
+  // sc-5219 (native-durable-writes)
+  ['storage-slow', 'storage-slow'],
+  ['storage-failed', 'storage-failed'],
   ['encrypt-failure', 'encryption'],
   ['decrypt-failure', 'encryption'],
 ]);

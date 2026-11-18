@@ -6,11 +6,15 @@ declare module 'absurd-sql/dist/indexeddb-main-thread' {
 declare module 'absurd-sql/dist/indexeddb-backend' {
   export default class IndexedDBBackend {
     constructor(
-      onFallbackFailure?: (state?: {
-        lastStoredFlushAt: number | null;
-        quota: boolean;
-      }) => void,
+      // No arguments: the stock safety check refused a write. With the state:
+      // the guard is on and a write failed
+      onFallbackFailure?: (
+        state?: { lastStoredFlushAt: number | null; quota: boolean },
+        ops?: unknown,
+      ) => void,
     );
+    files: Set<unknown>;
+    enableLatch(): void;
     createFile(filename: string): unknown;
   }
 }

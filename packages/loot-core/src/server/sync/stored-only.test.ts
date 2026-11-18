@@ -5,28 +5,33 @@
 // is stood in for: the blocked fs is off under test.
 import { Timestamp } from '@actual-app/crdt';
 
-import type * as FsModule from '#platform/server/fs';
+import * as fs from '#platform/server/fs';
 import * as db from '#server/db';
+import { app } from '#server/main-app';
+import { enableDurableWrites, isSyncHeld } from '#server/native/persisted';
 import * as prefs from '#server/prefs';
 import * as mockSyncServer from '#server/tests/mockSyncServer';
 
 import * as encoder from './encoder';
 import { isError } from './utils';
 
-import { applyMessages, fullSync, setSyncingMode } from './index';
+import {
+  applyMessages,
+  clearFullSyncTimeout,
+  fullSync,
+  setSyncingMode,
+} from './index';
 
-const storage = vi.hoisted(() => ({
-  whenPersisted: vi.fn<() => Promise<void>>(),
-  storageState: vi.fn(),
-}));
-
-vi.mock('#platform/server/fs', async original => ({
-  ...(await original<typeof FsModule>()),
-  whenPersisted: storage.whenPersisted,
-  storageState: storage.storageState,
-}));
-
-const healthy = { failed: false, lastStoredFlushAt: null, quota: false };
+const healthy = {
+  failed: false,
+  lastStoredFlushAt: null,
+  quota: false,
+  closeFailed: false,
+};
+const storage = {
+  whenPersisted: vi.spyOn(fs, 'whenPersisted'),
+  storageState: vi.spyOn(fs, 'storageState'),
+};
 // The time helpers the test setup adds
 const time = global as unknown as {
   stepForwardInTime(at?: number): void;
@@ -51,6 +56,8 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  clearFullSyncTimeout();
+  vi.useRealTimers();
   time.resetTime();
   setSyncingMode('disabled');
 });
@@ -92,7 +99,30 @@ async function remoteChange() {
 const reasonOf = (result: Awaited<ReturnType<typeof fullSync>>) =>
   isError(result) ? result.error.reason : null;
 
+// Must stay first: the switch is one-way
+describe('sync before the native bridge turns durable writes on', () => {
+  it('does not look at local storage at all', async () => {
+    await localChange();
+    storage.storageState.mockReturnValue({ ...healthy, failed: true });
+    storage.whenPersisted.mockReturnValue(new Promise(() => undefined));
+    const events = vi.spyOn(app.events, 'emit');
+    expect(reasonOf(await fullSync())).toBeNull();
+    expect(storage.whenPersisted).not.toHaveBeenCalled();
+    expect(mockSyncServer.getMessages()).toHaveLength(1);
+    expect(isSyncHeld()).toBe(false);
+    expect(events).toHaveBeenCalledWith(
+      'sync',
+      expect.objectContaining({ type: 'success' }),
+    );
+    events.mockRestore();
+  });
+});
+
 describe('sync sends only stored changes', () => {
+  beforeEach(() => {
+    enableDurableWrites();
+  });
+
   it('sends nothing until local storage says the changes are stored', async () => {
     await localChange();
     let stored: () => void = () => undefined;
@@ -109,7 +139,7 @@ describe('sync sends only stored changes', () => {
     expect(mockSyncServer.getMessages()).toHaveLength(1);
   });
 
-  it('on hung storage, sends nothing after the wait and tries again next round', async () => {
+  it('on hung storage, reports it instead of success, sends nothing and retries by itself', async () => {
     await db.update('preferences', {
       id: 'native-persist-wait-ms',
       value: '100',
@@ -121,16 +151,29 @@ describe('sync sends only stored changes', () => {
       new Promise<void>(() => undefined),
     );
     storage.whenPersisted.mockClear();
+    const events = vi.spyOn(app.events, 'emit');
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const syncing = fullSync();
     await vi.waitFor(() => expect(storage.whenPersisted).toHaveBeenCalled());
     await vi.advanceTimersByTimeAsync(100);
-    expect(reasonOf(await syncing)).toBeNull();
-    vi.useRealTimers();
+    expect(reasonOf(await syncing)).toBe('storage-slow');
+    expect(isSyncHeld()).toBe(true);
     expect(mockSyncServer.getMessages()).toHaveLength(sent);
-    // The messages were kept, and the next sync sends them
-    expect(reasonOf(await fullSync())).toBeNull();
-    expect(mockSyncServer.getMessages()).toHaveLength(sent + 1);
+    expect(events).toHaveBeenCalledWith('sync', {
+      type: 'error',
+      subtype: 'storage-slow',
+    });
+    expect(events).not.toHaveBeenCalledWith(
+      'sync',
+      expect.objectContaining({ type: 'success' }),
+    );
+    // Nothing else is needed: the messages were kept and a retry is scheduled
+    await vi.advanceTimersByTimeAsync(1000);
+    await vi.waitFor(() =>
+      expect(mockSyncServer.getMessages()).toHaveLength(sent + 1),
+    );
+    expect(isSyncHeld()).toBe(false);
+    vi.useRealTimers();
   });
 
   it('sends and receives nothing once storage has failed, and reports it', async () => {
@@ -142,6 +185,17 @@ describe('sync sends only stored changes', () => {
     expect(
       await db.all("SELECT * FROM messages_crdt WHERE row = 'bar'"),
     ).toEqual([]);
+  });
+
+  it('sends changes stored before the failure after the reload', async () => {
+    await localChange();
+    storage.storageState.mockReturnValue({ ...healthy, failed: true });
+    expect(reasonOf(await fullSync())).toBe('storage-failed');
+    expect(mockSyncServer.getMessages()).toHaveLength(0);
+    // Reload: the stored change is still on the device, and the latch is gone
+    storage.storageState.mockReturnValue(healthy);
+    expect(reasonOf(await fullSync())).toBeNull();
+    expect(mockSyncServer.getMessages()).toHaveLength(1);
   });
 
   it('leaves one copy on the server when a refused change is made again after reload', async () => {

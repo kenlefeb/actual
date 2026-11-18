@@ -10,7 +10,11 @@ import { _getModule } from '#platform/server/sqlite';
 import type { SqlJsModule } from '#platform/server/sqlite';
 
 import { _setDocumentDir as _setDocumentDirShared } from './shared';
-import { filesStorageState, filesWhenPersisted } from './storage-state';
+import {
+  filesStorageState,
+  filesWhenPersisted,
+  isOpenFile,
+} from './storage-state';
 import type { StorageFile, StorageState } from './storage-state';
 
 let FS: SqlJsModule['FS'] = null;
@@ -342,14 +346,20 @@ export const init = async function () {
   // the blocked fs enough. Additionally, we don't populate the
   // default files in testing.
   if (process.env.NODE_ENV !== 'test') {
-    // Fork (sc-5219): the patched backend reports every failed write, with
-    // the storage state the native shells show
-    const backend = new IndexedDBBackend(state => {
-      connection.send('fallback-write-error');
-      connection.send('storage-failed', {
-        lastStoredFlushAt: state?.lastStoredFlushAt ?? null,
-        quota: Boolean(state?.quota),
-      });
+    const backend = new IndexedDBBackend((state, ops) => {
+      // No state: absurd-sql's own safety check refused a write
+      if (!state) {
+        connection.send('fallback-write-error');
+      } else if (isOpenFile(blockedFiles(), ops)) {
+        // Fork (sc-5219): with the guard on, a write of the open budget failed
+        connection.send('storage-failed', {
+          lastStoredFlushAt: state.lastStoredFlushAt,
+          quota: state.quota,
+        });
+      } else {
+        closeFailed = true;
+        connection.send('storage-close-failed');
+      }
     });
     BFS = new SQLiteFS(FS, backend);
     Module.register_for_idb(BFS);
@@ -469,13 +479,22 @@ export const getModifiedTime = async (_filepath: string): Promise<Date> => {
 // mode of the iPhone and Mac shells, a write is stored only when its
 // IndexedDB transaction completes. In SharedArrayBuffer mode both answer at
 // once.
+let closeFailed = false;
+
 function blockedFiles(): StorageFile[] {
-  const files: Map<string, StorageFile> | undefined = BFS?.backend?.files;
-  return files ? [...files.values()] : [];
+  const files: Set<StorageFile> | undefined = BFS?.backend?.files;
+  return files ? [...files] : [];
 }
+
+/** One-way: only the native bridge's storage calls lead here. */
+export const enableStorageLatch = (): void => {
+  BFS?.backend?.enableLatch?.();
+};
 
 export const whenPersisted = (): Promise<void> =>
   filesWhenPersisted(blockedFiles());
 
-export const storageState = (): StorageState =>
-  filesStorageState(blockedFiles());
+export const storageState = (): StorageState => ({
+  ...filesStorageState(blockedFiles()),
+  closeFailed,
+});

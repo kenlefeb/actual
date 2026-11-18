@@ -1,14 +1,14 @@
 diff --git a/dist/indexeddb-backend.js b/dist/indexeddb-backend.js
-index a30d815805c225258b7d49ef15af9decfe02eb2f..59b5dffa600a394d8b85566a1264e516b3aacd83 100644
+index a30d815805c225258b7d49ef15af9decfe02eb2f..3c932102ad2f9c964bcf315ca41a0acb7a528c22 100644
 --- a/dist/indexeddb-backend.js
 +++ b/dist/indexeddb-backend.js
 @@ -1,3 +1,9 @@
 +// absurd-sql 0.0.54, Copyright 2021 James Long, MIT licence (see LICENSE).
 +// Modified by Ken's Actual fork for sc-5219 (openspec/changes/
-+// native-durable-writes): fallback writes settle on the transaction, run in
-+// flush order with the values of their own flush, and latch on the first
-+// failure; the file ops expose whenPersisted() and storageState(), and the
-+// backend keeps its files by name.
++// native-durable-writes). Always: fallback writes settle on the transaction
++// and run, with reads, closes and deletes, in order per database. Only once
++// enableLatch() is called (the native shells): the first failed write is
++// reported and stops further writes. Until then a failure behaves as in stock.
  let LOCK_TYPES = {
    NONE: 0,
    SHARED: 1,
@@ -29,40 +29,50 @@ index a30d815805c225258b7d49ef15af9decfe02eb2f..59b5dffa600a394d8b85566a1264e516
    // TODO: This should be renamed to `getDatabaseName`
    getStoreName() {
      return this.filename.replace(/\//g, '-');
-@@ -1127,6 +1143,9 @@ class Persistance {
+@@ -1067,6 +1083,19 @@ async function openDb(name) {
+   });
+ }
+ 
++// Fork (sc-5219): per database, every fallback write, read, close and delete
++// runs after the ones before it, across all the files of that name
++let fallbackChains = new Map();
++
++function enqueue(dbName, task) {
++  let result = (fallbackChains.get(dbName) || Promise.resolve()).then(task);
++  fallbackChains.set(
++    dbName,
++    result.catch(() => {})
++  );
++  return result;
++}
++
+ // Using a separate class makes it easier to follow the code, and
+ // importantly it removes any reliance on internal state in
+ // `FileOpsFallback`. That would be problematic since these method
+@@ -1127,6 +1156,11 @@ class Persistance {
      });
    }
  
 +  // Fork (sc-5219): settles on the transaction itself. An IDBTransaction
 +  // never fires `success`, only `complete`, `abort` and `error`, so the
-+  // original promise never resolved. The caller reports failures.
++  // original promise never resolved. A failed request aborts the transaction
++  // with that request's error, so `abort` carries the real one; `error` fires
++  // first, and for every request an abort cancels, with AbortError.
    async write(writes, cachedFirstBlock, hasLocked) {
      let db = await this.getDb(this.dbName);
  
-@@ -1136,15 +1155,18 @@ class Persistance {
+@@ -1136,6 +1170,10 @@ class Persistance {
      let store = trans.objectStore('data');
  
      await new Promise((resolve, reject) => {
 +      trans.oncomplete = () => resolve();
 +      trans.onabort = () =>
 +        reject(trans.error || new Error('IndexedDB write aborted'));
-+      trans.onerror = () =>
-+        reject(trans.error || new Error('IndexedDB write failed'));
 +
        let req = store.get(0);
        req.onsuccess = e => {
          if (hasLocked) {
-           if (!isSafeToWrite(req.result, cachedFirstBlock)) {
--            if (this.onFallbackFailure && !this.hasAlertedFailure) {
--              this.hasAlertedFailure = true;
--              this.onFallbackFailure();
--            }
-             reject(new Error('Fallback mode unable to write file changes'));
-+            trans.abort();
-             return;
-           }
-         }
-@@ -1153,11 +1175,7 @@ class Persistance {
+@@ -1153,17 +1191,13 @@ class Persistance {
          for (let write of writes) {
            store.put(write.value, write.key);
          }
@@ -74,15 +84,24 @@ index a30d815805c225258b7d49ef15af9decfe02eb2f..59b5dffa600a394d8b85566a1264e516
      });
    }
  }
-@@ -1173,6 +1191,41 @@ class FileOpsFallback {
+ 
+ class FileOpsFallback {
+-  constructor(filename, onFallbackFailure) {
++  constructor(filename, onFallbackFailure, backend) {
+     this.filename = filename;
+     this.dbName = this.filename.replace(/\//g, '-');
+     this.cachedFirstBlock = null;
+@@ -1173,11 +1207,62 @@ class FileOpsFallback {
      this.transferBlockOwnership = false;
  
      this.persistance = new Persistance(this.dbName, onFallbackFailure);
 +
-+    // Fork (sc-5219): the chain of writes, the failed latch, and when the
-+    // last write that stored was flushed
++    // Fork (sc-5219): this file's writes so far, the first failure, the
++    // latch, and when the last write that stored was flushed
 +    this.onFallbackFailure = onFallbackFailure;
++    this.backend = backend;
 +    this.pending = Promise.resolve();
++    this.firstFailure = null;
 +    this.failed = null;
 +    this.quota = false;
 +    this.lastStoredFlushAt = null;
@@ -104,19 +123,68 @@ index a30d815805c225258b7d49ef15af9decfe02eb2f..59b5dffa600a394d8b85566a1264e516
 +    };
 +  }
 +
++  // Only remembered until the guard is on: stock absurd-sql ignores it
 +  fail(error) {
-+    if (this.failed) {
++    if (!this.firstFailure) {
++      this.firstFailure = {
++        error: error || new Error('IndexedDB write failed'),
++        lastStoredFlushAt: this.lastStoredFlushAt
++      };
++    }
++    this.latchFirstFailure();
++  }
++
++  latchFirstFailure() {
++    if (!this.backend.latching || !this.firstFailure || this.failed) {
 +      return;
 +    }
-+    this.failed = error || new Error('IndexedDB write failed');
-+    this.quota = Boolean(error && error.name === 'QuotaExceededError');
++    let { error, lastStoredFlushAt } = this.firstFailure;
++    this.failed = error;
++    this.quota = error.name === 'QuotaExceededError';
++    this.lastStoredFlushAt = lastStoredFlushAt;
 +    if (this.onFallbackFailure) {
-+      this.onFallbackFailure(this.storageState());
++      this.onFallbackFailure(this.storageState(), this);
 +    }
    }
  
    async readIfFallback() {
-@@ -1277,12 +1330,35 @@ class FileOpsFallback {
+     this.transferBlockOwnership = true;
+-    this.blocks = await this.persistance.readAll();
++    // Fork (sc-5219): behind every write flushed so far
++    this.blocks = await enqueue(this.dbName, () => this.persistance.readAll());
+ 
+     return this.readMeta();
+   }
+@@ -1205,11 +1290,13 @@ class FileOpsFallback {
+   }
+ 
+   delete() {
+-    let req = globalThis.indexedDB.deleteDatabase(this.dbName);
+-    req.onerror = () => {
+-      console.warn(`Deleting ${this.filename} database failed`);
+-    };
+-    req.onsuccess = () => {};
++    enqueue(this.dbName, () => {
++      let req = globalThis.indexedDB.deleteDatabase(this.dbName);
++      req.onerror = () => {
++        console.warn(`Deleting ${this.filename} database failed`);
++      };
++      req.onsuccess = () => {};
++    });
+   }
+ 
+   open() {
+@@ -1226,7 +1313,8 @@ class FileOpsFallback {
+       this.blocks = new Map();
+     }
+ 
+-    this.persistance.closeDb();
++    // Fork (sc-5219): after the writes still waiting to use the connection
++    enqueue(this.dbName, () => this.persistance.closeDb());
+   }
+ 
+   readMeta() {
+@@ -1277,12 +1365,36 @@ class FileOpsFallback {
  
    flush() {
      if (this.writeQueue.length > 0) {
@@ -126,13 +194,14 @@ index a30d815805c225258b7d49ef15af9decfe02eb2f..59b5dffa600a394d8b85566a1264e516
 -        this.lockType > LOCK_TYPES.SHARED
 -      );
 +      // Fork (sc-5219): captured now, so the write runs with the values of
-+      // its own flush, after every earlier write, and nothing after a failure
++      // its own flush, after every earlier write
 +      let queue = this.writeQueue;
 +      let firstBlock = this.cachedFirstBlock;
 +      let locked = this.lockType > LOCK_TYPES.SHARED;
 +      let flushedAt = Date.now();
        this.writeQueue = [];
-+      this.pending = this.pending.then(async () => {
++      this.pending = enqueue(this.dbName, async () => {
++        // Set only once the guard is on
 +        if (this.failed) {
 +          return;
 +        }
@@ -157,17 +226,40 @@ index a30d815805c225258b7d49ef15af9decfe02eb2f..59b5dffa600a394d8b85566a1264e516
      }
      this.cachedFirstBlock = null;
    }
-@@ -1307,6 +1383,13 @@ class IndexedDBBackend {
+@@ -1291,6 +1403,23 @@ class FileOpsFallback {
+ class IndexedDBBackend {
+   constructor(onFallbackFailure) {
+     this.onFallbackFailure = onFallbackFailure;
++    // Fork (sc-5219): a reopened budget gets a new file under the same name,
++    // and the old one may still have writes pending.
++    // shortcut: closed files are never dropped, prune them if budgets get
++    // reopened often enough for this to matter
++    this.files = new Set();
++    this.latching = false;
++  }
++
++  // Fork (sc-5219): one-way; the native bridge turns it on. A write that
++  // already failed latches now.
++  enableLatch() {
++    this.latching = true;
++    for (let file of this.files) {
++      if (file.ops.latchFirstFailure) {
++        file.ops.latchFirstFailure();
++      }
++    }
+   }
+ 
+   createFile(filename) {
+@@ -1302,10 +1431,11 @@ class IndexedDBBackend {
+       // SharedArrayBuffer is not supported. Use the fallback methods
+       // which provide a somewhat working version, but doesn't
+       // support mutations across connections (tabs)
+-      ops = new FileOpsFallback(filename, this.onFallbackFailure);
++      ops = new FileOpsFallback(filename, this.onFallbackFailure, this);
+     }
  
      let file = new File(filename, ops);
++    this.files.add(file);
  
-+    // Fork (sc-5219): kept by name in production too, so the engine can ask
-+    // the open budget's file whether its writes are stored
-+    if (this.files == null) {
-+      this.files = new Map();
-+    }
-+    this.files.set(filename, file);
-+
      // If we don't need perf data, there's no reason for us to hold a
      // reference to the files. If we did we'd have to worry about
-     // memory leaks

@@ -29,7 +29,8 @@ final class SettingsBridgeTests: XCTestCase {
         XCTAssertNil(settings.clientVersion)
         XCTAssertEqual(
             settings.limits.first { $0.id == "accounts-register-page-size" },
-            NativeSettings.Limit(id: "accounts-register-page-size", value: 120, defaultValue: 50, ceiling: 200))
+            NativeSettings.Limit(id: "accounts-register-page-size", value: 120, defaultValue: 50, floor: 1, ceiling: 200))
+        XCTAssertEqual(settings.limits.first { $0.id == "native-persist-wait-ms" }?.floor, 100)
         // Every limit an engine handler reads: the Add transaction sheet's five
         // and story 4973's two scheduled-row limits included, and sc-5219's storage wait
         XCTAssertEqual(settings.limits.count, 14)

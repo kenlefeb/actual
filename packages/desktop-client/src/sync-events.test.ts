@@ -49,7 +49,7 @@ function setup() {
 
   listenForSyncEvent(store, queryClient);
 
-  return { invalidateQueries };
+  return { invalidateQueries, dispatch: vi.mocked(store.dispatch) };
 }
 
 function appliedEvent(tables: string[]): ServerEvents['sync-event'] {
@@ -139,6 +139,19 @@ describe('listenForSyncEvent', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: scheduleDateLookupQueries.all(),
     });
+  });
+
+  // sc-5219 (native-durable-writes D6)
+  it('stays quiet while local storage is slow: sync retries by itself', () => {
+    const { dispatch } = setup();
+    publishSyncEvent({ type: 'error', subtype: 'storage-slow' });
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('leaves a storage failure to its own notice', () => {
+    const { dispatch } = setup();
+    publishSyncEvent({ type: 'error', subtype: 'storage-failed' });
+    expect(dispatch).not.toHaveBeenCalled();
   });
 
   it('leaves the shared schedules query alone for unrelated tables', () => {

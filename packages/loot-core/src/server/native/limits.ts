@@ -168,6 +168,7 @@ export async function readLimits() {
     id,
     value: valueOf(id, stored.get(id)),
     default: LIMITS[id].default,
+    floor: floorOf(id),
     ceiling: LIMITS[id].ceiling,
   }));
 }

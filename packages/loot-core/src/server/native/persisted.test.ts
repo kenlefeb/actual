@@ -1,48 +1,54 @@
-import type * as ConnectionModule from '#platform/server/connection';
-import type * as FsModule from '#platform/server/fs';
 // Fork-only (sc-5219, openspec/changes/native-durable-writes D4, D5). The
 // storage barrier native code calls after each write, and the latch check
 // the page makes before forwarding one. The patched storage itself is
 // covered on fake-indexeddb in platform/server/fs/durable-writes.test.ts;
 // here the fs layer's two functions are stood in for, since the blocked fs
 // is off under test.
+import * as connection from '#platform/server/connection';
+import * as fs from '#platform/server/fs';
 import * as db from '#server/db';
 import * as prefs from '#server/prefs';
 
 import { app } from './app';
-
-const storage = vi.hoisted(() => ({
-  whenPersisted: vi.fn<() => Promise<void>>(),
-  storageState: vi.fn(),
-}));
-
-vi.mock('#platform/server/fs', async original => ({
-  ...(await original<typeof FsModule>()),
-  whenPersisted: storage.whenPersisted,
-  storageState: storage.storageState,
-}));
-
-const sent = vi.hoisted(() => [] as [string, unknown][]);
-vi.mock('#platform/server/connection', async original => ({
-  ...(await original<typeof ConnectionModule>()),
-  send: (name: string, payload: unknown) => {
-    sent.push([name, payload]);
-  },
-}));
+import { durableWritesEnabled } from './persisted';
 
 const h = app.handlers;
-const healthy = { failed: false, lastStoredFlushAt: 1000, quota: false };
+const healthy = {
+  failed: false,
+  lastStoredFlushAt: 1000,
+  quota: false,
+  closeFailed: false,
+};
+const storage = {
+  whenPersisted: vi.spyOn(fs, 'whenPersisted'),
+  storageState: vi.spyOn(fs, 'storageState'),
+  enableStorageLatch: vi.spyOn(fs, 'enableStorageLatch'),
+};
+const send = vi.spyOn(connection, 'send');
 
 beforeEach(async () => {
   await global.emptyDatabase()();
   await prefs.loadPrefs();
   storage.whenPersisted.mockReset().mockResolvedValue(undefined);
   storage.storageState.mockReset().mockReturnValue(healthy);
-  sent.length = 0;
+  send.mockReset();
 });
 
 afterEach(() => {
   vi.useRealTimers();
+});
+
+// Must stay first: the switch is one-way, and only the native bridge calls
+// these handlers
+describe('the durable-writes switch', () => {
+  it('is off until the first native storage call turns it on, once', async () => {
+    expect(durableWritesEnabled()).toBe(false);
+    expect(storage.enableStorageLatch).not.toHaveBeenCalled();
+    await h['native/storage-state']();
+    expect(durableWritesEnabled()).toBe(true);
+    await h['native/persisted']();
+    expect(storage.enableStorageLatch).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('native/persisted', () => {
@@ -69,11 +75,32 @@ describe('native/persisted', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(settled).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
-    expect(await answer).toEqual({ stored: false });
-    expect(sent).toEqual([]);
+    const { seq } = await answer;
+    expect(await answer).toEqual({ stored: false, seq: expect.any(Number) });
+    expect(send).not.toHaveBeenCalledWith('storage-stored', expect.anything());
     finish();
     await vi.advanceTimersByTimeAsync(0);
-    expect(sent).toEqual([['storage-stored', undefined]]);
+    expect(send).toHaveBeenCalledWith('storage-stored', { seq });
+  });
+
+  it('reports stored per call, so a later write still pending is not covered', async () => {
+    vi.useFakeTimers();
+    const finish: Array<() => void> = [];
+    storage.whenPersisted.mockImplementation(
+      () => new Promise<void>(resolve => finish.push(resolve)),
+    );
+    const first = h['native/persisted']();
+    await vi.advanceTimersByTimeAsync(2000);
+    const second = h['native/persisted']();
+    await vi.advanceTimersByTimeAsync(2000);
+    const [{ seq: firstSeq }, { seq: secondSeq }] = await Promise.all([
+      first,
+      second,
+    ]);
+    expect(secondSeq).not.toBe(firstSeq);
+    finish[0]();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(send.mock.calls).toEqual([['storage-stored', { seq: firstSeq }]]);
   });
 
   // A lifecycle flush can come with no budget open, so no preferences to read
@@ -100,16 +127,20 @@ describe('native/persisted', () => {
 
 describe('native/storage-state', () => {
   it('returns the latch, the last stored flush time and quota, at once', async () => {
-    expect(await h['native/storage-state']()).toEqual(healthy);
-    storage.storageState.mockReturnValue({
-      failed: true,
-      lastStoredFlushAt: null,
-      quota: true,
-    });
     expect(await h['native/storage-state']()).toEqual({
+      ...healthy,
+      syncHeld: false,
+    });
+    const failed = {
       failed: true,
       lastStoredFlushAt: null,
       quota: true,
+      closeFailed: true,
+    };
+    storage.storageState.mockReturnValue(failed);
+    expect(await h['native/storage-state']()).toEqual({
+      ...failed,
+      syncHeld: false,
     });
     expect(storage.whenPersisted).not.toHaveBeenCalled();
   });

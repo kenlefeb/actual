@@ -10652,10 +10652,10 @@ __metadata:
 
 "absurd-sql@patch:absurd-sql@npm%3A0.0.54#~/.yarn/patches/absurd-sql-npm-0.0.54-7f3f3a2866.patch":
   version: 0.0.54
-  resolution: "absurd-sql@patch:absurd-sql@npm%3A0.0.54#~/.yarn/patches/absurd-sql-npm-0.0.54-7f3f3a2866.patch::version=0.0.54&hash=3e65c1"
+  resolution: "absurd-sql@patch:absurd-sql@npm%3A0.0.54#~/.yarn/patches/absurd-sql-npm-0.0.54-7f3f3a2866.patch::version=0.0.54&hash=1f90d3"
   dependencies:
     safari-14-idb-fix: "npm:^1.0.4"
-  checksum: 10/94303988ffc934eb5d81b1cc2e0071895362bc8b1ee1e7977e28d37c7a8babe7238467e643ffe9a26330c73d7fe8a828ff7de0f01e48fbe59028e6b54724c739
+  checksum: 10/436fdfe46915e9be8fd3c5ec141dc65b639bebd52c70e1328be0781d63b71f66e5e7e1dc0ca11553e669aff525477a103eaca1539da6bbf398f5530e84a5a413
   languageName: node
   linkType: hard
 

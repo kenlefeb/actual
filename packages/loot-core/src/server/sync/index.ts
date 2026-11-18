@@ -19,6 +19,12 @@ import * as db from '#server/db';
 import { PostError, SyncError } from '#server/errors';
 import { app } from '#server/main-app';
 import { runMutator } from '#server/mutators';
+import {
+  durableWritesEnabled,
+  setSyncHeld,
+  storageFailed,
+  waitForStorage,
+} from '#server/native/persisted';
 import { postBinary } from '#server/post';
 import * as prefs from '#server/prefs';
 import { getServer } from '#server/server-config';
@@ -836,8 +842,13 @@ export const fullSync = once(async function (): Promise<
           meta: e.meta,
         });
       } else if (e.reason === 'storage-failed') {
-        // Fork (sc-5219): the native shells show the storage-failed notice
+        // Fork (sc-5219): the storage-failed event carries the notice
         app.events.emit('sync', { type: 'error', subtype: 'storage-failed' });
+      } else if (e.reason === 'storage-slow') {
+        // Fork (sc-5219): held back, never "synced"; try again by itself
+        app.events.emit('sync', { type: 'error', subtype: 'storage-slow' });
+        clearFullSyncTimeout();
+        syncTimeout = setTimeout(fullSync, FULL_SYNC_DELAY);
       } else if (e.reason === 'clock-drift') {
         app.events.emit('sync', {
           type: 'error',
@@ -911,24 +922,24 @@ async function _fullSync(
 
   const messages = getMessagesSince(since);
 
-  // Fork (sc-5219, openspec/changes/native-durable-writes D6): send only
-  // changes stored on this device. In the iPhone and Mac shells a write is
-  // stored when its IndexedDB transaction completes; wait for the writes
-  // behind these messages, at most native-persist-wait-ms, and on expiry
-  // send nothing this round. Once storage failed, send and receive nothing
-  // until reload. Elsewhere this resolves at once. Imported here, not at the
-  // top, to keep this upstream file's import graph unchanged.
-  const { storageFailed, waitForStorage } =
-    await import('#server/native/persisted');
-  if (storageFailed()) {
-    throw new SyncError('storage-failed');
-  }
-  const storage = await waitForStorage().catch(() => {
-    throw new SyncError('storage-failed');
-  });
-  if (!storage.stored) {
-    logger.info('Local storage still writing; sending at the next sync');
-    return [];
+  // Fork (sc-5219, openspec/changes/native-durable-writes D6): only once the
+  // native bridge has turned durable writes on, send only changes stored on
+  // this device. In the iPhone and Mac shells a write is stored when its
+  // IndexedDB transaction completes; wait for the writes behind these
+  // messages, at most native-persist-wait-ms. On expiry send nothing, report
+  // storage-slow rather than success, and retry. Once storage failed, send
+  // and receive nothing until reload.
+  if (durableWritesEnabled()) {
+    if (storageFailed()) {
+      throw new SyncError('storage-failed');
+    }
+    const storage = await waitForStorage().catch(() => {
+      throw new SyncError('storage-failed');
+    });
+    setSyncHeld(!storage.stored);
+    if (!storage.stored) {
+      throw new SyncError('storage-slow');
+    }
   }
 
   const userToken = await asyncStorage.getItem('user-token');

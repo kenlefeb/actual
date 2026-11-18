@@ -11,6 +11,19 @@ import type { StorageState } from '#platform/server/fs/storage-state';
 import { LIMITS, readLimit } from './limits';
 import { nativeRefusal } from './refusal';
 
+// Off for every client until the native bridge makes its first storage call:
+// no latch, no sync gate, and storage failures behave as in stock absurd-sql
+let durableWrites = false;
+
+export const durableWritesEnabled = () => durableWrites;
+
+/** One-way. Group 2 calls `native/storage-state` at bridge startup. */
+export function enableDurableWrites() {
+  if (durableWrites) return;
+  durableWrites = true;
+  fs.enableStorageLatch();
+}
+
 function notStored() {
   return nativeRefusal(
     'not-stored',
@@ -18,29 +31,33 @@ function notStored() {
   );
 }
 
-/**
- * Stored once every pending write fired complete, or not yet stored after
- * `native-persist-wait-ms`; then a `storage-stored` event follows when they
- * do. Refuses once the failed latch is set.
- */
 /** Whether the failed latch is set: nothing more is stored until reload. */
 export function storageFailed(): boolean {
   return fs.storageState().failed;
 }
 
-export async function persisted(): Promise<{ stored: boolean }> {
+let lastPersistSeq = 0;
+
+/**
+ * Stored once every pending write fired complete, or not yet stored after
+ * `native-persist-wait-ms`; then a `storage-stored` event with the same `seq`
+ * follows once the writes this call waited for are stored. Later writes may
+ * still be pending then. Refuses once the failed latch is set.
+ */
+export async function persisted(): Promise<{ stored: boolean; seq?: number }> {
+  enableDurableWrites();
   if (storageFailed()) throw notStored();
   const outcome = await waitForStorage().catch(() => {
     throw notStored();
   });
   if (!('pending' in outcome)) return { stored: true };
-  // The page tells native code when the writes do land; a failure instead
-  // latches and sends storage-failed
+  const seq = ++lastPersistSeq;
+  // A failure instead latches and sends storage-failed
   outcome.pending.then(
-    () => connection.send('storage-stored'),
+    () => connection.send('storage-stored', { seq }),
     () => undefined,
   );
-  return { stored: false };
+  return { stored: false, seq };
 }
 
 /**
@@ -71,6 +88,18 @@ export async function waitForStorage(): Promise<
 }
 
 /** The failed latch, when the last stored write was flushed, and whether storage is full. */
-export async function storageState(): Promise<StorageState> {
-  return fs.storageState();
+export async function storageState(): Promise<
+  StorageState & { syncHeld: boolean }
+> {
+  enableDurableWrites();
+  return { ...fs.storageState(), syncHeld };
 }
+
+// A sync is waiting on device storage (D6): the status line says so
+let syncHeld = false;
+
+export function setSyncHeld(held: boolean) {
+  syncHeld = held;
+}
+
+export const isSyncHeld = () => syncHeld;

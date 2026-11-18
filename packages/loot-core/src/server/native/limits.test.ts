@@ -227,6 +227,7 @@ describe('the limits registry', () => {
       id: 'accounts-register-page-size',
       value: 120,
       default: 50,
+      floor: 1,
       ceiling: 200,
     });
     expect(limits.find(l => l.id === 'accounts-write-max-ids')?.value).toBe(
@@ -245,6 +246,9 @@ describe('the limits registry', () => {
     for (const bad of ['50', '99', '5000', 'abc', '1e3']) {
       expect(await read(bad), bad).toBe(2000);
     }
+    expect(
+      (await readLimits()).find(l => l.id === 'native-persist-wait-ms'),
+    ).toMatchObject({ floor: 100, ceiling: 4000 });
     expect(await read('100')).toBe(100);
     expect(await read('3000')).toBe(3000);
     expect(await read('4000')).toBe(4000);

@@ -80,6 +80,8 @@ A fork loot-core handler, allowlisted in both lists as a call with no arguments,
 - `{ stored: false }` on timeout. The engine keeps waiting and sends `storage-stored` when the writes covered by that call finish, and the page bridge forwards it to Swift as `stored`;
 - `[native:not-stored]` when the latch is set.
 
+Every answer and `storage-stored` carries `seq`: an epoch fixed for that page load, and a number that restarts with it. Numbers alone can't be compared across a restart, so a success from the new page could otherwise clear a write the old page lost. Swift tracks not-yet-stored writes per epoch. A success clears only its own epoch, and a restart turns older pending writes into "may not have been saved", which only the restart or reload notice covers (Architect, PR #482).
+
 Deadline arithmetic: the wait ceiling is 4000 ms (D7), so `native/persisted` answers within 4 s plus a page round trip, inside its own 5 s deadline. The write call itself no longer contains any wait.
 
 ### D5. The failed latch, from any source
@@ -155,6 +157,7 @@ The ceiling stays under the 5 s bridge deadline (D4). The floor avoids a meaning
   - Quitting: `applicationShouldTerminate` returns `.terminateLater` and replies after the answer or the wait.
   - Closing the window: `windowShouldClose` defers the close the same way.
   - Sleeping: `EngineLifecycle.willSleep` calls `native/persisted` as a best effort; it cannot delay sleep.
+- Each flush waits for every file's pending writes, not only the open budget's, so a just-closed budget's last write isn't left behind (Architect, PR #482).
 - Page-process death, or a jetsam kill of a backgrounded iPhone app, gives no warning. Only writes already stored survive.
 
 ### D9. Interaction with sc-5220 and with undo

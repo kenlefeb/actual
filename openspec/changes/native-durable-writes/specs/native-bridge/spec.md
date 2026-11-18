@@ -49,6 +49,14 @@ In the iPhone and Mac apps, the Swift bridge client SHALL follow every allowlist
 - **WHEN** the user categorizes a row on iPhone
 - **THEN** the row changes, the client returns `stored: false`, "Saved here, not yet stored on this device." shows, and it clears when the engine's `storage-stored` reaches Swift as `stored`
 
+### Requirement: A not-yet-stored write belongs to its page load
+Swift SHALL track each "not yet stored" write by `seq`, which holds the page load's epoch and the write's order in it. A `stored: true` answer or `stored` event SHALL clear only writes of its own epoch. A restart SHALL turn every pending write of an older epoch into "may not have been saved", covered by the restart or reload notice, and no later success SHALL clear it.
+
+#### Scenario: A success after a restart
+- **GIVEN** a write showing "Saved here, not yet stored on this device." when the page restarts
+- **WHEN** a write in the new page answers `stored: true`, or a `stored` event arrives with the same number in the new epoch
+- **THEN** the earlier write is not reported as stored, and it stays "may not have been saved"
+
 ### Requirement: Any storage failure latches and is shown app-wide
 With the storage guard on, any failed IndexedDB write of the open budget, from any source (bridge write, web-screen edit or sync), SHALL set a failed latch. The patched storage SHALL write nothing more, the page SHALL send a `storage-failed` event with `lastStoredFlushAt` (when the last write that stored was flushed), and Swift SHALL show a persistent app-level notice, whichever screen is showing, until the person reloads or, after a restart, taps OK.
 
@@ -254,12 +262,17 @@ A failed write in a file with no open handles SHALL NOT set the latch. The engin
 - **THEN** the wait is 2000 ms
 
 ### Requirement: The shells flush storage before backgrounding or quitting
-The iPhone app SHALL call `native/persisted` when it moves to the background, in a background task with an expiration handler that ends it at once. The task SHALL end at the earliest of the answer, the wait, or expiry. The Mac app SHALL call it before quitting (replying later to terminate) and before closing its window, and best-effort before sleep, which it cannot delay.
+The iPhone app SHALL call `native/persisted` when it moves to the background, in a background task with an expiration handler that ends it at once. The task SHALL end at the earliest of the answer, the wait, or expiry. The Mac app SHALL call it before quitting (replying later to terminate) and before closing its window, and best-effort before sleep, which it cannot delay. Each flush SHALL wait for every file's pending writes, including a just-closed budget's.
 
 #### Scenario: iPhone to the background
 - **GIVEN** a change just made in a web screen inside the iPhone app
 - **WHEN** the person swipes to the home screen
 - **THEN** the app holds a background task until storage finishes, the wait passes or iOS expires it, whichever is first
+
+#### Scenario: A budget just closed
+- **GIVEN** a budget closed with its last write still pending
+- **WHEN** the app moves to the background or quits
+- **THEN** the flush waits for that write too, up to the wait
 
 #### Scenario: Mac quit
 - **GIVEN** a change still being stored

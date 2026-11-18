@@ -25,6 +25,7 @@ import {
   requireDeleteRows,
   requireMonth,
   requireRows,
+  rowKey,
   stderrLine,
 } from './shared';
 import type { Access, WriteLog } from './shared';
@@ -324,21 +325,6 @@ async function planUpdateTransactions(ctx: Ctx): Promise<Plan> {
     })),
   };
 }
-
-const rowKey = (
-  r: Record<string, unknown>,
-  account: unknown,
-  cleared: unknown,
-) =>
-  JSON.stringify([
-    account,
-    r.date,
-    r.amount,
-    norm(r.payee),
-    norm(r.category),
-    norm(r.notes),
-    Boolean(cleared),
-  ]);
 
 async function planCreateTransactions(ctx: Ctx): Promise<Plan> {
   const created = strings(ctx.entry.outcome?.created);

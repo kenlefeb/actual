@@ -193,4 +193,31 @@ describe('One write cannot fill the audit tail (its undo too)', () => {
     expect(res.text).toMatch(/its undo/);
     expect(lines()).toEqual([]);
   });
+
+  // The undo logs each created row as a JSON string, so a quote or backslash costs twice (Security, #449)
+  it.each([
+    ['quotes', '"'.repeat(1000)],
+    ['backslashes and non-ASCII text', '\\"é😀'.repeat(200)],
+  ])(
+    'a create with notes full of %s is refused up front, or its undo fits',
+    async (_, notes) => {
+      const create = async () =>
+        h.call('write_create_transactions', {
+          account_id: h.fixture.accountId,
+          transactions: Array.from({ length: 3 }, () => ({
+            date: '2026-01-05',
+            amount: -100,
+            notes,
+          })),
+        });
+      const own = await measure(create);
+      // Room for the ids an undo adds, not for notes escaped twice
+      await start({ maxAuditLineBytes: own + 500 });
+      const res = await create();
+      expect(res.isError, 'allowed, but its undo line would not fit').toBe(
+        true,
+      );
+      expect(res.text).toMatch(/its undo/);
+    },
+  );
 });

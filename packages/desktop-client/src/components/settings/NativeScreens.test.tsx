@@ -127,13 +127,38 @@ describe('NativeScreens', () => {
     expect(win.__actualNativeScreens?.reconcile).toBe(false);
   });
 
-  // sc-4931: no Accounts toggle reaches users until the screens ship (story 3611). For
-  // developers and tests the app's UserDefaults key `NativeScreen.accounts` turns it on.
-  it('does not offer an Accounts switch yet', () => {
+  // native-accounts-screen task 3.8: the Accounts switch, on when unset; it works both ways
+  it('offers the Accounts switch, on when unset, and turns it off and on again', () => {
+    const postMessage = insideIosApp();
+    renderSettings();
+    const checkbox = screen.getByRole('checkbox', {
+      name: /Native Accounts screen/,
+    });
+    expect(checkbox).toBeChecked();
+    fireEvent.click(checkbox);
+    expect(postMessage).toHaveBeenLastCalledWith({
+      type: 'nativeScreen',
+      screen: 'accounts',
+      on: false,
+    });
+    expect(checkbox).not.toBeChecked();
+    expect(win.__actualNativeScreens?.accounts).toBe(false);
+    fireEvent.click(checkbox);
+    expect(postMessage).toHaveBeenLastCalledWith({
+      type: 'nativeScreen',
+      screen: 'accounts',
+      on: true,
+    });
+    expect(checkbox).toBeChecked();
+    expect(win.__actualNativeScreens?.accounts).toBe(true);
+  });
+
+  it('shows the Accounts switch as off when the user turned it off', () => {
     insideIosApp();
+    win.__actualNativeScreens = { accounts: false };
     renderSettings();
     expect(
-      screen.queryByRole('checkbox', { name: /Native Accounts screen/ }),
-    ).not.toBeInTheDocument();
+      screen.getByRole('checkbox', { name: /Native Accounts screen/ }),
+    ).not.toBeChecked();
   });
 });

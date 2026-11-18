@@ -15,14 +15,18 @@ import {
 import { SettingsGroup } from './SettingsGroup';
 import { SettingsRow } from './SettingsRow';
 
-// Fork-only (sc-3751). Shown only inside the iOS app. Budget and Paychecks are
-// on unless turned off here (sc-5090); the change applies the next time the
-// tab is shown.
+// Fork-only (sc-3751). Shown only inside the iOS app. Budget, Accounts and
+// Paychecks are on unless turned off here (sc-5090, sc-3611); the change
+// applies the next time the tab is shown.
 export function NativeScreens() {
   const { t } = useTranslation();
   const [budgetOn, setBudgetOn] = useState(() => isNativeScreenOn('budget'));
   const [paychecksOn, setPaychecksOn] = useState(() =>
     isNativeScreenOn('paychecks'),
+  );
+  // native-accounts-screen task 3.8: on unless turned off here
+  const [accountsOn, setAccountsOn] = useState(() =>
+    isNativeScreenOn('accounts'),
   );
   // sc-4801: on unless turned off here
   const [reconcileOn, setReconcileOn] = useState(() => isNativeReconcileOn());
@@ -60,6 +64,38 @@ export function NativeScreens() {
               onChange={() => {
                 setNativeScreenOn('budget', !budgetOn);
                 setBudgetOn(!budgetOn);
+              }}
+            />
+          </View>
+        }
+      />
+      <SettingsRow
+        htmlFor="settings-native-accounts"
+        title={<Trans>Native Accounts screen</Trans>}
+        description={
+          <Text>
+            <Trans>
+              Show the Accounts tab as native iPhone screens: your accounts and
+              each account's transactions. It starts the next time you open
+              Accounts. Turn it off to go back.
+            </Trans>
+          </Text>
+        }
+        control={
+          <View
+            style={{
+              minWidth: 44,
+              minHeight: 44,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Checkbox
+              id="settings-native-accounts"
+              checked={accountsOn}
+              onChange={() => {
+                setNativeScreenOn('accounts', !accountsOn);
+                setAccountsOn(!accountsOn);
               }}
             />
           </View>

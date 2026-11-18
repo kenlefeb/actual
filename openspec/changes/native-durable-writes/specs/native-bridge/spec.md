@@ -125,12 +125,22 @@ If a restart leaves a write "may not have been saved" and no failure notice is s
 - **THEN** the line clears, this notice shows, no reload notice shows, and OK dismisses it
 
 ### Requirement: Offline never claims saved while a write is pending
-The native "Offline — changes saved on this iPhone" status SHALL show only when no write is pending. While one is, the status SHALL show the storage status line's text instead, so "Still saving to this device. Keep the app open." wins over it.
+The native "Offline — changes saved on this iPhone" status SHALL show only when no write is pending or "may not have been saved". While the storage status line is off in Release, the status SHALL read "Offline" in those cases. With the line on, it SHALL show the line's text while a write is pending, and "Offline" when a write only may not have been saved.
 
-#### Scenario: Offline with slow storage
-- **GIVEN** the app is offline and a write has returned `stored: false`
+#### Scenario: Line off in Release
+- **GIVEN** a Release build with the line off, the app offline, and a write pending or "may not have been saved"
 - **WHEN** the Accounts status shows
-- **THEN** it reads "Still saving to this device. Keep the app open.", and returns to the offline text once the write is stored
+- **THEN** it reads "Offline", never "changes saved on this iPhone"
+
+#### Scenario: Line on, offline with slow storage
+- **GIVEN** the line on, the app offline, and a write that returned `stored: false`
+- **WHEN** the Accounts status shows
+- **THEN** it reads "Still saving to this device. Keep the app open.", never "changes saved on this iPhone", and returns to the offline text once the write is stored
+
+#### Scenario: Line on, after a restart
+- **GIVEN** the line on, the app offline, and a write that "may not have been saved"
+- **WHEN** the Accounts status shows
+- **THEN** it reads "Offline", and the line stays clear
 
 ### Requirement: Any storage failure latches and is shown app-wide
 With the storage guard on, any failed IndexedDB write of the open budget, from any source (bridge write, web-screen edit or sync), SHALL set a failed latch. The patched storage SHALL write nothing more, the page SHALL send a `storage-failed` event with `lastStoredFlushAt` (when the last write that stored was flushed), and Swift SHALL show a persistent app-level notice, whichever screen is showing, until the person reloads or, after a restart, taps OK.

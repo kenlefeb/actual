@@ -78,6 +78,12 @@ final class AccountsBridgeTests: XCTestCase {
         XCTAssertNoThrow(try AccountRegisterRequest(accountId: "a", search: String(repeating: "x", count: 100)))
     }
 
+    // loot-core counts the search in UTF-16 units (JS `length`); an emoji is two
+    func testSearchLengthIsCountedInUTF16UnitsLikeLootCore() {
+        XCTAssertNoThrow(try AccountRegisterRequest(accountId: "a", search: String(repeating: "😀", count: 50)))
+        XCTAssertThrowsError(try AccountRegisterRequest(accountId: "a", search: String(repeating: "😀", count: 51)))
+    }
+
     func testReadsSendOnlyTheirOwnArguments() async throws {
         var seen: [(String, String)] = []
         let list = String(decoding: try fixture("accounts-list"), as: UTF8.self)

@@ -8,7 +8,7 @@ Tests first: write the tests, see them fail, then write the code. One story per 
 - [x] 1.2 `native/account-register` (design D1, D2). Failing tests first: newest-first order equal to the web's; keyset paging covers every row once, including when a row is inserted between pages; the `accounts-register-page-size` preference (default 50, ceiling 200, bad values fall back) through `readLimit`; a forged or malformed cursor fails; search over 100 characters fails and `%`, `_` and `\` match literally; scopes; search over payee, category, notes and amount returning a split's parent; running balance only for `all` with no search and `show-balances-<id>` on; header and upcoming on the first page only; rows carry `transferAccount` and `transferReconciled`. Fixture `account-register.json`
 - [x] 1.3 `accounts.perf.test.ts`: the list on 50 accounts; the register's first page and a page 10,000 rows deep on a 20,000-row account, with and without search; median under 50 ms; prints median and p95
 - [x] 1.4 Allowlist both reads (Swift list and `native-bridge-allowlist.json`, tests that the lists are equal), `coverage.json` skips, and Swift decode tests for both fixtures in `NativeBridgeCore`
-- [ ] 1.5 `yarn typecheck`, `yarn lint`, the tests, `yarn check:mcp-coverage`, the perf suite and `openspec validate --all --strict`; Security reviews the allowlist additions
+- [x] 1.5 `yarn typecheck`, `yarn lint`, the tests, `yarn check:mcp-coverage`, the perf suite and `openspec validate --all --strict`; Security reviews the allowlist additions
 
 ## 2. Writes, switch, overlay and view models (sc-4931)
 

@@ -206,11 +206,12 @@ describe('the native Budget screen switch', () => {
     expect(isNativeScreenOn('paychecks', win)).toBe(false);
   });
 
-  it('keeps the Accounts switch off when unset', () => {
+  // native-accounts-screen task 3.8: on when unset, an explicit off kept
+  it('reads on for Accounts when unset, and keeps an explicit off', () => {
     const { win } = iosApp();
-    expect(isNativeScreenOn('accounts', win)).toBe(false);
-    win.__actualNativeScreens = { accounts: true };
     expect(isNativeScreenOn('accounts', win)).toBe(true);
+    win.__actualNativeScreens = { accounts: false };
+    expect(isNativeScreenOn('accounts', win)).toBe(false);
   });
 
   // The Swift side checks the same file (NativeScreenDefaultsTests)

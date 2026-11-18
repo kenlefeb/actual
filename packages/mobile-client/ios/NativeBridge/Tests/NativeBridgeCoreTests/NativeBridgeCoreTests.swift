@@ -240,6 +240,8 @@ final class NativeScreenDefaultsTests: XCTestCase {
         let defaults = freshDefaults()
         defaults.set(false, forKey: NativeScreenSwitch.key(for: .budget))
         defaults.set(false, forKey: NativeScreenSwitch.paychecksKey)
+        defaults.set(false, forKey: NativeScreenSwitch.accountsKey)
+        XCTAssertFalse(NativeScreenSwitch.isAccountsNative(defaults: defaults))
         XCTAssertEqual(NativeScreenSwitch.screen(for: .budget, defaults: defaults), .web)
         XCTAssertFalse(NativeScreenSwitch.isPaychecksNative(defaults: defaults))
         defaults.set(true, forKey: NativeScreenSwitch.key(for: .budget))

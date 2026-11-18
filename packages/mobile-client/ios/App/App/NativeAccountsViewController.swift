@@ -178,6 +178,7 @@ struct AccountsScreen: View {
     // Owned here and handed to the list: a toolbar EditButton's own edit mode
     // never reached the List (sc-3611 hands-on pass)
     @State private var editMode: EditMode = .inactive
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         NavigationView {
@@ -188,7 +189,7 @@ struct AccountsScreen: View {
                     ToolbarItem(placement: .navigationBarLeading) {
                         if let list = model.state.value, !list.sections.onBudget.accounts.isEmpty || !list.sections.offBudget.accounts.isEmpty {
                             Button(editMode.isEditing ? AccountsWords.done : AccountsWords.edit) {
-                                withAnimation { editMode = editMode.isEditing ? .inactive : .active }
+                                withAnimation(reduceMotion ? nil : .default) { editMode = editMode.isEditing ? .inactive : .active }
                             }
                         }
                     }
@@ -206,6 +207,10 @@ struct AccountsScreen: View {
         }
         .onChange(of: model.actionError) { error in
             if let error { UIAccessibility.post(notification: .announcement, argument: error.message) }
+        }
+        // The register announces its own reads while it is pushed over the list
+        .onChange(of: model.state.error) { error in
+            if let error, nav.register == nil { UIAccessibility.post(notification: .announcement, argument: error.message) }
         }
     }
 
@@ -497,9 +502,7 @@ private struct AccountRow: View {
         Text(amountText)
             .font(.body.monospacedDigit())
             .foregroundColor(account.balance < 0 ? Money.negative : .primary)
-            // Beside the name it keeps its width, so the name wraps instead of
-            // the amount breaking mid-number (sc-3611 hands-on pass)
-            .fixedSize(horizontal: !typeSize.isAccessibilitySize, vertical: true)
+            .wholeAmount()
     }
 
     private var detail: String { AccountsWords.detail(AccountDetail(account), style: style) }
@@ -534,7 +537,7 @@ private struct AmountLine: View {
         Text(BudgetAmountFormat.string(amount, style: style))
             .font(.body.monospacedDigit())
             .foregroundColor(amount < 0 ? Money.negative : .secondary)
-            .fixedSize(horizontal: !typeSize.isAccessibilitySize, vertical: true)
+            .wholeAmount()
     }
 }
 

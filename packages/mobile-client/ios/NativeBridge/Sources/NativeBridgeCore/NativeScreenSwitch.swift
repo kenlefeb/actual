@@ -2,20 +2,20 @@ import Foundation
 
 // Fork-only (sc-3751). The per-screen switch: a tab shows its native screen
 // only while `NativeScreen.<tab>` is on in UserDefaults. Shipped screens read on
-// when unset (sc-5090, Ken 2026-11-15), Accounts excepted until story 3611; an
-// explicit off means the web screen. Settings flips it through the native chrome
+// when unset (sc-5090, Ken 2026-11-15; Accounts from story 3611); an explicit
+// off means the web screen. Settings flips it through the native chrome
 // plugin. The unset defaults match desktop-client/src/data/native-screen-defaults.json
 // (NativeScreenDefaultsTests).
 public enum NativeScreen: Equatable, Sendable { case web, native }
 
 public enum NativeScreenSwitch {
-    // The Budget tab and, off when unset, the Accounts tab have native screens so far
+    // The Budget and Accounts tabs have native screens so far
     public static let nativeTabs: Set<NativeTab> = [.budget, .accounts]
 
     public static func key(for tab: NativeTab) -> String { "NativeScreen.\(tab.rawValue)" }
 
     // Tabs whose screen reads on while the key is unset
-    private static let onWhenUnset: Set<NativeTab> = [.budget]
+    private static let onWhenUnset: Set<NativeTab> = [.budget, .accounts]
 
     public static func screen(for tab: NativeTab, defaults: UserDefaults = .standard) -> NativeScreen {
         guard nativeTabs.contains(tab) else { return .web }
@@ -31,10 +31,8 @@ public enum NativeScreenSwitch {
         defaults.object(forKey: paychecksKey) == nil || defaults.bool(forKey: paychecksKey)
     }
 
-    // sc-4931 (native-accounts-screen D4): the Accounts screen. It reads OFF while unset: the
-    // default flips to on, and Settings shows its toggle, in story 3611's PR, which ships the
-    // screens. Until then only developers and tests turn it on, by setting this UserDefaults
-    // key to true (the page toggle is hidden); with it off the Accounts tab is the web screens as today.
+    // native-accounts-screen D4 (task 3.8): the Accounts screen, on when unset; Settings
+    // stores false to turn it off, and with it off the Accounts tab is the web screens.
     public static let accountsKey = "NativeScreen.accounts"
 
     public static func isAccountsNative(defaults: UserDefaults = .standard) -> Bool {

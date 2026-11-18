@@ -19,7 +19,6 @@
 		D6673CBB0E01CEBA7D44FA28 /* EngineLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9232DFABC112DDBC56908FBF /* EngineLifecycle.swift */; };
 		DA9C537FB7C598492264F7D8 /* HomeEconomicsMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20D5FA73EC2BF679AC0CC233 /* HomeEconomicsMacApp.swift */; };
 		E2ABA8D1A32401500743525F /* WWWSchemeHandlerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE70CE285A9B6C939404F117 /* WWWSchemeHandlerTests.swift */; };
-		E319389EF9B76DFC83287BBA /* ReloadGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7517AD68AEAA7C7213653F71 /* ReloadGuard.swift */; };
 		E644DA7DFD4183C213063A62 /* WWWSchemeHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1C03BA71996E1EB62B964E /* WWWSchemeHandler.swift */; };
 		F3CDC31ACE9D1C98C9301252 /* EngineLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A38DD33146BC5355A150EFF5 /* EngineLifecycleTests.swift */; };
 		F6FDC8769B0DEB3E2FC16ECB /* MacEngineHostTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F65F9272B94E505672B77A6 /* MacEngineHostTests.swift */; };
@@ -41,7 +40,6 @@
 		333FCD0C5BD9FD1F4DDBBDD9 /* StorageLossMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageLossMonitor.swift; sourceTree = "<group>"; };
 		4934778DE83E6B79AA8E5412 /* PageProcessKillTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageProcessKillTests.swift; sourceTree = "<group>"; };
 		6F65F9272B94E505672B77A6 /* MacEngineHostTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacEngineHostTests.swift; sourceTree = "<group>"; };
-		7517AD68AEAA7C7213653F71 /* ReloadGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReloadGuard.swift; sourceTree = "<group>"; };
 		7C2AD8712ED066882131A5FE /* EngineSpikeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineSpikeTests.swift; sourceTree = "<group>"; };
 		7F1C03BA71996E1EB62B964E /* WWWSchemeHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WWWSchemeHandler.swift; sourceTree = "<group>"; };
 		9232DFABC112DDBC56908FBF /* EngineLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineLifecycle.swift; sourceTree = "<group>"; };
@@ -86,7 +84,6 @@
 				9252D5E08BD225D044CBECF4 /* Info.plist */,
 				EC8AC5EBA44BDCD55211F704 /* MacEngineHost.swift */,
 				B93C4666FA76203E682E2997 /* NavigationPolicy.swift */,
-				7517AD68AEAA7C7213653F71 /* ReloadGuard.swift */,
 				333FCD0C5BD9FD1F4DDBBDD9 /* StorageLossMonitor.swift */,
 				7F1C03BA71996E1EB62B964E /* WWWSchemeHandler.swift */,
 			);
@@ -259,7 +256,6 @@
 				DA9C537FB7C598492264F7D8 /* HomeEconomicsMacApp.swift in Sources */,
 				59229A47A7A9270AD340FD46 /* MacEngineHost.swift in Sources */,
 				0AE479F0C3B3CECFA0884FA3 /* NavigationPolicy.swift in Sources */,
-				E319389EF9B76DFC83287BBA /* ReloadGuard.swift in Sources */,
 				5B3BE3BFD59237810260BB7C /* StorageLossMonitor.swift in Sources */,
 				E644DA7DFD4183C213063A62 /* WWWSchemeHandler.swift in Sources */,
 			);

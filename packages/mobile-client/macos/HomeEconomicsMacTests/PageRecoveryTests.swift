@@ -1,3 +1,4 @@
+import NativeBridgeCore
 import WebKit
 import XCTest
 

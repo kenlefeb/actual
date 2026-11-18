@@ -37,6 +37,14 @@ public enum AccountsLoad<Value: Equatable>: Equatable {
         }
     }
 
+    // What the last read failed with; the screens announce each change of it
+    public var error: AccountsLoadError? {
+        switch self {
+        case .failed(let error), .stale(_, let error): return error
+        case .loading, .loaded: return nil
+        }
+    }
+
     fileprivate func failing(_ error: AccountsLoadError) -> AccountsLoad {
         if let good = value { return .stale(good, error) }
         return .failed(error)

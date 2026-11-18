@@ -316,3 +316,15 @@ final class AccountsCountWordsTests: XCTestCase {
         XCTAssertEqual(AccountsCountWords.results(0), "0 results")
     }
 }
+
+// Task 3.6: what the screens announce to VoiceOver when a read fails. A new failure
+// changes this value once; a repeat of the same failure does not.
+final class AccountsLoadErrorTests: XCTestCase {
+    func testOnlyAFailedReadCarriesAnError() throws {
+        let list = try decodedList()
+        XCTAssertNil(AccountsLoad<AccountsList>.loading.error)
+        XCTAssertNil(AccountsLoad.loaded(list).error)
+        XCTAssertEqual(AccountsLoad<AccountsList>.failed(.timedOut).error, .timedOut)
+        XCTAssertEqual(AccountsLoad.stale(list, .other).error, .other)
+    }
+}

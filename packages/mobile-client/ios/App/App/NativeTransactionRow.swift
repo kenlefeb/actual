@@ -63,8 +63,7 @@ struct NativeTransactionRow: View {
             Text(amount)
                 .font(.body.monospacedDigit())
                 .foregroundColor(isScheduled ? .secondary : isIncome ? NativeReconcileTokens.positive : .primary)
-                // Beside the payee it keeps its width, so the payee wraps, not the number
-                .fixedSize(horizontal: !typeSize.isAccessibilitySize, vertical: true)
+                .wholeAmount()
             statusLabel
         }
     }
@@ -109,6 +108,52 @@ struct NativeTransactionRow: View {
             case .register: [payee, detail, amount, word]
             }
         return parts.filter { !$0.isEmpty }.joined(separator: ", ")
+    }
+}
+
+// sc-3611 (task 3.6): an amount is never split across lines, which would read as
+// a different number. The floor is 40%: at the largest text size that is still
+// 17 pt or more for every amount style these screens use.
+extension View {
+    // On its own line: shrinks to fit the width. Its height stays free, or a tight
+    // height offer in a stack shrinks a short amount that fits the width anyway.
+    func oneLineAmount() -> some View {
+        lineLimit(1).minimumScaleFactor(0.4).fixedSize(horizontal: false, vertical: true)
+    }
+
+    // Beside a name it keeps its width and the name wraps; at the accessibility
+    // sizes it sits on its own line
+    func wholeAmount() -> some View { modifier(WholeAmount()) }
+}
+
+private struct WholeAmount: ViewModifier {
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    func body(content: Content) -> some View {
+        if typeSize.isAccessibilitySize {
+            content.oneLineAmount()
+        } else {
+            content.lineLimit(1).fixedSize(horizontal: true, vertical: true)
+        }
+    }
+}
+
+// "Label amount" in a line; at the accessibility sizes the label sits above the whole amount
+struct LabelledAmount: View {
+    let label: String
+    let amount: String
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(label.trimmingCharacters(in: .whitespaces)).fixedSize(horizontal: false, vertical: true)
+                Text(amount).monospacedDigit().oneLineAmount()
+            }
+            .accessibilityElement(children: .combine)
+        } else {
+            Text(label) + Text(amount).monospacedDigit()
+        }
     }
 }
 

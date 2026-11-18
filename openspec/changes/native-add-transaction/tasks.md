@@ -45,7 +45,8 @@
     - the draft-key whitelist refuses unlisted keys and wrong types with `[native:invalid-draft]`;
     - the draft is the person's input; `userFields` (every field the person edited, plus a preset account) is never changed by a rule, including on a payee change; each such field a rule would set differently is returned in `suggestions` with the rule's value;
     - `result` and `resultDigest`:
-      - canonical JSON as in design D2 (rows parent-first then `splits` order; fields account, amount, category, cleared, date, notes, tagged payee, schedule; keys sorted);
+      - canonical JSON as in design D2: an array of rows, parent first then `splits` order, so count and order count; fields account, amount, category, cleared, date, notes, the row's own tagged payee, schedule; keys sorted;
+      - reordered children, an added child or a changed child payee change the digest;
       - the same input gives the same digest, and key order does not matter;
       - one canonical hash helper is shared with the edit digest, over separate inputs;
     - each result row carries the engine's `amountText`;
@@ -77,6 +78,9 @@
     - an edit without a digest, or with a changed parent, child, partner, link or schedule, is `[native:changed-since]`;
     - for an add, the result is computed once on the same input as the preview; it is stored only when its digest equals `previewDigest`, or, with none, when no rule changed the input; otherwise `[native:preview-stale]`; a rule that sets a closed account refuses;
     - a made-up or stale `previewDigest` refuses with `preview-stale`, and nothing is stored;
+    - split ids: an add naming any existing row's id as a child (a reconciled row in another account in the test) is `[native:invalid-draft]`, and that row is unchanged; an edit naming a row that is not its own live child is refused the same way; its own children update in place;
+    - an edit of a row whose account was closed after the form read is `[native:not-found]`;
+    - currency symbols: with a currency set, only its symbol (and its final sign alone) is ignored, and `€12` in a USD budget is `amount-invalid`; with none set, any one currency symbol is ignored;
     - an edit checks both digests, each with its own refusal;
     - loop tests: notes typed before a payee whose rule sets notes save on the first attempt; an append-notes rule saves "lunch #bulk" on the first attempt with a digest, and on the second without one, never appending twice;
     - the touched set (children removed, partners old and new) is computed on the post-rules draft before any write;

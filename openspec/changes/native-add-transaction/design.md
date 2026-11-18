@@ -88,7 +88,7 @@ The page forwards `draft` as one object, so loot-core accepts only these keys an
 | `cleared` | boolean |
 | `inflow` | boolean |
 | `amountText` | string |
-| `splits` | array of `{id?, payee?, category, notes, inflow, amountText}` |
+| `splits` | array of `{id?, payee?, category, notes, inflow, amountText}`; `id` only on an edit, and only for a live child of that transaction (PR #453 Security review: an add naming an existing row's id took it over) |
 | `userFields` | array of field names, from the closed list below |
 
 Keys such as `reconciled`, `imported_id` and `tombstone` never reach `batchUpdateTransactions`.
@@ -107,7 +107,7 @@ It returns `{result, resultDigest, ruleFields, suggestions, remaining, errors}` 
 
 - **`result`** is the input after one run of the rules, in the draft's shape, with amounts evaluated. Each row also carries `amountText`, the engine's formatting of its amount in the budget's number format, so Swift can copy a value into the input without arithmetic (D6).
 - **`resultDigest`** is computed in the engine: SHA-256, hex, over canonical JSON of the rows a save would store.
-  - The rows are the parent first, then the children in the draft's `splits` order.
+  - The JSON is an array of rows: the parent first, then the children in the draft's `splits` order. The number and order of rows are therefore part of the digest, and each child carries its own payee.
   - Each row has exactly these fields, with keys sorted: `account` (id), `amount` (integer minor units), `category` (id or null), `cleared` (boolean), `date` (`YYYY-MM-DD`), `notes` (string or null), `payee` (`{"id": …}`, `{"name": …}` for an unresolved name, or null), and `schedule` (id or null).
   - There is no whitespace, and strings are JSON-escaped.
   - Swift treats the digest as opaque.
@@ -128,7 +128,9 @@ It returns `{result, resultDigest, ruleFields, suggestions, remaining, errors}` 
   **Before parsing:**
   - Whitespace at the start and end is dropped.
   - `×` (U+00D7) reads as `*`, `÷` (U+00F7) as `/`, and `−` (U+2212) as `-`.
-  - One currency symbol (`\p{Sc}`, such as `$` or `€`), directly before or after a number with optional space, is ignored, as the web ignores it.
+  - **Currency symbols.** One currency symbol directly before or after a number, with optional space, is ignored. Which one depends on the budget's currency (`defaultCurrencyCode`, read as `readCurrency` does):
+    - **A currency is set:** only that currency's symbol from the currency table is ignored (for example `A$`), plus its final currency-sign character alone when it ends in one (`$` for `A$`). Any other currency symbol is `amount-invalid`, so `€12` in a dollar budget is refused rather than read as 12 dollars.
+    - **No currency is set** (code `''`, symbol `''`; the currency setting is experimental and off by default): any one `\p{Sc}` symbol is ignored, as the web's `parsePrimary` ignores it, because there is no budget currency for it to contradict.
 
   **Numbers, by the budget's format.** Grouping separators may appear only between digits of the integer part, at the format's group positions. A number may start with the decimal separator (`.5`) or end with it (`12.`, or `12,` in a comma-decimal format), meaning no fraction digits, as the web's `currencyToAmount` reads them. This holds in both the preview and the save (amended 2026-11-18 after PR #451). A trailing grouping separator is still refused (`12,` in `comma-dot`). The preview runs on a field commit, not on every keystroke, so a half-typed amount never flashes an error.
 
@@ -215,6 +217,8 @@ Every step refuses with no write.
 
    The row itself is the durable record, so a reload, an engine restart or a trimmed undo history cannot cause a second save. Nothing else is kept, so no retention setting is needed.
 3. **Edit digest.** An edit without `digest`, or with one that no longer equals the recomputed digest, refuses with `[native:changed-since]`.
+   - An edit of a transaction whose account is now closed refuses with `[native:not-found]`, as the form read does.
+   - **Split ids.** On an add, any split `id` refuses with `[native:invalid-draft]`, and the engine mints every child id. On an edit, a split `id` must be a live child of this transaction; any other id (another transaction's row, a deleted row, an unknown id) refuses with `[native:invalid-draft]`. Both checks run before anything is looked up beyond the id, and nothing changes on refusal.
 4. **Rules, for an add only.** The engine computes the result exactly as the preview does: it evaluates the amounts, then runs the rules once on the input, keeping every field in `userFields`.
    - **With a `previewDigest`:** the result's digest must equal it.
    - **Without one** (the preview was unchecked): the result must equal the evaluated input over the rule-settable fields. In other words, no rule changed anything, because the person saw only their own input.

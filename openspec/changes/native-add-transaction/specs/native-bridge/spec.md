@@ -79,6 +79,23 @@ loot-core SHALL accept a draft and its splits only with the listed keys and type
 - **WHEN** a draft's `cleared` is `"yes"`
 - **THEN** the preview fails with `[native:invalid-draft]`
 
+### Requirement: Split child ids belong to the edited transaction
+A split child `id` SHALL be accepted only on an edit, and only for a live child of that transaction. On an add, the engine SHALL mint every child id, and any split `id` SHALL refuse with `[native:invalid-draft]`. A refused draft SHALL change nothing.
+
+#### Scenario: An add names an existing row
+- **GIVEN** a reconciled transaction R in another account
+- **WHEN** native code saves a new split whose child carries R's id
+- **THEN** the call fails with `[native:invalid-draft]`, and R is unchanged in account, amount, parent and reconciled flag
+
+#### Scenario: An edit names someone else's row
+- **GIVEN** a split being edited, and a transaction R that is not one of its children
+- **WHEN** native code saves the edit with a child carrying R's id
+- **THEN** the call fails with `[native:invalid-draft]`, and R and the split are unchanged
+
+#### Scenario: An edit keeps its own child
+- **WHEN** native code saves an edit whose children carry their own ids
+- **THEN** those children are updated in place
+
 ### Requirement: The preview evaluates amounts and rules without writing
 `native/transaction-preview` SHALL return the result of one rules run on the person's input with amounts evaluated as signed minor units, a digest of that result, the fields a rule set, a suggestion for each hand-set field a rule would set differently, the split remainder, and field errors from a closed set of codes. It SHALL have no side effects: no table written, no payee created, no undo step.
 
@@ -176,16 +193,20 @@ The preview's `amount-invalid` field error SHALL carry the budget's decimal sepa
 - **THEN** the sheet tells them to choose Expense or Income instead
 
 ### Requirement: Amount expressions use a closed set of operators
-Preview and save SHALL accept `+ - * /`, `×` and `÷`, and `−` (U+2212) as subtraction, each between two operands, with parentheses; spaces next to an operator or parenthesis, or around the text, are ignored. One currency symbol next to a number SHALL be ignored. Anything else, including `1e20`, `0x10`, `1_000`, `^` and a leading `+`, SHALL be `amount-invalid`.
+Preview and save SHALL accept `+ - * /`, `×`, `÷` and `−` (U+2212) between two operands, with parentheses; spaces next to an operator or parenthesis, or around the text, are ignored. One symbol next to a number SHALL be ignored: the budget currency's own if one is set, else any currency symbol. Anything else, including `1e20`, `0x10`, `1_000`, `^` and a leading `+`, SHALL be `amount-invalid`.
 
 #### Scenario: Operators and spacing
 - **GIVEN** the format is `space-comma`
 - **WHEN** a draft chosen as Expense has amount text `  (1 000 × 2) − 500 ÷ 2  `
 - **THEN** the preview returns −175000
 
-#### Scenario: Currency symbol
-- **GIVEN** the format is `comma-dot`
+#### Scenario: Currency symbol, no currency set
+- **GIVEN** the format is `comma-dot` and no budget currency is set
 - **THEN** `$12.50` and `12.50 €` read as 12.50, and `1$2` is `amount-invalid`
+
+#### Scenario: Currency symbol, currency set
+- **GIVEN** the budget currency is USD (`$`)
+- **THEN** `$12.50` reads as 12.50, and `€12.50` and `12.50 £` are `amount-invalid`
 
 #### Scenario: Refused text
 - **WHEN** a draft's amount text is `1e20`, `0x10`, `1_000`, `2^3`, `1..5`, `12abc` or `5+`
@@ -250,12 +271,17 @@ The preview and the save SHALL report `account-closed` when the transaction's ac
 - **THEN** the preview reports `account-closed` and the save fails with `[native:invalid-draft:account-closed]`
 
 ### Requirement: The save checks before it writes
-`native/transaction-save` SHALL refuse, writing nothing: a draft of the wrong shape or with no undo token (`[native:invalid-draft]`); an edit with no digest or a digest that no longer matches (`[native:changed-since]`); an invalid draft (`[native:invalid-draft:<codes>]`, listing only field codes from the fixture, never user text); a reconciled touched row without `confirmedReconciled === true` (`[native:needs-confirmed-reconciled]`).
+`native/transaction-save` SHALL refuse, writing nothing: a draft of the wrong shape or with no undo token (`[native:invalid-draft]`); an edit of a closed account's row (`[native:not-found]`); an edit with no digest or a stale digest (`[native:changed-since]`); an invalid draft (`[native:invalid-draft:<codes>]`, listing only field codes from the fixture, never user text); a reconciled touched row without `confirmedReconciled === true` (`[native:needs-confirmed-reconciled]`).
 
 #### Scenario: Changed since read
 - **GIVEN** the form was read with digest D, then a sync changed a child's notes
 - **WHEN** native code saves with digest D
 - **THEN** the call fails with `[native:changed-since]` and nothing changes
+
+#### Scenario: Edit in a closed account
+- **GIVEN** the form was read, then the transaction's account was closed on another device
+- **WHEN** native code saves the edit
+- **THEN** the call fails with `[native:not-found]` and nothing changes
 
 #### Scenario: No digest
 - **WHEN** native code saves an edit without a digest
@@ -270,11 +296,15 @@ The preview and the save SHALL report `account-closed` when the transaction's ac
 - **THEN** the call fails with `[native:invalid-draft]`
 
 ### Requirement: The result digest is canonical and separate
-`resultDigest` SHALL be SHA-256 over canonical JSON of the rows a save would store (parent, then children in input order), each with exactly account, amount in minor units, category, cleared, date, notes, payee as a tagged id or name, and schedule, keys sorted. It SHALL be computed in the engine and be separate from the edit conflict digest; an edit sends both.
+`resultDigest` SHALL be SHA-256 over canonical JSON of the array of rows a save would store (parent, then children in input order, so count and order count), each with exactly account, amount in minor units, category, cleared, date, notes, its own payee as a tagged id or name, and schedule, keys sorted. It SHALL be computed in the engine, apart from the edit digest; an edit sends both.
 
 #### Scenario: Same input, same digest
 - **WHEN** native code previews the same input twice with no change to rules or data
 - **THEN** both previews return the same `resultDigest`
+
+#### Scenario: Rows and child payees count
+- **WHEN** two results differ only in the order of two children, in an added child, or in one child's payee
+- **THEN** their result digests differ
 
 #### Scenario: Key order does not matter
 - **WHEN** two inputs differ only in the order of their JSON keys

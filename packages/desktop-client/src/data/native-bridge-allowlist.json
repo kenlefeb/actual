@@ -31,6 +31,11 @@
   "native/account-move",
   "native/transaction-form",
   "native/payees",
+  "native/settings",
+  "native/server-info",
+  "native/settings-save",
+  "native/transaction-form",
+  "native/payees",
   "native/transaction-preview",
   "native/transaction-save"
 ]

@@ -80,26 +80,53 @@ The window SHALL be the budget's upcoming-length preference and each schedule's 
 - **THEN** the cap is 92
 
 ### Requirement: Upcoming rows are capped before rules run
-Before rules run, the read SHALL keep at most `accounts-upcoming-max-rows` previews (a synced limit via `readLimit`, default 100, ceiling 500) of the relevant schedules: each schedule's next occurrence first, then each one's second, and so on, each round in the web's preview order. Rules, inversion, filter and counts see only those. When previews were dropped it SHALL return `upcomingAll` (all previews, counted without rules), `upcomingKept` and `upcomingMore`, all counting occurrences.
+The read SHALL generate occurrences of the relevant schedules in rounds (each one's next, then each one's second; within a round, nearest date first) and stop at `accounts-upcoming-max-rows` (a synced limit via `readLimit`, default 100, ceiling 500) or the horizon. Rules, inversion, filter and counts see only those. When it stopped at the cap with an occurrence left, it SHALL return `upcomingKept` (occurrences kept) and `upcomingMore: true`; it SHALL NOT count the rest.
 
 #### Scenario: Fifty daily schedules
-- **GIVEN** 50 daily schedules over a 92-day window, about 4,600 previews, and the default row cap
+- **GIVEN** 50 daily schedules over a 92-day window, about 4,600 occurrences, and the default row cap
 - **WHEN** native code reads the upcoming rows
-- **THEN** rules run for 100 previews only, `upcomingKept` is 100, `upcomingAll` is about 4,600 and `upcomingMore` is `upcomingAll` minus 100
+- **THEN** only about 150 occurrence dates are generated (100 kept, plus each schedule's check for one more), rules run for 100, `upcomingKept` is 100 and `upcomingMore` is true
+
+#### Scenario: Exactly at the cap
+- **GIVEN** a row cap of 10 and exactly 10 occurrences in the window
+- **WHEN** native code reads the upcoming rows
+- **THEN** all 10 are kept and there is no `upcomingMore`
 
 #### Scenario: A monthly bill among weekly schedules
-- **GIVEN** a row cap of 10, 12 weekly schedules and one monthly bill due in 20 days
+- **GIVEN** a row cap of 6, 4 weekly schedules and one monthly bill due in 20 days
 - **WHEN** native code reads the upcoming rows
-- **THEN** the monthly bill's next occurrence is kept, and later weekly occurrences are dropped first
+- **THEN** the first round keeps all 5 next occurrences, the bill included, and the second round keeps only the nearest 1
+
+#### Scenario: More schedules than the cap
+- **GIVEN** a row cap of 10 and 30 schedules with next occurrences on different days
+- **WHEN** native code reads the upcoming rows
+- **THEN** the 10 nearest next occurrences are kept, never farther ones, and `upcomingMore` is true
+
+#### Scenario: A partial final round
+- **GIVEN** a row cap of 7 and 5 weekly schedules
+- **WHEN** native code reads the upcoming rows
+- **THEN** all 5 next occurrences and the 2 nearest second occurrences are kept, and the rows are returned newest first
 
 #### Scenario: Under the cap
 - **GIVEN** 12 previews in the window
 - **WHEN** native code reads the upcoming rows
-- **THEN** all 12 run rules and there is no `upcomingMore`, `upcomingKept` or `upcomingAll`
+- **THEN** all 12 run rules and there is no `upcomingMore` or `upcomingKept`
 
 #### Scenario: A bad value
 - **WHEN** `accounts-upcoming-max-rows` is "0", "600" or "abc"
 - **THEN** the cap is 100
+
+### Requirement: Preview dates come from one generator
+A schedule's preview dates SHALL come from one lazy generator in loot-core `shared/`, built on `getNextDate`, which yields the same dates in the same order as `computeSchedulePreviewTransactions` does today, one at a time. `computeSchedulePreviewTransactions` SHALL use it, with unchanged output, and the upcoming read SHALL draw from it round by round, so "when does this schedule next occur" has one implementation.
+
+#### Scenario: Same dates as the web
+- **GIVEN** a fixture with daily, weekly, weekend-skipping, business-day, relative, ending and paid schedules
+- **WHEN** the generator is drained for each, and `computeSchedulePreviewTransactions` runs over the same schedules
+- **THEN** both give the same dates, and the web preview's tests pass unchanged
+
+#### Scenario: Lazy
+- **WHEN** the upcoming read takes 1 date from a daily schedule with a 366-day window
+- **THEN** `getNextDate` is called for that date only, plus at most one look-ahead
 
 ### Requirement: Schedule statuses cost one query
 The upcoming read SHALL work out statuses only for schedules relevant to the account, and SHALL find which of them already have a transaction in their occurrence window with one query over their ids (each schedule's latest transaction date compared with its match start date), giving the same answer as `getHasTransactionsQuery`.
@@ -110,7 +137,7 @@ The upcoming read SHALL work out statuses only for schedules relevant to the acc
 - **THEN** they name the same schedules
 
 ### Requirement: The reads meet their latency gates
-The perf suite SHALL fail when the register's first page median exceeds 50 ms on the 20,000-row account with 200 schedules in the window, or when `native/account-upcoming`'s median exceeds 100 ms with those 200 schedules (split, transfer-in and daily among them) or 150 ms in a worst case of 50 daily schedules across the 92-day cap, each with no filter, search and scope `uncleared`.
+The perf suite SHALL fail when the register's first page median exceeds 50 ms on the 20,000-row account with 200 schedules in the window, or when `native/account-upcoming`'s median exceeds 100 ms with those 200 schedules (split, transfer-in and daily among them) or 150 ms in each worst case, 50 daily schedules across the 92-day cap and across the 366-day ceiling, each with no filter, search and scope `uncleared`.
 
 #### Scenario: The gates run in CI
 - **WHEN** Fork CI runs `yarn workspace @actual-app/core run perf`

@@ -7,7 +7,7 @@ import { batchUpdateTransactions } from '#server/transactions';
 import type { TransactionEntity } from '#types/models';
 
 import type { Touched } from './accounts-writes';
-import { readLimit } from './reconcile-lock';
+import { readLimit } from './limits';
 import { nativeRefusal } from './refusal';
 import {
   evaluateDraft,
@@ -15,7 +15,6 @@ import {
   touchedSet,
   transactionDigest,
 } from './transaction-form';
-import type { NativeDraft } from './transaction-form';
 
 const NAME = 'native/transaction-save';
 const marks = (ids: unknown[]) => ids.map(() => '?').join(',');
@@ -42,11 +41,11 @@ const dateRepr = (date: string) => parseInt(date.replace(/-/g, ''), 10);
  * case, or a new name to create. A blank name, one too long or one equal to a
  * transfer payee's refuses (D3).
  */
-async function resolvePayee(draft: NativeDraft) {
-  if (draft.payee !== null || draft.payeeName === null) {
-    return { id: draft.payee, create: null };
+async function resolvePayee(payee: string | null, payeeName: string | null) {
+  if (payee !== null || payeeName === null) {
+    return { id: payee, create: null };
   }
-  const name = draft.payeeName.trim();
+  const name = payeeName.trim();
   if (name === '') throw invalid('a new payee needs a name');
   if (name.length > (await readLimit('payee-name-max-length'))) {
     throw invalid('payee name too long', ['payee-too-long']);
@@ -80,18 +79,35 @@ async function readEditRows(id: string) {
   );
 }
 
+/** A payee id, or a name's live payee, as the first save of a repeat stored it. */
+async function storedPayee(payee: string | null, payeeName: string | null) {
+  if (payee !== null || payeeName === null || payeeName.trim() === '') {
+    return payee;
+  }
+  return (
+    (
+      await db.first<{ id: string }>(
+        'SELECT id FROM payees WHERE tombstone = 0 AND transfer_acct IS NULL AND LOWER(name) = LOWER(?)',
+        [payeeName.trim()],
+      )
+    )?.id ?? null
+  );
+}
+
 export async function transactionSave(
   args: {
     draft: unknown;
+    previewDigest?: string | null;
     digest?: string;
     undoToken: string;
     confirmedReconciled?: boolean;
   },
   touched?: Touched,
 ): Promise<{ id: string }> {
-  // 1. Shape
+  // 1. Shape. An add's split ids are refused by readDraft
   const {
     draft: input,
+    previewDigest,
     digest,
     undoToken,
     confirmedReconciled,
@@ -99,66 +115,17 @@ export async function transactionSave(
   if (typeof undoToken !== 'string' || !undoToken) {
     throw invalid('a native write needs its undo token');
   }
+  if (previewDigest != null && typeof previewDigest !== 'string') {
+    throw invalid('previewDigest must be text');
+  }
   const draft = readDraft(NAME, input);
   const isAdd = draft.newId !== undefined;
   if (!isAdd && draft.id === undefined) {
     throw invalid('an add needs its new id, an edit its id');
   }
-  // An add's children are all new: the engine creates their ids, so a draft
-  // can never name an existing row as one (PR 451 review)
-  if (isAdd && draft.splits.some(s => s.id !== undefined)) {
-    throw invalid("a new transaction's split rows have no ids");
-  }
-  const payee = await resolvePayee(draft);
-  if (payee.id !== null) {
-    draft.payee = payee.id;
-    draft.payeeName = null;
-  }
 
-  // 2. A repeat of an add: the row itself is the durable record
-  if (isAdd) {
-    const existing = await db.first<StoredRow>(
-      'SELECT id, acct, tombstone, isChild, date, amount, description, category FROM transactions WHERE id = ?',
-      [draft.newId as string],
-    );
-    if (existing) {
-      if (existing.tombstone) {
-        throw nativeRefusal(
-          'changed-since',
-          `${NAME}: that transaction was undone or deleted`,
-        );
-      }
-      const evaluated = await evaluateDraft(NAME, draft, null, 'save');
-      const children = await db.first<{ n: number }>(
-        'SELECT COUNT(*) AS n FROM transactions WHERE tombstone = 0 AND isChild = 1 AND parent_id = ?',
-        [existing.id],
-      );
-      // A name the first save created is that payee now
-      const payeeId =
-        payee.create !== null
-          ? ((
-              await db.first<{ id: string }>(
-                'SELECT id FROM payees WHERE tombstone = 0 AND transfer_acct IS NULL AND LOWER(name) = LOWER(?)',
-                [payee.create],
-              )
-            )?.id ?? null)
-          : draft.payee;
-      if (
-        existing.isChild ||
-        existing.acct !== draft.account ||
-        existing.date !== dateRepr(draft.date) ||
-        existing.amount !== evaluated.amount ||
-        existing.description !== payeeId ||
-        existing.category !== (draft.splits.length ? null : draft.category) ||
-        (children?.n ?? 0) !== draft.splits.length
-      ) {
-        throw invalid('that id is another transaction');
-      }
-      return { id: existing.id };
-    }
-  }
-
-  // 3. An edit's digest, recomputed over every row it can touch
+  // 3, for an edit: the digest, the open account and the split ids, before
+  // anything else is read
   let before: Awaited<ReturnType<typeof readEditRows>> = [];
   if (!isAdd) {
     const id = draft.id as string;
@@ -194,25 +161,64 @@ export async function transactionSave(
     }
   }
 
-  // 4. Rules first, for an add; then 6, the preview's checks on the result
-  const evaluated = await evaluateDraft(
-    NAME,
-    draft,
-    null,
-    isAdd ? 'save' : 'preview',
-  );
-  if (evaluated.stale) {
+  // 4. The result exactly as the preview computes it: one rules run on the
+  // input for an add, none for an edit. Nothing is written by it.
+  const evaluated = await evaluateDraft(NAME, draft);
+  const { result } = evaluated;
+
+  // 2. A repeat of an add: the row itself is the durable record
+  if (isAdd) {
+    const existing = await db.first<StoredRow>(
+      'SELECT id, acct, tombstone, isChild, date, amount, description, category FROM transactions WHERE id = ?',
+      [draft.newId as string],
+    );
+    if (existing) {
+      if (existing.tombstone) {
+        throw nativeRefusal(
+          'changed-since',
+          `${NAME}: that transaction was undone or deleted`,
+        );
+      }
+      const children = await db.first<{ n: number }>(
+        'SELECT COUNT(*) AS n FROM transactions WHERE tombstone = 0 AND isChild = 1 AND parent_id = ?',
+        [existing.id],
+      );
+      if (
+        existing.isChild ||
+        existing.acct !== result.account ||
+        existing.date !== dateRepr(result.date) ||
+        existing.amount !== result.amount ||
+        existing.description !==
+          (await storedPayee(result.payee, result.payeeName)) ||
+        existing.category !== (result.splits.length ? null : result.category) ||
+        (children?.n ?? 0) !== result.splits.length
+      ) {
+        throw invalid('that id is another transaction');
+      }
+      return { id: existing.id };
+    }
+  }
+
+  // 4. The result must be what the person saw: the preview's digest, or,
+  // with none, the input itself. A rule that deletes the row is never stored.
+  const stale =
+    evaluated.deleted ||
+    (typeof previewDigest === 'string'
+      ? previewDigest !== evaluated.resultDigest
+      : evaluated.changed);
+  if (stale) {
     throw nativeRefusal(
       'preview-stale',
-      `${NAME}: rules changed the draft since it was shown`,
+      `${NAME}: rules changed the result since it was shown`,
     );
   }
+
+  // 6. The preview's checks, on the result
   const codes = [
     ...new Set(Object.values(evaluated.errors).map(e => e.code)),
   ].sort();
   if (codes.length > 0) throw invalid('invalid draft', codes);
-  const amount = evaluated.amount as number;
-  const splitAmounts = evaluated.splitAmounts as number[];
+  const payee = await resolvePayee(result.payee, result.payeeName);
 
   // 5 and 7. The touched rows that exist now: the parent, its children kept
   // and removed, and their transfer partners. A row counts as reconciled when
@@ -224,35 +230,38 @@ export async function transactionSave(
     );
   }
 
-  // The write: the payee, then one batch
-  let payeeId = draft.payee;
+  // The write: the payee, then one batch of only the digest's fields (D2,
+  // Security on PR 453), so nothing else a rule or the page sets is stored
+  let payeeId = payee.id;
   if (payee.create !== null) {
     payeeId = await db.insertPayee({ name: payee.create });
   }
   const id = (isAdd ? draft.newId : draft.id) as string;
-  const isSplit = draft.splits.length > 0;
+  const isSplit = result.splits.length > 0;
   const parent = {
     id,
-    account: draft.account,
-    date: draft.date,
+    account: result.account,
+    date: result.date,
     payee: payeeId,
-    category: isSplit ? null : draft.category,
-    notes: draft.notes,
-    cleared: draft.cleared,
-    amount,
+    category: isSplit ? null : result.category,
+    notes: result.notes,
+    cleared: result.cleared,
+    amount: result.amount as number,
     is_parent: isSplit,
+    ...(isAdd &&
+      evaluated.schedule !== null && { schedule: evaluated.schedule }),
   } as TransactionEntity;
-  const children = draft.splits.map(
+  const children = result.splits.map(
     (s, i) =>
       ({
-        id: s.id ?? crypto.randomUUID(),
-        account: draft.account,
-        date: draft.date,
+        id: (isAdd ? undefined : draft.splits[i]?.id) ?? crypto.randomUUID(),
+        account: result.account,
+        date: result.date,
         payee: s.payee ?? payeeId,
         category: s.category,
         notes: s.notes,
-        cleared: draft.cleared,
-        amount: splitAmounts[i],
+        cleared: result.cleared,
+        amount: s.amount as number,
         is_child: true,
         parent_id: id,
       }) as TransactionEntity,
@@ -271,7 +280,7 @@ export async function transactionSave(
     });
   } else {
     const existing = new Set(
-      before.filter(r => r.parent_id === id).map(r => r.id),
+      before.filter(r => r.is_child && r.parent_id === id).map(r => r.id),
     );
     const kept = new Set(children.map(c => c.id));
     await batchUpdateTransactions({

@@ -73,15 +73,15 @@ A tap opens a native read-only detail: date, payee, category, amount, account, "
 
 ### D6. Perf gates (amended 2026-11-18, see D7 to D10)
 
-`accounts.perf.test.ts` keeps its seed: 200 schedules on the 20,000-row account at the default horizon (20 with split actions, 10 of them with a line into the account; 20 transfers into it; 5 daily), and a worst case of 50 daily schedules across the 92-day cap. Each case runs with no filter, with search and with scope `uncleared`.
+`accounts.perf.test.ts` keeps its seed: 200 schedules on the 20,000-row account at the default horizon (20 with split actions, 10 of them with a line into the account; 20 transfers into it; 5 daily). It has two worst cases: 50 daily schedules across the 92-day cap, and the same across the 366-day ceiling (amended again, D12). Each case runs with no filter, with search and with scope `uncleared`.
 - `native/account-register` first page: median at most **50 ms** with every schedule seed loaded. It does no schedule work, so the seeds only prove that.
-- `native/account-upcoming`: median at most **100 ms** with the 200 schedules, and at most **150 ms** in the worst case.
+- `native/account-upcoming`: median at most **100 ms** with the 200 schedules, and at most **150 ms** in each worst case.
 
 Why those numbers hold: the developer's phase timings were taken at load averages of 126 to 970 on 10 cores, so they are upper bounds.
 - After D8, rules run for at most 100 previews; at 0.9 ms each that is 90 ms at most.
 - After D9, the status query covers only the account's relevant schedules, in one query (it was 110 to 130 ms for an `$or` over all 200).
 - The `json_each` filter measured about 4 ms.
-- The worst case adds only the preview loop over about 4,600 dates, because D8 cuts before rules.
+- The worst case was assumed to add only a cheap preview loop. That was wrong; see D12.
 
 Stop and report still applies. Measure on a quiet machine, with the load average below the core count, and print the load with the results. If a median misses its gate, the developer may lower the default of `accounts-upcoming-max-rows` to the largest value that meets it, down to 25, without asking first. Any default below 100 is reported to the Product Owner before merging, with the medians, p95s and load, because fewer rows changes what a person sees. Below 25, stop and report to the Director. Never loosen a gate.
 
@@ -110,16 +110,11 @@ The handler joins the allowlist (Swift list, page list, `coverage.json` skip). T
 
 ### D8. A row cap before rules run
 
-`accounts-upcoming-max-rows` (in `LIMITS`, default 100, ceiling 500) keeps previews of the schedules relevant to the account in rounds: every schedule's next occurrence first, then every schedule's second, and so on. Each round is in `comparePreviewTransactions` order, so a few weekly schedules cannot crowd a monthly bill off the list (Architect review, PR #445). The rows returned are then shown in the web's order. The cap is applied after the day cap and before rules run. Rules, inversion, the filter, the count and the total see only those. Every row shown has had its rules run, so "as they will post" holds for every shown row.
+`accounts-upcoming-max-rows` (in `LIMITS`, default 100, ceiling 500) keeps previews of the schedules relevant to the account in rounds: every schedule's next occurrence first, then every schedule's second, and so on. Within a round, occurrences are taken nearest date first (then `comparePreviewTransactions`'s tie-breaks), so a partial round, including a first round with more schedules than the cap, keeps the nearest occurrences. A few weekly schedules cannot crowd a monthly bill's next occurrence off the list (Architect reviews, PRs #445 and #452; the web's order is newest first, and cutting in that order would have kept the farthest). The rows returned are then shown in the web's display order, newest first. The cap is applied after the day cap and before rules run. Rules, inversion, the filter, the count and the total see only those. Every row shown has had its rules run, so "as they will post" holds for every shown row.
 
-When the cap drops previews, the read returns:
-- `upcomingAll`: all previews in the window, counted without running rules;
-- `upcomingKept`: the previews kept;
-- `upcomingMore`: the number dropped.
+When the cap stops generation with an occurrence left, the read returns `upcomingKept` (K, occurrences kept) and `upcomingMore: true`. It does not count the rest (D12). The rows shown can differ from K after inversion and filtering; `upcomingCount` counts those rows.
 
-All three count occurrences. The rows shown can differ from K after inversion and filtering; `upcomingCount` counts those rows.
-
-The register labels the count and total as partial ("Nearest K of M scheduled", the total labelled as the nearest rows' total), so a capped total is never read as the whole (Product Owner review, PR #445). It also says "N more scheduled rows not shown or searched; change this in Settings > Limits." `upcomingCount` and `upcomingTotal` cover returned rows only. Rows past the cap are not searched, because searching them would mean running their rules.
+The register labels the count and total as partial ("First K scheduled; more not shown", the total labelled as the shown rows' total), so a capped total is never read as the whole (Product Owner reviews, PRs #445 and #452). It also says how to see more: "More scheduled rows are not shown or searched. To see more, raise Scheduled rows: most shown in Settings > Advanced > Limits (up to 500)." `upcomingCount` and `upcomingTotal` cover returned rows only. Rows past the cap are not searched, because searching them would mean running their rules.
 
 ### D9. Statuses in one query, for relevant schedules only
 
@@ -137,9 +132,35 @@ Relevance (`isScheduleRelevantToAccount`) needs no status, so it runs first. Sta
 - **A formula on the payee field does nothing:** right. The rules engine does not apply formulas to `payee`. Relevance still treats a formula or template line as maybe relevant. The spec scenario now uses a template action, as the test does.
 - **No label field in `LIMITS`:** both limits join story 4643's registry with a name and help line when it lands:
   - `accounts-register-upcoming-max-days`: "Scheduled rows: days ahead", help "Caps the budget's upcoming scheduled length in the native register."
-  - `accounts-upcoming-max-rows`: "Scheduled rows: most shown", help "The most scheduled rows the native register shows and searches."
+  - `accounts-upcoming-max-rows`: display name "Scheduled rows: most shown", help "The most scheduled rows the native register shows and searches (up to 500)."
 
   Until then they stay code comments beside the entries. Whichever of the two merges second adds them (task 2.4).
+
+### D12. Generate only the occurrences that are kept (amended 2026-11-18, second stop)
+
+The developer rebuilt to D7 to D11 and stopped again, correctly, at load 12.4 on 10 cores:
+- register first page: 17 to 39 ms;
+- upcoming read with 200 schedules: 48.5 to 55 ms;
+- the 50-daily worst case: 648 to 788 ms against 150 ms.
+
+`computeSchedulePreviewTransactions` drains every occurrence (about 4,650 dates) before D8's cap can apply, and each date costs one `getNextDate`, which parses the date condition and builds a new `RSchedule`. My probe at load 10 on 10 cores: 4,650 `getNextDate` calls took 205 ms on their own. Parsing once per schedule and enumerating its 92-day window took 44 ms for 50 schedules. Rules for the 100 kept previews cost 40 to 50 ms.
+
+**Decision:** generate by rounds, lazily, with one implementation of the dates.
+- The per-schedule loop inside `computeSchedulePreviewTransactions` (next date, then `getNextDate` from the day after, skipping repeats, dropping the first date when paid, stopping at the schedule's own window end) moves into a lazy generator in `packages/loot-core/src/shared/schedules.ts`. `computeSchedulePreviewTransactions` drains it, so its output and its tests are unchanged. This is a behaviour-preserving refactor of an upstream function, the same kind of divergence the Product Owner approved for D1. No date rule is copied.
+- The upcoming read draws from each relevant schedule's generator round by round, stopping at the row cap or when every generator is done. Calls are bounded by about K plus the number of relevant schedules (each needs one look-ahead to know whether more exist), not by the window. For the 50-daily case that is about 150 `getNextDate` calls (about 7 ms at the probe's rate) instead of 4,650.
+- The day cap's `upcomingCapDays` uses the same look-ahead: a schedule whose own window runs past the cap is checked for one date beyond it.
+
+**M is dropped.** An exact count of all occurrences means draining every generator, which is the cost D12 removes. A cheaper count, enumerating each parsed `RSchedule` once (44 ms in the probe), would be a second, different implementation: it ignores the weekend and business-day moves, the de-duplication and relative dates. So the read returns `upcomingMore: true`, and the screen says "First K scheduled; more not shown" (Product Owner, PR #452: M dropped, wording agreed).
+
+**Options not taken:**
+- Caching the `RSchedule` inside `getNextDate`: an upstream engine change with global cache invalidation, unnecessary once only K dates are made.
+- A lower day cap for daily schedules: it changes what a person sees in order to pass a gate.
+
+**The worst case stays.** 50 daily schedules is not a typical household, but it maximises occurrences per window, which is what made this read slow. After D12 the cost is driven by the cap and the schedule count, which the 200-schedule case covers. So the gate keeps the 50-daily shape at 150 ms and adds the same shape at the 366-day ceiling, to prove the cost no longer grows with the window. The gate is not moved.
+
+**Kept from the developer's build (a8ad79013):** the separate read and allowlist, relevance-first statuses in one query, the `json_each` filter and counts, the day cap, `ruleFields`, and the register read's removal of schedule work. **Redone:** preview generation in the upcoming read (rounds over the generator), the extracted generator itself, `upcomingAll` removed, and the perf run.
+
+**Dependency:** the register read no longer returns upcoming rows, so until group 2 calls `native/account-upcoming` the native register shows none. The native Accounts screen is off by default, so no user sees this today. `native-accounts-screen` task 3.8 (switching it on by default) must not ship before this change's group 2; both changes' tasks say so.
 
 ## Risks / Trade-offs
 

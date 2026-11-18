@@ -10,7 +10,6 @@ import { evalArithmetic } from '#shared/arithmetic';
 import { getCurrency } from '#shared/currencies';
 import * as monthUtils from '#shared/months';
 import {
-  getChangedValues,
   getNumberFormat,
   parseNumberFormat,
   setNumberFormat,
@@ -19,7 +18,7 @@ import type { NumberFormats } from '#shared/util';
 import type { TransactionEntity } from '#types/models';
 
 import { readTouchedState } from './accounts-writes';
-import { readLimit } from './reconcile-lock';
+import { readLimit } from './limits';
 import { nativeRefusal } from './refusal';
 
 // The per-field codes (fixtures/transaction-field-errors.json). Kept apart
@@ -437,7 +436,12 @@ function isSplit(value: unknown) {
 export function readDraft(name: string, value: unknown): NativeDraft {
   if (
     !hasOnly(value, DRAFT_KEYS) ||
-    (value.newId !== undefined && value.id !== undefined)
+    (value.newId !== undefined && value.id !== undefined) ||
+    // An add's children are all new: the engine creates their ids (PR 453)
+    (value.id === undefined &&
+      (value.splits as NativeDraftSplit[] | undefined)?.some(
+        s => s.id !== undefined,
+      ))
   ) {
     throw nativeRefusal('invalid-draft', `${name}: invalid draft`);
   }
@@ -506,6 +510,8 @@ type Canonical = { text: string } | { error: FieldErrorCode };
 export function canonicalAmount(
   input: string,
   format: NumberFormats,
+  // The budget's currency symbols, or null when no currency is set (D2)
+  currency: string[] | null = null,
 ): Canonical {
   const { grouping, decimal } = separators(format);
   const indian = format === 'comma-dot-in';
@@ -527,9 +533,17 @@ export function canonicalAmount(
   const symbol = () => {
     const start = at;
     spaces();
-    if (/^\p{Sc}$/u.test(text[at] ?? '') && symbols === 0) {
+    const found =
+      symbols === 0
+        ? currency
+          ? currency.find(s => text.startsWith(s, at))
+          : /^\p{Sc}$/u.test(text[at] ?? '')
+            ? text[at]
+            : undefined
+        : undefined;
+    if (found) {
       symbols++;
-      at++;
+      at += found.length;
       spaces();
       return true;
     }
@@ -611,10 +625,11 @@ function evaluateAmount(
   inflow: boolean,
   places: number,
   format: NumberFormats,
+  currency: string[] | null,
 ): Amount {
   if (text.trim() === '') return { error: 'amount-required' };
   if (text.length > MAX_AMOUNT_TEXT) return { error: 'amount-invalid' };
-  const canonical = canonicalAmount(text, format);
+  const canonical = canonicalAmount(text, format, currency);
   if ('error' in canonical) return canonical;
   // The canonical text has '.' as its only separator, which evalArithmetic
   // reads as a decimal in the default format
@@ -663,54 +678,6 @@ function validDate(date: string) {
     !Number.isNaN(day.getTime()) && day.toISOString().slice(0, 10) === date
   );
 }
-
-// An empty value from the rules' point of view (the web's isEmptyRuleTarget)
-const isEmpty = (value: unknown) =>
-  value == null ||
-  value === '' ||
-  value === 0 ||
-  value === false ||
-  (Array.isArray(value) && value.length === 0);
-
-/**
- * The web's shouldApplyRuleChange (desktop-client
- * components/transactions/table/utils.ts), without the cleared list, which
- * the caller handles: a rule fills an empty field, and an append or prepend
- * notes rule extends the note once.
- */
-function shouldApplyRuleChange(field: string, current: unknown, next: unknown) {
-  if (isEmpty(current)) return true;
-  if (
-    field !== 'notes' ||
-    typeof current !== 'string' ||
-    typeof next !== 'string' ||
-    next === current
-  ) {
-    return false;
-  }
-  const index = next.indexOf(current);
-  if (index === -1) return false;
-  const prepended = next.slice(0, index);
-  const appended = next.slice(index + current.length);
-  return !(
-    (prepended === '' || current.startsWith(prepended)) &&
-    (appended === '' || current.endsWith(appended))
-  );
-}
-
-// The draft fields rules can set, by the entity's field name
-const RULE_FIELDS = [
-  'account',
-  'date',
-  'payee',
-  'category',
-  'notes',
-  'cleared',
-  'amount',
-] as const;
-type RuleField = (typeof RULE_FIELDS)[number];
-// Fields a rule may have filled that a later preview can still show as the rule's
-const PROBED_FIELDS = ['category', 'notes', 'cleared'] as const;
 
 type Lookups = {
   accounts: Map<string, { offbudget: number; closed: number }>;
@@ -789,13 +756,87 @@ async function payeeByName(name: string) {
   );
 }
 
-export type NativePreview = {
-  // The draft as the sheet shows it and sends back; the evaluated amounts beside it
-  draft: NativeDraft;
+async function readFormat() {
+  const prefs = await db.all<{ id: string; value: string | null }>(
+    "SELECT id, value FROM preferences WHERE id IN ('defaultCurrencyCode', 'numberFormat', 'hideFraction')",
+  );
+  const pref = (id: string) => prefs.find(p => p.id === id)?.value ?? undefined;
+  const code = pref('defaultCurrencyCode') ?? '';
+  const currency = getCurrency(code);
+  // D2: with a currency set, only its symbol (and its final sign alone, `$`
+  // for `A$`) is ignored next to a number; with none, any one symbol is
+  const last = currency.symbol.slice(-1);
+  const symbols = code
+    ? [
+        currency.symbol,
+        ...(currency.symbol.length > 1 && /\p{Sc}/u.test(last) ? [last] : []),
+      ].filter(s => s !== '')
+    : null;
+  const format = parseNumberFormat({
+    format: pref('numberFormat'),
+    hideFraction: pref('hideFraction'),
+  });
+  return {
+    places: currency.decimalPlaces,
+    symbols,
+    format: format.format,
+    separator: getNumberFormat({ format: format.format }).decimalSeparator,
+  };
+}
+
+// The fields a rule can set on the parent, by the entity's field name
+const RULE_FIELDS = [
+  'account',
+  'date',
+  'payee',
+  'category',
+  'notes',
+  'cleared',
+  'amount',
+] as const;
+type RuleField = (typeof RULE_FIELDS)[number];
+
+export type NativeResultSplit = {
+  payee: string | null;
+  // A payee name a rule set that no payee has yet; the save creates it
+  payeeName: string | null;
+  category: string | null;
+  notes: string;
+  inflow: boolean;
   amount: number | null;
-  splitAmounts: (number | null)[];
+  // The engine's formatting of `amount`, so Swift copies it without arithmetic
+  amountText: string | null;
+};
+
+export type NativeResult = NativeResultSplit & {
+  account: string;
+  date: string;
+  cleared: boolean;
+  splits: NativeResultSplit[];
+};
+
+export type NativeSuggestionValue = {
+  id?: string;
+  name?: string;
+  text?: string;
+  flag?: boolean;
+  amount?: number;
+  amountText?: string;
+};
+
+export type NativePreview = {
+  // The person's input after one run of the rules, with amounts evaluated
+  result: NativeResult;
+  // What a save of this result stores, hashed in the engine (D2)
+  resultDigest: string;
+  // Fields a rule set that the person never touched
   ruleFields: string[];
-  replaced: { field: UserField; value: unknown }[];
+  // Hand-set fields a rule would set differently, with the rule's value
+  suggestions: {
+    field: UserField;
+    row: number;
+    value: NativeSuggestionValue;
+  }[];
   remaining: number | null;
   // By field; only amount-invalid carries a detail, the budget's decimal
   // separator, never what was typed (PR 450)
@@ -805,74 +846,64 @@ export type NativePreview = {
   >;
 };
 
-async function readFormat() {
-  const prefs = await db.all<{ id: string; value: string | null }>(
-    "SELECT id, value FROM preferences WHERE id IN ('defaultCurrencyCode', 'numberFormat', 'hideFraction')",
-  );
-  const pref = (id: string) => prefs.find(p => p.id === id)?.value ?? undefined;
-  return {
-    places: getCurrency(pref('defaultCurrencyCode') ?? '').decimalPlaces,
-    ...parseNumberFormat({
-      format: pref('numberFormat'),
-      hideFraction: pref('hideFraction'),
-    }),
-  };
-}
+export type NativeEvaluated = NativePreview & {
+  // A rule changed a rule-settable field of the input
+  changed: boolean;
+  // A rule's result deletes the transaction
+  deleted: boolean;
+  // The schedule a rule linked, which the digest and a save carry
+  schedule: string | null;
+};
 
-/** The draft's value for a user field, as Restore puts it back. */
-function draftValue(draft: NativeDraft, field: UserField): unknown {
-  if (field === 'amount') {
-    return { amountText: draft.amountText, inflow: draft.inflow };
-  }
-  return draft[field];
+/** A row's payee as the digest carries it: an id, an unresolved name, or none. */
+function digestPayee(payee: string | null, name: string | null) {
+  if (payee) return { id: payee };
+  if (name !== null && name.trim() !== '') return { name: name.trim() };
+  return null;
 }
 
 /**
- * The preview (D2): the draft as the web form shows it after a field commit,
- * with amounts evaluated, rules applied to a new draft, the split remainder
- * and field errors. Writes nothing and creates no payee.
+ * D2: the rows a save would store, parent then children in `splits` order,
+ * each with exactly the sorted keys account, amount, category, cleared,
+ * date, notes, payee and schedule, hashed by the helper the edit digest uses.
  */
-export async function transactionPreview({
-  draft: input,
-  changedField,
-}: {
-  draft: unknown;
-  changedField?: string | null;
-}): Promise<NativePreview> {
-  const name = 'native/transaction-preview';
-  const draft = readDraft(name, input);
-  if (
-    changedField != null &&
-    !(USER_FIELDS as readonly unknown[]).includes(changedField)
-  ) {
-    throw nativeRefusal('invalid-draft', `${name}: invalid changed field`);
-  }
-  const { stale: _stale, ...preview } = await evaluateDraft(
-    name,
-    draft,
-    changedField ?? null,
-    'preview',
-  );
-  return preview;
+export async function resultDigest(
+  result: NativeResult,
+  schedule: string | null,
+) {
+  const row = (r: NativeResultSplit) => ({
+    account: result.account,
+    amount: r.amount,
+    category: r.category,
+    cleared: result.cleared,
+    date: result.date,
+    notes: r.notes === '' ? null : r.notes,
+    // A child with no payee of its own is stored with the parent's
+    payee:
+      r.payee || r.payeeName
+        ? digestPayee(r.payee, r.payeeName)
+        : digestPayee(result.payee, result.payeeName),
+    schedule,
+  });
+  return sha256(JSON.stringify([row(result), ...result.splits.map(row)]));
 }
 
+const sameValue = (a: unknown, b: unknown) => (a ?? null) === (b ?? null);
+
 /**
- * The preview's work, shared with the save (D3). In 'preview' mode the rules'
- * changes are applied as the web form applies them. In 'save' mode nothing is
- * applied: `stale` says whether the rules would change any rule-settable field
- * of the draft as submitted, the person's own fields aside.
+ * The preview's work, shared with the save (D2, D3): the amounts evaluated,
+ * one rules run on the input for a new draft keeping every field in
+ * `userFields`, the field errors on the result, and its digest. Writes
+ * nothing and creates no payee.
  */
 export async function evaluateDraft(
   name: string,
   draft: NativeDraft,
-  changedField: string | null,
-  mode: 'preview' | 'save',
-): Promise<NativePreview & { stale: boolean }> {
-  let stale = false;
+): Promise<NativeEvaluated> {
   const format = await readFormat();
-  const separator = getNumberFormat({ format: format.format }).decimalSeparator;
   const splitMax = await readLimit('transaction-split-max-children');
   const errors: Record<string, FieldErrorCode> = {};
+  const user = new Set<string>(draft.userFields);
 
   // A new name equal to a live payee's is that payee (D3), never a new one
   if (draft.payee === null && draft.payeeName !== null) {
@@ -883,158 +914,182 @@ export async function evaluateDraft(
     }
   }
 
-  let parentAmount = evaluateAmount(
-    draft.amountText,
-    draft.inflow,
-    format.places,
-    format.format,
-  );
+  const evaluate = (text: string, inflow: boolean) =>
+    evaluateAmount(text, inflow, format.places, format.format, format.symbols);
+  const textOf = (amount: number | null) =>
+    amount === null
+      ? null
+      : amountText(amount, format.places, format.separator);
+  const parentAmount = evaluate(draft.amountText, draft.inflow);
   // Over the limit, no child is evaluated or looked up (PR 450)
   const overLimit = draft.splits.length > splitMax;
-  let childAmounts: Amount[] = overLimit
+  const childAmounts = overLimit
     ? []
-    : draft.splits.map(s =>
-        evaluateAmount(s.amountText, s.inflow, format.places, format.format),
-      );
+    : draft.splits.map(s => evaluate(s.amountText, s.inflow));
+  const valueOf = (a: Amount | undefined) =>
+    a && 'amount' in a ? a.amount : null;
 
+  // The evaluated input, in the result's shape
+  const input: NativeResult = {
+    account: draft.account,
+    date: draft.date,
+    payee: draft.payee,
+    payeeName: draft.payeeName,
+    category: draft.category,
+    notes: draft.notes,
+    cleared: draft.cleared,
+    inflow: draft.inflow,
+    amount: valueOf(parentAmount),
+    amountText: textOf(valueOf(parentAmount)),
+    splits: draft.splits.map((s, i) => ({
+      payee: s.payee ?? null,
+      payeeName: null,
+      category: s.category,
+      notes: s.notes,
+      inflow: s.inflow,
+      amount: valueOf(childAmounts[i]),
+      amountText: textOf(valueOf(childAmounts[i])),
+    })),
+  };
+  const result: NativeResult = {
+    ...input,
+    splits: input.splits.map(s => ({ ...s })),
+  };
+  let resultAmounts = { parent: parentAmount, children: childAmounts };
   const ruleFields = new Set<string>();
-  const replaced: NativePreview['replaced'] = [];
-  let splitAmounts = childAmounts.map(a => ('amount' in a ? a.amount : null));
-  let amount = 'amount' in parentAmount ? parentAmount.amount : null;
+  const suggestions: NativePreview['suggestions'] = [];
+  let deleted = false;
+  let schedule: string | null = null;
 
-  // Rules run only on a new draft (D2), and not on one that cannot be dated
-  if (
-    draft.id === undefined &&
-    validDate(draft.date) &&
-    draft.splits.length <= splitMax
-  ) {
+  // Rules run once, on a new draft only (D2), and not on one that cannot be dated
+  if (draft.id === undefined && validDate(draft.date) && !overLimit) {
     const parentId = draft.newId ?? 'temp';
-    const entity = (fields: NativeDraft, value: number | null) =>
-      ({
-        id: parentId,
-        account: fields.account || null,
-        date: fields.date,
-        payee: fields.payee,
-        category: fields.category,
-        notes: fields.notes,
-        cleared: fields.cleared,
-        amount: value ?? 0,
-        ...(fields.splits.length > 0 && {
-          is_parent: true,
-          subtransactions: fields.splits.map((s, i) => ({
-            id: s.id ?? `${parentId}/${i}`,
-            account: fields.account || null,
-            date: fields.date,
-            payee: s.payee ?? fields.payee,
-            category: s.category,
-            notes: s.notes,
-            amount: splitAmounts[i] ?? 0,
-            is_child: true,
-            parent_id: parentId,
-          })),
-        }),
-      }) as TransactionEntity;
-    const before = entity(draft, amount);
+    const before = {
+      id: parentId,
+      account: input.account || null,
+      date: input.date,
+      payee: input.payee,
+      category: input.category,
+      notes: input.notes,
+      cleared: input.cleared,
+      amount: input.amount ?? 0,
+      ...(input.splits.length > 0 && {
+        is_parent: true,
+        subtransactions: input.splits.map((s, i) => ({
+          id: `${parentId}/${i}`,
+          account: input.account || null,
+          date: input.date,
+          payee: s.payee ?? input.payee,
+          category: s.category,
+          notes: s.notes,
+          amount: s.amount ?? 0,
+          is_child: true,
+          parent_id: parentId,
+        })),
+      }),
+    } as TransactionEntity;
     // A read: a payee a rule names stays a name (PR 447 review)
     const after = (await runRules(before, null, {
-      createPayees: false,
-    })) as TransactionEntity & { payee_name?: string };
-    const diff = getChangedValues(before, after) ?? {};
-    const user = new Set<string>(draft.userFields);
-    const payeeChange = changedField === 'payee';
-
-    if (mode === 'save') {
-      stale = ruleDifference(before, after, user, draft.payeeName);
-    }
-    for (const field of mode === 'save' ? [] : RULE_FIELDS) {
-      if (!Object.hasOwn(diff, field)) continue;
-      const current = before[field];
-      const next = after[field];
+      resolvePayeeNames: false,
+    })) as TransactionEntity & { payee_name?: string; tombstone?: boolean };
+    deleted = Boolean(after.tombstone);
+    schedule = after.schedule ?? null;
+    const named = after.payee === 'new';
+    // The rule's value for each parent field, in the result's terms
+    const ruled: Partial<Record<RuleField, unknown>> = {
+      account: after.account ?? '',
+      date: after.date,
+      payee: named ? null : (after.payee ?? null),
+      category: after.category ?? null,
+      notes: after.notes ?? '',
+      cleared: Boolean(after.cleared),
+      amount: after.amount,
+    };
+    const ruledName = named ? (after.payee_name ?? null) : null;
+    const differs = (field: RuleField) =>
+      field === 'payee'
+        ? !sameValue(ruled.payee, input.payee) ||
+          (named && !sameValue(ruledName, input.payeeName))
+        : field === 'amount'
+          ? input.amount !== null && ruled.amount !== input.amount
+          : !sameValue(ruled[field], input[field]);
+    for (const field of RULE_FIELDS) {
+      if (!differs(field)) continue;
       if (user.has(field)) {
-        // A field the person cleared stays empty; one they set yields only to a payee change
-        if (!payeeChange || isEmpty(current)) continue;
-        replaced.push({ field, value: draftValue(draft, field) });
-      } else if (!payeeChange && !shouldApplyRuleChange(field, current, next)) {
+        suggestions.push({ field, row: 0, value: { [field]: ruled[field] } });
         continue;
       }
       ruleFields.add(field);
-      if (field === 'amount') {
-        amount = next as number;
-        draft.inflow = amount > 0;
-        draft.amountText = amountText(amount, format.places, separator);
-        parentAmount = { amount };
-      } else if (field === 'payee') {
-        // A name no payee has yet: the save creates it
-        const named = next === 'new';
-        draft.payee = named ? null : (next as string | null);
-        draft.payeeName = named ? (after.payee_name ?? null) : null;
+      if (field === 'payee') {
+        result.payee = ruled.payee as string | null;
+        result.payeeName = ruledName;
+      } else if (field === 'amount') {
+        const amount = ruled.amount as number;
+        result.amount = amount;
+        result.inflow = amount > 0;
+        result.amountText = textOf(amount);
+        resultAmounts = { ...resultAmounts, parent: { amount } };
       } else {
-        (draft as Record<string, unknown>)[field] = next;
+        (result as Record<string, unknown>)[field] = ruled[field];
       }
     }
-
-    // Splits as the web form takes them: a split rule makes the children of
-    // a draft without any, unless the person removed them; on an existing
-    // split, the edited field's rule value goes down to each child
-    // (propagateRuleChangeToSubtransactions)
-    const ruleSplits = after.subtransactions ?? [];
-    if (mode === 'save') {
-      // Nothing is applied at save; the difference refuses instead
-    } else if (draft.splits.length === 0 && ruleSplits.length > 0) {
-      if (!user.has('splits')) {
-        draft.splits = ruleSplits.map(s => ({
-          payee: s.payee ?? null,
-          category: s.category ?? null,
-          notes: s.notes ?? '',
-          inflow: (s.amount ?? 0) > 0,
-          amountText: amountText(s.amount ?? 0, format.places, separator),
-        }));
-        splitAmounts = ruleSplits.map(s => s.amount ?? 0);
-        childAmounts = splitAmounts.map(a => ({ amount: a as number }));
-        ruleFields.add('splits');
-      }
-    } else if (
-      changedField &&
-      ['payee', 'category', 'notes'].includes(changedField) &&
-      !(user.has(changedField) && isEmpty(before[changedField as RuleField]))
-    ) {
-      const field = changedField as 'payee' | 'category' | 'notes';
-      draft.splits = draft.splits.map((s, i) => {
-        const value = ruleSplits[i]?.[field];
-        return value == null ? s : { ...s, [field]: value };
-      });
-    }
-
-    // Fields that still hold a rule's value from an earlier preview: a rule
-    // that, with them emptied, sets them to what the draft shows
-    const probed = PROBED_FIELDS.filter(
-      f =>
-        !ruleFields.has(f) &&
-        !user.has(f) &&
-        f !== changedField &&
-        !isEmpty(draft[f]),
-    );
-    if (mode === 'preview' && probed.length > 0) {
-      const emptied = { ...draft };
-      for (const f of probed) {
-        (emptied as Record<string, unknown>)[f] = f === 'cleared' ? false : '';
-        if (f === 'category') emptied.category = null;
-      }
-      const again = (await runRules(entity(emptied, amount), null, {
-        createPayees: false,
-      })) as TransactionEntity;
-      for (const f of probed) {
-        if (again[f] === draft[f]) ruleFields.add(f);
-      }
+    // The children a rule set, unless the person set them by hand
+    const ruledSplits = after.subtransactions ?? [];
+    const childChanged =
+      ruledSplits.length !== input.splits.length ||
+      ruledSplits.some(
+        (c, i) =>
+          !sameValue(
+            c.payee ?? input.payee,
+            input.splits[i].payee ?? input.payee,
+          ) ||
+          !sameValue(c.category, input.splits[i].category) ||
+          !sameValue(c.notes ?? '', input.splits[i].notes) ||
+          c.amount !== (input.splits[i].amount ?? 0),
+      );
+    if (childChanged && !user.has('splits')) {
+      ruleFields.add('splits');
+      result.splits = ruledSplits.map(c => ({
+        payee: c.payee === 'new' ? null : (c.payee ?? null),
+        payeeName: null,
+        category: c.category ?? null,
+        notes: c.notes ?? '',
+        inflow: (c.amount ?? 0) > 0,
+        amount: c.amount ?? 0,
+        amountText: textOf(c.amount ?? 0),
+      }));
+      resultAmounts = {
+        ...resultAmounts,
+        children: result.splits.map(c => ({ amount: c.amount as number })),
+      };
+    } else if (childChanged) {
+      suggestions.push({ field: 'splits', row: 0, value: {} });
     }
   }
+  await describeSuggestions(suggestions, textOf);
 
-  // Field errors, on the draft as it now stands
-  const lookups = await readLookups(draft, !overLimit);
-  if ('error' in parentAmount) errors.amount = parentAmount.error;
-  if (!validDate(draft.date)) errors.date = 'date-invalid';
-  const account = draft.account ? lookups.accounts.get(draft.account) : null;
-  if (!draft.account) {
+  // Field errors, on the result
+  const lookups = await readLookups(
+    {
+      ...draft,
+      payee: result.payee,
+      splits: result.splits.map((s, i) => ({
+        ...(draft.splits[i]?.id !== undefined && { id: draft.splits[i].id }),
+        payee: s.payee,
+        category: s.category,
+        notes: s.notes,
+        inflow: s.inflow,
+        amountText: '',
+      })),
+    },
+    !overLimit,
+  );
+  if ('error' in resultAmounts.parent) {
+    errors.amount = resultAmounts.parent.error;
+  }
+  if (!validDate(result.date)) errors.date = 'date-invalid';
+  const account = result.account ? lookups.accounts.get(result.account) : null;
+  if (!result.account) {
     errors.account = 'account-required';
   } else if (!account || account.closed) {
     errors.account = 'account-closed';
@@ -1044,18 +1099,20 @@ export async function evaluateDraft(
 
   // A transfer payee's account: closed, or on budget; unknown ids refuse
   const transferOf = (payee: string | null | undefined) => {
-    if (!payee) return { closed: false, onBudget: false };
+    if (!payee) return { closed: false, onBudget: false, same: false };
     const found = lookups.payees.get(payee);
     if (!found) {
       throw nativeRefusal('invalid-draft', `${name}: no such payee`);
     }
-    if (!found.transfer_acct) return { closed: false, onBudget: false };
+    if (!found.transfer_acct) {
+      return { closed: false, onBudget: false, same: false };
+    }
     const target = lookups.accounts.get(found.transfer_acct);
     return {
       closed: !target || Boolean(target.closed),
       onBudget: Boolean(target && !target.offbudget),
       // As the web refuses it: a transfer to the transaction's own account
-      same: found.transfer_acct === draft.account,
+      same: found.transfer_acct === result.account,
     };
   };
   const transferError = (payee: string | null | undefined) => {
@@ -1083,115 +1140,128 @@ export async function evaluateDraft(
     return null;
   };
 
-  const parentTransfer = transferError(draft.payee);
+  const parentTransfer = transferError(result.payee);
   if (parentTransfer) errors.payee = parentTransfer;
   if (
-    draft.payee === null &&
-    draft.payeeName !== null &&
-    draft.payeeName.trim().length > payeeNameMax
+    result.payee === null &&
+    result.payeeName !== null &&
+    result.payeeName.trim().length > payeeNameMax
   ) {
     errors.payee = 'payee-too-long';
   }
   const parentCategory =
-    draft.splits.length > 0 && draft.category !== null
+    result.splits.length > 0 && result.category !== null
       ? 'category-not-allowed'
-      : categoryError(draft.category, draft.payee, draft.id);
+      : categoryError(result.category, result.payee, draft.id);
   if (parentCategory) errors.category = parentCategory;
-  if (draft.notes.length > notesMax) errors.notes = 'notes-too-long';
+  if (result.notes.length > notesMax) errors.notes = 'notes-too-long';
 
   let remaining: number | null = null;
-  if (draft.splits.length > splitMax) {
+  if (overLimit) {
     errors.splits = 'split-limit';
-  } else if (draft.splits.length > 0) {
-    draft.splits.forEach((s, i) => {
+  } else if (result.splits.length > 0) {
+    result.splits.forEach((s, i) => {
       const at = `splits.${i}`;
-      const own = childAmounts[i];
+      const own = resultAmounts.children[i];
       if (own && 'error' in own) errors[`${at}.amount`] = own.error;
       const transfer = transferError(s.payee);
       if (transfer) errors[`${at}.payee`] = transfer;
-      const category = categoryError(s.category, s.payee ?? draft.payee, s.id);
+      // A child keeps its stored hidden category only on an edit
+      const rowId = draft.id === undefined ? undefined : draft.splits[i]?.id;
+      const category = categoryError(
+        s.category,
+        s.payee ?? result.payee,
+        rowId,
+      );
       if (category) errors[`${at}.category`] = category;
       if (s.notes.length > notesMax) errors[`${at}.notes`] = 'notes-too-long';
     });
-    if (amount !== null && splitAmounts.every(a => a !== null)) {
+    const amounts = result.splits.map(s => s.amount);
+    if (result.amount !== null && amounts.every(a => a !== null)) {
       remaining =
-        amount - (splitAmounts as number[]).reduce((sum, a) => sum + a, 0);
+        result.amount - (amounts as number[]).reduce((sum, a) => sum + a, 0);
       if (remaining !== 0) errors.splits = 'split-mismatch';
     }
   }
 
   return {
-    draft,
-    amount,
-    splitAmounts: draft.splits.map((_, i) => splitAmounts[i] ?? null),
+    result,
+    resultDigest: await resultDigest(result, schedule),
     ruleFields: [...ruleFields].sort(),
-    replaced,
+    suggestions,
     remaining,
-    stale,
     errors: Object.fromEntries(
       Object.entries(errors).map(([field, code]) => [
         field,
         code === 'amount-invalid'
-          ? { code, detail: { decimalSeparator: separator } }
+          ? { code, detail: { decimalSeparator: format.separator } }
           : { code },
       ]),
     ),
+    changed: ruleFields.size > 0,
+    deleted,
+    schedule,
   };
 }
 
-/** True when a notes rule's result only repeats text the note already carries. */
-function notesAlreadyApplied(current: string, next: string) {
-  const index = next.indexOf(current);
-  if (index === -1) return false;
-  const prepended = next.slice(0, index);
-  const appended = next.slice(index + current.length);
-  return (
-    (prepended === '' || current.startsWith(prepended)) &&
-    (appended === '' || current.endsWith(appended))
-  );
+/** Each suggestion's value as the engine shows it: ids with names, text, a flag or an amount. */
+async function describeSuggestions(
+  suggestions: NativePreview['suggestions'],
+  textOf: (amount: number | null) => string | null,
+) {
+  for (const suggestion of suggestions) {
+    const raw = (suggestion.value as Record<string, unknown>)[suggestion.field];
+    if (suggestion.field === 'splits') continue;
+    let value: NativeSuggestionValue = {};
+    if (
+      suggestion.field === 'category' ||
+      suggestion.field === 'account' ||
+      suggestion.field === 'payee'
+    ) {
+      const table =
+        suggestion.field === 'category'
+          ? 'categories'
+          : suggestion.field === 'account'
+            ? 'accounts'
+            : 'payees';
+      const id = typeof raw === 'string' && raw !== '' ? raw : null;
+      const found = id
+        ? await db.first<{ name: string }>(
+            `SELECT name FROM ${table} WHERE id = ?`,
+            [id],
+          )
+        : null;
+      value = id ? { id, ...(found && { name: found.name }) } : {};
+    } else if (suggestion.field === 'cleared') {
+      value = { flag: Boolean(raw) };
+    } else if (suggestion.field === 'amount') {
+      value = {
+        amount: raw as number,
+        amountText: textOf(Math.abs(raw as number)) ?? '',
+      };
+    } else {
+      value = { text: String(raw ?? '') };
+    }
+    suggestion.value = value;
+  }
 }
 
 /**
- * D3 step 4: whether the rules change any rule-settable field (account, date,
- * payee, category, notes, cleared, amount) on the parent or any child,
- * compared with the evaluated draft. A field the person set or cleared keeps
- * their value, so it is no difference; nor is a notes rule already applied.
+ * The preview (D2): one rules run on the person's input, the result with
+ * amounts evaluated, its digest, the fields a rule set, the rule's values
+ * for hand-set fields, the split remainder and field errors. No side effects.
  */
-function ruleDifference(
-  before: TransactionEntity,
-  after: TransactionEntity & { payee_name?: string },
-  user: Set<string>,
-  payeeName: string | null,
-) {
-  // A name no payee has yet, as the rules leave it (createPayees: false)
-  if (
-    after.payee === 'new' &&
-    before.payee == null &&
-    after.payee_name === payeeName
-  ) {
-    after = { ...after, payee: before.payee };
-  }
-  const differs = (
-    a: TransactionEntity,
-    b: TransactionEntity,
-    fields: readonly RuleField[],
-  ) =>
-    fields.some(f => {
-      if (user.has(f) || (a[f] ?? null) === (b[f] ?? null)) return false;
-      return !(
-        f === 'notes' &&
-        typeof a.notes === 'string' &&
-        a.notes !== '' &&
-        typeof b.notes === 'string' &&
-        notesAlreadyApplied(a.notes, b.notes)
-      );
-    });
-  if (differs(before, after, RULE_FIELDS)) return true;
-  const own = before.subtransactions ?? [];
-  const ruled = after.subtransactions ?? [];
-  if (user.has('splits')) return false;
-  if (own.length !== ruled.length) return true;
-  return own.some((child, i) =>
-    differs(child, ruled[i], ['payee', 'category', 'notes', 'amount']),
-  );
+export async function transactionPreview({
+  draft: input,
+}: {
+  draft: unknown;
+}): Promise<NativePreview> {
+  const name = 'native/transaction-preview';
+  const {
+    changed: _changed,
+    deleted: _deleted,
+    schedule: _schedule,
+    ...preview
+  } = await evaluateDraft(name, readDraft(name, input));
+  return preview;
 }

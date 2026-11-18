@@ -5,7 +5,7 @@
 import * as db from '#server/db';
 import { batchUpdateTransactions } from '#server/transactions';
 
-import { readLimit } from './reconcile-lock';
+import { readLimit } from './limits';
 import { nativeRefusal } from './refusal';
 
 // What a write touched, for the undo conflict check (D3a)

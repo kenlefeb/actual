@@ -56,13 +56,15 @@ describe('the Add transaction calls through the page bridge', () => {
         learnCategories: false,
         extra: 1,
       },
-      { draft: { account: 'a' }, changedField: 'payee' },
+      // PR 453: the preview takes the draft only
+      { draft: { account: 'a' } },
     ],
     // The save reads learn-categories from the budget, never from the call
     [
       'native/transaction-save',
       {
         draft: { account: 'a' },
+        previewDigest: 'p',
         digest: 'd',
         undoToken: 'T',
         confirmedReconciled: true,
@@ -71,6 +73,7 @@ describe('the Add transaction calls through the page bridge', () => {
       },
       {
         draft: { account: 'a' },
+        previewDigest: 'p',
         digest: 'd',
         undoToken: 'T',
         confirmedReconciled: true,

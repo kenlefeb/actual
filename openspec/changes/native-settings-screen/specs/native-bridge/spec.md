@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Settings are one local read
-`native/settings` SHALL return, in one message and without network calls, the budget preferences native Settings shows, the budget's name and ids, whether it is encrypted, the server address, signed-in state, whether changes are waiting to sync, the fork client version (added by the page) and every registry limit as its id, value, default and ceiling, equal to the registry.
+`native/settings` SHALL return, in one message and without network calls, the budget preferences native Settings shows, the budget's name and ids, whether it is encrypted, the server address, signed-in state, `sync.pending`, the fork client version (added by the page) and each registry limit that engine code reads, as its id, value, default and ceiling. `sync.pending` is true when the budget syncs and `messages_crdt` holds a message newer than `lastSyncedTimestamp`, the set the next sync sends.
 
 #### Scenario: Reading settings
 - **GIVEN** a budget with `numberFormat` set and `accounts-register-page-size` set to 120
@@ -18,8 +18,17 @@
 - **THEN** `native/settings` still answers within the latency gate
 
 #### Scenario: The limits equal the registry
-- **WHEN** a limit is added to the registry
-- **THEN** `native/settings` returns it, and a test fails if the two lists differ
+- **WHEN** engine code starts reading a registry limit
+- **THEN** `native/settings` returns it, and a test fails if the registry's readers and the engine's reads differ
+
+#### Scenario: A limit nothing reads
+- **GIVEN** a registry limit no engine code reads yet
+- **THEN** `native/settings` does not return it, so Settings never shows a limit that does nothing
+
+#### Scenario: Saving a limit nothing reads
+- **GIVEN** a registry limit no engine code reads yet
+- **WHEN** native code saves it, with any value or null to reset it
+- **THEN** the call fails with `[native:invalid-setting]` exactly as for an unknown key, and nothing changes
 
 ### Requirement: Server info has its own deadline
 `native/server-info` SHALL return whether the server answered and its version, waiting at most the limit `server-info-timeout-seconds` (default 5, ceiling 30). An unreachable server SHALL return reachable false and no version, not an error.
@@ -30,7 +39,7 @@
 - **THEN** it returns reachable false and version null within 5 seconds
 
 ### Requirement: The settings save is validated and undoable
-`native/settings-save` SHALL accept only keys from a closed list (the native Settings preferences and the limit ids), each value from its closed set or, for a limit, a whole number from 1 to its ceiling or null to reset. Anything else SHALL fail the whole call with `[native:invalid-setting]` and write nothing. A save SHALL be one undo step; preferences are last write wins, so undo SHALL not check for later changes.
+`native/settings-save` SHALL accept only keys from a closed list (the native Settings preferences and the ids of limits engine code reads), each value from its closed set or, for a limit, a whole number from 1 to its ceiling or null to reset. Anything else SHALL fail the whole call with `[native:invalid-setting]` and write nothing. A save SHALL be one undo step; preferences are last write wins, so undo SHALL not check for later changes.
 
 #### Scenario: Unknown key
 - **WHEN** native code saves `{csv-mappings-x: "…"}`

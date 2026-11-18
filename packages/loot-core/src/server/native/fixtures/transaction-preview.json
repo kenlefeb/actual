@@ -1,6 +1,5 @@
 {
-  "draft": {
-    "newId": "0b5f2c1e-8d3a-4f6b-9c2d-1a2b3c4d5e6f",
+  "result": {
     "account": "checking",
     "date": "2016-12-20",
     "payee": "costco",
@@ -9,17 +8,16 @@
     "notes": "Bulk",
     "cleared": false,
     "inflow": false,
-    "amountText": "10",
-    "splits": [],
-    "userFields": []
+    "amount": -1000,
+    "amountText": "10.00",
+    "splits": []
   },
-  "amount": -1000,
-  "splitAmounts": [],
+  "resultDigest": "24c2ca675f7d0981d8f5a0c4df921fc85228542d5ab24175a9cfa111c0f8264a",
   "ruleFields": [
     "category",
     "notes"
   ],
-  "replaced": [],
+  "suggestions": [],
   "remaining": null,
   "errors": {}
 }

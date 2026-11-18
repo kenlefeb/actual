@@ -325,5 +325,14 @@
   },
   "native/transaction-save": {
     "skip": "Native iOS bridge write of a person's Add transaction draft with an undo token (sc-3602, design D3); MCP writes transactions through write_create_transactions and write_update_transactions"
+  },
+  "native/settings": {
+    "skip": "Native iOS Settings read (sc-4643, native-settings-screen D1); MCP reads settings through get_settings in the mcp-settings-tools change"
+  },
+  "native/server-info": {
+    "skip": "Native iOS About server check with its own deadline (sc-4643, native-settings-screen D1); not an MCP capability"
+  },
+  "native/settings-save": {
+    "skip": "Native iOS bridge wrapper of the engine settings save with an undo token (sc-4643, D1); MCP will write settings through write_update_settings, which calls the same engine function"
   }
 }

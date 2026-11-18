@@ -75,19 +75,23 @@ final class TransactionFormContractTests: XCTestCase {
     func testDecodesThePreviewFixtures() throws {
         let data = try fixture("transaction-preview")
         let preview = try JSONDecoder().decode(TransactionPreview.self, from: data)
-        XCTAssertEqual(preview.amount, -1000)
-        XCTAssertEqual(preview.draft.category, "groceries")
+        XCTAssertEqual(preview.result.amount, -1000)
+        XCTAssertEqual(preview.result.amountText, "10.00")
+        XCTAssertEqual(preview.result.category, "groceries")
         XCTAssertEqual(preview.ruleFields, [.category, .notes])
+        XCTAssertEqual(preview.resultDigest.count, 64)
         XCTAssertTrue(try roundTrips(TransactionPreview.self, data))
 
-        let replacedData = try fixture("transaction-preview-replaced")
-        let replaced = try JSONDecoder().decode(TransactionPreview.self, from: replacedData)
-        XCTAssertEqual(replaced.replaced, [.init(field: .category, value: .text("dining"))])
-        XCTAssertTrue(try roundTrips(TransactionPreview.self, replacedData))
+        let suggestionsData = try fixture("transaction-preview-suggestions")
+        let suggested = try JSONDecoder().decode(TransactionPreview.self, from: suggestionsData)
+        XCTAssertEqual(suggested.suggestions.map(\.field), [.category, .notes])
+        XCTAssertEqual(suggested.suggestions[0].value.name, "Groceries")
+        XCTAssertEqual(suggested.suggestions[1].value.text, "Bulk")
+        XCTAssertTrue(try roundTrips(TransactionPreview.self, suggestionsData))
 
         let splitData = try fixture("transaction-preview-split")
         let split = try JSONDecoder().decode(TransactionPreview.self, from: splitData)
-        XCTAssertEqual(split.splitAmounts, [-1000, -500])
+        XCTAssertEqual(split.result.splits.map(\.amount), [-1000, -500])
         XCTAssertEqual(split.remaining, -1500)
         XCTAssertEqual(split.errors["splits"]?.code, .splitMismatch)
         XCTAssertTrue(try roundTrips(TransactionPreview.self, splitData))
@@ -100,11 +104,6 @@ final class TransactionFormContractTests: XCTestCase {
         XCTAssertNil(errors["notes"]?.detail)
     }
 
-    func testAnAmountRestoreValueRoundTrips() throws {
-        let value = TransactionPreview.PreviousValue.amount(amountText: "12.50", inflow: false)
-        let data = try JSONEncoder().encode(value)
-        XCTAssertEqual(try JSONDecoder().decode(TransactionPreview.PreviousValue.self, from: data), value)
-    }
 
     func testTheFieldErrorsAreTheirFixtureAndShareNoCodeWithTheRefusals() throws {
         let fields = try JSONDecoder().decode([String].self, from: fixture("transaction-field-errors"))
@@ -140,11 +139,13 @@ final class TransactionFormContractTests: XCTestCase {
             newId: "0b5f2c1e-8d3a-4f6b-9c2d-1a2b3c4d5e6f", id: nil, account: "a", date: "2016-12-20", payee: nil,
             payeeName: nil, category: nil, notes: "", cleared: false, inflow: false, amountText: "1", splits: [],
             userFields: [])
-        let saved = try await client.saveTransaction(try TransactionSave(draft: draft, digest: nil, undoToken: "T"))
+        let saved = try await client.saveTransaction(
+            try TransactionSave(draft: draft, previewDigest: "p", digest: nil, undoToken: "T"))
         XCTAssertEqual(saved, TransactionSaveResult(id: "n"))
         XCTAssertEqual(seen.map(\.0), ["native/transaction-save"])
         XCTAssertTrue(seen[0].1.contains(#""confirmedReconciled":false"#))
         XCTAssertTrue(seen[0].1.contains(#""undoToken":"T""#))
+        XCTAssertTrue(seen[0].1.contains(#""previewDigest":"p""#))
         do {
             _ = try await client.call("native/transaction-save", args: ["draft": "x"])
             XCTFail("the save took loose arguments")

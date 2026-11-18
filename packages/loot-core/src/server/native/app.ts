@@ -81,6 +81,7 @@ import {
   reconcileMatches,
 } from './reconcile-lock';
 import { nativeRefusal } from './refusal';
+import { readSettings, saveSettings, serverInfo } from './settings';
 import {
   payeesSearch,
   transactionForm,
@@ -247,6 +248,9 @@ export type NativeHandlers = {
   'native/transactions-delete': typeof transactionsDelete;
   'native/account-reopen': typeof accountReopen;
   'native/account-move': typeof accountMove;
+  'native/settings': typeof readSettings;
+  'native/server-info': typeof serverInfo;
+  'native/settings-save': typeof settingsSave;
   'native/transaction-form': typeof transactionFormRead;
   'native/payees': typeof payeesSearch;
   'native/transaction-preview': typeof transactionPreview;
@@ -302,6 +306,29 @@ app.method(
 app.method('native/transactions-delete', accountsWrite(transactionsDelete));
 app.method('native/account-reopen', accountsWrite(accountReopen));
 app.method('native/account-move', accountsWrite(accountMove));
+// sc-4643 (native-settings-screen D1): one undo step carrying Swift's token.
+// Preferences are last write wins, so its undo has no changed-since check.
+app.method('native/settings', readSettings);
+app.method('native/server-info', serverInfo);
+app.method(
+  'native/settings-save',
+  mutator(
+    undoable(settingsSave, args => ({ nativeUndoToken: args?.undoToken })),
+  ),
+);
+
+async function settingsSave({
+  changes,
+  undoToken,
+}: {
+  changes: unknown;
+  undoToken: string;
+}) {
+  if (typeof undoToken !== 'string' || !undoToken) {
+    throw new Error('native/settings-save: an undo token is required');
+  }
+  await saveSettings(changes);
+}
 // sc-3602 (native-add-transaction D1 and D2): reads only; the preview writes nothing
 app.method('native/transaction-form', transactionFormRead);
 app.method('native/payees', payeesSearch);

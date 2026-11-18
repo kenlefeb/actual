@@ -307,13 +307,25 @@ describe('native/transaction-save: a repeated add', () => {
 });
 
 describe('native/transaction-save: rules at save', () => {
+  const previewOf = (d: Record<string, unknown>) =>
+    h['native/transaction-preview']({ draft: d } as never);
+
+  it('stores the previewed result when its digest still matches', async () => {
+    await costcoRule();
+    const input = draft({ payee: 'costco', amountText: '12.50+3*2' });
+    const { resultDigest } = await previewOf(input);
+    await save({ draft: input, previewDigest: resultDigest });
+    expect(await row(NEW_ID)).toMatchObject({
+      category: 'groceries',
+      amount: -1850,
+    });
+  });
+
   it('refuses with preview-stale when a rule changed since the preview, storing nothing', async () => {
     const rule = await costcoRule();
-    const preview = await h['native/transaction-preview']({
-      draft: draft({ payee: 'costco' }),
-      changedField: 'payee',
-    });
-    expect(preview.draft.category).toBe('groceries');
+    const input = draft({ payee: 'costco' });
+    const { result, resultDigest } = await previewOf(input);
+    expect(result.category).toBe('groceries');
     await updateRule({
       id: rule,
       stage: null,
@@ -321,31 +333,31 @@ describe('native/transaction-save: rules at save', () => {
       conditions: [{ op: 'is', field: 'payee', value: 'costco' }],
       actions: [{ op: 'set', field: 'category', value: 'household' }],
     });
-    await expect(save({ draft: preview.draft })).rejects.toThrow(
-      /^\[native:preview-stale\] /,
-    );
+    await expect(
+      save({ draft: input, previewDigest: resultDigest }),
+    ).rejects.toThrow(/^\[native:preview-stale\] /);
     expect(await live()).toEqual([]);
   });
 
-  it('refuses with preview-stale when no preview was answered', async () => {
+  it('without a preview, stores only an input no rule changes', async () => {
     await costcoRule();
     await expect(save({ draft: draft({ payee: 'costco' }) })).rejects.toThrow(
       /^\[native:preview-stale\] /,
     );
     expect(await live()).toEqual([]);
+    // Amount evaluation alone is no change
+    await save({ draft: draft({ amountText: '2*3' }) });
+    expect((await row(NEW_ID))?.amount).toBe(-600);
   });
 
-  it('saves the previewed draft, and evaluating the amount is not a difference', async () => {
+  it('a correct client saves in at most two attempts', async () => {
     await costcoRule();
-    const preview = await h['native/transaction-preview']({
-      draft: draft({ payee: 'costco', amountText: '12.50+3*2' }),
-      changedField: 'payee',
-    });
-    await save({ draft: preview.draft });
-    expect(await row(NEW_ID)).toMatchObject({
-      category: 'groceries',
-      amount: -1850,
-    });
+    const input = draft({ payee: 'costco' });
+    const first = await save({ draft: input }).catch(e => e);
+    expect(first.message).toMatch(/^\[native:preview-stale\] /);
+    const { resultDigest } = await previewOf(input);
+    await save({ draft: input, previewDigest: resultDigest });
+    expect((await row(NEW_ID))?.category).toBe('groceries');
   });
 
   it("keeps the person's own fields", async () => {
@@ -354,7 +366,7 @@ describe('native/transaction-save: rules at save', () => {
       draft: draft({
         payee: 'costco',
         category: 'dining',
-        userFields: ['category'],
+        userFields: ['payee', 'category'],
       }),
     });
     expect((await row(NEW_ID))?.category).toBe('dining');
@@ -368,18 +380,18 @@ describe('native/transaction-save: rules at save', () => {
       actions: [{ op: 'set', field: 'payee_name', value: 'Brand New Payee' }],
     });
     const before = await count('payees');
-    let shown = draft({ notes: 'zz' });
+    const input = draft({ notes: 'zz', userFields: ['notes'] });
+    let digest = '';
     for (let i = 0; i < 10; i++) {
-      shown = (
-        await h['native/transaction-preview']({
-          draft: shown,
-          changedField: 'notes',
-        })
-      ).draft as never;
+      const preview = await previewOf(input);
+      expect(preview.result).toMatchObject({
+        payee: null,
+        payeeName: 'Brand New Payee',
+      });
+      digest = preview.resultDigest;
     }
-    expect(shown).toMatchObject({ payee: null, payeeName: 'Brand New Payee' });
     expect(await count('payees')).toBe(before);
-    await save({ draft: shown });
+    await save({ draft: input, previewDigest: digest });
     const created = await db.first<{ id: string }>(
       "SELECT id FROM payees WHERE name = 'Brand New Payee' AND tombstone = 0",
     );
@@ -395,10 +407,59 @@ describe('native/transaction-save: rules at save', () => {
       conditions: [{ op: 'is', field: 'notes', value: 'move' }],
       actions: [{ op: 'set', field: 'account', value: 'old' }],
     });
-    await expect(save({ draft: draft({ notes: 'move' }) })).rejects.toThrow(
+    const input = draft({ notes: 'move', userFields: ['notes'] });
+    await expect(save({ draft: input })).rejects.toThrow(
       /^\[native:preview-stale\] /,
     );
+    const { resultDigest } = await previewOf(input);
+    await expect(
+      save({ draft: input, previewDigest: resultDigest }),
+    ).rejects.toThrow('[native:invalid-draft:account-closed] ');
     expect(await live()).toEqual([]);
+  });
+
+  // Security, PR 453: a rule that deletes the transaction is never stored
+  it('refuses a rule whose result deletes the transaction', async () => {
+    await insertRule({
+      stage: null,
+      conditionsOp: 'and',
+      conditions: [{ op: 'is', field: 'notes', value: 'drop' }],
+      actions: [{ op: 'delete-transaction', value: '' }],
+    });
+    const input = draft({ notes: 'drop', userFields: ['notes'] });
+    const { resultDigest } = await previewOf(input);
+    for (const previewDigest of [resultDigest, undefined]) {
+      await expect(save({ draft: input, previewDigest })).rejects.toThrow(
+        /^\[native:preview-stale\] /,
+      );
+    }
+    expect(await live()).toEqual([]);
+  });
+
+  // Security, PR 453: only the digest's fields are written from a save
+  it("writes only the digest's fields, whatever a rule sets", async () => {
+    await insertRule({
+      stage: null,
+      conditionsOp: 'and',
+      conditions: [{ op: 'is', field: 'notes', value: 'tag' }],
+      actions: [{ op: 'set', field: 'imported_payee', value: 'Smuggled' }],
+    });
+    const input = draft({ notes: 'tag', userFields: ['notes'] });
+    const { resultDigest } = await previewOf(input);
+    await save({ draft: input, previewDigest: resultDigest });
+    const stored = await db.first<{
+      imported_description: string | null;
+      reconciled: number;
+      financial_id: string | null;
+    }>(
+      'SELECT imported_description, reconciled, financial_id FROM transactions WHERE id = ?',
+      [NEW_ID],
+    );
+    expect(stored).toEqual({
+      imported_description: null,
+      reconciled: 0,
+      financial_id: null,
+    });
   });
 });
 

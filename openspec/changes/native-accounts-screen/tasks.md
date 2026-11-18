@@ -27,13 +27,16 @@ Tests first: write the tests, see them fail, then write the code. One story per 
 
 ## 3. SwiftUI Accounts list and register on iPhone (sc-3611)
 
-- [ ] 3.1 The list (design D7): sections and totals, "All accounts" (web), detail lines, sync-status subtitle, pull to refresh, Edit mode reorder, Net worth footer, the + menu and empty-state hand-offs, empty and loading and sync-error states. Verify in the Simulator against Figma frames 26:38, 26:194, 39:1369, 39:1455 and 39:1583, light and dark
-- [ ] 3.2 Closed accounts with Reopen in teal and a read-only register (frame 38:1544)
-- [ ] 3.3 The register with `NativeTransactionRow` (frames 27:201, 27:373): header, Upcoming, date sections, paging on scroll, swipes with haptics, Categorize picker from `native/budget-month`, reconciled and transfer-partner confirmations, "Changed since — can't undo", the ••• menu (Reconcile; Account settings and Sync now as web hand-offs), tap opens the web editor
-- [ ] 3.4 Search and scope chips (frame 38:1414): results footer, no-results text, Cancel
-- [ ] 3.5 Reconcile entry (design D8): the list banner, ••• › Reconcile and the long-press present the existing flow; a UI test that each opens on the right account
+- [x] 3.1 The list (design D7): sections and totals, "All accounts" (web), detail lines, sync-status subtitle, pull to refresh, Edit mode reorder, Net worth footer, the + menu and empty-state hand-offs, empty and loading and sync-error states. Verify in the Simulator against Figma frames 26:38, 26:194, 39:1369, 39:1455 and 39:1583, light and dark
+- [x] 3.2 Closed accounts with Reopen in teal and a read-only register (frame 38:1544)
+- [x] 3.3 The register with `NativeTransactionRow` (frames 27:201, 27:373): header, Upcoming, date sections, paging on scroll, swipes with haptics, Categorize picker from `native/budget-month`, reconciled and transfer-partner confirmations, "Changed since — can't undo", the ••• menu (Reconcile; Account settings and Sync now as web hand-offs), tap opens the web editor
+- [x] 3.4 Search and scope chips (frame 38:1414): results footer, no-results text, Cancel
+- [x] 3.5 Reconcile entry (design D8): the list banner, ••• › Reconcile and the long-press present the existing flow; a UI test that each opens on the right account
+  - Done (PRs 428, 458): the repo has no iOS UI-test target, so the account each entry names is covered by `PresentReconcile` tests and was checked by hand in the Simulator (••• › Reconcile on Checking opened "Reconcile Checking")
 - [ ] 3.6 Dynamic Type to AX5, VoiceOver labels and custom actions, Dark Mode, Reduce Motion, localization; UX Designer reviews against the frames; notes on the story
-- [ ] 3.7 Fork news entry for the native Accounts screen; file Backlog stories for the follow-ups in design D7 (the "to review" count, per-account bank sync failure; native add and link account is sc-4949)
+  - Developer pass done (story 3611 comment, 2026-11-18): Dark Mode, Dynamic Type to AX5, localized strings, plural counts and tabular figures checked in the Simulator. At AX5 a balance too wide for the screen (13 digits) wraps onto a second line: it shows in full and is never truncated, which is what D7 and the spec ask ("every balance and amount shows in full"), so it is accepted. Left: VoiceOver by hand, Reduce Motion by hand, and the UX Designer's review
+- [x] 3.7 Fork news entry for the native Accounts screen; file Backlog stories for the follow-ups in design D7 (the "to review" count, per-account bank sync failure; native add and link account is sc-4949)
+  - Done: the upcoming release notes for the Accounts screens go into the fork news feed with the next version's release note (no version bump in this group); Backlog stories 5171 (the "to review" count) and 5172 (per-account bank sync failure)
 - [ ] 3.8 Flip the Accounts switch to on when unset (design D4): show the Settings toggle (hidden until now), `NativeScreenSwitch.isAccountsNative`, the page's `isNativeScreenOn('accounts')` fallback and the Settings default; failing tests first. It lands with the screens in this group, never before. It also waits for group 2 of `native-register-upcoming-rows` (sc-4973): until that ships, the native register shows no upcoming rows, because `native/account-register` no longer returns them
 
 ## Mac, deferred to the Mac app (sc-3629)

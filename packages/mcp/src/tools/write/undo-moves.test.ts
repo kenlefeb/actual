@@ -442,3 +442,102 @@ describe('Undo of a move reads only a well-formed line', () => {
     await expectRefusedUndo('old', reason);
   });
 });
+
+describe('Undo of a move: order, atomicity and shape (Tester review)', () => {
+  it('undoes a group moved from the middle', async () => {
+    await setup();
+    await group('X');
+    await group('Y');
+    const order = await groupOrder();
+    const middle = order[1];
+    const w = await write('write_move_category_group', { group_id: middle });
+    expect(await groupOrder()).not.toEqual(order);
+    await write('write_undo', { write_id: w.write_id });
+    expect(await groupOrder()).toEqual(order);
+  });
+
+  it('puts a group back before the income group, in the engine order', async () => {
+    await setup();
+    const x = await group('X');
+    const z = await group('Z');
+    const income = (await api.getCategoryGroups()).find(g => g.is_income)!;
+    // Sort order: ..., X, Income, ..., Z; the app lists income last, so X's
+    // listed next is not the income group
+    await api.moveCategoryGroup(z.id, undefined);
+    await api.moveCategoryGroup(x.id, income.id);
+    const order = await groupOrder();
+    const w = await write('write_move_category_group', { group_id: x.id });
+    expect(changesOf(w.write_id)).toEqual([
+      { id: x.id, field: 'next_group_id', before: income.id, after: null },
+    ]);
+    await write('write_undo', { write_id: w.write_id });
+    expect(await groupOrder()).toEqual(order);
+  });
+
+  it('makes one engine call: a failure changes nothing and the undo stays usable', async () => {
+    await setup();
+    const x = await group('X', ['A', 'B', 'C']);
+    const y = await group('Y');
+    const w = await write('write_move_category', {
+      category_id: x.B,
+      group_id: y.id,
+    });
+    const before = JSON.stringify(await api.getCategoryGroups());
+    const move = vi
+      .spyOn(api, 'moveCategory')
+      .mockRejectedValueOnce(new Error('boom'));
+    const update = vi.spyOn(api, 'updateCategory');
+    const failed = await undo(w.write_id);
+    expect(failed.json.failure).toMatch(/before any row changed/);
+    expect(move).toHaveBeenCalledTimes(1);
+    expect(update).not.toHaveBeenCalled();
+    expect(JSON.stringify(await api.getCategoryGroups())).toBe(before);
+    await write('write_undo', { write_id: w.write_id });
+    expect(await names(x.id)).toEqual(['A', 'B', 'C']);
+  });
+
+  it('refuses when the old next sibling is now in another group', async () => {
+    await setup();
+    const x = await group('X', ['A', 'B', 'C']);
+    const y = await group('Y');
+    const z = await group('Z');
+    const w = await write('write_move_category', {
+      category_id: x.B,
+      group_id: y.id,
+    });
+    await api.moveCategory(x.C, z.id);
+    const text = await expectRefusedUndo(w.write_id, FIX_CATEGORY);
+    expect(text).toContain(`${x.C} (next_category_id)`);
+    expect(text).toMatch(/the category it sat before is now in another group/);
+  });
+
+  it.each([
+    ['a group line with two ids', 'write_move_category_group', true, false],
+    [
+      'a group line with an extra change',
+      'write_move_category_group',
+      false,
+      true,
+    ],
+    [
+      'a category line without its group_id change',
+      'write_move_category',
+      false,
+      false,
+    ],
+  ])('%s is not undoable', async (_, tool, twoIds, extra) => {
+    await setup();
+    const x = await group('X', ['A']);
+    const y = await group('Y');
+    const isCategory = tool === 'write_move_category';
+    const row = isCategory ? x.A : x.id;
+    const next = isCategory ? 'next_category_id' : 'next_group_id';
+    await plantMove('shape', tool, twoIds ? [row, y.id] : [row], [
+      { id: row, field: next, before: null, after: null },
+      ...(extra
+        ? [{ id: row, field: 'group_id', before: y.id, after: x.id }]
+        : []),
+    ]);
+    await expectRefusedUndo('shape', /not an id of its kind/);
+  });
+});

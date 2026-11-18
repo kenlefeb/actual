@@ -79,8 +79,25 @@ loot-core SHALL accept a draft and its splits only with the listed keys and type
 - **WHEN** a draft's `cleared` is `"yes"`
 - **THEN** the preview fails with `[native:invalid-draft]`
 
+### Requirement: Split child ids belong to the edited transaction
+A split child `id` SHALL be accepted only on an edit, and only for a live child of that transaction. On an add, the engine SHALL mint every child id, and any split `id` SHALL refuse with `[native:invalid-draft]`. A refused draft SHALL change nothing.
+
+#### Scenario: An add names an existing row
+- **GIVEN** a reconciled transaction R in another account
+- **WHEN** native code saves a new split whose child carries R's id
+- **THEN** the call fails with `[native:invalid-draft]`, and R is unchanged in account, amount, parent and reconciled flag
+
+#### Scenario: An edit names someone else's row
+- **GIVEN** a split being edited, and a transaction R that is not one of its children
+- **WHEN** native code saves the edit with a child carrying R's id
+- **THEN** the call fails with `[native:invalid-draft]`, and R and the split are unchanged
+
+#### Scenario: An edit keeps its own child
+- **WHEN** native code saves an edit whose children carry their own ids
+- **THEN** those children are updated in place
+
 ### Requirement: The preview evaluates amounts and rules without writing
-`native/transaction-preview` SHALL return the draft as the web form would show it after a field commit, each amount evaluated from its text as signed integer minor units, the split remainder, the fields set by rules, any fields a payee change replaced with their previous values, and field errors from a closed set of codes. It SHALL have no side effects: no table written, no payee created, no undo step.
+`native/transaction-preview` SHALL return the result of one rules run on the person's input with amounts evaluated as signed minor units, a digest of that result, the fields a rule set, a suggestion for each hand-set field a rule would set differently, the split remainder, and field errors from a closed set of codes. It SHALL have no side effects: no table written, no payee created, no undo step.
 
 #### Scenario: Arithmetic
 - **WHEN** a draft carries amount text `12.50+3*2` with Outflow in a `1,000.33` budget
@@ -105,17 +122,27 @@ loot-core SHALL accept a draft and its splits only with the listed keys and type
 - **THEN** "Brand New Payee" is created in the save's undo step, and undo removes it
 
 ### Requirement: Rules keep the person's own fields
-In a preview of a new draft, rules SHALL not change a field the person set or cleared by hand, except that a payee change may replace it, as on the web; each field so replaced SHALL be returned with its previous value. A draft with an id SHALL run no rules.
+The person's fields SHALL be every field they set or cleared by hand in the sheet, plus a preset account. Rules SHALL never change them, in the preview, on a payee change, or at save; for each one a rule would set differently, the preview SHALL return the rule's value as a suggestion. The draft SHALL hold only the person's input, never a rule's output. A draft with an id SHALL run no rules.
 
 #### Scenario: A cleared category
 - **GIVEN** the Costco rule filled Groceries, then the person cleared the category
 - **WHEN** the amount changes
 - **THEN** the category stays empty
 
-#### Scenario: Replaced by a payee change
+#### Scenario: Typed before any rule touched it
+- **GIVEN** the person typed notes "lunch" before choosing a payee, and a rule "payee is Costco → notes Bulk run"
+- **WHEN** the person picks Costco and saves
+- **THEN** the preview keeps notes "lunch" and suggests "Bulk run", and the first save stores "lunch" with no `preview-stale`
+
+#### Scenario: A hand-set field stays on a payee change
 - **GIVEN** the person chose category Dining by hand
-- **WHEN** the payee changes to Costco
-- **THEN** the preview returns Groceries and lists category as replaced, previously Dining
+- **WHEN** the payee changes to Costco, whose rule sets Groceries
+- **THEN** the result keeps Dining, and the preview suggests Groceries for the category
+
+#### Scenario: Taking the suggestion
+- **GIVEN** that suggestion
+- **WHEN** native code previews again with category removed from the person's fields
+- **THEN** the result has Groceries, marked as set by a rule, and saving stores Groceries
 
 ### Requirement: Amount numbers follow the budget's number format
 Preview and save SHALL read each number by the budget's format: grouping only between integer digits at the format's group positions (3 digits, or last 3 then 2 for `1,00,000`), with space, NBSP and U+202F interchangeable in `space-comma` and `'` and U+2019 in `apostrophe-dot`; one decimal separator. A number not fully read SHALL be `amount-invalid`.
@@ -123,6 +150,14 @@ Preview and save SHALL read each number by the budget's format: grouping only be
 #### Scenario: comma-dot
 - **GIVEN** the budget's format is `comma-dot`
 - **THEN** `1,234.56` reads as 1234.56, and `12,34` and `1.234,56` are `amount-invalid`
+
+#### Scenario: A decimal separator at either end
+- **GIVEN** the format is `comma-dot`
+- **THEN** `12.` reads as 12.00 and `.5` as 0.50 in the preview and the save, and `12,` is `amount-invalid`
+
+#### Scenario: Trailing comma in a comma-decimal format
+- **GIVEN** the format is `dot-comma`
+- **THEN** `12,` reads as 12.00, and `12.` is `amount-invalid`
 
 #### Scenario: dot-comma
 - **GIVEN** the format is `dot-comma`
@@ -158,16 +193,20 @@ The preview's `amount-invalid` field error SHALL carry the budget's decimal sepa
 - **THEN** the sheet tells them to choose Expense or Income instead
 
 ### Requirement: Amount expressions use a closed set of operators
-Preview and save SHALL accept `+ - * /`, `×` and `÷`, and `−` (U+2212) as subtraction, each between two operands, with parentheses; spaces next to an operator or parenthesis, or around the text, are ignored. One currency symbol next to a number SHALL be ignored. Anything else, including `1e20`, `0x10`, `1_000`, `^` and a leading `+`, SHALL be `amount-invalid`.
+Preview and save SHALL accept `+ - * /`, `×`, `÷` and `−` (U+2212) between two operands, with parentheses; spaces next to an operator or parenthesis, or around the text, are ignored. One symbol next to a number SHALL be ignored: the budget currency's own if one is set, else any currency symbol. Anything else, including `1e20`, `0x10`, `1_000`, `^` and a leading `+`, SHALL be `amount-invalid`.
 
 #### Scenario: Operators and spacing
 - **GIVEN** the format is `space-comma`
 - **WHEN** a draft chosen as Expense has amount text `  (1 000 × 2) − 500 ÷ 2  `
 - **THEN** the preview returns −175000
 
-#### Scenario: Currency symbol
-- **GIVEN** the format is `comma-dot`
+#### Scenario: Currency symbol, no currency set
+- **GIVEN** the format is `comma-dot` and no budget currency is set
 - **THEN** `$12.50` and `12.50 €` read as 12.50, and `1$2` is `amount-invalid`
+
+#### Scenario: Currency symbol, currency set
+- **GIVEN** the budget currency is USD (`$`)
+- **THEN** `$12.50` reads as 12.50, and `€12.50` and `12.50 £` are `amount-invalid`
 
 #### Scenario: Refused text
 - **WHEN** a draft's amount text is `1e20`, `0x10`, `1_000`, `2^3`, `1..5`, `12abc` or `5+`
@@ -232,12 +271,17 @@ The preview and the save SHALL report `account-closed` when the transaction's ac
 - **THEN** the preview reports `account-closed` and the save fails with `[native:invalid-draft:account-closed]`
 
 ### Requirement: The save checks before it writes
-`native/transaction-save` SHALL refuse, writing nothing: a draft of the wrong shape or with no undo token (`[native:invalid-draft]`); an edit with no digest or a digest that no longer matches (`[native:changed-since]`); an invalid draft (`[native:invalid-draft:<codes>]`, listing only field codes from the fixture, never user text); a reconciled touched row without `confirmedReconciled === true` (`[native:needs-confirmed-reconciled]`).
+`native/transaction-save` SHALL refuse, writing nothing: a draft of the wrong shape or with no undo token (`[native:invalid-draft]`); an edit of a closed account's row (`[native:not-found]`); an edit with no digest or a stale digest (`[native:changed-since]`); an invalid draft (`[native:invalid-draft:<codes>]`, listing only field codes from the fixture, never user text); a reconciled touched row without `confirmedReconciled === true` (`[native:needs-confirmed-reconciled]`).
 
 #### Scenario: Changed since read
 - **GIVEN** the form was read with digest D, then a sync changed a child's notes
 - **WHEN** native code saves with digest D
 - **THEN** the call fails with `[native:changed-since]` and nothing changes
+
+#### Scenario: Edit in a closed account
+- **GIVEN** the form was read, then the transaction's account was closed on another device
+- **WHEN** native code saves the edit
+- **THEN** the call fails with `[native:not-found]` and nothing changes
 
 #### Scenario: No digest
 - **WHEN** native code saves an edit without a digest
@@ -251,8 +295,27 @@ The preview and the save SHALL report `account-closed` when the transaction's ac
 - **WHEN** native code saves without `undoToken`
 - **THEN** the call fails with `[native:invalid-draft]`
 
+### Requirement: The result digest is canonical and separate
+`resultDigest` SHALL be SHA-256 over canonical JSON of the array of rows a save would store (parent, then children in input order, so count and order count), each with exactly account, amount in minor units, category, cleared, date, notes, its own payee as a tagged id or name, and schedule, keys sorted. It SHALL be computed in the engine, apart from the edit digest; an edit sends both.
+
+#### Scenario: Same input, same digest
+- **WHEN** native code previews the same input twice with no change to rules or data
+- **THEN** both previews return the same `resultDigest`
+
+#### Scenario: Rows and child payees count
+- **WHEN** two results differ only in the order of two children, in an added child, or in one child's payee
+- **THEN** their result digests differ
+
+#### Scenario: Key order does not matter
+- **WHEN** two inputs differ only in the order of their JSON keys
+- **THEN** their result digests are equal
+
+#### Scenario: An edit sends both
+- **WHEN** native code saves an edit
+- **THEN** a wrong edit digest refuses with `[native:changed-since]`, and a wrong `previewDigest` refuses with `[native:preview-stale]`
+
 ### Requirement: Rules run first at save and must match the preview
-For a new transaction the save SHALL evaluate the draft's amounts, then run the rules keeping the person's own fields. If any rule-settable field (account, date, payee, category, notes, cleared, amount, on any row) then differs, it SHALL refuse with `[native:preview-stale]` before writing; amount evaluation is not a difference. Validation and the reconciled check SHALL apply to the result.
+For a new transaction the save SHALL compute the result as the preview does, once, on the same input. It SHALL store it only if its digest equals the preview digest sent, or, with none sent, if no rule changed a rule-settable field of the input; otherwise `[native:preview-stale]`, before writing. Validation and the reconciled check SHALL apply to the result.
 
 #### Scenario: Evaluating the amount is not a difference
 - **GIVEN** a draft with amount text `12.50+3*2`, and rules that change nothing
@@ -263,6 +326,20 @@ For a new transaction the save SHALL evaluate the draft's amounts, then run the 
 - **GIVEN** a preview showed category Groceries, then a sync edited the rule to set Household
 - **WHEN** native code saves the previewed draft
 - **THEN** the call fails with `[native:preview-stale]` and nothing is stored
+
+#### Scenario: An append-notes rule does not loop
+- **GIVEN** a rule "payee is Costco → append notes ' #bulk'", and the person's notes "lunch"
+- **WHEN** native code previews, then saves the same input with the preview's digest
+- **THEN** the save stores "lunch #bulk" on the first attempt, with no `preview-stale`
+
+#### Scenario: A forged or stale digest only refuses
+- **WHEN** native code saves an input with a `previewDigest` that is made up, or from an earlier preview of a different input
+- **THEN** the call fails with `[native:preview-stale]`, nothing is stored, and the engine never stores a result it did not compute in this call
+
+#### Scenario: Unchecked, then once more
+- **GIVEN** the same rule, and a save with no preview digest
+- **WHEN** the save refuses with `[native:preview-stale]`, native code previews the same input, and saves with that digest
+- **THEN** the second save stores "lunch #bulk", not "lunch #bulk #bulk"
 
 #### Scenario: A rule sets a closed account
 - **GIVEN** a rule sets the account to a closed account
@@ -278,7 +355,7 @@ A save and `native/transactions-delete` SHALL treat a touched row as reconciled 
 - **THEN** the call fails with `[native:needs-confirmed-reconciled]` and nothing changes
 
 ### Requirement: A repeated add never stores twice
-An add SHALL carry a new id chosen by native code: a lowercase UUID (8-4-4-4-12 hex), or the save SHALL refuse with `[native:invalid-draft]`. A repeat SHALL match only a live top-level row in the draft's account with the same date, amount, payee, category and child count: it returns that id and writes nothing. Any other row with that id SHALL refuse, `[native:changed-since]` if deleted, else `[native:invalid-draft]`. This SHALL hold across restarts.
+An add SHALL carry a new id chosen by native code: a lowercase UUID (8-4-4-4-12 hex), or the save SHALL refuse with `[native:invalid-draft]`. A repeat SHALL match only a live top-level row in the draft's account with the same date, amount, payee, category and child count as the draft's result: it returns that id and writes nothing. Any other row with that id SHALL refuse, `[native:changed-since]` if deleted, else `[native:invalid-draft]`. This SHALL hold across restarts.
 
 #### Scenario: Retry after an engine restart
 - **GIVEN** a save of new id N landed, then the engine restarted before its answer arrived
@@ -374,7 +451,7 @@ Swift SHALL send `webTransactionAction` only with a saved, live id from the form
 - **THEN** it ignores the message
 
 ### Requirement: Form reads, previews and saves meet the latency gate
-On a seed of 5,000 payees, 40 accounts, 150 categories, 300 rules and a 50-child split, the median loot-core time SHALL be under 50 ms for: a two-letter and an empty payee search, a payee-change preview on a new transaction, an amount-change preview on the split, the form read of the split, and a new transaction's save.
+On a seed of 5,000 payees, 40 accounts, 150 categories, 300 rules and a 50-child split, the median loot-core time SHALL be under 50 ms for: a two-letter and an empty payee search, a payee-change preview with three hand-set fields to suggest for, an amount-change preview on the split, the form read of the split, and a new transaction's save.
 
 #### Scenario: The perf suite
 - **WHEN** the native perf suite runs in Fork CI

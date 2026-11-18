@@ -62,7 +62,7 @@ On iPhone, a transaction added or edited in the native sheet SHALL be stored exa
 - **THEN** the transaction, its children, any new payee and any transfer partner are removed as one step
 
 ### Requirement: Rules fill the form as the web form does
-On iPhone, while adding, the sheet SHALL show the rules' result after each field commit, as the web form does. A payee change SHALL apply every field the rules set; other changes SHALL fill only empty fields and notes. A field the person cleared SHALL stay empty. Editing a saved transaction SHALL run no rules.
+On iPhone, while adding, the sheet SHALL show the rules' result after each field commit. Rules SHALL fill every field the person has not set or cleared by hand, and SHALL never change one they have, even on a payee change (a deliberate difference from the web). A field the person cleared SHALL stay empty. Editing a saved transaction SHALL run no rules.
 
 #### Scenario: A payee rule fills the category
 - **GIVEN** a rule "payee is Costco → category Groceries"
@@ -79,28 +79,28 @@ On iPhone, while adding, the sheet SHALL show the rules' result after each field
 - **WHEN** the person edits its amount
 - **THEN** the category stays Dining
 
-### Requirement: A rule's change is shown and can be undone
-On iPhone, a field filled by a rule SHALL read "Set by a rule" in words and to VoiceOver. The person's edit to it SHALL be kept until the next payee change. When a payee change replaces fields the person set by hand, the sheet SHALL name them and offer Restore, which puts back their values and is announced to VoiceOver.
+### Requirement: A rule's change is shown and a hand-set field stays
+On iPhone, a field a rule filled and the person never touched SHALL read "Set by a rule" in words and to VoiceOver. A field the person set by hand SHALL stay, even when the payee changes; if a rule would set it differently, the sheet SHALL show the rule's value with "Use rule's value", announced to VoiceOver, which applies it and makes it rule-set.
 
 #### Scenario: The indicator
 - **GIVEN** a rule "payee is Costco → category Groceries"
 - **WHEN** the person picks Costco on a new transaction
 - **THEN** the category shows Groceries with "Set by a rule", and VoiceOver reads "Category, Groceries, set by a rule"
 
-#### Scenario: The person's override is kept
-- **GIVEN** the rule filled Groceries
-- **WHEN** the person picks Dining and then changes the amount
-- **THEN** the category stays Dining without the indicator
-
-#### Scenario: Restore after a payee change
+#### Scenario: The person's choice stays on a payee change
 - **GIVEN** the person chose Dining by hand
-- **WHEN** they change the payee to Costco and the rule sets Groceries
-- **THEN** the sheet says the category was changed by a rule, and Restore puts back Dining
+- **WHEN** they change the payee to Costco
+- **THEN** the category stays Dining, the sheet says the rule for Costco would set Category to Groceries, and VoiceOver announces it
+
+#### Scenario: Use rule's value
+- **GIVEN** that suggestion
+- **WHEN** the person taps "Use rule's value"
+- **THEN** the category becomes Groceries with "Set by a rule", the suggestion disappears, and saving stores Groceries
 
 #### Scenario: A rule changed before saving
 - **GIVEN** the sheet showed Groceries, then the rule was edited on another device
 - **WHEN** the person saves
-- **THEN** nothing is stored, the sheet says "Rules changed this; check and save again.", shows the rule's new result with "Set by a rule", and the person saves again
+- **THEN** nothing is stored, the sheet says "Rules changed this; check and save again.", shows the rule's new result, and the person saves again
 
 ### Requirement: Amount entry with sign and arithmetic
 On iPhone, the amount field SHALL accept a number or an arithmetic expression with + − × ÷ in the budget's number format; Expense, Income, or a transfer's direction SHALL set the sign. The engine SHALL evaluate the expression; the sheet SHALL show the result and SHALL never compute money itself. An expression that does not evaluate SHALL show an inline error and block saving.
@@ -206,6 +206,17 @@ On iPhone, the category picker SHALL list categories by group, filter by a typed
 #### Scenario: Re-read fails
 - **GIVEN** a category was added on another device and the re-read fails
 - **THEN** the picker keeps its list and shows an error with Retry
+
+### Requirement: Rules that keep changing are settled by the person
+On iPhone, after two refusals in a row because rules changed the result of the same input, the sheet SHALL stop refreshing on its own, name in plain words the fields the rules keep changing, and offer to keep the value shown for each. A kept value becomes the person's own, so the next save stores what was shown.
+
+#### Scenario: A time-dependent rule
+- **GIVEN** a rule whose notes change on every run, and two saves refused because of it
+- **THEN** the sheet says the rules keep changing Notes, and offers to keep the notes shown
+
+#### Scenario: Keeping the value
+- **WHEN** the person keeps the notes shown and saves
+- **THEN** exactly those notes are stored, and the save is not refused again for Notes
 
 ### Requirement: An unchecked field does not block saving
 On iPhone, a timed-out preview SHALL retry once by itself and once on return to the foreground, then show "Couldn't check this yet." with Check Again. Save SHALL stay allowed. If the save's own rule run changes anything the sheet showed, nothing SHALL be stored and the sheet SHALL show the new result with "Rules changed this; check and save again."; otherwise the save SHALL store what was shown.

@@ -4,5 +4,7 @@
   "undo-nothing",
   "no-budget-for-month",
   "invalid-draft",
-  "not-found"
+  "not-found",
+  "changed-since",
+  "preview-stale"
 ]

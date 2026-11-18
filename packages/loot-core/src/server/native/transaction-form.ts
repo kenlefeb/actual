@@ -465,13 +465,20 @@ export function readDraft(name: string, value: unknown): NativeDraft {
 
 // D2: input validation, not a tunable limit
 const MAX_AMOUNT_TEXT = 100;
+// What the web's amount entry evaluates: digits, every number format's
+// separators, currency symbols, spaces, operators and parentheses
+const AMOUNT_CHARACTERS = /^[0-9.,'’   +\-*/^()−\p{Sc}]*$/u;
 
 type Amount = { amount: number } | { error: FieldErrorCode };
 
 /** One amount text in the budget's number format, as signed integer minor units. */
 function evaluateAmount(text: string, inflow: boolean, places: number): Amount {
   if (text.trim() === '') return { error: 'amount-required' };
-  if (text.length > MAX_AMOUNT_TEXT) return { error: 'amount-invalid' };
+  // The arithmetic parser stops at the first character it does not know and
+  // drops the rest ("1e20" would read as 1), so anything else is invalid
+  if (text.length > MAX_AMOUNT_TEXT || !AMOUNT_CHARACTERS.test(text)) {
+    return { error: 'amount-invalid' };
+  }
   const value = evalArithmetic(text, null);
   if (value === null || !Number.isFinite(value)) {
     return { error: 'amount-invalid' };
@@ -682,6 +689,28 @@ export async function transactionPreview({
   ) {
     throw nativeRefusal('invalid-draft', `${name}: invalid changed field`);
   }
+  const { stale: _stale, ...preview } = await evaluateDraft(
+    name,
+    draft,
+    changedField ?? null,
+    'preview',
+  );
+  return preview;
+}
+
+/**
+ * The preview's work, shared with the save (D3). In 'preview' mode the rules'
+ * changes are applied as the web form applies them. In 'save' mode nothing is
+ * applied: `stale` says whether the rules would change any rule-settable field
+ * of the draft as submitted, the person's own fields aside.
+ */
+export async function evaluateDraft(
+  name: string,
+  draft: NativeDraft,
+  changedField: string | null,
+  mode: 'preview' | 'save',
+): Promise<NativePreview & { stale: boolean }> {
+  let stale = false;
   const format = await readFormat();
   const separator = getNumberFormat({ format: format.format }).decimalSeparator;
   const splitMax = await readLimit('transaction-split-max-children');
@@ -758,7 +787,10 @@ export async function transactionPreview({
     const user = new Set<string>(draft.userFields);
     const payeeChange = changedField === 'payee';
 
-    for (const field of RULE_FIELDS) {
+    if (mode === 'save') {
+      stale = ruleDifference(before, after, user);
+    }
+    for (const field of mode === 'save' ? [] : RULE_FIELDS) {
       if (!Object.hasOwn(diff, field)) continue;
       const current = before[field];
       const next = after[field];
@@ -788,7 +820,9 @@ export async function transactionPreview({
     // split, the edited field's rule value goes down to each child
     // (propagateRuleChangeToSubtransactions)
     const ruleSplits = after.subtransactions ?? [];
-    if (draft.splits.length === 0 && ruleSplits.length > 0) {
+    if (mode === 'save') {
+      // Nothing is applied at save; the difference refuses instead
+    } else if (draft.splits.length === 0 && ruleSplits.length > 0) {
       if (!user.has('splits')) {
         draft.splits = ruleSplits.map(s => ({
           payee: s.payee ?? null,
@@ -822,7 +856,7 @@ export async function transactionPreview({
         f !== changedField &&
         !isEmpty(draft[f]),
     );
-    if (probed.length > 0) {
+    if (mode === 'preview' && probed.length > 0) {
       const emptied = { ...draft };
       for (const f of probed) {
         (emptied as Record<string, unknown>)[f] = f === 'cleared' ? false : '';
@@ -936,5 +970,54 @@ export async function transactionPreview({
     replaced,
     remaining,
     errors,
+    stale,
   };
+}
+
+/** True when a notes rule's result only repeats text the note already carries. */
+function notesAlreadyApplied(current: string, next: string) {
+  const index = next.indexOf(current);
+  if (index === -1) return false;
+  const prepended = next.slice(0, index);
+  const appended = next.slice(index + current.length);
+  return (
+    (prepended === '' || current.startsWith(prepended)) &&
+    (appended === '' || current.endsWith(appended))
+  );
+}
+
+/**
+ * D3 step 4: whether the rules change any rule-settable field (account, date,
+ * payee, category, notes, cleared, amount) on the parent or any child,
+ * compared with the evaluated draft. A field the person set or cleared keeps
+ * their value, so it is no difference; nor is a notes rule already applied.
+ */
+function ruleDifference(
+  before: TransactionEntity,
+  after: TransactionEntity,
+  user: Set<string>,
+) {
+  const differs = (
+    a: TransactionEntity,
+    b: TransactionEntity,
+    fields: readonly RuleField[],
+  ) =>
+    fields.some(f => {
+      if (user.has(f) || (a[f] ?? null) === (b[f] ?? null)) return false;
+      return !(
+        f === 'notes' &&
+        typeof a.notes === 'string' &&
+        a.notes !== '' &&
+        typeof b.notes === 'string' &&
+        notesAlreadyApplied(a.notes, b.notes)
+      );
+    });
+  if (differs(before, after, RULE_FIELDS)) return true;
+  const own = before.subtransactions ?? [];
+  const ruled = after.subtransactions ?? [];
+  if (user.has('splits')) return false;
+  if (own.length !== ruled.length) return true;
+  return own.some((child, i) =>
+    differs(child, ruled[i], ['payee', 'category', 'notes', 'amount']),
+  );
 }

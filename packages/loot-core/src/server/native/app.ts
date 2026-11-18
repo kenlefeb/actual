@@ -86,6 +86,7 @@ import {
   transactionForm,
   transactionPreview,
 } from './transaction-form';
+import { transactionSave } from './transaction-save';
 
 // null: the value doesn't apply to this budget type (or row)
 type Amount = number | null;
@@ -249,6 +250,7 @@ export type NativeHandlers = {
   'native/transaction-form': typeof transactionFormRead;
   'native/payees': typeof payeesSearch;
   'native/transaction-preview': typeof transactionPreview;
+  'native/transaction-save': typeof transactionSave;
 };
 
 export const app = createApp<NativeHandlers>();
@@ -304,6 +306,8 @@ app.method('native/account-move', accountsWrite(accountMove));
 app.method('native/transaction-form', transactionFormRead);
 app.method('native/payees', payeesSearch);
 app.method('native/transaction-preview', transactionPreview);
+// sc-3602 (D3): the save is one undo step carrying Swift's token
+app.method('native/transaction-save', accountsWrite(transactionSave));
 
 type NativeUndoMeta = {
   nativeUndoToken?: string;

@@ -30,7 +30,7 @@ final class SettingsBridgeTests: XCTestCase {
         XCTAssertEqual(
             settings.limits.first { $0.id == "accounts-register-page-size" },
             NativeSettings.Limit(id: "accounts-register-page-size", value: 120, defaultValue: 50, ceiling: 200))
-        XCTAssertEqual(settings.limits.count, 12)
+        XCTAssertEqual(settings.limits.count, 6)
     }
 
     func testServerInfoDecodesReachableAndUnreachable() async throws {

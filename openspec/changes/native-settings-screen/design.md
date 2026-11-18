@@ -44,8 +44,8 @@
 - **`budget`:** `{name, id, groupId}`.
 - **`encryption`:** `{enabled}`, from `encryptKeyId`.
 - **`server`:** `{url}`, or null for a local-only budget, plus `signedIn` and the user's display name.
-- **`sync`:** `{pending}`, true while the engine holds changes not yet sent (`messages_pending` has rows).
-- **`limits`:** every registry limit as `{id, value, default, ceiling}`, in registry order.
+- **`sync`:** `{pending}`, true when the budget syncs and `messages_crdt` holds a message newer than `lastSyncedTimestamp`, the set the next sync sends. (`messages_pending` holds deferred incoming messages, not unsent ones.)
+- **`limits`:** every registry limit that engine code reads, as `{id, value, default, ceiling}`, in registry order. A limit nothing reads yet is not listed, so Settings never shows a setting that does nothing; the story that adds its reader flips `hasReader`.
 - **`clientVersion`:** added by the page from `window.Actual.ACTUAL_VERSION`. loot-core cannot see it.
 
 **`native/server-info`** returns `{reachable, version}`:

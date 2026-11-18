@@ -11,6 +11,7 @@ import * as post from '#server/post';
 import * as prefs from '#server/prefs';
 import { BUDGET_TYPES } from '#server/prefs';
 import { getServer } from '#server/server-config';
+import * as sheet from '#server/sheet';
 import { batchMessages } from '#server/sync';
 import { currencies } from '#shared/currencies';
 import { UPCOMING_LENGTH_PRESET_VALUES } from '#shared/schedules';
@@ -209,9 +210,16 @@ export async function saveSettings(changes: unknown): Promise<void> {
   const writes = await validate(changes);
   const budgetType = writes.find(w => w.key === 'budgetType')?.value;
   const previousType = budgetType ? getBudgetType() : null;
-  // Switched and awaited here, before the write: the write's own switch runs
-  // unawaited and would race the cache reset below
-  if (budgetType) await setBudgetType(budgetType);
+  if (budgetType) {
+    // The cache stays dirty from before the in-memory switch until the
+    // rebuild, so a crash anywhere in between rebuilds it on the next start.
+    // setType ends its own barrier, so it is opened again after.
+    sheet.get().startCacheBarrier();
+    // Switched and awaited here, before the write: the write's own switch
+    // runs unawaited and would race the cache reset below
+    await setBudgetType(budgetType);
+    sheet.get().startCacheBarrier();
+  }
   try {
     await batchMessages(async () => {
       for (const { key, value } of writes) {
@@ -219,7 +227,10 @@ export async function saveSettings(changes: unknown): Promise<void> {
       }
     });
   } catch (e) {
-    if (previousType) await setBudgetType(previousType);
+    if (previousType) {
+      await setBudgetType(previousType);
+      sheet.get().endCacheBarrier();
+    }
     throw e;
   }
   if (writes.some(w => !isLimitId(w.key))) resetFormulaPreferencesCache();

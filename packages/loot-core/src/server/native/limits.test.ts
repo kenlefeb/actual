@@ -173,6 +173,25 @@ describe('the limits registry', () => {
     expect(others).not.toMatch(/const LIMITS\b/);
   });
 
+  // A setting that does nothing is never shown: `hasReader` is true exactly
+  // when engine code calls readLimit for the id. A story that adds the
+  // handler flips it in the same PR, and the limit appears in Settings.
+  it('marks exactly the limits engine code reads', () => {
+    const server = path.join(__dirname, '..');
+    const source = (readdirSync(server, { recursive: true }) as string[])
+      .filter(f => f.endsWith('.ts') && !f.endsWith('.test.ts'))
+      .map(f => readFileSync(path.join(server, f), 'utf8'))
+      .join('\n');
+    const read = Object.keys(LIMITS).filter(id =>
+      source.includes(`readLimit('${id}')`),
+    );
+    expect(
+      Object.entries(LIMITS)
+        .filter(([, l]) => l.hasReader)
+        .map(([id]) => id),
+    ).toEqual(read);
+  });
+
   it('reads every limit as value, default and ceiling, in registry order', async () => {
     await db.update('preferences', {
       id: 'accounts-register-page-size',
@@ -184,7 +203,10 @@ describe('the limits registry', () => {
       value: '900',
     });
     const limits = await readLimits();
-    expect(limits.map(l => l.id)).toEqual(D11.map(([id]) => id));
+    // Only the limits something reads, in registry order
+    expect(limits.map(l => l.id)).toEqual(
+      D11.map(([id]) => id).filter(id => LIMITS[id].hasReader),
+    );
     expect(limits.find(l => l.id === 'accounts-register-page-size')).toEqual({
       id: 'accounts-register-page-size',
       value: 120,

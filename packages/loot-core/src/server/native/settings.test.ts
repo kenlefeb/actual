@@ -6,6 +6,7 @@
 // main first, as in the app: budgetfiles/app reaches main.ts, which loads ./app
 import '#server/main';
 import * as asyncStorage from '#platform/server/asyncStorage';
+import * as budgetBase from '#server/budget/base';
 import { createBudget } from '#server/budget/base';
 import * as budgetFiles from '#server/budgetfiles/app';
 import * as db from '#server/db';
@@ -14,6 +15,7 @@ import * as post from '#server/post';
 import * as prefs from '#server/prefs';
 import { setServer } from '#server/server-config';
 import * as sheet from '#server/sheet';
+import { PENDING_MESSAGES_TABLE_SQL } from '#server/sync/messages-pending';
 import { clearUndo } from '#server/undo';
 import { currencies } from '#shared/currencies';
 import { UPCOMING_LENGTH_PRESET_VALUES } from '#shared/schedules';
@@ -92,7 +94,12 @@ describe('native/settings', () => {
       default: 50,
       ceiling: 200,
     });
-    expect(settings.limits.map(l => l.id)).toEqual(Object.keys(LIMITS));
+    // Only limits something reads: a setting that does nothing is not shown
+    expect(settings.limits.map(l => l.id)).toEqual(
+      Object.entries(LIMITS)
+        .filter(([, l]) => l.hasReader)
+        .map(([id]) => id),
+    );
     await expect(JSON.stringify(settings, null, 2) + '\n').toMatchFileSnapshot(
       './fixtures/settings.json',
     );
@@ -157,6 +164,30 @@ describe('native/settings', () => {
     await prefs.savePrefs({ lastSyncedTimestamp: sent });
     expect((await h['native/settings']()).sync).toEqual({ pending: true });
     await prefs.savePrefs({ lastSyncedTimestamp: unsent });
+    expect((await h['native/settings']()).sync).toEqual({ pending: false });
+  });
+
+  // Deferred incoming messages (from a newer app version) are not unsent changes
+  it('ignores rows in messages_pending', async () => {
+    await prefs.savePrefs({ groupId: 'g1' });
+    const latest = '2026-11-18T10:00:00.000Z-0000-0123456789abcdef';
+    db.runQuery(
+      "INSERT INTO messages_crdt (timestamp, dataset, row, column, value) VALUES (?, 'preferences', 'dateFormat', 'value', 'S:yyyy-MM-dd')",
+      [latest],
+    );
+    await prefs.savePrefs({ lastSyncedTimestamp: latest });
+    db.runQuery(PENDING_MESSAGES_TABLE_SQL);
+    db.runQuery(
+      "INSERT INTO messages_pending (dataset, row, column, timestamp, value) VALUES ('future_table', 'r1', 'c1', '2026-11-18T12:00:00.000Z-0000-0123456789abcdef', 'S:x')",
+    );
+    expect((await h['native/settings']()).sync).toEqual({ pending: false });
+  });
+
+  it('reads false for a local-only budget, even with local changes', async () => {
+    db.runQuery(
+      "INSERT INTO messages_crdt (timestamp, dataset, row, column, value) VALUES ('2026-11-18T11:00:00.000Z-0000-0123456789abcdef', 'preferences', 'dateFormat', 'value', 'S:yyyy-MM-dd')",
+    );
+    expect(prefs.getPrefs().groupId).toBeFalsy();
     expect((await h['native/settings']()).sync).toEqual({ pending: false });
   });
 });
@@ -298,6 +329,23 @@ describe('native/settings-save', () => {
     });
   });
 
+  it.each(Object.keys(LIMITS))(
+    '%s: takes 1 and its ceiling, refuses ceiling + 1, and null resets it',
+    async id => {
+      const { ceiling } = LIMITS[id as keyof typeof LIMITS];
+      await save({ [id]: 1 });
+      expect(await pref(id)).toBe('1');
+      await save({ [id]: ceiling });
+      expect(await pref(id)).toBe(String(ceiling));
+      for (const bad of [ceiling + 1, -1, Number.NaN, Infinity, -Infinity]) {
+        await expect(save({ [id]: bad })).rejects.toThrow(refused);
+        expect(await pref(id)).toBe(String(ceiling));
+      }
+      await save({ [id]: null });
+      expect(await pref(id)).toBeNull();
+    },
+  );
+
   it('stores a limit from 1 to its ceiling, and null resets it to the default', async () => {
     await save({ 'accounts-register-page-size': 1 });
     expect(await pref('accounts-register-page-size')).toBe('1');
@@ -415,6 +463,59 @@ describe('native/settings-save', () => {
     expect(reset).toHaveBeenCalledTimes(1);
     expect(await pref('budgetType')).toBe('tracking');
     expect(sheet.get().meta().budgetType).toBe('tracking');
+  });
+
+  async function seedBudget() {
+    global.currentMonth = '2026-03';
+    await db.insertCategoryGroup({
+      id: 'income',
+      name: 'Income',
+      is_income: 1,
+    });
+    await db.insertCategory({
+      id: 'salary',
+      name: 'Salary',
+      cat_group: 'income',
+      is_income: 1,
+    });
+    await createBudget(['2026-02', '2026-03']);
+  }
+
+  // Security finding 1: a crash after the in-memory switch and before the
+  // commit must leave the cache dirty, so the next start rebuilds it
+  it('holds the cache dirty from before the switch until the rebuild', async () => {
+    await seedBudget();
+    const spreadsheet = sheet.get();
+    const barrierAtWrite: boolean[] = [];
+    const update = db.update;
+    vi.spyOn(db, 'update').mockImplementation(async (table, row) => {
+      barrierAtWrite.push(spreadsheet.cacheBarrier);
+      return update(table, row);
+    });
+    const setTypeSpy = vi.spyOn(budgetBase, 'setType');
+    const barrierAtSwitch: boolean[] = [];
+    setTypeSpy.mockImplementation(async type => {
+      barrierAtSwitch.push(spreadsheet.cacheBarrier);
+      vi.mocked(budgetBase.setType).mockRestore();
+      return budgetBase.setType(type);
+    });
+    await save({ budgetType: 'tracking' });
+    global.currentMonth = null;
+    expect(barrierAtSwitch).toEqual([true]);
+    expect(barrierAtWrite).toEqual([true]);
+    expect(spreadsheet.cacheBarrier).toBe(false);
+  });
+
+  it('switches the budget type back in memory when the write fails', async () => {
+    await seedBudget();
+    vi.spyOn(db, 'update').mockRejectedValue(new Error('disk full'));
+    await expect(save({ budgetType: 'tracking' })).rejects.toThrow('disk full');
+    vi.restoreAllMocks();
+    global.currentMonth = null;
+    expect(sheet.get().meta().budgetType).toBe('envelope');
+    expect(budgetBase.getBudgetType()).toBe('envelope');
+    expect(await pref('budgetType')).toBeNull();
+    expect(sheet.get().cacheBarrier).toBe(false);
   });
 
   it('applies a changed limit to the next read in the running engine', async () => {

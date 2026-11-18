@@ -52,7 +52,7 @@
   - a test that the raw handlers in D2 are refused natively;
   - `coverage.json` skips;
   - Swift decode tests for `settings.json`.
-- [ ] 1.7 Run `yarn typecheck`, `yarn lint`, the tests, `yarn check:mcp-coverage`, the perf suite and `openspec validate --all --strict`. Security reviews.
+- [x] 1.7 Run `yarn typecheck`, `yarn lint`, the tests, `yarn check:mcp-coverage`, the perf suite and `openspec validate --all --strict`. Security reviews.
 
 ## 2. View model, switches and hand-offs (sc-4300)
 

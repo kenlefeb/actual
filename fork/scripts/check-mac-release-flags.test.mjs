@@ -46,6 +46,10 @@ void test('Mac Release flags: every way to define DEBUG fails', () => {
     'OTHER_SWIFT_FLAGS = -DDEBUG',
     'OTHER_SWIFT_FLAGS = -D DEBUG',
     'OTHER_SWIFT_FLAGS = -Xfrontend -warn-long -DDEBUG',
+    // Values stored with quotes (PR 463 Security note)
+    'OTHER_SWIFT_FLAGS = -D "DEBUG"',
+    'OTHER_SWIFT_FLAGS = "-DDEBUG"',
+    "SWIFT_ACTIVE_COMPILATION_CONDITIONS = 'DEBUG'",
   ]) {
     const result = check(`${CLEAN}    ${line}\n`);
     assert.equal(result.status, 1, line);

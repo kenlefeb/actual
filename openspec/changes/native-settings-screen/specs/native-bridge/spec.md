@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Settings are one local read
-`native/settings` SHALL return, in one message and without network calls, the budget preferences native Settings shows, the budget's name and ids, whether it is encrypted, the server address and signed-in state, the fork client version (added by the page) and every configurable limit as its id, value, default and ceiling.
+`native/settings` SHALL return, in one message and without network calls, the budget preferences native Settings shows, the budget's name and ids, whether it is encrypted, the server address, signed-in state, whether changes are waiting to sync, the fork client version (added by the page) and every registry limit as its id, value, default and ceiling, equal to the registry.
 
 #### Scenario: Reading settings
 - **GIVEN** a budget with `numberFormat` set and `accounts-register-page-size` set to 120
@@ -16,6 +16,10 @@
 #### Scenario: Offline
 - **GIVEN** the server is unreachable
 - **THEN** `native/settings` still answers within the latency gate
+
+#### Scenario: The limits equal the registry
+- **WHEN** a limit is added to the registry
+- **THEN** `native/settings` returns it, and a test fails if the two lists differ
 
 ### Requirement: Server info has its own deadline
 `native/server-info` SHALL return whether the server answered and its version, waiting at most the limit `server-info-timeout-seconds` (default 5, ceiling 30). An unreachable server SHALL return reachable false and no version, not an error.
@@ -45,6 +49,17 @@
 - **WHEN** native code saves `budgetType` tracking
 - **THEN** the preference is stored and the budget's computed values are rebuilt in the same call, as the web does
 
+### Requirement: A settings save is all or nothing on one path
+All keys of one `native/settings-save`, and any budget cache reset it needs, SHALL be written in one batch, so every device and read sees the old set or the new set, never part of one. Every caller that changes these settings SHALL use the same engine validation and write.
+
+#### Scenario: One bad key
+- **WHEN** native code saves two limits, the second over its ceiling
+- **THEN** the call fails and the first limit is unchanged
+
+#### Scenario: Interrupted write
+- **GIVEN** a save of two limits fails while writing the second
+- **THEN** neither limit has changed
+
 ### Requirement: The settings handlers are allowlisted with listed fields
 The bridge SHALL allowlist `native/settings`, `native/server-info` and `native/settings-save` in both the page list and the Swift list, which SHALL be equal. The page SHALL forward only `changes` and `undoToken` for the save and nothing for the reads. `preferences/save`, `save-global-prefs`, `subscribe-sign-out`, `set-server-url`, `key-make` and `reset-budget-cache` SHALL stay refused for native callers.
 
@@ -64,7 +79,7 @@ On a seed with 2,000 preference rows and every limit set, the median loot-core t
 - **THEN** both measurements print their median and p95, and the job fails if either median is 50 ms or more
 
 ### Requirement: Settings hand-offs are a closed set
-The chrome SHALL accept `webSettingsAction` only from the app's own page and only with an action from the closed list: `language`, `budgets`, `sync-server`, `encryption`, `users`, `bank-sync`, `business-calendars`, `experimental`, `export`, `reset-cache`, `repair`, `notifications`, `sign-out`. Any other message SHALL be ignored.
+The chrome SHALL accept `webSettingsAction` only from the app's own page, read no field but `action`, and accept only: `language`, `budgets`, `sync-server`, `encryption`, `users`, `bank-sync`, `business-calendars`, `experimental`, `export`, `reset-cache`, `repair`, `notifications`, `sign-out`. Any other message SHALL be ignored.
 
 #### Scenario: Unknown action
 - **WHEN** the chrome receives `webSettingsAction` with action `delete-budget`

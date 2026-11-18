@@ -27,7 +27,9 @@
 | Accounts | off | sc-3611 task 3.8 flips it and shows its web toggle |
 | Add transaction | off | sc-3602 task 3.9 |
 
-**`LIMITS`** (`server/native/reconcile-lock.ts`) holds five synced limits. Each has a default and a ceiling and is read by `readLimit`. sc-3602 adds two more: `payee-picker-max-results` and `transaction-split-max-children`.
+**`LIMITS`** (`server/native/reconcile-lock.ts`) holds five synced limits. Each has a default and a ceiling and is read by `readLimit` on every call. Open changes add more: #435 (sc-3602) adds five and #436 (sc-4973) adds one; D11 lists them all.
+
+**The MCP server's own limits** are not in `LIMITS` and are not synced preferences. They come from `packages/mcp/src/limits.ts` (environment) and from each grant: rows, cells, deletes, reconcile, audit tail and line, response bytes, statement age, clock skew, `confirm_destructive`, `allow_reconciled` and scopes. `reconcile-statement-balance` says the operator alone sets statement expiry and skew.
 
 **Sign-out.** `subscribe-sign-out` revokes the server session. It then unloads the encryption keys and removes `user-token`, `encrypt-keys`, `lastBudget` and `readOnly`. The page's `signOut` thunk closes the budget afterwards. The user menu passes `endProviderSession` (openid-true-sign-out).
 
@@ -42,7 +44,8 @@
 - **`budget`:** `{name, id, groupId}`.
 - **`encryption`:** `{enabled}`, from `encryptKeyId`.
 - **`server`:** `{url}`, or null for a local-only budget, plus `signedIn` and the user's display name.
-- **`limits`:** every registry limit as `{id, value, default, ceiling}`.
+- **`sync`:** `{pending}`, true while the engine holds changes not yet sent (`messages_pending` has rows).
+- **`limits`:** every registry limit as `{id, value, default, ceiling}`, in registry order.
 - **`clientVersion`:** added by the page from `window.Actual.ACTUAL_VERSION`. loot-core cannot see it.
 
 **`native/server-info`** returns `{reachable, version}`:
@@ -59,8 +62,10 @@
   - A limit value must be a whole number from 1 to its ceiling, or null, which resets it to the default by deleting the preference.
   - An unknown key, a bad value or an empty `changes` refuses the whole call with `[native:invalid-setting]`. The refusal names no value, and nothing is written.
 - **The write:**
-  - `preferences/save` for every key, in one undo step under the native token.
-  - A `budgetType` change runs `reset-budget-cache` inside the same handler, as the web does.
+  - Every key is written in one batch, with any `reset-budget-cache` the batch needs. Every device and every in-flight read sees either the old set or the new set, never part of one.
+  - It is one undo step under the native token.
+  - A `budgetType` change runs `reset-budget-cache`, as the web does.
+  - Validation and write are one engine function. Every caller uses it: the native save, web Settings › Limits, and the MCP tools in `mcp-settings-tools`. None has a copy.
 - **Undo.** Preferences are last write wins (ADR 3). `native/undo` restores the earlier values with no changed-since check, and the spec says so.
 
 Rejected: allowlisting `preferences/save`. It accepts any key, including the import mappings and the per-account flags.
@@ -85,12 +90,18 @@ Rejected: allowlisting `preferences/save`. It accepts any key, including the imp
 | --- | --- | --- | --- |
 | Native-screen switches | UserDefaults (per device) | Swift | UserDefaults; the page through `setNativeScreenOn` |
 | Formatting, budget type, learn categories, upcoming length, currency | synced `preferences` | engine | `native/settings-save` |
-| Limits | synced `preferences` | engine | `native/settings-save` (group 5) |
+| Limits | synced `preferences` | engine | `native/settings-save` (group 4) |
 | Budget name and ids, encryption, server address, user | metadata and global store | engine | read only; changes hand off |
 | Language | global store (per device) | engine | hand-off |
 | Theme | global store | engine | not offered; see D7 |
 
 Swift stores only the switches. It keeps no copy of engine-owned values beyond the visible view model, and it re-reads on change events and on returning to the foreground.
+
+## D4a. How a changed setting reaches running code
+
+- Engine limits are read through `readLimit` on every call. A change applies on the next call everywhere: this iPhone, other devices once synced, the web, and a running MCP server, which reads them through the engine.
+- The MCP server's own limits are read from its environment and grants at start. A change to those needs a restart, and none of them is reachable through `native/settings-save`.
+- A device that is behind syncs only the keys it changed, because the save sends only changed keys. It therefore cannot roll back a key it never touched (last write wins per key, ADR 3).
 
 ## D5. Native-screen switches
 
@@ -102,7 +113,7 @@ Swift stores only the switches. It keeps no copy of engine-owned values beyond t
 
 **Values.**
 
-- A row shows on when the key is unset or true.
+- A row shows the screen's own current value: the stored value when set, otherwise that screen's default. The default belongs to the screen's story. Today Reconcile reads on while unset; Budget, Paychecks, Accounts and Add transaction read off until sc-5090, sc-3611 and sc-3602 flip them.
 - Toggling stores an explicit true or false. An explicit false is kept across updates.
 - The native row and web Settings › Native screens write the same key, so both always agree.
 
@@ -113,7 +124,7 @@ Swift stores only the switches. It keeps no copy of engine-owned values beyond t
 - sc-3611 task 3.8 owns the Accounts default and its web toggle. sc-3602 task 3.9 owns Add transaction's.
 - The native section shows whatever the registry says when it ships. It never sets a default itself.
 
-**The Settings switch.** `NativeScreen.settings` reads off while unset until the hands-on pass in task 4.8. That task flips it to on (Ken, 2026-11-15).
+**The Settings switch.** `NativeScreen.settings` reads off while unset until the hands-on pass in task 3.8. That task flips it to on (Ken, 2026-11-15).
 
 - While it is off, the Settings tab is the web screen, and its Native screens section shows the Settings row, so the native screen can be turned back on.
 - While it is on, turning it off in native Settings returns the tab to the web screen at once.
@@ -140,7 +151,7 @@ The closed action list, each with the story that makes it native:
 | `notifications` | the fork news page | sc-4621 |
 | `sign-out` | the page's sign-out (D8) | sc-4637 |
 
-The chrome refuses anything else, and it accepts the message only from the app's own page. Backups are not offered on iPhone (Ken, 2026-11-16; sc-4648).
+The chrome refuses anything else, accepts the message only from the app's own page, and reads no field other than `action`. Backups are not offered on iPhone (Ken, 2026-11-16; sc-4648).
 
 ## D7. Theme
 
@@ -154,10 +165,13 @@ The native screens follow the system appearance (the Product Owner's decision). 
 **Sign-out.**
 
 - The Sync section offers Sign out, in red, with a native confirmation: "Sign out of <server>? The budget stays on the server. You'll need to sign in again on this iPhone."
+- While `sync.pending` is true, the confirmation also says "Some changes on this iPhone haven't synced yet. Signing out now loses them." It offers Sync now, which runs the allowlisted `sync` and then asks again. Sign out stays available.
 - On confirm, Swift sends `webSettingsAction {action: 'sign-out'}`. The page runs its existing sign-out with `endProviderSession: true`, as the user menu does.
 - On the device, that removes the session token, the encryption keys, the last-opened budget and the read-only marker, and closes the budget.
 - The native view models drop their cached values and show the page's sign-in screen.
 - The native-screen switches are kept, because they are device settings, not account data.
+- The local budget copy stays on the device, as on the web. An unencrypted budget remains readable there after sign-out.
+- Native code keeps no copy of budget data outside the view models it drops.
 
 It stays page-driven because sign-out changes the origin and the session, and the origin guard keys on the page.
 
@@ -168,7 +182,7 @@ It stays page-driven because sign-out changes the origin and the session, and th
 
 ## D9. AI
 
-No AI-use setting exists in the app today, and nothing in this change uses AI. When AI features arrive, their setting (off, local model, or bring-your-own-key, with a working no-AI path) belongs in Settings under Features. The Product Owner is to file a placeholder story for that row.
+No AI-use setting exists in the app today, and nothing in this change uses AI. When AI features arrive, their setting (off, local model, or bring-your-own-key, with a working no-AI path) belongs in Settings under Features, as story 5111.
 
 ## D10. View model and screen
 
@@ -189,16 +203,42 @@ No AI-use setting exists in the app today, and nothing in this change uses AI. W
 - **Native screens.**
 - **Sync:** server, encryption, Sign out.
 - **Features and Data:** the hand-off rows.
-- **Advanced:** budget and sync ids, which can be copied, and Limits (group 5).
+- **Advanced:** budget and sync ids, which can be copied, and Limits (group 4).
 - **About:** the client version, the iPhone app version and build (from the bundle), the server version, or "Server unreachable" with Retry, and Notifications (hand-off).
 
-## D11. Limits drill-down (group 5, sc-4643)
+## D11. Limits (group 4, sc-4643)
 
-**Native.**
+**The registry.** After #435 and #436 land:
 
-- One row per limit, showing the value and the default ("Default 50"), with a stepper and a number field bounded by the ceiling.
+| Limit | Name shown | Protects | Default | Ceiling |
+| --- | --- | --- | --- | --- |
+| `reconcile-match-max-candidates` | Reconcile: rows searched for a match | Keeps matching fast on a large account | 300 | 2000 |
+| `reconcile-match-max-results` | Reconcile: matches shown | Keeps the match list short | 5 | 20 |
+| `reconcile-lock-list-max-rows` | Reconcile: rows listed when locking | Keeps the lock summary readable | 200 | 2000 |
+| `accounts-register-page-size` | Register: rows per page | Keeps the register fast on a large account | 50 | 200 |
+| `accounts-write-max-ids` | Register: rows changed at once | Limits how much one tap can change | 100 | 500 |
+| `accounts-register-upcoming-max-days` | Scheduled rows: days ahead | Keeps the register's upcoming list bounded | 92 | 366 |
+| `payee-picker-max-results` | Payee search: results shown | Keeps payee search fast | 50 | 500 |
+| `payee-search-max-length` | Payee search: longest search | Keeps search cheap | 100 | 200 |
+| `payee-name-max-length` | New payee: longest name | Keeps payee lists readable | 200 | 500 |
+| `transaction-notes-max-length` | Notes: longest note | Keeps each transaction small | 10,000 | 50,000 |
+| `transaction-split-max-children` | Splits: most parts | Keeps a split editable | 50 | 200 |
+| `server-info-timeout-seconds` | About: server check wait | Stops About waiting on a dead server | 5 | 30 |
+
+A change that adds a limit to `LIMITS` adds its name and help line in the same PR.
+
+**What is not here.** The MCP server's own limits (Facts) are never in `LIMITS` and are never settable through `native/settings-save`. They stay with the operator: environment, server configuration and grants. #435 keeps no retry tokens, so it has no lifetime limit.
+
+**Tests.**
+
+- The `native/settings` limits equal the `LIMITS` registry.
+- Every registry id has a localized name and help line, or the build fails.
+- A key the MCP server enforces is refused by the save.
+
+**Native screen.**
+
+- One row per limit, with its name, its help line, the value, "Default 50", and a stepper and a number field bounded by the ceiling ("Up to 200").
 - Reset to default sends null.
-- Labels and help text come from a localized table keyed by the limit id. A limit id without a label falls back to the id, so a new limit is never hidden.
 
 **Web.** Web Settings › Advanced gets the same list through a page call to the same handler code, so web, iPhone and MCP store identical values.
 

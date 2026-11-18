@@ -13,12 +13,16 @@ The iPhone app SHALL show the native Settings tab only while `NativeScreen.setti
 - **WHEN** the person turns off the Settings row in Native screens
 - **THEN** the tab shows the web Settings screen at once
 
-### Requirement: Native-screen switches are per device and default on
-On iPhone, Settings › Native screens SHALL list one switch per shipped native screen. A switch SHALL read on when never set, and SHALL keep an explicit off across updates. The native and web sections SHALL write the same per-device value. Each screen's own change SHALL decide when its switch reads on while unset; Settings SHALL set no default.
+### Requirement: Native-screen switches show each screen's own default
+On iPhone, Settings › Native screens SHALL list one switch per shipped native screen. A row SHALL show the stored value, or while never set that screen's own default, which the screen's own change decides; Settings SHALL set no default. An explicit off SHALL be kept across updates. The native and web sections SHALL write the same per-device value.
 
-#### Scenario: Never set
-- **GIVEN** a shipped native screen whose switch was never set
+#### Scenario: Never set, default on
+- **GIVEN** the Reconcile switch was never set, and Reconcile defaults on
 - **THEN** its row shows on
+
+#### Scenario: Never set, default still off
+- **GIVEN** the Accounts switch was never set, on a release before Accounts defaults on
+- **THEN** its row shows off, and the Accounts tab is the web screen
 
 #### Scenario: Explicit off survives an update
 - **GIVEN** the person turned the Budget switch off
@@ -56,7 +60,7 @@ On iPhone, Settings › About SHALL show the fork's client version as the web sh
 - **THEN** About reads "Server unreachable" with Retry, and the client version still shows
 
 ### Requirement: Sync shows the server, encryption and sign-out
-On iPhone, Settings › Sync SHALL show the server's address (or that the budget is local only) and whether the budget is end-to-end encrypted, read-only. Sign out SHALL ask first, then end the session as the web user menu does, and remove the device's session, encryption keys and last-opened budget. The native-screen switches SHALL be kept.
+On iPhone, Settings › Sync SHALL show the server's address (or that the budget is local only) and whether the budget is end-to-end encrypted, read-only. Sign out SHALL ask first, then end the session as the web user menu does, and remove the device's session, encryption keys and last-opened budget. The switches and the local budget copy SHALL stay; native code SHALL keep no other copy of budget data.
 
 #### Scenario: Sign out
 - **GIVEN** a signed-in person with an encrypted budget
@@ -66,6 +70,22 @@ On iPhone, Settings › Sync SHALL show the server's address (or that the budget
 #### Scenario: Cancel
 - **WHEN** the person taps Sign out and then Cancel
 - **THEN** they stay signed in and nothing changes
+
+### Requirement: Sign-out warns about unsynced changes
+On iPhone, when changes on the device have not synced, the sign-out confirmation SHALL say that signing out now loses them and SHALL offer Sync now, which syncs and asks again. When nothing is pending, the confirmation SHALL not mention it.
+
+#### Scenario: Pending changes
+- **GIVEN** a transaction added offline that has not synced
+- **WHEN** the person taps Sign out
+- **THEN** the confirmation warns that unsynced changes will be lost and offers Sync now
+
+#### Scenario: Sync now
+- **WHEN** the person taps Sync now and the sync succeeds
+- **THEN** the confirmation shows again without the warning
+
+#### Scenario: Nothing pending
+- **GIVEN** everything has synced
+- **THEN** the confirmation has no unsynced-changes warning
 
 ### Requirement: Settings without a native screen open the web section
 On iPhone, a setting with no native screen yet SHALL be a row that opens its existing web section and returns to native Settings when closed. The rows SHALL be exactly: language, switch budget, change server, encryption, users, bank sync providers, business calendars, experimental features, export, reset cache, repair transactions and notifications. Backups SHALL not appear on iPhone.
@@ -86,7 +106,7 @@ Inside the iPhone app, the native screens and the web screens SHALL follow the s
 - **THEN** it is dark, and the stored theme is still "light"
 
 ### Requirement: Limits can be changed and reset
-Settings › Advanced › Limits SHALL list every configurable limit with its value and default, natively on iPhone and in web Settings on desktop and phone web. A value SHALL be a whole number from 1 to the limit's ceiling; Reset SHALL return it to the default. The change SHALL apply to the next read or write on every device and through MCP.
+Settings › Advanced › Limits SHALL list every configurable limit with its value and default, natively on iPhone and in web Settings on desktop and phone web. A value SHALL be a whole number from 1 to the limit's ceiling; Reset SHALL return it to the default. The change SHALL apply to the next read or write on every device and in a running MCP server.
 
 #### Scenario: Raising the register page size
 - **WHEN** the person sets "Register page size" to 120 on iPhone
@@ -99,6 +119,28 @@ Settings › Advanced › Limits SHALL list every configurable limit with its va
 #### Scenario: Reset
 - **WHEN** the person taps Reset on a changed limit
 - **THEN** it shows its default again
+
+### Requirement: Every limit explains itself
+Each limit SHALL show a plain-words name, one line saying what it protects, its default and its ceiling. A limit without a name or help line SHALL still be listed under its id, and a test SHALL fail the build when a registry limit lacks either.
+
+#### Scenario: Register page size
+- **WHEN** the person opens Limits
+- **THEN** "Register: rows per page" reads "Keeps the register fast on a large account", "Default 50", "Up to 200"
+
+#### Scenario: A new limit without text
+- **GIVEN** a limit is added to the registry with no name or help line
+- **THEN** the build's label test fails
+
+### Requirement: Operator limits are not settings
+Limits that bound the MCP server itself (grant rows, cells, deletes, reconcile, confirm and scope settings; the server's audit, response, statement-age and clock-skew limits) SHALL never be in the Limits list or the settings registry, and SHALL stay set by the operator.
+
+#### Scenario: Not listed
+- **WHEN** the person opens Limits
+- **THEN** no MCP row, cell, delete, audit or statement limit is listed
+
+#### Scenario: Not savable
+- **WHEN** native code saves the key `max_rows` or `statement-max-age-hours`
+- **THEN** the call fails with `[native:invalid-setting]` and nothing changes
 
 ### Requirement: Keyboard, VoiceOver and Dynamic Type
 On iPhone, Settings SHALL be fully usable with a hardware keyboard (Tab and arrows move, Space toggles, Return opens, Esc goes back, ⌘, selects the Settings tab). VoiceOver SHALL read each row's label, value and state, and say when a row opens the web view. Up to AX5, values SHALL wrap below labels and never truncate.

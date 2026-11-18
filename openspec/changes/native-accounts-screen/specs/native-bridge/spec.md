@@ -125,21 +125,31 @@ Deleting a transfer row SHALL also delete its partner row in the other account. 
 - **WHEN** the delete is sent without `confirmedReconciled`
 - **THEN** it is refused and neither row changes
 
+#### Scenario: A partner inside a reconciled split
+- **GIVEN** the partner is a child of a reconciled split whose own flag is not set
+- **WHEN** the delete or categorize is sent without `confirmedReconciled`
+- **THEN** it is refused and nothing changes; the parent's reconciled state counts
+
 ### Requirement: Native Undo refuses after later changes
-Undoing an accounts write SHALL first check that every row or account it touched still has the category, tombstone and order the write left. If any differs, as after an edit synced from another device, the undo SHALL change nothing and say it can't undo.
+Undoing an accounts write SHALL first check that every row or account it touched still has the category, tombstone, order and schedule link the write left. If any differs, as after an edit synced from another device, the undo SHALL change nothing and say it can't undo.
 
 #### Scenario: An edit synced in since
 - **GIVEN** a native categorize to Groceries, then another device sets one of those rows to Dining and it syncs
 - **WHEN** native Undo is called with the categorize token
 - **THEN** it is refused, the row stays Dining and no other row changes
 
+#### Scenario: A schedule link changed since
+- **GIVEN** a native categorize, then one of those rows is linked to or unlinked from a schedule
+- **WHEN** native Undo is called with the categorize token
+- **THEN** it is refused and no row changes
+
 #### Scenario: Nothing changed since
 - **WHEN** native Undo is called right after the write
 - **THEN** every row returns to its earlier state
 
 ### Requirement: Web hand-offs are a closed set of messages
-The app SHALL send `webAccountAction` to its own page only, with `action` one of `add-account`, `link-account`, `account-settings` or `bank-sync`, and, for the last two, an `account_id` that is a known open account. The page SHALL check the action again, refuse anything else, and open only its existing flow.
+The app SHALL send `webAccountAction` to its own page only, with `action` one of `add-account`, `link-account`, `account-settings` or `bank-sync`, and, for the last two, an `account_id` that is a known open account. The page SHALL check the action again, and for the last two that the account is a known open one, refuse anything else, and open only its existing flow.
 
 #### Scenario: An unknown action
 - **WHEN** native code is asked to send `webAccountAction` with action `delete-account`, or `account-settings` with an unknown id
-- **THEN** nothing is sent, and the page refuses an action outside the set if one arrives
+- **THEN** nothing is sent, and the page refuses an action outside the set, or an account id it does not know as open (including `..`), without navigating

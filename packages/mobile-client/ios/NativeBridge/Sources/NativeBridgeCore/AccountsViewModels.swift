@@ -213,6 +213,9 @@ public final class AccountsListViewModel: ObservableObject {
     public static let watchedTables = accountsWatchedTables
 
     @Published public private(set) var state: AccountsLoad<AccountsList> = .loading
+    // Counts failed reads, so a screen can announce each failed attempt once, even when a retry fails
+    // the same way and leaves `state` as it was (sc-3611 task 3.6)
+    @Published public private(set) var failureCount = 0
     @Published public private(set) var refreshError: BudgetRefreshError?
     // From a pull until its page call settles, which can be after the deadline
     @Published public private(set) var isSyncing = false
@@ -272,6 +275,7 @@ public final class AccountsListViewModel: ObservableObject {
         } catch {
             guard mine == generation else { return }
             state = state.failing(.from(error))
+            failureCount += 1
         }
     }
 
@@ -287,6 +291,7 @@ public final class AccountsListViewModel: ObservableObject {
         if let failure {
             refreshError = failure
             if let good = state.value { state = .stale(good, failure == .timedOut ? .timedOut : .other) }
+            failureCount += 1
             return
         }
         guard isSceneActive else { return }
@@ -370,6 +375,9 @@ public final class AccountRegisterViewModel: ObservableObject {
     static let maxSearch = 100
 
     @Published public private(set) var state: AccountsLoad<AccountRegisterContent> = .loading
+    // Counts failed reads, so a screen can announce each failed attempt once, even when a retry fails
+    // the same way and leaves `state` as it was (sc-3611 task 3.6)
+    @Published public private(set) var failureCount = 0
     @Published public private(set) var refreshError: BudgetRefreshError?
     @Published public private(set) var isSyncing = false
     @Published public private(set) var scope: AccountRegisterScope = .all
@@ -449,6 +457,7 @@ public final class AccountRegisterViewModel: ObservableObject {
         } catch {
             guard mine == generation else { return }
             state = state.failing(.from(error))
+            failureCount += 1
             // Never left on Loading: the failed state offers Retry with the register's
             if section == upcomingGeneration { upcoming = .failed }
             return
@@ -514,6 +523,7 @@ public final class AccountRegisterViewModel: ObservableObject {
         } catch {
             guard mine == generation else { return }
             state = state.failing(.from(error))
+            failureCount += 1
         }
         await readUpcoming(section)
     }
@@ -534,6 +544,7 @@ public final class AccountRegisterViewModel: ObservableObject {
         } catch {
             guard mine == generation else { return }
             state = state.failing(.from(error))
+            failureCount += 1
         }
     }
 
@@ -582,6 +593,7 @@ public final class AccountRegisterViewModel: ObservableObject {
             if failure == .waitingForStorage { return }
             refreshError = failure
             if let good = state.value { state = .stale(good, failure == .timedOut ? .timedOut : .other) }
+            failureCount += 1
             return
         }
         guard isSceneActive else { return }

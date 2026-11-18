@@ -58,7 +58,24 @@ Run one build at a time on the shared Mac, and check `uptime` first.
   exercised by a test in this target.)
 - VoiceOver labels: XCUITest reads the accessibility tree, so `element.label`,
   `element.value` and `element.accessibilityHint` are what VoiceOver speaks.
-  Assert them with `XCTAssertEqual(row.label, "...")`. (Not yet exercised.)
+  Assert them with `XCTAssertEqual(row.label, "...")`
+  (`NativeAccountsAccessibilityUITests`). The iOS Simulator does not run
+  VoiceOver, so nothing is ever "heard": a test checks what VoiceOver would be
+  given, and a person with VoiceOver on a device checks how it sounds.
+- What XCUITest cannot see, the Debug UI-test host reads from the live
+  accessibility tree (`UITestActionsProbe` in `UITestAccounts.swift`): the custom
+  actions (the actions rotor) of each row, and the elements VoiceOver can land on
+  (XCUITest's own tree also lists accessibility-hidden elements and the parts
+  inside a combined element, which VoiceOver does not stop on, so it cannot show
+  what is hidden). Tap `uitest.dumpActions` or `uitest.dumpElements` and read
+  `uitest.actions` or `uitest.elements`.
+- Announcements: screens speak through `AccessibilityAnnouncer`; the host
+  records what it was asked to say in `uitest.announcements` ("<how many>|<the
+  last>"). `-UITestFailList YES` and `-UITestFailRegister YES` make a read fail;
+  `-UITestSlowList YES` and `-UITestSlowRegister YES` hold it in flight.
+- `performAccessibilityAudit(for:)` (iOS 17+) runs over the screen. Test the audit
+  types about what VoiceOver finds and says; contrast, Dynamic Type and the
+  system search field are reported separately.
 - Dynamic Type: launch with
   `app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]`
   and assert key controls are still hittable (`isHittable`).

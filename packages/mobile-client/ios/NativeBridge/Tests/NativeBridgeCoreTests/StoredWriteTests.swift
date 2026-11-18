@@ -26,6 +26,73 @@ final class StoredWriteTests: XCTestCase {
         }
     }
 
+    // Named here, so a list that loses one cannot quietly skip the barrier
+    func testEveryWriteIsAWrite() {
+        let writes = [
+            "budget/budget-amount", "budget/transfer-category", "budget/transfer-available", "paycheck-skip-next", "native/undo",
+            "native/paycheck-save", "paycheck-delete", "native/reconcile-tick", "native/reconcile-list-set",
+            "account-statement-balance-save", "native/reconcile-adjust", "native/reconcile-lock", "native/transactions-categorize",
+            "native/transactions-delete", "native/account-reopen", "native/account-move", "native/transaction-save",
+            "native/settings-save",
+        ]
+        XCTAssertEqual(writes.count, 18)
+        for name in writes { XCTAssertEqual(NativeBridgeAllowlist.kind(of: name), .write, name) }
+    }
+
+    // As on the page: only what is listed as a read skips the barrier
+    func testOnlyListedNamesAreReads() {
+        let others = NativeBridgeAllowlist.handlers.filter { NativeBridgeAllowlist.kind(of: $0) != .write }
+        XCTAssertEqual(
+            others,
+            NativeBridgeAllowlist.allReads.union(NativeBridgeAllowlist.sync).union(NativeBridgeAllowlist.storage))
+    }
+
+    func testAnOlderStoredAnswerDoesNotClearANewerWrite() {
+        let status = WriteStorageStatus()
+        let older = status.nextTicket()
+        let newer = status.nextTicket()
+        status.record(PersistedAnswer(stored: false, seq: 2), ticket: newer)
+        status.record(PersistedAnswer(stored: true), ticket: older)
+        XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
+        status.record(PersistedAnswer(stored: true), ticket: status.nextTicket())
+        XCTAssertNil(status.message)
+    }
+
+    func testAnOlderNotStoredAnswerDoesNotUndoANewerStoredOne() {
+        let status = WriteStorageStatus()
+        let older = status.nextTicket()
+        let newer = status.nextTicket()
+        status.record(PersistedAnswer(stored: true), ticket: newer)
+        status.record(PersistedAnswer(stored: false, seq: 1), ticket: older)
+        XCTAssertNil(status.message)
+    }
+
+    func testAStoredEventThatArrivesBeforeItsAnswerCounts() {
+        let status = WriteStorageStatus()
+        status.storedEvent(seq: 5)
+        status.record(PersistedAnswer(stored: false, seq: 5), ticket: status.nextTicket())
+        XCTAssertNil(status.message)
+        status.record(PersistedAnswer(stored: false, seq: 6), ticket: status.nextTicket())
+        XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
+    }
+
+    // With the storage guard off a failed write still answers stored, so nothing
+    // may present that answer as saved. Remove when the guard turns on.
+    func testNoAppCodeReadsTheStoredAnswerBeforeTheGuardIsOn() throws {
+        let client = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let roots = ["ios/NativeBridge/Sources", "ios/App/App", "macos/HomeEconomicsMac"]
+        for root in roots {
+            let files = FileManager.default.enumerator(at: client.appendingPathComponent(root), includingPropertiesForKeys: nil)
+            while let file = files?.nextObject() as? URL {
+                guard file.pathExtension == "swift", file.lastPathComponent != "NativeBridgeClient.swift" else { continue }
+                let text = try String(contentsOf: file, encoding: .utf8)
+                XCTAssertFalse(text.contains("StoredWrite"), file.path)
+                XCTAssertFalse(text.contains(".write(\""), file.path)
+            }
+        }
+    }
+
     func testEveryAllowlistedNameHasAKind() {
         for name in NativeBridgeAllowlist.handlers {
             XCTAssertNotNil(NativeBridgeAllowlist.kind(of: name), name)

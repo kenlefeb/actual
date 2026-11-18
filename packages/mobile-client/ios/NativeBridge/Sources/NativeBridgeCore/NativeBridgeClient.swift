@@ -65,14 +65,16 @@ public enum NativeBridgeAllowlist {
     // storage call changes nothing, so it is never a write.
     public enum Kind: Equatable { case read, write, sync, storage }
 
-    public static let allWrites: Set<String> = writes.union(paycheckWrites).union(reconcileWrites).union(accountsWrites)
-        .union(settingsWrites).union(transactionWrites)
+    public static let allReads: Set<String> = reads.union(reconcileReads).union(accountsReads).union(transactionReads)
+        .union(settingsReads)
 
+    // Anything not listed as a read is a write, as on the page, so a new
+    // handler cannot skip the barrier by being left off a list
     public static func kind(of name: String) -> Kind? {
         guard handlers.contains(name) else { return nil }
-        if allWrites.contains(name) { return .write }
         if sync.contains(name) { return .sync }
-        return storage.contains(name) ? .storage : .read
+        if storage.contains(name) { return .storage }
+        return allReads.contains(name) ? .read : .write
     }
 }
 
@@ -136,30 +138,45 @@ public final class WriteStorageStatus: ObservableObject {
         "Saved here, not yet stored on this device.", comment: "Native screens: a change was made but this device has not stored it yet")
 
     @Published private var writesInProgress = 0
-    @Published private var isNotYetStored = false
-    private var awaitedSeq: Int?
+    // Writes not known to be stored: when their native/persisted call was
+    // asked, and its number once answered
+    @Published private var unstored: [(ticket: Int, seq: Int?)] = []
+    private var lastTicket = 0
+    private var newestStoredTicket = 0
+    private var storedThroughSeq = 0
 
     public nonisolated init() {}
 
     public var message: String? {
         if writesInProgress > 0 { return Self.savingMessage }
-        return isNotYetStored ? Self.notYetStoredMessage : nil
+        return unstored.isEmpty ? nil : Self.notYetStoredMessage
     }
 
     func writeBegan() { writesInProgress += 1 }
     func writeEnded() { writesInProgress -= 1 }
 
-    // A stored answer covers every write before it
-    func record(_ answer: PersistedAnswer) {
-        isNotYetStored = !answer.stored
-        awaitedSeq = answer.stored ? nil : answer.seq ?? awaitedSeq
+    // Taken just before asking, because answers can arrive out of order
+    func nextTicket() -> Int {
+        lastTicket += 1
+        return lastTicket
     }
 
-    // The engine's storage-stored, which the page forwards as `stored`
+    // A stored answer covers every write asked about before it, and no later one
+    func record(_ answer: PersistedAnswer, ticket: Int) {
+        if answer.stored {
+            newestStoredTicket = max(newestStoredTicket, ticket)
+            unstored.removeAll { $0.ticket <= ticket }
+        } else if ticket > newestStoredTicket, (answer.seq ?? .max) > storedThroughSeq {
+            unstored.append((ticket, answer.seq))
+        }
+    }
+
+    // The engine's storage-stored, which the page forwards as `stored`. It can
+    // arrive before the answer that carries its number. Writes are stored in
+    // order, so it covers every earlier number too.
     public func storedEvent(seq: Int) {
-        guard let awaitedSeq, seq >= awaitedSeq else { return }
-        self.awaitedSeq = nil
-        isNotYetStored = false
+        storedThroughSeq = max(storedThroughSeq, seq)
+        unstored.removeAll { $0.seq.map { $0 <= seq } ?? false }
     }
 }
 
@@ -383,23 +400,28 @@ public struct NativeBridgeClient {
             await storage?.writeEnded()
             throw error
         }
-        let answer = await persisted()
-        await storage?.record(answer)
+        let stored = await persisted()
         await storage?.writeEnded()
-        return StoredWrite(data: data, stored: answer.stored)
+        return StoredWrite(data: data, stored: stored)
     }
 
-    private func persisted() async -> PersistedAnswer {
+    private func persisted() async -> Bool {
+        let ticket = await storage?.nextTicket() ?? 0
         do {
-            return try await askPersisted()
+            let answer = try await askPersisted()
+            await storage?.record(answer, ticket: ticket)
+            return answer.stored
         } catch NativeBridgeError.timedOut {
+            await storage?.record(.notStored, ticket: ticket)
             // The one call that may be repeated: it changes nothing
             Task {
-                if let answer = try? await askPersisted() { await storage?.record(answer) }
+                let retry = await storage?.nextTicket() ?? 0
+                if let answer = try? await askPersisted() { await storage?.record(answer, ticket: retry) }
             }
-            return .notStored
+            return false
         } catch {
-            return .notStored
+            await storage?.record(.notStored, ticket: ticket)
+            return false
         }
     }
 
@@ -427,7 +449,7 @@ public struct NativeBridgeClient {
             || (args is AccountReopen && name == "native/account-reopen") || (args is AccountMove && name == "native/account-move")
             || (args is SettingsSave && name == "native/settings-save")
             || (args is TransactionSave && name == "native/transaction-save")
-        guard !NativeBridgeAllowlist.allWrites.contains(name) || isTyped else {
+        guard NativeBridgeAllowlist.kind(of: name) != .write || isTyped else {
             throw NativeBridgeError.invalidWrite(name)
         }
         let encoder = JSONEncoder()

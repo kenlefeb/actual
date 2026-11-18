@@ -6,8 +6,8 @@ import Foundation
 public enum NativeScreen: Equatable, Sendable { case web, native }
 
 public enum NativeScreenSwitch {
-    // Only the Budget tab has a native screen so far
-    public static let nativeTabs: Set<NativeTab> = [.budget]
+    // The Budget tab and, off by default, the Accounts tab have native screens so far
+    public static let nativeTabs: Set<NativeTab> = [.budget, .accounts]
 
     public static func key(for tab: NativeTab) -> String { "NativeScreen.\(tab.rawValue)" }
 
@@ -28,7 +28,7 @@ public enum NativeScreenSwitch {
     public static let accountsKey = "NativeScreen.accounts"
 
     public static func isAccountsNative(defaults: UserDefaults = .standard) -> Bool {
-        defaults.bool(forKey: accountsKey)
+        screen(for: .accounts, defaults: defaults) == .native
     }
 
     // sc-4801: the Reconcile flow ships on, so unset reads as on (Ken,
@@ -51,7 +51,6 @@ public enum NativeScreensScript {
         let screens = NativeTab.allCases.filter(NativeScreenSwitch.nativeTabs.contains).map {
             "\"\($0.rawValue)\": \(NativeScreenSwitch.screen(for: $0, defaults: defaults) == .native)"
         } + [
-            "\"accounts\": \(NativeScreenSwitch.isAccountsNative(defaults: defaults))",
             "\"paychecks\": \(NativeScreenSwitch.isPaychecksNative(defaults: defaults))",
             "\"reconcile\": \(NativeScreenSwitch.isReconcileNative(defaults: defaults))",
         ]

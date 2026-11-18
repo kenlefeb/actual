@@ -1,6 +1,6 @@
-import React, { Fragment, useCallback } from 'react';
+import React, { Fragment, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams, useSearchParams } from 'react-router';
+import { useLocation, useParams, useSearchParams } from 'react-router';
 
 import { Button } from '@actual-app/components/button';
 import { styles } from '@actual-app/components/styles';
@@ -17,6 +17,7 @@ import { MobileBackButton } from '#components/mobile/MobileBackButton';
 import { AddTransactionButton } from '#components/mobile/transactions/AddTransactionButton';
 import { MobilePageHeader, Page } from '#components/Page';
 import { useAccount } from '#hooks/useAccount';
+import { useNavigate } from '#hooks/useNavigate';
 import { useSyncedPref } from '#hooks/useSyncedPref';
 import {
   collapseModals,
@@ -104,6 +105,7 @@ function AccountHeader({ account }: { readonly account: AccountEntity }) {
   const failed = isAccountFailedSync(account);
 
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { mutate: updateAccount } = useUpdateAccountMutation();
 
   const onSave = useCallback(
@@ -231,6 +233,17 @@ function AccountHeader({ account }: { readonly account: AccountEntity }) {
     onReopenAccount,
     onSave,
   ]);
+
+  // The native Accounts screen hands "account settings" to this menu (D7a):
+  // open it once, then forget the request so Back never reopens it
+  const location = useLocation();
+  const asked = (location.state as { openAccountMenu?: boolean } | null)
+    ?.openAccountMenu;
+  useEffect(() => {
+    if (!asked) return;
+    onClick();
+    void navigate(location.pathname, { replace: true, state: {} });
+  }, [asked, onClick, navigate, location.pathname]);
 
   return (
     <View

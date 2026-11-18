@@ -68,8 +68,6 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
             let key: String
             if name == "paychecks" {
                 key = NativeScreenSwitch.paychecksKey
-            } else if name == "accounts" {
-                key = NativeScreenSwitch.accountsKey
             } else if name == "reconcile" {
                 key = NativeScreenSwitch.reconcileKey
             } else if let tab = NativeTab(rawValue: name), NativeScreenSwitch.nativeTabs.contains(tab) {

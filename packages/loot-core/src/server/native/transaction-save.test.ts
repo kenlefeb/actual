@@ -437,25 +437,54 @@ describe('native/transaction-save: rules at save', () => {
   });
 
   // Security, PR 453: only the digest's fields are written from a save
+  // PR 447 review: chained rules never fire on a hand-set field's rule value
+  it('stores the protected result of chained rules, as the preview showed it', async () => {
+    await costcoRule();
+    await insertRule({
+      stage: null,
+      conditionsOp: 'and',
+      conditions: [{ op: 'is', field: 'category', value: 'groceries' }],
+      actions: [{ op: 'set', field: 'notes', value: 'food' }],
+    });
+    const input = draft({
+      payee: 'costco',
+      category: 'dining',
+      userFields: ['payee', 'category'],
+    });
+    const { result, resultDigest } = await previewOf(input);
+    expect(result).toMatchObject({ category: 'dining', notes: '' });
+    await save({ draft: input, previewDigest: resultDigest });
+    const stored = await row(NEW_ID);
+    expect(stored?.category).toBe('dining');
+    expect(stored?.notes ?? '').toBe('');
+  });
+
   it("writes only the digest's fields, whatever a rule sets", async () => {
     await insertRule({
       stage: null,
       conditionsOp: 'and',
       conditions: [{ op: 'is', field: 'notes', value: 'tag' }],
-      actions: [{ op: 'set', field: 'imported_payee', value: 'Smuggled' }],
+      actions: [
+        { op: 'set', field: 'imported_payee', value: 'Smuggled' },
+        // A field the digest carries, so the test proves the rule fired
+        { op: 'set', field: 'cleared', value: true },
+      ],
     });
     const input = draft({ notes: 'tag', userFields: ['notes'] });
-    const { resultDigest } = await previewOf(input);
+    const { result, resultDigest } = await previewOf(input);
+    expect(result.cleared).toBe(true);
     await save({ draft: input, previewDigest: resultDigest });
     const stored = await db.first<{
+      cleared: number;
       imported_description: string | null;
       reconciled: number;
       financial_id: string | null;
     }>(
-      'SELECT imported_description, reconciled, financial_id FROM transactions WHERE id = ?',
+      'SELECT cleared, imported_description, reconciled, financial_id FROM transactions WHERE id = ?',
       [NEW_ID],
     );
     expect(stored).toEqual({
+      cleared: 1,
       imported_description: null,
       reconciled: 0,
       financial_id: null,

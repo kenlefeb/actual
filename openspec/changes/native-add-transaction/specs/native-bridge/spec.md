@@ -117,21 +117,67 @@ In a preview of a new draft, rules SHALL not change a field the person set or cl
 - **WHEN** the payee changes to Costco
 - **THEN** the preview returns Groceries and lists category as replaced, previously Dining
 
-### Requirement: Amount text follows a closed grammar
-Preview and save SHALL accept amount text only as numbers (digits, the budget's grouping separator, one decimal separator), the operators + − × ÷, parentheses and spaces between tokens, fully consumed. Other text SHALL be `amount-invalid`. The sign SHALL come only from the Expense, Income or Transfer choice, and a result below zero SHALL be `amount-negative`.
+### Requirement: Amount numbers follow the budget's number format
+Preview and save SHALL read each number by the budget's format: grouping only between integer digits at the format's group positions (3 digits, or last 3 then 2 for `1,00,000`), with space, NBSP and U+202F interchangeable in `space-comma` and `'` and U+2019 in `apostrophe-dot`; one decimal separator. A number not fully read SHALL be `amount-invalid`.
 
-#### Scenario: Text the grammar does not consume
-- **WHEN** a draft's amount text is `1e20`, `0x10`, `1_000`, `12 34`, `1..5`, `12abc`, `$12`, `-5` or `2*-3`
+#### Scenario: comma-dot
+- **GIVEN** the budget's format is `comma-dot`
+- **THEN** `1,234.56` reads as 1234.56, and `12,34` and `1.234,56` are `amount-invalid`
+
+#### Scenario: dot-comma
+- **GIVEN** the format is `dot-comma`
+- **THEN** `1.234,56` reads as 1234.56, and `1,234.56` is `amount-invalid`
+
+#### Scenario: space-comma
+- **GIVEN** the format is `space-comma`
+- **THEN** `1 234,56`, `1\u00A0234,56` and `1\u202F234,56` each read as 1234.56, and `12 34` is `amount-invalid`
+
+#### Scenario: apostrophe-dot
+- **GIVEN** the format is `apostrophe-dot`
+- **THEN** `1'234.56` and `1’234.56` read as 1234.56, and `12'34` is `amount-invalid`
+
+#### Scenario: comma-dot-in
+- **GIVEN** the format is `comma-dot-in`
+- **THEN** `1,00,000.50` reads as 100000.50, and `1,000,00` and `1,000,000` are `amount-invalid`
+
+### Requirement: Amount expressions use a closed set of operators
+Preview and save SHALL accept `+ - * /`, `×` and `÷`, and `−` (U+2212) as subtraction, each between two operands, with parentheses; spaces next to an operator or parenthesis, or around the text, are ignored. One currency symbol next to a number SHALL be ignored. Anything else, including `1e20`, `0x10`, `1_000`, `^` and a leading `+`, SHALL be `amount-invalid`.
+
+#### Scenario: Operators and spacing
+- **GIVEN** the format is `space-comma`
+- **WHEN** a draft chosen as Expense has amount text `  (1 000 × 2) − 500 ÷ 2  `
+- **THEN** the preview returns −175000
+
+#### Scenario: Currency symbol
+- **GIVEN** the format is `comma-dot`
+- **THEN** `$12.50` and `12.50 €` read as 12.50, and `1$2` is `amount-invalid`
+
+#### Scenario: Refused text
+- **WHEN** a draft's amount text is `1e20`, `0x10`, `1_000`, `2^3`, `1..5`, `12abc` or `5+`
 - **THEN** the preview reports `amount-invalid` and the save fails with `[native:invalid-draft:amount-invalid]`
 
-#### Scenario: A negative result
-- **WHEN** a draft chosen as Expense has amount text `3-8`
+#### Scenario: Leading plus
+- **WHEN** the amount text is `+5`
+- **THEN** it is `amount-invalid`, as on the web, because the sign comes only from the control
+
+#### Scenario: Surrounding whitespace
+- **WHEN** the amount text is ` 12.50 ` with a pasted trailing space
+- **THEN** it reads as 12.50, because whitespace around the text changes no value
+
+### Requirement: The sign comes only from the control
+The sign SHALL come only from Expense, Income or the transfer's direction. A leading `-` or `−` and a result below zero SHALL be `amount-negative`, whose message tells the person to choose Expense or Income; a minus between two operands SHALL be subtraction.
+
+#### Scenario: A leading minus
+- **WHEN** a draft chosen as Expense has amount text `-5` or `−5`
 - **THEN** the preview reports `amount-negative`, the direction stays Expense, and the save fails with `[native:invalid-draft:amount-negative]`
 
-#### Scenario: Grouping and parentheses
-- **GIVEN** a budget with number format `1,000.33`
-- **WHEN** a draft chosen as Expense has amount text `(1,200.50 + 99.50) / 2`
-- **THEN** the preview returns −65000
+#### Scenario: A negative result
+- **WHEN** the amount text is `3-8` or `3−8`
+- **THEN** the preview reports `amount-negative` and nothing flips
+
+#### Scenario: Subtraction
+- **WHEN** the amount text is `8−3` as Income
+- **THEN** the preview returns +500
 
 ### Requirement: Field values are bounded
 The engine SHALL report as field errors: amount text over 100 characters, or an amount not finite, not whole minor units or beyond the safe integer range (`amount-invalid`); notes on any row over `transaction-notes-max-length` (default 10,000, ceiling 50,000; `notes-too-long`); a date that is not real or outside 1900-01-01 to 2999-12-31 (`date-invalid`). A future date SHALL be allowed.

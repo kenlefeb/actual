@@ -39,13 +39,14 @@ struct AccountRegisterView: View {
             }
             .alert(model.actionError?.message ?? "", isPresented: isErrorShown) { Button(AccountsWords.ok, role: .cancel) {} }
             .onChange(of: model.actionError) { error in
-                if let error { UIAccessibility.post(notification: .announcement, argument: error.message) }
+                if let error { AccessibilityAnnouncer.post(error.message) }
             }
-            .onChange(of: model.state.error) { error in
-                if let error { UIAccessibility.post(notification: .announcement, argument: error.registerMessage) }
+            // Once per failed read, including a retry that fails the same way
+            .onChange(of: model.failureCount) { _ in
+                if let error = model.state.error { AccessibilityAnnouncer.post(error.registerMessage) }
             }
             .onChange(of: model.undoOffer) { offer in
-                if let offer { UIAccessibility.post(notification: .announcement, argument: AccountsWords.undoText(offer)) }
+                if let offer { AccessibilityAnnouncer.post(AccountsWords.undoText(offer)) }
             }
             .confirmationDialog(confirming?.title ?? "", isPresented: isConfirming, titleVisibility: .visible, presenting: confirming) { ask in
                 Button(ask.action, role: ask.isDelete ? .destructive : nil) { confirmed(ask) }
@@ -122,7 +123,9 @@ struct AccountRegisterView: View {
             RegisterList(content: .placeholder, model: model, search: "", rowActions: { _ in .none }, actions: rowHandlers)
                 .redacted(reason: .placeholder)
                 .disabled(true)
-                .accessibilityLabel(Text(RegisterWords.loading))
+                // Each made-up row is hidden from VoiceOver (hiddenWhilePlaceholder), with one
+                // "Loading" element in their place (sc-3611 task 3.6)
+                .overlay { Color.clear.accessibilityElement().accessibilityLabel(Text(RegisterWords.loading)) }
         case .loaded(let content):
             RegisterList(
                 content: content, model: model, search: model.search, rowActions: rowActions, actions: rowHandlers,
@@ -251,6 +254,7 @@ private struct RegisterList: View {
 
     var body: some View {
         List {
+            Group {
             if let staleError {
                 Text(verbatim: staleError.registerMessage).foregroundColor(Money.warning).font(.subheadline)
                     .fixedSize(horizontal: false, vertical: true)
@@ -293,6 +297,8 @@ private struct RegisterList: View {
                 LabelledAmount(label: RegisterWords.resultsTotal, amount: BudgetAmountFormat.string(results.total, style: style))
                     .font(.footnote).foregroundColor(.secondary).listRowBackground(Color.clear)
             }
+            }
+            .hiddenWhilePlaceholder()
         }
         .listStyle(.insetGrouped)
         // Cancel (the field closing) restores the whole register, scope included
@@ -401,7 +407,7 @@ private struct UpcomingSectionView: View {
             .accessibilityValue(updating ? Text(UpcomingWords.updating) : Text(""))
         }
         .onChange(of: updating) { isUpdating in
-            if isUpdating { UIAccessibility.post(notification: .announcement, argument: UpcomingWords.updating) }
+            if isUpdating { AccessibilityAnnouncer.post(UpcomingWords.updating) }
         }
     }
 
@@ -527,6 +533,7 @@ private struct RegisterHeader: View {
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
+        .hiddenWhilePlaceholder()
     }
 }
 

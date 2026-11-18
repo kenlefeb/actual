@@ -29,6 +29,7 @@ struct NativeTransactionRow: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(accessibilityText))
+        .hiddenWhilePlaceholder()
     }
 
     // At accessibility sizes the amount moves under the payee, whole
@@ -164,4 +165,30 @@ enum NativeTransactionRowWords {
     static let scheduled = NSLocalizedString("Scheduled", comment: "Native transaction row: an upcoming scheduled transaction")
     static let locked = NSLocalizedString("Reconciled", comment: "Native transaction row: reconciled and locked")
     static let uncategorized = NSLocalizedString("Uncategorized", comment: "Native transaction row: no category")
+}
+
+
+// sc-3611 task 3.6: one place that speaks a failed read to VoiceOver. In a UI-test
+// launch it also records what it was asked to say, since XCUITest cannot hear it.
+enum AccessibilityAnnouncer {
+    static func post(_ text: String) {
+        UIAccessibility.post(notification: .announcement, argument: text)
+        #if DEBUG
+        Task { @MainActor in UITestAnnouncements.shared.record(text) }
+        #endif
+    }
+}
+
+// A redacted placeholder shows made-up names and numbers; VoiceOver must not read them
+// (sc-3611 task 3.6). Applied to a List's rows, it hides them while the view is redacted.
+struct HiddenWhilePlaceholder: ViewModifier {
+    @Environment(\.redactionReasons) private var redaction
+
+    func body(content: Content) -> some View {
+        content.accessibilityHidden(redaction.contains(.placeholder))
+    }
+}
+
+extension View {
+    func hiddenWhilePlaceholder() -> some View { modifier(HiddenWhilePlaceholder()) }
 }

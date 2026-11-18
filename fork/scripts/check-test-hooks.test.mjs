@@ -34,6 +34,17 @@ void test('Test hooks: names the worker bundle holding a marker', () => {
   assert.match(findTestHooks(dir)[0], /kcab\.worker\.abc\.js/);
 });
 
+// Named here, not read from HOOK_MARKERS, so dropping one from the list fails
+for (const marker of ['__forkTestCommitDelayMs', '__forkTestBarrierOff']) {
+  void test(`Test hooks: finds ${marker}`, () => {
+    const dir = build({
+      'index.js': `x(${marker})`,
+      'kcab/kcab.worker.abc.js': 'worker',
+    });
+    assert.equal(findTestHooks(dir).length, 1);
+  });
+}
+
 void test('Test hooks: a source map is not a bundle', () => {
   const dir = build({
     'kcab/kcab.worker.abc.js': 'worker',

@@ -44,6 +44,7 @@ None.
 - `native-bridge`: "Sync failure reasons map to a closed set" is modified. New requirements:
   - "A write is saved only when storage says so"
   - "The storage barrier waits for complete"
+  - "A not-yet-stored write belongs to its page load"
   - "Any storage failure latches and is shown app-wide"
   - "No write applies after a storage failure"
   - "Only stored changes reach the server"

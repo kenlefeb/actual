@@ -73,9 +73,11 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
 
     // Story 5186: WebKit ended the page's process (memory pressure, a crash),
     // which leaves an empty window. Reload the app's own page, never the URL
-    // the web view last showed. loot-core keeps committed changes and its
-    // unsynced messages in IndexedDB, so they survive; a bridge call that was
-    // in flight fails with its timeout and is not retried.
+    // the web view last showed. loot-core's database lives in IndexedDB, but
+    // it is written there asynchronously: a change survives once it has been
+    // flushed (measured: 1 s and 5 s after a write it survived; killed at once,
+    // the last changes were gone). A bridge call in flight fails with its
+    // timeout and is not retried.
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         if reloads.allowsReload(at: now()) {
             Self.logger.notice("page process ended; reloading the app's page")

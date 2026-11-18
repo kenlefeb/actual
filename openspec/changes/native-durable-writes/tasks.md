@@ -49,10 +49,8 @@
   - iPhone simulator: the same loop.
   - Put the before and after counts in the PR (D12).
 - [ ] 3.5 Run the `NativeBridgeCore` tests, the Mac tests and the iOS build; all pass. The next TestFlight build carries this change (Product Owner, comment 5222)
-- [ ] 3.6 Failing test first for "A not-yet-stored write belongs to its page load": `seq` carries the page load's epoch; Swift also records each write's page-load generation, for a write with no answer and so no `seq`; `stored: true` and `stored` clear only their own epoch; a restart turns older pending writes into "may not have been saved", and no later success clears them (D4)
+- [x] 3.6 Failing test first for "A not-yet-stored write belongs to its page load": `seq` carries the page load's epoch; Swift also records each write's page-load generation, for a write with no answer and so no `seq`; `stored: true` and `stored` clear only their own epoch; a restart turns older pending writes into "may not have been saved", and no later success clears them (D4)
 - [ ] 3.7 **Gate:** do not turn the storage guard on in the iPhone app until sc-5247 (iPhone page-death reload) and the iPhone part of sc-5220 (reload notice) have merged. The PR that turns it on links both merged PRs (Product Owner, sc-5219 comment 5277; design D7a)
-
-- [ ] 3.6 Failing test first: a page restart while a write is "Saved here, not yet stored on this device." keeps that write from being reported as stored. Today a later `stored: true` (or a `stored` event from the new page, whose numbering restarts) clears it, although the earlier write may have been lost with the page. Settle the wording with the Architect's review of the restart rules
 
 ## 4. Review decisions from the engine PR (sc-5219)
 
@@ -61,5 +59,5 @@
 - [ ] 4.3 The storage guard: a one-way engine switch, off by default and set when the native bridge installs. Tests that with it off a fallback-mode browser's sync, messages and `fallback-write-error` are as today (safety-check failures only, no `conflict` flag), that with it off the patched backend fails as stock does (no latch, no dropped queue, quota rejections unseen, `onFallbackFailure` only for the safety check), and that with it on the latch, refusal, gate and notices apply; on `storage-failed` the page asks `native/storage-state` (D7a)
 - [ ] 4.4 `floor` in `native/settings`, its fixture and Swift decoding; the native and web Limits screens bounded to floor through ceiling (D7)
 - [ ] 4.5 The closed-budget notice in the shells, with the Product Owner's wording in the copy table; the restart notices' approved wording goes there too
-- [ ] 4.6 Failing tests first, then the status lines (`NativeAccountsViewController` and its Accounts sync state; `MobileSyncStatus.tsx`): "Waiting for this device to finish saving" on `storage-slow`, kept through held retries, and normal again when the wait clears
+- [x] 4.6 Failing tests first, then the status lines (`NativeAccountsViewController` and its Accounts sync state; `MobileSyncStatus.tsx`): "Waiting for this device to finish saving" on `storage-slow`, kept through held retries, and normal again when the wait clears
 - [x] 4.7 The patch as specified in D2 and D7: rejection from `trans.onabort` only; a `Set` of files; the per-database queue with the guard on or off; the 60 s deadline covering only the wait for pending writes, with a test that a read slower than the deadline still opens; `initialFullSync` completing under `storage-slow`

@@ -100,7 +100,10 @@ describe('native/persisted', () => {
     expect(settled).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
     const { seq } = await answer;
-    expect(await answer).toEqual({ stored: false, seq: { epoch: expect.any(String), n: expect.any(Number) } });
+    expect(await answer).toEqual({
+      stored: false,
+      seq: { epoch: expect.any(String), n: expect.any(Number) },
+    });
     expect(send).not.toHaveBeenCalledWith('storage-stored', expect.anything());
     finish();
     await vi.advanceTimersByTimeAsync(0);
@@ -124,9 +127,7 @@ describe('native/persisted', () => {
     expect(secondSeq).not.toBe(firstSeq);
     finish[0]();
     await vi.advanceTimersByTimeAsync(0);
-    expect(send.mock.calls).toEqual([
-      ['storage-stored', { seq: firstSeq }],
-    ]);
+    expect(send.mock.calls).toEqual([['storage-stored', { seq: firstSeq }]]);
   });
 
   // A lifecycle flush can come with no budget open, so no preferences to read

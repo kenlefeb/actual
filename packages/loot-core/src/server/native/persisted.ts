@@ -44,7 +44,7 @@ type PersistSeq = { epoch: string; n: number };
 let lastPersistSeq = 0;
 // This page load. A restart loses whatever was not stored, so native code must
 // not let a new page's answers vouch for an old page's writes.
-const epoch = uuidv4();
+let epoch: string | undefined;
 
 /**
  * Stored once every pending write fired complete, or not yet stored after
@@ -60,6 +60,7 @@ export async function persisted(): Promise<{
   const outcome = await waitForStorage().catch(() => {
     throw notStored();
   });
+  epoch ??= uuidv4();
   const seq = { epoch, n: ++lastPersistSeq };
   if (!('pending' in outcome)) return { stored: true, seq };
   // A failure instead latches and sends storage-failed

@@ -141,6 +141,15 @@ describe('first sign-in must match the configured admin subject', () => {
     config.set('openId.adminSubject', '');
   });
 
+  // fork: sc-4962
+  it('returns to the parsed origin when the return URL has a trailing slash', async () => {
+    config.set('openId.adminSubject', 'fixed-id');
+    const start = await loginWithOpenIdSetup('https://actual.example/');
+    const state = new URL(start.url ?? '').searchParams.get('state');
+    const result = await loginWithOpenIdFinalize({ code: 'code', state });
+    expect(result.url).toMatch(/^https:\/\/actual\.example\/openid-cb\?token=/);
+  });
+
   it('a matching first sign-in becomes ADMIN and owner', async () => {
     config.set('openId.adminSubject', 'fixed-id');
     const result = await signIn();

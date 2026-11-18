@@ -13,6 +13,7 @@ import {
   getUserByUsername,
   transferAllFilesFromUser,
 } from '#services/user-service';
+import { originOf } from '#util/return-origins';
 import { TOKEN_EXPIRATION_NEVER } from '#util/validate-user';
 
 import { checkPassword } from './password';
@@ -216,7 +217,8 @@ export async function loginWithOpenIdSetup(
   );
   accountDb.mutate(
     'INSERT INTO pending_openid_requests (state, code_verifier, return_url, expiry_time) VALUES (?, ?, ?, ?)',
-    [state, code_verifier, returnUrl, expiry_time],
+    // fork: sc-4962. Store the origin so a trailing slash can't double the path.
+    [state, code_verifier, originOf(new URL(returnUrl)), expiry_time],
   );
 
   const url = client.authorizationUrl({
@@ -495,11 +497,6 @@ const APP_RETURN_ORIGINS = [
   'http://localhost:3010', // Electron desktop app's sign-in listener
 ];
 const DEV_RETURN_ORIGINS = ['http://localhost:3001'];
-
-// URL.origin is "null" for custom schemes, so compare scheme and host instead.
-function originOf(url: URL) {
-  return `${url.protocol}//${url.host}`;
-}
 
 function allowedReturnOrigins(serverHostname: string) {
   const origins: string[] = [

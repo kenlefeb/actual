@@ -45,6 +45,19 @@
 - **WHEN** native code saves it as null
 - **THEN** the preference is removed and the next read shows value 50
 
+#### Scenario: Custom upcoming length bounds
+- **WHEN** native code saves `upcomingScheduledTransactionLength` as `0-day`, `03-week`, `1000-day`, `3-weeks`, `3-Week`, ` 3-week`, `-1-day` or `custom`
+- **THEN** each call fails with `[native:invalid-setting]` and nothing changes
+
+#### Scenario: A stored invalid length does not block other saves
+- **GIVEN** the stored upcoming length is `NaN-day`
+- **WHEN** native code saves only `dateFormat`
+- **THEN** the save succeeds, and the upcoming length is still `NaN-day`
+
+#### Scenario: Custom upcoming length accepted
+- **WHEN** native code saves it as `1-day`, `14-week` or `999-year`
+- **THEN** the value is stored exactly as sent
+
 #### Scenario: Budget type
 - **WHEN** native code saves `budgetType` tracking
 - **THEN** the preference is stored and the budget's computed values are rebuilt in the same call, as the web does

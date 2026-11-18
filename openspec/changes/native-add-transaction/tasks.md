@@ -9,6 +9,7 @@
 - [ ] 1.0 Shared row state (design D1): add `parent_id`, `is_parent`, `is_child` and `sort_order` to `readTouchedState`, additively. The accounts-write tests must stay green. The digest is the SHA-256 of that state over the touched set, with no second reader.
 - [ ] 1.1 `native/transaction-form` in `server/native/transaction-form.ts` (design D1).
   - Each open account carries its `transferPayee` id, and each transfer row carries its `partner` fields (design D1, added 2026-11-18).
+  - Categories include hidden ones, marked `hidden` (added 2026-11-18).
   - Write failing contract tests first on a seed that has:
     - on-budget, off-budget and closed accounts;
     - hidden categories;
@@ -48,7 +49,14 @@
     - dates outside 1900-01-01 to 2999-12-31 are `date-invalid`, and future dates are allowed;
     - notes over `transaction-notes-max-length` on any row are `notes-too-long`;
     - a transfer payee with a closed or deleted account is `account-closed`;
-    - no payee is ever created, and nothing is written.
+    - no payee is ever created, and nothing is written, including for a rule that sets a payee by name: the payee count is unchanged after many previews and after the `ruleFields` re-run (`runRules` with payee names unresolved);
+    - the amount grammar (design D2), with every accept and refuse scenario of the spec run in each of the five number formats;
+    - `amount-invalid` errors carry `detail.decimalSeparator` (`.` or `,`, from the format, never typed text); the other codes have no detail;
+    - NBSP, U+202F and U+2019 grouping; Indian grouping; `× ÷ −` mapped; one currency symbol ignored; surrounding whitespace dropped;
+    - `1e20`, `0x10`, `1_000`, `^`, `1..5`, `12abc`, a trailing operator, a misplaced group and a leading `+` are `amount-invalid`;
+    - a leading `-` or `−` and a negative result are `amount-negative`, with the direction unchanged;
+    - the upstream edit is only `runRules`'s optional parameter and the branch around `insertPayee` in `transaction-rules.ts`, with `rules-run` and the default unchanged (a test that the default still creates the payee);
+    - the split count is checked before any child is evaluated or looked up;
   - Add the fixtures `transaction-preview.json` and `transaction-field-errors.json`, with a test that the field codes and the refusal codes share no code.
 - [ ] 1.4 `native/transaction-save` (design D3), in the order of D3.
   - Write failing tests first:
@@ -76,6 +84,7 @@
     - a repeated token returns the same id;
     - nothing changes on any refusal.
   - Add `changed-since`, `preview-stale` and `not-found` to the shared `native-refusal-codes.json`.
+  - `category-hidden` (added 2026-11-18): refused on a new row, or on a row whose stored category is another one. Allowed on an edited row that already has it. Tests cover the preview and the save.
   - Tests for D3 step 4:
     - evaluating `amountText` is not a difference;
     - a rule change to any rule-settable field on any row refuses with `preview-stale` before any write, whether or not a preview was answered.
@@ -115,10 +124,12 @@
   - `ruleFields` drives the indicator, and the person's edits join `userFields`;
   - replaced fields offer Restore;
   - a form-read `not-found` shows the unavailable state;
+  - the preset account comes from the register on screen, else `AddTransaction.lastAccountId` if still open, else empty and required; the key is written after each successful add;
+  - Delete of a reconciled row is one dialog with the reconciled line, which sends `confirmedReconciled: true`;
   - a preview timeout retries once after `previewRetryDelay` and once on foreground, then shows the unchecked state, with Save still enabled;
   - Reload after `changed-since`:
     - compares only engine values (new read against base) with per-field edited flags, and never parses `amountText`;
-    - lists both-changed fields with "Use theirs";
+    - lists both-changed fields with "Use other device's";
     - lists child-only and partner-only changes;
     - adopts the new digest only after showing that list;
   - choosing a transfer payee sets Transfer, and leaving Transfer clears To account.
@@ -140,9 +151,11 @@
 - category row disabled, with its reason (off-budget, on-budget transfer);
 - the category picker: groups, search, Uncategorized, the tick, and the error with Retry;
 - the Transfer state: the Expense / Income / Transfer control, the To account row, the direction wording, and the category hidden with its reason;
-- Reload keeping the person's edits, with the both-changed list and "Use theirs";
+- Reload keeping the person's edits, with the both-changed list and "Use other device's";
 - "Couldn't check this yet." with Check Again;
-- the copy table (frame, element, text), approved by the Product Owner;
+- the copy table (frame, element, text), approved by the Product Owner, including two new rows for approval:
+  - Amount / `amount-invalid`: a sentence naming the budget's decimal separator with an example ("Use . for decimals, like 12.50"; "Use , for decimals, like 12,50");
+  - Amount / `amount-negative`: a sentence that points to the Expense and Income control;
 - "Set by a rule", the replaced-fields notice and Restore;
 - the "Not checked" state after a preview timeout;
 - Cancel's discard confirmation;

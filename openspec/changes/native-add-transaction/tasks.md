@@ -8,6 +8,7 @@
 
 - [ ] 1.0 Shared row state (design D1): add `parent_id`, `is_parent`, `is_child` and `sort_order` to `readTouchedState`, additively. The accounts-write tests must stay green. The digest is the SHA-256 of that state over the touched set, with no second reader.
 - [ ] 1.1 `native/transaction-form` in `server/native/transaction-form.ts` (design D1).
+  - Each open account carries its `transferPayee` id (design D1, added 2026-11-18).
   - Write failing contract tests first on a seed that has:
     - on-budget, off-budget and closed accounts;
     - hidden categories;
@@ -109,7 +110,10 @@
   - `preview-stale` shows "Rules changed this; check and save again.", previews again and shows the rule's result;
   - `ruleFields` drives the indicator, and the person's edits join `userFields`;
   - replaced fields offer Restore;
-  - a form-read `not-found` shows the unavailable state.
+  - a form-read `not-found` shows the unavailable state;
+  - a preview timeout retries once after `previewRetryDelay` and once on foreground, then shows the unchecked state, with Save still enabled;
+  - Reload after `changed-since` merges by field comparison against the base read, lists both-changed fields with "Use theirs", and carries the new digest;
+  - choosing a transfer payee sets Transfer, and leaving Transfer clears To account.
 - [ ] 2.2 `NativeScreen.addTransaction` (design D7):
   - add the switch, the script entry, and the router paths (`/transactions/new`, `/transactions/<id>`);
   - add the `webTransactionAction` chrome message with its closed actions, origin check and live-id check.
@@ -126,6 +130,11 @@
 - amount expression display and keypad accessory;
 - inline errors;
 - category row disabled, with its reason (off-budget, on-budget transfer);
+- the category picker: groups, search, Uncategorized, the tick, and the error with Retry;
+- the Transfer state: the Expense / Income / Transfer control, the To account row, the direction wording, and the category hidden with its reason;
+- Reload keeping the person's edits, with the both-changed list and "Use theirs";
+- "Couldn't check this yet." with Check Again;
+- the copy table (frame, element, text), approved by the Product Owner;
 - "Set by a rule", the replaced-fields notice and Restore;
 - the "Not checked" state after a preview timeout;
 - Cancel's discard confirmation;
@@ -150,6 +159,9 @@ Then:
   - Save with haptic and the Undo toast;
   - Cancel with the discard confirmation.
   - Verify in the Simulator against the Add and Edit frames (node 25-2), light and dark.
+- [ ] 3.0 Transfer state (design D8a): the three-way control, To account and direction, the category rules, and switching modes. Add UI tests.
+- [ ] 3.0a Category picker (design D8d): search, Uncategorized, tick by id, and the error with Retry. Add UI tests.
+- [ ] 3.0b Copy (design D8e): every string is localized from the approved copy table, with a test for hard-coded strings.
 - [ ] 3.1a The rule indicator, the person's overrides, and the replaced-fields notice with Restore (design D2a). Add UI tests and VoiceOver announcements.
 - [ ] 3.2 Splits: add and remove a child, the remainder in words, the `split-limit` state.
 - [ ] 3.3 Transfers and category rules: the off-budget and on-budget transfer wording.

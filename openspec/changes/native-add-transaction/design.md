@@ -34,7 +34,7 @@ Read on origin/development 2645aa42 and in Figma (Accounts page, node 25-2).
 It returns:
 
 - the currency fields `native/budget-month` carries;
-- `accounts`: open accounts as `{id, name, offbudget}`, in the web's order;
+- `accounts`: open accounts as `{id, name, offbudget, transferPayee}`, in the web's order. `transferPayee` is the account's transfer payee id, which the Transfer state and the payee picker's Transfers section put in the draft. It was added for the 2026-11-18 design decisions (D8a), as an additive field;
 - `categoryGroups`: the non-hidden groups and categories, as the web picker shows them;
 - `defaults` for an add: the account (`account_id` if open), today, and the web's `cleared` default;
 - for an edit, `transaction`: the parent and children with names resolved, `transferAccount`, `transferAccountClosed` and `reconciled` on each row, `schedule {id, name}` or null, attachment names, and `digest`.
@@ -216,7 +216,13 @@ If the rules cases cannot meet 50 ms on this seed, stop and report the measured 
 `TransactionFormViewModel` (`NativeBridgeCore`) is tested against the fake transport and the contract fixtures, with an injected sleep for every time-based case.
 
 - **Draft state.** It keeps `newId` for the sheet's lifetime, along with `userFields`, `ruleFields` and the last preview.
-- **Save enabled.** Save is enabled only while the last preview has no errors and matches the draft. A timed-out preview marks the field "Not checked".
+- **Save enabled.** Save is disabled while the last completed preview reported an error for the current values. Otherwise it is enabled, including while a field is unchecked (D8c): the save re-runs rules and validation on the server and refuses with `[native:preview-stale]` or `[native:invalid-draft:<codes>]` if the draft was wrong.
+- **Preview timeout (D8c).** After a preview times out, the view model retries it once by itself after a short pause (`previewRetryDelay`, 2 s, a named constant) and once more when the app returns to the foreground. If it still has no answer, the field shows "Couldn't check this yet." with Check Again.
+- **Reload after `changed-since` (D8b).** The view model keeps the form read it started from (the base), re-reads the form, and compares each field of the new read with the base and with the draft. This is a value comparison of fields the engine returned, amounts compared as integers; no arithmetic is done.
+  - A field the person did not change takes the new value.
+  - A field only the person changed keeps their value.
+  - A field changed both by the person and elsewhere keeps the person's value and is listed with both values and "Use theirs".
+  - The draft then carries the new digest, and the new read becomes the base.
 - **Save timeout.** The sheet shows "Save didn't finish" with Retry. Retry sends the same `newId`, token and draft.
   - For an add, D3 step 2 makes the retry safe.
   - For an edit that did land, the retry gets `changed-since`. The view model re-reads, and if the stored values equal the draft it treats the save as done.
@@ -244,11 +250,18 @@ If the rules cases cannot meet 50 ms on this seed, stop and report the measured 
 A sheet with large detents, following the Figma Add and Edit frames.
 
 - **Amount.**
-  - It comes first and is focused on open, with Outflow or Inflow shown.
-  - The keypad accessory has + − × ÷ and the sign toggle.
+  - It comes first and is focused on open.
+  - Above it, a three-way control: Expense, Income, Transfer (D8a). Expense stores an outflow and Income an inflow.
+  - The keypad accessory has + − × ÷.
   - The field shows the expression while editing and the evaluated amount after the preview.
 - **Payee picker.** Search, favourites, "Create “…”", and Transfers (open accounts other than the current one).
-- **Category picker.** Groups from the form read. The row is disabled, with its reason in words, for an off-budget account and for an on-budget to on-budget transfer.
+- **Category picker (D8d).**
+  - It lists the groups and their categories from the form read, with search that filters by name.
+  - Uncategorized is the first row; choosing it stores no category.
+  - The current choice is ticked, matched by id.
+  - Hidden categories are not listed, as on the web.
+  - The category row is disabled, with its reason in words, for an off-budget account and for a transfer between two on-budget accounts.
+  - When a `categories` change event arrives, the view model re-reads the form. If that read fails, the picker shows an error with Retry and keeps the last list.
 - **Other fields.** Account, date, notes (multiline), cleared, a read-only schedule line, and the Documents row (D7).
 - **Rule indicator.** "Set by a rule" on rule-filled fields, and the replaced-fields notice with Restore (D2a).
 - **Splits.** Each child has amount, category, payee and notes. The remainder shows in words ("$12.00 left to split", "$3.00 over").
@@ -260,7 +273,37 @@ A sheet with large detents, following the Figma Add and Edit frames.
   - Loading while the form reads, redacted.
   - Form-read failure: "This transaction is no longer available" with Close.
   - Field errors inline.
-  - `changed-since` shows "This transaction changed on another device" with Reload. Reload lists what changed before showing the current values.
+  - `changed-since` shows "This transaction changed on another device" with Reload. Reload keeps the person's edits (D8b).
+  - Text: every string comes from the Designer's copy table once the Product Owner has approved it, as translated strings (D8e). Wording quoted in this design and its spec is illustrative until then.
+
+### D8a. Transfer state
+
+- Choosing Transfer replaces the Payee row with a "To account" row, listing open accounts other than this one. A direction control says whether the money goes out of this account or into it, and that sets `inflow`.
+- The engine still stores a transfer through the destination account's transfer payee. The draft's `payee` is that account's `transferPayee`, and the payee picker's Transfers section stays.
+- **Category:**
+  - Between two on-budget accounts, or two off-budget accounts, the Category row is hidden, with the reason in words.
+  - Between an on-budget and an off-budget account, the Category row shows only when this transaction is on the on-budget side. On the off-budget side it is hidden, with the reason.
+- **Switching modes:**
+  - Switching from Transfer back to Expense or Income clears the To account and restores the Payee row.
+  - Choosing a transfer payee in the payee picker switches the control to Transfer.
+
+### D8b. Reload keeps the person's edits
+
+See D6. The engine needs nothing new: the form read already returns every field, and the view model compares values.
+
+### D8c. Unchecked fields
+
+See D6. While a field is unchecked, the save stays protected by the server's own rules run and validation (D3 steps 4 to 6).
+
+### D8d. Category picker
+
+See D8, Category picker. It uses only the form read's `categoryGroups` and the `categories` change event.
+
+### D8e. Copy
+
+- The Designer's copy table (frame, element, text), approved by the Product Owner in one pass, is the source of exact text.
+- The text is plain language: one sentence of cause and one of what to do, with no jargon, codes or blame.
+- Every string is a localized string. A test fails on a hard-coded user-facing string in the sheet.
 
 ## D9. Keyboard and accessibility
 

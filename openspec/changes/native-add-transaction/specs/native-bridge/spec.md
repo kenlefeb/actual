@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: The transaction form is one read
-`native/transaction-form` SHALL return, in one message, the currency fields, the open accounts, the non-hidden category groups, the defaults for a new transaction, and for an id the whole transaction (parent, children, transfer partners' accounts and whether each is closed, reconciled flags, schedule, attachment names) with its digest. An id that is not a live top-level transaction, or is in a closed account, SHALL fail with `[native:not-found]`.
+`native/transaction-form` SHALL return, in one message, the currency fields, the open accounts with their transfer payee ids, the non-hidden category groups, the defaults for a new transaction, and for an id the whole transaction (parent, children, transfer partners' accounts and whether each is closed, reconciled flags, schedule, attachment names) with its digest. An id that is not a live top-level transaction, or is in a closed account, SHALL fail with `[native:not-found]`.
 
 #### Scenario: Reading a split transfer
 - **GIVEN** a split whose second child is a transfer to Savings
@@ -12,6 +12,10 @@
 - **GIVEN** the contract fixture checked by vitest and decoded by the Swift tests
 - **WHEN** the handler's output shape changes
 - **THEN** the vitest contract test fails, and the Swift decode test fails against the regenerated fixture
+
+#### Scenario: Transfer payees
+- **WHEN** native code reads the form
+- **THEN** each open account carries the id of its transfer payee
 
 #### Scenario: A deleted id
 - **WHEN** native code reads the form for a deleted transaction's id

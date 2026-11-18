@@ -289,6 +289,9 @@ export type ApiHandlers = {
     id: APICategoryEntity['id'];
   }) => Promise<{ transactions: number; months: string[] }>;
 
+  // Fork handler (sc-4692): restores soft-deleted rows; see the api-fork-handlers spec
+  'api/undelete-rows': (arg: UndeleteRowsArgs) => Promise<UndeleteRowsResult>;
+
   'api/note-get': (arg: Pick<NoteEntity, 'id'>) => Promise<NoteEntity | null>;
 
   'api/note-update': (arg: NoteEntity) => Promise<void>;
@@ -387,3 +390,39 @@ export type ApiHandlers = {
     { error: 'no-server' } | { error: 'network-failure' } | { version: string }
   >;
 };
+
+/** The tables `api/undelete-rows` un-deletes rows of; `category_mapping` is only ever `set`. */
+export type UndeleteTable =
+  | 'categories'
+  | 'category_groups'
+  | 'transactions'
+  | 'transaction_attachments'
+  | 'category_mapping';
+
+export type UndeleteRowsArgs = {
+  /** The loaded budget's sync id; a different one rejects the call. */
+  budget_id: string;
+  rows: Array<{
+    table: UndeleteTable;
+    id: string;
+    /** Fixed columns by API name: `transfer_id`, `payee`, or a mapping's `transferId`. */
+    set?: { transfer_id?: string; payee?: string; transferId?: string };
+  }>;
+  /** Budget cells put back in the same batch; only the transfer categories of categories being un-deleted. */
+  cells?: Array<{ category: string; month: string; amount: number }>;
+  /** Read each named row's state and change nothing. */
+  check?: boolean;
+};
+
+/** What `check: true` returns for one named row: fixed columns only, by db column name. */
+export type UndeleteRowState = {
+  table: UndeleteTable;
+  id: string;
+  exists: boolean;
+  deleted: boolean;
+  columns: Record<string, string | number | null | string[]>;
+};
+
+export type UndeleteRowsResult =
+  | { check: true; rows: UndeleteRowState[] }
+  | { check: false; restored: number; cells: number };

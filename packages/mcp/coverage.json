@@ -167,6 +167,12 @@
   "api/transaction-delete": {
     "tool": "write_delete_transactions"
   },
+  "api/undelete-rows": {
+    "tool": "write_undo"
+  },
+  "undeleteRows": {
+    "tool": "write_undo"
+  },
   "deleteTransaction": {
     "tool": "write_delete_transactions"
   },

@@ -475,16 +475,4 @@ describe('write_delete_transactions', () => {
     expect(res.json.deleted).toEqual([]);
     expect(res.json.unlinked).toEqual([]);
   });
-
-  it('cannot be undone yet: write_undo refuses it as not undoable', async () => {
-    const { checking } = await setup();
-    const [t] = await rows({ account: checking });
-    const res = await del({ ids: [t.id] });
-    const undo = await h.call('write_undo', { write_id: res.json.write_id });
-    expect(undo.isError).toBe(true);
-    expect(undo.text).toMatch(/cannot be undone/);
-    expect(await alive(t.id)).toBe(false);
-    const listed = (await h.call('list_writes')).json.writes[0];
-    expect(listed.undoable).toBe(false);
-  });
 });

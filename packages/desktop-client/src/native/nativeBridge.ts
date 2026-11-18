@@ -256,6 +256,12 @@ const RECONCILE_FIELDS = new Map([
   ],
 ]);
 
+// sc-4386: the Accounts screen's reads (native-accounts-screen D1); loot-core
+// checks the values and the page size is the synced preference, never an argument
+const ACCOUNTS_FIELDS = new Map([
+  ['native/account-register', ['account_id', 'scope', 'search', 'cursor']],
+]);
+
 function pickFields(args: unknown, fields: string[]) {
   const given = (args ?? {}) as Record<string, unknown>;
   return Object.fromEntries(
@@ -331,6 +337,10 @@ export function createNativeBridge({
         args = { token: readToken(token) };
       } else if (name === 'native/reconcile-month') {
         args = undefined;
+      } else if (name === 'native/accounts-list') {
+        args = undefined;
+      } else if (ACCOUNTS_FIELDS.has(name)) {
+        args = pickFields(args, ACCOUNTS_FIELDS.get(name) ?? []);
       } else if (RECONCILE_FIELDS.has(name)) {
         if (
           name === 'native/reconcile-tick' ||

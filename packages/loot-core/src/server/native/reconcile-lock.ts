@@ -29,6 +29,8 @@ const LIMITS = {
   'reconcile-match-max-candidates': { fallback: 300, ceiling: 2000 },
   'reconcile-match-max-results': { fallback: 5, ceiling: 20 },
   'reconcile-lock-list-max-rows': { fallback: 200, ceiling: 2000 },
+  // sc-4386 (native-accounts-screen D2)
+  'accounts-register-page-size': { fallback: 50, ceiling: 200 },
 } as const;
 
 export async function readLimit(id: keyof typeof LIMITS): Promise<number> {

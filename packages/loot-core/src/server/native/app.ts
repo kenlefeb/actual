@@ -57,6 +57,7 @@ import type {
   TransactionEntity,
 } from '#types/models';
 
+import { accountRegister, accountsList } from './accounts';
 import {
   reconcileListSet,
   reconcileMonth,
@@ -223,6 +224,8 @@ export type NativeHandlers = {
   'native/reconcile-lock-preview': typeof reconcileLockPreview;
   'native/reconcile-adjust': typeof reconcileAdjust;
   'native/reconcile-lock': typeof reconcileLock;
+  'native/accounts-list': typeof accountsListRead;
+  'native/account-register': typeof accountRegisterRead;
 };
 
 export const app = createApp<NativeHandlers>();
@@ -262,6 +265,20 @@ app.method(
   'native/reconcile-lock',
   mutator(undoable(reconcileLock, () => ({ nativeLock: true }))),
 );
+
+// sc-4386 (native-accounts-screen D1)
+app.method('native/accounts-list', accountsListRead);
+app.method('native/account-register', accountRegisterRead);
+
+async function accountsListRead() {
+  return { ...(await readCurrency()), ...(await accountsList()) };
+}
+
+async function accountRegisterRead(
+  args: Parameters<typeof accountRegister>[0],
+) {
+  return { ...(await readCurrency()), ...(await accountRegister(args)) };
+}
 
 async function budgetMonth({
   month,

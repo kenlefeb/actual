@@ -1,0 +1,82 @@
+{
+  "currencyCode": "",
+  "currencyDecimalPlaces": 2,
+  "currencySymbol": "",
+  "currencySymbolPosition": "before",
+  "currencySpace": false,
+  "numberFormat": "comma-dot",
+  "hideFraction": false,
+  "sections": {
+    "onBudget": {
+      "total": 117820,
+      "accounts": [
+        {
+          "id": "checking",
+          "name": "Checking",
+          "balance": 92820,
+          "offbudget": false,
+          "closed": false,
+          "lastSync": "1483228800000",
+          "lastTransactionDate": "2016-12-28",
+          "bankSync": true,
+          "clearingFor": null
+        },
+        {
+          "id": "savings",
+          "name": "Savings",
+          "balance": 50000,
+          "offbudget": false,
+          "closed": false,
+          "lastSync": null,
+          "lastTransactionDate": "2016-12-20",
+          "bankSync": false,
+          "clearingFor": null
+        },
+        {
+          "id": "card",
+          "name": "Card",
+          "balance": -25000,
+          "offbudget": false,
+          "closed": false,
+          "lastSync": null,
+          "lastTransactionDate": "2016-12-20",
+          "bankSync": false,
+          "clearingFor": "Acme"
+        }
+      ]
+    },
+    "offBudget": {
+      "total": 300000,
+      "accounts": [
+        {
+          "id": "house",
+          "name": "House",
+          "balance": 300000,
+          "offbudget": true,
+          "closed": false,
+          "lastSync": null,
+          "lastTransactionDate": "2016-12-20",
+          "bankSync": false,
+          "clearingFor": null
+        }
+      ]
+    }
+  },
+  "closed": {
+    "total": 700,
+    "accounts": [
+      {
+        "id": "old",
+        "name": "Old",
+        "balance": 700,
+        "offbudget": false,
+        "closed": true,
+        "lastSync": null,
+        "lastTransactionDate": "2016-12-20",
+        "bankSync": false,
+        "clearingFor": null
+      }
+    ]
+  },
+  "netWorth": 417820
+}

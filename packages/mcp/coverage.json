@@ -275,6 +275,12 @@
   "native/reconcile-tick": {
     "skip": "Native iOS bridge write of a person ticking rows (sc-4801); MCP sets cleared through write_update_transactions"
   },
+  "native/accounts-list": {
+    "skip": "Native iOS bridge batched read of the Accounts list (sc-4386, ADR 11); MCP reads accounts through list_accounts and get_account_balance"
+  },
+  "native/account-register": {
+    "skip": "Native iOS bridge keyset-paged read of one account's register (sc-4386, ADR 11); MCP reads transactions through list_transactions"
+  },
   "native/reconcile-list-set": {
     "skip": "Native iOS bridge write of the person's own Reconcile checklist exclusions (sc-4801); a display preference, not budget data"
   },

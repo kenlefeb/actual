@@ -9,6 +9,7 @@
 - [ ] 1.0 Shared row state (design D1): add `parent_id`, `is_parent`, `is_child` and `sort_order` to `readTouchedState`, additively. The accounts-write tests must stay green. The digest is the SHA-256 of that state over the touched set, with no second reader.
 - [ ] 1.1 `native/transaction-form` in `server/native/transaction-form.ts` (design D1).
   - Each open account carries its `transferPayee` id, and each transfer row carries its `partner` fields (design D1, added 2026-11-18).
+  - Categories include hidden ones, marked `hidden` (added 2026-11-18).
   - Write failing contract tests first on a seed that has:
     - on-budget, off-budget and closed accounts;
     - hidden categories;
@@ -76,6 +77,7 @@
     - a repeated token returns the same id;
     - nothing changes on any refusal.
   - Add `changed-since`, `preview-stale` and `not-found` to the shared `native-refusal-codes.json`.
+  - `category-hidden` (added 2026-11-18): refused on a new row, or on a row whose stored category is another one. Allowed on an edited row that already has it. Tests cover the preview and the save.
   - Tests for D3 step 4:
     - evaluating `amountText` is not a difference;
     - a rule change to any rule-settable field on any row refuses with `preview-stale` before any write, whether or not a preview was answered.
@@ -115,10 +117,12 @@
   - `ruleFields` drives the indicator, and the person's edits join `userFields`;
   - replaced fields offer Restore;
   - a form-read `not-found` shows the unavailable state;
+  - the preset account comes from the register on screen, else `AddTransaction.lastAccountId` if still open, else empty and required; the key is written after each successful add;
+  - Delete of a reconciled row is one dialog with the reconciled line, which sends `confirmedReconciled: true`;
   - a preview timeout retries once after `previewRetryDelay` and once on foreground, then shows the unchecked state, with Save still enabled;
   - Reload after `changed-since`:
     - compares only engine values (new read against base) with per-field edited flags, and never parses `amountText`;
-    - lists both-changed fields with "Use theirs";
+    - lists both-changed fields with "Use other device's";
     - lists child-only and partner-only changes;
     - adopts the new digest only after showing that list;
   - choosing a transfer payee sets Transfer, and leaving Transfer clears To account.
@@ -140,7 +144,7 @@
 - category row disabled, with its reason (off-budget, on-budget transfer);
 - the category picker: groups, search, Uncategorized, the tick, and the error with Retry;
 - the Transfer state: the Expense / Income / Transfer control, the To account row, the direction wording, and the category hidden with its reason;
-- Reload keeping the person's edits, with the both-changed list and "Use theirs";
+- Reload keeping the person's edits, with the both-changed list and "Use other device's";
 - "Couldn't check this yet." with Check Again;
 - the copy table (frame, element, text), approved by the Product Owner;
 - "Set by a rule", the replaced-fields notice and Restore;

@@ -35,7 +35,7 @@ It returns:
 
 - the currency fields `native/budget-month` carries;
 - `accounts`: open accounts as `{id, name, offbudget, transferPayee}`, in the web's order. `transferPayee` is the account's transfer payee id, which the Transfer state and the payee picker's Transfers section put in the draft. It was added for the 2026-11-18 design decisions (D8a), as an additive field;
-- `categoryGroups`: the non-hidden groups and categories, as the web picker shows them;
+- `categoryGroups`: the groups and their categories, each category carrying `hidden` (changed 2026-11-18, story comment 5150: the picker needs hidden categories so that an edit can keep one);
 - `defaults` for an add: the account (`account_id` if open), today, and the web's `cleared` default;
 - for an edit, `transaction`: the parent and children, each row as `{id, account, date, payee, category, notes, cleared, amount, reconciled}` with names resolved and `amount` in integer minor units, plus:
   - `transferAccount` and `transferAccountClosed` on each transfer row;
@@ -115,6 +115,7 @@ It returns `{draft, ruleFields, replaced, remaining, errors}` and writes nothing
   - `account-required`, `account-closed` (the transaction's account, or a transfer payee's account that is closed or deleted);
   - `transfer-same-account`: a transfer payee of the transaction's own account (added 2026-11-18, as the web refuses it);
   - `category-not-allowed`, `category-unknown`;
+  - `category-hidden`: a hidden category on a new row, or on a row whose stored category is a different one. An edited row may keep the hidden category it already has (added 2026-11-18);
   - `date-invalid`: not a real date, or outside 1900-01-01 to 2999-12-31. A future date is allowed.
   - `split-mismatch`, `split-limit`;
   - `payee-too-long`, `notes-too-long`.
@@ -175,11 +176,12 @@ Swift sends `confirmedReconciled: true` only after the person confirms the nativ
 
 Delete reuses `native/transactions-delete {account_id, ids: [parentId], confirmedReconciled}`. This change adds the reconciled-parent rule of step 7 to it.
 
-Its native confirmation:
+Its native confirmation is one dialog, never two (decision of 2026-11-18). It:
 
 - names the transfer partner's account, and says when that account is closed (decision on sc-5013);
 - says both sides are deleted;
-- says Undo restores both.
+- says Undo restores both;
+- when any row it deletes is reconciled, adds the reconciled line in the same dialog. Its confirm button then sends `confirmedReconciled: true`.
 
 ### Limits
 
@@ -228,11 +230,12 @@ If the rules cases cannot meet 50 ms on this seed, stop and report the measured 
 - **Draft state.** It keeps `newId` for the sheet's lifetime, along with `userFields`, `ruleFields` and the last preview.
 - **Save enabled.** Save is disabled while the last completed preview reported an error for the current values. Otherwise it is enabled, including while a field is unchecked (D8c): the save re-runs rules and validation on the server and refuses with `[native:preview-stale]` or `[native:invalid-draft:<codes>]` if the draft was wrong.
 - **Preview timeout (D8c).** After a preview times out, the view model retries it once by itself after a short pause (`previewRetryDelay`, 2 s, a named constant) and once more when the app returns to the foreground. If it still has no answer, the field shows "Couldn't check this yet." with Check Again.
+- **Preset account.** With a native register on screen, Add presets that account. Otherwise it presets the account of the last transaction saved on this device. The view model stores that id in its own UserDefaults key, `AddTransaction.lastAccountId`, after each successful add. It is a per-device convenience, not engine data. It is used only when it is still among the form read's open accounts; otherwise the account is empty and required. There is no default-account setting.
 - **Reload after `changed-since` (D8b).** The view model keeps the form read it started from (the base) and an "edited by the person" flag per field and per row, set as the person edits, as `userFields` is. It re-reads the form and compares only engine values: each field of the new read against the same field of the base. Amounts are compared as the integers the reads return.
   - Swift never parses `amountText`. Where it shows the person's amount beside theirs, it shows the last preview's evaluated amount, or the person's text as typed when the field is unchecked.
   - A field the person did not edit takes the new value.
-  - A field changed elsewhere that the person also edited keeps the person's value and is listed with both values and "Use theirs".
-  - A change only on a split child the person did not edit, or only on a transfer partner (read from `partner`), is also listed in words ("The other side of this transfer changed on another device: date."), with no "Use theirs", because the form shows it nowhere else.
+  - A field changed elsewhere that the person also edited keeps the person's value and is listed with both values and "Use other device's".
+  - A change only on a split child the person did not edit, or only on a transfer partner (read from `partner`), is also listed in words ("The other side of this transfer changed on another device: date."), with no "Use other device's", because the form shows it nowhere else.
   - Only after the person has seen that list does the draft carry the new digest and the new read become the base. A Reload with nothing to list says nothing changed that affects the form, and adopts the digest.
 - **Save timeout.** The sheet shows "Save didn't finish" with Retry. Retry sends the same `newId`, token and draft.
   - For an add, D3 step 2 makes the retry safe.
@@ -270,7 +273,7 @@ A sheet with large detents, following the Figma Add and Edit frames.
   - It lists the groups and their categories from the form read, with search that filters by name.
   - Uncategorized is the first row; choosing it stores no category.
   - The current choice is ticked, matched by id.
-  - Hidden categories are not listed, as on the web.
+  - Hidden categories are listed under HIDDEN, disabled, with the reason ("Hidden in the budget…"). The exception: the hidden category a row being edited already has is ticked and selectable, so an edit never forces a change.
   - The category row is disabled, with its reason in words, for an off-budget account and for a transfer between two on-budget accounts.
   - When a `categories` change event arrives, the view model re-reads the form. If that read fails, the picker shows an error with Retry and keeps the last list.
 - **Other fields.** Account, date, notes (multiline), cleared, a read-only schedule line, and the Documents row (D7).
@@ -293,7 +296,8 @@ A sheet with large detents, following the Figma Add and Edit frames.
 - The engine still stores a transfer through the destination account's transfer payee. The draft's `payee` is that account's `transferPayee`, and the payee picker's Transfers section stays.
 - **Category:**
   - Between two on-budget accounts, or two off-budget accounts, the Category row is hidden, with the reason in words.
-  - Between an on-budget and an off-budget account, the Category row shows only when this transaction is on the on-budget side. On the off-budget side it is hidden, with the reason.
+  - Between an on-budget and an off-budget account, in either direction, an optional Category row shows only when this transaction is on the on-budget side, with a line for the direction (money leaving the budget counts as spending; money coming in counts as income). On the off-budget side it is hidden, with the reason.
+  - This matches how the engine stores a transfer today. `clearCategory` (`server/transactions/transfer.ts`) clears the category only when both accounts are on budget or both are off budget, and the partner row is created without one. The save's existing rule (no category on an off-budget account's rows) keeps the category on the on-budget side. The save needs nothing new for this.
 - **Switching modes:**
   - Switching from Transfer back to Expense or Income clears the To account and restores the Payee row.
   - Choosing a transfer payee in the payee picker switches the control to Transfer.
@@ -315,6 +319,7 @@ See D8, Category picker. It uses only the form read's `categoryGroups` and the `
 - The Designer's copy table (frame, element, text), approved by the Product Owner in one pass, is the source of exact text.
 - The text is plain language: one sentence of cause and one of what to do, with no jargon, codes or blame.
 - Every string is a localized string. A test fails on a hard-coded user-facing string in the sheet.
+- The approved table is Figma node 89:5413, with the Product Owner's corrections in story comment 5150. Hand-off rows say "Opens the web version", never "web view".
 
 ## D9. Keyboard and accessibility
 

@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: The transaction form is one read
-`native/transaction-form` SHALL return, in one message, the currency fields, the open accounts with their transfer payee ids, the non-hidden categories, the new-transaction defaults, and for an id the parent and children (each field, amounts as minor units), each transfer partner's own fields and whether its account is closed, schedule, attachment names and the digest. An id that is not a live top-level transaction, or is in a closed account, SHALL fail with `[native:not-found]`.
+`native/transaction-form` SHALL return, in one message, the currency fields, the open accounts with their transfer payee ids, the categories each marked hidden or not, the new-transaction defaults, and for an id the parent and children (each field, amounts as minor units), each transfer partner's own fields and whether its account is closed, schedule, attachment names and the digest. An id that is not a live top-level transaction, or is in a closed account, SHALL fail with `[native:not-found]`.
 
 #### Scenario: Reading a split transfer
 - **GIVEN** a split whose second child is a transfer to Savings
@@ -12,6 +12,11 @@
 - **GIVEN** the contract fixture checked by vitest and decoded by the Swift tests
 - **WHEN** the handler's output shape changes
 - **THEN** the vitest contract test fails, and the Swift decode test fails against the regenerated fixture
+
+#### Scenario: Hidden categories are marked
+- **GIVEN** a hidden category "Old Hobby"
+- **WHEN** native code reads the form
+- **THEN** "Old Hobby" is in its group, marked hidden
 
 #### Scenario: Transfer payees
 - **WHEN** native code reads the form
@@ -117,6 +122,18 @@ The engine SHALL report as field errors: amount text over 100 characters, or an 
 #### Scenario: Dates
 - **WHEN** the date is 2026-02-30 or 1899-12-31
 - **THEN** the preview reports `date-invalid`, and 2027-01-15 is accepted
+
+### Requirement: A hidden category only stays where it already is
+The preview and the save SHALL report `category-hidden` for a hidden category on a new row, or on a row whose stored category is a different one. An edited row that already has a hidden category SHALL be allowed to keep it.
+
+#### Scenario: New transaction
+- **WHEN** a new draft uses the hidden category "Old Hobby"
+- **THEN** the preview reports `category-hidden` and the save fails with `[native:invalid-draft:category-hidden]`
+
+#### Scenario: Edit keeps it
+- **GIVEN** a saved transaction in "Old Hobby", which is now hidden
+- **WHEN** native code saves an amount change that keeps the category
+- **THEN** the save succeeds and the category stays "Old Hobby"
 
 ### Requirement: Transfers need open accounts
 The preview and the save SHALL report `account-closed` when the transaction's account, or the account of any transfer payee in the draft, is closed or deleted.

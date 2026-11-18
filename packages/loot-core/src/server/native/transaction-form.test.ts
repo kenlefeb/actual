@@ -784,6 +784,110 @@ describe('native/transaction-preview', () => {
     ).toMatchFileSnapshot('./fixtures/transaction-preview-suggestions.json');
   });
 
+  // PR 447 review of the rebuild: no rule may fire on a value of a hand-set
+  // field the transaction will never have
+  describe('chained rules', () => {
+    const rule = (
+      conditions: { op: string; field: string; value: unknown }[],
+      actions: { op: string; field: string; value: unknown }[],
+    ) =>
+      insertRule({
+        stage: null,
+        conditionsOp: 'and',
+        conditions,
+        actions,
+      } as never);
+
+    it('never lets a later rule see a value a rule set on a hand-set field', async () => {
+      await costcoRule();
+      await rule(
+        [{ op: 'is', field: 'category', value: 'groceries' }],
+        [{ op: 'set', field: 'notes', value: 'food' }],
+      );
+      const result = await preview(
+        draft({
+          payee: 'costco',
+          category: 'dining',
+          userFields: ['payee', 'category'],
+        }),
+      );
+      expect(result.result.category).toBe('dining');
+      // costcoRule's own notes action still fills the untouched notes
+      expect(result.result.notes).toBe('Bulk');
+      expect(result.suggestions).toEqual([
+        {
+          field: 'category',
+          row: 0,
+          value: { id: 'groceries', name: 'Groceries' },
+        },
+      ]);
+    });
+
+    it('stops a three-rule chain at the hand-set field', async () => {
+      await rule(
+        [{ op: 'is', field: 'payee', value: 'corner' }],
+        [{ op: 'set', field: 'category', value: 'groceries' }],
+      );
+      await rule(
+        [{ op: 'is', field: 'category', value: 'groceries' }],
+        [{ op: 'set', field: 'notes', value: 'food' }],
+      );
+      await rule(
+        [{ op: 'is', field: 'notes', value: 'food' }],
+        [{ op: 'set', field: 'cleared', value: true }],
+      );
+      const result = await preview(
+        draft({
+          payee: 'corner',
+          category: 'dining',
+          userFields: ['payee', 'category'],
+        }),
+      );
+      expect(result.result).toMatchObject({
+        category: 'dining',
+        notes: '',
+        cleared: false,
+      });
+      expect(result.ruleFields).toEqual([]);
+      expect(result.suggestions.map(s => s.field)).toEqual(['category']);
+      // Unprotected, the whole chain runs
+      const free = await preview(
+        draft({ payee: 'corner', userFields: ['payee'] }),
+      );
+      expect(free.result).toMatchObject({
+        category: 'groceries',
+        notes: 'food',
+        cleared: true,
+      });
+    });
+
+    it('confirms each suggestion with only that field freed', async () => {
+      await rule(
+        [{ op: 'is', field: 'payee', value: 'corner' }],
+        [{ op: 'set', field: 'category', value: 'groceries' }],
+      );
+      await rule(
+        [{ op: 'is', field: 'category', value: 'groceries' }],
+        [{ op: 'set', field: 'notes', value: 'food' }],
+      );
+      // Notes would change only if the category were freed too, so freeing
+      // notes alone suggests nothing for it
+      const result = await preview(
+        draft({
+          payee: 'corner',
+          category: 'dining',
+          notes: 'mine',
+          userFields: ['payee', 'category', 'notes'],
+        }),
+      );
+      expect(result.result).toMatchObject({
+        category: 'dining',
+        notes: 'mine',
+      });
+      expect(result.suggestions.map(s => s.field)).toEqual(['category']);
+    });
+  });
+
   it('keeps a field the person cleared empty', async () => {
     await costcoRule();
     const result = await preview(

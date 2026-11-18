@@ -14,7 +14,10 @@ import type {
 } from '@actual-app/core/server/api-models';
 import type { ImportableBudgetType } from '@actual-app/core/server/importers/index';
 import type { Query } from '@actual-app/core/shared/query';
-import type { ImportTransactionsOpts } from '@actual-app/core/types/api-handlers';
+import type {
+  ImportTransactionsOpts,
+  UndeleteRowsArgs,
+} from '@actual-app/core/types/api-handlers';
 import type {
   AccountEntity,
   BusinessCalendarEntity,
@@ -373,6 +376,15 @@ export function moveCategoryGroup(
 /** The transactions and the budgeted months (YYYY-MM, non-zero) of a category. */
 export function getCategoryUsage(id: APICategoryEntity['id']) {
   return send('api/category-usage-get', { id });
+}
+
+/**
+ * Un-deletes named soft-deleted rows of categories, category groups,
+ * transactions and transaction attachments, sets a few fixed columns on them
+ * and puts transfer cells back, all in one batch; `check: true` only reads.
+ */
+export function undeleteRows(arg: UndeleteRowsArgs) {
+  return send('api/undelete-rows', arg);
 }
 
 export function getNote(id: NoteEntity['id']) {

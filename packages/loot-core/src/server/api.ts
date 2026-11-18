@@ -22,6 +22,7 @@ import {
   updateTransaction,
 } from '#shared/transactions';
 import { diffItems, integerToAmount } from '#shared/util';
+import type { UndeleteRowsArgs, UndeleteRowState } from '#types/api-handlers';
 import type { Handlers } from '#types/handlers';
 import type {
   AccountEntity,
@@ -48,7 +49,7 @@ import {
 } from './api-models';
 import type { AmountOPType, APIScheduleEntity } from './api-models';
 import { aqlQuery } from './aql';
-import { isTrackingBudget } from './budget/actions';
+import { isTrackingBudget, setBudget } from './budget/actions';
 import { planTemplates } from './budget/goal-template';
 import { planAverage, planCopyPreviousMonth } from './budget/month-plans';
 import * as cloudStorage from './cloud-storage';
@@ -1016,6 +1017,276 @@ handlers['api/category-usage-get'] = async function ({ id }) {
     .sort();
   return { transactions: data as number, months };
 };
+
+// Columns `check: true` returns, by table: the ones an undo compares, no more
+const UNDELETE_COLUMNS = {
+  categories: ['name', 'cat_group', 'is_income', 'hidden'],
+  category_groups: ['name', 'is_income'],
+  transactions: [
+    'acct',
+    'date',
+    'description',
+    'transferred_id',
+    'parent_id',
+    'isParent',
+    'isChild',
+    'reconciled',
+  ],
+  transaction_attachments: ['transaction_id'],
+  category_mapping: ['transferId'],
+} as const;
+const UNDELETE_MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+async function undeleteRowState(
+  table: keyof typeof UNDELETE_COLUMNS,
+  id: string,
+): Promise<UndeleteRowState> {
+  // The table and columns come from the fixed list above, never from the call
+  const columns = UNDELETE_COLUMNS[table];
+  const hasTombstone = table !== 'category_mapping';
+  const row = await db.first<Record<string, string | number | null>>(
+    `SELECT ${hasTombstone ? 'tombstone, ' : ''}${columns.join(', ')} FROM ${table} WHERE id = ?`,
+    [id],
+  );
+  const picked: UndeleteRowState['columns'] = {};
+  for (const c of columns) picked[c] = row ? row[c] : null;
+  if (table === 'categories') {
+    // The deleted categories forwarded to this one, and its own forward
+    picked.mapped_from = (
+      await db.all<{ id: string }>(
+        'SELECT id FROM category_mapping WHERE transferId = ? AND id != ?',
+        [id, id],
+      )
+    ).map(r => r.id);
+    picked.mapping =
+      (
+        await db.first<{ transferId: string }>(
+          'SELECT transferId FROM category_mapping WHERE id = ?',
+          [id],
+        )
+      )?.transferId ?? null;
+  }
+  if (table === 'category_groups') {
+    // Every category of the group, deleted ones too (a group delete walks them all)
+    picked.category_ids = (
+      await db.all<{ id: string }>(
+        'SELECT id FROM categories WHERE cat_group = ?',
+        [id],
+      )
+    ).map(r => r.id);
+  }
+  return {
+    table,
+    id,
+    exists: Boolean(row),
+    deleted: Boolean(row && hasTombstone && row.tombstone === 1),
+    columns: picked,
+  };
+}
+
+handlers['api/undelete-rows'] = withMutation(async function (
+  args: UndeleteRowsArgs,
+) {
+  checkFileOpen();
+  const loaded = prefs.getPrefs();
+  if (args.budget_id !== (loaded.groupId ?? loaded.id)) {
+    throw APIError('budget_id is not the loaded budget');
+  }
+  const { rows, cells = [], check = false } = args;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    throw APIError('rows must name at least one row');
+  }
+  const seen = new Set<string>();
+  for (const r of rows) {
+    const known =
+      typeof r?.table === 'string' && Object.hasOwn(UNDELETE_COLUMNS, r.table);
+    if (!known || typeof r.id !== 'string' || r.id === '') {
+      throw APIError('Each row needs a table of the fixed list and an id');
+    }
+    if (seen.has(`${r.table}:${r.id}`)) {
+      throw APIError('A row may be named only once');
+    }
+    seen.add(`${r.table}:${r.id}`);
+  }
+
+  const states = new Map<string, UndeleteRowState>();
+  for (const r of rows) {
+    states.set(`${r.table}:${r.id}`, await undeleteRowState(r.table, r.id));
+  }
+  if (check) {
+    return { check: true as const, rows: [...states.values()] };
+  }
+
+  // From here on every rule rejects the whole call before anything is sent
+  const state = (table: string, id: string) => states.get(`${table}:${id}`);
+  const isRestored = (table: string, id: string) =>
+    Boolean(state(table, id)?.deleted);
+  const setOf = (table: string, id: string) =>
+    rows.find(r => r.table === table && r.id === id)?.set;
+  const restored = rows.filter(r => isRestored(r.table, r.id));
+  const sends: Array<{ table: string; id: string; fields: object }> = [];
+
+  // The transfer payee of an account: the one payee a real transfer side carries for it
+  const transferPayeeOf = async (account: unknown) =>
+    (
+      await db.first<{ id: string }>(
+        'SELECT id FROM payees WHERE transfer_acct = ? AND tombstone = 0',
+        [account as string],
+      )
+    )?.id;
+
+  for (const r of rows) {
+    const st = states.get(`${r.table}:${r.id}`);
+    const keys = Object.keys(r.set ?? {});
+    if (!st.exists) {
+      throw APIError('A named row does not exist');
+    }
+    if (r.table === 'category_mapping') {
+      const target = r.set?.transferId;
+      if (
+        keys.length !== 1 ||
+        typeof target !== 'string' ||
+        !isRestored('categories', target)
+      ) {
+        throw APIError(
+          'A mapping may only be set to a category un-deleted in the call',
+        );
+      }
+      // Only a deleted category's mapping may move, never a live one's
+      const owner = await db.first<{ tombstone: number }>(
+        'SELECT tombstone FROM categories WHERE id = ?',
+        [r.id],
+      );
+      if (owner?.tombstone !== 1) {
+        throw APIError('A mapping row must belong to a deleted category');
+      }
+      sends.push({ table: r.table, id: r.id, fields: { transferId: target } });
+      continue;
+    }
+    if (st.deleted) {
+      if (
+        keys.some(k => k !== 'transfer_id') ||
+        (keys.length > 0 && r.table !== 'transactions')
+      ) {
+        throw APIError(
+          'Only transfer_id may be set, on a restored transaction',
+        );
+      }
+      const fields: Record<string, unknown> = { tombstone: 0 };
+      if (r.set?.transfer_id !== undefined) {
+        const other = r.set.transfer_id;
+        const otherState = state('transactions', other);
+        const otherLink =
+          setOf('transactions', other)?.transfer_id ??
+          otherState?.columns.transferred_id;
+        // The two name each other, and the other is restored here or is the live child
+        if (
+          !otherState ||
+          otherLink !== r.id ||
+          !(otherState.deleted || otherState.columns.isChild === 1)
+        ) {
+          throw APIError(
+            'transfer_id must name a row of the call that names this one back',
+          );
+        }
+        // A real transfer carries, on each side, the other side's account's transfer payee
+        const otherPayee = otherState.deleted
+          ? otherState.columns.description
+          : setOf('transactions', other)?.payee;
+        const mine = await transferPayeeOf(otherState.columns.acct);
+        const theirs = await transferPayeeOf(st.columns.acct);
+        if (
+          !mine ||
+          !theirs ||
+          st.columns.description !== mine ||
+          otherPayee !== theirs
+        ) {
+          throw APIError(
+            "Each side of a transfer needs the other account's transfer payee",
+          );
+        }
+        fields.transferred_id = other;
+      }
+      sends.push({ table: r.table, id: r.id, fields });
+      continue;
+    }
+    // A live row: only the split child a delete unlinked, relinked to a restored row
+    const link = r.set?.transfer_id;
+    const partner =
+      typeof link === 'string' ? state('transactions', link) : undefined;
+    if (
+      r.table !== 'transactions' ||
+      typeof link !== 'string' ||
+      keys.some(k => k !== 'transfer_id' && k !== 'payee') ||
+      st.columns.isChild !== 1 ||
+      !partner?.deleted ||
+      setOf('transactions', link)?.transfer_id !== r.id
+    ) {
+      throw APIError('A named row is not deleted');
+    }
+    if (
+      st.columns.transferred_id !== null ||
+      st.columns.description !== null ||
+      st.columns.reconciled
+    ) {
+      throw APIError('The child is still linked or reconciled');
+    }
+    const fields: Record<string, unknown> = { transferred_id: link };
+    if (r.set?.payee !== undefined) fields.description = r.set.payee;
+    sends.push({ table: r.table, id: r.id, fields });
+  }
+
+  // Every restored category must end up mapping to itself, so no cycle can form
+  for (const r of restored) {
+    if (r.table !== 'categories') continue;
+    const reset = setOf('category_mapping', r.id)?.transferId;
+    const ends = reset ?? state(r.table, r.id)?.columns.mapping;
+    if (ends !== r.id) {
+      throw APIError('A restored category must map to itself');
+    }
+  }
+
+  // Cells: only the transfer categories of the categories restored here
+  const cellCategories = new Set<string>();
+  for (const r of restored) {
+    const to =
+      r.table === 'categories' && state(r.table, r.id)?.columns.mapping;
+    if (typeof to === 'string' && to !== r.id) cellCategories.add(to);
+  }
+  const cellKeys = new Set<string>();
+  for (const c of cells) {
+    const live = await db.first<{ id: string }>(
+      'SELECT id FROM categories WHERE id = ? AND tombstone = 0',
+      [c?.category],
+    );
+    if (
+      !live ||
+      !cellCategories.has(c.category) ||
+      !UNDELETE_MONTH.test(c.month) ||
+      !Number.isSafeInteger(c.amount) ||
+      cellKeys.has(`${c.category}:${c.month}`)
+    ) {
+      throw APIError('A cell is not a transfer cell of a restored category');
+    }
+    cellKeys.add(`${c.category}:${c.month}`);
+  }
+
+  await batchMessages(async () => {
+    for (const s of sends) await db.update(s.table, { id: s.id, ...s.fields });
+    for (const c of cells) {
+      await setBudget({
+        category: c.category,
+        month: c.month,
+        amount: c.amount,
+      });
+    }
+  });
+  return {
+    check: false as const,
+    restored: restored.length,
+    cells: cells.length,
+  };
+});
 
 handlers['api/note-get'] = async function ({ id }) {
   checkFileOpen();

@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "id": "fork-release-26.10.1-alpha.45",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.45 — Ken's Actual fork",
+      "date": "2026-11-17",
+      "version": "26.10.1-alpha.45",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.45.md",
+      "body": "**Unofficial fork prerelease.** Based on upstream Actual v26.11.0 (`1766241e3f4b3c578e424c4fa15f1eb83c0da17d`, October 29, 2026); not an official Actual Budget release.\n\nThis release lets Ken's assistant delete transactions and undo deletes through the MCP server. The production grant does not include the `delete` scope yet, so this is not available in production.",
+      "details": "#### Features\n\n- The MCP server can delete transactions, with a preview first when the connection requires one. It needs the `delete` scope, which the production grant does not include yet.\n- The MCP server can undo its own deletes of transactions, categories and category groups. The original rows come back with their ids, and the undo is refused if anything changed since the delete.\n\n#### Enhancements\n\n- None in this release.\n\n#### Bugfixes\n\n- None in this release.\n\n#### Maintenance\n\n- Adds the two batched reads behind the coming native Accounts screen on iPhone (the accounts list and a paged account register). Nothing is visible in the app yet.\n- No upstream changes in this release; the fork stays on upstream Actual 26.11.0.\n\n#### Known limitations\n\n- Experimental.\n- The `delete` scope is still withheld from the production grant, so deleting transactions, categories and category groups through the MCP is not live in production.\n- The hosted MCP can close and delete accounts (behind a confirm step, with the `accounts:delete` permission); those account actions cannot be undone.\n- The native Schedules & Paychecks screens are off by default; turn them on in Settings to try them.\n- Tapping a tag in the transaction editor does nothing.\n- Tags are not yet fully accessible on the phone.\n- OpenID sign-out needs the server's address in the identity provider's allowed sign-out addresses; without it the provider shows an error page, though you are already signed out of Actual.\n- Attached documents aren't included in a budget export.\n- Documents removed before alpha.35 are recorded the first time an updated device syncs, and deleted 30 days after that. Removals made on a device that has not been updated are not tracked.\n- HEIC pictures are refused; use the Photos library or a JPEG or PNG copy.\n- Attaching a document needs a connection; there is no offline upload queue.\n- After restoring server data from a backup, pause the cleanup first (`production/RESTORE.md`)."
+    },
+    {
       "id": "fork-release-26.10.1-alpha.44",
       "type": "release",
       "title": "Release 26.10.1-alpha.44 — Ken's Actual fork",

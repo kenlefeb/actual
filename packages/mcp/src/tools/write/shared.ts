@@ -89,7 +89,8 @@ export async function requireUndoableLine(
     ...log.identity,
     tool: 'write_undo',
     budget_id,
-    ids: entry.ids,
+    // The undo logs every id it restores, which can include rows beyond the delete's own ids
+    ids: [...new Set([...entry.ids, ...entry.changes.map(c => c.id)])],
     changes: entry.changes.map(c => ({
       ...c,
       before: c.after,

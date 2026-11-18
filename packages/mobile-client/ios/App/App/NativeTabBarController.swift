@@ -106,7 +106,7 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
             },
             reserve: { [weak self] height in
                 guard let self else { return }
-                self.containers.values.forEach { $0.additionalSafeAreaInsets.bottom = height }
+                self.containers.values.forEach { $0.reserveBottom(height) }
                 var presented = self.presentedViewController
                 while let screen = presented {
                     screen.additionalSafeAreaInsets.bottom = height
@@ -495,6 +495,13 @@ final class TabContainerViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         onWillAppear?(section)
+    }
+
+    // Room for the storage line: the screen ends above it, and the strip it
+    // sits on matches the grouped page rather than showing as a white band
+    func reserveBottom(_ height: CGFloat) {
+        additionalSafeAreaInsets.bottom = height
+        view.backgroundColor = height > 0 ? .systemGroupedBackground : .systemBackground
     }
 
     // The status bar follows the screen in this tab

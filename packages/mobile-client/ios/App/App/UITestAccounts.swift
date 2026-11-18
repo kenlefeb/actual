@@ -28,7 +28,7 @@ enum UITestAccounts {
         storageLine = WriteStorageLine(
             status: status, scene: scene, barHeight: { 0 },
             reserve: { [weak root] height in
-                root?.additionalSafeAreaInsets.bottom = height
+                (root as? TabContainerViewController)?.reserveBottom(height)
                 root?.presentedViewController?.additionalSafeAreaInsets.bottom = height
             })
     }
@@ -65,10 +65,16 @@ enum UITestAccounts {
             openRegister: { nav.register = AccountRegisterViewModel(client: client, accountId: $0) },
             closeRegister: { nav.register = nil },
             reconcile: { handOff.text = "reconcile:\($0 ?? "checklist")" })
-        return UIHostingController(
+        let screen = UIHostingController(
             rootView: UITestAccountsRoot(
                 screen: AccountsScreen(model: model, nav: nav, reconcileMonth: monthModel, actions: actions),
                 handOff: handOff, model: model, month: monthModel))
+        guard UserDefaults.standard.string(forKey: "UITestStorageLine") != nil else { return screen }
+        // Laid out as in the app, so the line's reserved space is the real one
+        let container = TabContainerViewController(tab: .accounts)
+        container.tabBarVisible = true
+        container.embed(screen)
+        return container
     }
 
     // loot-core filters by scope on its side; the fake does the same to the fixture

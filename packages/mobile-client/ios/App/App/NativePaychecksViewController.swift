@@ -427,6 +427,13 @@ enum Money {
             : UIColor(red: 0x1F / 255, green: 0x7A / 255, blue: 0x35 / 255, alpha: 1)
     })
 
+    // DESIGN.native.md money/negative: balances below zero (sc-3611)
+    static let negative = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0xFF / 255, green: 0x7B / 255, blue: 0x73 / 255, alpha: 1)
+            : UIColor(red: 0xC0 / 255, green: 0x00 / 255, blue: 0x13 / 255, alpha: 1)
+    })
+
     // DESIGN.native.md status/warning-text: 5.8:1 on the warning tint in light
     static let warning = Color(UIColor { traits in
         traits.userInterfaceStyle == .dark
@@ -458,6 +465,7 @@ enum Dates {
     static func long(_ day: String) -> String { format(day, "EEEEMMMMdyyyy") }
     static func medium(_ day: String) -> String { format(day, "EEEEMMMMd") }
     static func short(_ day: String) -> String { format(day, "EEEMMMd") }
+    static func monthDay(_ day: String) -> String { format(day, "MMMd") }
 }
 
 private enum Words {

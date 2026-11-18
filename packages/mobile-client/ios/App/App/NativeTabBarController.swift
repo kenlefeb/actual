@@ -81,6 +81,7 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
             self?.accountsOverlay?.eventReceived(event, tables: tables)
             self?.reconcileFlow?.eventReceived(event, tables: tables)
         }
+        bridgeController.nativeBridge.onSyncStatus = { [weak self] in self?.accountsOverlay?.syncStatusChanged($0) }
         chrome.onPresentReconcile = { [weak self] body in self?.presentReconcile(body) }
         // Hidden until a budget is open (sign-in and the budget list have none)
         setTabBarVisible(false)
@@ -159,7 +160,8 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
         }
         guard let route, accountsOverlay == nil, !container.hostsNativeScreen else { return }
         let screen = NativeAccountsViewController(
-            client: bridgeController.nativeBridge.client, route: route, chrome: bridgeController.nativeChrome)
+            client: bridgeController.nativeBridge.client, route: route, chrome: bridgeController.nativeChrome,
+            syncStatus: bridgeController.nativeBridge.syncStatus)
         accountsOverlay = screen
         container.setOverlay(screen)
     }

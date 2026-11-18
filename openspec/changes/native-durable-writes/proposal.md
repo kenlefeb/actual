@@ -27,7 +27,7 @@ The Product Owner's decision (comment 5222): Propose now, top of the native queu
   - Mac: on quit and window close, and best-effort on sleep.
 - **Test hooks stay out of production.** A build-time constant removes them, and Fork CI checks the bundles.
 
-Mobile scope: the iPhone app and the Mac app, the two native shells. The web screens inside them get the lifecycle flushes only. The web app served by our server, Electron and MCP are not at risk and do not change. A browser that falls back to the same storage mode gets the latch, sync gate and a notice (design D7a).
+Mobile scope: the iPhone app and the Mac app, the two native shells. The web screens inside them get the lifecycle flushes only. The web app served by our server, Electron and MCP are not at risk and do not change. A browser that falls back to the same storage mode keeps today's sync and messages; protecting it is a separate story (design D7a).
 
 Not in this change:
 - offering the absurd-sql change upstream (a later, separate decision);
@@ -49,16 +49,15 @@ None.
   - "Only stored changes reach the server"
   - "The failure notice says what was lost"
   - "The notice's cut-off time is exact"
-  - "A restart closes the lost window"
+  - "The restart notice asks the person to check"
   - "A restart keeps the device-full reason"
   - "The failure notice outranks the reload notice"
-  - "Each failure has its own lost window"
-  - "The notice lists at most two windows"
+  - "The restart notice keeps the earliest cut-off"
   - "The storage wait is a limit"
   - "The shells flush storage before backgrounding or quitting"
   - "Durable platforms do not wait for storage"
   - "A held sync never reports success"
-  - "Fallback-mode browsers get the latch and sync gate"
+  - "The storage guard is for the native shells"
   - "A closed budget's failed write is reported"
   - "Limits report their floor"
   - "Test hooks are absent from production"

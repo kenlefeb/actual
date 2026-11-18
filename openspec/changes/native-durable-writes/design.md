@@ -50,7 +50,7 @@ Alternative rejected: vendoring absurd-sql. It is larger to review and hides the
 
 On the first rejection:
 - `this.failed` is set to the error. Later flushes drop their queue and write nothing, so IndexedDB stays at the last good commit.
-- `onFallbackFailure` is called for every kind of failure, not only the safety check, so the new `storage-failed` (D5) fires for quota, abort and error too. `fallback-write-error` fires only for the safety check (D7a).
+- `onFallbackFailure` is called for every kind of failure, not only the safety check, so the new `storage-failed` (D5) fires for quota, abort and error too. `fallback-write-error` keeps its existing meaning, the safety check alone (D7a).
 
 The patched module also adds:
 - `whenPersisted()`, which returns the chain and rejects with `this.failed` if it is set;
@@ -90,32 +90,27 @@ Deadline arithmetic: the wait ceiling is 4000 ms (D7), so `native/persisted` ans
 
 ### D5a. The failure notice across a restart
 
-Product Owner decision, sc-5219 comment 5245, corrected by the Architect's review of PR #474. A restart clears the page's latch and `lastStoredFlushAt`, and "Reload the app" is then out of date. The new page can store again, so "changes made after <time>" would call later, saved changes lost, and the person would re-enter them as duplicates. So Swift owns a list of **unsaved windows**, each with a start and an end (none while it is still open).
+Product Owner decisions, sc-5219 comment 5245 and PR #474. A restart clears the page's latch and `lastStoredFlushAt`, and "Reload the app" is then out of date. The new page can store again, so the restart notice can't say that everything after the cut-off is lost. It holds one earliest cut-off and asks the person to check. Tracking separate windows was considered and dropped as too hard to act on.
 
 - **Detecting a restart:** a page load the person didn't ask for through Reload. The Mac app has `webViewWebContentProcessDidTerminate` in `MacEngineHost`. On iPhone, Capacitor's `WebViewDelegationHandler` reloads silently, so the shell must observe that reload.
-- **Closing a window:** R is when the new page's bridge is ready. Nothing can be stored between the old page's death and that moment, so the window is exact. The notice changes then; until then the failure notice stays, with Reload.
-- **Rounding:** starts are truncated to the second and R is rounded up, so each window can only grow by under a second. A lost change is never outside it.
-- **A later failure** opens its own window from its cut-off. If nothing stored since the latest load, it starts at that load and merges with the window that load closed, because the loss is continuous.
-- **Readability:** the notice names the newest two windows. Three or more need failure, restart, failure, restart, failure with no OK between them. Older ones collapse into "Some earlier changes weren't saved either. Check anything you made before <time>." This gives up the exact older windows: the person checks instead of re-entering, which can't create a duplicate and doesn't call a lost change saved. A single span from first to last was rejected because it would call the saved changes between windows lost. The two is copy structure, not a limit.
-- **A further restart with no new failure:** the reload notice can't show, so the notice adds "Check your most recent changes too." Swift doesn't know that dead page's last stored write, so it can't name a window.
-- **Device full:** Swift already holds `quota`, so the reason survives cheaply. It says "ran out", because after a restart the app doesn't know whether the device is still full.
-- **OK or Reload** clears the windows.
+- **Holding the cut-off:** Swift keeps the earliest cut-off, and whether the latest failure was a quota failure, until OK on a restart notice. Further restarts leave the notice alone.
+- **The two kinds of notice stay distinct.** The failure notice says changes are known lost, so it always uses its own failure's cut-off: an older one would call changes stored since then lost, and the person would re-enter them. The restart notice says "may not have been saved. Check them", so the earliest cut-off is safe there. If a failure arrives while a restart notice is waiting for OK, the failure notice shows, and the next page load brings the restart notice back with the earliest time.
+- **"Since you opened the app" keeps the first-load rule, in one place.** The restart notice alone wouldn't need it, because "may not have been saved" stays true. The failure notice does: after any reload the page's `lastStoredFlushAt` starts null, and "weren't saved" would be false for changes stored earlier. So one rule produces the cut-off when a failure arrives: `lastStoredFlushAt`, else the latest page load's time, truncated, else none on the app's first load. The restart notice reuses that value.
 - **Priority:** the failure notice replaces the sc-5220 reload notice at once, and no reload notice appears while it, or its restart form, is showing.
 
-Wording for the Product Owner's copy table:
+Copy-table wording (Product Owner, PR #474):
 
 | Case | Text |
 |---|---|
-| Restart | The app restarted. Changes made between <A> and <R> weren't saved and need to be made again. |
-| Restart, nothing stored since the app opened | The app restarted. Changes made between opening the app and <R> weren't saved and need to be made again. |
-| Restart, device full | The app restarted. This device ran out of space. Free up some space if you haven't already. Changes made between <A> and <R> weren't saved and need to be made again. |
-| Second window, added | Changes made between <A> and <R> weren't saved either. |
-| Older windows, added | Some earlier changes weren't saved either. Check anything you made before <time>. |
-| Another restart, added | Check your most recent changes too. |
+| Restart | The app restarted. Changes made after <A> may not have been saved. Check them, and make again any that are missing. |
+| Restart, no cut-off | The app restarted. Changes made since you opened the app may not have been saved. Check them, and make again any that are missing. |
+| Restart, device full | The app restarted, and this device is out of space. Free up some space. Changes made after <A> may not have been saved. Check them, and make again any that are missing. |
+
+<A> is the time to the second, cut off, never rounded up.
 
 ### D6. Sync sends only stored changes
 
-In upstream `server/sync/index.ts`, `_fullSync` gets a fork-marked edit:
+In upstream `server/sync/index.ts`, `_fullSync` gets a fork-marked edit that applies only with the storage guard on (D7a):
 1. It reads the messages to send, as today.
 2. It then awaits `whenPersisted()`, which covers every write committed before the read, for at most `native-persist-wait-ms`.
 3. It sends only if that resolves. If the wait expires (a hung IndexedDB), it throws `SyncError('storage-slow')`: nothing is sent, the messages stay, `fullSync` emits an error rather than `success`, and a retry is scheduled after `FULL_SYNC_DELAY`. No new notice shows (Product Owner, PR #474). The existing status lines, native and narrow-layout web, read "Waiting for this device to finish saving" and return to normal when the wait clears. A held retry keeps that text rather than flickering through "Syncing…". Native code gets the reason through the closed set. A hung store therefore delays sending, is never reported as synced, and never sends unstored changes (Architect, PR #473).
@@ -124,7 +119,7 @@ If the latch is set, it sends nothing and receives nothing until reload, and rep
 
 So a change refused or not stored is on neither the device nor the server, and "need to be made again" cannot produce a duplicate (Security, 2b). Changes stored before the failure stay on the device and are sent after reload.
 
-On the web from our server, Electron and the API, `whenPersisted` resolves at once and never fails, so sync is unchanged there. This is the one behavioural edit to an upstream file; it is fork-marked and small.
+Without the guard (browsers, Electron and the API), sync is unchanged. This is the one behavioural edit to an upstream file; it is fork-marked and small.
 
 ### D7. The limit
 
@@ -140,9 +135,11 @@ The ceiling stays under the 5 s bridge deadline (D4). The floor avoids a meaning
 ### D7a. Other platforms, and closed budgets
 
 - **Durable platforms** (SharedArrayBuffer mode, Electron, the API): `whenPersisted` resolves at once, so nothing changes.
-- **Fallback-mode browsers** have the same risk, so they keep the latch and the sync gate, with no shell flag. They have no bridge and no Swift notice. On `storage-failed` the page shows a sticky notification with the D5 wording and a Reload action; `<time>` comes from the event, and a null cut-off uses the "since you opened the app" sentence, because a page load is an app open there. In the shells this web notification is suppressed.
-- **`fallback-write-error` keeps its one meaning.** Its message says another tab has the app open, which would be false for a quota error. So it fires only when the safety check fails, and `storage-failed` then carries `conflict: true` so the browser shows only that message.
-- **Closed budgets:** `close()` flushes and then drops the handle, so the last write of a closed budget can fail with no open file to latch. It must not latch, because it says nothing about the budget now open. The engine sends `storage-close-failed` once, and the shells and browsers show the Product Owner's wording: "Some recent changes to the budget you closed weren't saved. Open it and make them again." The sync gate means those changes were not sent. If the failure notice is showing, it keeps priority and this notice follows.
+- **The storage guard is native-only** (Security's review of PR #473, ruled by the Architect). Merging the engine alone must not change what anyone sees, and a latched browser would stop syncing with no honest notice. So the engine has a one-way switch, off by default. The native page bridge turns it on when it installs (group 2); nothing turns it off, and browsers have no bridge. While it is off there is no write refusal, sync gate, `storage-slow` or storage notice, and sync behaves as it does today.
+- **Fallback-mode browsers keep today's behaviour.** `fallback-write-error` keeps its one meaning: the safety check failed because another tab changed the file. There is no `conflict` flag and no browser storage notice. Protecting browsers is a separate story.
+- **One exception, for the Architect to confirm:** the patched storage stops writing after a failed write everywhere, as Security advised, because a later commit on top of a failed one can damage the file. In a browser this differs from today only after such a failure.
+- **`storage-failed` is a prompt.** The event can come from a closed file or a copy, so with the guard on the page asks `native/storage-state` before it treats the open budget as failed.
+- **Closed budgets (native shells):** `close()` flushes and then drops the handle, so the last write of a closed budget can fail with no open file to latch. It must not latch, because it says nothing about the budget now open. The engine sends `storage-close-failed` once, and the shells show the Product Owner's wording: "Some recent changes to the budget you closed weren't saved. Open it and make them again." The sync gate means those changes were not sent. If the failure notice is showing, it keeps priority and this notice follows.
 
 ### D8. Lifecycle flushes
 
@@ -179,7 +176,7 @@ Fork CI, after the production web build, searches the built page and worker bund
 - **loot-core** (the real patched module, on `fake-indexeddb`):
   - writes settle on `complete`, and on `abort` and `error` with the error;
   - the chain advances in order with values captured at flush time;
-  - the latch stops further writes, raises `storage-failed` (and `fallback-write-error` only on a conflict), and `whenPersisted` rejects;
+  - the latch stops further writes, raises `storage-failed` (and `fallback-write-error` only when the safety check fails), and `whenPersisted` rejects;
   - SharedArrayBuffer mode resolves at once;
   - `native/persisted` answers stored, not stored on timeout (fake timers) and `[native:not-stored]`;
   - `native/storage-state`;

@@ -75,7 +75,7 @@ Before forwarding any write, the page bridge SHALL check the storage's failed la
 - **THEN** it lists `not-stored`
 
 ### Requirement: Only stored changes reach the server
-The engine SHALL send local changes to the sync server only after `whenPersisted` resolves for the changes it reads to send, waiting at most `native-persist-wait-ms`; on expiry it SHALL send nothing and follow "A held sync never reports success". It SHALL send nothing while the failed latch is set, until reload. So a change that was refused or not stored is on neither the device nor the server, and making it again cannot create a duplicate.
+With the storage guard on, the engine SHALL send local changes to the sync server only after `whenPersisted` resolves for the changes it reads to send, waiting at most `native-persist-wait-ms`; on expiry it SHALL send nothing and follow "A held sync never reports success". It SHALL send nothing while the failed latch is set, until reload. So a change that was refused or not stored is on neither the device nor the server, and making it again cannot create a duplicate.
 
 #### Scenario: Refused, then made again
 - **GIVEN** a transaction added just before a storage failure, refused as not stored
@@ -118,37 +118,34 @@ The notice SHALL show `lastStoredFlushAt` to the second in the person's locale (
 - **WHEN** the notice shows
 - **THEN** it says "Changes made since you opened the app weren't saved and need to be made again." and shows no time
 
-### Requirement: A restart closes the lost window
-If the page restarts on its own while the failure notice shows, on iPhone or Mac, Swift SHALL record R, when the new page is ready, rounded up to the second, and show with OK and no Reload: "The app restarted. Changes made between <A> and <R> weren't saved and need to be made again." A is the notice's cut-off. With no cut-off, the clause SHALL read "between opening the app and <R>". Copy SHALL NOT say "page".
+### Requirement: The restart notice asks the person to check
+If the page restarts on its own while the failure notice shows, on iPhone or Mac, Swift SHALL replace it, with OK and no Reload, by "The app restarted. Changes made after <A> may not have been saved. Check them, and make again any that are missing." With no cut-off, it SHALL read "The app restarted. Changes made since you opened the app may not have been saved. Check them, and make again any that are missing." Copy SHALL NOT say "page".
 
-#### Scenario: Changes stored after the restart are not called lost
-- **GIVEN** the failure notice with cut-off 3:42:10 PM, a new page ready at 3:47:02.400 PM, and writes stored from 3:47 to 3:50 PM
-- **WHEN** the notice shows
-- **THEN** it reads "The app restarted. Changes made between 3:42:10 PM and 3:47:03 PM weren't saved and need to be made again.", and OK dismisses it
+#### Scenario: Restart with a cut-off time
+- **GIVEN** the failure notice showing a cut-off of 3:42:10 PM
+- **WHEN** the page's process dies and the page reloads on its own
+- **THEN** the notice reads "The app restarted. Changes made after 3:42:10 PM may not have been saved. Check them, and make again any that are missing.", and OK dismisses it
 
 #### Scenario: Restart with nothing stored
 - **GIVEN** the failure notice showing with nothing stored since the app opened
-- **WHEN** the new page is ready at 3:47:03 PM
-- **THEN** the notice reads "The app restarted. Changes made between opening the app and 3:47:03 PM weren't saved and need to be made again."
-
-#### Scenario: The new page never becomes ready
-- **WHEN** the page restarts and does not become ready
-- **THEN** the failure notice stays, with Reload
+- **WHEN** the page reloads on its own
+- **THEN** the notice reads "The app restarted. Changes made since you opened the app may not have been saved. Check them, and make again any that are missing."
 
 #### Scenario: The person reloads
-- **WHEN** the person taps Reload on the failure notice
+- **GIVEN** the failure notice showing, with no restart notice waiting for OK
+- **WHEN** the person taps Reload
 - **THEN** the notice closes and no restart notice shows
 
 ### Requirement: A restart keeps the device-full reason
-If the notice at a restart was the device-full one, the restart notice SHALL read "The app restarted. This device ran out of space. Free up some space if you haven't already. Changes made between <A> and <R> weren't saved and need to be made again." with OK. A further failed write SHALL show the device-full notice again, with the windows below.
+If the latest failure was a quota failure, the restart notice SHALL read "The app restarted, and this device is out of space. Free up some space. Changes made after <A> may not have been saved. Check them, and make again any that are missing." With no cut-off, "Changes made since you opened the app" SHALL replace "Changes made after <A>".
 
 #### Scenario: Restart while the device is full
 - **GIVEN** the device-full notice showing a cut-off of 3:42:10 PM
-- **WHEN** the new page is ready at 3:47:03 PM
-- **THEN** the notice uses that wording with 3:42:10 PM and 3:47:03 PM, and OK
+- **WHEN** the page reloads on its own
+- **THEN** the notice reads "The app restarted, and this device is out of space. Free up some space. Changes made after 3:42:10 PM may not have been saved. Check them, and make again any that are missing."
 
 ### Requirement: The failure notice outranks the reload notice
-The failure notice SHALL replace a showing reload notice (sc-5220) at once. No reload notice SHALL appear over or beside the failure notice or its restart form. If the page restarts again with no new failure, the notice SHALL keep its windows and add "Check your most recent changes too." After OK or Reload, later automatic reloads SHALL show the reload notice as usual.
+The failure notice SHALL replace a showing reload notice (sc-5220) at once. No reload notice SHALL appear over or beside the failure notice or its restart form, however many times the page restarts. After the person dismisses them, later automatic reloads SHALL show the reload notice as usual.
 
 #### Scenario: Failure while the reload notice shows
 - **GIVEN** the reload notice showing
@@ -156,45 +153,27 @@ The failure notice SHALL replace a showing reload notice (sc-5220) at once. No r
 - **THEN** the failure notice replaces it at once
 
 #### Scenario: Repeated restarts
-- **GIVEN** the restart notice showing 3:42:10 PM to 3:47:03 PM
-- **WHEN** the page restarts again with no new failure
-- **THEN** the same window stays, "Check your most recent changes too." is added, and no reload notice shows
+- **GIVEN** the restart notice showing 3:42:10 PM
+- **WHEN** the page restarts again
+- **THEN** the same notice and time stay, and no reload notice shows
 
 #### Scenario: After OK
 - **GIVEN** the person tapped OK
 - **WHEN** the page later reloads on its own
 - **THEN** the reload notice shows
 
-### Requirement: Each failure has its own lost window
-Swift SHALL hold the unsaved windows until OK or Reload, because a restart clears the page's state. A failure after a restart SHALL open a new window from its own cut-off, or from the latest page load if nothing stored since it, and SHALL leave stored changes outside every window. A window starting at or before the previous window's end SHALL merge with it. "Opening the app" SHALL be used only for the app's first load.
+### Requirement: The restart notice keeps the earliest cut-off
+Swift SHALL hold the earliest cut-off until OK on a restart notice. A failure while one is held SHALL show the failure notice with that failure's own cut-off, because it says changes are lost, and the next page load SHALL bring back the restart notice with the earliest. A failure with nothing stored since a later page load SHALL use that load's time, truncated; "since you opened the app" SHALL apply only on the app's first load.
 
-#### Scenario: A later failure gets its own window
-- **GIVEN** the restart notice for 3:42:10 PM to 3:47:03 PM, writes stored until 3:55:30 PM, and a failure with that cut-off
-- **WHEN** the notice shows
-- **THEN** it reads "Changes can't be saved on this device right now. Reload the app. Changes made after 3:55:30 PM weren't saved and need to be made again. Changes made between 3:42:10 PM and 3:47:03 PM weren't saved either."
+#### Scenario: A later failure
+- **GIVEN** the restart notice held at 3:42:10 PM, a write stored at 3:50:00 PM, and a failure with cut-off 3:50:00 PM
+- **WHEN** the failure is reported
+- **THEN** the failure notice says changes made after 3:50:00 PM weren't saved, and after a reload the restart notice says 3:42:10 PM
 
-#### Scenario: Nothing stored between
-- **GIVEN** the restart notice for 3:42:10 PM to 3:47:03 PM, and a failure before anything stored in the new page
-- **WHEN** the notice shows
-- **THEN** the windows merge and it says changes made after 3:42:10 PM weren't saved
-
-#### Scenario: Stored before a restart, no notice showing
+#### Scenario: Stored before a restart, nothing since
 - **GIVEN** writes stored before a restart at 4:00:30 PM with no notice showing, and nothing stored since
 - **WHEN** the next write fails
-- **THEN** the notice says changes made after 4:00:30 PM, never "opening the app"
-
-### Requirement: The notice lists at most two windows
-The notice SHALL name the newest two windows, newest first. If older windows exist, it SHALL add "Some earlier changes weren't saved either. Check anything you made before <time>.", where <time> is the start of the older listed window. Times SHALL show the date when it is not today. Starts SHALL be truncated and restart times rounded up, so a lost change is never left outside a window.
-
-#### Scenario: Three windows
-- **GIVEN** unsaved windows starting at 1:00:00 PM, 2:00:00 PM and 3:00:00 PM
-- **WHEN** the notice shows
-- **THEN** it names the 3:00:00 PM and 2:00:00 PM windows, and says to check anything made before 2:00:00 PM
-
-#### Scenario: Across midnight
-- **GIVEN** a window that started yesterday
-- **WHEN** the notice shows
-- **THEN** that time includes its date
+- **THEN** the failure notice says changes made after 4:00:30 PM, never "since you opened the app"
 
 ### Requirement: A held sync never reports success
 When sync's storage wait expires, the engine SHALL NOT emit sync success. It SHALL end the round with sync error `storage-slow` and schedule a retry after the usual sync delay, until storage finishes or fails. No new notice or alert SHALL show. The native sync status line SHALL read "Waiting for this device to finish saving" through the retries, and return to normal when the wait clears. `sync.pending` stays true.
@@ -214,18 +193,23 @@ When sync's storage wait expires, the engine SHALL NOT emit sync success. It SHA
 - **WHEN** the retry runs
 - **THEN** the status line keeps the waiting text and never shows "Syncing…" or "Sync failed" for it
 
-### Requirement: Fallback-mode browsers get the latch and sync gate
-A browser in fallback mode SHALL have the latch and sync gate. On `storage-failed` it SHALL show a sticky notification with the failure notice's wording and Reload. `fallback-write-error` SHALL fire only when another tab changed the file, and `storage-failed` then carries `conflict: true`, so the browser shows only its one-tab message. The native shells SHALL show their own notice, not a web one.
+### Requirement: The storage guard is for the native shells
+The write refusal, sync gate, held-sync reporting and storage notices SHALL stay off until the native bridge turns on the storage guard, a one-way engine switch set when the bridge installs. Browsers never set it and keep today's sync and messages. `fallback-write-error` SHALL keep its one meaning, another tab changed the file. The patched storage SHALL still stop writing after a failure on every platform, to protect the file.
 
-#### Scenario: Quota in a browser
-- **GIVEN** a fallback-mode browser whose write fails with a quota error
-- **WHEN** the failure is reported
-- **THEN** the device-full wording shows with Reload, and not the one-tab message
+#### Scenario: A browser after a failed write
+- **GIVEN** a fallback-mode browser, with no native bridge, whose write fails with a quota error
+- **WHEN** the next sync runs
+- **THEN** sync runs as today, with no storage wait, and no storage notice or "another tab" message shows
+
+#### Scenario: The native shell
+- **GIVEN** the native bridge installed in the iPhone or Mac app
+- **WHEN** a sync runs
+- **THEN** the guard is on, and sync sends only stored changes
 
 #### Scenario: Another tab
-- **GIVEN** a write refused because another tab changed the file
+- **GIVEN** a browser write refused because another tab changed the file
 - **WHEN** the failure is reported
-- **THEN** only the one-tab message shows
+- **THEN** `fallback-write-error` fires and the existing one-tab message shows
 
 ### Requirement: A closed budget's failed write is reported
 A failed write in a file with no open handles SHALL NOT set the latch. The engine SHALL send `storage-close-failed` once for that file, and the app SHALL show, with OK, "Some recent changes to the budget you closed weren't saved. Open it and make them again." A showing failure notice SHALL keep priority, and this notice follows it.

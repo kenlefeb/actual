@@ -1751,6 +1751,45 @@ describe('API paycheck schedules', () => {
 });
 
 describe('API fork handlers', () => {
+  test('A deleted transaction is brought back by undeleteRows', async () => {
+    await api.loadBudget(budgetName);
+    const account = await api.createAccount({ name: 'Checking' }, 0);
+    await api.addTransactions(account, [
+      { date: '2026-01-05', amount: -1200, notes: 'rent' },
+    ]);
+    const [t] = await api.getTransactions(account, '2026-01-01', '2026-01-31');
+    const prefs = (await api.internal?.send('load-prefs')) as {
+      id: string;
+      groupId?: string;
+    };
+    const budget_id = prefs.groupId ?? prefs.id;
+
+    await api.deleteTransaction(t.id);
+    expect(
+      await api.getTransactions(account, '2026-01-01', '2026-01-31'),
+    ).toEqual([]);
+    await expect(
+      api.undeleteRows({
+        budget_id: 'other',
+        rows: [{ table: 'transactions', id: t.id }],
+      }),
+    ).rejects.toThrow();
+    const checked = await api.undeleteRows({
+      budget_id,
+      check: true,
+      rows: [{ table: 'transactions', id: t.id }],
+    });
+    expect(checked).toMatchObject({ check: true, rows: [{ deleted: true }] });
+
+    await api.undeleteRows({
+      budget_id,
+      rows: [{ table: 'transactions', id: t.id }],
+    });
+    expect(
+      await api.getTransactions(account, '2026-01-01', '2026-01-31'),
+    ).toMatchObject([{ id: t.id, amount: -1200, notes: 'rent' }]);
+  });
+
   test('Business calendars are created, read, updated and deleted', async () => {
     await api.loadBudget(budgetName);
 
@@ -2284,6 +2323,7 @@ const FORK_HANDLER_METHODS = {
   'api/budget-average': 'setBudgetToAverage',
   'api/account-statement-balance-get': 'getAccountStatementBalance',
   'api/account-statement-balance-consume': 'consumeAccountStatementBalance',
+  'api/undelete-rows': 'undeleteRows',
 } as const;
 
 describe('Statement balance record methods', () => {

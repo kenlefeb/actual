@@ -317,7 +317,7 @@ export function registerTransactionWriteTools(
 
   tool(
     'write_delete_transactions',
-    `Delete transactions by id, as the app does, at most ${limits.maxDeleteRows} rows by default counting every row it removes. Deleting a split parent deletes its children; deleting a transfer deletes its other side (when that side is a split child it is unlinked, not deleted); attachments go with their rows. A split child cannot be deleted on its own. A reconciled row, or a row whose transfer partner, child's partner or unlinked partner child is reconciled, needs allow_reconciled true, which the connection's grant must allow. When this connection must confirm deletes, the first call changes nothing and returns a dry run listing every row, with \`confirm\`; call again with it within 5 minutes. Not undoable yet.`,
+    `Delete transactions by id, as the app does, at most ${limits.maxDeleteRows} rows by default counting every row it removes. Deleting a split parent deletes its children; deleting a transfer deletes its other side (when that side is a split child it is unlinked, not deleted); attachments go with their rows. A split child cannot be deleted on its own. A reconciled row, or a row whose transfer partner, child's partner or unlinked partner child is reconciled, needs allow_reconciled true, which the connection's grant must allow. When this connection must confirm deletes, the first call changes nothing and returns a dry run listing every row, with \`confirm\`; call again with it within 5 minutes. Undoable with write_undo.`,
     {
       ids: z.array(id).min(1).max(limits.rowsCeiling),
       allow_reconciled: z.boolean().optional(),
@@ -398,6 +398,7 @@ export function registerTransactionWriteTools(
             account: t.account,
             date: t.date,
             payee: t.payee,
+            category: t.category,
             transfer_id: t.transfer_id,
             parent_id: t.parent_id,
             reconciled: t.reconciled,

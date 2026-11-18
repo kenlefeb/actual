@@ -71,6 +71,51 @@ async function readRows(name: string, accountId: unknown, ids: unknown) {
   return { account, rows, max };
 }
 
+type Touch = { id: string; reconciled: number; isChild: number };
+
+/**
+ * Everything a write changes beyond the named rows: a split's children (when
+ * `withChildren`) and the transfer partner of every one of those rows, children
+ * included. The cap and the reconciled check apply to the whole set.
+ */
+async function touchedRows(rows: Row[], withChildren: boolean) {
+  const children = withChildren
+    ? await db.all<Touch & { transfer_id: string | null }>(
+        `SELECT id, reconciled, isChild, transferred_id AS transfer_id FROM transactions
+         WHERE tombstone = 0 AND isChild = 1 AND parent_id IN (${marks(rows)})`,
+        rows.map(r => r.id),
+      )
+    : [];
+  const own = new Set([...rows, ...children].map(r => r.id));
+  const partnerIds = [
+    ...new Set(
+      [...rows, ...children].flatMap(r =>
+        r.transfer_id && !own.has(r.transfer_id) ? [r.transfer_id] : [],
+      ),
+    ),
+  ];
+  const partners = partnerIds.length
+    ? await db.all<Touch>(
+        `SELECT id, reconciled, isChild FROM transactions
+         WHERE tombstone = 0 AND id IN (${marks(partnerIds)})`,
+        partnerIds,
+      )
+    : [];
+  return { children, partners, all: [...rows, ...children, ...partners] };
+}
+
+function checkFullSet(
+  name: string,
+  all: Touch[],
+  max: number,
+  confirmed: unknown,
+) {
+  if (all.length > max) {
+    throw new Error(`${name}: at most ${max} rows per call`);
+  }
+  checkReconciled(name, all, confirmed);
+}
+
 function checkReconciled(
   name: string,
   rows: { reconciled: number }[],
@@ -94,7 +139,7 @@ export async function transactionsCategorize(args: {
   const { account_id, ids, category, confirmedReconciled, undoToken } =
     args ?? ({} as typeof args);
   checkToken(name, undoToken);
-  const { account, rows } = await readRows(name, account_id, ids);
+  const { account, rows, max } = await readRows(name, account_id, ids);
   if (account.offbudget) {
     throw new Error(`${name}: an off-budget account's rows have no category`);
   }
@@ -124,7 +169,13 @@ export async function transactionsCategorize(args: {
       throw new Error(`${name}: a transfer between on-budget accounts`);
     }
   }
-  checkReconciled(name, rows, confirmedReconciled);
+  // Updating a transfer rewrites its partner row too, so that is touched
+  checkFullSet(
+    name,
+    (await touchedRows(rows, false)).all,
+    max,
+    confirmedReconciled,
+  );
   await batchUpdateTransactions({
     // null clears the category, which the entity type does not name
     updated: rows.map(r => ({ id: r.id, category: category as string })),
@@ -143,30 +194,14 @@ export async function transactionsDelete(args: {
     args ?? ({} as typeof args);
   checkToken(name, undoToken);
   const { rows, max } = await readRows(name, account_id, ids);
-  const children = await db.all<{ id: string; reconciled: number }>(
-    `SELECT id, reconciled FROM transactions
-     WHERE tombstone = 0 AND isChild = 1 AND parent_id IN (${marks(rows)})`,
-    rows.map(r => r.id),
-  );
-  const partnerIds = rows.flatMap(r => (r.transfer_id ? [r.transfer_id] : []));
-  const partners = partnerIds.length
-    ? await db.all<{ id: string; reconciled: number }>(
-        `SELECT id, reconciled FROM transactions
-         WHERE tombstone = 0 AND id IN (${marks(partnerIds)})`,
-        partnerIds,
-      )
-    : [];
-  const total = new Set([...rows, ...children, ...partners].map(r => r.id));
-  if (total.size > max) {
-    throw new Error(`${name}: at most ${max} rows per call`);
-  }
-  checkReconciled(
-    name,
-    [...rows, ...children, ...partners],
-    confirmedReconciled,
-  );
+  const { children, partners, all } = await touchedRows(rows, true);
+  checkFullSet(name, all, max, confirmedReconciled);
   await batchUpdateTransactions({ deleted: rows.map(r => ({ id: r.id })) });
-  return { deleted: total.size };
+  // A partner that is a split child is unlinked and kept, not deleted
+  return {
+    deleted:
+      rows.length + children.length + partners.filter(p => !p.isChild).length,
+  };
 }
 
 export async function accountReopen(args: { id: string; undoToken: string }) {

@@ -29,6 +29,7 @@ Undo of a delete sends `tombstone = 0` for the logged ids and puts back the few 
   - `transactions.payee`: on that partner child only, and only the transfer payee of the restored row's account.
   - `category_mapping.transferId`: an existing mapping row, set only to a category un-deleted in this call. A mapping can then only point at a live category that maps to itself, so no cycle can form.
 - **Cells** are set through the budget actions, as `doTransfer` does, inside the same `batchMessages` as the rows. The rows and the cells are applied together or not at all.
+- **No rewiring** (Security review, PR #411): a mapping row named must belong to a deleted category, and every restored category must end up mapping to itself. A live split child is relinked only when it is unlinked (`transfer_id` and `payee` null) and not reconciled. Whenever `transfer_id` is set, each side's payee must be the other side's account's transfer payee.
 - **`budget_id`** must equal the loaded budget's id, or the call rejects.
 - **`check: true`** sends nothing and returns each named row's state (exists, tombstoned, and the columns the planner compares). This is how the planner sees deleted rows, which AQL hides.
 
@@ -44,7 +45,7 @@ Ids and values only, computed before the write under the lock, plus `budget_id` 
 
 ### D4. Every allowed delete is undoable
 
-Before any audit line, a delete builds both its own attempt line and the attempt line its undo would write. It is refused with fixed text when either would exceed the audit line limit, or its transfer cells exceed the cell limit. Both are existing settings with grant overrides (Ken's rule: every limit is a configurable default), so no limit is added.
+Before any audit line, a delete builds both its own attempt line and the attempt line its undo would write. It is refused with fixed text when either would exceed the audit line limit, or its transfer cells exceed the cell limit. The undo counts the rows it restores the way the delete counted them (its transactions, or its categories) against the delete limit (D6), so a delete the delete limit allowed is never refused by the undo for its group row, mappings or attachments. A group delete with a transfer is also refused when the group holds categories deleted earlier: the app re-points their mappings too, and the handler's mapping rule cannot restore them. Both are existing settings with grant overrides (Ken's rule: every limit is a configurable default), so no limit is added.
 
 ### D5. Undo: sync, check, apply, verify
 
@@ -67,7 +68,7 @@ If the handler rejects or throws, nothing was applied, the undo is not used, and
 
 ### D6. Scopes, limits and confirm
 
-The scope table gains the three deletes with the delete's own scopes: `transactions:write delete`, `structure:write delete`. Restored rows count against the row limit and transfer cells against the cell limit. An undelete adds data back, so it needs no `confirm`.
+The scope table gains the three deletes with the delete's own scopes: `transactions:write delete`, `structure:write delete`. Restored rows count against the delete limit, as the delete counted them (transactions, or categories; never the group row, mappings or attachments), and transfer cells against the cell limit. An undelete adds data back, so it needs no `confirm`.
 
 ### D7. The transaction delete tool
 

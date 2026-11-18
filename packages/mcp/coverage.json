@@ -295,5 +295,17 @@
   },
   "native/reconcile-lock": {
     "skip": "Native-only: a person's lock from the app (sc-4825, design D5); MCP locks through write_reconcile_account"
+  },
+  "native/transactions-categorize": {
+    "skip": "Native iOS bridge write of a person categorizing register rows (sc-4931, design D3); MCP sets categories through write_update_transactions"
+  },
+  "native/transactions-delete": {
+    "skip": "Native iOS bridge write of a person deleting register rows (sc-4931, design D3); MCP deletes through write_delete_transactions"
+  },
+  "native/account-reopen": {
+    "skip": "Native iOS bridge wrapper of account-reopen with an undo token (sc-4931, design D3); MCP reopens accounts through write_reopen_account"
+  },
+  "native/account-move": {
+    "skip": "Native iOS bridge wrapper of account-move with an undo token (sc-4931, design D3); a display order, MCP orders accounts through write_update_account"
   }
 }

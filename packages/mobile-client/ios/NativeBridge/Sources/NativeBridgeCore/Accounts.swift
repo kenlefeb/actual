@@ -133,3 +133,126 @@ extension NativeBridgeClient {
         try JSONDecoder().decode(AccountRegister.self, from: await call("native/account-register", args: request))
     }
 }
+
+// sc-4931 (native-accounts-screen D3): the four Accounts writes. Each is sent
+// only as its own typed value with the undo token Swift makes; loot-core
+// validates the whole call and nothing changes on a refusal. Swift never
+// writes the database. 500 is the engine's ceiling for `accounts-write-max-ids`;
+// the setting itself (default 100) is applied there.
+private func requireValue(_ value: String, _ field: String) throws {
+    guard !value.isEmpty else { throw NativeBridgeError.invalidWrite(field) }
+}
+
+// `native/transactions-categorize`: `category` nil clears it and is sent as null
+public struct TransactionsCategorize: Encodable, Equatable {
+    public let accountId: String
+    public let ids: [String]
+    public let category: String?
+    // True only after the person confirmed changing a reconciled row
+    public let confirmedReconciled: Bool
+    public let undoToken: String
+
+    static let maxIds = 500
+
+    public init(accountId: String, ids: [String], category: String?, confirmedReconciled: Bool = false, undoToken: String = UUID().uuidString) throws {
+        try requireValue(accountId, "account_id")
+        guard !ids.isEmpty, ids.count <= Self.maxIds, !ids.contains("") else { throw NativeBridgeError.invalidWrite("ids") }
+        guard category != "" else { throw NativeBridgeError.invalidWrite("category") }
+        try requireValue(undoToken, "undoToken")
+        (self.accountId, self.ids, self.category, self.confirmedReconciled, self.undoToken) =
+            (accountId, ids, category, confirmedReconciled, undoToken)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case accountId = "account_id"
+        case ids, category, confirmedReconciled, undoToken
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(accountId, forKey: .accountId)
+        try container.encode(ids, forKey: .ids)
+        try container.encode(category, forKey: .category)
+        try container.encode(confirmedReconciled, forKey: .confirmedReconciled)
+        try container.encode(undoToken, forKey: .undoToken)
+    }
+}
+
+// `native/transactions-delete`: a transfer's partner and a split's children go with it
+public struct TransactionsDelete: Encodable, Equatable {
+    public let accountId: String
+    public let ids: [String]
+    public let confirmedReconciled: Bool
+    public let undoToken: String
+
+    static let maxIds = 500
+
+    public init(accountId: String, ids: [String], confirmedReconciled: Bool = false, undoToken: String = UUID().uuidString) throws {
+        try requireValue(accountId, "account_id")
+        guard !ids.isEmpty, ids.count <= Self.maxIds, !ids.contains("") else { throw NativeBridgeError.invalidWrite("ids") }
+        try requireValue(undoToken, "undoToken")
+        (self.accountId, self.ids, self.confirmedReconciled, self.undoToken) = (accountId, ids, confirmedReconciled, undoToken)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case accountId = "account_id"
+        case ids, confirmedReconciled, undoToken
+    }
+}
+
+// `native/account-reopen`: only a closed account
+public struct AccountReopen: Encodable, Equatable {
+    public let id: String
+    public let undoToken: String
+
+    public init(id: String, undoToken: String = UUID().uuidString) throws {
+        try requireValue(id, "id")
+        try requireValue(undoToken, "undoToken")
+        (self.id, self.undoToken) = (id, undoToken)
+    }
+}
+
+// `native/account-move`: before `targetId` in the same section, or to the end
+// of it when nil (sent as null)
+public struct AccountMove: Encodable, Equatable {
+    public let id: String
+    public let targetId: String?
+    public let undoToken: String
+
+    public init(id: String, targetId: String?, undoToken: String = UUID().uuidString) throws {
+        try requireValue(id, "id")
+        if let targetId {
+            try requireValue(targetId, "targetId")
+            guard targetId != id else { throw NativeBridgeError.invalidWrite("targetId") }
+        }
+        try requireValue(undoToken, "undoToken")
+        (self.id, self.targetId, self.undoToken) = (id, targetId, undoToken)
+    }
+
+    enum CodingKeys: String, CodingKey { case id, targetId, undoToken }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(targetId, forKey: .targetId)
+        try container.encode(undoToken, forKey: .undoToken)
+    }
+}
+
+extension NativeBridgeClient {
+    public func categorizeTransactions(_ write: TransactionsCategorize) async throws {
+        _ = try await call("native/transactions-categorize", args: write)
+    }
+
+    public func deleteTransactions(_ write: TransactionsDelete) async throws {
+        _ = try await call("native/transactions-delete", args: write)
+    }
+
+    public func reopenAccount(_ write: AccountReopen) async throws {
+        _ = try await call("native/account-reopen", args: write)
+    }
+
+    public func moveAccount(_ write: AccountMove) async throws {
+        _ = try await call("native/account-move", args: write)
+    }
+}

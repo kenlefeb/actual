@@ -66,10 +66,62 @@ final class AccountsContractTests: XCTestCase {
 }
 
 final class AccountsBridgeTests: XCTestCase {
-    func testBothReadsAreAllowlistedAndNoWriteYet() {
-        XCTAssertTrue(NativeBridgeAllowlist.handlers.isSuperset(of: ["native/accounts-list", "native/account-register"]))
-        XCTAssertFalse(NativeBridgeAllowlist.handlers.contains("account-reopen"))
-        XCTAssertFalse(NativeBridgeAllowlist.handlers.contains("transactions-batch-update"))
+    func testTheReadsAndTheFourWritesAreAllowlistedButNotTheRawHandlers() {
+        XCTAssertTrue(
+            NativeBridgeAllowlist.handlers.isSuperset(of: [
+                "native/accounts-list", "native/account-register", "native/transactions-categorize",
+                "native/transactions-delete", "native/account-reopen", "native/account-move",
+            ]))
+        for raw in ["account-reopen", "account-move", "transactions-batch-update"] {
+            XCTAssertFalse(NativeBridgeAllowlist.handlers.contains(raw))
+        }
+    }
+
+    func testEachWriteSendsOnlyItsOwnFieldsAndLooseArgumentsAreRefused() async throws {
+        var seen: [(String, String)] = []
+        let client = NativeBridgeClient { name, args in
+            seen.append((name, args))
+            return "null"
+        }
+        try await client.categorizeTransactions(
+            try TransactionsCategorize(accountId: "a", ids: ["t1"], category: "c", confirmedReconciled: true, undoToken: "T"))
+        try await client.categorizeTransactions(
+            try TransactionsCategorize(accountId: "a", ids: ["t1"], category: nil, undoToken: "T"))
+        try await client.deleteTransactions(try TransactionsDelete(accountId: "a", ids: ["t1", "t2"], undoToken: "T"))
+        try await client.reopenAccount(try AccountReopen(id: "old", undoToken: "T"))
+        try await client.moveAccount(try AccountMove(id: "a", targetId: nil, undoToken: "T"))
+        XCTAssertEqual(
+            seen.map(\.1),
+            [
+                #"{"account_id":"a","category":"c","confirmedReconciled":true,"ids":["t1"],"undoToken":"T"}"#,
+                #"{"account_id":"a","category":null,"confirmedReconciled":false,"ids":["t1"],"undoToken":"T"}"#,
+                #"{"account_id":"a","confirmedReconciled":false,"ids":["t1","t2"],"undoToken":"T"}"#,
+                #"{"id":"old","undoToken":"T"}"#,
+                #"{"id":"a","targetId":null,"undoToken":"T"}"#,
+            ])
+        for name in ["native/transactions-categorize", "native/transactions-delete", "native/account-reopen", "native/account-move"] {
+            do {
+                _ = try await client.call(name, args: ["id": "a"])
+                XCTFail("\(name) took loose arguments")
+            } catch NativeBridgeError.invalidWrite {
+            }
+        }
+        XCTAssertEqual(seen.count, 5)
+    }
+
+    func testWritesRefuseWhatLootCoreRefuses() {
+        XCTAssertThrowsError(try TransactionsCategorize(accountId: "", ids: ["t"], category: nil, undoToken: "T"))
+        XCTAssertThrowsError(try TransactionsCategorize(accountId: "a", ids: [], category: nil, undoToken: "T"))
+        XCTAssertThrowsError(try TransactionsCategorize(accountId: "a", ids: ["t"], category: "", undoToken: "T"))
+        XCTAssertThrowsError(try TransactionsCategorize(accountId: "a", ids: ["t"], category: nil, undoToken: ""))
+        XCTAssertThrowsError(try TransactionsDelete(accountId: "a", ids: [""], undoToken: "T"))
+        // 500 is loot-core's ceiling for accounts-write-max-ids; the engine applies the setting
+        XCTAssertThrowsError(try TransactionsDelete(accountId: "a", ids: (0...500).map { "t\($0)" }, undoToken: "T"))
+        XCTAssertNoThrow(try TransactionsDelete(accountId: "a", ids: (0..<500).map { "t\($0)" }, undoToken: "T"))
+        XCTAssertThrowsError(try AccountReopen(id: "", undoToken: "T"))
+        XCTAssertThrowsError(try AccountMove(id: "a", targetId: "", undoToken: "T"))
+        XCTAssertThrowsError(try AccountMove(id: "a", targetId: "a", undoToken: "T"))
+        XCTAssertThrowsError(try AccountMove(id: "a", targetId: nil, undoToken: ""))
     }
 
     func testRegisterRequestRejectsWhatLootCoreRefuses() {

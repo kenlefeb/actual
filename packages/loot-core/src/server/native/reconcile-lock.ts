@@ -31,6 +31,8 @@ const LIMITS = {
   'reconcile-lock-list-max-rows': { fallback: 200, ceiling: 2000 },
   // sc-4386 (native-accounts-screen D2)
   'accounts-register-page-size': { fallback: 50, ceiling: 200 },
+  // sc-4931 (D3): rows per categorize or delete call, children and partners counted
+  'accounts-write-max-ids': { fallback: 100, ceiling: 500 },
 } as const;
 
 export async function readLimit(id: keyof typeof LIMITS): Promise<number> {

@@ -34,8 +34,13 @@ public enum NativeBridgeAllowlist {
     ]
     // sc-4386 (native-accounts-screen D1): the Accounts screen's batched reads
     public static let accountsReads: Set<String> = ["native/accounts-list", "native/account-register"]
+    // sc-4931 (D3): sent only as TransactionsCategorize, TransactionsDelete, AccountReopen and
+    // AccountMove. The raw account-reopen, account-move and transactions-batch-update stay off.
+    public static let accountsWrites: Set<String> = [
+        "native/transactions-categorize", "native/transactions-delete", "native/account-reopen", "native/account-move",
+    ]
     public static let handlers: Set<String> = reads.union(writes).union(paycheckWrites).union(sync).union(reconcileReads)
-        .union(reconcileWrites).union(accountsReads)
+        .union(reconcileWrites).union(accountsReads).union(accountsWrites)
 }
 
 // The page's reduced sync result (nativeBridge.ts): whether it worked, and a
@@ -232,9 +237,12 @@ public struct NativeBridgeClient {
             || (args is ReconcileTick && name == "native/reconcile-tick") || (args is ReconcileListSet && name == "native/reconcile-list-set")
             || (args is StatementBalanceSave && name == "account-statement-balance-save")
             || (args is ReconcileAdjust && name == "native/reconcile-adjust") || (args is ReconcileLock && name == "native/reconcile-lock")
+            || (args is TransactionsCategorize && name == "native/transactions-categorize")
+            || (args is TransactionsDelete && name == "native/transactions-delete")
+            || (args is AccountReopen && name == "native/account-reopen") || (args is AccountMove && name == "native/account-move")
         let isWrite =
             NativeBridgeAllowlist.writes.contains(name) || NativeBridgeAllowlist.paycheckWrites.contains(name)
-            || NativeBridgeAllowlist.reconcileWrites.contains(name)
+            || NativeBridgeAllowlist.reconcileWrites.contains(name) || NativeBridgeAllowlist.accountsWrites.contains(name)
         guard !isWrite || isTyped else {
             throw NativeBridgeError.invalidWrite(name)
         }

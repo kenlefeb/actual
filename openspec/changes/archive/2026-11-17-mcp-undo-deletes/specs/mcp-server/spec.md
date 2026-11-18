@@ -63,8 +63,20 @@ A delete SHALL be refused with fixed text before any audit line, changing nothin
 - **WHEN** a client deletes a group whose transfer would change 120 cells
 - **THEN** the call is refused naming the cell limit, and nothing changed
 
+### Requirement: A group delete keeps its mappings undoable
+A category group delete with a transfer SHALL be refused, changing nothing and before any audit line, when the group holds categories deleted earlier (the message says so and names no ids): the app would re-point their mappings and an undo could not restore them. Without a transfer such a group SHALL delete as before.
+
+#### Scenario: An earlier-deleted category in the group
+- **GIVEN** a group holding a live category and one deleted earlier
+- **WHEN** a client deletes the group with `transfer_category_id`
+- **THEN** the call is refused saying the group holds categories deleted earlier and advising a delete without a transfer or in the app (it names no ids), and nothing is logged or changed
+
+#### Scenario: The same group without a transfer
+- **WHEN** a client deletes that group with no transfer category
+- **THEN** it is deleted, and its undo restores it
+
 ### Requirement: Undo of a delete restores the original rows
-`write_undo` of a transaction, category or group delete SHALL sync first, check every conflict, then restore the deleted rows with their original ids, the columns and mapping rows it changed, and the transfer cells in one `undeleteRows` call, all or nothing. It needs the delete's scopes, no `confirm`, and counts rows against the row limit and cells against the cell limit.
+`write_undo` of a transaction, category or group delete SHALL sync first, check every conflict, then restore the deleted rows with their original ids, the columns and mapping rows it changed, and the transfer cells in one `undeleteRows` call, all or nothing. It needs the delete's scopes, no `confirm`, and counts the rows the delete counted (its transactions, or its categories) against the delete limit and cells against the cell limit.
 
 #### Scenario: A category comes back
 - **GIVEN** "Dining" with notes, a goal and 12 transactions, deleted with a transfer to "Groceries"
@@ -79,6 +91,16 @@ A delete SHALL be refused with fixed text before any audit line, changing nothin
 #### Scenario: A group comes back
 - **WHEN** the client undoes a group delete
 - **THEN** the group and all its categories are back with their ids and order
+
+#### Scenario: A large group at the default limits
+- **GIVEN** a group of 26 categories deleted with a transfer, at the default limits
+- **WHEN** the client undoes the delete
+- **THEN** the group and all 26 categories come back, because the undo counts 26 rows against the delete limit, as the delete did
+
+#### Scenario: The limit was lowered since
+- **GIVEN** a delete of 3 rows, and a delete limit lowered to 2 afterwards
+- **WHEN** the client undoes it
+- **THEN** the undo is refused naming the limit, and nothing changed
 
 #### Scenario: The handler fails
 - **WHEN** `undeleteRows` throws during an undo of a category delete
@@ -110,7 +132,7 @@ After the restore, `write_undo` SHALL read the restored rows and cells back, and
 - **THEN** the undo is refused naming the group, and nothing changed
 
 ### Requirement: Undo of a transaction delete checks live references
-`write_undo` of a transaction delete SHALL also refuse when a restored row's account is closed or deleted, its payee does not resolve to a live payee, an unlinked partner child is deleted, reconciled or no longer unlinked, or, without `allow_reconciled` and the grant's option, a restored row is reconciled or its account was reconciled after the delete.
+`write_undo` of a transaction delete SHALL also refuse when a restored row's account is closed or deleted, its payee does not resolve to a live payee, its category is deleted and forwards to no live category, an unlinked partner child is deleted, reconciled or no longer unlinked, or, without `allow_reconciled` and the grant's option, a restored row is reconciled or its account was reconciled after the delete.
 
 #### Scenario: Its account is gone
 - **GIVEN** a deleted transaction whose account was later deleted in the app
@@ -121,6 +143,11 @@ After the restore, `write_undo` SHALL read the restored rows and cells back, and
 - **GIVEN** a deleted transaction whose account was reconciled after the delete
 - **WHEN** the client undoes the delete without `allow_reconciled`
 - **THEN** the undo is refused naming the account as reconciled since, and nothing changed
+
+#### Scenario: Its category is gone
+- **GIVEN** a deleted transaction whose category was deleted later without a transfer
+- **WHEN** the client undoes the delete
+- **THEN** the undo is refused naming the category, and nothing changed
 
 #### Scenario: Its partner child is gone
 - **GIVEN** a deleted transfer whose partner split child was unlinked, and the child's split deleted later

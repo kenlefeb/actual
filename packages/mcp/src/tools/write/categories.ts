@@ -5,8 +5,15 @@ import type { Limits } from '#limits';
 import { Refusal } from '#refusal';
 import { withText } from '#sanitize';
 
+import { checkRows, deleteSnapshot, rowKey } from './delete-snapshot';
 import type { RegisterWriteTool } from './shared';
-import { confirm, id, loggedWrite, requireDeleteRows } from './shared';
+import {
+  confirm,
+  id,
+  loggedWrite,
+  requireDeleteRows,
+  requireUndoableLine,
+} from './shared';
 
 export type Cat = {
   id: string;
@@ -408,7 +415,7 @@ export function registerCategoryWriteTools(
 
   tool(
     'write_delete_category',
-    'Delete a category, by category id (never a name). When it has transactions or budgeted amounts, transfer_category_id (another category of the same kind) is required and receives them; without it the call is refused with the counts. When this connection must confirm deletes, the first call changes nothing and returns a dry run with `confirm`; call again with it within 5 minutes. There is no undo.',
+    'Delete a category, by category id (never a name). When it has transactions or budgeted amounts, transfer_category_id (another category of the same kind) is required and receives them; without it the call is refused with the counts. When this connection must confirm deletes, the first call changes nothing and returns a dry run with `confirm`; call again with it within 5 minutes. Undoable with write_undo.',
     {
       category_id: id,
       transfer_category_id: id.optional(),
@@ -416,7 +423,10 @@ export function registerCategoryWriteTools(
     },
     async ({ category_id, transfer_category_id }, auditLog) => {
       const groups = await load();
-      const { category } = findCategory(groups, category_id);
+      const { category, group: categoryGroup } = findCategory(
+        groups,
+        category_id,
+      );
       if (transfer_category_id !== undefined) {
         const target = findCategory(
           groups,
@@ -440,26 +450,36 @@ export function registerCategoryWriteTools(
           `The category is in use (${usageText(usage)}). Pass transfer_category_id to move them. ${NOTHING}`,
         );
       }
+      // An expense transfer adds the amounts to the transfer category (doTransfer)
+      const snapshot = await deleteSnapshot(
+        auditLog,
+        [{ id: category_id, group_id: categoryGroup.id }],
+        transfer_category_id,
+        !category.is_income,
+      );
+      const entry = {
+        ids: [category_id],
+        changes: [
+          {
+            id: category_id,
+            field: 'name',
+            before: category.name,
+            after: null,
+          },
+          {
+            id: category_id,
+            field: 'transfer_category_id',
+            before: null,
+            after: transfer_category_id ?? null,
+          },
+          ...snapshot,
+        ],
+      };
+      await requireUndoableLine(auditLog, 'write_delete_category', entry);
       return loggedWrite(
         auditLog,
         'write_delete_category',
-        {
-          ids: [category_id],
-          changes: [
-            {
-              id: category_id,
-              field: 'name',
-              before: category.name,
-              after: null,
-            },
-            {
-              id: category_id,
-              field: 'transfer_category_id',
-              before: null,
-              after: transfer_category_id ?? null,
-            },
-          ],
-        },
+        entry,
         async () => {
           await api.deleteCategory(category_id, transfer_category_id);
           return { applied: [category_id] };
@@ -482,7 +502,7 @@ export function registerCategoryWriteTools(
 
   tool(
     'write_delete_category_group',
-    `Delete an expense category group and its categories (hidden ones too), by group id (never a name). When any category has transactions or budgeted amounts, transfer_category_id (an expense category outside the group) is required and receives them all; without it the call is refused naming the categories in use. At most ${limits.maxDeleteRows} categories by default. When this connection must confirm deletes, the first call changes nothing and returns a dry run with \`confirm\`; call again with it within 5 minutes. There is no undo.`,
+    `Delete an expense category group and its categories (hidden ones too), by group id (never a name). When any category has transactions or budgeted amounts, transfer_category_id (an expense category outside the group) is required and receives them all; without it the call is refused naming the categories in use. At most ${limits.maxDeleteRows} categories by default. When this connection must confirm deletes, the first call changes nothing and returns a dry run with \`confirm\`; call again with it within 5 minutes. Undoable with write_undo.`,
     { group_id: id, transfer_category_id: id.optional(), confirm },
     async ({ group_id, transfer_category_id }, auditLog) => {
       const groups = await load();
@@ -522,27 +542,47 @@ export function registerCategoryWriteTools(
           `These categories are in use: ${used.join('; ')}. Pass transfer_category_id to move them. ${NOTHING}`,
         );
       }
+      if (transfer_category_id !== undefined) {
+        // The app re-points categories deleted earlier in the group too, which an undo cannot put back
+        const held = (
+          await checkRows([{ table: 'category_groups', id: group_id }])
+        ).get(rowKey('category_groups', group_id))?.columns.category_ids;
+        if (Array.isArray(held) && held.length !== group.categories.length) {
+          throw new Refusal(
+            `This group holds categories deleted earlier, which a delete with a transfer would re-point and an undo cannot restore. Delete it without a transfer, or in the app. ${NOTHING}`,
+          );
+        }
+      }
+      const snapshot = await deleteSnapshot(
+        auditLog,
+        group.categories.map(c => ({ id: c.id, group_id })),
+        transfer_category_id,
+        true,
+      );
+      const entry = {
+        ids: [group_id, ...group.categories.map(c => c.id)],
+        changes: [
+          { id: group_id, field: 'name', before: group.name, after: null },
+          ...group.categories.map(c => ({
+            id: c.id,
+            field: 'name',
+            before: c.name,
+            after: null,
+          })),
+          {
+            id: group_id,
+            field: 'transfer_category_id',
+            before: null,
+            after: transfer_category_id ?? null,
+          },
+          ...snapshot,
+        ],
+      };
+      await requireUndoableLine(auditLog, 'write_delete_category_group', entry);
       return loggedWrite(
         auditLog,
         'write_delete_category_group',
-        {
-          ids: [group_id, ...group.categories.map(c => c.id)],
-          changes: [
-            { id: group_id, field: 'name', before: group.name, after: null },
-            ...group.categories.map(c => ({
-              id: c.id,
-              field: 'name',
-              before: c.name,
-              after: null,
-            })),
-            {
-              id: group_id,
-              field: 'transfer_category_id',
-              before: null,
-              after: transfer_category_id ?? null,
-            },
-          ],
-        },
+        entry,
         async () => {
           await api.deleteCategoryGroup(group_id, transfer_category_id);
           return { applied: [group_id, ...group.categories.map(c => c.id)] };

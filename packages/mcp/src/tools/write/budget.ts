@@ -35,7 +35,7 @@ export async function budgeted(m: string, categoryId: string) {
 }
 
 /** A month's budgeted amounts by category id (design D3: one read per month, not per cell). */
-async function budgetedMonth(m: string) {
+export async function budgetedMonth(m: string) {
   const { categoryGroups } = await api.getBudgetMonth(m);
   return new Map(
     categoryGroups

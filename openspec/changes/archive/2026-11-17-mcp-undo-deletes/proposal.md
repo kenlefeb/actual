@@ -26,8 +26,8 @@ None.
 
 ### Modified Capabilities
 
-- `mcp-server`: new requirements "Delete transactions", "Transaction delete refusals", "Audit lines name the budget", "Deletes log what their undo needs", "A delete must be undoable", "Undo of a delete restores the original rows", "Undo of a delete reports what it sees", "Undo of a delete refuses on any conflict" and "Undo of a transaction delete checks live references"; "What undo reverses" is modified.
-- `api-fork-handlers`: new requirements "Undelete rows", "Undelete sets only fixed columns" and "Undelete restores rows and cells together".
+- `mcp-server`: new requirements "Delete transactions", "Transaction delete refusals", "Audit lines name the budget", "Deletes log what their undo needs", "A delete must be undoable", "A group delete keeps its mappings undoable", "Undo of a delete restores the original rows", "Undo of a delete reports what it sees", "Undo of a delete refuses on any conflict" and "Undo of a transaction delete checks live references"; "What undo reverses" is modified.
+- `api-fork-handlers`: new requirements "Undelete rows", "Undelete sets only fixed columns", "Undelete cannot rewire live rows" and "Undelete restores rows and cells together".
 
 ## Impact
 

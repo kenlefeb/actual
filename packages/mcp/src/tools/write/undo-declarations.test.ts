@@ -17,7 +17,7 @@ let h: Awaited<ReturnType<typeof startHarness>>;
 
 afterEach(async () => {
   vi.restoreAllMocks();
-  await h.close();
+  await h?.close();
 });
 
 async function start(limits?: Partial<Limits>, count = 1) {

@@ -30,10 +30,59 @@ function lines() {
     .map(l => JSON.parse(l));
 }
 
+/** The budget's rows, groups and cells, to show a refused write changed nothing. */
+async function snapshot() {
+  const { data } = (await api.runQuery(
+    api
+      .q('transactions')
+      .select(['id', 'notes', 'amount', 'category'])
+      .orderBy(['id']),
+  )) as { data: unknown[] };
+  const months = await Promise.all(
+    ['2026-03', '2026-04'].map(m => api.getBudgetMonth(m)),
+  );
+  return JSON.stringify([data, await api.getCategoryGroups(), months]);
+}
+
+/** Set by the gate test: the write tool's call is refused, and nothing may change. */
+let gated: { before?: string; text?: string } | undefined;
+
 async function call(tool: string, args: Record<string, unknown>) {
+  if (gated) gated.before = await snapshot();
   const res = await h!.call(tool, args);
+  if (gated) {
+    expect(res.isError, 'the write was allowed').toBe(true);
+    gated.text = res.text;
+    return { write_id: '' };
+  }
   expect(res.isError, res.text).toBe(false);
   return res.json as { write_id: string };
+}
+
+async function start(maxAuditLineBytes?: number) {
+  h = await startHarness(
+    { count: 2 },
+    {
+      grant: { scopes: [...SCOPES], confirm_destructive: false },
+      identity: { user_id: 'u1', subject: 'sub1' },
+      ...(maxAuditLineBytes ? { limits: { maxAuditLineBytes } } : {}),
+    },
+  );
+  vi.spyOn(api, 'sync').mockResolvedValue(undefined);
+}
+
+/** The estimate for the write's own logged line. */
+function estimateOf(writeId: string, tool: string) {
+  const attempt = lines().find(
+    l => l.call_id === writeId && l.phase === 'attempt',
+  );
+  const { user_id, subject, scopes, grant } = attempt;
+  return lineBytes(
+    { user_id, subject, scopes, ...(grant ? { grant } : {}) },
+    attempt.budget_id,
+    tool,
+    { ids: attempt.ids, changes: attempt.changes },
+  );
 }
 
 const MONTH = '2026-03';
@@ -146,25 +195,9 @@ describe('The undo-line estimate never undercounts', () => {
   });
 
   it.each(Object.keys(WRITES))('%s', async tool => {
-    h = await startHarness(
-      { count: 2 },
-      {
-        grant: { scopes: [...SCOPES], confirm_destructive: false },
-        identity: { user_id: 'u1', subject: 'sub1' },
-      },
-    );
-    vi.spyOn(api, 'sync').mockResolvedValue(undefined);
+    await start();
     const w = await WRITES[tool]();
-    const attempt = lines().find(
-      l => l.call_id === w.write_id && l.phase === 'attempt',
-    );
-    const { user_id, subject, scopes, grant } = attempt;
-    const estimate = lineBytes(
-      { user_id, subject, scopes, ...(grant ? { grant } : {}) },
-      attempt.budget_id,
-      tool,
-      { ids: attempt.ids, changes: attempt.changes },
-    );
+    const estimate = estimateOf(w.write_id, tool);
     const undo = await call('write_undo', { write_id: w.write_id });
     const real = lines().find(
       l => l.call_id === undo.write_id && l.phase === 'attempt',
@@ -172,5 +205,26 @@ describe('The undo-line estimate never undercounts', () => {
     expect(estimate.undo).toBeGreaterThanOrEqual(
       Buffer.byteLength(JSON.stringify(real)),
     );
+  });
+});
+
+describe('Each undoable tool refuses a write whose undo line would not fit', () => {
+  afterEach(() => {
+    gated = undefined;
+  });
+
+  // The same write on a fresh budget gives a line of the same size (ids are UUIDs)
+  it.each(Object.keys(WRITES))('%s', async tool => {
+    await start();
+    const { own, undo } = estimateOf((await WRITES[tool]()).write_id, tool);
+    expect(own).toBeLessThan(undo);
+    await h!.close();
+    global.currentMonth = '2026-01';
+    await start(undo - 1);
+    gated = {};
+    await WRITES[tool]();
+    expect(gated.text).toMatch(/its undo would make an audit line/);
+    expect(lines()).toEqual([]);
+    expect(await snapshot()).toBe(gated.before);
   });
 });

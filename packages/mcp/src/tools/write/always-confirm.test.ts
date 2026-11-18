@@ -83,6 +83,32 @@ describe('Permanent actions always confirm', () => {
     expect(await open(id)).toBeUndefined();
   });
 
+  it.each([
+    ['write_close_account', 'closed'],
+    ['write_delete_account', 'deleted'],
+  ])('%s of a bank-linked account writes on confirm', async (tool, field) => {
+    await start();
+    const id = await account('Linked');
+    await link(id, true);
+    const dry = await expectDryRun(tool, { account_id: id });
+    const done = await h.call(tool, {
+      account_id: id,
+      confirm: dry.json.confirm,
+    });
+    expect(done.isError, done.text).toBe(false);
+    expect(await open(id)).toBeUndefined();
+    const attempt = auditLines().find(l => l.phase === 'attempt');
+    expect(attempt).toMatchObject({
+      tool,
+      unlinks_bank_sync: true,
+      changes: [{ id, field }],
+    });
+    expect(auditLines().find(l => l.phase === 'outcome')).toMatchObject({
+      status: 'ok',
+      applied: [id],
+    });
+  });
+
   it('a confirm from before the link changed is stale', async () => {
     await start();
     const id = await account('Linked');

@@ -241,6 +241,39 @@ struct PersistedAnswer: Decodable, Equatable {
     static let notStored = PersistedAnswer(stored: false)
 }
 
+// sc-5219 (D8): the iPhone's flush on going to the background. The system's
+// background task ends at the earliest of the answer (the client's deadline
+// bounds it) or expiry, and only once.
+@MainActor
+public final class BackgroundFlush<Token> {
+    private let begin: (_ onExpiry: @escaping () -> Void) -> Token
+    private let end: (Token) -> Void
+    private let flush: () async -> Void
+    private var token: Token?
+
+    public init(
+        begin: @escaping (_ onExpiry: @escaping () -> Void) -> Token, end: @escaping (Token) -> Void,
+        flush: @escaping () async -> Void
+    ) {
+        (self.begin, self.end, self.flush) = (begin, end, flush)
+    }
+
+    public func run() {
+        guard token == nil else { return }
+        token = begin { [weak self] in self?.finish() }
+        Task { [weak self, flush] in
+            await flush()
+            self?.finish()
+        }
+    }
+
+    private func finish() {
+        guard let token else { return }
+        self.token = nil
+        end(token)
+    }
+}
+
 // A write's result, and whether this device has stored it
 public struct StoredWrite {
     public let data: Data
@@ -474,9 +507,17 @@ public struct NativeBridgeClient {
         }
     }
 
-    private func askPersisted() async throws -> PersistedAnswer {
+    // D8: before the app may stop running. Covers every file, so a budget just
+    // closed is included. False when storage has not confirmed, for any reason.
+    public func flushStorage() async -> Bool {
+        guard let answer = try? await askPersisted(argsJSON: #"{"allFiles":true}"#) else { return false }
+        await storage?.record(answer)
+        return answer.stored
+    }
+
+    private func askPersisted(argsJSON: String = "{}") async throws -> PersistedAnswer {
         let name = "native/persisted"
-        let json = try await withTimeout(name, timeout) { try await transport(name, "{}") }
+        let json = try await withTimeout(name, timeout) { try await transport(name, argsJSON) }
         return try JSONDecoder().decode(PersistedAnswer.self, from: Data(json.utf8))
     }
 

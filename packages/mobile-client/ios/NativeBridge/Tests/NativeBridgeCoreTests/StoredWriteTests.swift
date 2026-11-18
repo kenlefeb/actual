@@ -243,6 +243,65 @@ final class StoredWriteTests: XCTestCase {
         XCTAssertEqual(shown.last, .some(nil))
     }
 
+    // D8: a lifecycle flush asks for every file and reports the answer
+    func testAFlushAsksForEveryFileAndSaysWhetherItIsStored() async {
+        var sent: [(String, String)] = []
+        var reply = #"{"stored":true,"seq":{"epoch":"e","n":1}}"#
+        let bridge = NativeBridgeClient(storage: WriteStorageStatus()) { name, args in
+            sent.append((name, args))
+            return reply
+        }
+        let stored = await bridge.flushStorage()
+        XCTAssertTrue(stored)
+        XCTAssertEqual(sent.first?.0, "native/persisted")
+        XCTAssertEqual(sent.first?.1, #"{"allFiles":true}"#)
+        reply = #"{"stored":false,"seq":{"epoch":"e","n":2}}"#
+        let notStored = await bridge.flushStorage()
+        XCTAssertFalse(notStored)
+    }
+
+    func testAFlushThatFailsReportsNotStored() async {
+        let bridge = NativeBridgeClient(storage: WriteStorageStatus()) { _, _ in throw NativeBridgeError.noPage }
+        let stored = await bridge.flushStorage()
+        XCTAssertFalse(stored)
+    }
+
+    func testABackgroundFlushEndsItsTaskOnceWhenTheAnswerComes() async {
+        let answer = AsyncGate()
+        var ended: [Int] = []
+        var begun = 0
+        let flush = BackgroundFlush<Int>(
+            begin: { _ in
+                begun += 1
+                return 7
+            }, end: { ended.append($0) }, flush: { await answer.wait() })
+        flush.run()
+        flush.run()
+        XCTAssertEqual(begun, 1)
+        XCTAssertEqual(ended, [])
+        await answer.open()
+        await waitUntil { ended == [7] }
+        try? await Task.sleep(nanoseconds: 10_000_000)
+        XCTAssertEqual(ended, [7])
+    }
+
+    func testABackgroundFlushEndsItsTaskAtOnceOnExpiry() async {
+        let answer = AsyncGate()
+        var expire: () -> Void = {}
+        var ended: [Int] = []
+        let flush = BackgroundFlush<Int>(
+            begin: { onExpiry in
+                expire = onExpiry
+                return 7
+            }, end: { ended.append($0) }, flush: { await answer.wait() })
+        flush.run()
+        expire()
+        XCTAssertEqual(ended, [7])
+        await answer.open()
+        try? await Task.sleep(nanoseconds: 10_000_000)
+        XCTAssertEqual(ended, [7])
+    }
+
     func testTheStoredEventCarriesOnlyItsNumber() {
         let stored = NativeBridgeEvent.stored(of: ["event": "stored", "payload": ["seq": ["epoch": "e", "n": 7], "extra": 1]])
         XCTAssertEqual(stored?.seq, 7)

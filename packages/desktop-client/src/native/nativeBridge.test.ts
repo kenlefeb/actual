@@ -146,6 +146,16 @@ describe('storage through the page bridge', () => {
     },
   );
 
+  it('passes on only a lifecycle flush request to native/persisted', async () => {
+    const { bridge, send } = storageSetup();
+    await bridge.call('native/persisted', { allFiles: true, extra: 1 });
+    await bridge.call('native/persisted', { allFiles: 'yes' });
+    expect(send.mock.calls).toEqual([
+      ['native/persisted', { allFiles: true }],
+      ['native/persisted', undefined],
+    ]);
+  });
+
   it('keeps the guard switch away from native code', async () => {
     const { bridge } = storageSetup();
     await expect(bridge.call('native/enable-storage-guard')).rejects.toThrow(

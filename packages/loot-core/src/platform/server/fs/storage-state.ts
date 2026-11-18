@@ -40,15 +40,21 @@ export function isOpenFile(
  * Resolves when the open budget's writes so far are stored, including those of
  * earlier files of its name; rejects if an open file's failed. Another
  * budget's stuck write must not hold this one back. With nothing open, every
- * file counts, so a flush still covers a budget just closed.
+ * file counts. A lifecycle flush asks for `allFiles`, so a budget just closed
+ * is covered even when another has opened since (D8).
  */
-export async function filesWhenPersisted(files: Iterable<StorageFile>) {
+export async function filesWhenPersisted(
+  files: Iterable<StorageFile>,
+  { allFiles = false }: { allFiles?: boolean } = {},
+) {
   const all = [...files];
   const openNames = new Set(
     all.filter(file => file.openHandles > 0).map(file => file.filename),
   );
   const waitedFor =
-    openNames.size > 0 ? all.filter(file => openNames.has(file.filename)) : all;
+    !allFiles && openNames.size > 0
+      ? all.filter(file => openNames.has(file.filename))
+      : all;
   await Promise.all(
     waitedFor.map(async file => {
       try {

@@ -130,6 +130,13 @@ describe('native/persisted', () => {
     expect(send.mock.calls).toEqual([['storage-stored', { seq: firstSeq }]]);
   });
 
+  it('waits for every file only when a lifecycle flush asks', async () => {
+    await h['native/persisted']();
+    expect(storage.whenPersisted).toHaveBeenLastCalledWith({ allFiles: false });
+    await h['native/persisted']({ allFiles: true });
+    expect(storage.whenPersisted).toHaveBeenLastCalledWith({ allFiles: true });
+  });
+
   // A lifecycle flush can come with no budget open, so no preferences to read
   it('still answers with no budget open', async () => {
     db.closeDatabase();

@@ -491,8 +491,9 @@ export const enableStorageLatch = (): void => {
   BFS?.backend?.enableLatch?.();
 };
 
-export const whenPersisted = (): Promise<void> =>
-  filesWhenPersisted(blockedFiles());
+export const whenPersisted = (options?: {
+  allFiles?: boolean;
+}): Promise<void> => filesWhenPersisted(blockedFiles(), options);
 
 export const storageState = (): StorageState => ({
   ...filesStorageState(blockedFiles()),

@@ -38,7 +38,7 @@
   - the held earliest cut-off: kept until OK, a later failure notice using its own cut-off, the restart notice returning on the next load, and a load time instead of "since you opened the app" after any reload;
   - `[native:not-stored]` mapping;
   - copy-table keys, with the failure wording sent to the Product Owner for approval (D3, D5).
-- [ ] 3.2 Lifecycle:
+- [x] 3.2 Lifecycle:
   - iPhone: the background task with an expiration handler, ended at the earliest of the answer, the wait or expiry.
   - Mac: `.terminateLater` on quit, a deferred window close, and a best-effort flush in `EngineLifecycle.willSleep`.
   - Tests with a fake client (D8).

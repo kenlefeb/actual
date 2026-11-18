@@ -458,10 +458,13 @@ export function createNativeBridge({
       } else if (
         name === 'native/accounts-list' ||
         name === 'native/server-info' ||
-        name === 'native/persisted' ||
         name === 'native/storage-state'
       ) {
         args = undefined;
+      } else if (name === 'native/persisted') {
+        // D8: a lifecycle flush also covers a budget just closed
+        const { allFiles } = (args ?? {}) as Record<string, unknown>;
+        args = allFiles === true ? { allFiles } : undefined;
       } else if (name === 'native/settings') {
         // sc-4643 (native-settings-screen D2): the client version is the only
         // field the page adds; loot-core cannot see it

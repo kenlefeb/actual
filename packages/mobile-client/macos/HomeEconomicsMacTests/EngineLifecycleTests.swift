@@ -25,6 +25,33 @@ final class EngineLifecycleTests: XCTestCase {
         XCTAssertEqual(window.orderedOut, 1)
     }
 
+    // sc-5219 (D8): storage is flushed before the window goes or the app quits
+    private var flushes: [() -> Void] = []
+    private lazy var flushing = EngineLifecycle(reread: {}, flush: { [unowned self] in self.flushes.append($0) })
+
+    func testClosingTheWindowWaitsForTheFlush() {
+        let window = FakeWindow()
+        XCTAssertFalse(flushing.windowShouldClose(window))
+        XCTAssertTrue(window.visible)
+        flushes[0]()
+        XCTAssertFalse(window.visible)
+    }
+
+    func testQuittingRepliesOnceAfterTheFlush() {
+        var replies = 0
+        flushing.shouldTerminate { replies += 1 }
+        flushing.shouldTerminate { replies += 1 }
+        XCTAssertEqual(flushes.count, 1)
+        XCTAssertEqual(replies, 0)
+        flushes[0]()
+        XCTAssertEqual(replies, 1)
+    }
+
+    func testSleepAsksForABestEffortFlush() {
+        flushing.willSleep()
+        XCTAssertEqual(flushes.count, 1)
+    }
+
     func testTheAppKeepsRunningWithNoWindow() {
         XCTAssertFalse(EngineLifecycle.terminatesAfterLastWindowClosed)
     }

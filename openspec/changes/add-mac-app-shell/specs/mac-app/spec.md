@@ -72,12 +72,17 @@ The Mac app SHALL NOT use a private WebKit API, or enable file-URL access or uni
 - **THEN** the app refuses the in-frame navigation
 
 #### Scenario: Another host
-- **GIVEN** a link to a host that is neither the sync server nor the provider
-- **WHEN** it is followed
+- **GIVEN** an `https` link to a host that is neither the sync server nor the provider
+- **WHEN** the user clicks it
 - **THEN** it opens in the default browser, not in the app's web view
 
+#### Scenario: An http link
+- **GIVEN** an `http` link to any host
+- **WHEN** the user clicks it
+- **THEN** the app refuses it, and nothing opens
+
 ### Requirement: In-frame sign-in hosts are a fixed list in this milestone
-Until story 4984, the hosts allowed in-frame over `https` SHALL be a list fixed in the app's build: the fork's sync servers and their OpenID provider. A user whose sync server or sign-in provider is not listed, including a provider that sends them on to another host, SHALL be able to sign in only with a password: the OpenID sign-in page opens in the default browser, and the app stays on its sign-in screen.
+Until story 4984, the hosts allowed in-frame over `https` SHALL be a list fixed in the app's build: the fork's sync servers and their OpenID provider. A user whose server or sign-in provider is not listed, or whose provider sends them to another host, SHALL sign in only with a password. Choosing OpenID SHALL keep the app on its sign-in screen with a message that this sign-in isn't supported yet and to use a password, and hand nothing to the browser.
 
 #### Scenario: A listed server
 - **GIVEN** the person's server and its OpenID provider are on the app's list
@@ -86,8 +91,18 @@ Until story 4984, the hosts allowed in-frame over `https` SHALL be a list fixed 
 
 #### Scenario: A server that is not listed
 - **GIVEN** the person's server or its OpenID provider is not on the app's list
-- **WHEN** they sign in
-- **THEN** password sign-in works, and choosing OpenID opens the provider's page in the default browser while the app stays on its sign-in screen
+- **WHEN** they choose OpenID sign-in
+- **THEN** the app stays on its sign-in screen and says this server's sign-in isn't supported in the Mac app yet and to use a password, and no browser opens
+
+#### Scenario: Password sign-in on a server that is not listed
+- **GIVEN** the person's server is not on the app's list
+- **WHEN** they sign in with their password
+- **THEN** sign-in completes in the app
+
+#### Scenario: A redirect carrying a sign-in token or code
+- **GIVEN** the app's window is sent, by a redirect or by the page, to a host that is not on the list
+- **WHEN** the address holds a token or code
+- **THEN** the app refuses it, opens nothing outside the app, and logs no part of the address
 
 ### Requirement: Onboarding uses the web screens and budgets open only by sync download
 Until native onboarding ships, the Mac app SHALL show the web screens in its window for the server URL, sign-in (password and OpenID), the budget list and the encryption password. A budget SHALL open only by downloading it from the sync server, like a new device. An end-to-end encrypted budget SHALL ask for its password before it opens.

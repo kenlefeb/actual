@@ -22,6 +22,7 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
     // Every forwarded event, then one coalesced call per burst
     var onEvent: ((String) -> Void)?
     var onChange: (() -> Void)?
+    var onRefusedSignIn: (() -> Void)?
     private lazy var coalescer = ChangeCoalescer { [weak self] in self?.onChange?() }
     private let policy: NavigationPolicy
     private let openInBrowser: (URL) -> Void
@@ -74,17 +75,30 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
 
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction) async -> WKNavigationActionPolicy {
         guard let url = action.request.url else { return .cancel }
-        switch policy.decide(url, isMainFrame: action.targetFrame?.isMainFrame ?? true) {
+        switch policy.decide(url, isMainFrame: action.targetFrame?.isMainFrame ?? true, userClicked: Self.userClicked(action)) {
         case .allow:
             return .allow
         case .openInBrowser:
             openInBrowser(url)
             return .cancel
+        case .refuseSignIn:
+            // Never the URL: a redirect here can carry a sign-in token or code
+            Self.logger.notice("refused a navigation to an unlisted host")
+            onRefusedSignIn?()
+            return .cancel
         case .cancel:
-            // The scheme and host only: a path or query can carry a token
-            Self.logger.notice("refused navigation to \(url.scheme ?? "", privacy: .public)://\(url.host ?? "", privacy: .public)")
+            Self.logger.notice("refused a navigation")
             return .cancel
         }
+    }
+
+    // A link the user activated. WebKit reports a redirect, a script
+    // navigation and a form post as other types. macOS exposes no public
+    // user-gesture flag beyond this, so a script's synthetic click on a link
+    // can still count: it only opens the browser at a URL the page itself
+    // shows, never a redirect's target.
+    static func userClicked(_ action: WKNavigationAction) -> Bool {
+        action.navigationType == .linkActivated
     }
 
     // MARK: WKUIDelegate
@@ -94,7 +108,7 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
         _ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for action: WKNavigationAction,
         windowFeatures: WKWindowFeatures
     ) -> WKWebView? {
-        if let url = action.request.url, url.scheme?.lowercased() == "https" { openInBrowser(url) }
+        if let url = action.request.url, url.scheme?.lowercased() == "https", Self.userClicked(action) { openInBrowser(url) }
         return nil
     }
 }

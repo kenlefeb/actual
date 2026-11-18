@@ -9,8 +9,41 @@ import XCTest
 final class MacEngineHostTests: XCTestCase {
     private let hosts: Set<String> = ["actual-staging.owl-becrux.ts.net", "actual-staging.us.auth0.com"]
 
-    private func decide(_ string: String, mainFrame: Bool = true) -> NavigationDecision {
-        NavigationPolicy(allowedHosts: hosts).decide(URL(string: string)!, isMainFrame: mainFrame)
+    private func decide(_ string: String, mainFrame: Bool = true, userClicked: Bool = false) -> NavigationDecision {
+        NavigationPolicy(allowedHosts: hosts).decide(URL(string: string)!, isMainFrame: mainFrame, userClicked: userClicked)
+    }
+
+    // A navigation as WebKit reports it: a click (link, mouse button) or not
+    private final class FakeAction: WKNavigationAction {
+        private let fakeRequest: URLRequest
+        private let fakeType: WKNavigationType
+        private let fakeButton: Int
+        init(_ url: String, type: WKNavigationType, button: Int = 0) {
+            fakeRequest = URLRequest(url: URL(string: url)!)
+            fakeType = type
+            fakeButton = button
+            super.init()
+        }
+        override var request: URLRequest { fakeRequest }
+        override var navigationType: WKNavigationType { fakeType }
+        override var buttonNumber: Int { fakeButton }
+        // nil: the main frame, as for a new-window request
+        override var targetFrame: WKFrameInfo? { nil }
+    }
+
+    private var opened: [URL] = []
+    private var refusedSignIns = 0
+
+    private func host() -> MacEngineHost {
+        let host = MacEngineHost(
+            www: FileManager.default.temporaryDirectory, version: "test", policy: NavigationPolicy(allowedHosts: hosts),
+            openInBrowser: { [unowned self] in self.opened.append($0) })
+        host.onRefusedSignIn = { [unowned self] in self.refusedSignIns += 1 }
+        return host
+    }
+
+    private func navigate(_ host: MacEngineHost, _ action: WKNavigationAction) async -> WKNavigationActionPolicy {
+        await host.webView(host.webView, decidePolicyFor: action)
     }
 
     // MARK: Origin guard
@@ -42,9 +75,55 @@ final class MacEngineHostTests: XCTestCase {
         XCTAssertEqual(decide("http://192.168.1.10:5006/"), .cancel)
     }
 
-    func testAnotherHostOpensInTheBrowser() {
-        XCTAssertEqual(decide("https://actualbudget.org/docs"), .openInBrowser)
-        XCTAssertEqual(decide("https://evil.example/actual-staging.us.auth0.com"), .openInBrowser)
+    func testAClickedLinkToAnotherHostOpensInTheBrowser() {
+        XCTAssertEqual(decide("https://actualbudget.org/docs", userClicked: true), .openInBrowser)
+        XCTAssertEqual(decide("https://evil.example/actual-staging.us.auth0.com", userClicked: true), .openInBrowser)
+    }
+
+    // PR 413 round 3: a redirect or script navigation can carry a token or code
+    func testAnUnclickedNavigationToAnotherHostIsRefusedNotOpened() {
+        XCTAssertEqual(decide("https://idp.example/authorize?code=x"), .refuseSignIn)
+        XCTAssertEqual(decide("https://evil.example/", mainFrame: false, userClicked: true), .cancel)
+    }
+
+    func testAClickedHttpLinkIsRefused() {
+        XCTAssertEqual(decide("http://example.com/", userClicked: true), .cancel)
+    }
+
+    func testTheDelegateOpensOnlyAClickedLink() async {
+        let host = host()
+        let policy = await navigate(host, FakeAction("https://actualbudget.org/docs", type: .linkActivated, button: 0))
+        XCTAssertEqual(policy, .cancel)
+        XCTAssertEqual(opened, [URL(string: "https://actualbudget.org/docs")!])
+        XCTAssertEqual(refusedSignIns, 0)
+    }
+
+    func testARedirectWithATokenIsCancelledAndNeverOpened() async {
+        let host = host()
+        // A server redirect reports .other, as a script navigation does
+        let policy = await navigate(host, FakeAction("https://unlisted.example/openid-cb?token=SECRET&code=SECRET", type: .other))
+        XCTAssertEqual(policy, .cancel)
+        XCTAssertTrue(opened.isEmpty)
+        XCTAssertEqual(refusedSignIns, 1)
+    }
+
+    func testAFormPostOrReloadToAnotherHostIsNeverOpened() async {
+        let host = host()
+        for type in [WKNavigationType.formSubmitted, .formResubmitted, .reload, .backForward] {
+            let policy = await navigate(host, FakeAction("https://unlisted.example/cb?code=SECRET", type: type))
+            XCTAssertEqual(policy, .cancel)
+        }
+        XCTAssertTrue(opened.isEmpty)
+    }
+
+    func testANewWindowOpensOnlyForAClickedLink() {
+        let host = host()
+        let config = WKWebViewConfiguration()
+        let features = WKWindowFeatures()
+        XCTAssertNil(host.webView(host.webView, createWebViewWith: config, for: FakeAction("https://unlisted.example/?token=SECRET", type: .other), windowFeatures: features))
+        XCTAssertTrue(opened.isEmpty)
+        XCTAssertNil(host.webView(host.webView, createWebViewWith: config, for: FakeAction("https://actualbudget.org/", type: .linkActivated, button: 0), windowFeatures: features))
+        XCTAssertEqual(opened, [URL(string: "https://actualbudget.org/")!])
     }
 
     func testAnotherHostInAFrameIsDropped() {

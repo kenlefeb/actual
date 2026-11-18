@@ -38,7 +38,7 @@ Test-first: write each test, run it and see it fail before writing the code. One
 - [ ] 1.8 If criterion 1 fails, stop. Weakening WebKit is not allowed (no private API, no file-URL access, no dropped COEP). Record the evidence, and ask the PO (through the Director) to re-plan sc-4942 onto the `packages/api` browser-worker bundle with a new page bridge and native onboarding (about 1 to 1.5 person-weeks more). If criterion 2 fails, propose moving native sign-in (story 4960) into sc-4942 the same way.
 - [x] 1.9 Add `.github/workflows/fork-mac-native.yml`: on PRs touching `packages/mobile-client/macos/**` or `packages/mobile-client/ios/NativeBridge/**`, build and test unsigned on `macos-26` with no secrets. Verify: the job runs green on this PR and fails when a test is broken on purpose (then reverted).
 - [x] 1.10 Run `yarn check:native-swift` with a temporary `import SQLite3` in a Mac Swift file. Verify: it fails and names the file, then passes once the line is removed.
-- [x] 1.11 Security Analyst review of the sign-in and sync-download path. Confirm `isValidRedirectUrl` is unchanged, the origin guard covers the scheme, the scheme handler can't serve files outside `www`, no URL query is logged, and navigation is `https`-only. Record the review on the PR.
+- [ ] 1.11 Security Analyst review of the sign-in and sync-download path. Confirm `isValidRedirectUrl` is unchanged, the origin guard covers the scheme, the scheme handler can't serve files outside `www`, no URL query is logged, and navigation is `https`-only. Record the review on the PR.
 
 ## 2. Native Budget window, read-only (sc-4951)
 

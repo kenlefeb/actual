@@ -51,7 +51,7 @@
    - The consumers `style/theme.tsx` and `components/settings/Themes.tsx` are updated deliberately. The shell gets the native theme (the onboarding screens are web, and native is preferred), and the theme picker is hidden as on iPhone. The UX Designer confirms this in the shell PR.
 5. **Sign-in stays in the web view for M1.**
    - OpenID navigates the main frame to the provider and returns to `homeeconomics://localhost/openid-cb`, which already passes `isValidRedirectUrl` (host `localhost`), as `capacitor://localhost` does on iPhone.
-   - A `WKNavigationDelegate` allows in-frame navigation only to the app's scheme and to `https` on the configured sync server and the OpenID provider's host. A plain-`http` server address is refused in-frame. Any other link opens in the default browser.
+   - A `WKNavigationDelegate` allows in-frame navigation only to the app's scheme and to `https` on the configured sync server and the OpenID provider's host. A plain-`http` server address is refused in-frame. Only an `https` link the user clicks (`linkActivated`) opens in the default browser; a redirect, script navigation or form post to another host is refused and nothing leaves the app, because it can carry the sign-in token or code (PR 413 round 3). The app does not register `homeeconomics://` with the system.
 6. **Views on the Mac are new; view models are shared.**
    - The Mac Budget window is a SwiftUI `Table` over `BudgetViewModel` (one `native/budget-month` read per shown month), with 1 to 3 months per Figma.
    - Edits reuse `BudgetAmountWrite` and `Transfer` validation.

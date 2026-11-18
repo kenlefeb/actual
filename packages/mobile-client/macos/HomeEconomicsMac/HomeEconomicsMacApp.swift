@@ -37,6 +37,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // Native views (story 4951) subscribe here; one re-read per burst
         rereads = ChangeCoalescer {}
         host.onChange = { [weak self] in self?.rereads?.notify() }
+        // The page stays on its sign-in screen; nothing went to the browser
+        host.onRefusedSignIn = { [weak self] in self?.showSignInNotSupported() }
         self.host = host
 
         let window = NSWindow(
@@ -76,6 +78,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc private func didWake() { lifecycle.didWake() }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool { lifecycle.windowShouldClose(sender) }
+
+    // Until story 4984: a server or sign-in provider the app doesn't list
+    private func showSignInNotSupported() {
+        guard let window, window.attachedSheet == nil else { return }
+        let alert = NSAlert()
+        alert.messageText = String(localized: "This server's sign-in isn't supported in the Mac app yet")
+        alert.informativeText = String(localized: "Sign in with your password instead.")
+        alert.beginSheetModal(for: window)
+    }
 
     #if DEBUG
     // Task 1.6 and spike criterion 4: times `native/budget-month` reads of

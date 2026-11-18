@@ -214,3 +214,37 @@ final class ChangeCoalescerTests: XCTestCase {
         wait(for: [again], timeout: 1)
     }
 }
+
+// sc-5090: the page and the app must agree on what an unset switch reads as.
+// Both read desktop-client/src/data/native-screen-defaults.json.
+final class NativeScreenDefaultsTests: XCTestCase {
+    private func freshDefaults() -> UserDefaults {
+        let suite = "NativeScreenDefaultsTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        addTeardownBlock { defaults.removePersistentDomain(forName: suite) }
+        return defaults
+    }
+
+    func testAnUnsetSwitchReadsAsTheSharedDefaultsFileSays() throws {
+        let data = try Data(contentsOf: packagesDir.appendingPathComponent(
+            "desktop-client/src/data/native-screen-defaults.json"))
+        let shared = try JSONDecoder().decode([String: Bool].self, from: data)
+        let source = NativeScreensScript.source(defaults: freshDefaults(), expectedOrigin: "capacitor://localhost")
+        XCTAssertEqual(shared.count, 4)
+        for (screen, on) in shared {
+            XCTAssertTrue(source.contains("\"\(screen)\": \(on)"), "\(screen) should read \(on) when unset: \(source)")
+        }
+    }
+
+    func testAnExplicitOffIsKeptAndAnExplicitOnStaysOn() {
+        let defaults = freshDefaults()
+        defaults.set(false, forKey: NativeScreenSwitch.key(for: .budget))
+        defaults.set(false, forKey: NativeScreenSwitch.paychecksKey)
+        XCTAssertEqual(NativeScreenSwitch.screen(for: .budget, defaults: defaults), .web)
+        XCTAssertFalse(NativeScreenSwitch.isPaychecksNative(defaults: defaults))
+        defaults.set(true, forKey: NativeScreenSwitch.key(for: .budget))
+        defaults.set(true, forKey: NativeScreenSwitch.paychecksKey)
+        XCTAssertEqual(NativeScreenSwitch.screen(for: .budget, defaults: defaults), .native)
+        XCTAssertTrue(NativeScreenSwitch.isPaychecksNative(defaults: defaults))
+    }
+}

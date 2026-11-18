@@ -8,7 +8,7 @@ The SwiftUI Schedules & Paychecks screens in the native Apple apps: the Budget-t
 
 ### Requirement: The native paychecks screens have a per-screen switch and a web fallback
 
-A per-device switch, off by default, SHALL choose between the native Schedules & Paychecks screens and the existing web screens. With it off, the Budget tab SHALL have no summary row, and Schedules SHALL open the web screens unchanged. Flipping the switch SHALL need no data migration and lose no saved edit.
+A per-device switch, reading on when unset (sc-5090), SHALL choose between the native Schedules & Paychecks screens and the existing web screens. With it off, the Budget tab SHALL have no summary row, and Schedules SHALL open the web screens unchanged. Flipping the switch SHALL need no data migration and lose no saved edit.
 
 #### Scenario: Switch off on iPhone
 

@@ -15,4 +15,4 @@
 - [x] 2.3 Failing tests first for the modified "One write cannot fill the audit tail" (an update and a create whose undo line would not fit), then `requireUndoableLine` for every tool in `UNDOABLE` (design D5)
 - [x] 2.4 Failing tests first for "Permanent actions always confirm" and "Bank-linked is read at each call" and the modified "Account delete" and "Account close and delete are confirmed and audited" (confirm off: bank-linked close and delete, unlinked close and delete, templates, linked since the client's last read, a stale `confirm` after the link changed, a link that cannot be read), then the link read on every call and `alwaysConfirm` on `write_apply_budget_templates` and on bank-linked close and delete in `account-close.ts` (design D6)
 - [x] 2.5 `packages/mcp/README.md`: the undo section lists moves and the not-undoable reasons; the confirm section names the always-confirm tools
-- [ ] 2.6 Run `yarn typecheck`, `yarn lint`, `yarn check:mcp-coverage` and the `@actual-app/mcp` tests; all pass
+- [x] 2.6 Run `yarn typecheck`, `yarn lint`, `yarn check:mcp-coverage` and the `@actual-app/mcp` tests; all pass

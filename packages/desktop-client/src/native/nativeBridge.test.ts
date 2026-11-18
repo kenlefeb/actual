@@ -1,4 +1,12 @@
-import { createNativeBridge, installNativeBridge } from './nativeBridge';
+import * as connection from '@actual-app/core/platform/client/connection';
+
+import allowlist from '#data/native-bridge-allowlist.json';
+
+import {
+  createNativeBridge,
+  installNativeBridge,
+  isNativeRead,
+} from './nativeBridge';
 
 // native-bridge: "The bridge forwards only allowlisted handlers" and
 // "Native views re-read on change events" (sc-3584)
@@ -52,11 +60,187 @@ describe('createNativeBridge', () => {
   });
 });
 
+// native-durable-writes D3, D5, D7a, D10 (sc-5219)
+describe('storage through the page bridge', () => {
+  const healthy = { failed: false, lastStoredFlushAt: 1000, quota: false };
+  const failed = { failed: true, lastStoredFlushAt: 500, quota: true };
+
+  function storageSetup(state: unknown = healthy) {
+    const send = vi.fn(async (name: string, _args?: unknown) => {
+      if (name === 'native/storage-state') {
+        if (state instanceof Error) throw state;
+        return state;
+      }
+      return null;
+    });
+    const listeners = new Map<string, (payload: unknown) => void>();
+    const listen = (name: string, cb: (payload: unknown) => void) => {
+      listeners.set(name, cb);
+      return () => listeners.delete(name);
+    };
+    const notify = vi.fn();
+    const bridge = createNativeBridge({ send, listen, notify });
+    return { bridge, send, listeners, notify };
+  }
+
+  const WRITES = [
+    'budget/budget-amount',
+    'budget/transfer-category',
+    'budget/transfer-available',
+    'paycheck-skip-next',
+    'native/undo',
+    'native/paycheck-save',
+    'paycheck-delete',
+    'native/reconcile-tick',
+    'native/reconcile-list-set',
+    'account-statement-balance-save',
+    'native/reconcile-adjust',
+    'native/reconcile-lock',
+    'native/transactions-categorize',
+    'native/transactions-delete',
+    'native/account-reopen',
+    'native/account-move',
+    'native/transaction-save',
+    'native/settings-save',
+  ];
+
+  it.each(WRITES)('refuses %s once storage has failed', async name => {
+    const { bridge, send } = storageSetup(failed);
+    await expect(bridge.call(name, {})).rejects.toThrow(
+      /^\[native:not-stored\] /,
+    );
+    expect(send.mock.calls).toEqual([['native/storage-state']]);
+  });
+
+  it('counts every allowlisted name that is not a listed read as a write', () => {
+    expect(allowlist.filter(name => !isNativeRead(name)).sort()).toEqual(
+      [...WRITES].sort(),
+    );
+  });
+
+  it('checks storage before validating or forwarding a write, and does not wait', async () => {
+    const { bridge, send } = storageSetup();
+    await bridge.call('native/undo', { token: 't' });
+    expect(send.mock.calls).toEqual([
+      ['native/storage-state'],
+      ['native/undo', { token: 't' }],
+    ]);
+  });
+
+  it('does not stop reads or sync after a failure', async () => {
+    const { bridge, send } = storageSetup(failed);
+    await bridge.call('native/accounts-list');
+    await bridge.call('sync');
+    expect(send.mock.calls.map(([name]) => name)).toEqual([
+      'native/accounts-list',
+      'sync',
+    ]);
+  });
+
+  it.each(['native/persisted', 'native/storage-state'])(
+    'forwards %s with no arguments',
+    async name => {
+      const { bridge, send } = storageSetup();
+      await bridge.call(name, { extra: 1 });
+      expect(send.mock.calls).toEqual([[name, undefined]]);
+    },
+  );
+
+  it('keeps the guard switch away from native code', async () => {
+    const { bridge } = storageSetup();
+    await expect(bridge.call('native/enable-storage-guard')).rejects.toThrow(
+      'not allowlisted',
+    );
+  });
+
+  it('posts storage-failed with the state of the open budget', async () => {
+    const { listeners, notify } = storageSetup(failed);
+    listeners.get('storage-failed')?.({ lastStoredFlushAt: 1, quota: false });
+    await vi.waitFor(() =>
+      expect(notify).toHaveBeenCalledWith({
+        event: 'storage-failed',
+        payload: { lastStoredFlushAt: 500, quota: true },
+      }),
+    );
+  });
+
+  it('posts nothing when the open budget has not failed', async () => {
+    const { listeners, notify, send } = storageSetup();
+    listeners.get('storage-failed')?.({ lastStoredFlushAt: 1, quota: false });
+    await vi.waitFor(() => expect(send).toHaveBeenCalled());
+    await Promise.resolve();
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('still posts the failure if the state cannot be read', async () => {
+    const { listeners, notify } = storageSetup(new Error('gone'));
+    const payload = { lastStoredFlushAt: 1, quota: false };
+    listeners.get('storage-failed')?.(payload);
+    await vi.waitFor(() =>
+      expect(notify).toHaveBeenCalledWith({ event: 'storage-failed', payload }),
+    );
+  });
+
+  it('forwards storage-stored as stored, and a closed budget failure', () => {
+    const { listeners, notify } = storageSetup();
+    listeners.get('storage-stored')?.({ seq: 3 });
+    listeners.get('storage-close-failed')?.(undefined);
+    expect(notify.mock.calls).toEqual([
+      [{ event: 'stored', payload: { seq: 3 } }],
+      [{ event: 'storage-close-failed', payload: undefined }],
+    ]);
+  });
+
+  describe('the barrier test hook', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('turns the barrier off only with the build constant', async () => {
+      vi.stubGlobal('__forkTestBarrierOff', true);
+      const off = storageSetup(failed);
+      await expect(off.bridge.call('native/undo', {})).rejects.toThrow(
+        /not-stored/,
+      );
+
+      vi.stubGlobal('__FORK_TEST_HOOKS__', true);
+      const on = storageSetup(failed);
+      await on.bridge.call('native/undo', { token: 't' });
+      expect(await on.bridge.call('native/persisted')).toBe('{"stored":true}');
+      expect(on.send.mock.calls).toEqual([['native/undo', { token: 't' }]]);
+    });
+  });
+});
+
 describe('installNativeBridge', () => {
   it('does nothing outside the iOS app', () => {
+    const sent = vi.spyOn(connection, 'send');
     const win: Parameters<typeof installNativeBridge>[0] = {};
     installNativeBridge(win);
     expect(win.__actualNativeBridge).toBeUndefined();
+    expect(sent).not.toHaveBeenCalled();
+    sent.mockRestore();
+  });
+
+  // Queued ahead of anything the app sends, so before any budget opens
+  it('turns the storage guard on before telling native code it is ready', () => {
+    const order: string[] = [];
+    const sent = vi.spyOn(connection, 'send').mockImplementation((async (
+      name: string,
+    ) => {
+      order.push(name);
+    }) as never);
+    installNativeBridge({
+      webkit: {
+        messageHandlers: {
+          actualNativeBridge: {
+            postMessage: ({ event }) => order.push(event),
+          },
+        },
+      },
+    });
+    expect(order.slice(0, 2)).toEqual(['native/enable-storage-guard', 'ready']);
+    sent.mockRestore();
   });
 
   it('installs the bridge when the native message handler is present', () => {

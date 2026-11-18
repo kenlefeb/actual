@@ -54,9 +54,12 @@ public enum NativeBridgeAllowlist {
     // key-make and reset-budget-cache stay off.
     public static let settingsReads: Set<String> = ["native/settings", "native/server-info"]
     public static let settingsWrites: Set<String> = ["native/settings-save"]
+    // sc-5219 (native-durable-writes D4, D5): the storage barrier and the failure latch.
+    // The guard's switch stays off: the page sets it as its bridge installs.
+    public static let storage: Set<String> = ["native/persisted", "native/storage-state"]
     public static let handlers: Set<String> = reads.union(writes).union(paycheckWrites).union(sync).union(reconcileReads)
         .union(reconcileWrites).union(accountsReads).union(accountsWrites).union(settingsReads).union(settingsWrites)
-        .union(transactionReads).union(transactionWrites)
+        .union(transactionReads).union(transactionWrites).union(storage)
 }
 
 // The page's reduced sync result (nativeBridge.ts): whether it worked, and a

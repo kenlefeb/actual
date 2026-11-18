@@ -360,6 +360,15 @@ export default defineConfig(async ({ mode, command }) => {
         disableGlobbing: false,
       },
     },
+    // Fork (sc-5219, native-durable-writes D10): test hooks are compiled out
+    // unless a test build asks for them. Unit tests set the constant themselves.
+    define: isVitest
+      ? {}
+      : {
+          __FORK_TEST_HOOKS__: JSON.stringify(
+            process.env.FORK_TEST_HOOKS === 'true',
+          ),
+        },
     resolve: {
       ...(mode !== 'browser' && {
         conditions: ['electron-renderer', 'module', 'browser', 'default'],

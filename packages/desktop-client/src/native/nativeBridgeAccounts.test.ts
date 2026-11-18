@@ -20,7 +20,7 @@ const codes: string[] = JSON.parse(
 // allowlisted" (sc-4386). loot-core checks each call; the page forwards only
 // each read's own fields, and never a page size.
 function setup() {
-  const send = vi.fn(async () => undefined);
+  const send = vi.fn(async (_name: string, _args?: unknown) => undefined);
   const bridge = createNativeBridge({
     send,
     listen: vi.fn(() => vi.fn()),
@@ -101,7 +101,9 @@ describe('accounts reads through the page bridge', () => {
       expect(send).toHaveBeenCalledWith(name, forwarded);
       const { undoToken: _omitted, ...tokenless } = args;
       await expect(bridge.call(name, tokenless)).rejects.toThrow(/undo token/);
-      expect(send).toHaveBeenCalledTimes(1);
+      expect(
+        send.mock.calls.filter(([called]) => called === name),
+      ).toHaveLength(1);
     },
   );
 

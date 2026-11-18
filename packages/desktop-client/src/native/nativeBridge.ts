@@ -31,7 +31,73 @@ declare global {
   }
 }
 
-const EVENTS = ['cells-changed', 'sync-event'];
+const EVENTS = ['cells-changed', 'sync-event', 'storage-close-failed'];
+
+// sc-5219 (native-durable-writes D5): every allowlisted name not listed here
+// counts as a write, so a new handler is refused after a storage failure
+// until someone says it only reads
+const NATIVE_READS = new Set([
+  'native/budget-month',
+  'native/schedules-paychecks',
+  'query',
+  'native/paycheck-preview',
+  'paycheck-year-to-date',
+  'sync',
+  'native/reconcile-month',
+  'native/reconcile-rows',
+  'account-statement-balance-prefill',
+  'account-statement-balance-get',
+  'native/reconcile-matches',
+  'native/reconcile-lock-preview',
+  'native/accounts-list',
+  'native/account-register',
+  'native/account-upcoming',
+  'native/transaction-form',
+  'native/payees',
+  'native/transaction-preview',
+  'native/settings',
+  'native/server-info',
+  'native/persisted',
+  'native/storage-state',
+]);
+
+export const isNativeRead = (name: string) => NATIVE_READS.has(name);
+
+type StorageState = {
+  failed: boolean;
+  lastStoredFlushAt: number | null;
+  quota: boolean;
+};
+
+declare const __FORK_TEST_HOOKS__: boolean | undefined;
+
+// Test-only (D10): the kill tests' control run. The build constant removes
+// this from production bundles, and Fork CI checks they lack the marker.
+function isBarrierOff() {
+  return (
+    typeof __FORK_TEST_HOOKS__ !== 'undefined' &&
+    __FORK_TEST_HOOKS__ &&
+    (globalThis as { __forkTestBarrierOff?: boolean }).__forkTestBarrierOff ===
+      true
+  );
+}
+
+// The event can come from a closed file or a copy, so the open budget's own
+// state decides (D7a). If it can't be read, a notice beats silence.
+async function reportStorageFailure(
+  forward: Send,
+  notify: Notify,
+  payload: unknown,
+) {
+  try {
+    const state = (await forward('native/storage-state')) as StorageState;
+    if (!state.failed) return;
+    const { lastStoredFlushAt, quota } = state;
+    notify({ event: 'storage-failed', payload: { lastStoredFlushAt, quota } });
+  } catch {
+    notify({ event: 'storage-failed', payload });
+  }
+}
 
 type Snapshot = {
   budgetType: string;
@@ -346,10 +412,27 @@ export function createNativeBridge({
   for (const event of EVENTS) {
     subscribe(event, payload => notify({ event, payload }));
   }
+  subscribe('storage-stored', payload => notify({ event: 'stored', payload }));
+  subscribe('storage-failed', payload => {
+    void reportStorageFailure(forward, notify, payload);
+  });
   return {
     async call(name, args) {
       if (!allowlist.includes(name)) {
         throw new Error(`native bridge: ${name} is not allowlisted`);
+      }
+      if (isBarrierOff()) {
+        if (name === 'native/persisted') return '{"stored":true}';
+      } else if (!isNativeRead(name)) {
+        // Before anything else, so nothing more is applied in memory (D5)
+        const state = (await forward('native/storage-state')) as
+          | StorageState
+          | undefined;
+        if (state?.failed) {
+          throw new Error(
+            '[native:not-stored] native bridge: changes can no longer be stored on this device',
+          );
+        }
       }
       if (name === 'sync') {
         return JSON.stringify(await sync(forward));
@@ -374,7 +457,9 @@ export function createNativeBridge({
         args = undefined;
       } else if (
         name === 'native/accounts-list' ||
-        name === 'native/server-info'
+        name === 'native/server-info' ||
+        name === 'native/persisted' ||
+        name === 'native/storage-state'
       ) {
         args = undefined;
       } else if (name === 'native/settings') {
@@ -415,8 +500,12 @@ export function installNativeBridge(win: BridgeWindow) {
   if (!handler) return;
 
   // send and listen are typed per handler name; the bridge is dynamic by design
+  const forward = send as unknown as Send;
+  // sc-5219 (D7a): sends are delivered in order, so this reaches the engine
+  // before anything that opens a budget
+  forward('native/enable-storage-guard').catch(() => undefined);
   win.__actualNativeBridge = createNativeBridge({
-    send: send as unknown as Send,
+    send: forward,
     listen: listen as unknown as Listen,
     notify: message => handler.postMessage(message),
   });

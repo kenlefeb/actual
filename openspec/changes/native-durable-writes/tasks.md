@@ -20,11 +20,11 @@
 
 ## 2. Page bridge (sc-5219)
 
-- [ ] 2.1 Failing tests first in `nativeBridge.test.ts`: a write is refused before forwarding when `native/storage-state` reports the latch (set by any source); `storage-failed` is posted with `lastStoredFlushAt` and `quota`; `native/persisted` and `native/storage-state` are allowlisted, and the write call itself contains no wait (D3, D5)
-- [ ] 2.2 The latch check, the `storage-failed` event in `EVENTS`, `native-bridge-allowlist.json`, the Swift allowlist and `coverage.json` skips
-- [ ] 2.3 Test hooks behind `__FORK_TEST_HOOKS__` (false in production builds). A Fork CI step searches the production page and worker bundles for the hook marker and fails if found (D10)
-- [ ] 2.4 Run `yarn typecheck`, `yarn lint` and the `@actual-app/web` tests; all pass
-- [ ] 2.5 Failing test first: the bridge calls `native/enable-storage-guard` as it installs, before any budget opens. A failure from before the switch latches with a cut-off that can overstate the loss (Security, PR #473)
+- [x] 2.1 Failing tests first in `nativeBridge.test.ts`: a write is refused before forwarding when `native/storage-state` reports the latch (set by any source); `storage-failed` is posted with `lastStoredFlushAt` and `quota`; `native/persisted` and `native/storage-state` are allowlisted, and the write call itself contains no wait (D3, D5)
+- [x] 2.2 The latch check, the `storage-failed` event in `EVENTS`, `native-bridge-allowlist.json`, the Swift allowlist and `coverage.json` skips
+- [x] 2.3 Test hooks behind `__FORK_TEST_HOOKS__` (false in production builds). A Fork CI step searches the production page and worker bundles for the hook marker and fails if found (D10)
+- [x] 2.4 Run `yarn typecheck`, `yarn lint` and the `@actual-app/web` tests; all pass
+- [x] 2.5 Failing test first: the bridge calls `native/enable-storage-guard` as it installs, before any budget opens. A failure from before the switch latches with a cut-off that can overstate the loss (Security, PR #473)
 
 ## 3. iPhone and Mac shells (sc-5219)
 
@@ -53,7 +53,7 @@
 ## 4. Review decisions from the engine PR (sc-5219)
 
 - [x] 4.1 Failing tests first, then the engine: a timed-out sync wait raises `storage-slow`, emits no success, sends nothing and schedules a retry; `storage-stored` follows a timed-out `native/persisted`; `storage-close-failed` fires once for a closed file and does not latch (D4, D6, D7a)
-- [ ] 4.2 The page bridge forwards `storage-stored` as `stored`; `storage-slow` and `storage-failed` join the sync reasons in the page and Swift
+- [x] 4.2 The page bridge forwards `storage-stored` as `stored`; `storage-slow` and `storage-failed` join the sync reasons in the page and Swift
 - [ ] 4.3 The storage guard: a one-way engine switch, off by default and set when the native bridge installs. Tests that with it off a fallback-mode browser's sync, messages and `fallback-write-error` are as today (safety-check failures only, no `conflict` flag), that with it off the patched backend fails as stock does (no latch, no dropped queue, quota rejections unseen, `onFallbackFailure` only for the safety check), and that with it on the latch, refusal, gate and notices apply; on `storage-failed` the page asks `native/storage-state` (D7a)
 - [ ] 4.4 `floor` in `native/settings`, its fixture and Swift decoding; the native and web Limits screens bounded to floor through ceiling (D7)
 - [ ] 4.5 The closed-budget notice in the shells, with the Product Owner's wording in the copy table; the restart notices' approved wording goes there too

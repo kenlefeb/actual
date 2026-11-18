@@ -121,7 +121,7 @@ describe('reconcile handlers through the page bridge', () => {
         label: 'x',
       }),
     ).rejects.toThrow(/undo token/);
-    expect(send).not.toHaveBeenCalled();
+    expect(send.mock.calls).toEqual([['native/storage-state']]);
   });
 
   it('refuses a tick without its undo token', async () => {
@@ -133,6 +133,6 @@ describe('reconcile handlers through the page bridge', () => {
         cleared: true,
       }),
     ).rejects.toThrow(/undo token/);
-    expect(send).not.toHaveBeenCalled();
+    expect(send.mock.calls).toEqual([['native/storage-state']]);
   });
 });

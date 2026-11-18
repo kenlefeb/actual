@@ -2,6 +2,16 @@
   "schemaVersion": 1,
   "entries": [
     {
+      "id": "fork-release-26.10.1-alpha.46",
+      "type": "release",
+      "title": "Release 26.10.1-alpha.46 — Ken's Actual fork",
+      "date": "2026-11-18",
+      "version": "26.10.1-alpha.46",
+      "url": "https://github.com/kenlefeb/actual/blob/development/fork/release-notes/26.10.1-alpha.46.md",
+      "body": "**Unofficial fork prerelease.** Based on upstream Actual v26.11.0 (`1766241e3f4b3c578e424c4fa15f1eb83c0da17d`, October 29, 2026); not an official Actual Budget release.\n\nThis release closes a sign-in weakness in the sync server. Nothing else in it is visible to users yet.",
+      "details": "#### Features\n\n- None in this release.\n\n#### Enhancements\n\n- None in this release.\n\n#### Bugfixes\n\n- Closes a sign-in weakness. When you signed in with OpenID, the sync server accepted almost any \"localhost\" address as the place to send you back to. It now accepts only its own address, the iPhone, Mac and desktop apps, and any addresses the server operator adds with the new `ACTUAL_OPENID_ALLOWED_RETURN_ORIGINS` setting (empty by default). No current app is locked out.\n\n#### Maintenance\n\n- The native Accounts list and register screens on iPhone exist but are off by default, with no visible switch to turn them on, so they are not yet visible. The reads, writes and undo protection behind them, and their stable refusal codes, are internal.\n- The Mac app shell, a warning about lost local storage and a rule that links open in the browser only from the app's own page are merged, but no Mac app ships yet, so there is nothing for users.\n- CI and tests: the iPhone app now builds for the simulator on iPhone changes, a Swift project check matches only the app target's sources, and a flaky register search test and a Mac test that left preference files behind are fixed.\n- No upstream changes in this release; the fork stays on upstream Actual 26.11.0.\n\n#### Known limitations\n\n- Experimental.\n- The native Schedules & Paychecks screens are off by default; turn them on in Settings to try them.\n- Tapping a tag in the transaction editor does nothing.\n- Tags are not yet fully accessible on the phone.\n- OpenID sign-out needs the server's address in the identity provider's allowed sign-out addresses; without it the provider shows an error page, though you are already signed out of Actual.\n- Attached documents aren't included in a budget export.\n- Documents removed before alpha.35 are recorded the first time an updated device syncs, and deleted 30 days after that. Removals made on a device that has not been updated are not tracked.\n- HEIC pictures are refused; use the Photos library or a JPEG or PNG copy.\n- Attaching a document needs a connection; there is no offline upload queue.\n- After restoring server data from a backup, pause the cleanup first (`production/RESTORE.md`)."
+    },
+    {
       "id": "fork-release-26.10.1-alpha.45",
       "type": "release",
       "title": "Release 26.10.1-alpha.45 — Ken's Actual fork",

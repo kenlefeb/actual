@@ -44,8 +44,8 @@
 - **`budget`:** `{name, id, groupId}`.
 - **`encryption`:** `{enabled}`, from `encryptKeyId`.
 - **`server`:** `{url}`, or null for a local-only budget, plus `signedIn` and the user's display name.
-- **`sync`:** `{pending}`, true while the engine holds changes not yet sent (`messages_pending` has rows).
-- **`limits`:** every registry limit as `{id, value, default, ceiling}`, in registry order.
+- **`sync`:** `{pending}`, true when the budget syncs and `messages_crdt` holds a message newer than `lastSyncedTimestamp`, the set the next sync sends. (`messages_pending` holds deferred incoming messages, not unsent ones.)
+- **`limits`:** every registry limit that engine code reads, as `{id, value, default, ceiling}`, in registry order. A limit nothing reads yet is not listed, so Settings never shows a setting that does nothing; the story that adds its reader flips `hasReader`.
 - **`clientVersion`:** added by the page from `window.Actual.ACTUAL_VERSION`. loot-core cannot see it.
 
 **`native/server-info`** returns `{reachable, version}`:
@@ -56,7 +56,7 @@
 
 **`native/settings-save {changes, undoToken}`** replaces sc-4643's working name `native/budget-prefs-save`, because it writes limits too.
 
-- **Input.** `changes` maps keys from a closed list to values. The list is the `prefs` keys above plus every limit id.
+- **Input.** `changes` maps keys from a closed list to values. The list is the `prefs` keys above plus every limit id that engine code reads (`hasReader`). A limit nothing reads is refused exactly like an unknown key.
 - **Validation:**
   - Each value is checked against its closed set: date formats, number formats, budget types, day 0 to 6, booleans, the currency codes and positions, and the upcoming length as the web's picker stores it: a preset from `UPCOMING_LENGTH_PRESET_VALUES` (`1`, `7`, `14`, `oneMonth`, `currentMonth`), or a custom length matching exactly `^[1-9][0-9]{0,2}-(day|week|month|year)$`: 1 to 999 of a known unit, lower case, with no sign, space or leading zero. It is stored exactly as typed, as the web stores it, and the literal `custom` is never stored.
     - The web's own picker (`CustomUpcomingLength.tsx`) can write values this pattern refuses. It saves `${parseInt(input)}-${unit}`, so an empty field writes `NaN-day`, a typed 0 writes `0-day`, a typed minus writes `-3-day`, and there is no upper bound (`1000-day`). Those come from typing outside the field's `min=1` and are not meaningful lengths, so the native save refuses them rather than widening the pattern. That web behaviour is upstream code.

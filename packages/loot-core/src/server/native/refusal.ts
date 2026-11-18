@@ -10,6 +10,7 @@ export const NATIVE_REFUSAL_CODES = [
   'undo-nothing',
   'no-budget-for-month',
   'invalid-draft',
+  'invalid-setting',
 ] as const;
 
 export type NativeRefusalCode = (typeof NATIVE_REFUSAL_CODES)[number];

@@ -352,8 +352,22 @@ export function createNativeBridge({
         args = { token: readToken(token) };
       } else if (name === 'native/reconcile-month') {
         args = undefined;
-      } else if (name === 'native/accounts-list') {
+      } else if (
+        name === 'native/accounts-list' ||
+        name === 'native/server-info'
+      ) {
         args = undefined;
+      } else if (name === 'native/settings') {
+        // sc-4643 (native-settings-screen D2): the client version is the only
+        // field the page adds; loot-core cannot see it
+        const settings = (await forward(name)) as Record<string, unknown>;
+        return JSON.stringify({
+          ...settings,
+          clientVersion: window.Actual?.ACTUAL_VERSION ?? null,
+        });
+      } else if (name === 'native/settings-save') {
+        readToken((args as Record<string, unknown> | null)?.undoToken);
+        args = pickFields(args, ['changes', 'undoToken']);
       } else if (ACCOUNTS_FIELDS.has(name)) {
         args = pickFields(args, ACCOUNTS_FIELDS.get(name) ?? []);
       } else if (ACCOUNTS_WRITE_FIELDS.has(name)) {

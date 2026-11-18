@@ -39,8 +39,13 @@ public enum NativeBridgeAllowlist {
     public static let accountsWrites: Set<String> = [
         "native/transactions-categorize", "native/transactions-delete", "native/account-reopen", "native/account-move",
     ]
+    // sc-4643 (native-settings-screen D2). The save is sent only as SettingsSave;
+    // preferences/save, save-global-prefs, subscribe-sign-out, set-server-url,
+    // key-make and reset-budget-cache stay off.
+    public static let settingsReads: Set<String> = ["native/settings", "native/server-info"]
+    public static let settingsWrites: Set<String> = ["native/settings-save"]
     public static let handlers: Set<String> = reads.union(writes).union(paycheckWrites).union(sync).union(reconcileReads)
-        .union(reconcileWrites).union(accountsReads).union(accountsWrites)
+        .union(reconcileWrites).union(accountsReads).union(accountsWrites).union(settingsReads).union(settingsWrites)
 }
 
 // The page's reduced sync result (nativeBridge.ts): whether it worked, and a
@@ -99,6 +104,7 @@ public struct NativeRefusal: Equatable {
         case undoNothing = "undo-nothing"
         case noBudgetForMonth = "no-budget-for-month"
         case invalidDraft = "invalid-draft"
+        case invalidSetting = "invalid-setting"
     }
 
     public let code: Code
@@ -278,9 +284,11 @@ public struct NativeBridgeClient {
             || (args is TransactionsCategorize && name == "native/transactions-categorize")
             || (args is TransactionsDelete && name == "native/transactions-delete")
             || (args is AccountReopen && name == "native/account-reopen") || (args is AccountMove && name == "native/account-move")
+            || (args is SettingsSave && name == "native/settings-save")
         let isWrite =
             NativeBridgeAllowlist.writes.contains(name) || NativeBridgeAllowlist.paycheckWrites.contains(name)
             || NativeBridgeAllowlist.reconcileWrites.contains(name) || NativeBridgeAllowlist.accountsWrites.contains(name)
+            || NativeBridgeAllowlist.settingsWrites.contains(name)
         guard !isWrite || isTyped else {
             throw NativeBridgeError.invalidWrite(name)
         }

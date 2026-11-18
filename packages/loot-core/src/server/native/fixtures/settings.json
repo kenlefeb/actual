@@ -1,0 +1,67 @@
+{
+  "prefs": {
+    "dateFormat": "MM/dd/yyyy",
+    "numberFormat": "dot-comma",
+    "hideFraction": "false",
+    "firstDayOfWeekIdx": "0",
+    "budgetType": "envelope",
+    "learn-categories": "true",
+    "upcomingScheduledTransactionLength": "7"
+  },
+  "flags": {
+    "currency": false
+  },
+  "budget": {
+    "name": "Home",
+    "id": "test",
+    "groupId": "group-1"
+  },
+  "encryption": {
+    "enabled": false
+  },
+  "server": {
+    "url": "https://sync.example.com",
+    "signedIn": true
+  },
+  "sync": {
+    "pending": false
+  },
+  "limits": [
+    {
+      "id": "reconcile-match-max-candidates",
+      "value": 300,
+      "default": 300,
+      "ceiling": 2000
+    },
+    {
+      "id": "reconcile-match-max-results",
+      "value": 5,
+      "default": 5,
+      "ceiling": 20
+    },
+    {
+      "id": "reconcile-lock-list-max-rows",
+      "value": 200,
+      "default": 200,
+      "ceiling": 2000
+    },
+    {
+      "id": "accounts-register-page-size",
+      "value": 120,
+      "default": 50,
+      "ceiling": 200
+    },
+    {
+      "id": "accounts-write-max-ids",
+      "value": 100,
+      "default": 100,
+      "ceiling": 500
+    },
+    {
+      "id": "server-info-timeout-seconds",
+      "value": 5,
+      "default": 5,
+      "ceiling": 30
+    }
+  ]
+}

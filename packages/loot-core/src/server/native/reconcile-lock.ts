@@ -21,35 +21,9 @@ import { q } from '#shared/query';
 import { realizeTempTransactions } from '#shared/transactions';
 import type { TransactionEntity } from '#types/models';
 
+import { readLimit } from './limits';
 import { isUsable, openAccount, summaryOf } from './reconcile';
 import type { NativeReconcileRow, NativeReconcileSummary } from './reconcile';
-
-// D7: synced preferences, whole numbers within a ceiling, else the default
-const LIMITS = {
-  'reconcile-match-max-candidates': { fallback: 300, ceiling: 2000 },
-  'reconcile-match-max-results': { fallback: 5, ceiling: 20 },
-  'reconcile-lock-list-max-rows': { fallback: 200, ceiling: 2000 },
-  // sc-4386 (native-accounts-screen D2)
-  'accounts-register-page-size': { fallback: 50, ceiling: 200 },
-  // sc-4931 (D3): rows per categorize or delete call, children and partners counted
-  'accounts-write-max-ids': { fallback: 100, ceiling: 500 },
-} as const;
-
-export async function readLimit(id: keyof typeof LIMITS): Promise<number> {
-  const { fallback, ceiling } = LIMITS[id];
-  const value = (
-    await db.first<{ value: string | null }>(
-      'SELECT value FROM preferences WHERE id = ?',
-      [id],
-    )
-  )?.value;
-  // `Number()` would accept 1e1 and 0x7
-  if (value && /^\d+$/.test(value)) {
-    const n = parseInt(value, 10);
-    if (n >= 1 && n <= ceiling) return n;
-  }
-  return fallback;
-}
 
 /** The budget's currency places, as the web formats money. */
 export async function decimalPlaces() {

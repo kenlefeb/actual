@@ -1,7 +1,9 @@
 // Fork-only (sc-4942, add-mac-app-shell task 1.4a). Tells the SwiftUI Mac app
 // whether a budget is open, so it can warn when its local data was cleared:
 // `open` or `closed` with the budget's cloud file id, or `none` once startup
-// has finished with no budget. Never the local budget id, which holds the
+// has finished and no budget is stored on this Mac at all. A budget that is
+// stored but failed to open (after an update, a sync error) is not `none`
+// (PR 421 review). Never the local budget id, which holds the
 // budget's name. Only the Mac app installs it (index.tsx), so the web and the
 // iPhone app send nothing new.
 import { nativeShell } from '#style/nativeShell';
@@ -19,6 +21,7 @@ type ReporterStore = {
   getState: () => {
     app: { loadingText: string | null; managerHasInitialized: boolean };
     prefs: { local: { id?: string; cloudFileId?: string } };
+    budgetfiles: { allFiles: ReadonlyArray<{ state: string }> | null };
   };
   subscribe: (listener: () => void) => unknown;
 };
@@ -32,12 +35,13 @@ export function installBudgetStateReporter(
   if (!handler || nativeShell(win) !== 'mac-app') return;
   reportBudgetState({
     getSnapshot: () => {
-      const { app, prefs } = store.getState();
+      const { app, prefs, budgetfiles } = store.getState();
       return {
         loadingText: app.loadingText,
         managerHasInitialized: app.managerHasInitialized,
         budgetId: prefs.local.id,
         cloudFileId: prefs.local.cloudFileId,
+        localBudgetCount: countLocalBudgets(budgetfiles.allFiles),
       };
     },
     subscribe: listener => {
@@ -47,11 +51,18 @@ export function installBudgetStateReporter(
   });
 }
 
+// Budgets stored on this Mac; a `remote` file lives only on the server.
+// null until the budget list has loaded.
+function countLocalBudgets(files: ReadonlyArray<{ state: string }> | null) {
+  return files ? files.filter(file => file.state !== 'remote').length : null;
+}
+
 export type BudgetStateSnapshot = {
   loadingText: string | null;
   managerHasInitialized: boolean;
   budgetId: string | undefined;
   cloudFileId: string | undefined;
+  localBudgetCount: number | null;
 };
 
 type Message = {
@@ -84,8 +95,13 @@ export function reportBudgetState({
   }
 
   subscribe(() => {
-    const { loadingText, managerHasInitialized, budgetId, cloudFileId } =
-      getSnapshot();
+    const {
+      loadingText,
+      managerHasInitialized,
+      budgetId,
+      cloudFileId,
+      localBudgetCount,
+    } = getSnapshot();
     if (loadingText !== null) {
       startupBegan = true;
       return;
@@ -107,7 +123,7 @@ export function reportBudgetState({
         payload: { state: 'closed', cloudFileId: closed },
       });
     }
-    if (managerHasInitialized) {
+    if (managerHasInitialized && localBudgetCount === 0) {
       send({ event: 'budget-state', payload: { state: 'none' } });
     }
   });

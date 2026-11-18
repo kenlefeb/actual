@@ -13,6 +13,7 @@ function start() {
     managerHasInitialized: false,
     budgetId: undefined,
     cloudFileId: undefined,
+    localBudgetCount: null,
   };
   const notify = vi.fn();
   reportBudgetState({
@@ -55,14 +56,41 @@ describe('budget-state (sc-4942)', () => {
     });
   });
 
-  it('sends none, with no id, once startup finished with no budget', () => {
+  it('sends none, with no id, once startup finished with no budget stored', () => {
     const page = start();
     page.set({ loadingText: 'Initializing...' });
     page.set({ managerHasInitialized: true });
     expect(page.sent()).toEqual([]);
     page.set({ loadingText: null });
+    // The budget list has not loaded yet: not known to be empty
+    expect(page.sent()).toEqual([]);
+    page.set({ localBudgetCount: 0 });
     expect(page.sent()).toEqual([
       { event: 'budget-state', payload: { state: 'none' } },
+    ]);
+  });
+
+  // PR 421 review: a last budget that fails to open is still on this Mac
+  it('sends no none when the last budget fails to open but budgets are stored', () => {
+    const page = start();
+    page.set({ loadingText: 'Opening last budget...', managerHasInitialized: true });
+    page.set({ loadingText: null, localBudgetCount: 2 });
+    expect(page.sent()).toEqual([]);
+  });
+
+  it('sends no none after a close while other budgets are stored', () => {
+    const page = start();
+    page.set({ loadingText: 'x', budgetId: 'b', cloudFileId: CLOUD });
+    page.set({ loadingText: null });
+    page.set({
+      budgetId: undefined,
+      cloudFileId: undefined,
+      managerHasInitialized: true,
+      localBudgetCount: 1,
+    });
+    expect(page.sent()).toEqual([
+      { event: 'budget-state', payload: { state: 'open', cloudFileId: CLOUD } },
+      { event: 'budget-state', payload: { state: 'closed', cloudFileId: CLOUD } },
     ]);
   });
 
@@ -77,7 +105,11 @@ describe('budget-state (sc-4942)', () => {
   it('sends each state once', () => {
     const page = start();
     page.set({ loadingText: 'x' });
-    page.set({ loadingText: null, managerHasInitialized: true });
+    page.set({
+      loadingText: null,
+      managerHasInitialized: true,
+      localBudgetCount: 0,
+    });
     page.set({ loadingText: null });
     expect(page.sent()).toHaveLength(1);
   });
@@ -101,6 +133,7 @@ describe('installBudgetStateReporter (sc-4942)', () => {
       getState: () => ({
         app: { loadingText: null, managerHasInitialized: false },
         prefs: { local: {} },
+        budgetfiles: { allFiles: null },
       }),
       subscribe: vi.fn(),
     };

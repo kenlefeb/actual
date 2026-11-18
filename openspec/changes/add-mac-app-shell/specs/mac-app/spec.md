@@ -131,7 +131,7 @@ Native Mac code SHALL NOT open, read or copy a budget database, including the El
 - **THEN** the fork check fails and names the file
 
 ### Requirement: Evicted storage is recovered by download, with a warning
-The sync server SHALL stay the source of truth. Outside the web view, and never in a log, the app SHALL remember only that a budget was open and which one (its cloud file id). When it remembers an open budget and the page, once the app has finished starting, says no budget is there, it SHALL warn once that this Mac's local data was cleared and unsynced changes may be lost, tell the user to sign in and download the budget again, then show sign-in. It SHALL NOT warn when the page is only slow.
+The sync server SHALL stay the source of truth. Outside the web view, never in a log, the app SHALL remember only that a budget was open and which one (its cloud file id). When it remembers an open budget and the page, once the app has finished starting, says no budget is stored on this Mac, it SHALL warn once that this Mac's local data was cleared and unsynced changes may be lost, tell the user to sign in and download the budget again, then show sign-in. It SHALL NOT warn on a slow page.
 
 #### Scenario: Data evicted after a budget was open
 - **GIVEN** a budget was open, and the app's website data was removed while the app was not running
@@ -142,6 +142,11 @@ The sync server SHALL stay the source of truth. Outside the web view, and never 
 - **GIVEN** the app warned about cleared data and the user dismissed it
 - **WHEN** the app launches again with storage still empty
 - **THEN** no warning shows, only the web sign-in
+
+#### Scenario: A budget that fails to open
+- **GIVEN** a budget was open last time and is still stored on this Mac
+- **WHEN** it fails to open at launch, for example after an app update
+- **THEN** no storage-loss warning shows
 
 #### Scenario: A slow start
 - **GIVEN** a budget was open last time

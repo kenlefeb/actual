@@ -83,7 +83,7 @@ Why those numbers hold: the developer's phase timings were taken at load average
 - The `json_each` filter measured about 4 ms.
 - The worst case adds only the preview loop over about 4,600 dates, because D8 cuts before rules.
 
-Stop and report still applies. Measure on a quiet machine, with the load average below the core count, and print the load with the results. If a median misses its gate, the developer may lower the default of `accounts-upcoming-max-rows` to the largest value that meets it, down to 25, without asking. Below 25, stop and report to the Director with medians, p95s and the load. Never loosen a gate.
+Stop and report still applies. Measure on a quiet machine, with the load average below the core count, and print the load with the results. If a median misses its gate, the developer may lower the default of `accounts-upcoming-max-rows` to the largest value that meets it, down to 25, without asking first. Any default below 100 is reported to the Product Owner before merging, with the medians, p95s and load, because fewer rows changes what a person sees. Below 25, stop and report to the Director. Never loosen a gate.
 
 ### D7. Upcoming rows are their own read
 
@@ -95,7 +95,10 @@ The developer stopped at the gate (2026-11-18). Inside the register read, 200 sc
 
 No cap gets 200 schedules under 50 ms inside the register read, so the upcoming rows leave it.
 
-`native/account-upcoming {account_id, scope, search}` is a new read-only handler. Swift calls it after the register's first page, and again on a scope, search or change event. Upcoming rows are already a separate section, so the register appears at once and the section fills in ("Loading scheduled…"). A reply for an older request is dropped by a request counter in the view model. A failed upcoming read leaves the posted rows in place.
+`native/account-upcoming {account_id, scope, search}` is a new read-only handler. Swift calls it after the register's first page, and again on a scope, search or change event. Upcoming rows are already a separate section, so the register appears at once and the section fills in ("Loading scheduled…"). A reply for an older request (scope, search, account, or a write since) is dropped by a request counter in the view model.
+- **In flight:** the section shows "Loading scheduled…".
+- **Failure:** the posted rows stay usable, and the section shows "Couldn't load scheduled rows. Try again." with Retry, which re-reads the upcoming section only. The copy goes in the screen's copy table.
+- **After a write:** a native write or change event that changes posted rows or schedules bumps the counter and re-runs the upcoming read. The section shows the loading state until the new reply, so upcoming rows read before a write never sit beside posted rows read after it.
 
 The web has the same cost today and the same shape: the page computes statuses (`useCachedSchedules`, with `getHasTransactionsQuery` over every schedule) and sends one `rules-run` per preview after the transactions load, and the register renders before the previews arrive. So this matches the web rather than departing from it.
 
@@ -103,13 +106,17 @@ The handler joins the allowlist (Swift list, page list, `coverage.json` skip). T
 
 ### D8. A row cap before rules run
 
-`accounts-upcoming-max-rows` (in `LIMITS`, default 100, ceiling 500) keeps the nearest previews, in `comparePreviewTransactions` order, of the schedules relevant to the account. It is applied after the day cap and before rules run. Rules, inversion, the filter, the count and the total see only those. Every row shown has had its rules run, so "as they will post" holds for every shown row.
+`accounts-upcoming-max-rows` (in `LIMITS`, default 100, ceiling 500) keeps previews of the schedules relevant to the account in rounds: every schedule's next occurrence first, then every schedule's second, and so on. Each round is in `comparePreviewTransactions` order, so a few weekly schedules cannot crowd a monthly bill off the list (Architect review, PR #445). The rows returned are then shown in the web's order. The cap is applied after the day cap and before rules run. Rules, inversion, the filter, the count and the total see only those. Every row shown has had its rules run, so "as they will post" holds for every shown row.
 
-The number dropped is returned as `upcomingMore`, and the register says "N more scheduled rows not shown or searched; change this in Settings > Limits." Rows past the cap are not searched, because searching them would mean running their rules. The notice says so.
+When the cap drops previews, the read returns:
+- `upcomingAll`: all previews in the window, counted without running rules;
+- `upcomingMore`: the number dropped.
+
+The register labels the count and total as partial ("Nearest K of M scheduled", the total labelled as the nearest rows' total), so a capped total is never read as the whole (Product Owner review, PR #445). It also says "N more scheduled rows not shown or searched; change this in Settings > Limits." `upcomingCount` and `upcomingTotal` cover returned rows only. Rows past the cap are not searched, because searching them would mean running their rules.
 
 ### D9. Statuses in one query, for relevant schedules only
 
-Relevance (`isScheduleRelevantToAccount`) needs no status, so it runs first. Statuses are then worked out only for the relevant schedules. "Has a transaction in its occurrence window" becomes one query: `SELECT schedule, MAX(date) FROM v_transactions_internal_alive WHERE schedule IN (SELECT value FROM json_each(?)) GROUP BY schedule`. A schedule has one when its latest date is on or after `getScheduleOccurrenceMatchStartDate(schedule, next_date)`, which is exactly what the `$or` asks. A test checks that both give the same set on a fixture. The web keeps its query; this is a server-side form of the same predicate, not a second rule.
+Relevance (`isScheduleRelevantToAccount`) needs no status, so it runs first. Statuses are then worked out only for the relevant schedules. "Has a transaction in its occurrence window" becomes one query: `SELECT schedule, MAX(date) FROM v_transactions_internal_alive WHERE schedule IN (SELECT value FROM json_each(?)) GROUP BY schedule`. A schedule has one when its latest date is on or after `getScheduleOccurrenceMatchStartDate(schedule, next_date)`, which is exactly what the `$or` asks. A test checks that both give the same set on a fixture with split children (a schedule paid by a child row), a tombstoned matching row and a schedule on a closed account. The web keeps its query; this is a server-side form of the same predicate, not a second rule.
 
 ### D10. Options not taken
 

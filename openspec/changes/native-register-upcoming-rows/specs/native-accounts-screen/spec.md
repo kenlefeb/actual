@@ -44,6 +44,24 @@ While any filter is active, the iPhone register SHALL show the upcoming rows' co
 - **WHEN** the results show
 - **THEN** the list says 3 results with their total, and 1 scheduled with its total
 
+### Requirement: A capped count and total say they are partial
+When loot-core returns `upcomingAll`, the iPhone register SHALL label the upcoming count and total as partial: "Nearest K of M scheduled" with K and M from loot-core, and the total labelled as the total of those nearest rows, so it is never read as the total of every scheduled row.
+
+#### Scenario: Capped, unfiltered
+- **GIVEN** 4,600 scheduled previews and the default row cap of 100
+- **WHEN** the user opens the register
+- **THEN** the upcoming section says "Nearest 100 of 4,600 scheduled" and its total is labelled as the nearest rows' total
+
+#### Scenario: Capped and searched
+- **GIVEN** the same account and a search matching 2 of the nearest 100
+- **WHEN** the results show
+- **THEN** the section says 2 scheduled in the nearest 100 of 4,600, with those 2 rows' total
+
+#### Scenario: Not capped
+- **GIVEN** 12 scheduled previews
+- **WHEN** the user opens the register
+- **THEN** the section says "12 scheduled" with no "Nearest" wording
+
 ### Requirement: The register says when the cap hides scheduled rows
 When loot-core reports that the horizon cap hid upcoming rows, the iPhone register SHALL say so below the upcoming rows: "Scheduled rows shown up to N days; change this in Settings > Limits.", with N from loot-core. It SHALL say nothing when no row was hidden.
 
@@ -70,7 +88,7 @@ Tapping an upcoming row on iPhone SHALL open a native read-only detail with its 
 - **THEN** the detail shows "Scheduled" and no "Fields set by rules" line
 
 ### Requirement: The register does not wait for upcoming rows
-The iPhone register SHALL show its header and posted rows from the register read without waiting for upcoming rows, then fill the upcoming section from `native/account-upcoming`, showing "Loading scheduled…" in words until it arrives. A reply for an older scope, search or account SHALL be dropped, and a failed upcoming read SHALL leave the posted rows in place and say scheduled rows could not load.
+The iPhone register SHALL show its header and posted rows without waiting for upcoming rows, then fill the upcoming section from `native/account-upcoming`, showing "Loading scheduled…" in words while the read is in flight. A reply for an older scope, search, account or write SHALL be dropped. A failed read SHALL keep the posted rows usable and show "Couldn't load scheduled rows. Try again." with Retry, which re-reads the upcoming section only.
 
 #### Scenario: Upcoming rows arrive later
 - **GIVEN** an upcoming read that answers after the register read
@@ -84,7 +102,24 @@ The iPhone register SHALL show its header and posted rows from the register read
 
 #### Scenario: The upcoming read fails
 - **WHEN** `native/account-upcoming` fails
-- **THEN** the posted rows stay, and the upcoming section says scheduled rows could not load
+- **THEN** the posted rows stay usable, and the upcoming section shows "Couldn't load scheduled rows. Try again." with Retry
+
+#### Scenario: Retry
+- **GIVEN** the failed section
+- **WHEN** the user taps Retry and the read succeeds
+- **THEN** only the upcoming section is read again, and it fills in
+
+### Requirement: Upcoming rows refresh after a write
+After a native write that changes posted rows or schedules, or a change event that does, the iPhone register SHALL re-run the upcoming read and show "Loading scheduled…" until it answers, and SHALL never show upcoming rows read before the write beside posted rows read after it.
+
+#### Scenario: Categorize a row
+- **GIVEN** the register with upcoming rows shown
+- **WHEN** the user categorizes a posted row
+- **THEN** the upcoming section shows "Loading scheduled…" until the new upcoming reply, and the reply from before the write, if it arrives late, is dropped
+
+#### Scenario: A schedule changed elsewhere
+- **WHEN** a sync brings a schedule change
+- **THEN** the upcoming section is read again
 
 ### Requirement: The register says when the row cap hides scheduled rows
 When loot-core returns `upcomingMore`, the iPhone register SHALL say below the upcoming rows: "N more scheduled rows not shown or searched; change this in Settings > Limits.", with N from loot-core, and nothing otherwise.

@@ -39,7 +39,7 @@ Upcoming rows SHALL come from `native/account-upcoming {account_id, scope, searc
 - **THEN** the read succeeds and filters them, with no error about too many variables
 
 ### Requirement: The upcoming read returns its count and total
-`native/account-upcoming` SHALL return `upcomingCount` (its returned rows, an inverted line counting once) and `upcomingTotal` (loot-core's sum of their signed amounts). The register read's `resultCount` and `resultTotal` SHALL count posted rows only.
+`native/account-upcoming` SHALL return `upcomingCount` (the rows it returns, an inverted line counting once) and `upcomingTotal` (loot-core's sum of their signed amounts); both cover returned rows only, never rows past the cap. The register read's `resultCount` and `resultTotal` SHALL count posted rows only.
 
 #### Scenario: Separate totals
 - **GIVEN** a search matching posted rows of -10.00 and -5.00 and an upcoming row of -20.00
@@ -80,17 +80,22 @@ The window SHALL be the budget's upcoming-length preference and each schedule's 
 - **THEN** the cap is 92
 
 ### Requirement: Upcoming rows are capped before rules run
-The read SHALL keep, in the web's preview order, at most `accounts-upcoming-max-rows` previews (a synced limit through `readLimit`, default 100, ceiling 500) of the schedules relevant to the account, before rules run, then run rules, invert, filter and count only those. When previews were dropped it SHALL return `upcomingMore`, their number; else omit it. Rows past the cap are neither searched nor counted.
+Before rules run, the read SHALL keep at most `accounts-upcoming-max-rows` previews (a synced limit via `readLimit`, default 100, ceiling 500) of the relevant schedules: each schedule's next occurrence first, then each one's second, and so on, each round in the web's preview order. Rules, inversion, filter and counts see only those. When previews were dropped it SHALL return `upcomingMore` and `upcomingAll` (all previews, counted without rules).
 
 #### Scenario: Fifty daily schedules
 - **GIVEN** 50 daily schedules over a 92-day window, about 4,600 previews, and the default row cap
 - **WHEN** native code reads the upcoming rows
-- **THEN** rules run for 100 previews only, the nearest by date, and `upcomingMore` is the number dropped
+- **THEN** rules run for 100 previews only, `upcomingAll` is about 4,600 and `upcomingMore` is `upcomingAll` minus 100
+
+#### Scenario: A monthly bill among weekly schedules
+- **GIVEN** a row cap of 10, 12 weekly schedules and one monthly bill due in 20 days
+- **WHEN** native code reads the upcoming rows
+- **THEN** the monthly bill's next occurrence is kept, and later weekly occurrences are dropped first
 
 #### Scenario: Under the cap
 - **GIVEN** 12 previews in the window
 - **WHEN** native code reads the upcoming rows
-- **THEN** all 12 run rules and there is no `upcomingMore`
+- **THEN** all 12 run rules and there is no `upcomingMore` or `upcomingAll`
 
 #### Scenario: A bad value
 - **WHEN** `accounts-upcoming-max-rows` is "0", "600" or "abc"
@@ -100,7 +105,7 @@ The read SHALL keep, in the web's preview order, at most `accounts-upcoming-max-
 The upcoming read SHALL work out statuses only for schedules relevant to the account, and SHALL find which of them already have a transaction in their occurrence window with one query over their ids (each schedule's latest transaction date compared with its match start date), giving the same answer as `getHasTransactionsQuery`.
 
 #### Scenario: Same answer as the web's query
-- **GIVEN** a budget fixture with paid, unpaid, split and transfer schedules
+- **GIVEN** a budget fixture with paid, unpaid, split and transfer schedules, a schedule paid by a split child, one whose matching row is tombstoned, and one on a closed account
 - **WHEN** the one-query check and `getHasTransactionsQuery` run over the same schedules
 - **THEN** they name the same schedules
 

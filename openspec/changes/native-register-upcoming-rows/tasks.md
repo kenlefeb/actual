@@ -17,13 +17,13 @@ Amended 2026-11-18 (design D6 to D11). Built on branch `kenlefeb/sc-4973/native-
 - [ ] 1.3 (rework) `native/account-upcoming {account_id, scope, search}` in `packages/loot-core/src/server/native/accounts.ts`, registered in the native app (design D7):
   - argument checks shared with the register read;
   - relevance first, then statuses in one query for the relevant schedules only (D9);
-  - the day cap, then the row cap `accounts-upcoming-max-rows` (default 100, ceiling 500, in `LIMITS`) before rules (D8);
+  - the day cap, then the row cap `accounts-upcoming-max-rows` (default 100, ceiling 500, in `LIMITS`) before rules, kept in rounds of next occurrences (D8), with `upcomingAll` and `upcomingMore`;
   - then `runRules`, `ruleFields`, sort, inversion, filter and counts.
 
-  Remove `upcoming`, `upcomingCount`, `upcomingTotal`, `upcomingCapDays` and all schedule work from `native/account-register`. Failing tests first for "Upcoming rows are their own read", "Upcoming rows are capped before rules run" (`upcomingMore`, nearest first, bad values) and "Schedule statuses cost one query" (same set as `getHasTransactionsQuery` on a fixture)
+  Remove `upcoming`, `upcomingCount`, `upcomingTotal`, `upcomingCapDays` and all schedule work from `native/account-register`. Failing tests first for "Upcoming rows are their own read", "Upcoming rows are capped before rules run" (`upcomingAll`, `upcomingMore`, a monthly bill kept ahead of later weekly occurrences, bad values), "The upcoming read returns its count and total" (returned rows only) and "Schedule statuses cost one query" (same set as `getHasTransactionsQuery` on a fixture with a split child, a tombstoned row and a closed account)
 - [ ] 1.4 (built, keep; move) The `json_each(?)` CTE source in `registerFilter`, and the counts of "The upcoming read returns its count and total", now on the upcoming read. Keep the test past the 999-variable limit
 - [ ] 1.5 (built, keep) `accounts-register-upcoming-max-days` (default 92, ceiling 366) and `upcomingCapDays`, now returned by the upcoming read. Label and help as code comments beside both limits until story 4643's registry lands (design D11)
-- [ ] 1.6 (redo) `accounts.perf.test.ts`: the same seeds; the register's first page at 50 ms and `native/account-upcoming` at 100 ms (200 schedules) and 150 ms (worst case), each with no filter, search and `uncleared` (design D6). Run on a quiet machine, with the load average below the core count, and report the load. If the upcoming read misses, lower the default of `accounts-upcoming-max-rows` to the largest value that meets it, down to 25. Below 25, **stop and report** to the Director with the medians, p95s and load. Never loosen a gate
+- [ ] 1.6 (redo) `accounts.perf.test.ts`: the same seeds; the register's first page at 50 ms and `native/account-upcoming` at 100 ms (200 schedules) and 150 ms (worst case), each with no filter, search and `uncleared` (design D6). Run on a quiet machine, with the load average below the core count, and report the load. If the upcoming read misses, lower the default of `accounts-upcoming-max-rows` to the largest value that meets it, down to 25. **Report any default below 100 to the Product Owner before merging**, with the medians, p95s and load. Below 25, **stop and report** to the Director. Never loosen a gate
 - [ ] 1.7 Bridge allowlist: `native/account-upcoming` in the Swift list and the page's list, and a `coverage.json` skip; the allowlist test passes
 - [ ] 1.8 Run `yarn typecheck`, `yarn lint` and the `@actual-app/core` and `@actual-app/web` tests; all pass
 
@@ -33,7 +33,9 @@ Amended 2026-11-18 (design D6 to D11). Built on branch `kenlefeb/sc-4973/native-
   - decode `native/account-upcoming`: rows, `ruleFields`, `upcomingCount`, `upcomingTotal`, `upcomingCapDays` and `upcomingMore`;
   - the register shows posted rows before the upcoming reply, with "Loading scheduled…";
   - a stale reply (older scope, search or account) is dropped by the request counter;
-  - a failed upcoming read keeps the posted rows and says scheduled rows could not load;
+  - a failed upcoming read keeps the posted rows usable and shows "Couldn't load scheduled rows. Try again." with Retry, which re-reads the upcoming section only;
+  - after a native write or change event, the upcoming read re-runs and the section shows "Loading scheduled…" until it answers, never older rows;
+  - "Nearest K of M scheduled" with the total labelled partial when `upcomingAll` is present, and plain "N scheduled" otherwise;
   - upcoming rows shown while a scope or search is set;
   - "N scheduled" and its total shown apart from the posted results;
   - both notices (`upcomingCapDays`, `upcomingMore`);
@@ -41,7 +43,8 @@ Amended 2026-11-18 (design D6 to D11). Built on branch `kenlefeb/sc-4973/native-
 - [ ] 2.2 `Accounts.swift` and `AccountsViewModels.swift` (`NativeBridgeCore`, the view model story 5101's Mac register will reuse) call the upcoming read after the first page and on every scope, search or change event. `NativeAccountRegisterView.swift` shows:
   - upcoming rows with category, split count, the transfer's other account and "Scheduled" in words, kept while filtered;
   - the scheduled count and total;
-  - the loading and failure text;
+  - the loading, failure and Retry states, with copy in the copy table;
+  - the partial count and total wording;
   - both notices.
 - [ ] 2.3 Tapping an upcoming row opens the native read-only detail with "Scheduled" and "Fields set by rules: …", with no edit and no web hand-off (design D5a). UI test for a row with and without rule-set fields
 - [ ] 2.4 The Limits section rows "Scheduled rows: days ahead" and "Scheduled rows: most shown". If story 4643's Limits registry has merged, add both with their name and help line, and check that changing each changes the register and its notice. If not, comment both labels and help lines on story 4643 so they land there

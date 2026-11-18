@@ -361,6 +361,7 @@
 				FB434300000000000000102 /* PaycheckEditorViewModel.swift in Sources */,
 				FB434300000000000000103 /* NativePaycheckEditorView.swift in Sources */,
 				FB430900000000000000101 /* PaycheckSummaryRow.swift in Sources */,
+				FB493100000000000000101 /* Accounts.swift in Sources */,
 				FB4931000000000000000102 /* AccountsViewModels.swift in Sources */,
 				FB4931000000000000000103 /* WebAccountAction.swift in Sources */,
 				FB3611000000000000000101 /* AccountsListScreen.swift in Sources */,

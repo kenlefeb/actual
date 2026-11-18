@@ -60,6 +60,20 @@ public enum NativeBridgeAllowlist {
     public static let handlers: Set<String> = reads.union(writes).union(paycheckWrites).union(sync).union(reconcileReads)
         .union(reconcileWrites).union(accountsReads).union(accountsWrites).union(settingsReads).union(settingsWrites)
         .union(transactionReads).union(transactionWrites).union(storage)
+
+    // sc-5219 (D3): what a call is. A write is followed by native/persisted; a
+    // storage call changes nothing, so it is never a write.
+    public enum Kind: Equatable { case read, write, sync, storage }
+
+    public static let allWrites: Set<String> = writes.union(paycheckWrites).union(reconcileWrites).union(accountsWrites)
+        .union(settingsWrites).union(transactionWrites)
+
+    public static func kind(of name: String) -> Kind? {
+        guard handlers.contains(name) else { return nil }
+        if allWrites.contains(name) { return .write }
+        if sync.contains(name) { return .sync }
+        return storage.contains(name) ? .storage : .read
+    }
 }
 
 // The page's reduced sync result (nativeBridge.ts): whether it worked, and a
@@ -105,6 +119,61 @@ public enum NativeBridgeEvent {
         else { return [] }
         return tables.compactMap { $0 as? String }
     }
+
+    // sc-5219: the number of the native/persisted call whose writes are now stored
+    public static func storedSeq(of body: Any) -> Int? {
+        guard name(of: body) == "stored" else { return nil }
+        return ((body as? [String: Any])?["payload"] as? [String: Any])?["seq"] as? Int
+    }
+}
+
+// sc-5219 (native-durable-writes D3, D4): whether this device has stored the
+// writes made through the client. One per page; screens read `message`.
+@MainActor
+public final class WriteStorageStatus: ObservableObject {
+    public static let savingMessage = NSLocalizedString("Saving…", comment: "Native screens: a change is being stored on this device")
+    public static let notYetStoredMessage = NSLocalizedString(
+        "Saved here, not yet stored on this device.", comment: "Native screens: a change was made but this device has not stored it yet")
+
+    @Published private var writesInProgress = 0
+    @Published private var isNotYetStored = false
+    private var awaitedSeq: Int?
+
+    public nonisolated init() {}
+
+    public var message: String? {
+        if writesInProgress > 0 { return Self.savingMessage }
+        return isNotYetStored ? Self.notYetStoredMessage : nil
+    }
+
+    func writeBegan() { writesInProgress += 1 }
+    func writeEnded() { writesInProgress -= 1 }
+
+    // A stored answer covers every write before it
+    func record(_ answer: PersistedAnswer) {
+        isNotYetStored = !answer.stored
+        awaitedSeq = answer.stored ? nil : answer.seq ?? awaitedSeq
+    }
+
+    // The engine's storage-stored, which the page forwards as `stored`
+    public func storedEvent(seq: Int) {
+        guard let awaitedSeq, seq >= awaitedSeq else { return }
+        self.awaitedSeq = nil
+        isNotYetStored = false
+    }
+}
+
+struct PersistedAnswer: Decodable, Equatable {
+    let stored: Bool
+    var seq: Int?
+
+    static let notStored = PersistedAnswer(stored: false)
+}
+
+// A write's result, and whether this device has stored it
+public struct StoredWrite {
+    public let data: Data
+    public let stored: Bool
 }
 
 // sc-3611 (native-bridge: "Native refusals carry a stable code"). A loot-core
@@ -277,13 +346,17 @@ public struct NativeBridgeClient {
     private let transport: Transport
     private let timeout: TimeInterval
     private let syncTimeout: TimeInterval
+    // The app's clients have one, so every write waits for storage. Demo and
+    // screen-test clients have no page storage to wait for.
+    private let storage: WriteStorageStatus?
 
     public init(
         timeout: TimeInterval = NativeBridgeClient.defaultTimeout, syncTimeout: TimeInterval = NativeBridgeClient.defaultSyncTimeout,
-        transport: @escaping Transport
+        storage: WriteStorageStatus? = nil, transport: @escaping Transport
     ) {
         self.timeout = timeout
         self.syncTimeout = syncTimeout
+        self.storage = storage
         self.transport = transport
     }
 
@@ -291,8 +364,53 @@ public struct NativeBridgeClient {
         try await call(name, args: [String: String]())
     }
 
-    // Arguments are any JSON value, so a number crosses as a number
     public func call<Args: Encodable>(_ name: String, args: Args) async throws -> Data {
+        if storage != nil, NativeBridgeAllowlist.kind(of: name) == .write {
+            return try await write(name, args: args).data
+        }
+        return try await send(name, args: args)
+    }
+
+    // sc-5219 (D3): the write with its own deadline, then native/persisted with
+    // its own. The write is never retried. A failure of the second call only
+    // means not stored: the write has already been applied.
+    public func write<Args: Encodable>(_ name: String, args: Args) async throws -> StoredWrite {
+        await storage?.writeBegan()
+        let data: Data
+        do {
+            data = try await send(name, args: args)
+        } catch {
+            await storage?.writeEnded()
+            throw error
+        }
+        let answer = await persisted()
+        await storage?.record(answer)
+        await storage?.writeEnded()
+        return StoredWrite(data: data, stored: answer.stored)
+    }
+
+    private func persisted() async -> PersistedAnswer {
+        do {
+            return try await askPersisted()
+        } catch NativeBridgeError.timedOut {
+            // The one call that may be repeated: it changes nothing
+            Task {
+                if let answer = try? await askPersisted() { await storage?.record(answer) }
+            }
+            return .notStored
+        } catch {
+            return .notStored
+        }
+    }
+
+    private func askPersisted() async throws -> PersistedAnswer {
+        let name = "native/persisted"
+        let json = try await withTimeout(name, timeout) { try await transport(name, "{}") }
+        return try JSONDecoder().decode(PersistedAnswer.self, from: Data(json.utf8))
+    }
+
+    // Arguments are any JSON value, so a number crosses as a number
+    private func send<Args: Encodable>(_ name: String, args: Args) async throws -> Data {
         guard NativeBridgeAllowlist.handlers.contains(name), !NativeBridgeAllowlist.sync.contains(name) else {
             throw NativeBridgeError.notAllowlisted(name)
         }
@@ -309,12 +427,7 @@ public struct NativeBridgeClient {
             || (args is AccountReopen && name == "native/account-reopen") || (args is AccountMove && name == "native/account-move")
             || (args is SettingsSave && name == "native/settings-save")
             || (args is TransactionSave && name == "native/transaction-save")
-        let isWrite =
-            NativeBridgeAllowlist.writes.contains(name) || NativeBridgeAllowlist.paycheckWrites.contains(name)
-            || NativeBridgeAllowlist.reconcileWrites.contains(name) || NativeBridgeAllowlist.accountsWrites.contains(name)
-            || NativeBridgeAllowlist.settingsWrites.contains(name)
-            || NativeBridgeAllowlist.transactionWrites.contains(name)
-        guard !isWrite || isTyped else {
+        guard !NativeBridgeAllowlist.allWrites.contains(name) || isTyped else {
             throw NativeBridgeError.invalidWrite(name)
         }
         let encoder = JSONEncoder()

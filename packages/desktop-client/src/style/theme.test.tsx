@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CustomThemeStyle, ThemeStyle, useTheme } from './theme';
 
-let mockShell: 'ios' | 'mac' | null = null;
+let mockShell: 'ios' | 'mac' | 'mac-app' | null = null;
 let mockPrefs: Record<string, string | undefined> = {};
 
 // Tests don't process CSS, so each sheet stands in as its name
@@ -73,7 +73,7 @@ describe('ThemeStyle (sc-3505)', () => {
     mockPrefs = {};
   });
 
-  it.each(['ios', 'mac'] as const)(
+  it.each(['ios', 'mac', 'mac-app'] as const)(
     'in the %s app renders the Home Economics sheets, following the system appearance',
     shell => {
       mockShell = shell;
@@ -133,7 +133,7 @@ describe('CustomThemeStyle (sc-3505)', () => {
     expect(css.join('\n')).toContain('#654321');
   });
 
-  it.each(['ios', 'mac'] as const)(
+  it.each(['ios', 'mac', 'mac-app'] as const)(
     'in the %s app renders nothing, so a theme synced from a browser cannot restyle it',
     shell => {
       mockShell = shell;
@@ -154,7 +154,7 @@ describe('useTheme (sc-3505)', () => {
 
   // App.tsx's data-theme, the formula editor and the meta theme colour read
   // it, so a pref synced from a browser must not reach them
-  it.each(['ios', 'mac'] as const)(
+  it.each(['ios', 'mac', 'mac-app'] as const)(
     'in the %s app reports auto, whatever the pref says',
     shell => {
       mockShell = shell;

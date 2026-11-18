@@ -1,0 +1,40 @@
+# Fork-only (sc-4942, add-mac-app-shell): builds the SwiftUI Mac app unsigned
+# and runs its unit tests. Never upstream (fork/README.md). Needs no secrets
+# and no web build: the app's www copy phase skips a missing folder. Runs only
+# when the Mac app or NativeBridgeCore changes, because macOS runner minutes
+# are expensive.
+name: Fork Mac native
+
+on:
+  pull_request:
+    branches:
+      - development
+    paths:
+      - 'packages/mobile-client/macos/**'
+      - 'packages/mobile-client/ios/NativeBridge/**'
+      - '.github/workflows/fork-mac-native.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  fork-mac-native:
+    if: github.repository == 'kenlefeb/actual'
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Build and test the Mac app, unsigned
+        working-directory: packages/mobile-client/macos
+        run: >-
+          xcodebuild build test
+          -project HomeEconomicsMac.xcodeproj
+          -scheme HomeEconomicsMac
+          -destination platform=macOS
+          CODE_SIGNING_ALLOWED=NO

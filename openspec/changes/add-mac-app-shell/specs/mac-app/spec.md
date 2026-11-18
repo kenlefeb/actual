@@ -64,7 +64,7 @@ The Mac app's native code SHALL NOT log, store or send a URL's query or fragment
 - **THEN** no log line, crash report or stored value contains the token or the query
 
 ### Requirement: The web view is never weakened
-The Mac app SHALL NOT use a private WebKit API, or enable file-URL access or universal access from file URLs, or drop COOP or COEP. It SHALL NOT run a script in the page while the main frame is off `homeeconomics://localhost`. If cross-origin isolation is missing, the only fallback is the page's direct Worker in its existing fallback mode, as on iPhone. In-frame navigation SHALL be allowed only to the app's scheme and to `https` on the sync server and provider hosts.
+The Mac app SHALL NOT use a private WebKit API, or enable file-URL access or universal access from file URLs, or drop COOP or COEP. It SHALL NOT run a script in the page while the main frame is off `homeeconomics://localhost`. If the web view lacks the shared memory the engine's fast mode needs, the only fallback is the page's direct Worker in its fallback mode, as on iPhone. In-frame navigation SHALL be allowed only to the app's scheme and to `https` on the sync server and provider hosts.
 
 #### Scenario: A plain-http server
 - **GIVEN** the person enters an `http://` sync server address
@@ -72,9 +72,50 @@ The Mac app SHALL NOT use a private WebKit API, or enable file-URL access or uni
 - **THEN** the app refuses the in-frame navigation
 
 #### Scenario: Another host
-- **GIVEN** a link to a host that is neither the sync server nor the provider
-- **WHEN** it is followed
+- **GIVEN** an `https` link on the app's own page to a host that is neither the sync server nor the provider
+- **WHEN** the user clicks it
 - **THEN** it opens in the default browser, not in the app's web view
+
+#### Scenario: An http link
+- **GIVEN** an `http` link to any host
+- **WHEN** the user clicks it
+- **THEN** the app refuses it, and nothing opens
+
+### Requirement: Only links on the app's own page open in the browser
+A link the user clicks SHALL open in the default browser only when the page showing it is the app's own page, at `homeeconomics://localhost`. A click on any other page, such as the sync server's or the sign-in provider's, to a host outside the app's list SHALL be cancelled: nothing opens, and no part of the address is logged.
+
+#### Scenario: A link on the provider's page
+- **GIVEN** the sign-in provider's page is showing in the app and offers a link to another sign-in service
+- **WHEN** the user clicks it
+- **THEN** the app cancels it, nothing opens in the browser, and no part of the address is logged
+
+#### Scenario: A link on the app's own page
+- **GIVEN** the app's own page shows an `https` link to a host outside the list
+- **WHEN** the user clicks it
+- **THEN** it opens in the default browser
+
+### Requirement: In-frame sign-in hosts are a fixed list in this milestone
+Until story 4984, the hosts allowed in-frame over `https` SHALL be a list fixed in the app's build: the fork's sync servers and their OpenID provider. A user whose server or sign-in provider is not listed, or whose provider sends them to another host, SHALL sign in only with a password. Choosing OpenID SHALL keep the app on its sign-in screen with a message that this sign-in isn't supported yet and to use a password, and hand nothing to the browser.
+
+#### Scenario: A listed server
+- **GIVEN** the person's server and its OpenID provider are on the app's list
+- **WHEN** they sign in with OpenID
+- **THEN** the provider's pages load in the app's window and sign-in completes
+
+#### Scenario: A server that is not listed
+- **GIVEN** the person's server or its OpenID provider is not on the app's list
+- **WHEN** they choose OpenID sign-in
+- **THEN** the app stays on its sign-in screen and says this server's sign-in isn't supported in the Mac app yet and to use a password, and no browser opens
+
+#### Scenario: Password sign-in on a server that is not listed
+- **GIVEN** the person's server is not on the app's list
+- **WHEN** they sign in with their password
+- **THEN** sign-in completes in the app
+
+#### Scenario: A redirect carrying a sign-in token or code
+- **GIVEN** the app's window is sent, by a redirect or by the page, to a host that is not on the list
+- **WHEN** the address holds a token or code
+- **THEN** the app refuses it, opens nothing outside the app, and logs no part of the address
 
 ### Requirement: Onboarding uses the web screens and budgets open only by sync download
 Until native onboarding ships, the Mac app SHALL show the web screens in its window for the server URL, sign-in (password and OpenID), the budget list and the encryption password. A budget SHALL open only by downloading it from the sync server, like a new device. An end-to-end encrypted budget SHALL ask for its password before it opens.
@@ -103,12 +144,22 @@ Native Mac code SHALL NOT open, read or copy a budget database, including the El
 - **THEN** the fork check fails and names the file
 
 ### Requirement: Evicted storage is recovered by download, with a warning
-The sync server SHALL stay the source of truth. Native code SHALL keep a non-secret flag, outside the web view's storage, that a budget (by id) was open. If on launch the flag is set and the web view has no budget, the app SHALL warn that this Mac's local data was cleared and unsynced changes may be lost, then show onboarding to download again.
+The sync server SHALL stay the source of truth. Outside the web view, and never in a log, the app SHALL remember only that a budget was open and which one (its cloud file id). When it remembers an open budget and the page, once the app has finished starting, says no budget is there, it SHALL warn once that this Mac's local data was cleared and unsynced changes may be lost, tell the user to sign in and download the budget again, then show sign-in. It SHALL NOT warn when the page is only slow.
 
 #### Scenario: Data evicted after a budget was open
 - **GIVEN** a budget was open, and the app's website data was removed while the app was not running
 - **WHEN** the app launches
-- **THEN** it warns that local data was cleared and unsynced changes may be lost, then shows the web onboarding, and after sign-in the budget downloads again with the server's numbers
+- **THEN** it warns that local data was cleared and unsynced changes may be lost, tells the user to sign in and download the budget again, then shows the web sign-in, and after sign-in the budget downloads again with the server's numbers
+
+#### Scenario: The warning shows once
+- **GIVEN** the app warned about cleared data and the user dismissed it
+- **WHEN** the app launches again with storage still empty
+- **THEN** no warning shows, only the web sign-in
+
+#### Scenario: A slow start
+- **GIVEN** a budget was open last time
+- **WHEN** the page has not yet said whether a budget is there
+- **THEN** no warning shows, however long it takes
 
 #### Scenario: A first launch
 - **GIVEN** no budget was ever open on this Mac

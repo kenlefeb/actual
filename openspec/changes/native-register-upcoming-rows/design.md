@@ -110,11 +110,11 @@ The handler joins the allowlist (Swift list, page list, `coverage.json` skip). T
 
 ### D8. A row cap before rules run
 
-`accounts-upcoming-max-rows` (in `LIMITS`, default 100, ceiling 500) keeps previews of the schedules relevant to the account in rounds: every schedule's next occurrence first, then every schedule's second, and so on. Each round is in `comparePreviewTransactions` order, so a few weekly schedules cannot crowd a monthly bill off the list (Architect review, PR #445). The rows returned are then shown in the web's order. The cap is applied after the day cap and before rules run. Rules, inversion, the filter, the count and the total see only those. Every row shown has had its rules run, so "as they will post" holds for every shown row.
+`accounts-upcoming-max-rows` (in `LIMITS`, default 100, ceiling 500) keeps previews of the schedules relevant to the account in rounds: every schedule's next occurrence first, then every schedule's second, and so on. Within a round, occurrences are taken nearest date first (then `comparePreviewTransactions`'s tie-breaks), so a partial round, including a first round with more schedules than the cap, keeps the nearest occurrences. A few weekly schedules cannot crowd a monthly bill's next occurrence off the list (Architect reviews, PRs #445 and #452; the web's order is newest first, and cutting in that order would have kept the farthest). The rows returned are then shown in the web's display order, newest first. The cap is applied after the day cap and before rules run. Rules, inversion, the filter, the count and the total see only those. Every row shown has had its rules run, so "as they will post" holds for every shown row.
 
 When the cap stops generation with an occurrence left, the read returns `upcomingKept` (K, occurrences kept) and `upcomingMore: true`. It does not count the rest (D12). The rows shown can differ from K after inversion and filtering; `upcomingCount` counts those rows.
 
-The register labels the count and total as partial ("Nearest K scheduled; more not shown", the total labelled as the nearest rows' total), so a capped total is never read as the whole (Product Owner review, PR #445). It also says "More scheduled rows are not shown or searched; change this in Settings > Limits." `upcomingCount` and `upcomingTotal` cover returned rows only. Rows past the cap are not searched, because searching them would mean running their rules.
+The register labels the count and total as partial ("First K scheduled; more not shown", the total labelled as the shown rows' total), so a capped total is never read as the whole (Product Owner reviews, PRs #445 and #452). It also says how to see more: "More scheduled rows are not shown or searched. To see more, raise Scheduled rows: most shown in Settings > Advanced > Limits (up to 500)." `upcomingCount` and `upcomingTotal` cover returned rows only. Rows past the cap are not searched, because searching them would mean running their rules.
 
 ### D9. Statuses in one query, for relevant schedules only
 
@@ -132,7 +132,7 @@ Relevance (`isScheduleRelevantToAccount`) needs no status, so it runs first. Sta
 - **A formula on the payee field does nothing:** right. The rules engine does not apply formulas to `payee`. Relevance still treats a formula or template line as maybe relevant. The spec scenario now uses a template action, as the test does.
 - **No label field in `LIMITS`:** both limits join story 4643's registry with a name and help line when it lands:
   - `accounts-register-upcoming-max-days`: "Scheduled rows: days ahead", help "Caps the budget's upcoming scheduled length in the native register."
-  - `accounts-upcoming-max-rows`: "Scheduled rows: most shown", help "The most scheduled rows the native register shows and searches."
+  - `accounts-upcoming-max-rows`: display name "Scheduled rows: most shown", help "The most scheduled rows the native register shows and searches (up to 500)."
 
   Until then they stay code comments beside the entries. Whichever of the two merges second adds them (task 2.4).
 
@@ -150,7 +150,7 @@ The developer rebuilt to D7 to D11 and stopped again, correctly, at load 12.4 on
 - The upcoming read draws from each relevant schedule's generator round by round, stopping at the row cap or when every generator is done. Calls are bounded by about K plus the number of relevant schedules (each needs one look-ahead to know whether more exist), not by the window. For the 50-daily case that is about 150 `getNextDate` calls (about 7 ms at the probe's rate) instead of 4,650.
 - The day cap's `upcomingCapDays` uses the same look-ahead: a schedule whose own window runs past the cap is checked for one date beyond it.
 
-**M is dropped.** An exact count of all occurrences means draining every generator, which is the cost D12 removes. A cheaper count, enumerating each parsed `RSchedule` once (44 ms in the probe), would be a second, different implementation: it ignores the weekend and business-day moves, the de-duplication and relative dates. So the read returns `upcomingMore: true`, and the screen says "Nearest K scheduled; more not shown". **This needs the Product Owner's agreement**, since it replaces the agreed "Nearest K of M scheduled".
+**M is dropped.** An exact count of all occurrences means draining every generator, which is the cost D12 removes. A cheaper count, enumerating each parsed `RSchedule` once (44 ms in the probe), would be a second, different implementation: it ignores the weekend and business-day moves, the de-duplication and relative dates. So the read returns `upcomingMore: true`, and the screen says "First K scheduled; more not shown" (Product Owner, PR #452: M dropped, wording agreed).
 
 **Options not taken:**
 - Caching the `RSchedule` inside `getNextDate`: an upstream engine change with global cache invalidation, unnecessary once only K dates are made.

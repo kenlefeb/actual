@@ -80,7 +80,7 @@ The window SHALL be the budget's upcoming-length preference and each schedule's 
 - **THEN** the cap is 92
 
 ### Requirement: Upcoming rows are capped before rules run
-The read SHALL generate occurrences of the relevant schedules in rounds (each one's next, then each one's second, each round in the web's preview order) and stop at `accounts-upcoming-max-rows` (a synced limit via `readLimit`, default 100, ceiling 500) or the horizon. Rules, inversion, filter and counts see only those. When it stopped at the cap with an occurrence left, it SHALL return `upcomingKept` (occurrences kept) and `upcomingMore: true`; it SHALL NOT count the rest.
+The read SHALL generate occurrences of the relevant schedules in rounds (each one's next, then each one's second; within a round, nearest date first) and stop at `accounts-upcoming-max-rows` (a synced limit via `readLimit`, default 100, ceiling 500) or the horizon. Rules, inversion, filter and counts see only those. When it stopped at the cap with an occurrence left, it SHALL return `upcomingKept` (occurrences kept) and `upcomingMore: true`; it SHALL NOT count the rest.
 
 #### Scenario: Fifty daily schedules
 - **GIVEN** 50 daily schedules over a 92-day window, about 4,600 occurrences, and the default row cap
@@ -93,9 +93,19 @@ The read SHALL generate occurrences of the relevant schedules in rounds (each on
 - **THEN** all 10 are kept and there is no `upcomingMore`
 
 #### Scenario: A monthly bill among weekly schedules
-- **GIVEN** a row cap of 10, 12 weekly schedules and one monthly bill due in 20 days
+- **GIVEN** a row cap of 6, 4 weekly schedules and one monthly bill due in 20 days
 - **WHEN** native code reads the upcoming rows
-- **THEN** the monthly bill's next occurrence is kept, and later weekly occurrences are dropped first
+- **THEN** the first round keeps all 5 next occurrences, the bill included, and the second round keeps only the nearest 1
+
+#### Scenario: More schedules than the cap
+- **GIVEN** a row cap of 10 and 30 schedules with next occurrences on different days
+- **WHEN** native code reads the upcoming rows
+- **THEN** the 10 nearest next occurrences are kept, never farther ones, and `upcomingMore` is true
+
+#### Scenario: A partial final round
+- **GIVEN** a row cap of 7 and 5 weekly schedules
+- **WHEN** native code reads the upcoming rows
+- **THEN** all 5 next occurrences and the 2 nearest second occurrences are kept, and the rows are returned newest first
 
 #### Scenario: Under the cap
 - **GIVEN** 12 previews in the window

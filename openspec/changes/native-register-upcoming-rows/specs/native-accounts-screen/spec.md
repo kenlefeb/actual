@@ -45,22 +45,22 @@ While any filter is active, the iPhone register SHALL show the upcoming rows' co
 - **THEN** the list says 3 results with their total, and 1 scheduled with its total
 
 ### Requirement: A capped count and total say they are partial
-When loot-core returns `upcomingMore`, the iPhone register SHALL label the count and total as partial: "Nearest K scheduled; more not shown", with K (`upcomingKept`, occurrences kept) from loot-core, and the total labelled as those nearest rows' total. It SHALL never show a count of all scheduled occurrences, which loot-core does not compute.
+When loot-core returns `upcomingMore`, the iPhone register SHALL label the count and total as partial: "First K scheduled; more not shown", with K (`upcomingKept`, occurrences kept) from loot-core, and the total labelled as the shown rows' total. It SHALL never show a count of all scheduled occurrences, which loot-core does not compute.
 
 #### Scenario: Capped, unfiltered
 - **GIVEN** 4,600 scheduled occurrences and the default row cap of 100
 - **WHEN** the user opens the register
-- **THEN** the upcoming section says "Nearest 100 scheduled; more not shown" and its total is labelled as the nearest rows' total
+- **THEN** the upcoming section says "First 100 scheduled; more not shown" and its total is labelled as the shown rows' total
 
 #### Scenario: Capped and searched
-- **GIVEN** the same account and a search matching 2 of the nearest 100
+- **GIVEN** the same account and a search matching 2 of the first 100
 - **WHEN** the results show
-- **THEN** the section says 2 scheduled in the nearest 100, more not shown or searched, with those 2 rows' total
+- **THEN** the section says 2 scheduled in the first 100, more not shown or searched, with the shown rows' total
 
 #### Scenario: Not capped
 - **GIVEN** 12 scheduled previews
 - **WHEN** the user opens the register
-- **THEN** the section says "12 scheduled" with no "Nearest" wording
+- **THEN** the section says "12 scheduled" with no "First" wording
 
 ### Requirement: The register says when the cap hides scheduled rows
 When loot-core reports that the horizon cap hid upcoming rows, the iPhone register SHALL say so below the upcoming rows: "Scheduled rows shown up to N days; change this in Settings > Limits.", with N from loot-core. It SHALL say nothing when no row was hidden.
@@ -143,15 +143,15 @@ While upcoming rows are marked "Updating…", tapping one SHALL open its read-on
 - **THEN** the upcoming section shows "Loading scheduled…" until the reply
 
 ### Requirement: The register says when the row cap hides scheduled rows
-When loot-core returns `upcomingMore`, the iPhone register SHALL say below the upcoming rows: "More scheduled rows are not shown or searched; change this in Settings > Limits.", and nothing otherwise.
+When loot-core returns `upcomingMore`, the iPhone register SHALL say below the upcoming rows: "More scheduled rows are not shown or searched. To see more, raise Scheduled rows: most shown in Settings > Advanced > Limits (up to 500).", and nothing otherwise.
 
 #### Scenario: Fifty daily schedules
 - **GIVEN** an upcoming read returning `upcomingMore` true
 - **WHEN** the user opens the register
-- **THEN** the notice says more scheduled rows are not shown or searched and points to Settings > Limits
+- **THEN** the notice says more scheduled rows are not shown or searched, and to raise "Scheduled rows: most shown" in Settings > Advanced > Limits, up to 500
 
 ### Requirement: The cap is a labelled limit in Settings
-The Limits section of native Settings (story 4643) SHALL list `accounts-register-upcoming-max-days` as "Scheduled rows: days ahead" (it caps the budget's upcoming scheduled length in the native register; default 92, ceiling 366) and `accounts-upcoming-max-rows` as "Scheduled rows: most shown" (default 100, ceiling 500), each with its value, default and ceiling, as for every limit there.
+The Limits section of native Settings (story 4643) SHALL list `accounts-register-upcoming-max-days` as "Scheduled rows: days ahead" (it caps the budget's upcoming scheduled length in the native register; default 92, ceiling 366) and `accounts-upcoming-max-rows` as "Scheduled rows: most shown" (help: the most scheduled rows the native register shows and searches; default 100, ceiling 500), each with its value, default and ceiling, as for every limit there.
 
 #### Scenario: Changing the cap
 - **GIVEN** the Limits section of native Settings

@@ -13,6 +13,7 @@ import {
   getUserByUsername,
   transferAllFilesFromUser,
 } from '#services/user-service';
+import { originOf } from '#util/return-origins';
 import { TOKEN_EXPIRATION_NEVER } from '#util/validate-user';
 
 import { checkPassword } from './password';
@@ -216,7 +217,8 @@ export async function loginWithOpenIdSetup(
   );
   accountDb.mutate(
     'INSERT INTO pending_openid_requests (state, code_verifier, return_url, expiry_time) VALUES (?, ?, ?, ?)',
-    [state, code_verifier, returnUrl, expiry_time],
+    // fork: sc-4962. Store the origin so a trailing slash can't double the path.
+    [state, code_verifier, originOf(new URL(returnUrl)), expiry_time],
   );
 
   const url = client.authorizationUrl({
@@ -486,26 +488,64 @@ export function getServerHostname() {
   return null;
 }
 
-export function isValidRedirectUrl(url: string | undefined): url is string {
+// fork: sc-4962. The sign-in token goes to the return URL, so only these exact
+// origins may receive it: the server's own (the served web app), the native
+// apps, the operator's configured list, and the web dev server in development.
+const APP_RETURN_ORIGINS = [
+  'capacitor://localhost', // iPhone app (Capacitor)
+  'homeeconomics://localhost', // Mac app
+  'http://localhost:3010', // Electron desktop app's sign-in listener
+];
+const DEV_RETURN_ORIGINS = ['http://localhost:3001'];
+
+function allowedReturnOrigins(serverHostname: string) {
+  const origins: string[] = [
+    serverHostname,
+    ...APP_RETURN_ORIGINS,
+    ...(config.get('env') === 'development' ? DEV_RETURN_ORIGINS : []),
+    ...config.get('openId.allowedReturnOrigins'),
+  ];
+  return origins.flatMap(origin => {
+    try {
+      return [originOf(new URL(origin))];
+    } catch {
+      return [];
+    }
+  });
+}
+
+function parseAllowedRedirect(url: string | undefined) {
   const serverHostname = getServerHostname();
-
-  if (!serverHostname) {
-    return false;
+  if (!serverHostname || !url) {
+    return null;
   }
-
   try {
     const redirectUrl = new URL(url);
-    const serverUrl = new URL(serverHostname);
-
-    if (
-      redirectUrl.hostname === serverUrl.hostname ||
-      redirectUrl.hostname === 'localhost'
-    ) {
-      return true;
-    } else {
-      return false;
+    if (redirectUrl.username || redirectUrl.password) {
+      return null;
     }
+    return allowedReturnOrigins(serverHostname).includes(originOf(redirectUrl))
+      ? redirectUrl
+      : null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+// A sign-in's return URL: exactly an allowed origin, with no path or query.
+export function isValidRedirectUrl(url: string | undefined): url is string {
+  const redirectUrl = parseAllowedRedirect(url);
+  return (
+    redirectUrl !== null &&
+    (redirectUrl.pathname === '' || redirectUrl.pathname === '/') &&
+    !redirectUrl.search &&
+    !redirectUrl.hash
+  );
+}
+
+// The callback's redirect (return URL + /openid-cb?token=...): an allowed origin.
+export function isAllowedRedirectTarget(
+  url: string | undefined,
+): url is string {
+  return parseAllowedRedirect(url) !== null;
 }

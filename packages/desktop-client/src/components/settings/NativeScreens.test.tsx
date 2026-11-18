@@ -14,10 +14,11 @@ afterEach(() => {
   delete win.__actualNativeScreens;
 });
 
-function insideIosApp(budgetOn = false) {
+// budgetOn undefined: the app has not told the page, as with a never-set switch
+function insideIosApp(budgetOn?: boolean) {
   const postMessage = vi.fn();
   win.webkit = { messageHandlers: { actualNativeChrome: { postMessage } } };
-  win.__actualNativeScreens = { budget: budgetOn };
+  if (budgetOn !== undefined) win.__actualNativeScreens = { budget: budgetOn };
   return postMessage;
 }
 
@@ -36,10 +37,19 @@ describe('NativeScreens', () => {
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 
-  it('offers the Budget switch inside the iOS app, off by default', () => {
+  // sc-5090: on until the user turns it off; an explicit off is kept
+  it('offers the Budget switch inside the iOS app, on when unset', () => {
     insideIosApp();
     renderSettings();
     expect(screen.getByText('Native screens')).toBeInTheDocument();
+    expect(
+      screen.getByRole('checkbox', { name: /Native Budget screen/ }),
+    ).toBeChecked();
+  });
+
+  it('shows the Budget switch as off when the user turned it off', () => {
+    insideIosApp(false);
+    renderSettings();
     expect(
       screen.getByRole('checkbox', { name: /Native Budget screen/ }),
     ).not.toBeChecked();
@@ -69,7 +79,7 @@ describe('NativeScreens', () => {
   });
 
   it('tells the app and flips the checkbox on a click', () => {
-    const postMessage = insideIosApp();
+    const postMessage = insideIosApp(false);
     renderSettings();
     const checkbox = screen.getByRole('checkbox', {
       name: /Native Budget screen/,
@@ -84,21 +94,21 @@ describe('NativeScreens', () => {
   });
 
   // sc-4341
-  it('offers the Schedules & Paychecks switch, off by default, and tells the app', () => {
+  it('offers the Schedules & Paychecks switch, on when unset, and turns it off', () => {
     const postMessage = insideIosApp();
     renderSettings();
     const checkbox = screen.getByRole('checkbox', {
       name: /Native Schedules & Paychecks screen/,
     });
-    expect(checkbox).not.toBeChecked();
+    expect(checkbox).toBeChecked();
     fireEvent.click(checkbox);
     expect(postMessage).toHaveBeenCalledWith({
       type: 'nativeScreen',
       screen: 'paychecks',
-      on: true,
+      on: false,
     });
-    expect(checkbox).toBeChecked();
-    expect(win.__actualNativeScreens?.paychecks).toBe(true);
+    expect(checkbox).not.toBeChecked();
+    expect(win.__actualNativeScreens?.paychecks).toBe(false);
   });
 
   // sc-4801: Reconcile ships on; unset reads as on, and a click turns it off

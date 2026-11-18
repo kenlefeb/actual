@@ -81,6 +81,11 @@ On a seed with 2,000 preference rows and every limit set, the median loot-core t
 ### Requirement: Settings hand-offs are a closed set
 The chrome SHALL accept `webSettingsAction` only from the app's own page, read no field but `action`, and accept only: `language`, `budgets`, `sync-server`, `encryption`, `users`, `bank-sync`, `business-calendars`, `experimental`, `export`, `reset-cache`, `repair`, `notifications`, `sign-out`. Any other message SHALL be ignored.
 
+#### Scenario: Set up sync uses the server action
+- **GIVEN** a local-only budget
+- **WHEN** the person taps Set up sync
+- **THEN** the chrome receives `webSettingsAction` with action `sync-server`, and the web sync setup opens
+
 #### Scenario: Unknown action
 - **WHEN** the chrome receives `webSettingsAction` with action `delete-budget`
 - **THEN** it ignores the message and nothing opens

@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: The transaction form is one read
-`native/transaction-form` SHALL return, in one message, the currency fields, the open accounts, the non-hidden category groups, the defaults for a new transaction, and for an id the whole transaction (parent, children, transfer partners' accounts and whether each is closed, reconciled flags, schedule, attachment names) with its digest. An id that is not a live top-level transaction, or is in a closed account, SHALL fail with `[native:not-found]`.
+`native/transaction-form` SHALL return, in one message, the currency fields, the open accounts with their transfer payee ids, the non-hidden categories, the new-transaction defaults, and for an id the parent and children (each field, amounts as minor units), each transfer partner's own fields and whether its account is closed, schedule, attachment names and the digest. An id that is not a live top-level transaction, or is in a closed account, SHALL fail with `[native:not-found]`.
 
 #### Scenario: Reading a split transfer
 - **GIVEN** a split whose second child is a transfer to Savings
@@ -12,6 +12,15 @@
 - **GIVEN** the contract fixture checked by vitest and decoded by the Swift tests
 - **WHEN** the handler's output shape changes
 - **THEN** the vitest contract test fails, and the Swift decode test fails against the regenerated fixture
+
+#### Scenario: Transfer payees
+- **WHEN** native code reads the form
+- **THEN** each open account carries the id of its transfer payee
+
+#### Scenario: Partner fields
+- **GIVEN** a transfer from Checking to Savings
+- **WHEN** native code reads the Checking row's form
+- **THEN** the row carries the Savings partner's account, date, amount, notes, cleared and reconciled values
 
 #### Scenario: A deleted id
 - **WHEN** native code reads the form for a deleted transaction's id
@@ -138,7 +147,12 @@ The preview and the save SHALL report `account-closed` when the transaction's ac
 - **THEN** the call fails with `[native:invalid-draft]`
 
 ### Requirement: Rules run first at save and must match the preview
-For a new transaction the save SHALL run the rules first, keeping the person's own fields. If the result differs from the submitted draft in any field, the save SHALL refuse with `[native:preview-stale]`. The touched set, validation and reconciled check SHALL apply to that result, so a save stores exactly the draft the person last saw.
+For a new transaction the save SHALL evaluate the draft's amounts, then run the rules keeping the person's own fields. If any rule-settable field (account, date, payee, category, notes, cleared, amount, on any row) then differs, it SHALL refuse with `[native:preview-stale]` before writing; amount evaluation is not a difference. Validation and the reconciled check SHALL apply to the result.
+
+#### Scenario: Evaluating the amount is not a difference
+- **GIVEN** a draft with amount text `12.50+3*2`, and rules that change nothing
+- **WHEN** native code saves it
+- **THEN** it is stored with −1850, with no `preview-stale`
 
 #### Scenario: A rule changed after the preview
 - **GIVEN** a preview showed category Groceries, then a sync edited the rule to set Household

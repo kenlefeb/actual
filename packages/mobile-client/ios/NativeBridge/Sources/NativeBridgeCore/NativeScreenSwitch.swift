@@ -1,25 +1,34 @@
 import Foundation
 
 // Fork-only (sc-3751). The per-screen switch: a tab shows its native screen
-// only while `NativeScreen.<tab>` is on in UserDefaults; unset or off means the
-// web screen, exactly as before. Settings flips it through the native chrome plugin.
+// only while `NativeScreen.<tab>` is on in UserDefaults. Shipped screens read on
+// when unset (sc-5090, Ken 2026-11-15), Accounts excepted until story 3611; an
+// explicit off means the web screen. Settings flips it through the native chrome
+// plugin. The unset defaults match desktop-client/src/data/native-screen-defaults.json
+// (NativeScreenDefaultsTests).
 public enum NativeScreen: Equatable, Sendable { case web, native }
 
 public enum NativeScreenSwitch {
-    // The Budget tab and, off by default, the Accounts tab have native screens so far
+    // The Budget tab and, off when unset, the Accounts tab have native screens so far
     public static let nativeTabs: Set<NativeTab> = [.budget, .accounts]
 
     public static func key(for tab: NativeTab) -> String { "NativeScreen.\(tab.rawValue)" }
 
+    // Tabs whose screen reads on while the key is unset
+    private static let onWhenUnset: Set<NativeTab> = [.budget]
+
     public static func screen(for tab: NativeTab, defaults: UserDefaults = .standard) -> NativeScreen {
-        nativeTabs.contains(tab) && defaults.bool(forKey: key(for: tab)) ? .native : .web
+        guard nativeTabs.contains(tab) else { return .web }
+        let unsetIsOn = defaults.object(forKey: key(for: tab)) == nil && onWhenUnset.contains(tab)
+        return unsetIsOn || defaults.bool(forKey: key(for: tab)) ? .native : .web
     }
 
     // sc-4341: Schedules & Paychecks is not a tab, so it has its own key
     public static let paychecksKey = "NativeScreen.paychecks"
 
+    // sc-5090: on when unset; Settings stores false to turn it off
     public static func isPaychecksNative(defaults: UserDefaults = .standard) -> Bool {
-        defaults.bool(forKey: paychecksKey)
+        defaults.object(forKey: paychecksKey) == nil || defaults.bool(forKey: paychecksKey)
     }
 
     // sc-4931 (native-accounts-screen D4): the Accounts screen. It reads OFF while unset: the

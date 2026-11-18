@@ -7,6 +7,7 @@ import convict from 'convict';
 import createDebug from 'debug';
 
 import { applyFileEnv } from './config-file-env';
+import { validReturnOrigins } from './util/return-origins';
 import { parseAllowedNetwork } from './util/ssrf';
 
 const require = createRequire(import.meta.url);
@@ -315,6 +316,13 @@ const configSchema = convict({
       default: '',
       env: 'ACTUAL_OPENID_ADMIN_SUBJECT',
     },
+    // fork: sc-4962
+    allowedReturnOrigins: {
+      doc: "Extra origins (scheme://host[:port]) a sign-in may return to. The server's own origin and the official apps are always allowed. A future Android build needs its origin (https://localhost) added here.",
+      format: Array,
+      default: /** @type {string[]} */ ([]),
+      env: 'ACTUAL_OPENID_ALLOWED_RETURN_ORIGINS',
+    },
     authMethod: {
       doc: 'OpenID authentication method.',
       format: ['openid', 'oauth2'],
@@ -401,6 +409,11 @@ for (const [fileEnvVar, settingPath] of [
 
 debug(`Validating config`);
 configSchema.validate({ allowed: 'strict' });
+// fork: sc-4962
+configSchema.set(
+  'openId.allowedReturnOrigins',
+  validReturnOrigins(configSchema.get('openId.allowedReturnOrigins')),
+);
 
 debug(`Project root: ${configSchema.get('projectRoot')}`);
 debug(`Port: ${configSchema.get('port')}`);

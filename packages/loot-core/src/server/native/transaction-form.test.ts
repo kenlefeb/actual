@@ -538,14 +538,31 @@ describe('native/transaction-preview', () => {
 
   // The spec's accept and refuse scenarios, per number format (PR 450)
   it.each([
-    ['comma-dot', [['1,234.56', 123456]], ['12,34', '1.234,56', '12 34']],
-    ['dot-comma', [['1.234,56', 123456]], ['1,234.56', '12 34']],
+    // A trailing decimal separator reads as no fraction, as the web does; a
+    // trailing grouping separator stays refused (PR 453)
+    [
+      'comma-dot',
+      [
+        ['1,234.56', 123456],
+        ['12.', 1200],
+      ],
+      ['12,34', '1.234,56', '12 34', '12,'],
+    ],
+    [
+      'dot-comma',
+      [
+        ['1.234,56', 123456],
+        ['12,', 1200],
+      ],
+      ['1,234.56', '12 34', '12.'],
+    ],
     [
       'space-comma',
       [
         ['1 234,56', 123456],
         ['1 234,56', 123456],
         ['1 234,56', 123456],
+        ['12,', 1200],
       ],
       ['12 34'],
     ],
@@ -554,16 +571,18 @@ describe('native/transaction-preview', () => {
       [
         ["1'234.56", 123456],
         ["1'234.56", 123456],
+        ['12.', 1200],
       ],
-      ["12'34", '12 34'],
+      ["12'34", '12 34', "12'"],
     ],
     [
       'comma-dot-in',
       [
         ['1,00,000.50', 10000050],
         ['1,000', 100000],
+        ['12.', 1200],
       ],
-      ['1,000,00', '1,000,000', '12 34'],
+      ['1,000,00', '1,000,000', '12 34', '12,'],
     ],
   ] as [string, [string, number][], string[]][])(
     'reads numbers by the %s format',

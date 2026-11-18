@@ -1,6 +1,7 @@
 import { closeSync, fstatSync, openSync, readSync } from 'fs';
 
 import * as api from '@actual-app/api';
+import type { UndeleteRowsArgs } from '@actual-app/core/types/api-handlers';
 import type { TransactionEntity } from '@actual-app/core/types/models';
 import { z } from 'zod';
 
@@ -8,9 +9,12 @@ import { appendAudit } from '#audit';
 import type { AuditChange } from '#audit';
 import type { Scope } from '#grants';
 import { Refusal } from '#refusal';
+import { syncNow } from '#sync';
+import { lastReconciledOf } from '#tools/read/reconciliation';
 
 import { budgeted } from './budget';
 import { load } from './categories';
+import { checkRows, rowKey as stateKey } from './delete-snapshot';
 import {
   budgetId,
   confirm,
@@ -43,8 +47,10 @@ const UNDOABLE: Record<string, Scope[]> = {
   write_update_category_group: ['structure:write'],
   write_create_category: ['structure:write'],
   write_create_category_group: ['structure:write'],
+  write_delete_transactions: ['transactions:write', 'delete'],
+  write_delete_category: ['structure:write', 'delete'],
+  write_delete_category_group: ['structure:write', 'delete'],
 };
-// write_delete_transactions is not listed: undoing it ships with sc-4692 (it logs what that undo needs)
 
 /** Tools whose writes are budget cells (`category:month`), undone against the cell limit. */
 const CELL_TOOLS = [
@@ -216,7 +222,11 @@ type Plan = {
   deletes: boolean;
   /** Budget cells, counted against the cell limit rather than the row limit. */
   cells?: boolean;
-  steps: Array<{ id: string; run: () => Promise<void> }>;
+  steps: Array<{ id: string; ids?: string[]; run: () => Promise<void> }>;
+  /** An undo of a delete: its rows count against the row limit, its cells against the cell limit. */
+  restores?: { rows: number; cells: number };
+  /** After the apply: the rows and cells a later change already overrode. */
+  verify?: () => Promise<string[]>;
 };
 
 type Ctx = {
@@ -538,6 +548,326 @@ async function planCategoryCreate(ctx: Ctx, group: boolean): Promise<Plan> {
   };
 }
 
+const swapped = (changes: Change[]): AuditChange[] =>
+  changes.map(c => ({
+    id: c.id,
+    field: c.field,
+    before: c.after,
+    after: c.before,
+  }));
+
+/** Syncs first, so the checks see what other devices sent; a failed sync refuses the undo. */
+async function syncFirst() {
+  try {
+    await syncNow();
+  } catch {
+    throw new UndoRefusal(
+      'Could not sync before undoing, so the checks could not see other devices. Nothing changed. Try again.',
+      'sync',
+    );
+  }
+}
+
+const isObject = (v: unknown): v is Record<string, unknown> =>
+  Boolean(v) && typeof v === 'object' && !Array.isArray(v);
+
+const isId = (v: unknown): v is string =>
+  typeof v === 'string' && v.length > 0 && v.length <= 100;
+
+type RestoreRow = UndeleteRowsArgs['rows'][number];
+type RestoreCell = NonNullable<UndeleteRowsArgs['cells']>[number];
+
+/**
+ * An undo of a delete: one `undeleteRows` call for every row and cell, all or
+ * nothing, then a read-back that names whatever a later change already
+ * overrode (design D5). The undo's line holds the delete's changes with
+ * before and after swapped, the shape the delete's size check assumed.
+ */
+function restorePlan(
+  rows: RestoreRow[],
+  cells: RestoreCell[],
+  logged: Change[],
+  ids: string[],
+): Plan {
+  return {
+    ids,
+    changes: swapped(logged),
+    deletes: false,
+    restores: { rows: rows.length, cells: cells.length },
+    steps: [
+      {
+        id: 'restore',
+        ids,
+        run: async () => {
+          await api.undeleteRows({
+            budget_id: await budgetId(),
+            rows,
+            ...(cells.length > 0 ? { cells } : {}),
+          });
+        },
+      },
+    ],
+    verify: async () => {
+      const after = await checkRows(rows);
+      const overridden = rows.flatMap(r => {
+        const s = after.get(stateKey(r.table, r.id));
+        const holds =
+          s?.deleted === false &&
+          (r.set?.transfer_id === undefined ||
+            s.columns.transferred_id === r.set.transfer_id) &&
+          (r.set?.transferId === undefined ||
+            s.columns.transferId === r.set.transferId);
+        return holds ? [] : [r.id];
+      });
+      for (const c of cells) {
+        const now = await budgeted(c.month, c.category).catch(() => undefined);
+        if (now?.amount !== c.amount) {
+          overridden.push(`${c.category}:${c.month}`);
+        }
+      }
+      return overridden;
+    },
+  };
+}
+
+async function planDeleteTransactions(ctx: Ctx): Promise<Plan> {
+  const applied = appliedOf(ctx.entry);
+  const all = changesOf(ctx.entry);
+  const txs = all.filter(c => c.field === 'transaction' && applied.has(c.id));
+  const unlinks = all.filter(c => c.field === 'unlink');
+  const atts = all.filter(
+    c =>
+      c.field === 'attachment' &&
+      isObject(c.before) &&
+      applied.has(String(c.before.transaction_id)),
+  );
+  const logged = [...txs, ...atts, ...unlinks];
+  if (
+    txs.length === 0 ||
+    !logged.every(c => isObject(c.before) && isId(c.id))
+  ) {
+    throw notUndoable('There is nothing to put back.');
+  }
+  const before = (c: Change) => c.before as Record<string, unknown>;
+  for (const c of txs) {
+    const b = before(c);
+    if (!isId(b.account) || (b.payee !== null && !isId(b.payee))) {
+      throw notUndoable('A logged value is not an id.');
+    }
+  }
+  const accountsOf = [...new Set(txs.map(c => before(c).account as string))];
+  await syncFirst();
+
+  const states = await checkRows([
+    ...txs.map(c => ({ table: 'transactions' as const, id: c.id })),
+    ...unlinks.map(c => ({ table: 'transactions' as const, id: c.id })),
+    ...atts.map(c => ({
+      table: 'transaction_attachments' as const,
+      id: c.id,
+    })),
+  ]);
+  const col = (id: string, name: string) =>
+    states.get(stateKey('transactions', id))?.columns[name];
+  const stale: string[] = [];
+  for (const c of txs) {
+    const s = states.get(stateKey('transactions', c.id));
+    if (!s?.exists || !s.deleted) stale.push(`${c.id} (row)`);
+  }
+  for (const c of atts) {
+    const s = states.get(stateKey('transaction_attachments', c.id));
+    if (!s?.exists || !s.deleted) stale.push(`${c.id} (attachment)`);
+  }
+  const accounts = new Map(
+    (await api.getAccounts()).map(a => [a.id, Boolean(a.closed)]),
+  );
+  const payees = new Set((await api.getPayees()).map(p => p.id));
+  for (const account of accountsOf) {
+    if (!accounts.has(account) || accounts.get(account)) {
+      stale.push(`${account} (account)`);
+    }
+  }
+  for (const c of txs) {
+    const payee = before(c).payee;
+    if (typeof payee === 'string' && !payees.has(payee)) {
+      stale.push(`${payee} (payee)`);
+    }
+  }
+
+  const txIds = new Set(txs.map(c => c.id));
+  const sets = new Map<string, NonNullable<RestoreRow['set']>>();
+  for (const c of txs) {
+    const to = before(c).transfer_id;
+    if (typeof to === 'string' && col(c.id, 'transferred_id') !== to) {
+      if (!txIds.has(to) && !unlinks.some(u => u.id === to)) {
+        throw notUndoable(`Row ${c.id}'s transfer partner was not recorded.`);
+      }
+      sets.set(c.id, { transfer_id: to });
+    }
+  }
+  for (const c of unlinks) {
+    const s = states.get(stateKey('transactions', c.id));
+    if (!s?.exists || s.deleted) {
+      stale.push(`${c.id} (row)`);
+      continue;
+    }
+    if (s.columns.transferred_id !== null || s.columns.description !== null) {
+      stale.push(`${c.id} (transfer_id)`);
+    }
+    const partner = String(before(c).transfer_id);
+    const partnerLine = txs.find(t => t.id === partner);
+    if (!partnerLine || before(partnerLine).transfer_id !== c.id) {
+      throw notUndoable(`Child ${c.id}'s transfer row was not recorded.`);
+    }
+    const payee = before(c).payee;
+    sets.set(c.id, {
+      transfer_id: partner,
+      ...(typeof payee === 'string' ? { payee } : {}),
+    });
+  }
+  if (stale.length > 0) throw conflict(stale);
+
+  // A reconciled row, or an account reconciled after the delete, needs the override
+  const since = Date.parse(String(ctx.entry.attempt?.time));
+  const locked = [...txs, ...unlinks]
+    .filter(c => col(c.id, 'reconciled') === 1)
+    .map(c => c.id);
+  for (const account of accountsOf) {
+    if (Number(await lastReconciledOf(account)) > since) {
+      locked.push(`${account} (reconciled since)`);
+    }
+  }
+  if (locked.length > 0 && !ctx.allowReconciled) {
+    throw notUndoable(
+      `Reconciled: ${locked.join(', ')}; undo it with allow_reconciled set.`,
+    );
+  }
+
+  const row = (table: RestoreRow['table'], c: Change): RestoreRow => ({
+    table,
+    id: c.id,
+    ...(sets.has(c.id) ? { set: sets.get(c.id) } : {}),
+  });
+  return restorePlan(
+    [
+      ...txs.map(c => row('transactions', c)),
+      ...atts.map(c => row('transaction_attachments', c)),
+      ...unlinks.map(c => row('transactions', c)),
+    ],
+    [],
+    logged,
+    logged.map(c => c.id),
+  );
+}
+
+async function planDeleteCategories(ctx: Ctx, group: boolean): Promise<Plan> {
+  const applied = appliedOf(ctx.entry);
+  const all = changesOf(ctx.entry);
+  const ids = strings(ctx.entry.attempt?.ids).filter(i => applied.has(i));
+  const groupId = group ? strings(ctx.entry.attempt?.ids)[0] : undefined;
+  const catIds = group ? ids.filter(i => i !== groupId) : ids;
+  if (catIds.length === 0 || (group && !groupId)) {
+    throw notUndoable('There is nothing to put back.');
+  }
+  const field = (name: string) => all.filter(c => c.field === name);
+  const names = new Map(field('name').map(c => [c.id, c.before]));
+  const groupOf = new Map(field('group_id').map(c => [c.id, c.before]));
+  const transfer = field('transfer_category_id')[0]?.after;
+  const mappings = field('mapping');
+  const cells = all.flatMap(c => {
+    const month = /^budgeted:(\d{4}-\d{2})$/.exec(c.field)?.[1];
+    return month ? [{ ...c, month }] : [];
+  });
+  const valid =
+    catIds.every(
+      i => typeof names.get(i) === 'string' && isId(groupOf.get(i)),
+    ) &&
+    (!group || typeof names.get(groupId!) === 'string') &&
+    (transfer === null || transfer === undefined || isId(transfer)) &&
+    mappings.every(
+      c =>
+        isId(c.id) && isId(c.before) && isId(c.after) && c.after === transfer,
+    ) &&
+    cells.every(
+      c =>
+        c.id === transfer &&
+        Number.isSafeInteger(c.before) &&
+        Number.isSafeInteger(c.after),
+    );
+  if (!valid) throw notUndoable('A logged value is not an id of its kind.');
+  await syncFirst();
+
+  const states = await checkRows([
+    ...catIds.map(i => ({ table: 'categories' as const, id: i })),
+    ...(group ? [{ table: 'category_groups' as const, id: groupId! }] : []),
+    ...mappings.map(c => ({ table: 'category_mapping' as const, id: c.id })),
+  ]);
+  const stale: string[] = [];
+  for (const i of catIds) {
+    const s = states.get(stateKey('categories', i));
+    if (!s?.exists || !s.deleted) stale.push(`${i} (row)`);
+  }
+  const live = await load();
+  if (group) {
+    const s = states.get(stateKey('category_groups', groupId!));
+    if (!s?.exists || !s.deleted) stale.push(`${groupId} (row)`);
+    const wanted = String(names.get(groupId!)).toLowerCase();
+    if (live.some(g => g.name.toLowerCase() === wanted)) {
+      stale.push(`${groupId} (name)`);
+    }
+  } else {
+    const gid = String(groupOf.get(catIds[0]));
+    const liveGroup = live.find(g => g.id === gid);
+    if (!liveGroup) {
+      stale.push(`${gid} (group)`);
+    } else if (
+      liveGroup.categories.some(
+        c =>
+          c.name.toLowerCase() === String(names.get(catIds[0])).toLowerCase(),
+      )
+    ) {
+      stale.push(`${catIds[0]} (name)`);
+    }
+  }
+  if (typeof transfer === 'string') {
+    if (!live.some(g => g.categories.some(c => c.id === transfer))) {
+      stale.push(`${transfer} (category)`);
+    }
+    for (const m of mappings) {
+      if (
+        states.get(stateKey('category_mapping', m.id))?.columns.transferId !==
+        m.after
+      ) {
+        stale.push(`${m.id} (mapping)`);
+      }
+    }
+    for (const c of cells) {
+      const now = await budgeted(c.month, c.id).catch(() => undefined);
+      if (now?.amount !== c.after) stale.push(`${c.id}:${c.month} (cell)`);
+    }
+  }
+  if (stale.length > 0) throw conflict(stale);
+
+  const rows: RestoreRow[] = [
+    ...catIds.map(i => ({ table: 'categories' as const, id: i })),
+    ...(group ? [{ table: 'category_groups' as const, id: groupId! }] : []),
+    ...mappings.map(m => ({
+      table: 'category_mapping' as const,
+      id: m.id,
+      set: { transferId: m.before as string },
+    })),
+  ];
+  return restorePlan(
+    rows,
+    cells.map(c => ({
+      category: c.id,
+      month: c.month,
+      amount: c.before as number,
+    })),
+    all,
+    ids,
+  );
+}
+
 const PLANNERS: Record<string, (ctx: Ctx) => Promise<Plan>> = {
   write_update_transactions: planUpdateTransactions,
   write_create_transactions: planCreateTransactions,
@@ -549,6 +879,9 @@ const PLANNERS: Record<string, (ctx: Ctx) => Promise<Plan>> = {
   write_update_category_group: ctx => planCategoryUpdate(ctx, true),
   write_create_category: ctx => planCategoryCreate(ctx, false),
   write_create_category_group: ctx => planCategoryCreate(ctx, true),
+  write_delete_transactions: planDeleteTransactions,
+  write_delete_category: ctx => planDeleteCategories(ctx, false),
+  write_delete_category_group: ctx => planDeleteCategories(ctx, true),
 };
 
 type RegisterRead = <S extends z.ZodRawShape>(
@@ -560,7 +893,7 @@ type RegisterRead = <S extends z.ZodRawShape>(
 
 /** `write_undo` (a write tool, with its own access) and `list_writes` (a read tool). */
 export function registerUndoTools(
-  write: <S extends z.ZodRawShape>(
+  tool: <S extends z.ZodRawShape>(
     name: string,
     description: string,
     shape: S,
@@ -597,9 +930,9 @@ export function registerUndoTools(
     },
   );
 
-  write(
+  tool(
     'write_undo',
-    "Undo one of this identity's earlier writes by its write_id (from the write's result or list_writes): transaction creates and updates, budget amounts (also copy last month and set to average), and category and group creates and updates. It restores the logged values and is refused, changing nothing, if any of them changed since or a created row is in use. A write can be undone once. Reversing a write needs the scopes that write needed. Moves, paycheck skips, deletes and account tools are not undoable.",
+    "Undo one of this identity's earlier writes by its write_id (from the write's result or list_writes): transaction creates and updates, budget amounts (also copy last month and set to average), category and group creates and updates, and deletes of transactions, categories and category groups (sync first; the deleted rows come back with their ids). It restores the logged values and is refused, changing nothing, if any of them changed since or a created row is in use. A write can be undone once. Reversing a write needs the scopes that write needed. Moves, paycheck skips and account tools are not undoable.",
     {
       write_id: id,
       allow_reconciled: z.boolean().optional(),
@@ -678,9 +1011,16 @@ export function registerUndoTools(
           allowReconciled: Boolean(allow_reconciled),
         });
         // Undoing a create deletes: the delete limit, never a raised row limit
-        if (plan.deletes) requireDeleteRows(log, plan.steps.length);
-        else if (plan.cells) requireCells(log, plan.steps.length);
-        else requireRows(log, plan.steps.length);
+        if (plan.restores) {
+          requireRows(log, plan.restores.rows);
+          if (plan.restores.cells > 0) requireCells(log, plan.restores.cells);
+        } else if (plan.deletes) {
+          requireDeleteRows(log, plan.steps.length);
+        } else if (plan.cells) {
+          requireCells(log, plan.steps.length);
+        } else {
+          requireRows(log, plan.steps.length);
+        }
       } catch (error) {
         if (error instanceof Refusal) refuse(error, own);
         throw error;
@@ -695,17 +1035,30 @@ export function registerUndoTools(
           for (const step of plan.steps) {
             try {
               await step.run();
-              applied.push(step.id);
+              applied.push(...(step.ids ?? [step.id]));
             } catch (error) {
               stderrLine(log, `write_undo failed (call ${callId})`, error);
               return { applied, failed: callId };
             }
           }
-          return { applied };
+          // Read back what this server holds now; a later sync can still override it
+          const overridden = plan.verify
+            ? await plan.verify().catch(() => [])
+            : [];
+          return {
+            applied,
+            ...(overridden.length > 0 ? { detail: { overridden } } : {}),
+          };
         },
         async outcome => ({
           undid: write_id,
           restored: outcome.applied?.length ?? 0,
+          ...(outcome.detail?.overridden
+            ? {
+                overridden: outcome.detail.overridden,
+                note: 'These were restored, but a later change on this server already overrode them. The result reflects this copy of the budget only.',
+              }
+            : {}),
           ...(outcome.failed
             ? {
                 failed: outcome.failed,

@@ -37,8 +37,20 @@ final class PageRecoveryUITests: XCTestCase {
         launch(deaths: 4)
         let alert = app.alerts["The budget page stopped working"]
         XCTAssertTrue(alert.waitForExistence(timeout: 90), "no sheet after the fourth end")
-        alert.buttons["Reload"].tap()
-        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: alert)
-        waitForExpectations(timeout: 10)
+        // On CI the first tap can have no effect: the recording shows the alert
+        // fully on screen and untouched while the page behind it is still
+        // starting. So tap again, and log how many it took.
+        var taps = 0
+        var result = XCTWaiter.Result.timedOut
+        while taps < 5 && result != .completed {
+            if alert.buttons["Reload"].isHittable {
+                alert.buttons["Reload"].tap()
+                taps += 1
+            }
+            let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: alert)
+            result = XCTWaiter.wait(for: [gone], timeout: 4)
+        }
+        print("page recovery UI test: Reload took \(taps) tap(s)")
+        XCTAssertEqual(result, .completed, "Reload did not dismiss the alert after \(taps) taps")
     }
 }

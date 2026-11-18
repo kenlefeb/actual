@@ -43,9 +43,10 @@
     - the remainder;
     - each field-error code;
     - the draft-key whitelist refuses unlisted keys and wrong types with `[native:invalid-draft]`;
-    - `userFields` (every field the person edited): such a field is never changed except by a preview's payee change, and is then listed in `replaced` with its previous value; a rule value refused for it is listed in `overridden`;
+    - the draft is the person's input; `userFields` (every field the person edited, plus a preset account) is never changed by a rule, including on a payee change; each such field a rule would set differently is returned in `suggestions` with the rule's value;
+    - `result` and `resultDigest`: the same input gives the same digest; a suggestion, when taken (field removed from `userFields`), gives exactly the suggested value;
     - a trailing decimal separator (`12.`, `12,` in comma-decimal formats) reads as no fraction, in the preview and the save; a trailing grouping separator is refused;
-    - `ruleFields` lists rule-filled fields;
+    - `ruleFields` lists fields a rule set that the person did not touch;
     - amount text over 100 characters, non-finite, fractional minor units and values beyond `MAX_SAFE_INTEGER` are `amount-invalid`;
     - dates outside 1900-01-01 to 2999-12-31 are `date-invalid`, and future dates are allowed;
     - notes over `transaction-notes-max-length` on any row are `notes-too-long`;
@@ -68,8 +69,8 @@
       - a `newId` that is not a lowercase UUID (`ABC`, `../x`, upper case, 500 characters) is `[native:invalid-draft]`;
       - an undone or deleted row is `[native:changed-since]` with no id;
     - an edit without a digest, or with a changed parent, child, partner, link or schedule, is `[native:changed-since]`;
-    - for an add, rules run first with every `userFields` field kept (no payee-change exception at save), and any difference from the draft is `[native:preview-stale]`, including a rule that sets a closed account;
-    - the loop test: notes typed before a payee whose rule sets notes save on the first attempt; after a `preview-stale`, saving the new preview's draft succeeds;
+    - for an add, the result is computed once on the same input as the preview; it is stored only when its digest equals `previewDigest`, or, with none, when no rule changed the input; otherwise `[native:preview-stale]`; a rule that sets a closed account refuses;
+    - loop tests: notes typed before a payee whose rule sets notes save on the first attempt; an append-notes rule saves "lunch #bulk" on the first attempt with a digest, and on the second without one, never appending twice;
     - the touched set (children removed, partners old and new) is computed on the post-rules draft before any write;
     - `[native:invalid-draft:<codes>]` for each validation rule, with only fixture codes in the message;
     - `[native:needs-confirmed-reconciled]` for a reconciled row, child, partner or split parent (`"true"` and `1` refused);
@@ -99,6 +100,7 @@
   - add the four names to `native-bridge-allowlist.json` and the Swift client list, with a test that the lists are equal;
   - add the page argument lists in `nativeBridge.ts`, with a test that extra fields are dropped;
   - add the origin-guard names;
+  - the save's argument list adds `previewDigest` (PR #453);
   - the page-side checks for `webTransactionAction`: the closed action set, an id matching `[A-Za-z0-9_-]+` that is a live transaction, and `encodeURIComponent` in the path;
   - add a test that `transactions-batch-update`, `transaction-add`, `rules-run` and `payee-create` are refused natively;
   - add four `coverage.json` skips;
@@ -123,8 +125,9 @@
   - `newId` is kept for the sheet's lifetime and reused by Retry;
   - an edit retry that gets `changed-since` re-reads and finishes when the stored values equal the draft;
   - `preview-stale` shows "Rules changed this; check and save again.", previews again and shows the rule's result;
-  - every field the person edits joins `userFields`, whether or not a rule touched it; a field leaves it only when a payee change replaces it without Restore; `overridden` shows "Set by a rule" as overridden;
-  - replaced fields offer Restore;
+  - the input is kept apart from the last `result`, and a rule's output is never copied into it; every field the person edits joins `userFields`; a field leaves it only through "Use rule's value", which previews again;
+  - suggestions show under their field with "Use rule's value", announced to VoiceOver;
+  - the save sends the last `resultDigest`, or null while unchecked;
   - a form-read `not-found` shows the unavailable state;
   - the preset account comes from the register on screen, else `AddTransaction.lastAccountId` if still open, else empty and required; the key is written after each successful add;
   - Delete of a reconciled row is one dialog with the reconciled line, which sends `confirmedReconciled: true`;
@@ -158,7 +161,8 @@
 - the copy table (frame, element, text), approved by the Product Owner, including two new rows for approval:
   - Amount / `amount-invalid`: a sentence naming the budget's decimal separator with an example ("Use . for decimals, like 12.50"; "Use , for decimals, like 12,50");
   - Amount / `amount-negative`: a sentence that points to the Expense and Income control;
-- "Set by a rule", the replaced-fields notice and Restore;
+- "Set by a rule", and the rule suggestion line with its "Use rule's value" button under a hand-set field;
+- copy-table rows for approval: the suggestion line ("The rule for {payee} would set {Field} to {value}.") and the "Use rule's value" button, with its VoiceOver announcement;
 - the "Not checked" state after a preview timeout;
 - Cancel's discard confirmation;
 - Delete's confirmation, naming the partner and a closed account;
@@ -185,7 +189,7 @@ Then:
 - [ ] 3.0 Transfer state (design D8a): the three-way control, To account and direction, the category rules, and switching modes. Add UI tests.
 - [ ] 3.0a Category picker (design D8d): search, Uncategorized, tick by id, and the error with Retry. Add UI tests.
 - [ ] 3.0b Copy (design D8e): every string is localized from the approved copy table, with a test for hard-coded strings.
-- [ ] 3.1a The rule indicator, the person's overrides, and the replaced-fields notice with Restore (design D2a). Add UI tests and VoiceOver announcements.
+- [ ] 3.1a The rule indicator, hand-set fields that stay, and suggestions with "Use rule's value" (design D2a). Add UI tests and VoiceOver announcements.
 - [ ] 3.2 Splits: add and remove a child, the remainder in words, the `split-limit` state.
 - [ ] 3.3 Transfers and category rules: the off-budget and on-budget transfer wording.
 - [ ] 3.4 Edit mode:

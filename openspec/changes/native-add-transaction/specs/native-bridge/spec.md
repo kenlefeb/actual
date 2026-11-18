@@ -80,7 +80,7 @@ loot-core SHALL accept a draft and its splits only with the listed keys and type
 - **THEN** the preview fails with `[native:invalid-draft]`
 
 ### Requirement: The preview evaluates amounts and rules without writing
-`native/transaction-preview` SHALL return the draft as the web form would show it after a field commit, each amount evaluated from its text as signed integer minor units, the split remainder, the fields set by rules, any fields a payee change replaced with their previous values, and field errors from a closed set of codes. It SHALL have no side effects: no table written, no payee created, no undo step.
+`native/transaction-preview` SHALL return the result of one rules run on the person's input with amounts evaluated as signed minor units, a digest of that result, the fields a rule set, a suggestion for each hand-set field a rule would set differently, the split remainder, and field errors from a closed set of codes. It SHALL have no side effects: no table written, no payee created, no undo step.
 
 #### Scenario: Arithmetic
 - **WHEN** a draft carries amount text `12.50+3*2` with Outflow in a `1,000.33` budget
@@ -105,7 +105,7 @@ loot-core SHALL accept a draft and its splits only with the listed keys and type
 - **THEN** "Brand New Payee" is created in the save's undo step, and undo removes it
 
 ### Requirement: Rules keep the person's own fields
-The person's fields SHALL be every field they set or cleared by hand in the sheet. A preview's rules SHALL not change them, except that a payee change may replace one, returned with its previous value; the save SHALL never change them. A field whose rule value was refused SHALL be returned as overridden. A draft with an id SHALL run no rules.
+The person's fields SHALL be every field they set or cleared by hand in the sheet, plus a preset account. Rules SHALL never change them, in the preview, on a payee change, or at save; for each one a rule would set differently, the preview SHALL return the rule's value as a suggestion. The draft SHALL hold only the person's input, never a rule's output. A draft with an id SHALL run no rules.
 
 #### Scenario: A cleared category
 - **GIVEN** the Costco rule filled Groceries, then the person cleared the category
@@ -115,17 +115,17 @@ The person's fields SHALL be every field they set or cleared by hand in the shee
 #### Scenario: Typed before any rule touched it
 - **GIVEN** the person typed notes "lunch" before choosing a payee, and a rule "payee is Costco → notes Bulk run"
 - **WHEN** the person picks Costco and saves
-- **THEN** the notes stay "lunch", the preview lists notes as overridden, and the first save succeeds with no `preview-stale`
+- **THEN** the preview keeps notes "lunch" and suggests "Bulk run", and the first save stores "lunch" with no `preview-stale`
 
-#### Scenario: Two attempts at most
-- **GIVEN** a save refused with `[native:preview-stale]` because a rule changed after the last preview
-- **WHEN** the client saves the new preview's draft with its person's fields, and no rule changes in between
-- **THEN** the save succeeds
-
-#### Scenario: Replaced by a payee change
+#### Scenario: A hand-set field stays on a payee change
 - **GIVEN** the person chose category Dining by hand
-- **WHEN** the payee changes to Costco
-- **THEN** the preview returns Groceries and lists category as replaced, previously Dining
+- **WHEN** the payee changes to Costco, whose rule sets Groceries
+- **THEN** the result keeps Dining, and the preview suggests Groceries for the category
+
+#### Scenario: Taking the suggestion
+- **GIVEN** that suggestion
+- **WHEN** native code previews again with category removed from the person's fields
+- **THEN** the result has Groceries, marked as set by a rule, and saving stores Groceries
 
 ### Requirement: Amount numbers follow the budget's number format
 Preview and save SHALL read each number by the budget's format: grouping only between integer digits at the format's group positions (3 digits, or last 3 then 2 for `1,00,000`), with space, NBSP and U+202F interchangeable in `space-comma` and `'` and U+2019 in `apostrophe-dot`; one decimal separator. A number not fully read SHALL be `amount-invalid`.
@@ -270,7 +270,7 @@ The preview and the save SHALL report `account-closed` when the transaction's ac
 - **THEN** the call fails with `[native:invalid-draft]`
 
 ### Requirement: Rules run first at save and must match the preview
-For a new transaction the save SHALL evaluate the draft's amounts, then run the rules keeping the person's own fields. If any rule-settable field (account, date, payee, category, notes, cleared, amount, on any row) then differs, it SHALL refuse with `[native:preview-stale]` before writing; amount evaluation is not a difference. Validation and the reconciled check SHALL apply to the result.
+For a new transaction the save SHALL compute the result as the preview does, once, on the same input. It SHALL store it only if its digest equals the preview digest sent, or, with none sent, if no rule changed a rule-settable field of the input; otherwise `[native:preview-stale]`, before writing. Validation and the reconciled check SHALL apply to the result.
 
 #### Scenario: Evaluating the amount is not a difference
 - **GIVEN** a draft with amount text `12.50+3*2`, and rules that change nothing
@@ -281,6 +281,16 @@ For a new transaction the save SHALL evaluate the draft's amounts, then run the 
 - **GIVEN** a preview showed category Groceries, then a sync edited the rule to set Household
 - **WHEN** native code saves the previewed draft
 - **THEN** the call fails with `[native:preview-stale]` and nothing is stored
+
+#### Scenario: An append-notes rule does not loop
+- **GIVEN** a rule "payee is Costco → append notes ' #bulk'", and the person's notes "lunch"
+- **WHEN** native code previews, then saves the same input with the preview's digest
+- **THEN** the save stores "lunch #bulk" on the first attempt, with no `preview-stale`
+
+#### Scenario: Unchecked, then once more
+- **GIVEN** the same rule, and a save with no preview digest
+- **WHEN** the save refuses with `[native:preview-stale]`, native code previews the same input, and saves with that digest
+- **THEN** the second save stores "lunch #bulk", not "lunch #bulk #bulk"
 
 #### Scenario: A rule sets a closed account
 - **GIVEN** a rule sets the account to a closed account
@@ -296,7 +306,7 @@ A save and `native/transactions-delete` SHALL treat a touched row as reconciled 
 - **THEN** the call fails with `[native:needs-confirmed-reconciled]` and nothing changes
 
 ### Requirement: A repeated add never stores twice
-An add SHALL carry a new id chosen by native code: a lowercase UUID (8-4-4-4-12 hex), or the save SHALL refuse with `[native:invalid-draft]`. A repeat SHALL match only a live top-level row in the draft's account with the same date, amount, payee, category and child count: it returns that id and writes nothing. Any other row with that id SHALL refuse, `[native:changed-since]` if deleted, else `[native:invalid-draft]`. This SHALL hold across restarts.
+An add SHALL carry a new id chosen by native code: a lowercase UUID (8-4-4-4-12 hex), or the save SHALL refuse with `[native:invalid-draft]`. A repeat SHALL match only a live top-level row in the draft's account with the same date, amount, payee, category and child count as the draft's result: it returns that id and writes nothing. Any other row with that id SHALL refuse, `[native:changed-since]` if deleted, else `[native:invalid-draft]`. This SHALL hold across restarts.
 
 #### Scenario: Retry after an engine restart
 - **GIVEN** a save of new id N landed, then the engine restarted before its answer arrived

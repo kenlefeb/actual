@@ -93,16 +93,22 @@ The page forwards `draft` as one object, so loot-core accepts only these keys an
 
 Keys such as `reconciled`, `imported_id` and `tombstone` never reach `batchUpdateTransactions`.
 
-**`userFields`** names every field the person has set or cleared by hand in this sheet, whether or not a rule had touched it yet (D2a, amended 2026-11-18 after PR #451). It replaces the web's `clearedFields`. Allowed names: `account`, `date`, `payee`, `category`, `notes`, `cleared`, `amount`, `splits`.
+**The draft is the person's input,** never a rule's output (amended 2026-11-18, PR #453). It holds what the person typed or chose, plus the preset account, and nothing a rule produced. The view model sends the same input to the preview and to the save, and shows the preview's result beside it. The rules therefore always run once, on the same input, in the preview and in the save.
 
-The view model:
-- adds a field when the person edits or clears it;
-- removes it only when a preview's payee change replaces it (it is in `replaced`) and the person does not tap Restore;
-- keeps it after Restore.
+**`userFields`** names every field the person has set or cleared by hand in this sheet, whether or not a rule had touched it, plus the preset account (D2a). Rules never change a field in `userFields`: not in the preview, not on a payee change, not at the save. It replaces the web's `clearedFields`. Allowed names: `account`, `date`, `payee`, `category`, `notes`, `cleared`, `amount`, `splits`. Defaults the sheet fills in (today's date, the cleared default) are not in it.
+
+The view model adds a field when the person edits or clears it. It removes a field only when the person taps "Use rule's value" for it (D2a).
 
 ### `native/transaction-preview {draft, changedField}`
 
-It returns `{draft, ruleFields, overridden, replaced, remaining, errors}` and has no side effects. `overridden` lists each field in `userFields` that a rule would have set to a different value; the person's value was kept (added 2026-11-18). The sheet marks such a field as overriding a rule, with wording from the copy table. It writes to no table, creates no payee, and makes no undo step (amended 2026-11-18 after the review of PR #447).
+`changedField` is kept in the shape but no longer changes how the rules run (PR #453). The rules always run on the whole input.
+
+It returns `{result, resultDigest, ruleFields, suggestions, remaining, errors}` and has no side effects. It writes to no table, creates no payee, and makes no undo step (amended 2026-11-18 after the review of PR #447).
+
+- **`result`** is the input after one run of the rules, in the draft's shape, with amounts evaluated.
+- **`resultDigest`** is a SHA-256 over `result`'s rule-settable fields on every row: account, date, payee or payee name, category, notes, cleared and amount. Swift treats it as opaque.
+- **`ruleFields`** lists the fields of `result` that a rule set (the input left them empty or defaulted). The sheet marks them "Set by a rule".
+- **`suggestions`** lists `{field, row, value}` for each field in `userFields` that the rules would set to a different value. `value` is the rule's value, as the engine shows it: a category id and name, a payee id or name, notes text, or an amount in minor units. It replaces the earlier `replaced` and `overridden` (PR #453).
 
 - **Payee names.** The rules run with payee names left unresolved. This is the change's only upstream edit:
   - in `packages/loot-core/src/server/transactions/transaction-rules.ts`, `runRules` gets one optional parameter (`{ resolvePayeeNames: false }`);
@@ -150,12 +156,9 @@ It returns `{draft, ruleFields, overridden, replaced, remaining, errors}` and ha
   **Deliberate differences from the web.** The web's `evalArithmetic` strips all whitespace, accepts `^` and a unary minus, and lets `currencyToAmount` guess whether a lone `,` or `.` is decimal or grouping. That lets the text's sign flip the direction. The native engine follows the format exactly and takes the sign only from the control, so no amount is silently regrouped, truncated or reversed.
 
   **The keypad.** Its decimal key types the budget's decimal separator, not the phone locale's. Its accessory row types `+ − × ÷`, and the engine maps them. Swift only inserts characters.
-- **Rules.** For a draft with no `id`, rules run as on the web:
-  - a payee change applies every field the rules set;
-  - any other change fills only empty fields and notes;
-  - a field in `userFields` is never changed, except that a payee change may replace it (web parity), and then it is listed in `replaced` with its previous value.
-  - `ruleFields` lists every field whose value currently comes from a rule.
-  - A draft with an `id` runs no rules.
+- **Rules.** For a draft with no `id`, the rules run once on the input. They fill every field not in `userFields`, and leave every field in `userFields` as the person set it. A draft with an `id` runs no rules.
+  - **Deliberate difference from the web.** The web re-applies every field on a payee change, replacing a hand-set field. Here a hand-set field stays, and the rule's value is offered as a suggestion (Product Owner, PR #453).
+  - A suggestion is computed by running the rules as if that one field were not in `userFields`, keeping its current value. Taking it therefore yields exactly the suggested value.
 - **The split remainder.** `remaining` is the parent minus the children's sum.
 - **Errors.** `errors` maps each field (with a child index for splits) to `{code, detail?}`.
   - `code` comes from `transaction-field-errors.json`.
@@ -178,15 +181,17 @@ It returns `{draft, ruleFields, overridden, replaced, remaining, errors}` and ha
 
 **Debounce.** Swift sends the preview after a field commits, debounced by the named constant `TransactionFormViewModel.previewDebounce` (150 ms). A newer preview supersedes an older one.
 
-### D2a. Rules the person can see and undo
+### D2a. Rules the person can see and choose
 
-- Each field in `ruleFields` shows "Set by a rule" in words, and VoiceOver reads it with the field.
-- The person's own edit to such a field adds it to `userFields`. Their value is then kept until the next payee change.
-- When a payee change replaces fields in `userFields`, the sheet names them ("Category and notes were changed by a rule") with Restore. Restore puts back the previous values from `replaced`, keeps them in `userFields`, and is announced to VoiceOver.
+- **Set by a rule.** A field in `ruleFields`, which the person has not touched, shows "Set by a rule" in words, and VoiceOver reads it with the field.
+- **Editing it.** The person's edit to such a field adds the field to `userFields`, and their value stays from then on.
+- **Suggestions.** For each suggestion, the sheet shows under the field "The rule for {payee} would set {Field} to {value}." with a "Use rule's value" button. VoiceOver announces the line when it appears.
+- **Use rule's value.** Tapping it removes the field from `userFields` and previews again. The rule then sets the field, and it shows "Set by a rule".
+- **Copy.** The exact text comes from the copy table.
 
 ## D3. Save
 
-`native/transaction-save {draft, digest, undoToken, confirmedReconciled}` returns `{id}`. It is one undo step, and all or nothing.
+`native/transaction-save {draft, previewDigest, digest, undoToken, confirmedReconciled}` returns `{id}`. It is one undo step, and all or nothing. For an add, `draft` is the same input the last preview received, and `previewDigest` is that preview's `resultDigest` (null while the preview is unchecked).
 
 ### Add or edit
 
@@ -199,19 +204,23 @@ Every step refuses with no write.
 
 1. **Shape.** The draft has the keys and types of D2, and `undoToken` is present. Otherwise `[native:invalid-draft]`.
 2. **Repeat of an add.** `newId` must be a lowercase UUID, or the save refuses with `[native:invalid-draft]`. The hand-off's `[A-Za-z0-9_-]+` check therefore always accepts the person's own transaction. A row with id `newId` may already exist:
-   - **Live, top-level and in the draft's account**, with the same date, amount, payee, category and child count as the draft evaluates to: return `{id: newId}` and write nothing.
+   - **Live, top-level and in the draft's account**, with the same date, amount, payee, category and child count as the draft's result (step 4): return `{id: newId}` and write nothing.
    - **Live, but a split child, in another account, or different:** `[native:invalid-draft]`, with no id returned.
    - **Tombstoned** (the save was undone or deleted): `[native:changed-since]`, with no id returned.
 
    The row itself is the durable record, so a reload, an engine restart or a trimmed undo history cannot cause a second save. Nothing else is kept, so no retention setting is needed.
 3. **Edit digest.** An edit without `digest`, or with one that no longer equals the recomputed digest, refuses with `[native:changed-since]`.
-4. **Rules, for an add only.** The engine first evaluates the submitted draft as the preview does: amounts from `amountText`. That evaluation is not a difference. Then the rules run. At save, every field in `userFields` keeps the person's value with no exception: the preview's payee-change replacement belongs to a field commit, not to the save. The result is compared with the evaluated draft over every field a rule can set, on the parent and every child: account, date, payee, category, notes, cleared and amount.
-   - Any difference refuses with `[native:preview-stale]` before anything is written. The view model then previews again, shows the result with "Rules changed this; check and save again.", and the person saves again.
-   - No difference: the save continues.
+4. **Rules, for an add only.** The engine computes the result exactly as the preview does: it evaluates the amounts, then runs the rules once on the input, keeping every field in `userFields`.
+   - **With a `previewDigest`:** the result's digest must equal it.
+   - **Without one** (the preview was unchecked): the result must equal the evaluated input over the rule-settable fields. In other words, no rule changed anything, because the person saw only their own input.
+   - **Otherwise** the save refuses with `[native:preview-stale]` before anything is written. The view model then previews the same input and shows the result with "Rules changed this; check and save again."
+   - **If it passes,** the result is what is validated and stored.
 
-   This holds whether or not the last preview answered, so nothing the person did not see is stored, even while a field is unchecked.
-
-   **No refusal loop.** After a `preview-stale`, the view model takes the new preview's draft as the form and adds nothing to it beyond what the person edits. The next save then submits exactly what the rules produce, with the person's fields kept. So a correct client reaches a stored save in at most two attempts, unless the rules or the budget change again between them, which refuses again for the same honest reason.
+   **Termination, with no idempotency assumption.** The rules run exactly once per call, on the same input, so the result changes only when the rules or budget data change. That includes a non-idempotent rule such as append-notes, which appends once to the person's notes in the preview and once in the save, giving the same text.
+   - A save after an answered preview therefore stores, unless something changed since that preview.
+   - A save after an unchecked preview stores at the latest on the second attempt: the refusal brings a preview, and the next save carries its digest.
+   - Any further refusal comes from a real change, and shows its new result.
+   - Nothing retries automatically: each save is the person's tap, after they have seen the result.
 5. **Touched set.** It is computed on the draft as it now stands: the parent, its children (added, kept and removed), and every transfer partner, old and new.
 6. **Validation** with the preview's checks: an open account and open transfer accounts; the category rules; children summing to the parent; the children cap; amount, notes, date and payee-name bounds. Any failure refuses with `[native:invalid-draft:<codes>]`, where `<codes>` holds only field codes from the fixture, never text the person typed.
 7. **Reconciled rows.** A touched row counts as reconciled when it, or the split parent of a touched child, is reconciled. Any such row needs `confirmedReconciled === true`, or the save refuses with `[native:needs-confirmed-reconciled]`.
@@ -258,7 +267,7 @@ All are in the `LIMITS` registry and read through `readLimit`. Malformed values 
   - form: `id`, `account_id`;
   - payees: `search`;
   - preview: `draft`, `changedField`;
-  - save: `draft`, `digest`, `undoToken`, `confirmedReconciled`.
+  - save: `draft`, `previewDigest`, `digest`, `undoToken`, `confirmedReconciled`.
 - **Origin guard.** The save and the preview join the origin-guard write names.
 - **Raw handlers stay refused natively, with a test:** `transactions-batch-update`, `transaction-add`, `rules-run` and `payee-create`.
 - **New refusal codes.** `changed-since`, `preview-stale` and `not-found` join the shared `native-refusal-codes.json`, with the fixture tests both sides already run.
@@ -296,7 +305,8 @@ If the rules cases cannot meet 50 ms on this seed, stop and report the measured 
 - **Save timeout.** The sheet shows "Save didn't finish" with Retry. Retry sends the same `newId`, token and draft.
   - For an add, D3 step 2 makes the retry safe.
   - For an edit that did land, the retry gets `changed-since`. The view model re-reads, and if the stored values equal the draft it treats the save as done.
-- **`preview-stale`.** It shows "Rules changed this; check and save again.", previews again, and shows what the rule changed (D2a).
+- **Input and result.** It keeps the person's input (the draft) separately from the last preview's `result` and `resultDigest`. It never copies a rule's output into the input.
+- **`preview-stale`.** It shows "Rules changed this; check and save again.", previews the same input again, and shows the result with its suggestions (D2a).
 - **Background.** No calls while the app is in the background. On return, an open edit sheet re-reads and keeps the draft.
 
 ## D7. Route, switch and hand-offs
@@ -333,7 +343,7 @@ A sheet with large detents, following the Figma Add and Edit frames.
   - The category row is disabled, with its reason in words, for an off-budget account and for a transfer between two on-budget accounts.
   - When a `categories` change event arrives, the view model re-reads the form. If that read fails, the picker shows an error with Retry and keeps the last list.
 - **Other fields.** Account, date, notes (multiline), cleared, a read-only schedule line, and the Documents row (D7).
-- **Rule indicator.** "Set by a rule" on rule-filled fields, and the replaced-fields notice with Restore (D2a).
+- **Rule indicator.** "Set by a rule" on rule-filled fields, and for a hand-set field the rule's suggestion with "Use rule's value" (D2a).
 - **Splits.** Each child has amount, category, payee and notes. The remainder shows in words ("$12.00 left to split", "$3.00 over").
 - **Saving and leaving.**
   - Save gives a success haptic, closes the sheet, and shows an Undo toast. If the undo is refused, the toast reads "Can't undo — changed since".
@@ -389,7 +399,7 @@ These are requirements, not polish.
 - **VoiceOver.**
   - Each field reads its label, its value, "Set by a rule" when that applies, and any error.
   - The amount reads as currency with its direction.
-  - The remainder, replaced fields and Restore are announced.
+  - The remainder and each rule suggestion are announced.
   - Split children are grouped as "Split 2 of 4".
 - **Dynamic Type to AX5.** Labels stack above values, and the amount never truncates.
 - **Appearance and language.** Dark Mode through the HE variables, tabular digits, and localized text.

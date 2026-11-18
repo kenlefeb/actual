@@ -42,6 +42,23 @@ export async function load(): Promise<Group[]> {
   }));
 }
 
+/** Group ids in the engine's order (sort order, income groups included), the order a group move places against. */
+export async function groupOrder() {
+  const { data } = (await api.runQuery(
+    api
+      .q('category_groups')
+      .filter({ tombstone: false })
+      .orderBy(['sort_order', 'id'])
+      .select(['id']),
+  )) as { data: Array<{ id: string }> };
+  return data.map(g => g.id);
+}
+
+/** The id after `id` in `ids`, or null when it is last. */
+export function nextOf(ids: string[], id: string) {
+  return ids[ids.indexOf(id) + 1] ?? null;
+}
+
 function findGroup(groups: Group[], groupId: string, what = 'group_id') {
   const found = groups.find(g => g.id === groupId);
   if (!found) {
@@ -339,8 +356,11 @@ export function registerCategoryWriteTools(
             },
             {
               id: category_id,
-              field: 'before_category_id',
-              before: null,
+              field: 'next_category_id',
+              before: nextOf(
+                from.categories.map(c => c.id),
+                category_id,
+              ),
               after: before_category_id ?? null,
             },
           ],
@@ -383,6 +403,7 @@ export function registerCategoryWriteTools(
         }
       }
       const before = groups.findIndex(g => g.id === group_id);
+      const oldNext = nextOf(await groupOrder(), group_id);
       return loggedWrite(
         auditLog,
         'write_move_category_group',
@@ -391,8 +412,8 @@ export function registerCategoryWriteTools(
           changes: [
             {
               id: group_id,
-              field: 'before_group_id',
-              before: null,
+              field: 'next_group_id',
+              before: oldNext,
               after: before_group_id ?? null,
             },
           ],

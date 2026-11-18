@@ -99,14 +99,19 @@ Keys such as `reconciled`, `imported_id` and `tombstone` never reach `batchUpdat
 
 The view model adds a field when the person edits or clears it. It removes a field only when the person taps "Use rule's value" for it (D2a).
 
-### `native/transaction-preview {draft, changedField}`
+### `native/transaction-preview {draft}`
 
-`changedField` is kept in the shape but no longer changes how the rules run (PR #453). The rules always run on the whole input.
+The rules always run on the whole input. `changedField` is removed from the shape (PR #453): it no longer did anything.
 
 It returns `{result, resultDigest, ruleFields, suggestions, remaining, errors}` and has no side effects. It writes to no table, creates no payee, and makes no undo step (amended 2026-11-18 after the review of PR #447).
 
-- **`result`** is the input after one run of the rules, in the draft's shape, with amounts evaluated.
-- **`resultDigest`** is a SHA-256 over `result`'s rule-settable fields on every row: account, date, payee or payee name, category, notes, cleared and amount. Swift treats it as opaque.
+- **`result`** is the input after one run of the rules, in the draft's shape, with amounts evaluated. Each row also carries `amountText`, the engine's formatting of its amount in the budget's number format, so Swift can copy a value into the input without arithmetic (D6).
+- **`resultDigest`** is computed in the engine: SHA-256, hex, over canonical JSON of the rows a save would store.
+  - The rows are the parent first, then the children in the draft's `splits` order.
+  - Each row has exactly these fields, with keys sorted: `account` (id), `amount` (integer minor units), `category` (id or null), `cleared` (boolean), `date` (`YYYY-MM-DD`), `notes` (string or null), `payee` (`{"id": …}`, `{"name": …}` for an unresolved name, or null), and `schedule` (id or null).
+  - There is no whitespace, and strings are JSON-escaped.
+  - Swift treats the digest as opaque.
+- **Two digests, two purposes.** `resultDigest` says what the person saw: the proposed rows after rules, checked at save. The edit conflict digest (D1, from `readTouchedState`) says what was in the database when the form opened: stored rows, checked for edits and undo. They share no input and are never compared with each other; both are hashed by one canonical helper. An edit sends both. For an edit, no rules run, so its result is the evaluated input.
 - **`ruleFields`** lists the fields of `result` that a rule set (the input left them empty or defaulted). The sheet marks them "Set by a rule".
 - **`suggestions`** lists `{field, row, value}` for each field in `userFields` that the rules would set to a different value. `value` is the rule's value, as the engine shows it: a category id and name, a payee id or name, notes text, or an amount in minor units. It replaces the earlier `replaced` and `overridden` (PR #453).
 
@@ -158,7 +163,7 @@ It returns `{result, resultDigest, ruleFields, suggestions, remaining, errors}` 
   **The keypad.** Its decimal key types the budget's decimal separator, not the phone locale's. Its accessory row types `+ − × ÷`, and the engine maps them. Swift only inserts characters.
 - **Rules.** For a draft with no `id`, the rules run once on the input. They fill every field not in `userFields`, and leave every field in `userFields` as the person set it. A draft with an `id` runs no rules.
   - **Deliberate difference from the web.** The web re-applies every field on a payee change, replacing a hand-set field. Here a hand-set field stays, and the rule's value is offered as a suggestion (Product Owner, PR #453).
-  - A suggestion is computed by running the rules as if that one field were not in `userFields`, keeping its current value. Taking it therefore yields exactly the suggested value.
+  - **Finding suggestions.** The preview makes one extra rules run with no field protected, keeping the person's values as the starting point. Every hand-set field whose value that run changes is a candidate. Each candidate is then confirmed with a run that unprotects only that field, and the confirmed value is the suggestion, so taking it yields exactly that value. The extra runs are unprotected in the sense of ignoring `userFields`; they write nothing. With no hand-set fields, there are no extra runs.
 - **The split remainder.** `remaining` is the parent minus the children's sum.
 - **Errors.** `errors` maps each field (with a child index for splits) to `{code, detail?}`.
   - `code` comes from `transaction-field-errors.json`.
@@ -221,6 +226,11 @@ Every step refuses with no write.
    - A save after an unchecked preview stores at the latest on the second attempt: the refusal brings a preview, and the next save carries its digest.
    - Any further refusal comes from a real change, and shows its new result.
    - Nothing retries automatically: each save is the person's tap, after they have seen the result.
+
+   **Rules that never settle.** A rule that depends on time, or is otherwise non-deterministic, can give a different result on every run. After two `preview-stale` refusals in a row on the same input:
+   - The view model stops refreshing on its own. It compares the last two results field by field, using engine values only, and the sheet says in plain words which fields the rules keep changing ("Rules keep changing Notes. Keep the value shown, or change it yourself."), from the copy table.
+   - The person can keep the value shown for each such field. "Keep this value" copies the engine's displayed value into the input (for an amount, the result row's `amountText`) and adds the field to `userFields`, so no rule can change it. The view model then previews again, and the next save carries that preview's `resultDigest`.
+   - **Guarantee:** each round makes at least one more field hand-set, and a draft has a finite number of rule-settable fields. When all the changing fields are hand-set, the rules can no longer change the result, so the save stores. Every stored value was shown to the person, and nothing is stored without their tap.
 5. **Touched set.** It is computed on the draft as it now stands: the parent, its children (added, kept and removed), and every transfer partner, old and new.
 6. **Validation** with the preview's checks: an open account and open transfer accounts; the category rules; children summing to the parent; the children cap; amount, notes, date and payee-name bounds. Any failure refuses with `[native:invalid-draft:<codes>]`, where `<codes>` holds only field codes from the fixture, never text the person typed.
 7. **Reconciled rows.** A touched row counts as reconciled when it, or the split parent of a touched child, is reconciled. Any such row needs `confirmedReconciled === true`, or the save refuses with `[native:needs-confirmed-reconciled]`.
@@ -266,7 +276,7 @@ All are in the `LIMITS` registry and read through `readLimit`. Malformed values 
 - **The page's argument lists.** `nativeBridge.ts` forwards only the listed fields, and drops anything else before loot-core:
   - form: `id`, `account_id`;
   - payees: `search`;
-  - preview: `draft`, `changedField`;
+  - preview: `draft`;
   - save: `draft`, `previewDigest`, `digest`, `undoToken`, `confirmedReconciled`.
 - **Origin guard.** The save and the preview join the origin-guard write names.
 - **Raw handlers stay refused natively, with a test:** `transactions-batch-update`, `transaction-add`, `rules-run` and `payee-create`.
@@ -281,12 +291,12 @@ All are in the `LIMITS` registry and read through `readLimit`. Malformed values 
 **Measured,** each with median and p95 printed, and the median gated under 50 ms:
 
 - `native/payees` with a two-letter search, and with an empty one;
-- a payee-change preview on a new transaction;
+- a payee-change preview on a new transaction with three hand-set fields that the rules would set differently, so the suggestion runs are included;
 - an amount-change preview on the split;
 - the form read of the split;
 - a save of a new transaction (rules run).
 
-If the rules cases cannot meet 50 ms on this seed, stop and report the measured numbers to the Director before changing the design, as ADR 11's gate did.
+If the rules cases cannot meet 50 ms on this seed, including the suggestion runs, stop and report the measured numbers to the Director before changing the design, as ADR 11's gate did.
 
 ## D6. View model
 

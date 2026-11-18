@@ -207,6 +207,17 @@ On iPhone, the category picker SHALL list categories by group, filter by a typed
 - **GIVEN** a category was added on another device and the re-read fails
 - **THEN** the picker keeps its list and shows an error with Retry
 
+### Requirement: Rules that keep changing are settled by the person
+On iPhone, after two refusals in a row because rules changed the result of the same input, the sheet SHALL stop refreshing on its own, name in plain words the fields the rules keep changing, and offer to keep the value shown for each. A kept value becomes the person's own, so the next save stores what was shown.
+
+#### Scenario: A time-dependent rule
+- **GIVEN** a rule whose notes change on every run, and two saves refused because of it
+- **THEN** the sheet says the rules keep changing Notes, and offers to keep the notes shown
+
+#### Scenario: Keeping the value
+- **WHEN** the person keeps the notes shown and saves
+- **THEN** exactly those notes are stored, and the save is not refused again for Notes
+
 ### Requirement: An unchecked field does not block saving
 On iPhone, a timed-out preview SHALL retry once by itself and once on return to the foreground, then show "Couldn't check this yet." with Check Again. Save SHALL stay allowed. If the save's own rule run changes anything the sheet showed, nothing SHALL be stored and the sheet SHALL show the new result with "Rules changed this; check and save again."; otherwise the save SHALL store what was shown.
 

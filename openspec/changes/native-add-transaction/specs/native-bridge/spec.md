@@ -269,6 +269,21 @@ The preview and the save SHALL report `account-closed` when the transaction's ac
 - **WHEN** native code saves without `undoToken`
 - **THEN** the call fails with `[native:invalid-draft]`
 
+### Requirement: The result digest is canonical and separate
+`resultDigest` SHALL be SHA-256 over canonical JSON of the rows a save would store (parent, then children in input order), each with exactly account, amount in minor units, category, cleared, date, notes, payee as a tagged id or name, and schedule, keys sorted. It SHALL be computed in the engine and be separate from the edit conflict digest; an edit sends both.
+
+#### Scenario: Same input, same digest
+- **WHEN** native code previews the same input twice with no change to rules or data
+- **THEN** both previews return the same `resultDigest`
+
+#### Scenario: Key order does not matter
+- **WHEN** two inputs differ only in the order of their JSON keys
+- **THEN** their result digests are equal
+
+#### Scenario: An edit sends both
+- **WHEN** native code saves an edit
+- **THEN** a wrong edit digest refuses with `[native:changed-since]`, and a wrong `previewDigest` refuses with `[native:preview-stale]`
+
 ### Requirement: Rules run first at save and must match the preview
 For a new transaction the save SHALL compute the result as the preview does, once, on the same input. It SHALL store it only if its digest equals the preview digest sent, or, with none sent, if no rule changed a rule-settable field of the input; otherwise `[native:preview-stale]`, before writing. Validation and the reconciled check SHALL apply to the result.
 
@@ -286,6 +301,10 @@ For a new transaction the save SHALL compute the result as the preview does, onc
 - **GIVEN** a rule "payee is Costco → append notes ' #bulk'", and the person's notes "lunch"
 - **WHEN** native code previews, then saves the same input with the preview's digest
 - **THEN** the save stores "lunch #bulk" on the first attempt, with no `preview-stale`
+
+#### Scenario: A forged or stale digest only refuses
+- **WHEN** native code saves an input with a `previewDigest` that is made up, or from an earlier preview of a different input
+- **THEN** the call fails with `[native:preview-stale]`, nothing is stored, and the engine never stores a result it did not compute in this call
 
 #### Scenario: Unchecked, then once more
 - **GIVEN** the same rule, and a save with no preview digest
@@ -402,7 +421,7 @@ Swift SHALL send `webTransactionAction` only with a saved, live id from the form
 - **THEN** it ignores the message
 
 ### Requirement: Form reads, previews and saves meet the latency gate
-On a seed of 5,000 payees, 40 accounts, 150 categories, 300 rules and a 50-child split, the median loot-core time SHALL be under 50 ms for: a two-letter and an empty payee search, a payee-change preview on a new transaction, an amount-change preview on the split, the form read of the split, and a new transaction's save.
+On a seed of 5,000 payees, 40 accounts, 150 categories, 300 rules and a 50-child split, the median loot-core time SHALL be under 50 ms for: a two-letter and an empty payee search, a payee-change preview with three hand-set fields to suggest for, an amount-change preview on the split, the form read of the split, and a new transaction's save.
 
 #### Scenario: The perf suite
 - **WHEN** the native perf suite runs in Fork CI

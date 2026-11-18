@@ -44,7 +44,13 @@
     - each field-error code;
     - the draft-key whitelist refuses unlisted keys and wrong types with `[native:invalid-draft]`;
     - the draft is the person's input; `userFields` (every field the person edited, plus a preset account) is never changed by a rule, including on a payee change; each such field a rule would set differently is returned in `suggestions` with the rule's value;
-    - `result` and `resultDigest`: the same input gives the same digest; a suggestion, when taken (field removed from `userFields`), gives exactly the suggested value;
+    - `result` and `resultDigest`:
+      - canonical JSON as in design D2 (rows parent-first then `splits` order; fields account, amount, category, cleared, date, notes, tagged payee, schedule; keys sorted);
+      - the same input gives the same digest, and key order does not matter;
+      - one canonical hash helper is shared with the edit digest, over separate inputs;
+    - each result row carries the engine's `amountText`;
+    - suggestions are found with one unprotected run and confirmed per candidate; taking one (field removed from `userFields`) gives exactly the suggested value; no extra run when nothing is hand-set;
+    - `changedField` is gone from the preview's shape, and the page's argument list is `draft` only;
     - a trailing decimal separator (`12.`, `12,` in comma-decimal formats) reads as no fraction, in the preview and the save; a trailing grouping separator is refused;
     - `ruleFields` lists fields a rule set that the person did not touch;
     - amount text over 100 characters, non-finite, fractional minor units and values beyond `MAX_SAFE_INTEGER` are `amount-invalid`;
@@ -70,6 +76,8 @@
       - an undone or deleted row is `[native:changed-since]` with no id;
     - an edit without a digest, or with a changed parent, child, partner, link or schedule, is `[native:changed-since]`;
     - for an add, the result is computed once on the same input as the preview; it is stored only when its digest equals `previewDigest`, or, with none, when no rule changed the input; otherwise `[native:preview-stale]`; a rule that sets a closed account refuses;
+    - a made-up or stale `previewDigest` refuses with `preview-stale`, and nothing is stored;
+    - an edit checks both digests, each with its own refusal;
     - loop tests: notes typed before a payee whose rule sets notes save on the first attempt; an append-notes rule saves "lunch #bulk" on the first attempt with a digest, and on the second without one, never appending twice;
     - the touched set (children removed, partners old and new) is computed on the post-rules draft before any write;
     - `[native:invalid-draft:<codes>]` for each validation rule, with only fixture codes in the message;
@@ -127,6 +135,10 @@
   - `preview-stale` shows "Rules changed this; check and save again.", previews again and shows the rule's result;
   - the input is kept apart from the last `result`, and a rule's output is never copied into it; every field the person edits joins `userFields`; a field leaves it only through "Use rule's value", which previews again;
   - suggestions show under their field with "Use rule's value", announced to VoiceOver;
+  - after two `preview-stale` refusals in a row on the same input:
+    - it stops refreshing on its own and names the fields whose values differ between the last two results (engine values only);
+    - "Keep this value" copies the engine's value (`amountText` for an amount) into the input and adds the field to `userFields`;
+    - a time-dependent fake rule ends in a stored save;
   - the save sends the last `resultDigest`, or null while unchecked;
   - a form-read `not-found` shows the unavailable state;
   - the preset account comes from the register on screen, else `AddTransaction.lastAccountId` if still open, else empty and required; the key is written after each successful add;
@@ -162,6 +174,7 @@
   - Amount / `amount-invalid`: a sentence naming the budget's decimal separator with an example ("Use . for decimals, like 12.50"; "Use , for decimals, like 12,50");
   - Amount / `amount-negative`: a sentence that points to the Expense and Income control;
 - "Set by a rule", and the rule suggestion line with its "Use rule's value" button under a hand-set field;
+- the "Rules keep changing {fields}" message with "Keep this value", and copy-table rows for both;
 - copy-table rows for approval: the suggestion line ("The rule for {payee} would set {Field} to {value}.") and the "Use rule's value" button, with its VoiceOver announcement;
 - the "Not checked" state after a preview timeout;
 - Cancel's discard confirmation;

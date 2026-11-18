@@ -41,7 +41,9 @@ This answers the risk Security raised: an agent holding `settings:write` can nev
   - `write_undo` restores every logged before value, in one engine save, while each key still holds its logged after value.
   - If any key differs, the undo refuses with the reason "a setting changed since; nothing restored", and changes nothing.
   - Undo needs `settings:write`.
-- **Confirm.** A call that changes `budgetType` (which recalculates the whole budget) or any limit always answers the first call with a dry run and a `confirm`, whatever `confirm_destructive` says. This follows #433's rule for permanent actions and the Product Owner's decision on sc-4691.
+- **Confirm.** Validation runs first, so a call that would be refused never returns a `confirm`. A valid call that changes `budgetType` (which recalculates the whole budget) or any limit always answers the first call with a dry run and a `confirm`, whatever `confirm_destructive` says.
+  - Undoing a `budgetType` change also needs a `confirm`, because it recalculates the budget again.
+  - Undoing a limit change needs none: it restores a value the owner already had. This follows #433's rule for permanent actions and the Product Owner's decision on sc-4691.
   - The dry run lists each key's current and new value.
   - Other preference changes follow `confirm_destructive` as usual.
 

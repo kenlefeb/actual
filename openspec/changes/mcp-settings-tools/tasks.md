@@ -28,6 +28,8 @@
   - `write_undo` restores the values, and refuses when a key changed since.
 - [ ] 1.6 Always confirm for `budgetType` and limits (design D3). Write failing tests first:
   - with `confirm_destructive` false, the first call is a dry run with a `confirm`;
+  - an invalid call is refused without a `confirm`;
+  - `write_undo` of a `budgetType` change needs a `confirm`, and undoing only limits does not;
   - other preference changes follow `confirm_destructive`.
 - [ ] 1.7 Update `coverage.json` and `packages/mcp/README.md`. Run `yarn typecheck`, `yarn lint`, the tests, `yarn check:mcp-coverage` and `openspec validate --all --strict`. Security reviews.
 - [ ] 1.8 Ask Ken, through the Director, whether to add `settings:write` to the production grant. Don't add it without his approval.

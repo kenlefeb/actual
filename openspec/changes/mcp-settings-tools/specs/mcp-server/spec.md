@@ -27,8 +27,8 @@ Every tool SHALL declare the scopes it needs, chosen from: `budget:read` (every 
 
 #### Scenario: Out of range
 - **GIVEN** a grant with `settings:write`
-- **WHEN** the client sets `accounts-write-max-ids` to 900 and confirms
-- **THEN** the call is refused, names the ceiling 500, and nothing changes
+- **WHEN** the client sets `accounts-write-max-ids` to 900
+- **THEN** the first call is refused, names the ceiling 500, returns no `confirm`, and nothing changes
 
 ### Requirement: Settings tools reach only the closed list
 `write_update_settings` SHALL accept only the keys the native settings save accepts: the listed budget preferences and the registry limit ids. It SHALL NOT change, and `get_settings` SHALL NOT return, the server address, encryption, sign-in or user, sync, any key, or the native-screen switches.
@@ -70,7 +70,7 @@ Limits that bound the MCP server SHALL never be settable through `settings:write
 - **THEN** the undo is refused and the limit stays 80
 
 ### Requirement: Budget type and limit changes always confirm
-`write_update_settings` SHALL answer a call that changes `budgetType` or any limit with a dry run listing each key's current and new value and a `confirm`, whatever `confirm_destructive` says, and SHALL change nothing until the confirmed call.
+`write_update_settings` SHALL validate first, refusing an invalid call without a `confirm`. It SHALL answer a valid call that changes `budgetType` or any limit with a dry run listing each key's current and new value and a `confirm`, whatever `confirm_destructive` says, and change nothing until the confirmed call. Undoing it SHALL need a `confirm` when it restores `budgetType`; undoing only limits SHALL not.
 
 #### Scenario: Confirm off
 - **GIVEN** a grant with `settings:write` and `confirm_destructive: false`
@@ -80,3 +80,13 @@ Limits that bound the MCP server SHALL never be settable through `settings:write
 #### Scenario: Confirmed
 - **WHEN** the client repeats the call with the `confirm`
 - **THEN** the budget type is tracking and the budget is recalculated
+
+#### Scenario: Undoing a budget type change
+- **GIVEN** a confirmed change of `budgetType` to tracking
+- **WHEN** the client calls `write_undo` for it
+- **THEN** the first call returns a dry run and a `confirm`, and the budget type changes back only on the confirmed call
+
+#### Scenario: Undoing a limit change
+- **GIVEN** a confirmed change of `accounts-register-page-size` from 50 to 120
+- **WHEN** the client calls `write_undo` for it
+- **THEN** the limit is 50 again on that call, with no `confirm` asked

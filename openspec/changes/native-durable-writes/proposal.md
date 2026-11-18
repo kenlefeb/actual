@@ -13,13 +13,19 @@ The Product Owner's decision (comment 5222): Propose now, top of the native queu
 
 ## What Changes
 
-- **A durability barrier in the storage library.** `absurd-sql` 0.0.54 is carried with a fork-only yarn patch. Its fallback file keeps the chain of pending IndexedDB writes and exposes "when persisted". After the first failed write, it stops writing, so stored data stays at the last good commit.
-- **A loot-core barrier handler.** `native/persisted` waits, up to a limit, for every pending write of the open budget. The answer is stored, not yet stored, or failed.
-- **Native writes reply only once stored.** The page bridge awaits the barrier after every allowlisted write, before it replies to Swift.
-  - Past the wait, the write still replies, and Swift shows "Saved here, not yet stored on this device." until a later "stored" event.
-  - A failed store becomes a refusal with `[native:not-stored]`, and every later write is refused the same way until a reload.
-- **A new limit.** `native-persist-wait-ms` (name "Saving: wait for device storage", default 2000, ceiling 30000) in the limits registry, shown in Settings > Advanced > Limits.
-- **Best-effort flushes on lifecycle events.** The iPhone app flushes when it moves to the background, within a background task. The Mac app flushes when it quits, closes its window or goes to sleep. These are the only protection for edits made in the web screens inside the shells, which are not awaited one by one.
+- **A durability barrier in the storage library.** `absurd-sql` 0.0.54 is carried with a fork-only yarn patch:
+  - its fallback writes now settle on the transaction's `complete`, `abort` or `error`; today they never settle;
+  - they are chained with values captured at flush time;
+  - the library exposes "when persisted" and the storage state;
+  - any failed write sets a latch that stops all further writes, so stored data stays at the last good commit.
+- **A saved write is a stored write.** The Swift bridge client follows each write with a `native/persisted` call, which has its own deadline. It returns the write's result with `stored: true` or `stored: false`. Screens show a write as saved only when stored, and "Saving…" until then; past the wait they show "Saved here, not yet stored on this device." A write is never retried because storage was slow.
+- **Nothing applies after a storage failure, from any source.** The page bridge checks the latch before forwarding any write, and refuses with `[native:not-stored]`. A persistent app-level notice says changes made after the last stored time need to be made again, and offers Reload.
+- **Only stored changes reach the server.** Sync waits for local storage before sending, and sends nothing after a failure. A refused change therefore can't come back as a duplicate.
+- **A new limit.** `native-persist-wait-ms` ("Saving: wait for device storage", default 2000, floor 100, ceiling 4000, under the 5 s bridge deadline).
+- **Best-effort lifecycle flushes:**
+  - iPhone: on backgrounding, within a background task with an expiration handler;
+  - Mac: on quit and window close, and best-effort on sleep.
+- **Test hooks stay out of production.** A build-time constant removes them, and Fork CI checks the bundles.
 
 Mobile scope: the iPhone app and the Mac app, the two native shells. The web screens inside them get the lifecycle flushes only. The web app served by our server, Electron and MCP are not at risk and do not change (design D7).
 
@@ -36,12 +42,16 @@ None.
 ### Modified Capabilities
 
 - `native-bridge`: new requirements:
-  - "Native writes reply once stored"
-  - "A write past the storage wait says it is not yet stored"
-  - "A failed store is refused and stops further writes"
+  - "A write is saved only when storage says so"
+  - "The storage barrier waits for complete"
+  - "Any storage failure latches and is shown app-wide"
+  - "No write applies after a storage failure"
+  - "Only stored changes reach the server"
+  - "The failure notice says what was lost"
   - "The storage wait is a limit"
   - "The shells flush storage before backgrounding or quitting"
   - "Only the native shells wait for storage"
+  - "Test hooks are absent from production"
   - "The barrier is measured and gated"
   - "An acknowledged write survives a page-process kill"
 
@@ -50,10 +60,12 @@ None.
 - **Code:**
   - `.yarn/patches/absurd-sql-npm-0.0.54-*.patch` and its root `package.json` resolution;
   - `packages/loot-core/src/platform/server/fs/index.ts` (a fork-marked `whenPersisted` export, resolving at once on Electron and in the API);
-  - `server/native/app.ts` (`native/persisted`), `refusal.ts` and `fixtures/native-refusal-codes.json` (`not-stored`), `limits.ts`;
-  - `packages/desktop-client/src/native/nativeBridge.ts` (await after writes) and the allowlist (`native/persisted`);
-  - Swift: the iPhone `AppDelegate` and bridge client; the Mac `EngineLifecycle`, `MacEngineHost` and app delegate; the copy table; tests.
-- **Upstream files touched:** none of Actual's beyond the fork-marked `fs/index.ts` export. The patch is to a third-party package.
+  - `server/native/app.ts` (`native/persisted`, `native/storage-state`), `refusal.ts` and `fixtures/native-refusal-codes.json` (`not-stored`), `limits.ts` (the limit and an optional `floor`);
+  - `server/sync/index.ts` (a fork-marked edit: send only after `whenPersisted`, and nothing after a failure);
+  - `packages/desktop-client/src/native/nativeBridge.ts` (the latch check before writes, the `storage-failed` event) and the allowlist (`native/persisted`, `native/storage-state`);
+  - Swift: `NativeBridgeClient` (the read/write table, the two-call write with `stored`); the iPhone `AppDelegate`; the Mac `EngineLifecycle`, `MacEngineHost` and app delegate; the app-level notice; the copy table; tests.
+  - Fork CI: the production-bundle check for test hooks.
+- **Upstream files touched:** fork-marked edits to `fs/index.ts` (exports) and `sync/index.ts` (the send gate, a no-op off the native shells). The patch is to a third-party package.
 - **Reviews:** Tester; Solution Architect; Security Analyst (a patched dependency, a new allowlisted handler); the Product Owner reviews intent.
 
 ## Decisions for Ken

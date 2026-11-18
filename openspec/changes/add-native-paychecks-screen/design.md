@@ -99,7 +99,7 @@ Residual risk: a remote change to the same rows that is applied after the offer'
 
 ### 7. Switch, re-reads, Mac
 
-- A `NativeScreen.paychecks` key in UserDefaults, default off, handled like `NativeScreen.budget` (add-native-budget-screen Decision 1: a user script tells the page, and Settings in the iOS app toggles it).
+- A `NativeScreen.paychecks` key in UserDefaults, reading on when unset (sc-5090), handled like `NativeScreen.budget` (add-native-budget-screen Decision 1: a user script tells the page, and Settings in the iOS app toggles it).
 - The row and the list are overlays shown only while the switch is on and `enabled` is true. Otherwise the web screens show.
 - Re-reads go through `ChangeCoalescer` on `sync-event`s whose tables include paychecks, paycheck_schedules, schedules, transactions, accounts or preferences, and on foreground.
 - The view models live in `NativeBridgeCore`, free of platform code, so the Mac app (sc-3629) reuses them in sc-4352.
@@ -124,4 +124,4 @@ The other names already have lines.
 
 ## Migration Plan
 
-No data migration. Ship behind the default-off switch. Rollback is turning it off.
+No data migration. Ships on, behind a switch (sc-5090). Rollback is turning it off.

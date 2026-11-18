@@ -15,9 +15,9 @@ import {
 import { SettingsGroup } from './SettingsGroup';
 import { SettingsRow } from './SettingsRow';
 
-// Fork-only (sc-3751). Shown only inside the iOS app. Default off: the Budget
-// tab shows the web screen until this is on; the change applies the next time
-// the tab is shown.
+// Fork-only (sc-3751). Shown only inside the iOS app. Budget and Paychecks are
+// on unless turned off here (sc-5090); the change applies the next time the
+// tab is shown.
 export function NativeScreens() {
   const { t } = useTranslation();
   const [budgetOn, setBudgetOn] = useState(() => isNativeScreenOn('budget'));

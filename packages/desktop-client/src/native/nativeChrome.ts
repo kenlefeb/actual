@@ -4,6 +4,8 @@
 // the page to show a section through `window.__actualNativeChrome.navigate`.
 // The message handler exists only inside the iOS app, so everything here is a
 // no-op in a browser.
+import nativeScreenDefaults from '#data/native-screen-defaults.json';
+
 type ChromeMessage =
   | { type: 'route'; path: string; tabBar: boolean }
   | { type: 'closed' }
@@ -96,11 +98,16 @@ export function nativeHaptic(win: ChromeWindow = window) {
   post(win, { type: 'haptic' });
 }
 
+// sc-5090: a shipped screen reads on until the user turns it off; Accounts
+// reads off until story 3611. The app sends explicit values; this is the
+// fallback for an unset one, and matches NativeScreenSwitch.swift.
 export function isNativeScreenOn(
   screen: NativeScreenName,
   win: ChromeWindow = window,
 ) {
-  return win.__actualNativeScreens?.[screen] === true;
+  if (!hasNativeTabBar(win)) return false;
+  const value = win.__actualNativeScreens?.[screen];
+  return nativeScreenDefaults[screen] ? value !== false : value === true;
 }
 
 // sc-4801: the native Reconcile flow ships on, so unset reads as on (Ken,

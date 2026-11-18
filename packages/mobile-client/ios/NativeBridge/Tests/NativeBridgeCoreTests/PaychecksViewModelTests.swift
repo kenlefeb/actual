@@ -248,12 +248,14 @@ final class PaychecksViewModelTests: XCTestCase {
 }
 
 final class PaychecksSwitchTests: XCTestCase {
-    func testIsOffByDefaultAndFollowsItsKey() {
+    func testIsOnByDefaultAndFollowsItsKey() {
         let suite = "PaychecksSwitchTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
-        XCTAssertFalse(NativeScreenSwitch.isPaychecksNative(defaults: defaults))
+        XCTAssertTrue(NativeScreenSwitch.isPaychecksNative(defaults: defaults))
         XCTAssertEqual(NativeScreenSwitch.paychecksKey, "NativeScreen.paychecks")
+        defaults.set(false, forKey: NativeScreenSwitch.paychecksKey)
+        XCTAssertFalse(NativeScreenSwitch.isPaychecksNative(defaults: defaults))
         defaults.set(true, forKey: NativeScreenSwitch.paychecksKey)
         XCTAssertTrue(NativeScreenSwitch.isPaychecksNative(defaults: defaults))
     }

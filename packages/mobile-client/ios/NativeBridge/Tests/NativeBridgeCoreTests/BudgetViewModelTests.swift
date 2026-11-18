@@ -623,8 +623,9 @@ final class NativeScreenSwitchTests: XCTestCase {
         return defaults
     }
 
-    func testUnsetMeansTheWebScreen() {
-        XCTAssertEqual(NativeScreenSwitch.screen(for: .budget, defaults: defaults()), .web)
+    // sc-5090: Budget ships on, so unset is native; an explicit off is kept
+    func testUnsetMeansTheNativeScreen() {
+        XCTAssertEqual(NativeScreenSwitch.screen(for: .budget, defaults: defaults()), .native)
     }
 
     func testOnMeansTheNativeScreenAndOffGoesBack() {
@@ -724,9 +725,9 @@ final class NativeScreensScriptTests: XCTestCase {
         let suite = "NativeScreensScriptTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         addTeardownBlock { defaults.removePersistentDomain(forName: suite) }
-        XCTAssertTrue(NativeScreensScript.source(defaults: defaults, expectedOrigin: "capacitor://localhost").contains(#"window.__actualNativeScreens = {"budget": false, "accounts": false, "paychecks": false, "reconcile": true};"#))
-        defaults.set(true, forKey: "NativeScreen.budget")
-        XCTAssertTrue(NativeScreensScript.source(defaults: defaults, expectedOrigin: "capacitor://localhost").contains(#"window.__actualNativeScreens = {"budget": true, "accounts": false, "paychecks": false, "reconcile": true};"#))
+        XCTAssertTrue(NativeScreensScript.source(defaults: defaults, expectedOrigin: "capacitor://localhost").contains(#"window.__actualNativeScreens = {"budget": true, "accounts": false, "paychecks": true, "reconcile": true};"#))
+        defaults.set(false, forKey: "NativeScreen.budget")
+        XCTAssertTrue(NativeScreensScript.source(defaults: defaults, expectedOrigin: "capacitor://localhost").contains(#"window.__actualNativeScreens = {"budget": false, "accounts": false, "paychecks": true, "reconcile": true};"#))
         defaults.set(true, forKey: "NativeScreen.accounts")
         XCTAssertTrue(NativeScreensScript.source(defaults: defaults, expectedOrigin: "capacitor://localhost").contains(#""accounts": true"#))
     }

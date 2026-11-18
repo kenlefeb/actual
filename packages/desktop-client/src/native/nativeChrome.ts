@@ -21,9 +21,26 @@ export type NativeScreenName =
   | 'paychecks'
   | 'reconcile';
 
+// sc-4931 (native-accounts-screen D7a): the web flows the native Accounts
+// screen hands off to, a closed set
+export type WebAccountAction =
+  | 'add-account'
+  | 'link-account'
+  | 'account-settings'
+  | 'bank-sync';
+const WEB_ACCOUNT_ACTIONS = [
+  'add-account',
+  'link-account',
+  'account-settings',
+  'bank-sync',
+];
+const NEEDS_ACCOUNT = ['account-settings', 'bank-sync'];
+
 type NativeChrome = {
   navigate: (path: string) => void;
   report: () => void;
+  // Present only when the page has a flow to open
+  webAccountAction?: (action: WebAccountAction, accountId?: string) => void;
 };
 
 export type ChromeWindow = {
@@ -134,6 +151,7 @@ export function installNativeChrome(
   win: ChromeWindow,
   navigate: (path: string) => void,
   report: () => void,
+  openWebAccountAction?: (action: WebAccountAction, accountId?: string) => void,
 ) {
   if (!hasNativeTabBar(win)) return undefined;
 
@@ -146,6 +164,26 @@ export function installNativeChrome(
       navigate(path);
     },
     report,
+    ...(openWebAccountAction && {
+      // The app has checked the account is a known open one; the page checks
+      // the shape and opens only its existing flow for the action
+      webAccountAction(action, accountId) {
+        if (
+          typeof action !== 'string' ||
+          !WEB_ACCOUNT_ACTIONS.includes(action) ||
+          (NEEDS_ACCOUNT.includes(action) &&
+            (typeof accountId !== 'string' || accountId === ''))
+        ) {
+          throw new Error(
+            `native chrome: web account action ${String(action)} is not allowlisted`,
+          );
+        }
+        openWebAccountAction(
+          action,
+          NEEDS_ACCOUNT.includes(action) ? accountId : undefined,
+        );
+      },
+    }),
   };
   return () => {
     delete win.__actualNativeChrome;

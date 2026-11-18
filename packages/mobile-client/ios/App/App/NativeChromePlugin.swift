@@ -100,6 +100,12 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
         callPage("window.__actualNativeChrome?.navigate(path)", ["path": path])
     }
 
+    // sc-4931 (D7a): hand one checked action to the web flow; WebAccountAction
+    // only exists for the closed set and a known open account
+    func handOff(_ action: WebAccountAction) {
+        callPage(action.script, action.arguments)
+    }
+
     // Ask the page to report its route again, after the app was in the background
     func reportRoute() {
         callPage("window.__actualNativeChrome?.report()", [:])

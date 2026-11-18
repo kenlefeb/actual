@@ -355,3 +355,55 @@ describe('the native Reconcile switch', () => {
     });
   });
 });
+
+// native-bridge: "Web hand-offs are a closed set of messages" (sc-4931, D7a)
+describe('webAccountAction', () => {
+  function setup() {
+    const { win } = iosApp();
+    const open = vi.fn();
+    installNativeChrome(win, vi.fn(), vi.fn(), open);
+    return { win, open };
+  }
+
+  it.each(['add-account', 'link-account'] as const)(
+    'opens the %s flow with no account',
+    action => {
+      const { win, open } = setup();
+      win.__actualNativeChrome?.webAccountAction?.(action, 'ignored');
+      expect(open).toHaveBeenCalledWith(action, undefined);
+    },
+  );
+
+  it.each(['account-settings', 'bank-sync'] as const)(
+    'opens the %s flow for the named account',
+    action => {
+      const { win, open } = setup();
+      win.__actualNativeChrome?.webAccountAction?.(action, 'checking');
+      expect(open).toHaveBeenCalledWith(action, 'checking');
+    },
+  );
+
+  it.each([
+    ['delete-account', 'checking'],
+    ['account-settings', undefined],
+    ['bank-sync', ''],
+    ['bank-sync', 5],
+    [5, 'checking'],
+    [undefined, undefined],
+  ])('refuses %s with %s and opens nothing', (action, accountId) => {
+    const { win, open } = setup();
+    expect(() =>
+      win.__actualNativeChrome?.webAccountAction?.(
+        action as never,
+        accountId as never,
+      ),
+    ).toThrow(/not allowlisted/);
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it('offers no hand-off without a flow to open', () => {
+    const { win } = iosApp();
+    installNativeChrome(win, vi.fn(), vi.fn());
+    expect(win.__actualNativeChrome?.webAccountAction).toBeUndefined();
+  });
+});

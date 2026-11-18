@@ -262,6 +262,21 @@ const ACCOUNTS_FIELDS = new Map([
   ['native/account-register', ['account_id', 'scope', 'search', 'cursor']],
 ]);
 
+// sc-4931 (D3): the Accounts screen's writes. loot-core validates the whole
+// call; the page forwards only each write's own fields and needs the token.
+const ACCOUNTS_WRITE_FIELDS = new Map([
+  [
+    'native/transactions-categorize',
+    ['account_id', 'ids', 'category', 'confirmedReconciled', 'undoToken'],
+  ],
+  [
+    'native/transactions-delete',
+    ['account_id', 'ids', 'confirmedReconciled', 'undoToken'],
+  ],
+  ['native/account-reopen', ['id', 'undoToken']],
+  ['native/account-move', ['id', 'targetId', 'undoToken']],
+]);
+
 function pickFields(args: unknown, fields: string[]) {
   const given = (args ?? {}) as Record<string, unknown>;
   return Object.fromEntries(
@@ -341,6 +356,9 @@ export function createNativeBridge({
         args = undefined;
       } else if (ACCOUNTS_FIELDS.has(name)) {
         args = pickFields(args, ACCOUNTS_FIELDS.get(name) ?? []);
+      } else if (ACCOUNTS_WRITE_FIELDS.has(name)) {
+        readToken((args as Record<string, unknown> | null)?.undoToken);
+        args = pickFields(args, ACCOUNTS_WRITE_FIELDS.get(name) ?? []);
       } else if (RECONCILE_FIELDS.has(name)) {
         if (
           name === 'native/reconcile-tick' ||

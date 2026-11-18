@@ -102,8 +102,8 @@ Test-first: write each test, run it and see it fail before writing the code. One
 
 ## 5. Notice on an automatic page reload (sc-5220)
 
-- [x] 5.1 Show a brief, non-blocking notice on each automatic page reload (not on the user's Reload), announced to VoiceOver and hiding itself; keep the sheet after three reloads in a minute. Test failing first: each automatic reload is announced, giving up and the user's Reload are not, and the notice hides itself without an older timer hiding a newer notice. Verify: the Mac tests pass.
-- [ ] 5.2 The UX Designer approves the notice's placement and wording.
+- [x] 5.1 Show a notice in a strip under the title bar on each automatic page reload (not on the user's Reload). It moves the page down, has a Dismiss button, waits for the page to load and the window to be key and visible, is announced to VoiceOver then, hides 15 seconds later but not within 2 seconds of input, and is removed when the sheet after three reloads appears. One notice slot: a persistent notice is never replaced by a timed one. Test failing first for each. Verify: the Mac tests pass.
+- [ ] 5.2 Hand checks in a real window (light and dark, narrow, full screen, a month-bar click while the strip shows, the page paints under the strip, VoiceOver), and the UX Designer approves placement and wording.
 
 ## Workflow follow-up
 

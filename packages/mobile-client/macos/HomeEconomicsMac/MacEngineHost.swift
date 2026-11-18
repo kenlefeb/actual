@@ -91,6 +91,14 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
     // the last changes were gone). A bridge call in flight fails, usually at
     // once with `.pageOrigin` (else with its timeout), and is not retried.
     var onAutomaticReload: (() -> Void)?
+    var onPageLoaded: (() -> Void)?
+
+    // A load that ended, either way; the error can hold a URL, so it is not read
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { onPageLoaded?() }
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { onPageLoaded?() }
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        onPageLoaded?()
+    }
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         if reloads.allowsReload(at: now()) {

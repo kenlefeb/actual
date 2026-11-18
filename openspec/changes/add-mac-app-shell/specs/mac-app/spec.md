@@ -56,22 +56,37 @@ The app's scheme SHALL serve only files inside the bundled web build. It decodes
 - **THEN** it answers not found, not `index.html`
 
 ### Requirement: A page whose process ended is reloaded, and the user is told
-When WebKit ends the page's process, the app SHALL reload its own page, never the address the window last showed. Each automatic reload SHALL show a brief notice at the top of the window that the page restarted and a change made just before may need checking. The notice SHALL not take focus or block input, SHALL be announced to VoiceOver, and SHALL hide itself. After three automatic reloads within a minute the app SHALL stop and ask, with a Reload button.
+When WebKit ends the page's process, the app SHALL reload its own page, never the address the window last showed. Each automatic reload SHALL show a notice in a strip under the title bar that moves the page down and covers nothing. It SHALL not take focus, SHALL have a Dismiss button, and SHALL be announced to VoiceOver. After three automatic reloads within a minute the app SHALL remove the notice, stop reloading and ask, with a Reload button.
 
 #### Scenario: The page's process ends
-- **GIVEN** the app is showing its page
-- **WHEN** WebKit ends the page's process
-- **THEN** the app reloads its own page and shows the notice, which VoiceOver announces and which hides itself after a few seconds
+- **GIVEN** the app is showing its page, in its key window
+- **WHEN** WebKit ends the page's process and the reloaded page finishes loading
+- **THEN** the strip says "The app restarted just now, so your last change may not have been saved. Check it, and make it again if it’s missing.", VoiceOver announces it, and it hides 15 seconds later
+
+#### Scenario: The page restarts while the window is in the background
+- **GIVEN** the window is not key or not visible
+- **WHEN** the page's process ends and the page reloads
+- **THEN** the notice waits, and when the person returns it shows and is announced, with its full 15 seconds
 
 #### Scenario: The person keeps working
 - **GIVEN** the notice is showing
 - **WHEN** the person clicks or types in the page
-- **THEN** the page gets the input, and the notice did not take focus
+- **THEN** the page gets the input, the notice did not take focus or cover the page, and it does not hide until 2 seconds after the last input
+
+#### Scenario: The person dismisses the notice
+- **GIVEN** the notice is showing
+- **WHEN** the person presses Dismiss, with the mouse or from the keyboard
+- **THEN** the strip goes at once and the page moves back up
 
 #### Scenario: The process keeps ending
 - **GIVEN** the app reloaded its page three times within a minute
 - **WHEN** the process ends again
-- **THEN** the app does not reload, and asks with a Reload button; pressing Reload shows no notice
+- **THEN** the notice is removed, the app does not reload, and it asks with a Reload button; pressing Reload shows no notice
+
+#### Scenario: A notice that must stay is showing
+- **GIVEN** a persistent notice is in the strip
+- **WHEN** the page restarts
+- **THEN** the persistent notice stays, and the restart notice does not appear over it
 
 ### Requirement: Sign-in URLs and tokens are never logged
 The Mac app's native code SHALL NOT log, store or send a URL's query or fragment, including the OpenID return, which carries the sign-in token. The scheme handler and the navigation handler SHALL log at most the path of a refused request.

@@ -37,7 +37,12 @@ It returns:
 - `accounts`: open accounts as `{id, name, offbudget, transferPayee}`, in the web's order. `transferPayee` is the account's transfer payee id, which the Transfer state and the payee picker's Transfers section put in the draft. It was added for the 2026-11-18 design decisions (D8a), as an additive field;
 - `categoryGroups`: the non-hidden groups and categories, as the web picker shows them;
 - `defaults` for an add: the account (`account_id` if open), today, and the web's `cleared` default;
-- for an edit, `transaction`: the parent and children with names resolved, `transferAccount`, `transferAccountClosed` and `reconciled` on each row, `schedule {id, name}` or null, attachment names, and `digest`.
+- for an edit, `transaction`: the parent and children, each row as `{id, account, date, payee, category, notes, cleared, amount, reconciled}` with names resolved and `amount` in integer minor units, plus:
+  - `transferAccount` and `transferAccountClosed` on each transfer row;
+  - `partner`, the transfer partner's own `{id, account, date, amount, notes, cleared, reconciled}`, so Reload can show a change made only on the other side (D6; added 2026-11-18, additive);
+  - `schedule {id, name}` or null;
+  - attachment names;
+  - `digest`.
 
 An `id` that is not a live top-level transaction, or that belongs to a closed account, fails with `[native:not-found]`. The sheet then shows "This transaction is no longer available" (D8).
 
@@ -108,6 +113,7 @@ It returns `{draft, ruleFields, replaced, remaining, errors}` and writes nothing
 - **Errors.** `errors` maps each field (with a child index for splits) to a code from `transaction-field-errors.json`:
   - `amount-invalid`, `amount-required`;
   - `account-required`, `account-closed` (the transaction's account, or a transfer payee's account that is closed or deleted);
+  - `transfer-same-account`: a transfer payee of the transaction's own account (added 2026-11-18, as the web refuses it);
   - `category-not-allowed`, `category-unknown`;
   - `date-invalid`: not a real date, or outside 1900-01-01 to 2999-12-31. A future date is allowed.
   - `split-mismatch`, `split-limit`;
@@ -144,7 +150,11 @@ Every step refuses with no write.
 
    The row itself is the durable record, so a reload, an engine restart or a trimmed undo history cannot cause a second save. Nothing else is kept, so no retention setting is needed.
 3. **Edit digest.** An edit without `digest`, or with one that no longer equals the recomputed digest, refuses with `[native:changed-since]`.
-4. **Rules, for an add only.** The rules run on the server first, with `userFields` honoured as in D2. If the result differs in any field from the draft as submitted, the save refuses with `[native:preview-stale]`. The view model then previews again and shows the person the change. A save therefore stores exactly the draft the person last saw.
+4. **Rules, for an add only.** The engine first evaluates the submitted draft as the preview does: amounts from `amountText`. That evaluation is not a difference. Then the rules run, with `userFields` honoured as in D2. The result is compared with the evaluated draft over every field a rule can set, on the parent and every child: account, date, payee, category, notes, cleared and amount.
+   - Any difference refuses with `[native:preview-stale]` before anything is written. The view model then previews again, shows the result with "Rules changed this; check and save again.", and the person saves again.
+   - No difference: the save continues.
+
+   This holds whether or not the last preview answered, so nothing the person did not see is stored, even while a field is unchecked.
 5. **Touched set.** It is computed on the draft as it now stands: the parent, its children (added, kept and removed), and every transfer partner, old and new.
 6. **Validation** with the preview's checks: an open account and open transfer accounts; the category rules; children summing to the parent; the children cap; amount, notes, date and payee-name bounds. Any failure refuses with `[native:invalid-draft:<codes>]`, where `<codes>` holds only field codes from the fixture, never text the person typed.
 7. **Reconciled rows.** A touched row counts as reconciled when it, or the split parent of a touched child, is reconciled. Any such row needs `confirmedReconciled === true`, or the save refuses with `[native:needs-confirmed-reconciled]`.
@@ -218,11 +228,12 @@ If the rules cases cannot meet 50 ms on this seed, stop and report the measured 
 - **Draft state.** It keeps `newId` for the sheet's lifetime, along with `userFields`, `ruleFields` and the last preview.
 - **Save enabled.** Save is disabled while the last completed preview reported an error for the current values. Otherwise it is enabled, including while a field is unchecked (D8c): the save re-runs rules and validation on the server and refuses with `[native:preview-stale]` or `[native:invalid-draft:<codes>]` if the draft was wrong.
 - **Preview timeout (D8c).** After a preview times out, the view model retries it once by itself after a short pause (`previewRetryDelay`, 2 s, a named constant) and once more when the app returns to the foreground. If it still has no answer, the field shows "Couldn't check this yet." with Check Again.
-- **Reload after `changed-since` (D8b).** The view model keeps the form read it started from (the base), re-reads the form, and compares each field of the new read with the base and with the draft. This is a value comparison of fields the engine returned, amounts compared as integers; no arithmetic is done.
-  - A field the person did not change takes the new value.
-  - A field only the person changed keeps their value.
-  - A field changed both by the person and elsewhere keeps the person's value and is listed with both values and "Use theirs".
-  - The draft then carries the new digest, and the new read becomes the base.
+- **Reload after `changed-since` (D8b).** The view model keeps the form read it started from (the base) and an "edited by the person" flag per field and per row, set as the person edits, as `userFields` is. It re-reads the form and compares only engine values: each field of the new read against the same field of the base. Amounts are compared as the integers the reads return.
+  - Swift never parses `amountText`. Where it shows the person's amount beside theirs, it shows the last preview's evaluated amount, or the person's text as typed when the field is unchecked.
+  - A field the person did not edit takes the new value.
+  - A field changed elsewhere that the person also edited keeps the person's value and is listed with both values and "Use theirs".
+  - A change only on a split child the person did not edit, or only on a transfer partner (read from `partner`), is also listed in words ("The other side of this transfer changed on another device: date."), with no "Use theirs", because the form shows it nowhere else.
+  - Only after the person has seen that list does the draft carry the new digest and the new read become the base. A Reload with nothing to list says nothing changed that affects the form, and adopts the digest.
 - **Save timeout.** The sheet shows "Save didn't finish" with Retry. Retry sends the same `newId`, token and draft.
   - For an add, D3 step 2 makes the retry safe.
   - For an edit that did land, the retry gets `changed-since`. The view model re-reads, and if the stored values equal the draft it treats the save as done.

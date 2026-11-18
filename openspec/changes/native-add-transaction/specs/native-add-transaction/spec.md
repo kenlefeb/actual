@@ -178,7 +178,7 @@ On iPhone, the category picker SHALL list the form read's non-hidden categories 
 - **THEN** the picker keeps its list and shows an error with Retry
 
 ### Requirement: An unchecked field does not block saving
-On iPhone, when a preview times out the sheet SHALL retry it once by itself and once when the app returns to the foreground, then show "Couldn't check this yet." with Check Again. Save SHALL stay allowed; the server re-runs the rules and validation and refuses a wrong draft, so nothing unchecked is stored silently.
+On iPhone, a timed-out preview SHALL retry once by itself and once on return to the foreground, then show "Couldn't check this yet." with Check Again. Save SHALL stay allowed. If the save's own rule run changes anything the sheet showed, nothing SHALL be stored and the sheet SHALL show the new result with "Rules changed this; check and save again."; otherwise the save SHALL store what was shown.
 
 #### Scenario: Retry succeeds
 - **GIVEN** the first preview times out
@@ -192,7 +192,12 @@ On iPhone, when a preview times out the sheet SHALL retry it once by itself and 
 #### Scenario: Saving an unchecked draft that a rule changes
 - **GIVEN** an unchecked field, and a rule that would change the category
 - **WHEN** the person saves
-- **THEN** nothing is stored, and the sheet shows the rule's result to check and save again
+- **THEN** nothing is stored, and the sheet shows the new category with "Rules changed this; check and save again."
+
+#### Scenario: Saving an unchecked draft that no rule changes
+- **GIVEN** an unchecked amount of `12.50+3*2`, and no rule that applies
+- **WHEN** the person saves
+- **THEN** the transaction is stored with −18.50 and the sheet closes
 
 ### Requirement: Splits keep their remainder from the engine
 On iPhone, the sheet SHALL let the person split a transaction into children, each with amount, category, payee and notes, up to the limit `transaction-split-max-children`. The sheet SHALL show the engine's remaining amount in words and SHALL block saving until the children sum to the parent.
@@ -210,7 +215,7 @@ On iPhone, the sheet SHALL let the person split a transaction into children, eac
 - **THEN** "Add split" is disabled and says the limit is 50
 
 ### Requirement: A changed transaction is not overwritten
-On iPhone, saving an edit SHALL fail with "This transaction changed on another device" when the transaction, any of its children, or any transfer partner changed after the sheet read it. Nothing SHALL be written. Reload SHALL keep the person's edits, take the new values for fields they did not edit, and list each field changed in both places with "Use theirs".
+On iPhone, saving an edit SHALL fail with "This transaction changed on another device" when the transaction, any of its children, or any transfer partner changed after the sheet read it. Nothing SHALL be written. Reload SHALL keep the person's edits, take new values for fields they did not edit, list fields changed in both places with "Use theirs", and list changes made only on a split child or transfer partner.
 
 #### Scenario: Edited elsewhere
 - **GIVEN** the sheet is open on a transaction, and a sync changes its notes
@@ -235,6 +240,16 @@ On iPhone, saving an edit SHALL fail with "This transaction changed on another d
 #### Scenario: Use theirs
 - **WHEN** the person taps "Use theirs" on the notes
 - **THEN** the notes show the other device's text
+
+#### Scenario: Only the partner changed
+- **GIVEN** a transfer is open, the person changed the amount, and another device changed only the partner's date
+- **WHEN** the person taps Reload
+- **THEN** the sheet lists that the other side of the transfer changed its date, keeps the person's amount, and saves only after they have seen it
+
+#### Scenario: Only a child changed
+- **GIVEN** a split is open, and another device changed only the second child's category
+- **WHEN** the person taps Reload
+- **THEN** the second child shows the new category and the sheet lists that it changed
 
 ### Requirement: Text comes from the approved copy table
 On iPhone, every user-facing string in the sheet SHALL be a localized string whose exact text comes from the Designer's copy table once the Product Owner approves it; wording quoted in this spec is illustrative until then. Text SHALL say the cause and what to do in plain words, with no codes.

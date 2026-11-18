@@ -19,10 +19,11 @@ Tests first: write the tests, see them fail, then write the code. One story per 
   - Temporary (Director, 2026-11-17): the switch defaults to OFF in code, so web `/accounts` is unchanged until the screens exist. This task is done when its pieces are: the Swift key and script entry (done), then the Settings toggle (hidden until the overlay works), `NativeTab.accounts` in `nativeTabs` and the overlay behind the off switch (2.4). The default flip to on is task 3.8.
 - [ ] 2.4 The overlay on the Accounts container and the router (design D5). Failing `NativeBridgeCore` tests first for which paths show native (`/accounts`, `/accounts/<known id>`) and which stay web (`/accounts/all`, unknown ids, `/transactions/<id>`), and for back returning to the register
 - [ ] 2.4a `webAccountAction` chrome message (design D7a): the closed action set, an account id required and known for `account-settings` and `bank-sync`, origin-checked; the page opens the existing add-account, link-account, account-menu and bank-sync flows, and the overlay steps aside and re-reads on close. Failing tests first on both sides
+  - Done so far: `WebAccountAction` (Swift, the closed set and a known open account), the app's `handOff` call, and the page's `webAccountAction` check on `__actualNativeChrome`. Left for 2.4: the page flows it opens and the overlay stepping aside and re-reading on close.
 - [x] 2.5 `NativeReconcileBanner` renders only while the Accounts switch is off (design D8); failing test first
-- [ ] 2.6 `AccountsListViewModel` and `AccountRegisterViewModel` against a fake transport and the fixtures (design D6). Failing tests first: redacted first load; re-reads, errors and timeouts keep the last values; coalesced re-reads; paging appends and stops at a null cursor; search debounce and scope reset the pages; no reads in the background and one on return; pull-to-refresh runs one `sync`
+- [x] 2.6 `AccountsListViewModel` and `AccountRegisterViewModel` against a fake transport and the fixtures (design D6). Failing tests first: redacted first load; re-reads, errors and timeouts keep the last values; coalesced re-reads; paging appends and stops at a null cursor; search debounce and scope reset the pages; no reads in the background and one on return; pull-to-refresh runs one `sync`
 - [ ] 2.7 Run the checks in 1.5; Security reviews the writes
-- [ ] 2.8 Ask the PO, through the Director, to extend sc-4877 so the Swift-minted nonce also covers `confirmedReconciled` on these writes (design D3, accepted risk until then)
+- [x] 2.8 Ask the PO, through the Director, to extend sc-4877 so the Swift-minted nonce also covers `confirmedReconciled` on these writes (design D3, accepted risk until then)
 
 ## 3. SwiftUI Accounts list and register on iPhone (sc-3611)
 

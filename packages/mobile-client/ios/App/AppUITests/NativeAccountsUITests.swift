@@ -107,9 +107,10 @@ final class NativeAccountsUITests: XCTestCase {
         uncleared.tap()
         XCTAssertTrue(uncleared.isSelected, "tapping the chip did not select it")
         waitUntilGone(grocer, "the cleared row stays under the Uncleared scope")
-        // The system draws the field's cancel control as "Cancel" or, on the newest iOS, "close"
-        let cancel = app.buttons["Cancel"].exists ? app.buttons["Cancel"] : app.buttons["close"]
-        XCTAssertTrue(cancel.waitForExistence(timeout: 5), "the search field has no cancel control")
+        // The system draws the field's cancel control; its label differs between iOS versions and
+        // placements ("Cancel", "close", "Close"), so wait for any of them
+        let cancel = app.buttons.matching(NSPredicate(format: "label ==[c] 'Cancel' OR label ==[c] 'Close'")).firstMatch
+        XCTAssertTrue(cancel.waitForExistence(timeout: 10), "the search field has no cancel control; the buttons are \(app.buttons.allElementsBoundByIndex.map(\.label))")
         cancel.tap()
         XCTAssertTrue(grocer.waitForExistence(timeout: 10), "Cancel left the scope on: the cleared row did not return")
         XCTAssertTrue(app.staticTexts["Working balance"].waitForExistence(timeout: 10), "Cancel left the filter on")

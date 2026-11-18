@@ -553,6 +553,18 @@ describe('the storage state across files', () => {
 
   const stuck = () => new Promise<void>(() => undefined);
 
+  // A flush right after closing a budget must cover its last write
+  it('waits for every file when none is open', async () => {
+    let settled = false;
+    void filesWhenPersisted([file(0, {}, stuck, '/blocked/closed')]).then(
+      () => {
+        settled = true;
+      },
+    );
+    await new Promise(resolve => setTimeout(resolve));
+    expect(settled).toBe(false);
+  });
+
   it("does not wait for another budget's stuck write once one is open", async () => {
     await expect(
       filesWhenPersisted([file(0, {}, stuck, '/blocked/closed'), file(1, {})]),

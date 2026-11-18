@@ -7,13 +7,13 @@ import { z } from 'zod';
 
 import { appendAudit } from '#audit';
 import type { AuditChange } from '#audit';
-import type { Scope } from '#grants';
 import { Refusal } from '#refusal';
 import { syncNow } from '#sync';
 import { lastReconciledOf } from '#tools/read/reconciliation';
 
 import { budgeted } from './budget';
 import { groupOrder, load, nextOf } from './categories';
+import { NOT_UNDOABLE, UNDOABLE } from './declarations';
 import { checkRows, rowKey as stateKey } from './delete-snapshot';
 import {
   budgetId,
@@ -31,28 +31,9 @@ import type { Access, WriteLog } from './shared';
 import { editRows, FIELD_COLUMN } from './update-plan';
 
 /** One text for every failure of the first checks, so ids cannot be probed. */
-const NOT_UNDOABLE =
+const UNKNOWN =
   'That write cannot be undone: it is unknown, not yours, or not undoable. Nothing changed.';
 const BY_HAND = 'Review it and undo by hand if you still want to.';
-
-/** The scopes each undoable tool's reversal needs, by tool name; never read from a log line (design D2). */
-const UNDOABLE: Record<string, Scope[]> = {
-  write_update_transactions: ['transactions:write'],
-  write_create_transactions: ['transactions:write'],
-  write_set_budget_amount: ['budget:write'],
-  write_set_budget_amounts: ['budget:write'],
-  write_copy_budget_month: ['budget:write'],
-  write_set_budget_to_average: ['budget:write'],
-  write_update_category: ['structure:write'],
-  write_update_category_group: ['structure:write'],
-  write_create_category: ['structure:write'],
-  write_create_category_group: ['structure:write'],
-  write_delete_transactions: ['transactions:write', 'delete'],
-  write_delete_category: ['structure:write', 'delete'],
-  write_delete_category_group: ['structure:write', 'delete'],
-  write_move_category: ['structure:write'],
-  write_move_category_group: ['structure:write'],
-};
 
 /** The change that records a move's old place, by tool (design D1). */
 const NEXT_FIELD: Record<string, string> = {
@@ -180,7 +161,7 @@ function usedBy(e: Entry) {
 /** Why a write cannot be undone, in fixed text; undefined when it can. */
 function whyNot(e: Entry) {
   const tool = e.attempt?.tool as string;
-  if (tool === 'write_undo') return 'an undo cannot be undone';
+  if (tool in NOT_UNDOABLE) return NOT_UNDOABLE[tool];
   if (e.attempt?.schema !== 2) return 'written before undo existed';
   if (!(tool in UNDOABLE)) return 'this kind of write is not undoable yet';
   if (
@@ -1049,7 +1030,7 @@ async function planMove(ctx: Ctx, group: boolean): Promise<Plan> {
   };
 }
 
-const PLANNERS: Record<string, (ctx: Ctx) => Promise<Plan>> = {
+export const PLANNERS: Record<string, (ctx: Ctx) => Promise<Plan>> = {
   write_update_transactions: planUpdateTransactions,
   write_create_transactions: planCreateTransactions,
   write_set_budget_amount: planBudgetCells,
@@ -1150,7 +1131,7 @@ export function registerUndoTools(
         !isMine(entry, log) ||
         entry.attempt.budget_id !== (await budgetId())
       ) {
-        refuse(new UndoRefusal(NOT_UNDOABLE, 'unknown'));
+        refuse(new UndoRefusal(UNKNOWN, 'unknown'));
       }
       const tool = entry!.attempt!.tool as string;
       const own = { undoes: write_id };

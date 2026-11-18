@@ -11,6 +11,8 @@ import type { Limits } from '#limits';
 import { Refusal } from '#refusal';
 import { withText } from '#sanitize';
 
+import { UNDOABLE } from './declarations';
+
 const MAX_AMOUNT = 1e12;
 
 /** Refuses (fixed text, before any audit line) an amount that is not a sane integer of cents. */
@@ -71,17 +73,22 @@ const LINE_FIELDS = () => ({
 });
 
 /**
- * Refuses (fixed text, before any audit line) a delete whose own attempt line
- * or whose undo's attempt line would exceed the audit line limit, so every
- * delete that runs can be undone. The undo's line holds the same ids and
- * values with before and after swapped, plus `undoes` and its own tool name.
+ * Refuses (fixed text, before any audit line) an undoable write whose own
+ * attempt line or whose undo's attempt line would exceed the audit line
+ * limit, so every undoable write that runs can be undone (design D5). The
+ * undo's line holds the same values with before and after swapped, plus
+ * `undoes` and its own tool name; a created row (`new...`) is named by an id
+ * of its own, and a budget cell by `category:month`.
  */
-export async function requireUndoableLine(
+async function requireUndoableLine(
   log: WriteLog,
   tool: string,
   entry: { ids: string[]; changes: AuditChange[] },
 ) {
   const budget_id = await budgetId();
+  const changes = entry.changes.map(c =>
+    c.id.startsWith('new') ? { ...c, id: randomUUID() } : c,
+  );
   const size = (line: object) =>
     Buffer.byteLength(JSON.stringify({ ...LINE_FIELDS(), ...line }));
   const own = size({ ...log.identity, tool, budget_id, ...entry });
@@ -89,9 +96,18 @@ export async function requireUndoableLine(
     ...log.identity,
     tool: 'write_undo',
     budget_id,
-    // The undo logs every id it restores, which can include rows beyond the delete's own ids
-    ids: [...new Set([...entry.ids, ...entry.changes.map(c => c.id)])],
-    changes: entry.changes.map(c => ({
+    // The undo logs every id it restores, which can include rows beyond the write's own ids
+    ids: [
+      ...new Set([
+        ...entry.ids,
+        ...changes.map(c => c.id),
+        ...changes.flatMap(c => {
+          const month = /^budgeted:(\d{4}-\d{2})$/.exec(c.field)?.[1];
+          return month ? [`${c.id}:${month}`] : [];
+        }),
+      ]),
+    ],
+    changes: changes.map(c => ({
       ...c,
       before: c.after,
       after: c.before,
@@ -101,7 +117,7 @@ export async function requireUndoableLine(
   const cap = log.limits.maxAuditLineBytes;
   if (own > cap || undo > cap) {
     throw new Refusal(
-      `This delete or its undo would make an audit line of ${Math.max(own, undo)} bytes, above the limit of ${cap}; a delete must be undoable. Nothing changed. Split it into smaller calls.`,
+      `This write or its undo would make an audit line of ${Math.max(own, undo)} bytes, above the limit of ${cap}; an undoable write must stay undoable. Nothing changed. Split it into smaller calls.`,
     );
   }
 }
@@ -256,6 +272,7 @@ export async function loggedWrite<R extends object>(
 > {
   // One write may not fill the audit tail an undo reads (it would evict the
   // undo history and its own line); refused before anything is written.
+  if (tool in UNDOABLE) await requireUndoableLine(log, tool, entry);
   const budget_id = await budgetId();
   const lineBytes = Buffer.byteLength(
     JSON.stringify({

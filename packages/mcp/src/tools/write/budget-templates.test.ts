@@ -35,6 +35,16 @@ function lines() {
 
 const MONTH = '2026-03';
 
+/** Templates always answer the first call with a dry run; this confirms it and returns the write's result. */
+async function apply(args: Record<string, unknown>) {
+  const dry = await h.call('write_apply_budget_templates', args);
+  if (dry.isError || !dry.json.dry_run) return dry;
+  return h.call('write_apply_budget_templates', {
+    ...args,
+    confirm: dry.json.confirm,
+  });
+}
+
 async function budgetedNow(category: string, month = MONTH) {
   const m = await api.getBudgetMonth(month);
   return Number(
@@ -72,7 +82,7 @@ describe('Apply budget templates', () => {
   it('Applies to unbudgeted categories, auditing each cell with its goal', async () => {
     await start();
     const { a, b, d } = await fixture();
-    const res = await h.call('write_apply_budget_templates', { month: MONTH });
+    const res = await apply({ month: MONTH });
     expect(res.isError, res.text).toBe(false);
     expect(await budgetedNow(a)).toBe(10000);
     expect(await budgetedNow(d)).toBe(30);
@@ -108,7 +118,7 @@ describe('Apply budget templates', () => {
   it('Overwrite also runs categories that are already budgeted', async () => {
     await start();
     const { a, d } = await fixture();
-    const res = await h.call('write_apply_budget_templates', {
+    const res = await apply({
       month: MONTH,
       mode: 'overwrite',
     });
@@ -120,7 +130,7 @@ describe('Apply budget templates', () => {
   it('Runs only the listed categories, overwriting them', async () => {
     await start();
     const { a, d } = await fixture();
-    const res = await h.call('write_apply_budget_templates', {
+    const res = await apply({
       month: MONTH,
       category_ids: [d],
     });
@@ -131,7 +141,7 @@ describe('Apply budget templates', () => {
 
   it('Changes nothing, and logs nothing, when there is nothing to apply', async () => {
     await start();
-    const res = await h.call('write_apply_budget_templates', { month: MONTH });
+    const res = await apply({ month: MONTH });
     expect(res.isError, res.text).toBe(false);
     expect(res.json).toMatchObject({ changed: 0, cells: [] });
     expect(lines()).toEqual([]);
@@ -141,7 +151,7 @@ describe('Apply budget templates', () => {
     await start();
     const { a } = await fixture();
     await api.updateNote(a, '#template schedule nosuch');
-    const res = await h.call('write_apply_budget_templates', { month: MONTH });
+    const res = await apply({ month: MONTH });
     expect(res.isError, res.text).toBe(false);
     expect(res.json.changed).toBe(0);
     expect(res.json.text.errors.join(' ')).toContain('A');
@@ -152,7 +162,7 @@ describe('Apply budget templates', () => {
   it('Counts the cells that change against the cell limit', async () => {
     await start({}, { maxCells: 1 });
     const { a } = await fixture();
-    const res = await h.call('write_apply_budget_templates', { month: MONTH });
+    const res = await apply({ month: MONTH });
     expect(res.isError).toBe(true);
     expect(res.text).toMatch(/At most 1 budget cells.*would change 2/);
     expect(await budgetedNow(a)).toBe(0);
@@ -161,7 +171,7 @@ describe('Apply budget templates', () => {
 
   it('Needs budget:write', async () => {
     await start({ scopes: ['budget:read'] });
-    const res = await h.call('write_apply_budget_templates', { month: MONTH });
+    const res = await apply({ month: MONTH });
     expect(res.isError).toBe(true);
     expect(res.text).toMatch(/needs budget:write/);
   });
@@ -169,7 +179,7 @@ describe('Apply budget templates', () => {
   it('Cannot be undone', async () => {
     await start();
     const { a } = await fixture();
-    const done = await h.call('write_apply_budget_templates', {
+    const done = await apply({
       month: MONTH,
     });
     const undo = await h.call('write_undo', { write_id: done.json.write_id });
@@ -184,7 +194,7 @@ describe('Apply budget templates', () => {
     await api.setBudgetAmount(MONTH, a, 10000);
     await api.updateNote(b, '');
     vi.spyOn(api, 'applyBudgetTemplates').mockRejectedValue(new Error('boom'));
-    const res = await h.call('write_apply_budget_templates', { month: MONTH });
+    const res = await apply({ month: MONTH });
     expect(res.isError, res.text).toBe(false);
     expect(res.json.failed).toBeTruthy();
     expect(res.json.failure).toMatch(/may have been written/);
@@ -200,9 +210,9 @@ describe('Apply budget templates', () => {
     let calls = 0;
     vi.spyOn(api, 'planBudgetTemplates').mockImplementation(async (...args) => {
       const plan = await real(...args);
-      return ++calls === 1 ? plan : { ...plan, errors: ['x'] };
+      return ++calls <= 2 ? plan : { ...plan, errors: ['x'] };
     });
-    const res = await h.call('write_apply_budget_templates', { month: MONTH });
+    const res = await apply({ month: MONTH });
     expect(res.json.failed).toBeTruthy();
     expect(lines()[1]).toMatchObject({ status: 'failed' });
   });
@@ -215,7 +225,7 @@ describe('Apply budget templates', () => {
       await api.setBudgetAmount(MONTH, a, 10000);
       throw new Error('boom');
     });
-    const res = await h.call('write_apply_budget_templates', { month: MONTH });
+    const res = await apply({ month: MONTH });
     expect(res.json.applied).not.toContain(`${a}:${MONTH}`);
     expect(res.json.applied).not.toContain(`${b}:${MONTH}`);
     expect(res.json.failed).toBeTruthy();
@@ -233,7 +243,7 @@ describe('Apply budget templates', () => {
         throw new Error('boom');
       },
     );
-    const res = await h.call('write_apply_budget_templates', { month: MONTH });
+    const res = await apply({ month: MONTH });
     expect(res.json.failed).toBeTruthy();
     expect(res.json.failure).toMatch(/may have been written/);
     expect(res.json.applied.length).toBeGreaterThan(0);
@@ -247,11 +257,11 @@ describe('Apply budget templates', () => {
     vi.spyOn(api, 'planBudgetTemplates').mockImplementation(async (...args) => {
       const plan = await real(...args);
       // a sync from another device changes a goal after the first check
-      return ++calls === 1
+      return ++calls <= 2
         ? plan
         : { ...plan, cells: plan.cells.map(c => ({ ...c, goalAfter: 1 })) };
     });
-    const res = await h.call('write_apply_budget_templates', { month: MONTH });
+    const res = await apply({ month: MONTH });
     vi.restoreAllMocks();
     expect(res.json.applied).toEqual([]);
     expect(res.json.failed).toBeTruthy();

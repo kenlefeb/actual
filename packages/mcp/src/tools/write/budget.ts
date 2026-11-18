@@ -219,9 +219,14 @@ async function categoryNames(month: string) {
 }
 
 /** A dry run is never shortened: one that does not fit the response size is refused, with no confirm. */
-function requireDryRunFits(log: WriteLog, shown: object, count: number) {
+function requireDryRunFits(
+  log: WriteLog,
+  shown: object,
+  count: number,
+  alwaysConfirm = false,
+) {
   if (
-    isDryRun(log) &&
+    isDryRun(log, log.destructive, alwaysConfirm) &&
     Buffer.byteLength(JSON.stringify(shown)) + ENVELOPE_BYTES >
       log.limits.maxResponseBytes
   ) {
@@ -481,7 +486,7 @@ async function runTemplates(
     goal_before: c.goalBefore,
     goal_after: c.goalAfter,
   }));
-  requireDryRunFits(log, { ...entry, cells }, plan.cells.length);
+  requireDryRunFits(log, { ...entry, cells }, plan.cells.length, true);
   return loggedWrite(
     log,
     'write_apply_budget_templates',
@@ -508,7 +513,8 @@ async function runTemplates(
           }
         : {}),
     }),
-    { preview: { cells } },
+    // Permanent: always a dry run first, whatever confirm_destructive says (design D6)
+    { preview: { cells }, alwaysConfirm: true },
   );
 }
 export function registerBudgetWriteTools(
@@ -664,7 +670,7 @@ export function registerBudgetWriteTools(
 
   tool(
     'write_apply_budget_templates',
-    `Apply a month's (YYYY-MM) budget templates (the #template and #goal lines of category notes, no AI), as the budget menu's apply and overwrite do. mode "apply" (the default) runs only categories with no budgeted amount; "overwrite" runs every category with a template. With category_ids only those categories run, always overwriting. The budgeted amounts and goals that would change are counted against the cell limit (${limits.maxCells} by default), and the automations the notes would store are listed too. When this connection must confirm destructive calls, the first call changes nothing and lists every cell (category_id:month, before, after, goal before and after) with a \`confirm\` that binds every cell, goal and stored automation; call again with it within 5 minutes. A dry run too large to list in one response is refused with no confirm. A note with a template error applies nothing and says so. Cells are named category_id:month in the audit log, which records each goal before and after. Not undoable.`,
+    `Apply a month's (YYYY-MM) budget templates (the #template and #goal lines of category notes, no AI), as the budget menu's apply and overwrite do. mode "apply" (the default) runs only categories with no budgeted amount; "overwrite" runs every category with a template. With category_ids only those categories run, always overwriting. The budgeted amounts and goals that would change are counted against the cell limit (${limits.maxCells} by default), and the automations the notes would store are listed too. The first call always changes nothing and lists every cell (category_id:month, before, after, goal before and after) with a \`confirm\` that binds every cell, goal and stored automation; call again with it within 5 minutes. A dry run too large to list in one response is refused with no confirm. A note with a template error applies nothing and says so. Cells are named category_id:month in the audit log, which records each goal before and after.`,
     {
       month,
       mode: z.enum(['apply', 'overwrite']).optional(),
@@ -690,7 +696,7 @@ export function registerBudgetWriteTools(
   );
   tool(
     'write_set_budget_carryover',
-    "Turn rollover (carryover) of a category's balance on or off, by category id (never a name). The engine applies it from the given month (YYYY-MM) onward, to every later month. Returns the flag before and after and how many months it covers. Not undoable.",
+    "Turn rollover (carryover) of a category's balance on or off, by category id (never a name). The engine applies it from the given month (YYYY-MM) onward, to every later month. Returns the flag before and after and how many months it covers.",
     { month, category_id: id, flag: z.boolean() },
     async ({ month: m, category_id, flag }, auditLog) => {
       requireMonth(m);
@@ -735,7 +741,7 @@ export function registerBudgetWriteTools(
 
   tool(
     'write_hold_budget_for_next_month',
-    "Hold an amount (integer cents, above 0) of a month's to-budget for next month (envelope budgets only). The engine holds nothing when to-budget is not above 0 and holds at most the to-budget, so the result reads the held amount back and says whether anything was held. Not undoable; write_reset_budget_hold clears it.",
+    "Hold an amount (integer cents, above 0) of a month's to-budget for next month (envelope budgets only). The engine holds nothing when to-budget is not above 0 and holds at most the to-budget, so the result reads the held amount back and says whether anything was held.",
     { month, amount: z.number() },
     async ({ month: m, amount }, auditLog) => {
       requireMonth(m);
@@ -785,7 +791,7 @@ export function registerBudgetWriteTools(
 
   tool(
     'write_reset_budget_hold',
-    'Clear the amount held for next month in a month (envelope budgets only). Returns the held amount before and after. Not undoable.',
+    'Clear the amount held for next month in a month (envelope budgets only). Returns the held amount before and after.',
     { month },
     async ({ month: m }, auditLog) => {
       requireMonth(m);

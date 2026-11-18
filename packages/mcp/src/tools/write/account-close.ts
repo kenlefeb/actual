@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { Refusal } from '#refusal';
 
 import { ACCOUNT_DELETE_SCOPE, findAccount, NOTHING } from './accounts';
-import type { RegisterWriteTool } from './shared';
+import type { RegisterWriteTool, WriteLog } from './shared';
 import {
   confirm,
   id,
@@ -62,17 +62,23 @@ async function factsOf(accountId: string): Promise<Facts> {
               .select(['id', 'reconciled']),
           )) as { data: Array<{ reconciled: boolean }> }
         ).data;
-  const { data: link } = (await api.runQuery(
-    api
-      .q('accounts')
-      .filter({ id: accountId })
-      .select(['account_id', 'account_sync_source']),
-  )) as {
-    data: Array<{
-      account_id: string | null;
-      account_sync_source: string | null;
-    }>;
-  };
+  // Read at every call; a link that cannot be read counts as linked (design D6)
+  const link = await (
+    api.runQuery(
+      api
+        .q('accounts')
+        .filter({ id: accountId })
+        .select(['account_id', 'account_sync_source']),
+    ) as Promise<{
+      data: Array<{
+        account_id: string | null;
+        account_sync_source: string | null;
+      }>;
+    }>
+  ).then(
+    r => r.data[0],
+    () => undefined,
+  );
   return {
     name: account.name,
     offbudget: Boolean(account.offbudget),
@@ -84,10 +90,20 @@ async function factsOf(accountId: string): Promise<Facts> {
     reconciled: data.filter(r => r.reconciled).length,
     partner_ids,
     partners_reconciled: partners.filter(r => r.reconciled).length,
-    bank_linked: Boolean(link[0]?.account_id),
-    bank_provider: link[0]?.account_sync_source ?? null,
+    bank_linked: !link || Boolean(link.account_id),
+    bank_provider: link?.account_sync_source ?? null,
   };
 }
+
+/**
+ * A bank-linked account always confirms, whatever `confirm_destructive` says
+ * (design D6). A `confirm` that was passed is always checked, so one from
+ * before the link changed is stale rather than ignored.
+ */
+const bankLinkedConfirm = (facts: Facts, log: WriteLog) => ({
+  alwaysConfirm: facts.bank_linked || typeof log.args.confirm === 'string',
+  ...(facts.bank_linked ? { preview: { bank_sync: BANK_SYNC } } : {}),
+});
 
 const closingRows = async (accountId: string) =>
   (
@@ -105,7 +121,7 @@ const exists = async (accountId: string) =>
 export function registerAccountCloseTools(tool: RegisterWriteTool) {
   tool(
     'write_close_account',
-    `Close an open account, by id (never a name), as the app does. When its balance is not zero, pass \`transfer_account_id\` (an open account other than itself) and, only when the transfer crosses the on-budget line (one account on budget, one off), \`transfer_category_id\`. An account with no transactions is deleted instead. ${BANK_SYNC} Needs a \`confirm\` from a dry run when the connection requires one. Returns the account's state before and after.`,
+    `Close an open account, by id (never a name), as the app does. When its balance is not zero, pass \`transfer_account_id\` (an open account other than itself) and, only when the transfer crosses the on-budget line (one account on budget, one off), \`transfer_category_id\`. An account with no transactions is deleted instead. ${BANK_SYNC} Needs a \`confirm\` from a dry run when the connection requires one, and always for a bank-linked account. Returns the account's state before and after.`,
     {
       account_id: id,
       transfer_account_id: id.optional(),
@@ -206,6 +222,7 @@ export function registerAccountCloseTools(tool: RegisterWriteTool) {
             },
           };
         },
+        bankLinkedConfirm(facts, auditLog),
       );
     },
     {
@@ -217,7 +234,7 @@ export function registerAccountCloseTools(tool: RegisterWriteTool) {
 
   tool(
     'write_delete_account',
-    `Delete an open account and every transaction in it, by id (never a name), as the app's delete does. A closed account is refused: reopen it first. Transfers to it lose their payee and link on the other side. Refused when the account (or a transfer partner) holds a reconciled transaction unless \`allow_reconciled\` is true and the connection allows it, and when it holds more rows than the connection's row cap (split children count). ${BANK_SYNC} Needs a \`confirm\` from a dry run when the connection requires one. Returns the counts deleted.`,
+    `Delete an open account and every transaction in it, by id (never a name), as the app's delete does. A closed account is refused: reopen it first. Transfers to it lose their payee and link on the other side. Refused when the account (or a transfer partner) holds a reconciled transaction unless \`allow_reconciled\` is true and the connection allows it, and when it holds more rows than the connection's row cap (split children count). ${BANK_SYNC} Needs a \`confirm\` from a dry run when the connection requires one, and always for a bank-linked account. Returns the counts deleted.`,
     {
       account_id: id,
       allow_reconciled: z.boolean().optional(),
@@ -273,6 +290,7 @@ export function registerAccountCloseTools(tool: RegisterWriteTool) {
           transactions_deleted: facts.transactions,
           partners_unlinked: facts.partner_ids,
         }),
+        bankLinkedConfirm(facts, auditLog),
       );
     },
     {

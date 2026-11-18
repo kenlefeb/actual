@@ -114,7 +114,7 @@ export async function transactionSave(
   if (isAdd) {
     const existing = await db.first<StoredRow>(
       'SELECT id, acct, tombstone, isChild, date, amount, description, category FROM transactions WHERE id = ?',
-      [draft.newId],
+      [draft.newId as string],
     );
     if (existing) {
       if (existing.tombstone) {

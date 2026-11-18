@@ -154,7 +154,9 @@ describe('native/transaction-save: an add', () => {
     expect(rows).toHaveLength(3);
     const children = rows.filter(r => r.isChild);
     expect(
-      children.map(c => [c.amount, c.category]).sort((a, b) => +a[0] - +b[0]),
+      children
+        .sort((a, b) => a.amount - b.amount)
+        .map(c => [c.amount, c.category]),
     ).toEqual([
       [-2000, 'dining'],
       [-1000, 'groceries'],

@@ -94,6 +94,13 @@ export function problems(files) {
   ]);
 }
 
+// The App target compiles NativeBridgeCore from the Xcode project's own list of
+// files, so `swift test` passes on a source the iPhone build never sees.
+// names: the sources' file names; project: the project.pbxproj text.
+export function missingFromProject(names, project) {
+  return names.filter(name => !project.includes(`${name} in Sources`));
+}
+
 export function findNativeSources(root) {
   const files = {};
   const walk = dir => {
@@ -113,6 +120,19 @@ export function findNativeSources(root) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const found = problems(findNativeSources(process.cwd()));
+  const core = join(SWIFT_ROOT, 'ios/NativeBridge/Sources/NativeBridgeCore');
+  const project = readFileSync(
+    join(SWIFT_ROOT, 'ios/App/App.xcodeproj/project.pbxproj'),
+    'utf8',
+  );
+  for (const name of missingFromProject(
+    readdirSync(core).filter(file => file.endsWith('.swift')),
+    project,
+  )) {
+    found.push(
+      `${join(core, name)}: not in the Xcode project's Sources, so the iPhone app build cannot see it`,
+    );
+  }
   if (found.length) {
     console.error(`Native Swift check failed:\n  - ${found.join('\n  - ')}`);
     process.exit(1);

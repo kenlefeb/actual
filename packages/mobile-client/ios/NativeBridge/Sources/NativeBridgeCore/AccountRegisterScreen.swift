@@ -51,6 +51,42 @@ public struct RegisterDay: Equatable, Identifiable {
     }
 }
 
+// The search footer: "N results" and their total, both loot-core's (D1)
+public struct RegisterResults: Equatable {
+    public let count: Int
+    public let total: Int
+}
+
+extension AccountRegisterContent {
+    // Only while a search is set, from the first page
+    public func results(search: String) -> RegisterResults? {
+        guard !search.isEmpty, let count = first.resultCount, let total = first.resultTotal else { return nil }
+        return RegisterResults(count: count, total: total)
+    }
+}
+
+extension AccountsLoadError {
+    // The register's own words: it reads transactions, not the account list
+    public var registerMessage: String {
+        switch self {
+        case .timedOut: NSLocalizedString("Transactions did not load in time.", comment: "Native Accounts register: read timed out")
+        case .other: NSLocalizedString("Transactions could not be loaded.", comment: "Native Accounts register: read failed")
+        }
+    }
+}
+
+// A change to resend with confirmedReconciled once the person confirms
+public enum RegisterRetry: Equatable {
+    case delete(AccountRegister.Row)
+    case categorize(AccountRegister.Row, category: String?)
+
+    public var row: AccountRegister.Row {
+        switch self {
+        case .delete(let row), .categorize(let row, _): row
+        }
+    }
+}
+
 // The status word a row shows (D7), never colour alone
 public enum RegisterRowStatus: Equatable {
     case pending, cleared, reconciled

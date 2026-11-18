@@ -1,0 +1,50 @@
+{
+  "currencyCode": "",
+  "currencyDecimalPlaces": 2,
+  "currencySymbol": "",
+  "currencySymbolPosition": "before",
+  "currencySpace": false,
+  "numberFormat": "comma-dot",
+  "hideFraction": false,
+  "rows": [
+    {
+      "id": "food",
+      "date": "2016-12-28",
+      "payee": "Grocer",
+      "category": "Groceries",
+      "categoryId": "groceries",
+      "splitCount": 0,
+      "notes": "weekly shop",
+      "amount": -4180,
+      "cleared": true,
+      "reconciled": false,
+      "transferAccount": null,
+      "transferReconciled": null,
+      "runningBalance": null
+    },
+    {
+      "id": "split",
+      "date": "2016-12-25",
+      "payee": null,
+      "category": null,
+      "categoryId": null,
+      "splitCount": 2,
+      "notes": null,
+      "amount": -3000,
+      "cleared": false,
+      "reconciled": false,
+      "transferAccount": null,
+      "transferReconciled": null,
+      "runningBalance": null
+    }
+  ],
+  "nextCursor": null,
+  "header": {
+    "balance": -12180,
+    "cleared": -1680,
+    "uncleared": -10500
+  },
+  "upcoming": [],
+  "resultCount": 2,
+  "resultTotal": -7180
+}

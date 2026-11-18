@@ -130,6 +130,10 @@ public enum AccountsCountWords {
         String(AttributedString(localized: "^[\(count) account](inflect: true)", comment: "Native Accounts: closed accounts count").characters)
     }
 
+    public static func results(_ count: Int) -> String {
+        String(AttributedString(localized: "^[\(count) result](inflect: true)", comment: "Native Accounts register: search results count").characters)
+    }
+
     public static func toReconcile(_ count: Int) -> String {
         String(
             AttributedString(localized: "^[\(count) account](inflect: true) to reconcile", comment: "Native Accounts: reconcile banner")

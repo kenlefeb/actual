@@ -61,6 +61,7 @@ public struct AccountRegister: Codable, Equatable {
         public let date: String
         public let payee: String?
         public let category: String?
+        public let categoryId: String?
         public let splitCount: Int
         public let notes: String?
         public let amount: Int
@@ -100,6 +101,10 @@ public struct AccountRegister: Codable, Equatable {
     // The first page only
     public let header: Header?
     public let upcoming: [Upcoming]?
+    // The first page while a search or a scope other than all is set: the
+    // matching rows on every page and loot-core's sum of their amounts
+    public let resultCount: Int?
+    public let resultTotal: Int?
 }
 
 // `native/account-register`'s arguments. Swift sends no page size: loot-core

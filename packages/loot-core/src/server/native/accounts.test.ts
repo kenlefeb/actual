@@ -419,6 +419,8 @@ describe('native/account-register', () => {
       expect(byId.food).toMatchObject({
         payee: 'Grocer',
         category: 'Groceries',
+        // sc-3611: the picker marks the current category by id
+        categoryId: 'groceries',
         notes: 'weekly shop',
         cleared: true,
         reconciled: false,
@@ -471,6 +473,49 @@ describe('native/account-register', () => {
       expect(await ids('costco')).toEqual(['split']);
       expect(await ids('41.80')).toEqual(['food']);
       expect(await ids('-41.80')).toEqual(['food']);
+    });
+
+    // sc-3611: the search footer's "N results" and total, over every page
+    describe('result count and total', () => {
+      it('counts and sums the whole filtered set, a split once at its parent amount', async () => {
+        await setPref('accounts-register-page-size', '1');
+        // 'grocer' matches food, and split through its child's category
+        const first = await register({ search: 'grocer' });
+        expect(first.rows).toHaveLength(1);
+        expect(first.resultCount).toBe(2);
+        expect(first.resultTotal).toBe(-4180 + -3000);
+        // A matching child counts its parent once, not the child's amount
+        await setPref('accounts-register-page-size', '50');
+        await expect(
+          JSON.stringify(await register({ search: 'grocer' }), null, 2) + '\n',
+        ).toMatchFileSnapshot('./fixtures/account-register-search.json');
+        const child = await register({ search: 'costco' });
+        expect(child.resultCount).toBe(1);
+        expect(child.resultTotal).toBe(-3000);
+        const scope = await register({ scope: 'uncleared' });
+        expect(scope.resultCount).toBe(3);
+        expect(scope.resultTotal).toBe(-500 - 3000 - 7000);
+      });
+
+      it('is zero with no match', async () => {
+        const none = await register({ search: 'nothing like it' });
+        expect(none.resultCount).toBe(0);
+        expect(none.resultTotal).toBe(0);
+      });
+
+      it('is left out unfiltered and after the first page', async () => {
+        await setPref('accounts-register-page-size', '1');
+        const all = await register();
+        expect(all.resultCount).toBeUndefined();
+        expect(all.resultTotal).toBeUndefined();
+        const first = await register({ search: 'grocer' });
+        const second = await register({
+          search: 'grocer',
+          cursor: first.nextCursor,
+        });
+        expect(second.resultCount).toBeUndefined();
+        expect(second.resultTotal).toBeUndefined();
+      });
     });
 
     it('matches % _ and \\ literally', async () => {

@@ -312,5 +312,7 @@ final class AccountsCountWordsTests: XCTestCase {
         XCTAssertEqual(AccountsCountWords.accounts(2), "2 accounts")
         XCTAssertEqual(AccountsCountWords.toReconcile(1), "1 account to reconcile")
         XCTAssertEqual(AccountsCountWords.toReconcile(3), "3 accounts to reconcile")
+        XCTAssertEqual(AccountsCountWords.results(1), "1 result")
+        XCTAssertEqual(AccountsCountWords.results(0), "0 results")
     }
 }

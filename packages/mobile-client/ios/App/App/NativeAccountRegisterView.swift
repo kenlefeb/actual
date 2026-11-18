@@ -30,7 +30,8 @@ struct AccountRegisterView: View {
             .searchable(text: $searchText, prompt: Text(RegisterWords.searchPrompt))
             .onChange(of: searchText) { text in Task { await model.setSearch(text) } }
             .refreshable { await model.refresh() }
-            .task { if case .loading = model.state { await model.load() } }            .safeAreaInset(edge: .bottom) {
+            .task { if case .loading = model.state { await model.load() } }
+            .safeAreaInset(edge: .bottom) {
                 UndoBar(offer: model.undoOffer, isWorking: model.writes.isWorking) { Task { await model.undo() } }
             }
             .alert(model.actionError?.message ?? "", isPresented: isErrorShown) { Button(AccountsWords.ok, role: .cancel) {} }
@@ -46,12 +47,31 @@ struct AccountRegisterView: View {
             } message: { ask in
                 Text(ask.message)
             }
+            // loot-core refused for a reconciled row the screen could not see: ask, then resend
+            .background(
+                Color.clear.confirmationDialog(
+                    RegisterWords.reconciledInvolvedTitle, isPresented: isRetryAsked, titleVisibility: .visible,
+                    presenting: model.confirmationNeeded
+                ) { retry in
+                    Button(retryAction(retry), role: retry.isDelete ? .destructive : nil) { Task { await model.confirmRetry() } }
+                    Button(RegisterWords.cancel, role: .cancel) { model.cancelRetry() }
+                } message: { _ in
+                    Text(RegisterWords.reconciledInvolved)
+                })
             .sheet(item: $categorizing) { item in
-                CategoryPicker(model: model, current: item.row.category) { category in
+                CategoryPicker(model: model, currentId: item.row.categoryId) { category in
                     categorizing = nil
                     Task { await model.categorize(item.row, category: category, confirmed: item.confirmed) }
                 }
             }
+    }
+
+    private var isRetryAsked: Binding<Bool> {
+        Binding(get: { model.confirmationNeeded != nil }, set: { if !$0 { model.cancelRetry() } })
+    }
+
+    private func retryAction(_ retry: RegisterRetry) -> String {
+        retry.isDelete ? RegisterWords.delete : RegisterWords.changeCategory
     }
 
     private var isErrorShown: Binding<Bool> {
@@ -100,7 +120,7 @@ struct AccountRegisterView: View {
                 clearingFor: account?.clearingFor, staleError: error)
         case .failed(let error):
             VStack(spacing: 12) {
-                Text(verbatim: error.message).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                Text(verbatim: error.registerMessage).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                 Button(AccountsWords.retry) { Task { await model.load() } }.buttonStyle(.borderedProminent)
             }
             .padding()
@@ -192,6 +212,13 @@ private struct RegisterConfirmation: Identifiable {
     var action: String { kind == .delete ? RegisterWords.delete : RegisterWords.changeCategory }
 }
 
+private extension RegisterRetry {
+    var isDelete: Bool {
+        if case .delete = self { return true }
+        return false
+    }
+}
+
 private extension RegisterRowActions {
     static let none = RegisterRowActions(canClear: false, canCategorize: false, canDelete: false, asksFirst: false)
 }
@@ -211,10 +238,14 @@ private struct RegisterList: View {
     var body: some View {
         List {
             if let staleError {
-                Text(verbatim: staleError.message).foregroundColor(Money.warning).font(.subheadline)
+                Text(verbatim: staleError.registerMessage).foregroundColor(Money.warning).font(.subheadline)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if isSearching { chips }
+            if let results, results.count > 0 {
+                Text(AccountsCountWords.results(results.count)).font(.headline).listRowBackground(Color.clear)
+                    .accessibilityAddTraits(.isHeader)
+            }
             if !isSearching, search.isEmpty, let header = content.header {
                 Section { RegisterHeader(header: header, style: style, clearingFor: clearingFor) }
             }
@@ -246,9 +277,16 @@ private struct RegisterList: View {
                 ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear)
                     .accessibilityLabel(Text(RegisterWords.loadingMore))
             }
+            // The search footer: loot-core's total over every page (D1), never summed here
+            if let results, results.count > 0 {
+                (Text(RegisterWords.resultsTotal) + Text(BudgetAmountFormat.string(results.total, style: style)).monospacedDigit())
+                    .font(.footnote).foregroundColor(.secondary).listRowBackground(Color.clear)
+            }
         }
         .listStyle(.insetGrouped)
     }
+
+    private var results: RegisterResults? { content.results(search: search) }
 
     private func sectionTitle(_ text: String) -> some View {
         Text(text).font(.headline).foregroundColor(.primary).textCase(nil).accessibilityAddTraits(.isHeader)
@@ -286,6 +324,7 @@ private struct RegisterHeader: View {
     let header: AccountRegister.Header
     let style: BudgetAmountStyle
     let clearingFor: String?
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -294,11 +333,20 @@ private struct RegisterHeader: View {
                 .font(.largeTitle.bold().monospacedDigit())
                 .foregroundColor(header.balance < 0 ? Money.negative : .primary)
                 .fixedSize(horizontal: false, vertical: true)
-            Text(
-                String(
-                    format: RegisterWords.clearedUncleared, BudgetAmountFormat.string(header.cleared, style: style),
-                    BudgetAmountFormat.string(header.uncleared, style: style))
-            )
+            // Two lines with no separator at the accessibility sizes, so a wrap never starts with "·"
+            Group {
+                if typeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(String(format: RegisterWords.clearedAmount, BudgetAmountFormat.string(header.cleared, style: style)))
+                        Text(String(format: RegisterWords.unclearedAmount, BudgetAmountFormat.string(header.uncleared, style: style)))
+                    }
+                } else {
+                    Text(
+                        String(
+                            format: RegisterWords.clearedUncleared, BudgetAmountFormat.string(header.cleared, style: style),
+                            BudgetAmountFormat.string(header.uncleared, style: style)))
+                }
+            }
             .font(.footnote.monospacedDigit()).foregroundColor(.secondary)
             .fixedSize(horizontal: false, vertical: true)
             if let clearingFor {
@@ -380,7 +428,9 @@ private struct RegisterRow: View {
 // Long-press › Categorize: the budget's visible categories (D3, from native/budget-month)
 private struct CategoryPicker: View {
     @ObservedObject var model: AccountRegisterViewModel
-    let current: String?
+    // The row's category id; nil when it has none
+    let currentId: String?
+    // nil clears the category, which loot-core allows wherever Categorize is offered
     let pick: (String?) -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -389,24 +439,24 @@ private struct CategoryPicker: View {
             Group {
                 if let groups = model.categoryGroups {
                     List {
+                        Section {
+                            choice(RegisterWords.uncategorized, isCurrent: currentId == nil) { pick(nil) }
+                        }
                         ForEach(groups) { group in
                             Section(header: Text(group.name)) {
                                 ForEach(group.categories) { category in
-                                    Button { pick(category.id) } label: {
-                                        HStack {
-                                            Text(category.name).foregroundColor(.primary)
-                                            Spacer()
-                                            if category.name == current {
-                                                Image(systemName: "checkmark").foregroundColor(Color(NativeTabBarController.accent))
-                                                    .accessibilityLabel(Text(RegisterWords.currentCategory))
-                                            }
-                                        }
-                                    }
+                                    choice(category.name, isCurrent: category.id == currentId) { pick(category.id) }
                                 }
                             }
                         }
                     }
                     .listStyle(.insetGrouped)
+                } else if model.categoriesFailed {
+                    VStack(spacing: 12) {
+                        Text(RegisterWords.categoriesFailed).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                        Button(AccountsWords.retry) { Task { await load() } }.buttonStyle(.borderedProminent)
+                    }
+                    .padding()
                 } else {
                     ProgressView().accessibilityLabel(Text(RegisterWords.loading))
                 }
@@ -415,7 +465,23 @@ private struct CategoryPicker: View {
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button(RegisterWords.cancel) { dismiss() } } }
         }
         .tint(Color(NativeTabBarController.accent))
-        .task { await model.loadCategories(month: NativeBridgeBenchmark.currentMonth()) }
+        .task { await load() }
+    }
+
+    private func load() async { await model.loadCategories(month: NativeBridgeBenchmark.currentMonth()) }
+
+    private func choice(_ name: String, isCurrent: Bool, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Text(name).foregroundColor(.primary)
+                Spacer()
+                if isCurrent {
+                    Image(systemName: "checkmark").foregroundColor(Color(NativeTabBarController.accent))
+                        .accessibilityLabel(Text(RegisterWords.currentCategory))
+                }
+            }
+        }
+        .accessibilityAddTraits(isCurrent ? .isSelected : [])
     }
 }
 
@@ -434,18 +500,29 @@ extension AccountRegisterContent {
         let rows = (0..<8).map { index in
             AccountRegister.Row(
                 id: "p\(index)", date: index < 3 ? "2026-01-02" : "2026-01-01", payee: "Placeholder payee", category: "Category",
-                splitCount: 0, notes: nil, amount: -12_345, cleared: true, reconciled: false, transferAccount: nil,
+                categoryId: nil, splitCount: 0, notes: nil, amount: -12_345, cleared: true, reconciled: false, transferAccount: nil,
                 transferReconciled: nil, runningBalance: nil)
         }
         let first = AccountRegister(
             currencyCode: "", currencyDecimalPlaces: 2, currencySymbol: "", currencySymbolPosition: .before, currencySpace: false,
             numberFormat: .commaDot, hideFraction: false, rows: rows, nextCursor: nil,
-            header: AccountRegister.Header(balance: 1_234_567, cleared: 1_234_567, uncleared: 0), upcoming: [])
+            header: AccountRegister.Header(balance: 1_234_567, cleared: 1_234_567, uncleared: 0), upcoming: [], resultCount: nil,
+            resultTotal: nil)
         return AccountRegisterContent(first: first, rows: rows, nextCursor: nil, pages: 1)
     }()
 }
 
 enum RegisterWords {
+    static let clearedAmount = NSLocalizedString("Cleared %@", comment: "Native Accounts register: header, large text")
+    static let unclearedAmount = NSLocalizedString("Uncleared %@", comment: "Native Accounts register: header, large text")
+    static let categoriesFailed = NSLocalizedString(
+        "The categories could not be loaded.", comment: "Native Accounts register: category picker read failed")
+    static let reconciledInvolvedTitle = NSLocalizedString(
+        "Change a reconciled transaction?", comment: "Native Accounts register: loot-core asked for a confirmation")
+    static let reconciledInvolved = NSLocalizedString(
+        "A reconciled transaction is part of this change, so the reconciled balance changes too.",
+        comment: "Native Accounts register: loot-core asked for a confirmation")
+    static let resultsTotal = NSLocalizedString("Total of results: ", comment: "Native Accounts register: search footer, before the total")
     static let noPayee = NSLocalizedString("No payee", comment: "Native Accounts register: a row without a payee")
     static let searchPrompt = NSLocalizedString("Search payee, category, notes", comment: "Native Accounts register: search field")
     static let loading = NSLocalizedString("Loading", comment: "Native Accounts register: VoiceOver while loading")

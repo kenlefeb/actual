@@ -63,6 +63,18 @@ The register read SHALL filter by scope `all`, `uncleared` or `uncategorized`, a
 - **WHEN** the scope is `uncleared` or a search is set
 - **THEN** every row's running balance is null
 
+### Requirement: A filtered register carries its result count and total
+While a search or a scope other than `all` is set, the register read's first page SHALL return `resultCount` and `resultTotal`: the number of top-level rows matching on every page, and loot-core's sum of their amounts. A split SHALL count once, at its parent's amount, and its children never. Unfiltered reads and later pages SHALL omit both. Native code SHALL show them and never add amounts.
+
+#### Scenario: A search spanning pages
+- **GIVEN** a page size of 1 and a search matching a plain row and, through a child, a split
+- **WHEN** native code reads the first page
+- **THEN** `resultCount` is 2 and `resultTotal` is the plain row's amount plus the split parent's amount
+
+#### Scenario: Unfiltered
+- **WHEN** no search is set and the scope is `all`
+- **THEN** the read has no `resultCount` or `resultTotal`
+
 ### Requirement: The accounts reads meet the latency gate
 The perf suite SHALL time `native/accounts-list` on 50 accounts and `native/account-register` for a first page and for a page 10,000 rows deep of a 20,000-row account, with and without search, and SHALL fail when a median exceeds 50 ms.
 

@@ -108,4 +108,25 @@ describe('accounts reads through the page bridge', () => {
     await bridge.call(name, args);
     expect(send).toHaveBeenCalledWith(name, forwarded);
   });
+
+  // sc-3611: the search footer's count and total reach native code as loot-core sent them
+  it('returns the register read whole, with its result count and total', async () => {
+    const read = {
+      rows: [],
+      nextCursor: null,
+      resultCount: 32,
+      resultTotal: -12345,
+    };
+    const { bridge, send } = setup();
+    send.mockResolvedValueOnce(read as never);
+    const result = await bridge.call('native/account-register', {
+      account_id: 'a',
+      scope: 'all',
+      search: 'x',
+      cursor: null,
+    });
+    expect(
+      JSON.parse(typeof result === 'string' ? result : JSON.stringify(result)),
+    ).toEqual(read);
+  });
 });

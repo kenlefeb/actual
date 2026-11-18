@@ -7,20 +7,13 @@ import type { RuleConditionEntity, ScheduleEntity } from '#types/models';
 
 import { setBusinessCalendars } from './business-calendar-lookup';
 import { businessCalendarPresets } from './business-calendar-presets';
-import { parseDateCondition } from './date-condition';
 import { setScheduleDates } from './schedule-date-lookup';
 import {
   computeSchedulePreviewTransactions,
+  getNextDate,
   schedulePreviewDates,
 } from './schedules';
 import type { ScheduleStatuses } from './schedules';
-
-vi.mock('./date-condition', async importOriginal => {
-  const actual = await importOriginal<{
-    parseDateCondition: typeof parseDateCondition;
-  }>();
-  return { ...actual, parseDateCondition: vi.fn(actual.parseDateCondition) };
-});
 
 function makeSchedule(
   id: string,
@@ -162,16 +155,42 @@ describe('schedulePreviewDates', () => {
     },
   );
 
-  it('is lazy: one date costs one getNextDate plus at most one look-ahead', () => {
+  it('is lazy: two dates of a 366-day window cost one or two getNextDate calls', () => {
     const schedule = makeSchedule('long', '2017-01-01', recur('2017-01-01'), {
       custom_upcoming_length: '366-day',
     });
-    vi.mocked(parseDateCondition).mockClear();
-    const dates = schedulePreviewDates(schedule, 'upcoming', '7');
+    const nextDate = vi.fn(getNextDate);
+    const dates = schedulePreviewDates(schedule, 'upcoming', '7', nextDate);
     expect(dates.next().value).toBe('2017-01-01');
     expect(dates.next().value).toBe('2017-01-02');
-    expect(vi.mocked(parseDateCondition).mock.calls.length).toBeLessThanOrEqual(
-      2,
+    // An eager drain makes about 366
+    expect(nextDate.mock.calls.length).toBeGreaterThanOrEqual(1);
+    expect(nextDate.mock.calls.length).toBeLessThanOrEqual(2);
+  });
+
+  it('never yields a date twice when weekend moves repeat one', () => {
+    const dates = [
+      ...schedulePreviewDates(SCHEDULES.weekends, 'upcoming', '7'),
+    ];
+    // Saturday 7 and Sunday 8 January both move back to Friday 6
+    expect(dates.filter(date => date === '2017-01-06')).toEqual(['2017-01-06']);
+    expect(new Set(dates).size).toBe(dates.length);
+  });
+
+  it('throws instead of looping when the dates stop moving forward', () => {
+    // A fresh, earlier date each call: the day never passes the window's end
+    let back = 0;
+    const backwards = () => {
+      back++;
+      return `2016-${String(12 - Math.floor(back / 28)).padStart(2, '0')}-${String(28 - (back % 28)).padStart(2, '0')}`;
+    };
+    const dates = schedulePreviewDates(
+      SCHEDULES.daily,
+      'upcoming',
+      '7',
+      backwards,
     );
+    expect(() => [...dates]).toThrow(/schedulePreviewDates: no progress/);
+    expect(back).toBeLessThan(100);
   });
 });

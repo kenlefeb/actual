@@ -9,7 +9,6 @@ import * as prefs from '#server/prefs';
 import { app as rulesApp } from '#server/rules/app';
 import { app as schedulesApp } from '#server/schedules/app';
 import { loadRules, updateRule } from '#server/transactions/transaction-rules';
-import { parseDateCondition } from '#shared/date-condition';
 import { q } from '#shared/query';
 import {
   comparePreviewTransactions,
@@ -22,6 +21,7 @@ import {
   getStatus,
 } from '#shared/schedules';
 import type { ScheduleStatuses } from '#shared/schedules';
+import type * as Schedules from '#shared/schedules';
 import { ungroupTransactions } from '#shared/transactions';
 import type { AccountEntity, ScheduleEntity } from '#types/models';
 
@@ -29,11 +29,22 @@ import { schedulesWithTransactions } from './accounts';
 import { app } from './app';
 
 // Counts date condition parses: one per `getNextDate` (D12)
-vi.mock('#shared/date-condition', async importOriginal => {
-  const actual = await importOriginal<{
-    parseDateCondition: typeof parseDateCondition;
-  }>();
-  return { ...actual, parseDateCondition: vi.fn(actual.parseDateCondition) };
+// Counts the generator's date calls: one `getNextDate` per date (D12)
+const dateCalls = vi.hoisted(() => ({ count: 0 }));
+vi.mock('#shared/schedules', async importOriginal => {
+  const actual = await importOriginal<typeof Schedules>();
+  return {
+    ...actual,
+    schedulePreviewDates: (
+      ...[schedule, status, length]: Parameters<
+        typeof Schedules.schedulePreviewDates
+      >
+    ) =>
+      actual.schedulePreviewDates(schedule, status, length, (...args) => {
+        dateCalls.count++;
+        return actual.getNextDate(...args);
+      }),
+  };
 });
 
 const h = app.handlers;
@@ -626,10 +637,12 @@ describe('native/account-upcoming', () => {
         });
       }
       await upcoming();
-      vi.mocked(parseDateCondition).mockClear();
+      dateCalls.count = 0;
       const read = await upcoming();
-      // 100 kept, plus each schedule's check for one more (was about 4,650)
-      expect(vi.mocked(parseDateCondition).mock.calls.length).toBeLessThan(200);
+      // About 100 kept, plus each schedule's check for one more; an eager
+      // drain makes about 4,650
+      expect(dateCalls.count).toBeGreaterThanOrEqual(50);
+      expect(dateCalls.count).toBeLessThan(200);
       expect(read.upcoming).toHaveLength(100);
       expect(read).toMatchObject({ upcomingKept: 100, upcomingMore: true });
       // Two rounds: every schedule's first two dates

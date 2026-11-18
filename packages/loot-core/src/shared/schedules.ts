@@ -545,6 +545,8 @@ export function* schedulePreviewDates(
   schedule: ScheduleEntity,
   status: ScheduleStatusType | undefined,
   upcomingLength?: string,
+  // Injected only by tests, to count the dates made
+  nextDate: typeof getNextDate = getNextDate,
 ): Generator<string> {
   const today = d.startOfDay(monthUtils.parseDate(monthUtils.currentDay()));
   const effectiveUpcomingLength =
@@ -564,26 +566,34 @@ export function* schedulePreviewDates(
     yield schedule.next_date;
   }
   let day = d.startOfDay(monthUtils.parseDate(schedule.next_date));
+  // Each pass moves the day forward at least one day, so a pass beyond the
+  // window's length means it stopped moving: fail rather than loop forever
+  let passes = d.differenceInCalendarDays(upcomingPeriodEnd, day) + 2;
   if (isRecurring) {
     while (day <= upcomingPeriodEnd) {
-      const nextDate = getNextDate(dateConditions, day);
+      if (--passes < 0) {
+        throw new Error(
+          `schedulePreviewDates: no progress for schedule ${schedule.id}`,
+        );
+      }
+      const date = nextDate(dateConditions, day);
 
-      if (nextDate === null) {
+      if (date === null) {
         break;
       }
 
-      if (d.startOfDay(monthUtils.parseDate(nextDate)) > upcomingPeriodEnd) {
+      if (d.startOfDay(monthUtils.parseDate(date)) > upcomingPeriodEnd) {
         break;
       }
 
-      if (dates.includes(nextDate)) {
+      if (dates.includes(date)) {
         day = d.startOfDay(monthUtils.parseDate(monthUtils.addDays(day, 1)));
         continue;
       }
 
-      dates.push(nextDate);
-      yield nextDate;
-      day = d.startOfDay(monthUtils.parseDate(monthUtils.addDays(nextDate, 1)));
+      dates.push(date);
+      yield date;
+      day = d.startOfDay(monthUtils.parseDate(monthUtils.addDays(date, 1)));
     }
   }
 }

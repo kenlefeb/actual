@@ -20,9 +20,9 @@ import { PostError, SyncError } from '#server/errors';
 import { app } from '#server/main-app';
 import { runMutator } from '#server/mutators';
 import {
-  durableWritesEnabled,
   setSyncHeld,
   storageFailed,
+  storageGuardEnabled,
   waitForStorage,
 } from '#server/native/persisted';
 import { postBinary } from '#server/post';
@@ -923,13 +923,13 @@ async function _fullSync(
   const messages = getMessagesSince(since);
 
   // Fork (sc-5219, openspec/changes/native-durable-writes D6): only once the
-  // native bridge has turned durable writes on, send only changes stored on
+  // native bridge has turned the storage guard on, send only changes stored on
   // this device. In the iPhone and Mac shells a write is stored when its
   // IndexedDB transaction completes; wait for the writes behind these
   // messages, at most native-persist-wait-ms. On expiry send nothing, report
   // storage-slow rather than success, and retry. Once storage failed, send
   // and receive nothing until reload.
-  if (durableWritesEnabled()) {
+  if (storageGuardEnabled()) {
     if (storageFailed()) {
       throw new SyncError('storage-failed');
     }

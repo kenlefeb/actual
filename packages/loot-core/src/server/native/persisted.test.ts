@@ -10,7 +10,7 @@ import * as db from '#server/db';
 import * as prefs from '#server/prefs';
 
 import { app } from './app';
-import { durableWritesEnabled } from './persisted';
+import { storageGuardEnabled } from './persisted';
 
 const h = app.handlers;
 const healthy = {
@@ -38,15 +38,16 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-// Must stay first: the switch is one-way, and only the native bridge calls
-// these handlers
-describe('the durable-writes switch', () => {
-  it('is off until the first native storage call turns it on, once', async () => {
-    expect(durableWritesEnabled()).toBe(false);
-    expect(storage.enableStorageLatch).not.toHaveBeenCalled();
+// Must stay first: the switch is one-way
+describe('the storage guard', () => {
+  it('stays off until the native bridge turns it on, and turns on once', async () => {
     await h['native/storage-state']();
-    expect(durableWritesEnabled()).toBe(true);
     await h['native/persisted']();
+    expect(storageGuardEnabled()).toBe(false);
+    expect(storage.enableStorageLatch).not.toHaveBeenCalled();
+    await h['native/enable-storage-guard']();
+    await h['native/enable-storage-guard']();
+    expect(storageGuardEnabled()).toBe(true);
     expect(storage.enableStorageLatch).toHaveBeenCalledTimes(1);
   });
 });

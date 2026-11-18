@@ -11,16 +11,17 @@ import type { StorageState } from '#platform/server/fs/storage-state';
 import { LIMITS, readLimit } from './limits';
 import { nativeRefusal } from './refusal';
 
-// Off for every client until the native bridge makes its first storage call:
-// no latch, no sync gate, and storage failures behave as in stock absurd-sql
-let durableWrites = false;
+// The storage guard (D7a). Off for every client until the native bridge turns
+// it on as it installs: no latch, no sync gate, and storage failures behave as
+// in stock absurd-sql
+let storageGuard = false;
 
-export const durableWritesEnabled = () => durableWrites;
+export const storageGuardEnabled = () => storageGuard;
 
-/** One-way. Group 2 calls `native/storage-state` at bridge startup. */
-export function enableDurableWrites() {
-  if (durableWrites) return;
-  durableWrites = true;
+/** `native/enable-storage-guard`. One-way; browsers have no bridge to call it. */
+export async function enableStorageGuard(): Promise<void> {
+  if (storageGuard) return;
+  storageGuard = true;
   fs.enableStorageLatch();
 }
 
@@ -45,7 +46,6 @@ let lastPersistSeq = 0;
  * still be pending then. Refuses once the failed latch is set.
  */
 export async function persisted(): Promise<{ stored: boolean; seq?: number }> {
-  enableDurableWrites();
   if (storageFailed()) throw notStored();
   const outcome = await waitForStorage().catch(() => {
     throw notStored();
@@ -91,7 +91,6 @@ export async function waitForStorage(): Promise<
 export async function storageState(): Promise<
   StorageState & { syncHeld: boolean }
 > {
-  enableDurableWrites();
   return { ...fs.storageState(), syncHeld };
 }
 

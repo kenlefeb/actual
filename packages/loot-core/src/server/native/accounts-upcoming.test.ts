@@ -397,7 +397,7 @@ describe('native/account-upcoming', () => {
       expect(await row()).toMatchObject({ payee: null, otherPayees: 0 });
     });
 
-    it('shows a payee a rule sets on the whole split', async () => {
+    it('shows a payee a rule sets on the whole split, which its lines inherit', async () => {
       await addSchedule('Set', {
         date: '2017-01-03',
         amount: -9000,
@@ -410,6 +410,46 @@ describe('native/account-upcoming', () => {
         ruleFields: ['payee', 'splits'],
       });
     });
+
+    // Can't tell "parent wins" from "lines win": the engine clears a split parent's payee after rules
+    it('takes a split payee from its lines when a rule sets a different payee on the parent', async () => {
+      await addSchedule('Differs', {
+        date: '2017-01-03',
+        amount: -9000,
+        payee: 'grocer',
+        actions: [
+          payeeOf('power'),
+          ...lines([payeeOf('grocer')], [payeeOf('grocer')]),
+        ],
+      });
+      expect(await row()).toMatchObject({
+        payee: 'Grocer',
+        otherPayees: 0,
+        ruleFields: ['splits'],
+      });
+    });
+
+    // The web names a transfer payee by its account, whatever the payee is called
+    it('names a transfer line by its account', async () => {
+      await db.update('payees', { id: 'to-savings', name: 'Renamed payee' });
+      await addSchedule('To savings', {
+        date: '2017-01-03',
+        amount: -9000,
+        payee: 'to-savings',
+        actions: lines(),
+      });
+      expect(await row()).toMatchObject({ payee: 'Savings', otherPayees: 0 });
+    });
+  });
+
+  it('names a plain transfer by its account, not its payee', async () => {
+    await db.update('payees', { id: 'to-savings', name: 'Renamed payee' });
+    await addSchedule('Save', {
+      date: '2017-01-03',
+      amount: -7000,
+      payee: 'to-savings',
+    });
+    expect((await upcoming()).upcoming[0]).toMatchObject({ payee: 'Savings' });
   });
 
   it('inverts a plain transfer into the account, naming the other account', async () => {

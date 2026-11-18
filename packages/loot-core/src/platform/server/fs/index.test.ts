@@ -182,14 +182,13 @@ describe('storage state of the blocked fs', () => {
     let left = times;
     vi.spyOn(IDBDatabase.prototype, 'transaction').mockImplementation(function (
       this: IDBDatabase,
-      stores: string | string[],
-      mode?: IDBTransactionMode,
+      ...args: Parameters<IDBDatabase['transaction']>
     ) {
-      if (mode === 'readwrite' && left > 0) {
+      if (args[1] === 'readwrite' && left > 0) {
         left--;
         throw new DOMException('full', 'QuotaExceededError');
       }
-      return transaction.call(this, stores, mode);
+      return transaction.apply(this, args);
     });
   }
 
@@ -205,18 +204,25 @@ describe('storage state of the blocked fs', () => {
     await init();
     const FS = sqlite._getModule().FS;
     const stream = FS.open(`/blocked/${name}`, 'w+');
+    // The blocked fs's own stream, which the sql.js types don't describe
+    const blocked = stream as unknown as {
+      node: {
+        contents: { lock(type: number): void; unlock(type: number): void };
+      };
+      stream_ops: { fsync(stream: unknown): void };
+    };
     const write = (byte: number) => {
       // A first block carries SQLite's page size, big-endian at offset 16
       const page = new Uint8Array(4096).fill(byte);
       page.set([0x10, 0], 16);
-      FS.write(stream, page, 0, 4096, 0);
-      stream.stream_ops.fsync(stream);
+      FS.write(stream as never, page, 0, 4096, 0);
+      blocked.stream_ops.fsync(stream);
     };
     // Under SQLite's write lock, so the safety check runs
     const lockedWrite = (byte: number) => {
-      stream.node.contents.lock(4);
+      blocked.node.contents.lock(4);
       write(byte);
-      stream.node.contents.unlock(1);
+      blocked.node.contents.unlock(1);
     };
     return { write, lockedWrite, close: () => FS.close(stream) };
   }

@@ -68,7 +68,7 @@ import {
   transactionsDelete,
 } from './accounts-writes';
 import type { RecordedState, Touched } from './accounts-writes';
-import { persisted, storageState } from './persisted';
+import { enableStorageGuard, persisted, storageState } from './persisted';
 import {
   reconcileListSet,
   reconcileMonth,
@@ -255,6 +255,7 @@ export type NativeHandlers = {
   'native/settings-save': typeof settingsSave;
   'native/persisted': typeof persisted;
   'native/storage-state': typeof storageState;
+  'native/enable-storage-guard': typeof enableStorageGuard;
   'native/transaction-form': typeof transactionFormRead;
   'native/payees': typeof payeesSearch;
   'native/transaction-preview': typeof transactionPreview;
@@ -319,6 +320,7 @@ app.method('native/server-info', serverInfo);
 // sc-5219 (native-durable-writes D4, D5): the storage barrier and the latch
 app.method('native/persisted', persisted);
 app.method('native/storage-state', storageState);
+app.method('native/enable-storage-guard', enableStorageGuard);
 app.method(
   'native/settings-save',
   mutator(

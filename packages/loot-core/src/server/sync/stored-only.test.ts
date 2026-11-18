@@ -8,7 +8,7 @@ import { Timestamp } from '@actual-app/crdt';
 import * as fs from '#platform/server/fs';
 import * as db from '#server/db';
 import { app } from '#server/main-app';
-import { enableDurableWrites, isSyncHeld } from '#server/native/persisted';
+import { enableStorageGuard, isSyncHeld } from '#server/native/persisted';
 import * as prefs from '#server/prefs';
 import * as mockSyncServer from '#server/tests/mockSyncServer';
 
@@ -100,7 +100,7 @@ const reasonOf = (result: Awaited<ReturnType<typeof fullSync>>) =>
   isError(result) ? result.error.reason : null;
 
 // Must stay first: the switch is one-way
-describe('sync before the native bridge turns durable writes on', () => {
+describe('sync before the native bridge turns the storage guard on', () => {
   it('does not look at local storage at all', async () => {
     await localChange();
     storage.storageState.mockReturnValue({ ...healthy, failed: true });
@@ -119,8 +119,8 @@ describe('sync before the native bridge turns durable writes on', () => {
 });
 
 describe('sync sends only stored changes', () => {
-  beforeEach(() => {
-    enableDurableWrites();
+  beforeEach(async () => {
+    await enableStorageGuard();
   });
 
   it('sends nothing until local storage says the changes are stored', async () => {

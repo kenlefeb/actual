@@ -92,6 +92,7 @@ describe('native/settings', () => {
       id: 'accounts-register-page-size',
       value: 120,
       default: 50,
+      floor: 1,
       ceiling: 200,
     });
     // Only limits something reads: a setting that does nothing is not shown

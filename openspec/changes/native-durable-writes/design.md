@@ -48,9 +48,11 @@ Alternative rejected: vendoring absurd-sql. It is larger to review and hides the
 
 `FileOpsFallback.flush()` captures the queue, `cachedFirstBlock` and the lock state **at flush time** into constants, and only then chains them: `this.pending = this.pending.then(() => persistance.write(queue, first, locked))`. So writes keep their order and run with the values of their own flush, not later ones. Each write records the time it was flushed (captured), and a write that stores sets `lastStoredFlushAt` to its own flush time. That is when its contents were fixed, not when it completed, so a change made while it was in flight is never reported as saved (Security, final review).
 
-On the first rejection:
+With the storage guard on (D7a), on the first rejection:
 - `this.failed` is set to the error. Later flushes drop their queue and write nothing, so IndexedDB stays at the last good commit.
-- `onFallbackFailure` is called for every kind of failure, not only the safety check, so `fallback-write-error` and the new `storage-failed` (D5) fire for quota, abort and error too.
+- `onFallbackFailure` is called for every kind of failure, not only the safety check, so the new `storage-failed` (D5) fires for quota, abort and error too. `fallback-write-error` keeps its existing meaning, the safety check alone (D7a).
+
+With the guard off, a rejection is only caught, so the chain carries on and the backend fails exactly as stock does: no latch, no dropped queue, quota failures unseen, and `onFallbackFailure` only for the safety check.
 
 The patched module also adds:
 - `whenPersisted()`, which returns the chain and rejects with `this.failed` if it is set;
@@ -71,7 +73,7 @@ The patched module also adds:
 
 A fork loot-core handler, allowlisted in both lists as a call with no arguments, with a `coverage.json` skip. It races `whenPersisted()` against `native-persist-wait-ms`:
 - `{ stored: true }` when every pending write fired `complete`;
-- `{ stored: false }` on timeout. The page keeps waiting in the background and sends `stored` when the chain resolves;
+- `{ stored: false }` on timeout. The engine keeps waiting and sends `storage-stored` when the writes covered by that call finish, and the page bridge forwards it to Swift as `stored`;
 - `[native:not-stored]` when the latch is set.
 
 Deadline arithmetic: the wait ceiling is 4000 ms (D7), so `native/persisted` answers within 4 s plus a page round trip, inside its own 5 s deadline. The write call itself no longer contains any wait.
@@ -81,25 +83,45 @@ Deadline arithmetic: the wait ceiling is 4000 ms (D7), so `native/persisted` ans
 - The latch lives in the patched storage (D2). Bridge writes, web-screen edits and sync applies all set it, because they all write the same file.
 - **Before forwarding any write**, the page bridge asks `native/storage-state` (a fork handler, instant, allowlisted, no arguments) and, if the latch is set, refuses with `[native:not-stored]` without forwarding. So nothing more is applied in memory (Security, 2a). `native/undo` is a write and is refused the same way.
 - There is one residual race: a write already forwarded when another source's write fails. That write gets `stored: false` from its `native/persisted` and is covered by D6, so it is nowhere but memory.
-- On latching, the page posts `storage-failed { lastStoredFlushAt, quota }` to Swift (a new entry in the bridge's `EVENTS`). Swift shows a persistent app-level notice above every screen until reload, not a screen toast (Architect, blocking 3).
+- On latching, the page posts `storage-failed { lastStoredFlushAt, quota }` to Swift (a new entry in the bridge's `EVENTS`). Swift shows a persistent app-level notice above every screen until the person reloads or, after a restart, taps OK (D5a). It is not a screen toast (Architect, blocking 3).
 - Copy (copy table; decided by the Product Owner at approval, PR #467 comment 6981240882). `<time>` is `lastStoredFlushAt` in the person's locale to the second (for example 3:42:10 PM), truncated, never rounded up (Security's approval nit), so a change stored at 3:42:05 is never re-entered as a duplicate. The notice offers Reload.
   - General: "Changes can't be saved on this device right now. Reload the app. Changes made after <time> weren't saved and need to be made again."
   - Device full (`quota`): "This device is full, so changes can't be saved. Free up some space, then reload the app. Changes made after <time> weren't saved and need to be made again. Saved changes can't sync until there's space." Sync writes to local storage too, so it can't resume until there is space.
   - No write stored since the app opened (`lastStoredFlushAt` null): the sentence with <time> becomes "Changes made since you opened the app weren't saved and need to be made again." in both notices.
 - Reads still show in-memory data until reload, and the notice says those changes are not kept (Architect, non-blocking 5). Writes whose replies were `stored: false` were already shown as "Saving…", never saved.
 
+### D5a. The failure notice across a restart
+
+Product Owner decisions, sc-5219 comment 5245 and PR #474. A restart clears the page's latch and `lastStoredFlushAt`, and "Reload the app" is then out of date. The new page can store again, so the restart notice can't say that everything after the cut-off is lost. It holds one earliest cut-off and asks the person to check. Tracking separate windows was considered and dropped as too hard to act on.
+
+- **Detecting a restart:** a page load the person didn't ask for through Reload. The Mac app has `webViewWebContentProcessDidTerminate` in `MacEngineHost`. On iPhone, Capacitor's `WebViewDelegationHandler` reloads silently, so the shell must observe that reload.
+- **Holding the cut-off:** Swift keeps the earliest cut-off, and whether the latest failure was a quota failure, until OK on a restart notice. Further restarts leave the notice alone.
+- **The two kinds of notice stay distinct.** The failure notice says changes are known lost, so it always uses its own failure's cut-off: an older one would call changes stored since then lost, and the person would re-enter them. The restart notice says "may not have been saved. Check them", so the earliest cut-off is safe there. If a failure arrives while a restart notice is waiting for OK, the failure notice shows, and the next page load brings the restart notice back with the earliest time.
+- **"Since you opened the app" keeps the first-load rule, in one place.** The restart notice alone wouldn't need it, because "may not have been saved" stays true. The failure notice does: after any reload the page's `lastStoredFlushAt` starts null, and "weren't saved" would be false for changes stored earlier. So one rule produces the cut-off when a failure arrives: `lastStoredFlushAt`, else the latest page load's time, truncated, else none on the app's first load. The restart notice reuses that value.
+- **Priority:** the failure notice replaces the sc-5220 reload notice at once, and no reload notice appears while it, or its restart form, is showing.
+
+Copy-table wording (Product Owner, PR #474):
+
+| Case | Text |
+|---|---|
+| Restart | The app restarted. Changes made after <A> may not have been saved. Check them, and make again any that are missing. |
+| Restart, no cut-off | The app restarted. Changes made since you opened the app may not have been saved. Check them, and make again any that are missing. |
+| Restart, device full | The app restarted, and this device is out of space. Free up some space. Changes made after <A> may not have been saved. Check them, and make again any that are missing. |
+
+<A> is the time to the second, cut off, never rounded up.
+
 ### D6. Sync sends only stored changes
 
-In upstream `server/sync/index.ts`, `_fullSync` gets a fork-marked edit:
+In upstream `server/sync/index.ts`, `_fullSync` gets a fork-marked edit that applies only with the storage guard on (D7a):
 1. It reads the messages to send, as today.
 2. It then awaits `whenPersisted()`, which covers every write committed before the read, for at most `native-persist-wait-ms`.
-3. It sends only if that resolves. If the wait expires (a hung IndexedDB), it sends nothing this round, keeps the messages, and the next scheduled sync tries again. A hung store therefore delays sending; it never stalls sync for ever and never sends unstored changes (both reviewers, final round).
+3. It sends only if that resolves. If the wait expires (a hung IndexedDB), it throws `SyncError('storage-slow')`: nothing is sent, the messages stay, `fullSync` emits an error rather than `success`, and a retry is scheduled after `FULL_SYNC_DELAY`. No new notice shows (Product Owner, PR #474). The existing status lines, native and narrow-layout web, read "Waiting for this device to finish saving" and return to normal when the wait clears. A held retry keeps that text rather than flickering through "Syncing…". Native code gets the reason through the closed set. A hung store therefore delays sending, is never reported as synced, and never sends unstored changes (Architect, PR #473).
 
 If the latch is set, it sends nothing and receives nothing until reload, and reports a sync error, `storage-failed`, that the shells show as the D5 notice.
 
 So a change refused or not stored is on neither the device nor the server, and "need to be made again" cannot produce a duplicate (Security, 2b). Changes stored before the failure stay on the device and are sent after reload.
 
-On the web from our server, Electron and the API, `whenPersisted` resolves at once and never fails, so sync is unchanged there. This is the one behavioural edit to an upstream file; it is fork-marked and small.
+Without the guard (browsers, Electron and the API), sync is unchanged. This is the one behavioural edit to an upstream file; it is fork-marked and small.
 
 ### D7. The limit
 
@@ -109,6 +131,16 @@ On the web from our server, Electron and the API, `whenPersisted` resolves at on
 - default 2000, a new optional `floor` of 100 (the registry's readers treat a value outside floor to ceiling as the default; other limits keep floor 1), ceiling 4000, `hasReader: true`.
 
 The ceiling stays under the 5 s bridge deadline (D4). The floor avoids a meaningless "not yet stored" on every write (Security advisory). Any default below 2000 ms is reported to the Product Owner.
+
+`native/settings` returns `floor` for every limit (1 unless the registry sets one), in its fixture and Swift decoding, and the Limits screens are bounded to floor through ceiling, so no screen offers a value the save refuses (Architect, PR #473).
+
+### D7a. Other platforms, and closed budgets
+
+- **Durable platforms** (SharedArrayBuffer mode, Electron, the API): `whenPersisted` resolves at once, so nothing changes.
+- **The storage guard is native-only** (Security's review of PR #473, ruled by the Architect). Merging the engine alone must not change what anyone sees, and a latched browser would stop syncing with no honest notice. So the engine has a one-way switch, off by default. The native page bridge turns it on when it installs (group 2); nothing turns it off, and browsers have no bridge. It also tells the patched backend to latch. While it is off there is no latch, write refusal, sync gate, `storage-slow` or storage notice, and the backend and sync behave as they do today. Stock absurd-sql already keeps a later commit off a failed one: memory's block 0 has moved on, so the next write under a lock fails `isSafeToWrite` (Architect, PR #474).
+- **Fallback-mode browsers keep today's behaviour.** `fallback-write-error` keeps its one meaning: the safety check failed because another tab changed the file. There is no `conflict` flag and no browser storage notice. Protecting browsers is story 5249.
+- **`storage-failed` is a prompt.** The event can come from a closed file or a copy, so with the guard on the page asks `native/storage-state` before it treats the open budget as failed.
+- **Closed budgets (native shells):** `close()` flushes and then drops the handle, so the last write of a closed budget can fail with no open file to latch. It must not latch, because it says nothing about the budget now open. The engine sends `storage-close-failed` once, and the shells show the Product Owner's wording: "Some recent changes to the budget you closed weren't saved. Open it and make them again." The sync gate means those changes were not sent. If the failure notice is showing, it keeps priority and this notice follows.
 
 ### D8. Lifecycle flushes
 
@@ -121,7 +153,7 @@ The ceiling stays under the 5 s bridge deadline (D4). The floor avoids a meaning
 
 ### D9. Interaction with sc-5220 and with undo
 
-- **sc-5220's reload notice** stays as specified and true: web-screen edits and writes still "Saving…" can be lost on a sudden page death.
+- **sc-5220's reload notice** stays as specified and true: web-screen edits and writes still "Saving…" can be lost on a sudden page death. The failure notice takes priority over it (D5a).
 - **Undo:**
   - `native/undo` is a write: it follows the same two calls, and is refused in the failed state.
   - Undo tokens live in the in-memory stack, which a reload clears, so a lost write leaves no token to misuse.
@@ -145,7 +177,7 @@ Fork CI, after the production web build, searches the built page and worker bund
 - **loot-core** (the real patched module, on `fake-indexeddb`):
   - writes settle on `complete`, and on `abort` and `error` with the error;
   - the chain advances in order with values captured at flush time;
-  - the latch stops further writes, raises `fallback-write-error` and `storage-failed`, and `whenPersisted` rejects;
+  - the latch stops further writes, raises `storage-failed` (and `fallback-write-error` only when the safety check fails), and `whenPersisted` rejects;
   - SharedArrayBuffer mode resolves at once;
   - `native/persisted` answers stored, not stored on timeout (fake timers) and `[native:not-stored]`;
   - `native/storage-state`;

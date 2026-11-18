@@ -343,5 +343,8 @@
   },
   "native/storage-state": {
     "skip": "Native iOS bridge check of the storage failure latch before a write (sc-5219, design D5); the API has no such state"
+  },
+  "native/enable-storage-guard": {
+    "skip": "One-way switch the native bridge sets as it installs (sc-5219, design D7a); the API's writes are durable when they return"
   }
 }

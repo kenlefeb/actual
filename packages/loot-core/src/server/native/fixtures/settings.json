@@ -31,84 +31,98 @@
       "id": "reconcile-match-max-candidates",
       "value": 300,
       "default": 300,
+      "floor": 1,
       "ceiling": 2000
     },
     {
       "id": "reconcile-match-max-results",
       "value": 5,
       "default": 5,
+      "floor": 1,
       "ceiling": 20
     },
     {
       "id": "reconcile-lock-list-max-rows",
       "value": 200,
       "default": 200,
+      "floor": 1,
       "ceiling": 2000
     },
     {
       "id": "accounts-register-page-size",
       "value": 120,
       "default": 50,
+      "floor": 1,
       "ceiling": 200
     },
     {
       "id": "accounts-write-max-ids",
       "value": 100,
       "default": 100,
+      "floor": 1,
       "ceiling": 500
     },
     {
       "id": "accounts-register-upcoming-max-days",
       "value": 92,
       "default": 92,
+      "floor": 1,
       "ceiling": 366
     },
     {
       "id": "accounts-upcoming-max-rows",
       "value": 100,
       "default": 100,
+      "floor": 1,
       "ceiling": 500
     },
     {
       "id": "payee-picker-max-results",
       "value": 50,
       "default": 50,
+      "floor": 1,
       "ceiling": 500
     },
     {
       "id": "payee-search-max-length",
       "value": 100,
       "default": 100,
+      "floor": 1,
       "ceiling": 200
     },
     {
       "id": "payee-name-max-length",
       "value": 200,
       "default": 200,
+      "floor": 1,
       "ceiling": 500
     },
     {
       "id": "transaction-notes-max-length",
       "value": 10000,
       "default": 10000,
+      "floor": 1,
       "ceiling": 50000
     },
     {
       "id": "transaction-split-max-children",
       "value": 50,
       "default": 50,
+      "floor": 1,
       "ceiling": 200
     },
     {
       "id": "server-info-timeout-seconds",
       "value": 5,
       "default": 5,
+      "floor": 1,
       "ceiling": 30
     },
     {
       "id": "native-persist-wait-ms",
       "value": 2000,
       "default": 2000,
+      "floor": 100,
       "ceiling": 4000
     }
   ]

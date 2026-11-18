@@ -71,6 +71,8 @@ private func pullSync(_ client: NativeBridgeClient, settled: @escaping () -> Voi
 // sc-3611: what a list write failed with. Fixed local words only.
 public enum AccountsActionError: Equatable {
     case reopenFailed, moveFailed, clearFailed, categorizeFailed, deleteFailed, timedOut
+    // loot-core wants confirmedReconciled; the register asks instead of showing this
+    case needsConfirmation
     // Undo: a touched row changed since (D3a), the step is no longer the latest, or anything else
     case changedSince, nothingToUndo, undoFailed, undoTimedOut
 
@@ -89,6 +91,9 @@ public enum AccountsActionError: Equatable {
             return NSLocalizedString("The transaction could not be deleted. Nothing changed.", comment: "Native Accounts: delete failed")
         case .timedOut:
             return NSLocalizedString("The budget did not answer in time. Nothing changed.", comment: "Native Accounts: write timed out")
+        case .needsConfirmation:
+            return NSLocalizedString(
+                "A reconciled transaction is involved. Nothing changed.", comment: "Native Accounts: write needs a confirmation")
         case .changedSince:
             return NSLocalizedString("Changed since — can't undo.", comment: "Native Accounts: undo refused, a touched row changed")
         case .nothingToUndo:
@@ -148,7 +153,11 @@ public final class AccountsWrites: ObservableObject {
         do {
             try await write()
         } catch {
-            actionError = Self.isTimeout(error) ? .timedOut : failed
+            if case NativeBridgeError.page(let message) = error, message.contains("needs confirmedReconciled") {
+                actionError = .needsConfirmation
+            } else {
+                actionError = Self.isTimeout(error) ? .timedOut : failed
+            }
             return
         }
         await reread()
@@ -332,6 +341,9 @@ public final class AccountRegisterViewModel: ObservableObject {
     @Published public private(set) var search = ""
     // The Categorize picker's groups (D3: from native/budget-month), visible ones only
     @Published public private(set) var categoryGroups: [BudgetMonth.Group]?
+    @Published public private(set) var categoriesFailed = false
+    // A change loot-core refused until the person confirms a reconciled row
+    @Published public private(set) var confirmationNeeded: RegisterRetry?
     public let writes: AccountsWrites
     public var undoOffer: AccountsUndoOffer? { writes.undoOffer }
     public var actionError: AccountsActionError? { writes.actionError }
@@ -511,6 +523,7 @@ public final class AccountRegisterViewModel: ObservableObject {
         else { return }
         let offer = AccountsUndoOffer(token: write.undoToken, action: .categorize, name: Self.name(of: row))
         await writes.perform(failed: .categorizeFailed, offer: offer, reread: reload) { try await self.client.categorizeTransactions(write) }
+        askIfRefusedForConfirmation(.categorize(row, category: category))
     }
 
     // A transfer's partner goes with it (loot-core)
@@ -518,13 +531,38 @@ public final class AccountRegisterViewModel: ObservableObject {
         guard let write = try? TransactionsDelete(accountId: accountId, ids: [row.id], confirmedReconciled: confirmed) else { return }
         let offer = AccountsUndoOffer(token: write.undoToken, action: .delete, name: Self.name(of: row))
         await writes.perform(failed: .deleteFailed, offer: offer, reread: reload) { try await self.client.deleteTransactions(write) }
+        askIfRefusedForConfirmation(.delete(row))
     }
+
+    // loot-core found a reconciled row the screen could not see (a split child's
+    // transfer partner, or a row a sync reconciled): ask, as for a reconciled row
+    private func askIfRefusedForConfirmation(_ retry: RegisterRetry) {
+        guard writes.actionError == .needsConfirmation else { return }
+        writes.clearActionError()
+        confirmationNeeded = retry
+    }
+
+    // Only after the person confirmed: the same change, with confirmedReconciled
+    public func confirmRetry() async {
+        guard let retry = confirmationNeeded else { return }
+        confirmationNeeded = nil
+        switch retry {
+        case .delete(let row): await delete(row, confirmed: true)
+        case .categorize(let row, let category): await categorize(row, category: category, confirmed: true)
+        }
+    }
+
+    public func cancelRetry() { confirmationNeeded = nil }
 
     public func undo() async { await writes.undo(reread: reload) }
 
-    // The month's groups for the picker; a failed read leaves the picker empty
+    // The month's groups for the picker; a failed read says so, for Retry
     public func loadCategories(month: String) async {
-        guard let read = try? await client.budgetMonth(month) else { return }
+        categoriesFailed = false
+        guard let read = try? await client.budgetMonth(month) else {
+            categoriesFailed = true
+            return
+        }
         categoryGroups = read.groups.filter { !$0.hidden && !$0.visibleCategories.isEmpty }.map {
             BudgetMonth.Group(
                 id: $0.id, name: $0.name, isIncome: $0.isIncome, hidden: false, budgeted: nil, spent: nil, balance: nil,

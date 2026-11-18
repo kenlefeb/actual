@@ -56,6 +56,7 @@ export type NativeRegisterRow = {
   date: string;
   payee: string | null;
   category: string | null;
+  categoryId: string | null;
   splitCount: number;
   notes: string | null;
   amount: number;
@@ -82,6 +83,11 @@ export type NativeAccountRegister = {
   // First page only
   header?: { balance: number; cleared: number; uncleared: number };
   upcoming?: NativeUpcomingRow[];
+  // First page, only while a search or a scope other than all is set: how
+  // many top-level rows match on every page, and their amounts' sum. A split
+  // counts once, at its parent's amount; its children are never counted.
+  resultCount?: number;
+  resultTotal?: number;
 };
 
 export async function accountsList(): Promise<NativeAccountsList> {
@@ -307,6 +313,7 @@ export async function accountRegister({
     so: number;
     payee: string | null;
     category: string | null;
+    category_id: string | null;
     notes: string | null;
     amount: number;
     cleared: number;
@@ -317,7 +324,7 @@ export async function accountRegister({
     transfer_account_name: string | null;
     partner_reconciled: number | null;
   }>(
-    `SELECT t.id, t.date AS d, ${FLAG} AS sb, ${SORT_ORDER} AS so, p.name AS payee, c.name AS category,
+    `SELECT t.id, t.date AS d, ${FLAG} AS sb, ${SORT_ORDER} AS so, p.name AS payee, c.name AS category, c.id AS category_id,
        t.notes, t.amount, t.cleared, t.reconciled,
        CASE WHEN t.is_parent = 1 THEN
          (SELECT COUNT(*) FROM transactions ch WHERE ch.parent_id = t.id AND ch.isChild = 1 AND ch.tombstone = 0)
@@ -379,6 +386,7 @@ export async function accountRegister({
       date: fromDateRepr(r.d),
       payee: r.payee ?? null,
       category: r.category ?? null,
+      categoryId: r.category_id ?? null,
       splitCount: r.split_count,
       notes: r.notes ?? null,
       amount: r.amount,
@@ -407,12 +415,29 @@ export async function accountRegister({
   );
   const balance = header?.balance ?? 0;
   const cleared = header?.cleared ?? 0;
-  return {
+  const firstPage: NativeAccountRegister = {
     rows,
     nextCursor,
     header: { balance, cleared, uncleared: balance - cleared },
     // The web shows scheduled rows only in the unfiltered register
     upcoming: filter.filtered ? [] : await upcomingRows(account.id),
+  };
+  if (!filter.filtered) return firstPage;
+  // The rows' own filter, over the whole set (the search footer)
+  const results = await db.first<{ n: number; total: number | null }>(
+    `SELECT COUNT(*) AS n, SUM(t.amount) AS total
+     FROM ${ALIVE} t
+     JOIN accounts a ON a.id = t.account
+     LEFT JOIN payees p ON p.id = t.payee
+     LEFT JOIN categories c ON c.id = t.category
+     LEFT JOIN accounts ta ON ta.id = p.transfer_acct AND ta.tombstone = 0
+     WHERE t.account = ? AND t.is_child = 0${filter.sql}`,
+    [account.id, ...filter.params],
+  );
+  return {
+    ...firstPage,
+    resultCount: results?.n ?? 0,
+    resultTotal: results?.total ?? 0,
   };
 }
 

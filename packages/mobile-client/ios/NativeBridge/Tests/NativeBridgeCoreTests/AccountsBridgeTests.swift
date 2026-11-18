@@ -54,6 +54,7 @@ final class AccountsContractTests: XCTestCase {
         let page = try JSONDecoder().decode(AccountRegister.self, from: data)
         XCTAssertEqual(page.rows.map(\.id), ["food", "plain", "lock", "split", "out"])
         XCTAssertEqual(page.rows[0].payee, "Grocer")
+        XCTAssertEqual(page.rows[0].categoryId, "groceries")
         XCTAssertEqual(page.rows[3].splitCount, 2)
         XCTAssertEqual(page.rows[4].transferAccount, AccountRegister.TransferAccount(id: "savings", name: "Savings"))
         XCTAssertEqual(page.rows[4].transferReconciled, true)
@@ -61,6 +62,18 @@ final class AccountsContractTests: XCTestCase {
         XCTAssertNil(page.nextCursor)
         XCTAssertEqual(page.header?.balance, page.rows.first?.runningBalance)
         XCTAssertEqual(page.upcoming, [])
+        XCTAssertNil(page.resultCount)
+        XCTAssertNil(page.resultTotal)
+        XCTAssertTrue(try roundTrips(AccountRegister.self, data))
+    }
+
+    // sc-3611: a filtered first page carries loot-core's count and total over every page
+    func testDecodesTheSearchFixturesCountAndTotal() throws {
+        let data = try fixture("account-register-search")
+        let page = try JSONDecoder().decode(AccountRegister.self, from: data)
+        XCTAssertEqual(page.rows.map(\.id), ["food", "split"])
+        XCTAssertEqual(page.resultCount, 2)
+        XCTAssertEqual(page.resultTotal, -7180)
         XCTAssertTrue(try roundTrips(AccountRegister.self, data))
     }
 }

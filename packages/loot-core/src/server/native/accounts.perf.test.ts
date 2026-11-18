@@ -106,6 +106,31 @@ describe('native accounts reads', () => {
         first('note 1', null),
       ),
     ).toBeLessThan(50);
+    // sc-3611: the first page of a broad search and of a scope carries the
+    // count and total over the whole filtered set
+    expect(
+      await time(
+        'native/account-register first page, broad search with count and total',
+        async () => {
+          const page = await first('note', null);
+          expect(page.resultCount).toBeGreaterThan(6000);
+        },
+      ),
+    ).toBeLessThan(50);
+    expect(
+      await time(
+        'native/account-register first page, uncleared with count and total',
+        async () => {
+          const page = await read({
+            account_id: 'a0',
+            scope: 'uncleared',
+            search: null,
+            cursor: null,
+          });
+          expect(page.resultCount).toBe(ROWS / 2);
+        },
+      ),
+    ).toBeLessThan(50);
     const deepSearch = await deepCursor('note');
     expect(deepSearch).not.toBeNull();
     expect(

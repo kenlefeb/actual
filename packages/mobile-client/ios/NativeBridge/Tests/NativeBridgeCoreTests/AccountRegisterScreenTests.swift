@@ -24,7 +24,7 @@ private func row(_ id: String) throws -> AccountRegister.Row { try register().ro
 private func row(_ id: String, date: String) throws -> AccountRegister.Row {
     let base = try row("food")
     return AccountRegister.Row(
-        id: id, date: date, payee: base.payee, category: base.category, splitCount: 0, notes: nil, amount: base.amount, cleared: false,
+        id: id, date: date, payee: base.payee, category: base.category, categoryId: base.categoryId, splitCount: 0, notes: nil, amount: base.amount, cleared: false,
         reconciled: false, transferAccount: nil, transferReconciled: nil, runningBalance: nil)
 }
 
@@ -46,6 +46,25 @@ final class RegisterDayTests: XCTestCase {
         XCTAssertEqual(RegisterDay.title("2026-11-16", today: today, calendar: calendar, locale: locale), "Yesterday")
         XCTAssertEqual(RegisterDay.title("2026-11-12", today: today, calendar: calendar, locale: locale), "Thursday, Nov 12")
         XCTAssertEqual(RegisterDay.title("2025-11-12", today: today, calendar: calendar, locale: locale), "Wednesday, Nov 12, 2025")
+    }
+}
+
+// sc-3611: the search footer shows loot-core's count and total; the register's errors name transactions
+final class RegisterResultsTests: XCTestCase {
+    private func content(_ name: String) throws -> AccountRegisterContent {
+        let page = try JSONDecoder().decode(AccountRegister.self, from: Data(try fixture(name).utf8))
+        return AccountRegisterContent(first: page, rows: page.rows, nextCursor: page.nextCursor, pages: 1)
+    }
+
+    func testTheFooterShowsTheCountAndTotalOnlyWhileSearching() throws {
+        XCTAssertEqual(try content("account-register-search").results(search: "grocer"), RegisterResults(count: 2, total: -7180))
+        XCTAssertNil(try content("account-register-search").results(search: ""))
+        XCTAssertNil(try content("account-register").results(search: "grocer"))
+    }
+
+    func testTheRegistersReadErrorsNameTransactions() {
+        XCTAssertEqual(AccountsLoadError.other.registerMessage, "Transactions could not be loaded.")
+        XCTAssertEqual(AccountsLoadError.timedOut.registerMessage, "Transactions did not load in time.")
     }
 }
 
@@ -218,5 +237,52 @@ final class AccountRegisterWriteTests: XCTestCase {
         let groups = try XCTUnwrap(model.categoryGroups)
         XCTAssertFalse(groups.isEmpty)
         XCTAssertTrue(groups.allSatisfy { !$0.hidden && $0.categories.allSatisfy { !$0.hidden } })
+    }
+
+    // PR 428 review: a failed month read says so, with Retry, instead of spinning forever
+    func testAFailedPickerReadSaysSoAndRetries() async throws {
+        let page = FakeRegisterPage()
+        page.failures["native/budget-month"] = Boom()
+        let model = model(page)
+        await model.loadCategories(month: "2017-01")
+        XCTAssertTrue(model.categoriesFailed)
+        XCTAssertNil(model.categoryGroups)
+        page.failures = [:]
+        await model.loadCategories(month: "2017-01")
+        XCTAssertFalse(model.categoriesFailed)
+        XCTAssertNotNil(model.categoryGroups)
+    }
+
+    // PR 428 review: a split whose child transfers to a reconciled row is refused for want of
+    // confirmedReconciled; the screen asks, and resends only after the person confirms
+    func testARefusalForWantOfConfirmationAsksThenResends() async throws {
+        let page = FakeRegisterPage()
+        let model = model(page)
+        await model.load()
+        page.failures["native/transactions-delete"] = NativeBridgeError.page(
+            "native/transactions-delete: a reconciled row needs confirmedReconciled to be true")
+        await model.delete(try row("split"), confirmed: false)
+        XCTAssertEqual(model.confirmationNeeded, .delete(try row("split")))
+        XCTAssertNil(model.actionError)
+        XCTAssertNil(model.undoOffer)
+        page.failures = [:]
+        await model.confirmRetry()
+        XCTAssertEqual(try page.args("native/transactions-delete")["confirmedReconciled"] as? Bool, true)
+        XCTAssertNil(model.confirmationNeeded)
+        XCTAssertEqual(model.undoOffer?.action, .delete)
+    }
+
+    func testACategorizeRefusalAsksTooAndCancelSendsNothing() async throws {
+        let page = FakeRegisterPage()
+        let model = model(page)
+        await model.load()
+        page.failures["native/transactions-categorize"] = NativeBridgeError.page(
+            "native/transactions-categorize: a reconciled row needs confirmedReconciled to be true")
+        await model.categorize(try row("food"), category: nil, confirmed: false)
+        XCTAssertEqual(model.confirmationNeeded, .categorize(try row("food"), category: nil))
+        let sent = page.names().count
+        model.cancelRetry()
+        XCTAssertNil(model.confirmationNeeded)
+        XCTAssertEqual(page.names().count, sent)
     }
 }

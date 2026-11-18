@@ -68,3 +68,9 @@ Ships before `native-accounts-screen` task 3.8 turns the native Accounts screen 
 ## 3. Archive (sc-4973)
 
 - [ ] 3.1 After `native-accounts-screen` archives, turn "Upcoming rows are their own read" into MODIFIED deltas of "A register page is one read with a keyset cursor" (the first page adds the header only) and "The accounts handlers are allowlisted" (adds `native/account-upcoming`), then validate and archive (design D7)
+
+## 4. Search by a payee name no payee has yet (sc-5196)
+
+- [x] 4.1 Failing test first: an upcoming row whose rule names a payee that does not exist yet (a row's own payee and a split line's) is found by searching that name; the Uncleared and Uncategorized chips are unchanged; no payee is created
+- [x] 4.2 The upcoming rows' JSON source carries the unresolved name under a stand-in payee id, and a stand-in payee row joins it, so the posted rows' predicate is unchanged and matches the name shown
+- [x] 4.3 The latency gates still hold (`yarn workspace @actual-app/core run perf`, on a quiet machine)

@@ -337,5 +337,11 @@
   },
   "native/settings-save": {
     "skip": "Native iOS bridge wrapper of the engine settings save with an undo token (sc-4643, D1); MCP will write settings through write_update_settings, which calls the same engine function"
+  },
+  "native/persisted": {
+    "skip": "Native iOS bridge storage barrier after a write (sc-5219, design D4); MCP runs on the API, whose writes are durable when they return"
+  },
+  "native/storage-state": {
+    "skip": "Native iOS bridge check of the storage failure latch before a write (sc-5219, design D5); the API has no such state"
   }
 }

@@ -7,6 +7,8 @@
 import 'fake-indexeddb/auto';
 import IndexedDBBackend from 'absurd-sql/dist/indexeddb-backend';
 
+import { filesStorageState, filesWhenPersisted } from './storage-state';
+
 const BLOCK = 4096;
 
 type Ops = {
@@ -168,6 +170,94 @@ describe('absurd-sql fallback writes (patched)', () => {
     ops.unlock(1);
     await expect(ops.whenPersisted()).rejects.toThrow(/unable to write/);
     expect(onFailure).toHaveBeenCalledTimes(1);
+  });
+});
+
+// D10: the control run's commit delay exists only behind the build constant
+describe('the commit-delay test hook', () => {
+  const hooks = globalThis as {
+    __FORK_TEST_HOOKS__?: boolean;
+    __forkTestCommitDelayMs?: number;
+  };
+
+  afterEach(() => {
+    vi.useRealTimers();
+    delete hooks.__FORK_TEST_HOOKS__;
+    delete hooks.__forkTestCommitDelayMs;
+  });
+
+  it('delays a commit while the constant is on', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    hooks.__FORK_TEST_HOOKS__ = true;
+    hooks.__forkTestCommitDelayMs = 300;
+    const { ops, dbName } = fallbackFile();
+    ops.writeBlocks([{ pos: 0, data: block(4) }], BLOCK);
+    let settled = false;
+    const persisted = ops.whenPersisted().then(() => {
+      settled = true;
+    });
+    await vi.advanceTimersByTimeAsync(299);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await persisted;
+    expect(await stored(dbName, 0)).toBe(4);
+  });
+
+  it('does nothing without the constant', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    hooks.__forkTestCommitDelayMs = 300;
+    const { ops, dbName } = fallbackFile();
+    ops.writeBlocks([{ pos: 0, data: block(6) }], BLOCK);
+    await ops.whenPersisted();
+    expect(await stored(dbName, 0)).toBe(6);
+  });
+});
+
+// "Of the open budget": a closed budget's file neither latches nor blocks
+describe('the storage state across files', () => {
+  const file = (
+    openHandles: number,
+    state: Partial<ReturnType<Ops['storageState']>>,
+    whenPersisted = () => Promise.resolve(),
+  ) => ({
+    openHandles,
+    ops: {
+      whenPersisted,
+      storageState: () => ({
+        failed: null,
+        lastStoredFlushAt: null,
+        quota: false,
+        ...state,
+      }),
+    },
+  });
+
+  it('reports the newest stored flush of the open files', () => {
+    expect(
+      filesStorageState([
+        file(1, { lastStoredFlushAt: 10 }),
+        file(1, { lastStoredFlushAt: 20 }),
+        file(0, { lastStoredFlushAt: 30 }),
+      ]),
+    ).toEqual({ failed: false, lastStoredFlushAt: 20, quota: false });
+  });
+
+  it("reports an open file's failure with that file's cut-off", () => {
+    expect(
+      filesStorageState([
+        file(1, { lastStoredFlushAt: 20 }),
+        file(1, { failed: new Error('x'), lastStoredFlushAt: 10, quota: true }),
+      ]),
+    ).toEqual({ failed: true, lastStoredFlushAt: 10, quota: true });
+  });
+
+  it("ignores a closed file's failure, but still waits for its writes", async () => {
+    const failed = new Error('x');
+    const closed = file(0, { failed }, () => Promise.reject(failed));
+    expect(filesStorageState([closed]).failed).toBe(false);
+    await expect(filesWhenPersisted([closed])).resolves.toBeUndefined();
+    const open = file(1, { failed }, () => Promise.reject(failed));
+    await expect(filesWhenPersisted([open])).rejects.toBe(failed);
   });
 });
 

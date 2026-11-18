@@ -6,8 +6,9 @@
 // at once: writes there are durable when they return.
 import * as connection from '#platform/server/connection';
 import * as fs from '#platform/server/fs';
+import type { StorageState } from '#platform/server/fs/storage-state';
 
-import { readLimit } from './limits';
+import { LIMITS, readLimit } from './limits';
 import { nativeRefusal } from './refusal';
 
 function notStored() {
@@ -50,7 +51,10 @@ export async function persisted(): Promise<{ stored: boolean }> {
 export async function waitForStorage(): Promise<
   { stored: true } | { stored: false; pending: Promise<void> }
 > {
-  const wait = await readLimit('native-persist-wait-ms');
+  // With no budget open there are no preferences to read
+  const wait = await readLimit('native-persist-wait-ms').catch(
+    () => LIMITS['native-persist-wait-ms'].default,
+  );
   const pending = fs.whenPersisted();
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timedOut = new Promise<'timeout'>(resolve => {
@@ -67,6 +71,6 @@ export async function waitForStorage(): Promise<
 }
 
 /** The failed latch, when the last stored write was flushed, and whether storage is full. */
-export async function storageState(): Promise<fs.StorageState> {
+export async function storageState(): Promise<StorageState> {
   return fs.storageState();
 }

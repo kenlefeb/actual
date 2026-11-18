@@ -2,21 +2,21 @@
 
 ## 1. Storage barrier in loot-core (sc-5219)
 
-- [ ] 1.1 Failing tests first, importing the installed `absurd-sql/dist/indexeddb-backend` module on `fake-indexeddb`:
+- [x] 1.1 Failing tests first, importing the installed `absurd-sql/dist/indexeddb-backend` module on `fake-indexeddb`:
   - writes settle on `complete`, and on `abort` and `error`;
   - the chain advances in order with values captured at flush time;
   - `lastStoredFlushAt` is the last stored write's flush time, and `quota` is set on a quota error;
   - the latch stops writes and raises `fallback-write-error` and `storage-failed`;
   - `whenPersisted` and `storageState`;
   - SharedArrayBuffer mode resolves at once (design D2, D12).
-- [ ] 1.2 `yarn patch absurd-sql@0.0.54`: rewrite `Persistance.write` to settle on the transaction; capture values at flush time; the chain, the latch, `lastStoredFlushAt`, `quota`, `whenPersisted` and `storageState`; failures raise `onFallbackFailure`. Keep the MIT notice and a header naming sc-5219. Add the root `resolutions` entry. `yarn install --immutable` passes with the lock's patch hash (D1, D2)
-- [ ] 1.3 `whenPersisted()` and `storageState()` in `platform/server/fs/index.ts` (fork-marked), and resolving versions in `index.electron.ts` and `index.api.ts` (D2, "Only the native shells wait for storage")
-- [ ] 1.4 Failing tests first for `native/persisted` (stored, not stored on timeout, `[native:not-stored]`), `native/storage-state` and the limit with floor and ceiling. Then:
+- [x] 1.2 `yarn patch absurd-sql@0.0.54`: rewrite `Persistance.write` to settle on the transaction; capture values at flush time; the chain, the latch, `lastStoredFlushAt`, `quota`, `whenPersisted` and `storageState`; failures raise `onFallbackFailure`. Keep the MIT notice and a header naming sc-5219. Add the root `resolutions` entry. `yarn install --immutable` passes with the lock's patch hash (D1, D2)
+- [x] 1.3 `whenPersisted()` and `storageState()` in `platform/server/fs/index.ts` (fork-marked), and resolving versions in `index.electron.ts` and `index.api.ts` (D2, "Only the native shells wait for storage")
+- [x] 1.4 Failing tests first for `native/persisted` (stored, not stored on timeout, `[native:not-stored]`), `native/storage-state` and the limit with floor and ceiling. Then:
   - both handlers;
   - `not-stored` in `refusal.ts` and `native-refusal-codes.json`;
   - `native-persist-wait-ms` (default 2000, floor 100, ceiling 4000) and the registry's optional `floor` in `limits.ts` (D4, D7).
-- [ ] 1.5 Failing tests first for "Only stored changes reach the server" (nothing sent before persistence; on a hung store, nothing sent after the wait and a retry next round; nothing sent or received with the latch set; no duplicate after re-entry). Then the fork-marked gate in `_fullSync` (D6)
-- [ ] 1.6 Run `yarn typecheck`, `yarn lint` and the `@actual-app/core` tests; all pass
+- [x] 1.5 Failing tests first for "Only stored changes reach the server" (nothing sent before persistence; on a hung store, nothing sent after the wait and a retry next round; nothing sent or received with the latch set; no duplicate after re-entry). Then the fork-marked gate in `_fullSync` (D6)
+- [x] 1.6 Run `yarn typecheck`, `yarn lint` and the `@actual-app/core` tests; all pass
 
 ## 2. Page bridge (sc-5219)
 

@@ -102,7 +102,7 @@ describe('sync sends only stored changes', () => {
       }),
     );
     const syncing = fullSync();
-    await new Promise(resolve => setTimeout(resolve, 20));
+    await vi.waitFor(() => expect(storage.whenPersisted).toHaveBeenCalled());
     expect(mockSyncServer.getMessages()).toHaveLength(0);
     stored();
     expect(reasonOf(await syncing)).toBeNull();
@@ -120,7 +120,13 @@ describe('sync sends only stored changes', () => {
     storage.whenPersisted.mockReturnValueOnce(
       new Promise<void>(() => undefined),
     );
-    expect(reasonOf(await fullSync())).toBeNull();
+    storage.whenPersisted.mockClear();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const syncing = fullSync();
+    await vi.waitFor(() => expect(storage.whenPersisted).toHaveBeenCalled());
+    await vi.advanceTimersByTimeAsync(100);
+    expect(reasonOf(await syncing)).toBeNull();
+    vi.useRealTimers();
     expect(mockSyncServer.getMessages()).toHaveLength(sent);
     // The messages were kept, and the next sync sends them
     expect(reasonOf(await fullSync())).toBeNull();
@@ -136,6 +142,25 @@ describe('sync sends only stored changes', () => {
     expect(
       await db.all("SELECT * FROM messages_crdt WHERE row = 'bar'"),
     ).toEqual([]);
+  });
+
+  it('leaves one copy on the server when a refused change is made again after reload', async () => {
+    await localChange();
+    storage.storageState.mockReturnValue({ ...healthy, failed: true });
+    expect(reasonOf(await fullSync())).toBe('storage-failed');
+    // Reload: the device is back at its last stored state, without the change
+    storage.storageState.mockReturnValue(healthy);
+    await global.emptyDatabase()();
+    await prefs.loadPrefs();
+    await prefs.savePrefs({
+      groupId: 'group',
+      lastSyncedTimestamp: Timestamp.zero.toString(),
+    });
+    await localChange();
+    expect(reasonOf(await fullSync())).toBeNull();
+    expect(
+      mockSyncServer.getMessages().filter(m => m.row === 'foo'),
+    ).toHaveLength(1);
   });
 
   it('treats a write that fails while waiting as a storage failure', async () => {

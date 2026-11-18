@@ -76,6 +76,12 @@ describe('native/persisted', () => {
     expect(sent).toEqual([['storage-stored', undefined]]);
   });
 
+  // A lifecycle flush can come with no budget open, so no preferences to read
+  it('still answers with no budget open', async () => {
+    db.closeDatabase();
+    expect(await h['native/persisted']()).toEqual({ stored: true });
+  });
+
   it('refuses with not-stored once storage failed', async () => {
     storage.storageState.mockReturnValue({ ...healthy, failed: true });
     await expect(h['native/persisted']()).rejects.toThrow(

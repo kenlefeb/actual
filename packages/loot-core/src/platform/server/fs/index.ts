@@ -10,6 +10,8 @@ import { _getModule } from '#platform/server/sqlite';
 import type { SqlJsModule } from '#platform/server/sqlite';
 
 import { _setDocumentDir as _setDocumentDirShared } from './shared';
+import { filesStorageState, filesWhenPersisted } from './storage-state';
+import type { StorageFile, StorageState } from './storage-state';
 
 let FS: SqlJsModule['FS'] = null;
 let BFS = null;
@@ -462,53 +464,18 @@ export const getModifiedTime = async (_filepath: string): Promise<Date> => {
   );
 };
 
-// Fork-only (sc-5219, openspec/changes/native-durable-writes D2). The
-// patched absurd-sql backend's state for every file under /blocked: in the
-// fallback mode of the iPhone and Mac shells, a write is stored only when
-// its IndexedDB transaction completes. In SharedArrayBuffer mode both
-// resolve at once.
-export type StorageState = {
-  failed: boolean;
-  lastStoredFlushAt: number | null;
-  quota: boolean;
-};
-
-type PersistedOps = {
-  whenPersisted?: () => Promise<void>;
-  storageState?: () => {
-    failed: unknown;
-    lastStoredFlushAt: number | null;
-    quota: boolean;
-  };
-};
-
-function blockedOps(): PersistedOps[] {
-  const files: Map<string, { ops: PersistedOps }> | undefined =
-    BFS?.backend?.files;
-  return files ? [...files.values()].map(file => file.ops) : [];
+// Fork-only (sc-5219, openspec/changes/native-durable-writes D2): the patched
+// absurd-sql backend's state for the files under /blocked. In the fallback
+// mode of the iPhone and Mac shells, a write is stored only when its
+// IndexedDB transaction completes. In SharedArrayBuffer mode both answer at
+// once.
+function blockedFiles(): StorageFile[] {
+  const files: Map<string, StorageFile> | undefined = BFS?.backend?.files;
+  return files ? [...files.values()] : [];
 }
 
-/** Resolves when every write so far is stored; rejects once any failed. */
-export async function whenPersisted(): Promise<void> {
-  await Promise.all(blockedOps().map(ops => ops.whenPersisted?.()));
-}
+export const whenPersisted = (): Promise<void> =>
+  filesWhenPersisted(blockedFiles());
 
-export function storageState(): StorageState {
-  const states = blockedOps().flatMap(ops =>
-    ops.storageState ? [ops.storageState()] : [],
-  );
-  const failed = states.find(s => s.failed);
-  const stored = states
-    .map(s => s.lastStoredFlushAt)
-    .filter((at): at is number => at != null);
-  return {
-    failed: Boolean(failed),
-    // After a failure, the cut is the failed file's own last stored flush
-    lastStoredFlushAt: failed
-      ? failed.lastStoredFlushAt
-      : stored.length
-        ? Math.max(...stored)
-        : null,
-    quota: Boolean(failed?.quota),
-  };
-}
+export const storageState = (): StorageState =>
+  filesStorageState(blockedFiles());

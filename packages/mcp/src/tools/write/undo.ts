@@ -13,7 +13,7 @@ import { syncNow } from '#sync';
 import { lastReconciledOf } from '#tools/read/reconciliation';
 
 import { budgeted } from './budget';
-import { load } from './categories';
+import { groupOrder, load, nextOf } from './categories';
 import { checkRows, rowKey as stateKey } from './delete-snapshot';
 import {
   budgetId,
@@ -50,6 +50,14 @@ const UNDOABLE: Record<string, Scope[]> = {
   write_delete_transactions: ['transactions:write', 'delete'],
   write_delete_category: ['structure:write', 'delete'],
   write_delete_category_group: ['structure:write', 'delete'],
+  write_move_category: ['structure:write'],
+  write_move_category_group: ['structure:write'],
+};
+
+/** The change that records a move's old place, by tool (design D1). */
+const NEXT_FIELD: Record<string, string> = {
+  write_move_category: 'next_category_id',
+  write_move_category_group: 'next_group_id',
 };
 
 /** Tools whose writes are budget cells (`category:month`), undone against the cell limit. */
@@ -175,6 +183,12 @@ function whyNot(e: Entry) {
   if (tool === 'write_undo') return 'an undo cannot be undone';
   if (e.attempt?.schema !== 2) return 'written before undo existed';
   if (!(tool in UNDOABLE)) return 'this kind of write is not undoable yet';
+  if (
+    tool in NEXT_FIELD &&
+    !changesOf(e).some(c => c.field === NEXT_FIELD[tool])
+  ) {
+    return 'logged before moves recorded their place';
+  }
   const o = e.outcome;
   if (!o) return 'no outcome was logged';
   // A budget-cell write that stopped midway recorded only its applied cells
@@ -902,6 +916,139 @@ async function planDeleteCategories(ctx: Ctx, group: boolean): Promise<Plan> {
   );
 }
 
+/**
+ * An undo of a category or group move (design D3). It trusts only the line's
+ * ids; every fact it checks is read now, after a sync, and the old place must
+ * pass the rules the move tool applies to its arguments.
+ */
+async function planMove(ctx: Ctx, group: boolean): Promise<Plan> {
+  const tool = group ? 'write_move_category_group' : 'write_move_category';
+  const nextField = NEXT_FIELD[tool];
+  const raw = ctx.entry.attempt?.changes;
+  const ids = ctx.entry.attempt?.ids;
+  const all = changesOf(ctx.entry);
+  const rowId = Array.isArray(ids) && ids.length === 1 ? ids[0] : undefined;
+  const nexts = all.filter(c => c.field === nextField);
+  const moves = all.filter(c => c.field === 'group_id');
+  const idOrNull = (v: unknown) => v === null || isId(v);
+  // Exactly one row, with exactly the expected changes for it (design D2)
+  const valid =
+    Array.isArray(raw) &&
+    raw.length === all.length &&
+    all.length === (group ? 1 : 2) &&
+    nexts.length === 1 &&
+    moves.length === (group ? 0 : 1) &&
+    all.every(c => c.id === rowId) &&
+    idOrNull(nexts[0].before) &&
+    idOrNull(nexts[0].after) &&
+    moves.every(c => isId(c.before) && isId(c.after));
+  if (!valid || !isId(rowId)) {
+    throw notUndoable('A logged value is not an id of its kind.');
+  }
+  const next = nexts[0] as Change & { before: string | null };
+  const oldNext = next.before;
+  await syncFirst();
+
+  const what = group ? 'group' : 'category';
+  const problems: string[] = [];
+  const at = (item: string, field: string, cause: string) =>
+    problems.push(`${item} (${field}): ${cause}`);
+  if (oldNext === rowId) {
+    at(rowId, nextField, `a ${what} cannot sit before itself`);
+  }
+  const groups = await load();
+  let oldGroup: string | undefined;
+  if (group) {
+    const order = await groupOrder();
+    if (!order.includes(rowId)) {
+      at(rowId, 'row', 'the group has been deleted');
+    } else if (nextOf(order, rowId) !== next.after) {
+      at(rowId, nextField, 'the group has been reordered since');
+    }
+    if (oldNext !== null && oldNext !== rowId && !order.includes(oldNext)) {
+      at(oldNext, nextField, 'the group it sat before has been deleted');
+    }
+  } else {
+    const move = moves[0] as Change & { before: string; after: string };
+    oldGroup = move.before;
+    const now = groups.find(g => g.categories.some(c => c.id === rowId));
+    const row = now?.categories.find(c => c.id === rowId);
+    const old = groups.find(g => g.id === move.before);
+    if (!now || !row) {
+      at(rowId, 'row', 'the category has been deleted');
+    } else if (now.id !== move.after) {
+      at(
+        rowId,
+        'group_id',
+        'the category has been moved to another group since',
+      );
+    } else if (
+      nextOf(
+        now.categories.map(c => c.id),
+        rowId,
+      ) !== next.after
+    ) {
+      at(rowId, nextField, 'the category has been reordered since');
+    }
+    if (!old) {
+      at(move.before, 'group_id', 'the group it came from has been deleted');
+    } else if (row) {
+      if (old.is_income !== row.is_income) {
+        at(
+          old.id,
+          'group_id',
+          'a category cannot move between an income and an expense group',
+        );
+      }
+      if (
+        old.id !== now?.id &&
+        old.categories.some(
+          c =>
+            c.id !== rowId && c.name.toLowerCase() === row.name.toLowerCase(),
+        )
+      ) {
+        at(
+          rowId,
+          'name',
+          'a category of the same name is now in the group it came from',
+        );
+      }
+    }
+    if (oldNext !== null && oldNext !== rowId) {
+      const holder = groups.find(g => g.categories.some(c => c.id === oldNext));
+      if (!holder) {
+        at(oldNext, nextField, 'the category it sat before has been deleted');
+      } else if (holder.id !== move.before) {
+        at(
+          oldNext,
+          nextField,
+          'the category it sat before is now in another group',
+        );
+      }
+    }
+  }
+  if (problems.length > 0) {
+    throw new UndoRefusal(
+      `This move can no longer be undone safely: ${problems.join('; ')}. The ${what} stays where it is; move it by hand with ${tool}, or tell the budget's owner. Nothing changed.`,
+      'conflict',
+    );
+  }
+  return {
+    ids: [rowId],
+    deletes: false,
+    changes: swapped(all),
+    steps: [
+      {
+        id: rowId,
+        run: async () => {
+          if (group) await api.moveCategoryGroup(rowId, oldNext ?? undefined);
+          else await api.moveCategory(rowId, oldGroup!, oldNext ?? undefined);
+        },
+      },
+    ],
+  };
+}
+
 const PLANNERS: Record<string, (ctx: Ctx) => Promise<Plan>> = {
   write_update_transactions: planUpdateTransactions,
   write_create_transactions: planCreateTransactions,
@@ -916,6 +1063,8 @@ const PLANNERS: Record<string, (ctx: Ctx) => Promise<Plan>> = {
   write_delete_transactions: planDeleteTransactions,
   write_delete_category: ctx => planDeleteCategories(ctx, false),
   write_delete_category_group: ctx => planDeleteCategories(ctx, true),
+  write_move_category: ctx => planMove(ctx, false),
+  write_move_category_group: ctx => planMove(ctx, true),
 };
 
 type RegisterRead = <S extends z.ZodRawShape>(
@@ -966,7 +1115,7 @@ export function registerUndoTools(
 
   tool(
     'write_undo',
-    "Undo one of this identity's earlier writes by its write_id (from the write's result or list_writes): transaction creates and updates, budget amounts (also copy last month and set to average), category and group creates and updates, and deletes of transactions, categories and category groups (sync first; the deleted rows come back with their ids). It restores the logged values and is refused, changing nothing, if any of them changed since or a created row is in use. A write can be undone once. Reversing a write needs the scopes that write needed. Moves, paycheck skips and account tools are not undoable.",
+    "Undo one of this identity's earlier writes by its write_id (from the write's result or list_writes): transaction creates and updates, budget amounts (also copy last month and set to average), category and group creates and updates, deletes of transactions, categories and category groups (sync first; the deleted rows come back with their ids), and category and group moves (sync first; the row goes back before its old next sibling, or is refused naming what changed). It restores the logged values and is refused, changing nothing, if any of them changed since or a created row is in use. A write can be undone once. Reversing a write needs the scopes that write needed. Paycheck skips and account tools are not undoable.",
     {
       write_id: id,
       allow_reconciled: z.boolean().optional(),
@@ -999,13 +1148,23 @@ export function registerUndoTools(
       if (
         !entry?.attempt ||
         !isMine(entry, log) ||
-        whyNot(entry) ||
         entry.attempt.budget_id !== (await budgetId())
       ) {
         refuse(new UndoRefusal(NOT_UNDOABLE, 'unknown'));
       }
       const tool = entry!.attempt!.tool as string;
       const own = { undoes: write_id };
+      // The caller's own write: its fixed reason may be named
+      const reason = whyNot(entry!);
+      if (reason) {
+        refuse(
+          new UndoRefusal(
+            `That write cannot be undone: ${reason}. Nothing changed.`,
+            'not-undoable',
+          ),
+          own,
+        );
+      }
       const used = usedBy(entry!);
       if (used) {
         refuse(

@@ -47,7 +47,7 @@ The attempt line of `write_move_category` SHALL hold `group_id` and `next_catego
 #### Scenario: The refusal says why and what to do
 - **GIVEN** an undo refused because the old neighbour "C" was deleted
 - **WHEN** the client reads the refusal
-- **THEN** it names "C" and `next_category_id`, says in plain words that the category it sat before is gone, and says the category stays where it is: move it by hand with `write_move_category`, or tell Ken
+- **THEN** it names "C" and `next_category_id`, says in plain words that the category it sat before is gone, and says the category stays where it is: move it by hand with `write_move_category`, or tell the budget's owner
 
 #### Scenario: Moved again since
 - **GIVEN** "B" moved into "Y", then moved again into "Z"

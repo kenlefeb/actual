@@ -599,9 +599,19 @@ describe('Undo a write', () => {
   it('refuses writes that are not undoable', async () => {
     await start(1);
     const [t] = await rows();
-    const mv = await write('write_move_category_group', {
-      group_id: (await api.getCategoryGroups())[0].id,
-    });
+    // A move logged before moves recorded their place
+    const mv = { write_id: 'old-move' };
+    plantWrite(
+      mv.write_id,
+      {
+        tool: 'write_move_category_group',
+        ids: ['g'],
+        changes: [
+          { id: 'g', field: 'before_group_id', before: null, after: null },
+        ],
+      },
+      { applied: ['g'] },
+    );
     plantWrite('null-applied', {}, { applied: null });
     plantWrite('read-back', {}, { applied: [], read_back: 'failed' });
     plantWrite('failed', { ids: [t.id] }, { status: 'failed', applied: [] });

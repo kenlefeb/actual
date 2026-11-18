@@ -26,7 +26,7 @@ Test-first: write each test, run it and see it fail before writing the code. One
   - no private WebKit API or file-URL access preference is set, and no user script is added.
 
   Verify: the tests pass.
-- [ ] 1.4a Add the eviction warning. Swift stores a non-secret "budget open" flag with the cloud file id in `UserDefaults` when the page's `budget-state` event says a budget opened, and clears it when it says closed. At launch, if the flag is set and the page reports `none` after `ready`, it warns that local data was cleared and unsynced changes may be lost, then shows onboarding. Test with fakes, failing first: the flag plus empty storage warns, and a first launch does not. Verify: the tests pass.
+- [x] 1.4a Add the eviction warning. Swift stores a non-secret "budget open" flag with the cloud file id in `UserDefaults` when the page's `budget-state` event says a budget opened, and clears it when it says closed. At launch, if the flag is set and the page reports `none` after `ready`, it warns that local data was cleared and unsynced changes may be lost, then shows onboarding. Test with fakes, failing first: the flag plus empty storage warns, and a first launch does not. Verify: the tests pass.
 - [x] 1.5 Keep the engine alive. Closing the window orders it out without terminating; reopening from the Dock shows the same web view. Re-read hooks fire on `didBecomeActive` and `didWake` and never while inactive. Test the lifecycle logic with fakes, failing first. Verify: the tests pass.
 - [x] 1.6 Add a Debug-menu item, in Debug builds only, that calls `native/budget-month` for the current month and shows the result size and time.
 - [ ] 1.7 **Spike exit criteria.** Run on Ken's Mac or a team Mac against staging and record each result on sc-4942. All must pass before group 2 starts.
@@ -38,7 +38,7 @@ Test-first: write each test, run it and see it fail before writing the code. One
 - [ ] 1.8 If criterion 1 fails, stop. Weakening WebKit is not allowed (no private API, no file-URL access, no dropped COEP). Record the evidence, and ask the PO (through the Director) to re-plan sc-4942 onto the `packages/api` browser-worker bundle with a new page bridge and native onboarding (about 1 to 1.5 person-weeks more). If criterion 2 fails, propose moving native sign-in (story 4960) into sc-4942 the same way.
 - [x] 1.9 Add `.github/workflows/fork-mac-native.yml`: on PRs touching `packages/mobile-client/macos/**` or `packages/mobile-client/ios/NativeBridge/**`, build and test unsigned on `macos-26` with no secrets. Verify: the job runs green on this PR and fails when a test is broken on purpose (then reverted).
 - [x] 1.10 Run `yarn check:native-swift` with a temporary `import SQLite3` in a Mac Swift file. Verify: it fails and names the file, then passes once the line is removed.
-- [ ] 1.11 Security Analyst review of the sign-in and sync-download path. Confirm `isValidRedirectUrl` is unchanged, the origin guard covers the scheme, the scheme handler can't serve files outside `www`, no URL query is logged, and navigation is `https`-only. Record the review on the PR.
+- [x] 1.11 Security Analyst review of the sign-in and sync-download path. Confirm `isValidRedirectUrl` is unchanged, the origin guard covers the scheme, the scheme handler can't serve files outside `www`, no URL query is logged, and navigation is `https`-only. Record the review on the PR.
 
 ## 2. Native Budget window, read-only (sc-4951)
 

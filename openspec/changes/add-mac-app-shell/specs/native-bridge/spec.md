@@ -16,7 +16,7 @@ In the Mac app, the server URL the origin guard and page calls use SHALL be `hom
 - **THEN** the call is refused with the origin error and the message is ignored
 
 ### Requirement: The page reports its budget state to the Mac app
-In the Mac app the page SHALL post one event, `budget-state`, carrying only a state: `open` or `closed` with the budget's cloud file id (a UUID), or `none` with no id. It never carries the local budget id, which holds the budget's name. Swift SHALL accept it only through the page origin guard, and SHALL drop the whole message on any other shape, including `open` or `closed` without a UUID and `none` with an id.
+In the Mac app the page SHALL post one event, `budget-state`, carrying only a state: `open` or `closed` with the budget's cloud file id (a UUID), or `none` with no id when no budget is stored on this Mac. It never carries the local budget id, which holds the budget's name. Swift SHALL accept it only through the page origin guard, and SHALL drop the whole message on any other shape, including `open` or `closed` without a UUID and `none` with an id.
 
 #### Scenario: A budget opens
 - **GIVEN** the Mac app's page opens a synced budget
@@ -28,10 +28,15 @@ In the Mac app the page SHALL post one event, `budget-state`, carrying only a st
 - **WHEN** it posts `budget-state`
 - **THEN** the event carries `closed` and the cloud file id, and Swift accepts it
 
-#### Scenario: No budget is open
-- **GIVEN** the Mac app's page finished starting with no budget
+#### Scenario: No budget is stored
+- **GIVEN** the Mac app's page finished starting and no budget is stored on this Mac
 - **WHEN** it posts `budget-state` with `none` and no id
 - **THEN** Swift accepts it
+
+#### Scenario: A stored budget fails to open
+- **GIVEN** budgets are stored on this Mac, and the last one fails to open at startup
+- **WHEN** the page finishes starting
+- **THEN** it posts no `none`
 
 #### Scenario: A malformed event
 - **GIVEN** a `budget-state` message whose state is unknown, an `open` or `closed` whose id is missing or not a UUID, or a `none` that carries an id

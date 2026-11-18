@@ -23,6 +23,7 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
     var onEvent: ((String) -> Void)?
     var onChange: (() -> Void)?
     var onRefusedSignIn: (() -> Void)?
+    var onBudgetState: ((BudgetState) -> Void)?
     // The page that showed a link; replaceable in tests
     var sourceOrigin: (WKNavigationAction) -> PageOrigin? = MacEngineHost.sourceOrigin
     private lazy var coalescer = ChangeCoalescer { [weak self] in self?.onChange?() }
@@ -64,11 +65,20 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
     // MARK: WKScriptMessageHandler
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-        // Only the app's own page: the provider's sign-in pages load in this web view too
         let origin = message.frameInfo.securityOrigin
-        guard Self.acceptsMessage(isMainFrame: message.frameInfo.isMainFrame, scheme: origin.protocol, host: origin.host, port: origin.port),
-            let event = NativeBridgeEvent.name(of: message.body)
+        receive(message.body, isMainFrame: message.frameInfo.isMainFrame, scheme: origin.protocol, host: origin.host, port: origin.port)
+    }
+
+    func receive(_ body: Any, isMainFrame: Bool, scheme: String, host: String, port: Int) {
+        // Only the app's own page: the provider's sign-in pages load in this web view too
+        guard Self.acceptsMessage(isMainFrame: isMainFrame, scheme: scheme, host: host, port: port),
+            let event = NativeBridgeEvent.name(of: body)
         else { return }
+        if event == "budget-state" {
+            // Its exact shape or nothing (task 1.4a)
+            if let state = BudgetState.parse(body) { onBudgetState?(state) }
+            return
+        }
         onEvent?(event)
         coalescer.notify()
     }

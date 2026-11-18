@@ -39,6 +39,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         host.onChange = { [weak self] in self?.rereads?.notify() }
         // The page stays on its sign-in screen; nothing went to the browser
         host.onRefusedSignIn = { [weak self] in self?.showSignInNotSupported() }
+        let storage = StorageLossMonitor(defaults: .standard) { [weak self] in self?.showStorageLost() }
+        host.onBudgetState = { storage.handle($0) }
         self.host = host
 
         let window = NSWindow(
@@ -78,6 +80,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc private func didWake() { lifecycle.didWake() }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool { lifecycle.windowShouldClose(sender) }
+
+    // Task 1.4a: the web view's data was cleared while a budget was open
+    private func showStorageLost() {
+        guard let window else { return }
+        let alert = NSAlert()
+        alert.messageText = String(localized: "This Mac's budget data was cleared")
+        alert.informativeText = String(
+            localized: "Changes that weren't synced may be lost. Sign in and download your budget again.")
+        if let sheet = window.attachedSheet { window.endSheet(sheet) }
+        alert.beginSheetModal(for: window)
+    }
 
     // Until story 4984: a server or sign-in provider the app doesn't list
     private func showSignInNotSupported() {

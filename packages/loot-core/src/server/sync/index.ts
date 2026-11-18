@@ -835,6 +835,9 @@ export const fullSync = once(async function (): Promise<
           subtype: e.reason,
           meta: e.meta,
         });
+      } else if (e.reason === 'storage-failed') {
+        // Fork (sc-5219): the native shells show the storage-failed notice
+        app.events.emit('sync', { type: 'error', subtype: 'storage-failed' });
       } else if (e.reason === 'clock-drift') {
         app.events.emit('sync', {
           type: 'error',
@@ -907,6 +910,26 @@ async function _fullSync(
     new Timestamp(Date.now() - 5 * 60 * 1000, 0, '0').toString();
 
   const messages = getMessagesSince(since);
+
+  // Fork (sc-5219, openspec/changes/native-durable-writes D6): send only
+  // changes stored on this device. In the iPhone and Mac shells a write is
+  // stored when its IndexedDB transaction completes; wait for the writes
+  // behind these messages, at most native-persist-wait-ms, and on expiry
+  // send nothing this round. Once storage failed, send and receive nothing
+  // until reload. Elsewhere this resolves at once. Imported here, not at the
+  // top, to keep this upstream file's import graph unchanged.
+  const { storageFailed, waitForStorage } =
+    await import('#server/native/persisted');
+  if (storageFailed()) {
+    throw new SyncError('storage-failed');
+  }
+  const storage = await waitForStorage().catch(() => {
+    throw new SyncError('storage-failed');
+  });
+  if (!storage.stored) {
+    logger.info('Local storage still writing; sending at the next sync');
+    return [];
+  }
 
   const userToken = await asyncStorage.getItem('user-token');
 

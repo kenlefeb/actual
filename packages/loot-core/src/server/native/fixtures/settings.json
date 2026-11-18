@@ -104,6 +104,12 @@
       "value": 5,
       "default": 5,
       "ceiling": 30
+    },
+    {
+      "id": "native-persist-wait-ms",
+      "value": 2000,
+      "default": 2000,
+      "ceiling": 4000
     }
   ]
 }

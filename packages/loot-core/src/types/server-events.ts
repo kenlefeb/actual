@@ -109,6 +109,10 @@ export type ServerEvents = {
   'backups-updated': BackupUpdatedEvent;
   'cells-changed': CellsChangedEvent;
   'fallback-write-error': FallbackWriteErrorEvent;
+  // Fork (sc-5219): a write of the open budget failed to store; nothing more is stored
+  'storage-failed': { lastStoredFlushAt: number | null; quota: boolean };
+  // Fork (sc-5219): writes a timed-out native/persisted waited for are now stored
+  'storage-stored': undefined;
   'finish-import': FinishImportEvent;
   'finish-load': FinishLoadEvent;
   'import-progress': ImportProgressEvent;

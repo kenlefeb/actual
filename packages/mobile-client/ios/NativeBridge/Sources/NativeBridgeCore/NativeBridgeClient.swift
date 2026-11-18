@@ -121,6 +121,8 @@ public struct NativeRefusal: Equatable {
         // sc-3602 (D3): the save of an edit that changed elsewhere, or a draft rules changed since it was shown
         case changedSince = "changed-since"
         case previewStale = "preview-stale"
+        // sc-5219 (native-durable-writes D5): storage failed; nothing more is stored
+        case notStored = "not-stored"
     }
 
     public let code: Code

@@ -1,0 +1,162 @@
+diff --git a/dist/indexeddb-backend.js b/dist/indexeddb-backend.js
+index a30d815805c225258b7d49ef15af9decfe02eb2f..606cc2a88230340013c9327b193cabacc0774512 100644
+--- a/dist/indexeddb-backend.js
++++ b/dist/indexeddb-backend.js
+@@ -1,3 +1,9 @@
++// absurd-sql 0.0.54, Copyright 2021 James Long, MIT licence (see LICENSE).
++// Modified by Ken's Actual fork for sc-5219 (openspec/changes/
++// native-durable-writes): fallback writes settle on the transaction, run in
++// flush order with the values of their own flush, and latch on the first
++// failure; the file ops expose whenPersisted() and storageState(), and the
++// backend keeps its files by name.
+ let LOCK_TYPES = {
+   NONE: 0,
+   SHARED: 1,
+@@ -811,6 +817,16 @@ class FileOps {
+     this.filename = filename;
+   }
+ 
++  // Fork (sc-5219): a write here waits for its transaction's complete before
++  // returning, so it is already stored
++  whenPersisted() {
++    return Promise.resolve();
++  }
++
++  storageState() {
++    return { failed: null, lastStoredFlushAt: null, quota: false };
++  }
++
+   // TODO: This should be renamed to `getDatabaseName`
+   getStoreName() {
+     return this.filename.replace(/\//g, '-');
+@@ -1127,6 +1143,9 @@ class Persistance {
+     });
+   }
+ 
++  // Fork (sc-5219): settles on the transaction itself. An IDBTransaction
++  // never fires `success`, only `complete`, `abort` and `error`, so the
++  // original promise never resolved. The caller reports failures.
+   async write(writes, cachedFirstBlock, hasLocked) {
+     let db = await this.getDb(this.dbName);
+ 
+@@ -1136,15 +1155,18 @@ class Persistance {
+     let store = trans.objectStore('data');
+ 
+     await new Promise((resolve, reject) => {
++      trans.oncomplete = () => resolve();
++      trans.onabort = () =>
++        reject(trans.error || new Error('IndexedDB write aborted'));
++      trans.onerror = () =>
++        reject(trans.error || new Error('IndexedDB write failed'));
++
+       let req = store.get(0);
+       req.onsuccess = e => {
+         if (hasLocked) {
+           if (!isSafeToWrite(req.result, cachedFirstBlock)) {
+-            if (this.onFallbackFailure && !this.hasAlertedFailure) {
+-              this.hasAlertedFailure = true;
+-              this.onFallbackFailure();
+-            }
+             reject(new Error('Fallback mode unable to write file changes'));
++            trans.abort();
+             return;
+           }
+         }
+@@ -1153,11 +1175,7 @@ class Persistance {
+         for (let write of writes) {
+           store.put(write.value, write.key);
+         }
+-
+-        trans.onsuccess = () => resolve();
+-        trans.onerror = () => reject();
+       };
+-      req.onerror = reject;
+     });
+   }
+ }
+@@ -1173,6 +1191,41 @@ class FileOpsFallback {
+     this.transferBlockOwnership = false;
+ 
+     this.persistance = new Persistance(this.dbName, onFallbackFailure);
++
++    // Fork (sc-5219): the chain of writes, the failed latch, and when the
++    // last write that stored was flushed
++    this.onFallbackFailure = onFallbackFailure;
++    this.pending = Promise.resolve();
++    this.failed = null;
++    this.quota = false;
++    this.lastStoredFlushAt = null;
++  }
++
++  whenPersisted() {
++    return this.pending.then(() => {
++      if (this.failed) {
++        throw this.failed;
++      }
++    });
++  }
++
++  storageState() {
++    return {
++      failed: this.failed,
++      lastStoredFlushAt: this.lastStoredFlushAt,
++      quota: this.quota
++    };
++  }
++
++  fail(error) {
++    if (this.failed) {
++      return;
++    }
++    this.failed = error || new Error('IndexedDB write failed');
++    this.quota = Boolean(error && error.name === 'QuotaExceededError');
++    if (this.onFallbackFailure) {
++      this.onFallbackFailure(this.storageState());
++    }
+   }
+ 
+   async readIfFallback() {
+@@ -1277,12 +1330,24 @@ class FileOpsFallback {
+ 
+   flush() {
+     if (this.writeQueue.length > 0) {
+-      this.persistance.write(
+-        this.writeQueue,
+-        this.cachedFirstBlock,
+-        this.lockType > LOCK_TYPES.SHARED
+-      );
++      // Fork (sc-5219): captured now, so the write runs with the values of
++      // its own flush, after every earlier write, and nothing after a failure
++      let queue = this.writeQueue;
++      let firstBlock = this.cachedFirstBlock;
++      let locked = this.lockType > LOCK_TYPES.SHARED;
++      let flushedAt = Date.now();
+       this.writeQueue = [];
++      this.pending = this.pending.then(() => {
++        if (this.failed) {
++          return;
++        }
++        return this.persistance.write(queue, firstBlock, locked).then(
++          () => {
++            this.lastStoredFlushAt = flushedAt;
++          },
++          error => this.fail(error)
++        );
++      });
+     }
+     this.cachedFirstBlock = null;
+   }
+@@ -1307,6 +1372,13 @@ class IndexedDBBackend {
+ 
+     let file = new File(filename, ops);
+ 
++    // Fork (sc-5219): kept by name in production too, so the engine can ask
++    // the open budget's file whether its writes are stored
++    if (this.files == null) {
++      this.files = new Map();
++    }
++    this.files.set(filename, file);
++
+     // If we don't need perf data, there's no reason for us to hold a
+     // reference to the files. If we did we'd have to worry about
+     // memory leaks

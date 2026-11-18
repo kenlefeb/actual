@@ -109,7 +109,23 @@ export const LIMITS = {
     ceiling: 30,
     hasReader: true,
   },
+  // sc-5219 (native-durable-writes D7): under the 5 s bridge deadline; the
+  // floor avoids a meaningless "not yet stored" on every write
+  'native-persist-wait-ms': {
+    name: 'Saving: wait for device storage',
+    help: "How long a change waits to be stored on this device before the app says it isn't yet",
+    default: 2000,
+    floor: 100,
+    ceiling: 4000,
+    hasReader: true,
+  },
 } as const;
+
+/** The smallest allowed value: a limit's own floor, else 1. */
+export function floorOf(id: LimitId): number {
+  const limit = LIMITS[id];
+  return 'floor' in limit ? limit.floor : 1;
+}
 
 export type LimitId = keyof typeof LIMITS;
 
@@ -117,14 +133,15 @@ export function isLimitId(id: string): id is LimitId {
   return Object.hasOwn(LIMITS, id);
 }
 
-// A stored value counts only as a whole number from 1 to the ceiling;
+// A stored value counts only as a whole number from the floor (1 unless
+// the limit sets one) to the ceiling;
 // anything else (a bad synced value, a reset) reads as the default
 function valueOf(id: LimitId, stored: string | null | undefined) {
   const { default: fallback, ceiling } = LIMITS[id];
   // `Number()` would accept 1e1 and 0x7
   if (stored && /^\d+$/.test(stored)) {
     const n = parseInt(stored, 10);
-    if (n >= 1 && n <= ceiling) return n;
+    if (n >= floorOf(id) && n <= ceiling) return n;
   }
   return fallback;
 }

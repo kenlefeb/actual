@@ -340,8 +340,14 @@ export const init = async function () {
   // the blocked fs enough. Additionally, we don't populate the
   // default files in testing.
   if (process.env.NODE_ENV !== 'test') {
-    const backend = new IndexedDBBackend(() => {
+    // Fork (sc-5219): the patched backend reports every failed write, with
+    // the storage state the native shells show
+    const backend = new IndexedDBBackend(state => {
       connection.send('fallback-write-error');
+      connection.send('storage-failed', {
+        lastStoredFlushAt: state?.lastStoredFlushAt ?? null,
+        quota: Boolean(state?.quota),
+      });
     });
     BFS = new SQLiteFS(FS, backend);
     Module.register_for_idb(BFS);
@@ -455,3 +461,54 @@ export const getModifiedTime = async (_filepath: string): Promise<Date> => {
     'getModifiedTime not supported on the web (only used for backups)',
   );
 };
+
+// Fork-only (sc-5219, openspec/changes/native-durable-writes D2). The
+// patched absurd-sql backend's state for every file under /blocked: in the
+// fallback mode of the iPhone and Mac shells, a write is stored only when
+// its IndexedDB transaction completes. In SharedArrayBuffer mode both
+// resolve at once.
+export type StorageState = {
+  failed: boolean;
+  lastStoredFlushAt: number | null;
+  quota: boolean;
+};
+
+type PersistedOps = {
+  whenPersisted?: () => Promise<void>;
+  storageState?: () => {
+    failed: unknown;
+    lastStoredFlushAt: number | null;
+    quota: boolean;
+  };
+};
+
+function blockedOps(): PersistedOps[] {
+  const files: Map<string, { ops: PersistedOps }> | undefined =
+    BFS?.backend?.files;
+  return files ? [...files.values()].map(file => file.ops) : [];
+}
+
+/** Resolves when every write so far is stored; rejects once any failed. */
+export async function whenPersisted(): Promise<void> {
+  await Promise.all(blockedOps().map(ops => ops.whenPersisted?.()));
+}
+
+export function storageState(): StorageState {
+  const states = blockedOps().flatMap(ops =>
+    ops.storageState ? [ops.storageState()] : [],
+  );
+  const failed = states.find(s => s.failed);
+  const stored = states
+    .map(s => s.lastStoredFlushAt)
+    .filter((at): at is number => at != null);
+  return {
+    failed: Boolean(failed),
+    // After a failure, the cut is the failed file's own last stored flush
+    lastStoredFlushAt: failed
+      ? failed.lastStoredFlushAt
+      : stored.length
+        ? Math.max(...stored)
+        : null,
+    quota: Boolean(failed?.quota),
+  };
+}

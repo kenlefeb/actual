@@ -98,7 +98,11 @@ No cap gets 200 schedules under 50 ms inside the register read, so the upcoming 
 `native/account-upcoming {account_id, scope, search}` is a new read-only handler. Swift calls it after the register's first page, and again on a scope, search or change event. Upcoming rows are already a separate section, so the register appears at once and the section fills in ("Loading scheduled…"). A reply for an older request (scope, search, account, or a write since) is dropped by a request counter in the view model.
 - **In flight:** the section shows "Loading scheduled…".
 - **Failure:** the posted rows stay usable, and the section shows "Couldn't load scheduled rows. Try again." with Retry, which re-reads the upcoming section only. The copy goes in the screen's copy table.
-- **After a write:** a native write or change event that changes posted rows or schedules bumps the counter and re-runs the upcoming read. The section shows the loading state until the new reply, so upcoming rows read before a write never sit beside posted rows read after it.
+- **After a write:** a native write or change event that changes posted rows or schedules bumps the counter and re-runs the upcoming read.
+  - The old rows stay at the same height, dimmed and marked "Updating…" (count and total too, announced to VoiceOver), so the posted rows below don't move under the person's thumb. The old rows are labelled as old, never shown silently.
+  - A tap opens only the read-only detail, also marked "Updating…"; there are no swipe actions.
+  - The new reply replaces the rows. A failure replaces them with the failure state and Retry.
+  - "Loading scheduled…" stays for the first load and for scope or search changes (Product Owner review, PR #445, comment 6971029106).
 
 The web has the same cost today and the same shape: the page computes statuses (`useCachedSchedules`, with `getHasTransactionsQuery` over every schedule) and sends one `rules-run` per preview after the transactions load, and the register renders before the previews arrive. So this matches the web rather than departing from it.
 
@@ -110,7 +114,10 @@ The handler joins the allowlist (Swift list, page list, `coverage.json` skip). T
 
 When the cap drops previews, the read returns:
 - `upcomingAll`: all previews in the window, counted without running rules;
+- `upcomingKept`: the previews kept;
 - `upcomingMore`: the number dropped.
+
+All three count occurrences. The rows shown can differ from K after inversion and filtering; `upcomingCount` counts those rows.
 
 The register labels the count and total as partial ("Nearest K of M scheduled", the total labelled as the nearest rows' total), so a capped total is never read as the whole (Product Owner review, PR #445). It also says "N more scheduled rows not shown or searched; change this in Settings > Limits." `upcomingCount` and `upcomingTotal` cover returned rows only. Rows past the cap are not searched, because searching them would mean running their rules.
 

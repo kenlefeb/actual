@@ -80,12 +80,12 @@ The window SHALL be the budget's upcoming-length preference and each schedule's 
 - **THEN** the cap is 92
 
 ### Requirement: Upcoming rows are capped before rules run
-Before rules run, the read SHALL keep at most `accounts-upcoming-max-rows` previews (a synced limit via `readLimit`, default 100, ceiling 500) of the relevant schedules: each schedule's next occurrence first, then each one's second, and so on, each round in the web's preview order. Rules, inversion, filter and counts see only those. When previews were dropped it SHALL return `upcomingMore` and `upcomingAll` (all previews, counted without rules).
+Before rules run, the read SHALL keep at most `accounts-upcoming-max-rows` previews (a synced limit via `readLimit`, default 100, ceiling 500) of the relevant schedules: each schedule's next occurrence first, then each one's second, and so on, each round in the web's preview order. Rules, inversion, filter and counts see only those. When previews were dropped it SHALL return `upcomingAll` (all previews, counted without rules), `upcomingKept` and `upcomingMore`, all counting occurrences.
 
 #### Scenario: Fifty daily schedules
 - **GIVEN** 50 daily schedules over a 92-day window, about 4,600 previews, and the default row cap
 - **WHEN** native code reads the upcoming rows
-- **THEN** rules run for 100 previews only, `upcomingAll` is about 4,600 and `upcomingMore` is `upcomingAll` minus 100
+- **THEN** rules run for 100 previews only, `upcomingKept` is 100, `upcomingAll` is about 4,600 and `upcomingMore` is `upcomingAll` minus 100
 
 #### Scenario: A monthly bill among weekly schedules
 - **GIVEN** a row cap of 10, 12 weekly schedules and one monthly bill due in 20 days
@@ -95,7 +95,7 @@ Before rules run, the read SHALL keep at most `accounts-upcoming-max-rows` previ
 #### Scenario: Under the cap
 - **GIVEN** 12 previews in the window
 - **WHEN** native code reads the upcoming rows
-- **THEN** all 12 run rules and there is no `upcomingMore` or `upcomingAll`
+- **THEN** all 12 run rules and there is no `upcomingMore`, `upcomingKept` or `upcomingAll`
 
 #### Scenario: A bad value
 - **WHEN** `accounts-upcoming-max-rows` is "0", "600" or "abc"

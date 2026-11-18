@@ -17,7 +17,7 @@ Amended 2026-11-18 (design D6 to D11). Built on branch `kenlefeb/sc-4973/native-
 - [ ] 1.3 (rework) `native/account-upcoming {account_id, scope, search}` in `packages/loot-core/src/server/native/accounts.ts`, registered in the native app (design D7):
   - argument checks shared with the register read;
   - relevance first, then statuses in one query for the relevant schedules only (D9);
-  - the day cap, then the row cap `accounts-upcoming-max-rows` (default 100, ceiling 500, in `LIMITS`) before rules, kept in rounds of next occurrences (D8), with `upcomingAll` and `upcomingMore`;
+  - the day cap, then the row cap `accounts-upcoming-max-rows` (default 100, ceiling 500, in `LIMITS`) before rules, kept in rounds of next occurrences (D8), with `upcomingAll`, `upcomingKept` and `upcomingMore`;
   - then `runRules`, `ruleFields`, sort, inversion, filter and counts.
 
   Remove `upcoming`, `upcomingCount`, `upcomingTotal`, `upcomingCapDays` and all schedule work from `native/account-register`. Failing tests first for "Upcoming rows are their own read", "Upcoming rows are capped before rules run" (`upcomingAll`, `upcomingMore`, a monthly bill kept ahead of later weekly occurrences, bad values), "The upcoming read returns its count and total" (returned rows only) and "Schedule statuses cost one query" (same set as `getHasTransactionsQuery` on a fixture with a split child, a tombstoned row and a closed account)
@@ -34,8 +34,10 @@ Amended 2026-11-18 (design D6 to D11). Built on branch `kenlefeb/sc-4973/native-
   - the register shows posted rows before the upcoming reply, with "Loading scheduled…";
   - a stale reply (older scope, search or account) is dropped by the request counter;
   - a failed upcoming read keeps the posted rows usable and shows "Couldn't load scheduled rows. Try again." with Retry, which re-reads the upcoming section only;
-  - after a native write or change event, the upcoming read re-runs and the section shows "Loading scheduled…" until it answers, never older rows;
-  - "Nearest K of M scheduled" with the total labelled partial when `upcomingAll` is present, and plain "N scheduled" otherwise;
+  - after a native write or change event, the upcoming read re-runs while the old rows stay at the same height, dimmed and marked "Updating…" (count, total and VoiceOver too), until the new reply replaces them; a reply from before the write is dropped; a failure shows the failure state with Retry;
+  - an "Updating…" row opens only the read-only detail, marked "Updating…", with no swipe actions;
+  - "Loading scheduled…" only for the first load and for scope or search changes;
+  - "Nearest K of M scheduled" from `upcomingKept` and `upcomingAll`, with the total labelled partial, when `upcomingAll` is present, and plain "N scheduled" otherwise;
   - upcoming rows shown while a scope or search is set;
   - "N scheduled" and its total shown apart from the posted results;
   - both notices (`upcomingCapDays`, `upcomingMore`);

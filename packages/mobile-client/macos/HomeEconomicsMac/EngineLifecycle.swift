@@ -13,7 +13,7 @@ extension NSWindow: EngineWindow {}
 // wakes while the app is active, and when the window is reopened; never while
 // the app is inactive or the Mac is asleep, when WebKit may have suspended the page.
 final class EngineLifecycle {
-    static let terminatesAfterLastWindowClosed = false
+    static let terminatesAfterLastWindowClosed = true
 
     private let reread: () -> Void
     private var isActive = false

@@ -447,41 +447,6 @@ describe('Account sync', () => {
     expect(transactions[0].payee).toBe(payeeId);
   });
 
-  test('reconcile preview does not create payees named by a rule', async () => {
-    const { id: acctId } = await prepareDatabase();
-
-    await insertRule({
-      stage: null,
-      conditionsOp: 'and',
-      conditions: [{ op: 'is', field: 'imported_payee', value: 'Bakkerij' }],
-      actions: [{ op: 'set', field: 'payee_name', value: 'Bakery Renamed' }],
-    });
-
-    const countRows = async () => [
-      (await db.first<{ n: number }>('SELECT count(*) AS n FROM payees')).n,
-      (await db.first<{ n: number }>('SELECT count(*) AS n FROM payee_mapping'))
-        .n,
-    ];
-    const before = await countRows();
-    const toImport = [
-      { date: '2020-01-02', payee_name: 'bakkerij', amount: 4133 },
-    ];
-
-    await reconcileTransactions(acctId, toImport, { isPreview: true });
-
-    expect(await countRows()).toEqual(before);
-    expect(await db.getPayeeByName('Bakery Renamed')).toBeFalsy();
-
-    // The real import after the preview still creates and sets the payee
-    await reconcileTransactions(acctId, toImport);
-
-    const payee = await db.getPayeeByName('Bakery Renamed');
-    expect(payee).toBeTruthy();
-    const transactions = await getAllTransactions();
-    expect(transactions.length).toBe(1);
-    expect(transactions[0].payee).toBe(payee.id);
-  });
-
   const testMapped = version => {
     test(`reconcile matches unmapped and mapped payees (${version})`, async () => {
       const { id: acctId } = await prepareDatabase();

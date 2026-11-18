@@ -32,7 +32,7 @@ final class SettingsBridgeTests: XCTestCase {
             NativeSettings.Limit(id: "accounts-register-page-size", value: 120, defaultValue: 50, ceiling: 200))
         // Every limit an engine handler reads: the Add transaction sheet's five
         // and story 4973's two scheduled-row limits included
-        XCTAssertEqual(settings.limits.count, 12)
+        XCTAssertEqual(settings.limits.count, 13)
     }
 
     func testServerInfoDecodesReachableAndUnreachable() async throws {

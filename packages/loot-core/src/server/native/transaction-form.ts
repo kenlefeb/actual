@@ -15,6 +15,7 @@ import {
   parseNumberFormat,
   setNumberFormat,
 } from '#shared/util';
+import type { NumberFormats } from '#shared/util';
 import type { TransactionEntity } from '#types/models';
 
 import { readTouchedState } from './accounts-writes';
@@ -39,6 +40,8 @@ export const FIELD_ERROR_CODES = [
   'transfer-same-account',
   // Added 2026-11-18 (PR 444)
   'category-hidden',
+  // Added 2026-11-18 (PR 450): a leading minus or a result below zero
+  'amount-negative',
 ] as const;
 
 export type FieldErrorCode = (typeof FIELD_ERROR_CODES)[number];
@@ -465,24 +468,167 @@ export function readDraft(name: string, value: unknown): NativeDraft {
 
 // D2: input validation, not a tunable limit
 const MAX_AMOUNT_TEXT = 100;
-// What the web's amount entry evaluates: digits, every number format's
-// separators, currency symbols, spaces, operators and parentheses
-const AMOUNT_CHARACTERS = /^[0-9.,'’   +\-*/^()−\p{Sc}]*$/u;
 
 type Amount = { amount: number } | { error: FieldErrorCode };
 
-/** One amount text in the budget's number format, as signed integer minor units. */
-function evaluateAmount(text: string, inflow: boolean, places: number): Amount {
-  if (text.trim() === '') return { error: 'amount-required' };
-  // The arithmetic parser stops at the first character it does not know and
-  // drops the rest ("1e20" would read as 1), so anything else is invalid
-  if (text.length > MAX_AMOUNT_TEXT || !AMOUNT_CHARACTERS.test(text)) {
-    return { error: 'amount-invalid' };
+// The amount grammar (design D2, spec "Amount numbers follow the budget's
+// number format" and "Amount expressions use a closed set of operators").
+// The separators are the web's own, from getNumberFormat; the grouping
+// positions, operators and signs are this grammar's. Deliberately stricter
+// than the web's evalArithmetic: no amount is silently regrouped, truncated
+// or reversed.
+function separators(format: NumberFormats) {
+  const { thousandsSeparator, decimalSeparator } = getNumberFormat({ format });
+  const grouping = [thousandsSeparator];
+  // Characters people type for the same grouping
+  if (format === 'space-comma') grouping.push(' ', ' ', ' ');
+  if (format === 'apostrophe-dot') grouping.push("'", "'");
+  return { grouping, decimal: decimalSeparator };
+}
+
+const OPERATORS: Record<string, string> = {
+  '+': '+',
+  '-': '-',
+  '−': '-',
+  '*': '*',
+  '×': '*',
+  '/': '/',
+  '÷': '/',
+};
+
+type Canonical = { text: string } | { error: FieldErrorCode };
+
+/**
+ * Reads amount text by the grammar. Returns the plain arithmetic text
+ * evalArithmetic reads (`1200.5+99.5`), `amount-negative` for a leading minus
+ * on otherwise good text, or `amount-invalid`.
+ */
+export function canonicalAmount(
+  input: string,
+  format: NumberFormats,
+): Canonical {
+  const { grouping, decimal } = separators(format);
+  const indian = format === 'comma-dot-in';
+  let text = input.trim();
+  let negative = false;
+  if (text[0] === '-' || text[0] === '−') {
+    negative = true;
+    text = text.slice(1);
   }
-  const value = evalArithmetic(text, null);
+  let at = 0;
+  let out = '';
+  let symbols = 0;
+  const isDigit = (c: string | undefined) =>
+    c !== undefined && c >= '0' && c <= '9';
+  const spaces = () => {
+    while (text[at] === ' ') at++;
+  };
+  // One currency symbol next to a number, before or after it, with optional space
+  const symbol = () => {
+    const start = at;
+    spaces();
+    if (/^\p{Sc}$/u.test(text[at] ?? '') && symbols === 0) {
+      symbols++;
+      at++;
+      spaces();
+      return true;
+    }
+    at = start;
+    return false;
+  };
+  const number = () => {
+    const groups = [''];
+    while (
+      isDigit(text[at]) ||
+      (grouping.includes(text[at]) &&
+        isDigit(text[at - 1]) &&
+        isDigit(text[at + 1]))
+    ) {
+      if (isDigit(text[at])) groups[groups.length - 1] += text[at];
+      else groups.push('');
+      at++;
+    }
+    const [first, ...rest] = groups;
+    if (rest.length > 0) {
+      const last = rest[rest.length - 1];
+      const middle = rest.slice(0, -1);
+      const ok = indian
+        ? first.length <= 2 &&
+          last.length === 3 &&
+          middle.every(g => g.length === 2)
+        : first.length <= 3 && rest.every(g => g.length === 3);
+      if (!ok) return false;
+    }
+    let digits = groups.join('');
+    if (text[at] === decimal && isDigit(text[at + 1])) {
+      at++;
+      let fraction = '';
+      while (isDigit(text[at])) fraction += text[at++];
+      digits = `${digits || '0'}.${fraction}`;
+    }
+    if (digits === '') return false;
+    out += digits;
+    return true;
+  };
+  const operand = (): boolean => {
+    spaces();
+    if (text[at] === '(') {
+      at++;
+      out += '(';
+      if (!expression()) return false;
+      spaces();
+      if (text[at] !== ')') return false;
+      at++;
+      out += ')';
+      return true;
+    }
+    const before = symbol();
+    if (!number()) return false;
+    if (!before) symbol();
+    return true;
+  };
+  const expression = (): boolean => {
+    if (!operand()) return false;
+    for (;;) {
+      spaces();
+      const op = OPERATORS[text[at] ?? ''];
+      if (!op) return true;
+      at++;
+      out += op;
+      if (!operand()) return false;
+    }
+  };
+  if (!expression() || at !== text.length) return { error: 'amount-invalid' };
+  return negative ? { error: 'amount-negative' } : { text: out };
+}
+
+/** One amount text in the budget's number format, as signed integer minor units. */
+function evaluateAmount(
+  text: string,
+  inflow: boolean,
+  places: number,
+  format: NumberFormats,
+): Amount {
+  if (text.trim() === '') return { error: 'amount-required' };
+  if (text.length > MAX_AMOUNT_TEXT) return { error: 'amount-invalid' };
+  const canonical = canonicalAmount(text, format);
+  if ('error' in canonical) return canonical;
+  // The canonical text has '.' as its only separator, which evalArithmetic
+  // reads as a decimal in the default format
+  const previous = getNumberFormat().value;
+  setNumberFormat({ format: 'comma-dot', hideFraction: false });
+  let value: number | null;
+  try {
+    value = evalArithmetic(canonical.text, null);
+  } finally {
+    // shortcut: restores the format only; the server never sets hideFraction
+    setNumberFormat({ format: previous, hideFraction: false });
+  }
   if (value === null || !Number.isFinite(value)) {
     return { error: 'amount-invalid' };
   }
+  // The sign comes from the control, never from the text
+  if (value < 0) return { error: 'amount-negative' };
   const scaled = value * 10 ** places;
   const minor = Math.round(scaled);
   // A whole number of minor units, allowing binary rounding (0.1 + 0.2)
@@ -572,7 +718,10 @@ type Lookups = {
   stored: Map<string, string | null>;
 };
 
-async function readLookups(draft: NativeDraft): Promise<Lookups> {
+async function readLookups(
+  draft: NativeDraft,
+  withSplits: boolean,
+): Promise<Lookups> {
   const accounts = new Map(
     (
       await db.all<{
@@ -586,7 +735,8 @@ async function readLookups(draft: NativeDraft): Promise<Lookups> {
       { offbudget: a.offbudget, closed: a.closed || a.tombstone },
     ]),
   );
-  const payeeIds = [draft.payee, ...draft.splits.map(s => s.payee)].filter(
+  const splits = withSplits ? draft.splits : [];
+  const payeeIds = [draft.payee, ...splits.map(s => s.payee)].filter(
     (p): p is string => typeof p === 'string',
   );
   const payees = new Map(
@@ -610,7 +760,7 @@ async function readLookups(draft: NativeDraft): Promise<Lookups> {
   const rowIds =
     draft.id === undefined
       ? []
-      : [draft.id, ...draft.splits.flatMap(s => (s.id ? [s.id] : []))];
+      : [draft.id, ...splits.flatMap(s => (s.id ? [s.id] : []))];
   const stored = new Map(
     rowIds.length
       ? (
@@ -644,7 +794,12 @@ export type NativePreview = {
   ruleFields: string[];
   replaced: { field: UserField; value: unknown }[];
   remaining: number | null;
-  errors: Record<string, FieldErrorCode>;
+  // By field; only amount-invalid carries a detail, the budget's decimal
+  // separator, never what was typed (PR 450)
+  errors: Record<
+    string,
+    { code: FieldErrorCode; detail?: { decimalSeparator: string } }
+  >;
 };
 
 async function readFormat() {
@@ -725,24 +880,19 @@ export async function evaluateDraft(
     }
   }
 
-  // currencyToAmount reads the module's number format
-  const previous = getNumberFormat().value;
-  setNumberFormat({ format: format.format, hideFraction: false });
-  let parentAmount: Amount;
-  let childAmounts: Amount[];
-  try {
-    parentAmount = evaluateAmount(
-      draft.amountText,
-      draft.inflow,
-      format.places,
-    );
-    childAmounts = draft.splits.map(s =>
-      evaluateAmount(s.amountText, s.inflow, format.places),
-    );
-  } finally {
-    // shortcut: restores the format only; the server never sets hideFraction
-    setNumberFormat({ format: previous, hideFraction: false });
-  }
+  let parentAmount = evaluateAmount(
+    draft.amountText,
+    draft.inflow,
+    format.places,
+    format.format,
+  );
+  // Over the limit, no child is evaluated or looked up (PR 450)
+  const overLimit = draft.splits.length > splitMax;
+  let childAmounts: Amount[] = overLimit
+    ? []
+    : draft.splits.map(s =>
+        evaluateAmount(s.amountText, s.inflow, format.places, format.format),
+      );
 
   const ruleFields = new Set<string>();
   const replaced: NativePreview['replaced'] = [];
@@ -782,13 +932,16 @@ export async function evaluateDraft(
         }),
       }) as TransactionEntity;
     const before = entity(draft, amount);
-    const after = (await runRules(before)) as TransactionEntity;
+    // A read: a payee a rule names stays a name (PR 447 review)
+    const after = (await runRules(before, null, {
+      createPayees: false,
+    })) as TransactionEntity & { payee_name?: string };
     const diff = getChangedValues(before, after) ?? {};
     const user = new Set<string>(draft.userFields);
     const payeeChange = changedField === 'payee';
 
     if (mode === 'save') {
-      stale = ruleDifference(before, after, user);
+      stale = ruleDifference(before, after, user, draft.payeeName);
     }
     for (const field of mode === 'save' ? [] : RULE_FIELDS) {
       if (!Object.hasOwn(diff, field)) continue;
@@ -808,8 +961,10 @@ export async function evaluateDraft(
         draft.amountText = amountText(amount, format.places, separator);
         parentAmount = { amount };
       } else if (field === 'payee') {
-        draft.payee = next as string | null;
-        draft.payeeName = null;
+        // A name no payee has yet: the save creates it
+        const named = next === 'new';
+        draft.payee = named ? null : (next as string | null);
+        draft.payeeName = named ? (after.payee_name ?? null) : null;
       } else {
         (draft as Record<string, unknown>)[field] = next;
       }
@@ -862,9 +1017,9 @@ export async function evaluateDraft(
         (emptied as Record<string, unknown>)[f] = f === 'cleared' ? false : '';
         if (f === 'category') emptied.category = null;
       }
-      const again = (await runRules(
-        entity(emptied, amount),
-      )) as TransactionEntity;
+      const again = (await runRules(entity(emptied, amount), null, {
+        createPayees: false,
+      })) as TransactionEntity;
       for (const f of probed) {
         if (again[f] === draft[f]) ruleFields.add(f);
       }
@@ -872,7 +1027,7 @@ export async function evaluateDraft(
   }
 
   // Field errors, on the draft as it now stands
-  const lookups = await readLookups(draft);
+  const lookups = await readLookups(draft, !overLimit);
   if ('error' in parentAmount) errors.amount = parentAmount.error;
   if (!validDate(draft.date)) errors.date = 'date-invalid';
   const account = draft.account ? lookups.accounts.get(draft.account) : null;
@@ -969,8 +1124,15 @@ export async function evaluateDraft(
     ruleFields: [...ruleFields].sort(),
     replaced,
     remaining,
-    errors,
     stale,
+    errors: Object.fromEntries(
+      Object.entries(errors).map(([field, code]) => [
+        field,
+        code === 'amount-invalid'
+          ? { code, detail: { decimalSeparator: separator } }
+          : { code },
+      ]),
+    ),
   };
 }
 
@@ -994,9 +1156,18 @@ function notesAlreadyApplied(current: string, next: string) {
  */
 function ruleDifference(
   before: TransactionEntity,
-  after: TransactionEntity,
+  after: TransactionEntity & { payee_name?: string },
   user: Set<string>,
+  payeeName: string | null,
 ) {
+  // A name no payee has yet, as the rules leave it (createPayees: false)
+  if (
+    after.payee === 'new' &&
+    before.payee == null &&
+    after.payee_name === payeeName
+  ) {
+    after = { ...after, payee: before.payee };
+  }
   const differs = (
     a: TransactionEntity,
     b: TransactionEntity,

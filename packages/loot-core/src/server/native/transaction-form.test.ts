@@ -25,10 +25,21 @@ const h = app.handlers;
 const form = (args: Record<string, unknown> = {}) =>
   h['native/transaction-form'](args as never);
 const payees = (search: unknown) => h['native/payees']({ search } as never);
-const preview = (
+const previewRaw = (
   draft: Record<string, unknown>,
   changedField: string | null = null,
 ) => h['native/transaction-preview']({ draft, changedField } as never);
+// The errors as bare codes, for the behaviour tests; `raw` is the contract shape
+const preview = async (
+  draft: Record<string, unknown>,
+  changedField: string | null = null,
+) => {
+  const raw = await previewRaw(draft, changedField);
+  const errors: Record<string, string> = Object.fromEntries(
+    Object.entries(raw.errors).map(([field, error]) => [field, error.code]),
+  );
+  return { ...raw, errors, raw };
+};
 const setPref = (id: string, value: string) =>
   db.update('preferences', { id, value });
 
@@ -434,18 +445,6 @@ describe('native/transaction-preview', () => {
       -100033,
     );
     expect((await preview(draft({ amountText: '12,5+1' }))).amount).toBe(-1350);
-    for (const [format, text] of [
-      ['space-comma', '1\u202F000,33'],
-      ['apostrophe-dot', '1\u2019000.33'],
-      ['comma-dot-in', '1,000.33'],
-    ]) {
-      await setPref('numberFormat', format);
-      expect((await preview(draft({ amountText: text }))).amount).toBe(-100033);
-    }
-    await setPref('numberFormat', 'comma-dot');
-    expect((await preview(draft({ amountText: '1,000.33' }))).amount).toBe(
-      -100033,
-    );
   });
 
   it('reports amount-invalid and amount-required', async () => {
@@ -456,15 +455,134 @@ describe('native/transaction-preview', () => {
       '1/0',
       '1.005',
       'abc',
+      // The grammar (PR 450): fully consumed, no unary sign
+      '1e20',
+      '0x10',
+      '1_000',
+      '12 34',
+      '1..5',
+      '12abc',
+      '2^3',
+      '5+',
+      '+5',
+      '2*-3',
+      '(1+2',
+      '1$2',
+      '$$12',
     ]) {
-      expect((await preview(draft({ amountText }))).errors).toMatchObject({
-        amount: 'amount-invalid',
-      });
+      expect(
+        (await preview(draft({ amountText }))).errors,
+        amountText,
+      ).toMatchObject({ amount: 'amount-invalid' });
     }
     expect((await preview(draft({ amountText: '' }))).errors).toMatchObject({
       amount: 'amount-required',
     });
   });
+
+  it('takes the sign from the control: a leading minus or a negative result is amount-negative', async () => {
+    for (const amountText of ['-5', '−5', '3-8', '3−8']) {
+      const result = await preview(draft({ amountText }));
+      expect(result.errors, amountText).toEqual({ amount: 'amount-negative' });
+      expect(result.draft.inflow).toBe(false);
+      expect(result.amount).toBeNull();
+    }
+    expect(
+      (await preview(draft({ amountText: '8−3', inflow: true }))).amount,
+    ).toBe(500);
+    expect((await preview(draft({ amountText: '8-8' }))).amount).toBe(0);
+  });
+
+  it("gives amount-invalid the budget's decimal separator, never the typed text", async () => {
+    expect((await previewRaw(draft({ amountText: '1,5' }))).errors).toEqual({
+      amount: { code: 'amount-invalid', detail: { decimalSeparator: '.' } },
+    });
+    await setPref('numberFormat', 'dot-comma');
+    expect((await previewRaw(draft({ amountText: '1.5' }))).errors).toEqual({
+      amount: { code: 'amount-invalid', detail: { decimalSeparator: ',' } },
+    });
+    expect(
+      (
+        await previewRaw(
+          draft({ amountText: '3-8', notes: 'n'.repeat(10_001) }),
+        )
+      ).errors,
+    ).toEqual({
+      amount: { code: 'amount-negative' },
+      notes: { code: 'notes-too-long' },
+    });
+  });
+
+  it('reads the operators, parentheses, spacing and one currency symbol', async () => {
+    expect(
+      (await preview(draft({ amountText: '(1,200.50 + 99.50) / 2' }))).amount,
+    ).toBe(-65000);
+    expect((await preview(draft({ amountText: ' 2 × 3 ÷ 4 ' }))).amount).toBe(
+      -150,
+    );
+    expect((await preview(draft({ amountText: '10-2*3' }))).amount).toBe(-400);
+    expect((await preview(draft({ amountText: ' 12.50 ' }))).amount).toBe(
+      -1250,
+    );
+    expect((await preview(draft({ amountText: '.5' }))).amount).toBe(-50);
+    expect((await preview(draft({ amountText: '$12.50' }))).amount).toBe(-1250);
+    expect((await preview(draft({ amountText: '12.50 €' }))).amount).toBe(
+      -1250,
+    );
+    await setPref('numberFormat', 'space-comma');
+    expect(
+      (await preview(draft({ amountText: '  (1 000 × 2) − 500 ÷ 2  ' })))
+        .amount,
+    ).toBe(-175000);
+  });
+
+  // The spec's accept and refuse scenarios, per number format (PR 450)
+  it.each([
+    ['comma-dot', [['1,234.56', 123456]], ['12,34', '1.234,56', '12 34']],
+    ['dot-comma', [['1.234,56', 123456]], ['1,234.56', '12 34']],
+    [
+      'space-comma',
+      [
+        ['1 234,56', 123456],
+        ['1 234,56', 123456],
+        ['1 234,56', 123456],
+      ],
+      ['12 34'],
+    ],
+    [
+      'apostrophe-dot',
+      [
+        ["1'234.56", 123456],
+        ["1'234.56", 123456],
+      ],
+      ["12'34", '12 34'],
+    ],
+    [
+      'comma-dot-in',
+      [
+        ['1,00,000.50', 10000050],
+        ['1,000', 100000],
+      ],
+      ['1,000,00', '1,000,000', '12 34'],
+    ],
+  ] as [string, [string, number][], string[]][])(
+    'reads numbers by the %s format',
+    async (format, accepted, refused) => {
+      await setPref('numberFormat', format);
+      for (const [amountText, minor] of accepted) {
+        expect(
+          (await preview(draft({ amountText, inflow: true }))).amount,
+          amountText,
+        ).toBe(minor);
+      }
+      for (const amountText of refused) {
+        expect(
+          (await preview(draft({ amountText }))).errors,
+          amountText,
+        ).toEqual({ amount: 'amount-invalid' });
+      }
+    },
+  );
 
   it('runs the rules on a new draft, as rules-run does, and writes nothing', async () => {
     await costcoRule();
@@ -486,9 +604,9 @@ describe('native/transaction-preview', () => {
     expect(result.replaced).toEqual([]);
     expect(result.errors).toEqual({});
     expect(await transactionCount()).toBe(before);
-    await expect(JSON.stringify(result, null, 2) + '\n').toMatchFileSnapshot(
-      './fixtures/transaction-preview.json',
-    );
+    await expect(
+      JSON.stringify(result.raw, null, 2) + '\n',
+    ).toMatchFileSnapshot('./fixtures/transaction-preview.json');
   });
 
   it("keeps listing a rule's field on a later preview", async () => {
@@ -500,6 +618,44 @@ describe('native/transaction-preview', () => {
     );
     expect(second.draft.category).toBe('groceries');
     expect(second.ruleFields).toContain('category');
+  });
+
+  // PR 447 review, finding 1: a rule that sets a payee by name must not
+  // create it from a read; the preview names it and the save creates it
+  it('never creates the payee a rule names, nor writes any other table', async () => {
+    await insertRule({
+      stage: null,
+      conditionsOp: 'and',
+      conditions: [{ op: 'contains', field: 'notes', value: 'zz' }],
+      actions: [{ op: 'set', field: 'payee_name', value: 'Brand New Payee' }],
+    });
+    await costcoRule();
+    const tables = [
+      'payees',
+      'payee_mapping',
+      'categories',
+      'schedules',
+      'rules',
+      'transactions',
+      'messages_crdt',
+    ];
+    const counts = async () =>
+      Promise.all(
+        tables.map(
+          async t =>
+            (await db.first<{ n: number }>(`SELECT COUNT(*) AS n FROM ${t}`))
+              ?.n,
+        ),
+      );
+    const before = await counts();
+    const result = await preview(draft({ notes: 'zz' }), 'notes');
+    expect(result.draft.payee).toBeNull();
+    expect(result.draft.payeeName).toBe('Brand New Payee');
+    expect(result.ruleFields).toContain('payee');
+    // The ruleFields re-run: notes and the payee already hold the rule's values
+    await preview(result.draft, 'amount');
+    await preview(draft({ notes: 'zz', payee: 'costco' }), 'payee');
+    expect(await counts()).toEqual(before);
   });
 
   it('runs no rules on a draft with an id', async () => {
@@ -550,9 +706,9 @@ describe('native/transaction-preview', () => {
     );
     expect(other.draft.category).toBe('dining');
     expect(other.ruleFields).not.toContain('category');
-    await expect(JSON.stringify(result, null, 2) + '\n').toMatchFileSnapshot(
-      './fixtures/transaction-preview-replaced.json',
-    );
+    await expect(
+      JSON.stringify(result.raw, null, 2) + '\n',
+    ).toMatchFileSnapshot('./fixtures/transaction-preview-replaced.json');
   });
 
   it('applies a split rule, and returns the children and the remainder', async () => {
@@ -613,9 +769,22 @@ describe('native/transaction-preview', () => {
     expect(result.splitAmounts).toEqual([-1000, -500]);
     expect(result.remaining).toBe(-1500);
     expect(result.errors).toMatchObject({ splits: 'split-mismatch' });
-    await expect(JSON.stringify(result, null, 2) + '\n').toMatchFileSnapshot(
-      './fixtures/transaction-preview-split.json',
-    );
+    await expect(
+      JSON.stringify(result.raw, null, 2) + '\n',
+    ).toMatchFileSnapshot('./fixtures/transaction-preview-split.json');
+  });
+
+  it('checks the split count before evaluating or looking up any child', async () => {
+    const children = Array.from({ length: 2000 }, (_, i) => ({
+      payee: `missing-${i}`,
+      category: 'nope',
+      notes: '',
+      inflow: false,
+      amountText: '1e20',
+    }));
+    const result = await preview(draft({ splits: children }));
+    expect(result.errors).toEqual({ splits: 'split-limit' });
+    expect(result.splitAmounts.every(a => a === null)).toBe(true);
   });
 
   it('reports split-limit over transaction-split-max-children (default 50, ceiling 200)', async () => {

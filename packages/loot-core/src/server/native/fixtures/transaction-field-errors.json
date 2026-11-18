@@ -11,5 +11,6 @@
   "payee-too-long",
   "notes-too-long",
   "transfer-same-account",
-  "category-hidden"
+  "category-hidden",
+  "amount-negative"
 ]

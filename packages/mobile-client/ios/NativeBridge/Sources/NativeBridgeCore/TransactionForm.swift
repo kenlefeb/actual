@@ -134,6 +134,8 @@ public enum TransactionFieldError: String, Codable, CaseIterable {
     case notesTooLong = "notes-too-long"
     case transferSameAccount = "transfer-same-account"
     case categoryHidden = "category-hidden"
+    // A leading minus or a result below zero; the sign comes from the control (PR 450)
+    case amountNegative = "amount-negative"
 }
 
 // The draft the sheet sends and the preview returns. Only these keys reach
@@ -226,8 +228,19 @@ public struct TransactionPreview: Codable, Equatable {
     public let replaced: [Replaced]
     // The parent minus the children's sum, for a split
     public let remaining: Int?
+    // One field's error. Only amount-invalid carries a detail: the budget's
+    // decimal separator, never what was typed (PR 450)
+    public struct FieldError: Codable, Equatable {
+        public struct Detail: Codable, Equatable {
+            public let decimalSeparator: String
+        }
+
+        public let code: TransactionFieldError
+        public let detail: Detail?
+    }
+
     // By field: "amount", or "splits.<index>.<field>" for a child
-    public let errors: [String: TransactionFieldError]
+    public let errors: [String: FieldError]
 }
 
 // The form's read and preview arguments, as the page forwards them (D4)

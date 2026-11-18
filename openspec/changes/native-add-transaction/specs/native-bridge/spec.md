@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: The transaction form is one read
-`native/transaction-form` SHALL return, in one message, the currency fields, the open accounts with their transfer payee ids, the non-hidden categories, the new-transaction defaults, and for an id the parent and children (each field, amounts as minor units), each transfer partner's own fields and whether its account is closed, schedule, attachment names and the digest. An id that is not a live top-level transaction, or is in a closed account, SHALL fail with `[native:not-found]`.
+`native/transaction-form` SHALL return, in one message, the currency fields, the open accounts with their transfer payee ids, the categories each marked hidden or not, the new-transaction defaults, and for an id the parent and children (each field, amounts as minor units), each transfer partner's own fields and whether its account is closed, schedule, attachment names and the digest. An id that is not a live top-level transaction, or is in a closed account, SHALL fail with `[native:not-found]`.
 
 #### Scenario: Reading a split transfer
 - **GIVEN** a split whose second child is a transfer to Savings
@@ -12,6 +12,11 @@
 - **GIVEN** the contract fixture checked by vitest and decoded by the Swift tests
 - **WHEN** the handler's output shape changes
 - **THEN** the vitest contract test fails, and the Swift decode test fails against the regenerated fixture
+
+#### Scenario: Hidden categories are marked
+- **GIVEN** a hidden category "Old Hobby"
+- **WHEN** native code reads the form
+- **THEN** "Old Hobby" is in its group, marked hidden
 
 #### Scenario: Transfer payees
 - **WHEN** native code reads the form
@@ -75,7 +80,7 @@ loot-core SHALL accept a draft and its splits only with the listed keys and type
 - **THEN** the preview fails with `[native:invalid-draft]`
 
 ### Requirement: The preview evaluates amounts and rules without writing
-`native/transaction-preview` SHALL return the draft as the web form would show it after a field commit, each amount evaluated from its text in the budget's number format as signed integer minor units, the split remainder, the fields set by rules, any fields a payee change replaced with their previous values, and field errors from a closed set of codes. It SHALL write nothing and never create a payee.
+`native/transaction-preview` SHALL return the draft as the web form would show it after a field commit, each amount evaluated from its text as signed integer minor units, the split remainder, the fields set by rules, any fields a payee change replaced with their previous values, and field errors from a closed set of codes. It SHALL have no side effects: no table written, no payee created, no undo step.
 
 #### Scenario: Arithmetic
 - **WHEN** a draft carries amount text `12.50+3*2` with Outflow in a `1,000.33` budget
@@ -90,6 +95,15 @@ loot-core SHALL accept a draft and its splits only with the listed keys and type
 - **WHEN** a draft names the new payee "Corner Bakery"
 - **THEN** no payee is created
 
+#### Scenario: A rule names a payee that does not exist
+- **GIVEN** a rule "notes contains zz → set payee name Brand New Payee", and no such payee
+- **WHEN** native code previews a new draft with notes "zz" ten times
+- **THEN** each result carries the payee name "Brand New Payee" unresolved, and the number of payees is unchanged
+
+#### Scenario: The save creates it
+- **WHEN** native code then saves that draft
+- **THEN** "Brand New Payee" is created in the save's undo step, and undo removes it
+
 ### Requirement: Rules keep the person's own fields
 In a preview of a new draft, rules SHALL not change a field the person set or cleared by hand, except that a payee change may replace it, as on the web; each field so replaced SHALL be returned with its previous value. A draft with an id SHALL run no rules.
 
@@ -102,6 +116,85 @@ In a preview of a new draft, rules SHALL not change a field the person set or cl
 - **GIVEN** the person chose category Dining by hand
 - **WHEN** the payee changes to Costco
 - **THEN** the preview returns Groceries and lists category as replaced, previously Dining
+
+### Requirement: Amount numbers follow the budget's number format
+Preview and save SHALL read each number by the budget's format: grouping only between integer digits at the format's group positions (3 digits, or last 3 then 2 for `1,00,000`), with space, NBSP and U+202F interchangeable in `space-comma` and `'` and U+2019 in `apostrophe-dot`; one decimal separator. A number not fully read SHALL be `amount-invalid`.
+
+#### Scenario: comma-dot
+- **GIVEN** the budget's format is `comma-dot`
+- **THEN** `1,234.56` reads as 1234.56, and `12,34` and `1.234,56` are `amount-invalid`
+
+#### Scenario: dot-comma
+- **GIVEN** the format is `dot-comma`
+- **THEN** `1.234,56` reads as 1234.56, and `1,234.56` is `amount-invalid`
+
+#### Scenario: space-comma
+- **GIVEN** the format is `space-comma`
+- **THEN** `1 234,56`, `1\u00A0234,56` and `1\u202F234,56` each read as 1234.56, and `12 34` is `amount-invalid`
+
+#### Scenario: apostrophe-dot
+- **GIVEN** the format is `apostrophe-dot`
+- **THEN** `1'234.56` and `1’234.56` read as 1234.56, and `12'34` is `amount-invalid`
+
+#### Scenario: comma-dot-in
+- **GIVEN** the format is `comma-dot-in`
+- **THEN** `1,00,000.50` reads as 100000.50, and `1,000,00` and `1,000,000` are `amount-invalid`
+
+### Requirement: An unreadable amount says how to write one
+The preview's `amount-invalid` field error SHALL carry the budget's decimal separator, `.` or `,`, taken from its number format and never from the text typed. The sheet SHALL show a translated message naming that separator with an example in the budget's format; `amount-negative` SHALL tell the person to choose Expense or Income.
+
+#### Scenario: Dot-decimal budget
+- **GIVEN** the format is `comma-dot`
+- **WHEN** the person types `12,50`
+- **THEN** the error carries separator `.`, and the sheet says "Use . for decimals, like 12.50"
+
+#### Scenario: Comma-decimal budget
+- **GIVEN** the format is `dot-comma`
+- **WHEN** the person types `12.50`
+- **THEN** the error carries separator `,`, and the sheet says "Use , for decimals, like 12,50"
+
+#### Scenario: A leading minus
+- **WHEN** the person types `-5`
+- **THEN** the sheet tells them to choose Expense or Income instead
+
+### Requirement: Amount expressions use a closed set of operators
+Preview and save SHALL accept `+ - * /`, `×` and `÷`, and `−` (U+2212) as subtraction, each between two operands, with parentheses; spaces next to an operator or parenthesis, or around the text, are ignored. One currency symbol next to a number SHALL be ignored. Anything else, including `1e20`, `0x10`, `1_000`, `^` and a leading `+`, SHALL be `amount-invalid`.
+
+#### Scenario: Operators and spacing
+- **GIVEN** the format is `space-comma`
+- **WHEN** a draft chosen as Expense has amount text `  (1 000 × 2) − 500 ÷ 2  `
+- **THEN** the preview returns −175000
+
+#### Scenario: Currency symbol
+- **GIVEN** the format is `comma-dot`
+- **THEN** `$12.50` and `12.50 €` read as 12.50, and `1$2` is `amount-invalid`
+
+#### Scenario: Refused text
+- **WHEN** a draft's amount text is `1e20`, `0x10`, `1_000`, `2^3`, `1..5`, `12abc` or `5+`
+- **THEN** the preview reports `amount-invalid` and the save fails with `[native:invalid-draft:amount-invalid]`
+
+#### Scenario: Leading plus
+- **WHEN** the amount text is `+5`
+- **THEN** it is `amount-invalid`, as on the web, because the sign comes only from the control
+
+#### Scenario: Surrounding whitespace
+- **WHEN** the amount text is ` 12.50 ` with a pasted trailing space
+- **THEN** it reads as 12.50, because whitespace around the text changes no value
+
+### Requirement: The sign comes only from the control
+The sign SHALL come only from Expense, Income or the transfer's direction. A leading `-` or `−` and a result below zero SHALL be `amount-negative`, whose message tells the person to choose Expense or Income; a minus between two operands SHALL be subtraction.
+
+#### Scenario: A leading minus
+- **WHEN** a draft chosen as Expense has amount text `-5` or `−5`
+- **THEN** the preview reports `amount-negative`, the direction stays Expense, and the save fails with `[native:invalid-draft:amount-negative]`
+
+#### Scenario: A negative result
+- **WHEN** the amount text is `3-8` or `3−8`
+- **THEN** the preview reports `amount-negative` and nothing flips
+
+#### Scenario: Subtraction
+- **WHEN** the amount text is `8−3` as Income
+- **THEN** the preview returns +500
 
 ### Requirement: Field values are bounded
 The engine SHALL report as field errors: amount text over 100 characters, or an amount not finite, not whole minor units or beyond the safe integer range (`amount-invalid`); notes on any row over `transaction-notes-max-length` (default 10,000, ceiling 50,000; `notes-too-long`); a date that is not real or outside 1900-01-01 to 2999-12-31 (`date-invalid`). A future date SHALL be allowed.
@@ -117,6 +210,18 @@ The engine SHALL report as field errors: amount text over 100 characters, or an 
 #### Scenario: Dates
 - **WHEN** the date is 2026-02-30 or 1899-12-31
 - **THEN** the preview reports `date-invalid`, and 2027-01-15 is accepted
+
+### Requirement: A hidden category only stays where it already is
+The preview and the save SHALL report `category-hidden` for a hidden category on a new row, or on a row whose stored category is a different one. An edited row that already has a hidden category SHALL be allowed to keep it.
+
+#### Scenario: New transaction
+- **WHEN** a new draft uses the hidden category "Old Hobby"
+- **THEN** the preview reports `category-hidden` and the save fails with `[native:invalid-draft:category-hidden]`
+
+#### Scenario: Edit keeps it
+- **GIVEN** a saved transaction in "Old Hobby", which is now hidden
+- **WHEN** native code saves an amount change that keeps the category
+- **THEN** the save succeeds and the category stays "Old Hobby"
 
 ### Requirement: Transfers need open accounts
 The preview and the save SHALL report `account-closed` when the transaction's account, or the account of any transfer payee in the draft, is closed or deleted.
@@ -220,12 +325,16 @@ A save that passes its checks SHALL create a new payee only from a trimmed, non-
 - **THEN** the call fails with `[native:invalid-draft]` and no payee is created
 
 ### Requirement: Split size is a setting
-A save or preview SHALL refuse more children than `transaction-split-max-children`, default 50, ceiling 200; a malformed or out-of-range value SHALL use the default. Over the limit, the preview SHALL report `split-limit` and the save SHALL refuse with `[native:invalid-draft:split-limit]`.
+A save or preview SHALL refuse more children than `transaction-split-max-children` (default 50, ceiling 200; a malformed or out-of-range value uses the default), checking the count before evaluating any child. Over the limit, the preview SHALL report only `split-limit` and the save SHALL refuse with `[native:invalid-draft:split-limit]`.
 
 #### Scenario: Over the default
 - **GIVEN** the preference unset
 - **WHEN** native code saves a split with 51 children
 - **THEN** the call fails with `[native:invalid-draft:split-limit]` and nothing is stored
+
+#### Scenario: Checked before evaluating
+- **WHEN** native code previews a split with 2,000 children whose amount texts are invalid
+- **THEN** the preview reports only `split-limit`, and no child is evaluated or looked up
 
 #### Scenario: Raised limit
 - **GIVEN** `transaction-split-max-children` is 120

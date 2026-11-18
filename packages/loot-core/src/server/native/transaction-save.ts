@@ -56,7 +56,7 @@ async function resolvePayee(draft: NativeDraft) {
     [name],
   );
   if (found.some(p => p.transfer_acct)) {
-    throw invalid('a payee name may not be a transfer payee\'s');
+    throw invalid("a payee name may not be a transfer payee's");
   }
   return found.length
     ? { id: found[0].id, create: null }
@@ -195,7 +195,9 @@ export async function transactionSave(
       `${NAME}: rules changed the draft since it was shown`,
     );
   }
-  const codes = [...new Set(Object.values(evaluated.errors))].sort();
+  const codes = [
+    ...new Set(Object.values(evaluated.errors).map(e => e.code)),
+  ].sort();
   if (codes.length > 0) throw invalid('invalid draft', codes);
   const amount = evaluated.amount as number;
   const splitAmounts = evaluated.splitAmounts as number[];

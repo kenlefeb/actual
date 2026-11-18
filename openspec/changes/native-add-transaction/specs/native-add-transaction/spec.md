@@ -19,12 +19,22 @@ The iPhone app SHALL show the native Add and Edit transaction sheet only while t
 - **THEN** the web form opens
 
 ### Requirement: Every entry point opens the native sheet
-While the switch is on, the iPhone app SHALL open the native sheet from the Add tab, from a tap on a native register row (edit), and from a page route to `/transactions/new` or `/transactions/<id>`. Add from inside an account's native register SHALL preset that account.
+While the switch is on, the iPhone app SHALL open the native sheet from the Add tab, a native register row (edit), and a page route to `/transactions/new` or `/transactions/<id>`. Add SHALL preset the account of the register on screen, else the account of the last transaction saved on this device if it is still open, else leave the account empty and required.
 
 #### Scenario: Add from a register
 - **GIVEN** the native register of "Checking" is on screen
 - **WHEN** the person taps Add
 - **THEN** the native sheet opens for a new transaction with account "Checking"
+
+#### Scenario: Add with no register on screen
+- **GIVEN** the last transaction saved on this iPhone was in Savings, and Budget is on screen
+- **WHEN** the person taps Add
+- **THEN** the account is Savings
+
+#### Scenario: Nothing saved yet
+- **GIVEN** no transaction has been saved on this iPhone, and no register is on screen
+- **WHEN** the person taps Add
+- **THEN** the account is empty and Save says an account is needed
 
 #### Scenario: Edit from a register row
 - **WHEN** the person taps a row in a native register
@@ -109,7 +119,7 @@ On iPhone, the amount field SHALL accept a number or an arithmetic expression wi
 - **THEN** the field shows "Enter an amount" and Save is disabled
 
 ### Requirement: Pickers show the budget's own data
-On iPhone, the payee picker SHALL search the budget's payees, favourites first, offer to create a typed name, and list open accounts other than the transaction's as Transfers. The category picker SHALL list the non-hidden categories by group. The account picker SHALL list open accounts. All three SHALL come from the engine.
+On iPhone, the payee picker SHALL search the budget's payees, favourites first, offer to create a typed name, and list open accounts other than the transaction's as Transfers. The category picker SHALL list categories by group, hidden ones as "The category picker" says. The account picker SHALL list open accounts. All three SHALL come from the engine.
 
 #### Scenario: Searching payees
 - **GIVEN** payees "Costco", "Cost Plus" and "Target"
@@ -143,7 +153,7 @@ On iPhone, the sheet SHALL offer Expense, Income and Transfer. Transfer SHALL re
 - **THEN** the Payee row returns empty and no transfer is saved
 
 ### Requirement: Category follows the account and transfer rules
-On iPhone, the sheet SHALL hide the category, saying why in words, for a transaction in an off-budget account and for a transfer between two on-budget or two off-budget accounts. A transfer between an on-budget and an off-budget account SHALL show the category only on the on-budget side.
+On iPhone, the sheet SHALL hide the category, saying why in words, for a transaction in an off-budget account and for a transfer between two on-budget or two off-budget accounts. A transfer between an on-budget and an off-budget account, either way, SHALL show an optional category on the on-budget side only, saying it counts as spending or income.
 
 #### Scenario: Off-budget account
 - **WHEN** the person sets the account to an off-budget account
@@ -156,10 +166,20 @@ On iPhone, the sheet SHALL hide the category, saying why in words, for a transac
 #### Scenario: Transfer to an off-budget account
 - **GIVEN** a new transaction in on-budget Checking
 - **WHEN** the person chooses Transfer to off-budget Brokerage
-- **THEN** the Category row shows and its category is saved on the Checking side
+- **THEN** the optional Category row shows, says the money counts as spending, and its category is saved on the Checking side
+
+#### Scenario: Transfer from an off-budget account
+- **GIVEN** a new transaction in on-budget Checking
+- **WHEN** the person chooses Transfer, into Checking from off-budget Brokerage
+- **THEN** the optional Category row shows and says the money counts as income
+
+#### Scenario: Off-budget side
+- **GIVEN** a new transaction in off-budget Brokerage
+- **WHEN** the person chooses Transfer to on-budget Checking
+- **THEN** no Category row shows, and the reason is given in words
 
 ### Requirement: The category picker
-On iPhone, the category picker SHALL list the form read's non-hidden categories by group, filter them by a typed search, offer Uncategorized first (no category), and tick the current category by id. If re-reading the categories fails, it SHALL keep the last list and show an error with Retry.
+On iPhone, the category picker SHALL list categories by group, filter by a typed search, offer Uncategorized first, and tick the current category by id. Hidden categories SHALL be under Hidden, disabled with the reason, except one the edited row already has, which is ticked and selectable. A failed category re-read SHALL keep the last list and show an error with Retry.
 
 #### Scenario: Search
 - **WHEN** the person types "groc" in the category picker
@@ -172,6 +192,16 @@ On iPhone, the category picker SHALL list the form read's non-hidden categories 
 #### Scenario: Tick by id
 - **GIVEN** two categories named "Fees" in different groups, and the transaction uses the second
 - **THEN** only the second "Fees" is ticked
+
+#### Scenario: Hidden on a new transaction
+- **GIVEN** a hidden category "Old Hobby"
+- **WHEN** the person opens the picker on a new transaction
+- **THEN** "Old Hobby" is under Hidden, cannot be chosen, and says why
+
+#### Scenario: Hidden and already used
+- **GIVEN** a saved transaction in "Old Hobby", which is now hidden
+- **WHEN** the person opens the picker while editing it
+- **THEN** "Old Hobby" is ticked and selectable, and saving another change keeps it
 
 #### Scenario: Re-read fails
 - **GIVEN** a category was added on another device and the re-read fails
@@ -215,7 +245,7 @@ On iPhone, the sheet SHALL let the person split a transaction into children, eac
 - **THEN** "Add split" is disabled and says the limit is 50
 
 ### Requirement: A changed transaction is not overwritten
-On iPhone, saving an edit SHALL fail with "This transaction changed on another device" when the transaction, any of its children, or any transfer partner changed after the sheet read it. Nothing SHALL be written. Reload SHALL keep the person's edits, take new values for fields they did not edit, list fields changed in both places with "Use theirs", and list changes made only on a split child or transfer partner.
+On iPhone, saving an edit SHALL fail with "This transaction changed on another device" when the transaction, any of its children, or any transfer partner changed after the sheet read it. Nothing SHALL be written. Reload SHALL keep the person's edits, take new values for fields they did not edit, list fields changed in both places with "Use other device's", and list changes made only on a split child or transfer partner.
 
 #### Scenario: Edited elsewhere
 - **GIVEN** the sheet is open on a transaction, and a sync changes its notes
@@ -235,10 +265,10 @@ On iPhone, saving an edit SHALL fail with "This transaction changed on another d
 #### Scenario: Both changed the same field
 - **GIVEN** the person changed the notes, and another device also changed the notes
 - **WHEN** the person taps Reload
-- **THEN** the notes keep the person's text, the list shows both texts with "Use theirs", and saving uses the new digest
+- **THEN** the notes keep the person's text, the list shows both texts with "Use other device's", and saving uses the new digest
 
-#### Scenario: Use theirs
-- **WHEN** the person taps "Use theirs" on the notes
+#### Scenario: Use other device's
+- **WHEN** the person taps "Use other device's" on the notes
 - **THEN** the notes show the other device's text
 
 #### Scenario: Only the partner changed
@@ -275,7 +305,12 @@ On iPhone, saving or deleting a transaction SHALL first ask the person to confir
 - **THEN** nothing is written and the sheet keeps the draft
 
 ### Requirement: Delete from the edit sheet
-On iPhone, the edit sheet SHALL offer Delete, which asks first and deletes the transaction with its children and transfer partners as one undo step. For a transfer, the dialog SHALL name the partner's account, say when that account is closed, say both sides are deleted, and say Undo restores both.
+On iPhone, the edit sheet SHALL offer Delete, which asks once in one dialog and deletes the transaction with its children and transfer partners as one undo step. For a transfer the dialog SHALL name the partner's account, say when it is closed, say both sides go and that Undo restores both. A reconciled row adds a line to the same dialog.
+
+#### Scenario: Reconciled transfer, one dialog
+- **GIVEN** a reconciled transfer to Savings
+- **WHEN** the person taps Delete
+- **THEN** one dialog names Savings and says it is reconciled, and confirming it deletes both sides with no second dialog
 
 #### Scenario: Partner in a closed account
 - **GIVEN** a transfer whose partner is in the closed account "Old Savings"

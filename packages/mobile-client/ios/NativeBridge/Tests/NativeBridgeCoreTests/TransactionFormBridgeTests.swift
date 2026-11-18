@@ -89,8 +89,15 @@ final class TransactionFormContractTests: XCTestCase {
         let split = try JSONDecoder().decode(TransactionPreview.self, from: splitData)
         XCTAssertEqual(split.splitAmounts, [-1000, -500])
         XCTAssertEqual(split.remaining, -1500)
-        XCTAssertEqual(split.errors["splits"], .splitMismatch)
+        XCTAssertEqual(split.errors["splits"]?.code, .splitMismatch)
         XCTAssertTrue(try roundTrips(TransactionPreview.self, splitData))
+    }
+
+    func testAnAmountErrorCarriesTheDecimalSeparator() throws {
+        let json = #"{"amount":{"code":"amount-invalid","detail":{"decimalSeparator":","}},"notes":{"code":"notes-too-long"}}"#
+        let errors = try JSONDecoder().decode([String: TransactionPreview.FieldError].self, from: Data(json.utf8))
+        XCTAssertEqual(errors["amount"]?.detail?.decimalSeparator, ",")
+        XCTAssertNil(errors["notes"]?.detail)
     }
 
     func testAnAmountRestoreValueRoundTrips() throws {

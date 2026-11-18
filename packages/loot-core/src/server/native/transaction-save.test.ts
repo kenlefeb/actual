@@ -357,6 +357,34 @@ describe('native/transaction-save: rules at save', () => {
     expect((await row(NEW_ID))?.category).toBe('dining');
   });
 
+  it("creates the payee a rule names, in the save's undo step", async () => {
+    await insertRule({
+      stage: null,
+      conditionsOp: 'and',
+      conditions: [{ op: 'contains', field: 'notes', value: 'zz' }],
+      actions: [{ op: 'set', field: 'payee_name', value: 'Brand New Payee' }],
+    });
+    const before = await count('payees');
+    let shown = draft({ notes: 'zz' });
+    for (let i = 0; i < 10; i++) {
+      shown = (
+        await h['native/transaction-preview']({
+          draft: shown,
+          changedField: 'notes',
+        })
+      ).draft as never;
+    }
+    expect(shown).toMatchObject({ payee: null, payeeName: 'Brand New Payee' });
+    expect(await count('payees')).toBe(before);
+    await save({ draft: shown });
+    const created = await db.first<{ id: string }>(
+      "SELECT id FROM payees WHERE name = 'Brand New Payee' AND tombstone = 0",
+    );
+    expect((await row(NEW_ID))?.description).toBe(created?.id);
+    await undo();
+    expect(await count('payees')).toBe(before);
+  });
+
   it('refuses a rule that sets a closed account', async () => {
     await insertRule({
       stage: null,
@@ -387,6 +415,9 @@ describe('native/transaction-save: validation', () => {
     [{ category: 'secret' }, 'category-hidden'],
     [{ date: '2026-02-30' }, 'date-invalid'],
     [{ amountText: '1e20' }, 'amount-invalid'],
+    [{ amountText: '-5' }, 'amount-negative'],
+    [{ amountText: '3-8' }, 'amount-negative'],
+    [{ amountText: '12 34' }, 'amount-invalid'],
     [{ payeeName: 'p'.repeat(201) }, 'payee-too-long'],
     [{ payee: 'to-savings', category: 'groceries' }, 'category-not-allowed'],
     [

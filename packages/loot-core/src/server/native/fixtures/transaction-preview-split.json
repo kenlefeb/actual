@@ -37,6 +37,8 @@
   "replaced": [],
   "remaining": -1500,
   "errors": {
-    "splits": "split-mismatch"
+    "splits": {
+      "code": "split-mismatch"
+    }
   }
 }

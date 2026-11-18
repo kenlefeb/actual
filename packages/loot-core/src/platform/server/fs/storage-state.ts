@@ -13,6 +13,7 @@ export type StorageState = FilesStorageState & {
 };
 
 export type StorageFile = {
+  filename: string;
   openHandles: number;
   ops: {
     whenPersisted?: () => Promise<void>;
@@ -28,14 +29,28 @@ export type StorageFile = {
  * Whether these ops belong to an open file. Named by its ops, since a
  * reopened budget has a new file under the same name.
  */
-export function isOpenFile(files: Iterable<StorageFile>, ops: unknown) {
+export function isOpenFile(
+  files: Iterable<Pick<StorageFile, 'ops' | 'openHandles'>>,
+  ops: unknown,
+) {
   return [...files].some(file => file.ops === ops && file.openHandles > 0);
 }
 
-/** Resolves when every write so far is stored; rejects if an open file's failed. */
+/**
+ * Resolves when the open budget's writes so far are stored, including those of
+ * earlier files of its name; rejects if an open file's failed. Another
+ * budget's stuck write must not hold this one back. With nothing open, every
+ * file counts, so a flush still covers a budget just closed.
+ */
 export async function filesWhenPersisted(files: Iterable<StorageFile>) {
+  const all = [...files];
+  const openNames = new Set(
+    all.filter(file => file.openHandles > 0).map(file => file.filename),
+  );
+  const waitedFor =
+    openNames.size > 0 ? all.filter(file => openNames.has(file.filename)) : all;
   await Promise.all(
-    [...files].map(async file => {
+    waitedFor.map(async file => {
       try {
         await file.ops.whenPersisted?.();
       } catch (error) {

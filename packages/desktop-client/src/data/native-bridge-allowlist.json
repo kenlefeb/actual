@@ -38,5 +38,7 @@
   "native/transaction-form",
   "native/payees",
   "native/transaction-preview",
-  "native/transaction-save"
+  "native/transaction-save",
+  "native/persisted",
+  "native/storage-state"
 ]

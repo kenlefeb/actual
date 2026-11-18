@@ -508,7 +508,9 @@ describe('the storage state across files', () => {
     openHandles: number,
     state: Partial<ReturnType<Ops['storageState']>>,
     whenPersisted = () => Promise.resolve(),
+    filename = '/blocked/open',
   ) => ({
+    filename,
     openHandles,
     ops: {
       whenPersisted,
@@ -547,6 +549,35 @@ describe('the storage state across files', () => {
     await expect(filesWhenPersisted([closed])).resolves.toBeUndefined();
     const open = file(1, { failed }, () => Promise.reject(failed));
     await expect(filesWhenPersisted([open])).rejects.toBe(failed);
+  });
+
+  const stuck = () => new Promise<void>(() => undefined);
+
+  // A flush right after closing a budget must cover its last write
+  it('waits for every file when none is open', async () => {
+    let settled = false;
+    void filesWhenPersisted([file(0, {}, stuck, '/blocked/closed')]).then(
+      () => {
+        settled = true;
+      },
+    );
+    await new Promise(resolve => setTimeout(resolve));
+    expect(settled).toBe(false);
+  });
+
+  it("does not wait for another budget's stuck write once one is open", async () => {
+    await expect(
+      filesWhenPersisted([file(0, {}, stuck, '/blocked/closed'), file(1, {})]),
+    ).resolves.toBeUndefined();
+  });
+
+  it("waits for earlier writes under the open budget's own name", async () => {
+    let settled = false;
+    void filesWhenPersisted([file(0, {}, stuck), file(1, {})]).then(() => {
+      settled = true;
+    });
+    await new Promise(resolve => setTimeout(resolve));
+    expect(settled).toBe(false);
   });
 });
 

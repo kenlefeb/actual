@@ -59,6 +59,12 @@ import type {
 
 import { accountRegister, accountsList } from './accounts';
 import {
+  accountMove,
+  accountReopen,
+  transactionsCategorize,
+  transactionsDelete,
+} from './accounts-writes';
+import {
   reconcileListSet,
   reconcileMonth,
   reconcileRows,
@@ -226,6 +232,10 @@ export type NativeHandlers = {
   'native/reconcile-lock': typeof reconcileLock;
   'native/accounts-list': typeof accountsListRead;
   'native/account-register': typeof accountRegisterRead;
+  'native/transactions-categorize': typeof transactionsCategorize;
+  'native/transactions-delete': typeof transactionsDelete;
+  'native/account-reopen': typeof accountReopen;
+  'native/account-move': typeof accountMove;
 };
 
 export const app = createApp<NativeHandlers>();
@@ -269,6 +279,35 @@ app.method(
 // sc-4386 (native-accounts-screen D1)
 app.method('native/accounts-list', accountsListRead);
 app.method('native/account-register', accountRegisterRead);
+// sc-4931 (D3): each write is one undo step carrying Swift's token
+app.method(
+  'native/transactions-categorize',
+  mutator(
+    undoable(transactionsCategorize, args => ({
+      nativeUndoToken: args?.undoToken,
+    })),
+  ),
+);
+app.method(
+  'native/transactions-delete',
+  mutator(
+    undoable(transactionsDelete, args => ({
+      nativeUndoToken: args?.undoToken,
+    })),
+  ),
+);
+app.method(
+  'native/account-reopen',
+  mutator(
+    undoable(accountReopen, args => ({ nativeUndoToken: args?.undoToken })),
+  ),
+);
+app.method(
+  'native/account-move',
+  mutator(
+    undoable(accountMove, args => ({ nativeUndoToken: args?.undoToken })),
+  ),
+);
 
 async function accountsListRead() {
   return { ...(await readCurrency()), ...(await accountsList()) };

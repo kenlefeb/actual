@@ -46,7 +46,7 @@ Alternative rejected: vendoring absurd-sql. It is larger to review and hides the
 - reject with `trans.error` on `trans.onabort` and `trans.onerror`;
 - reject at once when the safety check fails (calling `onFallbackFailure` as today).
 
-`FileOpsFallback.flush()` captures the queue, `cachedFirstBlock` and the lock state **at flush time** into constants, and only then chains them: `this.pending = this.pending.then(() => persistance.write(queue, first, locked))`. So writes keep their order and run with the values of their own flush, not later ones. Every settled write records `lastStoredAt`.
+`FileOpsFallback.flush()` captures the queue, `cachedFirstBlock` and the lock state **at flush time** into constants, and only then chains them: `this.pending = this.pending.then(() => persistance.write(queue, first, locked))`. So writes keep their order and run with the values of their own flush, not later ones. Each write records the time it was flushed (captured), and a write that stores sets `lastStoredFlushAt` to its own flush time. That is when its contents were fixed, not when it completed, so a change made while it was in flight is never reported as saved (Security, final review).
 
 On the first rejection:
 - `this.failed` is set to the error. Later flushes drop their queue and write nothing, so IndexedDB stays at the last good commit.
@@ -54,7 +54,7 @@ On the first rejection:
 
 The patched module also adds:
 - `whenPersisted()`, which returns the chain and rejects with `this.failed` if it is set;
-- `storageState()`, which returns `{ failed, lastStoredAt }` at once.
+- `storageState()`, which returns `{ failed, lastStoredFlushAt, quota }` at once, where `quota` is true when the failure was a `QuotaExceededError`.
 
 `FileOps` (SharedArrayBuffer mode) gets both, resolving at once. `IndexedDBBackend` keeps its files by name in production too, so `fs/index.ts` can reach the open budget's file. `fs/index.ts` exports `whenPersisted()` and `storageState()` across open `/blocked` files. `index.electron.ts` and `index.api.ts` export versions that resolve at once and never fail.
 
@@ -81,16 +81,18 @@ Deadline arithmetic: the wait ceiling is 4000 ms (D7), so `native/persisted` ans
 - The latch lives in the patched storage (D2). Bridge writes, web-screen edits and sync applies all set it, because they all write the same file.
 - **Before forwarding any write**, the page bridge asks `native/storage-state` (a fork handler, instant, allowlisted, no arguments) and, if the latch is set, refuses with `[native:not-stored]` without forwarding. So nothing more is applied in memory (Security, 2a). `native/undo` is a write and is refused the same way.
 - There is one residual race: a write already forwarded when another source's write fails. That write gets `stored: false` from its `native/persisted` and is covered by D6, so it is nowhere but memory.
-- On latching, the page posts `storage-failed { lastStoredAt }` to Swift (a new entry in the bridge's `EVENTS`). Swift shows a persistent app-level notice above every screen until reload, not a screen toast (Architect, blocking 3).
-- Copy (copy table, wording for the Product Owner to approve): "Changes can't be saved on this device right now. Reload the app. Changes made after <time> weren't saved and need to be made again." `<time>` is `lastStoredAt` in the person's locale. The notice offers Reload.
+- On latching, the page posts `storage-failed { lastStoredFlushAt, quota }` to Swift (a new entry in the bridge's `EVENTS`). Swift shows a persistent app-level notice above every screen until reload, not a screen toast (Architect, blocking 3).
+- Copy (copy table, wording for the Product Owner to approve). `<time>` is `lastStoredFlushAt` in the person's locale, and the notice offers Reload.
+  - General: "Changes can't be saved on this device right now. Reload the app. Changes made after <time> weren't saved and need to be made again."
+  - Device full (`quota`): "This device is full, so changes can't be saved. Free up space, then reload the app. Changes made after <time> weren't saved and need to be made again; saved changes can't sync until there's space." Sync writes to local storage too, so it can't resume until there is space.
 - Reads still show in-memory data until reload, and the notice says those changes are not kept (Architect, non-blocking 5). Writes whose replies were `stored: false` were already shown as "Saving…", never saved.
 
 ### D6. Sync sends only stored changes
 
 In upstream `server/sync/index.ts`, `_fullSync` gets a fork-marked edit:
 1. It reads the messages to send, as today.
-2. It then awaits `whenPersisted()`, which covers every write committed before the read.
-3. It sends only if that resolves.
+2. It then awaits `whenPersisted()`, which covers every write committed before the read, for at most `native-persist-wait-ms`.
+3. It sends only if that resolves. If the wait expires (a hung IndexedDB), it sends nothing this round, keeps the messages, and the next scheduled sync tries again. A hung store therefore delays sending; it never stalls sync for ever and never sends unstored changes (both reviewers, final round).
 
 If the latch is set, it sends nothing and receives nothing until reload, and reports a sync error, `storage-failed`, that the shells show as the D5 notice.
 
@@ -133,7 +135,7 @@ Fork CI, after the production web build, searches the built page and worker bund
 
 ### D11. Measurement plan and gate
 
-- **Mac (automated, CI):** an XCTest in `HomeEconomicsMacTests` times a one-row `native/transactions-categorize` through `NativeBridgeClient` 30 times with the barrier, and 30 times with the hook off. It fails when the barrier adds more than 50 ms to the median or 250 ms to the p95. It runs in `fork-mac-native`.
+- **Mac (automated, CI):** an XCTest in `HomeEconomicsMacTests` times a one-row `native/transactions-categorize` through `NativeBridgeClient` end to end, 30 times: the `native/storage-state` check, the write and `native/persisted`. It times the bare write 30 times with the hook off. It fails when the three calls together add more than 50 ms to the median or 250 ms to the p95. It runs in `fork-mac-native`.
 - **iPhone:** timings on the simulator, and on a real iPhone (model and iOS version recorded) before the native Accounts screen defaults on (Architect, non-blocking 8). The Mac VM and the simulator are not representative of iPhone flash.
 - **Stop and report:** if the gate misses, the developer stops and reports to the Director, and the gate is not loosened.
 
@@ -147,7 +149,8 @@ Fork CI, after the production web build, searches the built page and worker bund
   - `native/persisted` answers stored, not stored on timeout (fake timers) and `[native:not-stored]`;
   - `native/storage-state`;
   - the limit with its floor and ceiling;
-  - `_fullSync` sends nothing before persistence and nothing in the failed state.
+  - `_fullSync` sends nothing before persistence, gives up after the wait and retries next round, and sends nothing in the failed state;
+  - `lastStoredFlushAt` is the flush time, not the completion time, and `quota` is set on a quota error.
 - **Page bridge:** a write is refused before forwarding in the failed state, `storage-failed` is posted, and `native/persisted` and `native/storage-state` are allowlisted.
 - **Swift:**
   - the read/write table (every name classified);

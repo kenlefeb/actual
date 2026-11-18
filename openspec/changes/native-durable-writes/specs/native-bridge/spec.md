@@ -30,7 +30,7 @@ In the iPhone and Mac apps, the Swift bridge client SHALL follow every allowlist
 - **THEN** the row changes, the client returns `stored: false`, "Saved here, not yet stored on this device." shows, and it clears on the `stored` event
 
 ### Requirement: Any storage failure latches and is shown app-wide
-Any failed IndexedDB write of the open budget, from any source (bridge write, web-screen edit or sync), SHALL set a failed latch. The patched storage SHALL write nothing more, the page SHALL send a `storage-failed` event with the time of the last stored write, and Swift SHALL show a persistent app-level notice until reload, whichever screen is showing.
+Any failed IndexedDB write of the open budget, from any source (bridge write, web-screen edit or sync), SHALL set a failed latch. The patched storage SHALL write nothing more, the page SHALL send a `storage-failed` event with `lastStoredFlushAt` (when the last write that stored was flushed), and Swift SHALL show a persistent app-level notice until reload, whichever screen is showing.
 
 #### Scenario: A web-screen edit fails on quota
 - **GIVEN** a web-screen edit whose IndexedDB write fails with a quota error
@@ -55,12 +55,17 @@ Before forwarding any write, the page bridge SHALL check the storage's failed la
 - **THEN** it lists `not-stored`
 
 ### Requirement: Only stored changes reach the server
-The engine SHALL send local changes to the sync server only after `whenPersisted` resolves for the changes it reads to send, and SHALL send nothing while the failed latch is set, until reload. So a change that was refused or not stored is on neither the device nor the server, and making it again cannot create a duplicate.
+The engine SHALL send local changes to the sync server only after `whenPersisted` resolves for the changes it reads to send, waiting at most `native-persist-wait-ms`; on expiry it SHALL send nothing that round and try again at the next scheduled sync. It SHALL send nothing while the failed latch is set, until reload. So a change that was refused or not stored is on neither the device nor the server, and making it again cannot create a duplicate.
 
 #### Scenario: Refused, then made again
 - **GIVEN** a transaction added just before a storage failure, refused as not stored
 - **WHEN** the person reloads and adds it again
 - **THEN** after the next sync the transaction is there once
+
+#### Scenario: Hung storage
+- **GIVEN** an IndexedDB write that never settles
+- **WHEN** a sync runs
+- **THEN** it stops waiting after `native-persist-wait-ms`, sends nothing, and the next scheduled sync tries again
 
 #### Scenario: Stored before the failure
 - **GIVEN** changes stored before the failure and not yet synced
@@ -68,12 +73,17 @@ The engine SHALL send local changes to the sync server only after `whenPersisted
 - **THEN** those changes are there and are sent on the next sync
 
 ### Requirement: The failure notice says what was lost
-The app-level notice SHALL read, from the copy table, "Changes can't be saved on this device right now. Reload the app. Changes made after <time> weren't saved and need to be made again.", with the time of the last stored write in the person's locale, and offer Reload. Its wording SHALL be approved by the Product Owner in the copy table.
+The app-level notice SHALL say, from the copy table, that changes can't be saved, to reload, and that changes made after <time> weren't saved and need to be made again, where <time> is `lastStoredFlushAt` in the person's locale. On a quota failure it SHALL say the device is full: free space, then reload; saved changes can't sync until then. The Product Owner approves the wording.
 
-#### Scenario: The time shown
-- **GIVEN** the last stored write at 3:42 PM
-- **WHEN** storage fails at 3:45 PM
-- **THEN** the notice says changes made after 3:42 PM need to be made again, and Reload reloads the page
+#### Scenario: The time shown is when the last stored write was flushed
+- **GIVEN** a write flushed at 3:42:10 PM that stored at 3:42:12 PM, and a change made at 3:42:11 PM whose write then failed
+- **WHEN** the notice shows
+- **THEN** it says changes made after 3:42 PM (3:42:10) need to be made again, so the 3:42:11 change is not reported as saved
+
+#### Scenario: Device full
+- **GIVEN** a write that fails with a quota error
+- **WHEN** the notice shows
+- **THEN** it says the device is full, to free up space and then reload, and that saved changes can't sync until then
 
 ### Requirement: The storage wait is a limit
 `native-persist-wait-ms` SHALL be in the limits registry with the name "Saving: wait for device storage", the help line "How long a change waits to be stored on this device before the app says it isn't yet", default 2000, floor 100 and ceiling 4000, under the 5 s bridge deadline. A value outside floor to ceiling SHALL read as the default.
@@ -118,7 +128,7 @@ Any hook that disables the barrier or delays storage for tests SHALL exist only 
 - **THEN** the marker is absent, or the job fails
 
 ### Requirement: The barrier is measured and gated
-The Mac test suite SHALL time a one-row categorize through the client with and without the barrier, 30 runs, and SHALL fail when the barrier adds more than 50 ms to the median or 250 ms to the p95. A real iPhone's median and p95 SHALL be recorded before the native Accounts screen defaults on.
+The Mac test suite SHALL time a one-row categorize through the client end to end (the `native/storage-state` check, the write and `native/persisted`) against the bare write, 30 runs each, and SHALL fail when the three together add more than 50 ms to the median or 250 ms to the p95. A real iPhone's median and p95 SHALL be recorded before the native Accounts screen defaults on.
 
 #### Scenario: The gate runs in Mac CI
 - **WHEN** the `fork-mac-native` workflow runs the Mac tests

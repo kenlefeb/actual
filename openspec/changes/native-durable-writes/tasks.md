@@ -50,6 +50,8 @@
   - Put the before and after counts in the PR (D12).
 - [ ] 3.5 Run the `NativeBridgeCore` tests, the Mac tests and the iOS build; all pass. The next TestFlight build carries this change (Product Owner, comment 5222)
 
+- [ ] 3.6 Failing test first: a page restart while a write is "Saved here, not yet stored on this device." keeps that write from being reported as stored. Today a later `stored: true` (or a `stored` event from the new page, whose numbering restarts) clears it, although the earlier write may have been lost with the page. Settle the wording with the Architect's review of the restart rules
+
 ## 4. Review decisions from the engine PR (sc-5219)
 
 - [x] 4.1 Failing tests first, then the engine: a timed-out sync wait raises `storage-slow`, emits no success, sends nothing and schedules a retry; `storage-stored` follows a timed-out `native/persisted`; `storage-close-failed` fires once for a closed file and does not latch (D4, D6, D7a)

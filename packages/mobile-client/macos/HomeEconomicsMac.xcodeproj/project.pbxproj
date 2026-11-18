@@ -22,6 +22,7 @@
 		E319389EF9B76DFC83287BBA /* ReloadGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7517AD68AEAA7C7213653F71 /* ReloadGuard.swift */; };
 		E644DA7DFD4183C213063A62 /* WWWSchemeHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1C03BA71996E1EB62B964E /* WWWSchemeHandler.swift */; };
 		F3CDC31ACE9D1C98C9301252 /* EngineLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A38DD33146BC5355A150EFF5 /* EngineLifecycleTests.swift */; };
+		F61D612CD5B76B0191980DBE /* StoragePerfGateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E25B877DB99F661948EE07DA /* StoragePerfGateTests.swift */; };
 		F6FDC8769B0DEB3E2FC16ECB /* MacEngineHostTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F65F9272B94E505672B77A6 /* MacEngineHostTests.swift */; };
 /* End PBXBuildFile section */
 
@@ -51,6 +52,7 @@
 		B7C932CF5A0D05DFBF8FA00C /* HomeEconomicsMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HomeEconomicsMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B93C4666FA76203E682E2997 /* NavigationPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationPolicy.swift; sourceTree = "<group>"; };
 		CE70CE285A9B6C939404F117 /* WWWSchemeHandlerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WWWSchemeHandlerTests.swift; sourceTree = "<group>"; };
+		E25B877DB99F661948EE07DA /* StoragePerfGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoragePerfGateTests.swift; sourceTree = "<group>"; };
 		EC8AC5EBA44BDCD55211F704 /* MacEngineHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacEngineHost.swift; sourceTree = "<group>"; };
 		F2B5A64065E258F52B97291C /* HomeEconomicsMacTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HomeEconomicsMacTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F40D4FD748B9FD8E90F3DE74 /* PageRecoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageRecoveryTests.swift; sourceTree = "<group>"; };
@@ -129,6 +131,7 @@
 				4934778DE83E6B79AA8E5412 /* PageProcessKillTests.swift */,
 				F40D4FD748B9FD8E90F3DE74 /* PageRecoveryTests.swift */,
 				1E78C87304ED3D02413EBD56 /* StorageLossMonitorTests.swift */,
+				E25B877DB99F661948EE07DA /* StoragePerfGateTests.swift */,
 				CE70CE285A9B6C939404F117 /* WWWSchemeHandlerTests.swift */,
 			);
 			path = HomeEconomicsMacTests;
@@ -247,6 +250,7 @@
 				7EF2915D6377EA83F8ED104A /* PageProcessKillTests.swift in Sources */,
 				A071576772926A277BC04DFD /* PageRecoveryTests.swift in Sources */,
 				D3C448290DA45717302FF5D8 /* StorageLossMonitorTests.swift in Sources */,
+				F61D612CD5B76B0191980DBE /* StoragePerfGateTests.swift in Sources */,
 				E2ABA8D1A32401500743525F /* WWWSchemeHandlerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

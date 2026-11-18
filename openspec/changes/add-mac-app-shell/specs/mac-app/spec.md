@@ -37,6 +37,45 @@ Closing the main window SHALL hide it, without stopping the engine or discarding
 - **WHEN** the user reopens it from the Dock
 - **THEN** the same engine and open budget are shown, and the visible view re-reads
 
+### Requirement: The app's scheme serves only its bundled web build
+The app's scheme SHALL serve only files inside the bundled web build. It decodes and standardizes the path, ignores query and fragment, and refuses a path that resolves outside the build folder or contains NUL or backslash. An extensionless path that is not a file SHALL get the app's `index.html`, so client routes such as `/openid-cb` load. A missing path with an extension SHALL get not found.
+
+#### Scenario: The OpenID callback route
+- **GIVEN** the provider redirects to `homeeconomics://localhost/openid-cb?token=...`
+- **WHEN** the scheme handles the request
+- **THEN** it serves the app's `index.html`, and the page completes sign-in
+
+#### Scenario: Traversal attempts
+- **GIVEN** a request for `/%2e%2e/Info.plist`, `/..%2f..%2fInfo.plist`, a double-encoded form, or a sibling folder such as `www2/`
+- **WHEN** the scheme handles it
+- **THEN** it refuses the request and serves nothing outside the build folder
+
+#### Scenario: A missing asset
+- **GIVEN** a request for `/missing.js`
+- **WHEN** the scheme handles it
+- **THEN** it answers not found, not `index.html`
+
+### Requirement: Sign-in URLs and tokens are never logged
+The Mac app's native code SHALL NOT log, store or send a URL's query or fragment, including the OpenID return, which carries the sign-in token. The scheme handler and the navigation handler SHALL log at most the path of a refused request.
+
+#### Scenario: The OpenID return
+- **GIVEN** sign-in returns to `homeeconomics://localhost/openid-cb?token=...`
+- **WHEN** the app handles the navigation and the request
+- **THEN** no log line, crash report or stored value contains the token or the query
+
+### Requirement: The web view is never weakened
+The Mac app SHALL NOT use a private WebKit API, or enable file-URL access or universal access from file URLs, or drop COOP or COEP. It SHALL NOT run a script in the page while the main frame is off `homeeconomics://localhost`. If cross-origin isolation is missing, the only fallback is the page's direct Worker in its existing fallback mode, as on iPhone. In-frame navigation SHALL be allowed only to the app's scheme and to `https` on the sync server and provider hosts.
+
+#### Scenario: A plain-http server
+- **GIVEN** the person enters an `http://` sync server address
+- **WHEN** the web view would navigate the main frame to it
+- **THEN** the app refuses the in-frame navigation
+
+#### Scenario: Another host
+- **GIVEN** a link to a host that is neither the sync server nor the provider
+- **WHEN** it is followed
+- **THEN** it opens in the default browser, not in the app's web view
+
 ### Requirement: Onboarding uses the web screens and budgets open only by sync download
 Until native onboarding ships, the Mac app SHALL show the web screens in its window for the server URL, sign-in (password and OpenID), the budget list and the encryption password. A budget SHALL open only by downloading it from the sync server, like a new device. An end-to-end encrypted budget SHALL ask for its password before it opens.
 
@@ -63,16 +102,21 @@ Native Mac code SHALL NOT open, read or copy a budget database, including the El
 - **WHEN** it adds `import SQLite3` or names a `.sqlite` path
 - **THEN** the fork check fails and names the file
 
-### Requirement: Evicted storage is recovered by download
-The sync server SHALL stay the source of truth. If WebKit has evicted the web view's data, the Mac app SHALL show the web onboarding again, so the user signs in, downloads the budget and re-enters an encryption password. It SHALL NOT show stale numbers or fail silently.
+### Requirement: Evicted storage is recovered by download, with a warning
+The sync server SHALL stay the source of truth. Native code SHALL keep a non-secret flag, outside the web view's storage, that a budget (by id) was open. If on launch the flag is set and the web view has no budget, the app SHALL warn that this Mac's local data was cleared and unsynced changes may be lost, then show onboarding to download again.
 
-#### Scenario: Data evicted
-- **GIVEN** the app's website data was removed while the app was not running
+#### Scenario: Data evicted after a budget was open
+- **GIVEN** a budget was open, and the app's website data was removed while the app was not running
 - **WHEN** the app launches
-- **THEN** the web onboarding shows, and after sign-in the budget downloads again with the server's numbers
+- **THEN** it warns that local data was cleared and unsynced changes may be lost, then shows the web onboarding, and after sign-in the budget downloads again with the server's numbers
+
+#### Scenario: A first launch
+- **GIVEN** no budget was ever open on this Mac
+- **WHEN** the app launches with empty storage
+- **THEN** the web onboarding shows with no warning
 
 ### Requirement: The Mac app runs beside the Electron app
-The Mac app SHALL use the bundle identifier `app.homeeconomics.budget.mac`, distinct from the iOS and Electron apps' `app.homeeconomics.budget`, so it has its own sandbox container, and and SHALL never read or write the Electron app's data directory. Both apps SHALL run at the same time on one Mac, each syncing through the server, without either changing the other's local data.
+The Mac app SHALL use the bundle identifier `app.homeeconomics.budget.mac`, distinct from the iOS and Electron apps' `app.homeeconomics.budget`, so it has its own sandbox container, and it SHALL never read or write the Electron app's data directory. Both apps SHALL run at the same time on one Mac, each syncing through the server, without either changing the other's local data.
 
 #### Scenario: Both open
 - **GIVEN** the Electron app and the Mac app open on the same synced budget
@@ -80,7 +124,7 @@ The Mac app SHALL use the bundle identifier `app.homeeconomics.budget.mac`, dist
 - **THEN** after a sync the other shows the change, and neither app's local files were touched by the other
 
 ### Requirement: The page recognizes the Mac shell
-The web page SHALL recognize the Mac app by its user agent. It SHALL then start its engine in a direct Worker, as on iOS and Android, and SHALL NOT treat the Mac app as the Electron app. Browsers and Electron SHALL keep their current behaviour.
+The web page SHALL recognize the Mac app by its user agent. It SHALL then start its engine in a direct Worker in the page's existing fallback mode, as the iPhone app does, and SHALL NOT treat the Mac app as the Electron app, including where the shell picks the theme. Browsers and Electron SHALL keep their current behaviour.
 
 #### Scenario: Page in the Mac app
 - **GIVEN** the page loaded in the Mac app's web view

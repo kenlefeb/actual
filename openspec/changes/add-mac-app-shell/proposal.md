@@ -2,7 +2,7 @@
 
 ## Why
 
-ADR 11's gate for the Mac app is met: the iPhone bridge benchmark passed on device (sc-3593) and the native iPhone Budget screen has shipped. Electron can't host SwiftUI, so the Mac needs its own SwiftUI app, running the same loot-core engine, beside the Electron app until it covers Ken's daily use (parent sc-3629). This change is the first slice: the app shell and its engine host, which is also the spike (sc-4942), then the native Budget window, read-only (sc-4951) and with edits (sc-4952). The Architect's Explore findings are on sc-4942.
+ADR 11's gate for the Mac app is met: the iPhone bridge benchmark passed on device (story 3593) and the native iPhone Budget screen has shipped. Electron can't host SwiftUI, so the Mac needs its own SwiftUI app, running the same loot-core engine, beside the Electron app until it covers Ken's daily use (parent story 3629). This change is the first slice: the app shell and its engine host, which is also the spike (sc-4942), then the native Budget window, read-only (sc-4951) and with edits (sc-4952). The Architect's Explore findings are on sc-4942.
 
 ## What Changes
 
@@ -17,12 +17,15 @@ ADR 11's gate for the Mac app is met: the iPhone bridge benchmark passed on devi
   - a switch back to the web Budget screen.
 - A new Fork CI workflow, `fork-mac-native`, builds and tests the Mac app on PRs that touch it.
 - Out of scope, each with its own story:
-  - TestFlight distribution (sc-4953);
-  - Electron data migration (sc-4943);
-  - Mac chrome: sidebar, menu bar and the Settings window (sc-4944);
-  - native sign-in with `ASWebAuthenticationSession`;
-  - the Budget menu's bulk items (Copy Last Month, 3-Month Average, Zero), copy and paste of amounts, and dragging a balance onto a category;
-  - every other Mac screen (sc-4622).
+  - TestFlight distribution (story 4953);
+  - Electron data migration (story 4943);
+  - Mac chrome: sidebar, menu bar and the Settings window (story 4944);
+  - native onboarding with `ASWebAuthenticationSession` (story 4960);
+  - keyboard bulk work: multi-cell selection, fill and paste, and the Budget menu's bulk items (story 4959);
+  - dragging a balance onto a category (story 4957);
+  - clearing stored data on sign-out (story 4963);
+  - pinning the sync server's OpenID return URLs (story 4962);
+  - every other Mac screen (story 4622).
 
 ## Capabilities
 
@@ -45,4 +48,4 @@ ADR 11's gate for the Mac app is met: the iPhone bridge benchmark passed on devi
   - a new workflow `.github/workflows/fork-mac-native.yml`.
   - `NativeBridgeCore` is reused, gaining only typed undo tokens on budget writes.
 - **Security:** a new custom-scheme origin and an OpenID return to it. The sync server's redirect validation is not widened. See the design's Security section.
-- **Bundle id (Ken decided, 2026-11-17, sc-4953):** the Mac app is `app.homeeconomics.budget.mac`, with its own App Store Connect record, while it runs beside Electron. The shell PR uses development signing. TestFlight distribution stays in its own story, sc-4953, outside this change.
+- **Bundle id (Ken decided, 2026-11-17, story 4953):** the Mac app is `app.homeeconomics.budget.mac`, with its own App Store Connect record, while it runs beside Electron. The shell PR uses development signing. TestFlight distribution stays in story 4953, outside this change.

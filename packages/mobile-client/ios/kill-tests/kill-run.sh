@@ -211,23 +211,36 @@ if [ $phase = delay ]; then
   grep -q '"stored":true' $docs/result-warm-up-2.json || { echo "the warm-up was not stored in time: stopping"; exit 1; }
   held_read warm-up || exit 1
   echo "--- barrier on, 300 ms commit delay: $kills kills right after stored: true, each read back"
-  echo "kill | answer | kept after the kill | all earlier kept | integrity_check" > $out/delayed-table.txt
-  for n in {1..$kills}; do
-    kill_after kill-delayed-$n write || exit 1
-    answer=$(cat $docs/result-kill-delayed-$n.json)
-    grep -q '"stored":true' $docs/result-kill-delayed-$n.json || { echo "kill-delayed-$n was not answered stored: stopping"; exit 1; }
-    held_read after-delayed-$n || exit 1
-    names=$out/after-delayed-$n-names.txt
-    grep -qx "kill-delayed-$n" $names && kept=yes || kept=no
-    earlier=$(grep -c '^kill-delayed-' $names)
-    check=$(sqlite3 $(ls $out/after-delayed-$n-db/*.sqlite | head -1) 'PRAGMA integrity_check;')
-    echo "$n | $answer | $kept | $earlier of $n | $check" | tee -a $out/delayed-table.txt
-    if [ $kept != yes ] || [ "$earlier" != $n ] || [ "$check" != ok ]; then
-      echo "a stored write was lost or the check failed after kill $n: stopping"
+  # Under load a write can miss native-persist-wait-ms and be answered stored:
+  # false; it makes no promise, so it is killed but not counted (up to 3x tries)
+  echo "try | answer | counted | this write kept | all stored writes kept | integrity_check" > $out/delayed-table.txt
+  stored=() a=0
+  while [ ${#stored} -lt $kills ] && [ $a -lt $((kills * 3)) ]; do
+    a=$((a + 1))
+    kill_after kill-delayed-$a write || exit 1
+    answer=$(cat $docs/result-kill-delayed-$a.json)
+    if ! grep -q '"stored":true' $docs/result-kill-delayed-$a.json; then
+      echo "$a | $answer | no (not stored in time) | - | - | -" | tee -a $out/delayed-table.txt
+      continue
+    fi
+    stored+=(kill-delayed-$a)
+    held_read after-delayed-$a || exit 1
+    names=$out/after-delayed-$a-names.txt
+    grep -qx "kill-delayed-$a" $names && kept=yes || kept=no
+    all=0
+    for w in $stored; do grep -qx $w $names && all=$((all + 1)); done
+    check=$(sqlite3 $(ls $out/after-delayed-$a-db/*.sqlite | head -1) 'PRAGMA integrity_check;')
+    echo "$a | $answer | ${#stored} | $kept | $all of ${#stored} | $check" | tee -a $out/delayed-table.txt
+    if [ $kept != yes ] || [ $all != ${#stored} ] || [ "$check" != ok ]; then
+      echo "a stored write was lost or the check failed after try $a: stopping"
       keep=1
       exit 1
     fi
   done
+  if [ ${#stored} -lt $kills ]; then
+    echo "only ${#stored} of $kills writes were answered stored in $a tries: stopping"
+    exit 1
+  fi
   echo "all $kills stored writes kept"
   # The control last, so a budget it strands can't spoil the barrier result
   echo "--- control: barrier off, 300 ms commit delay"

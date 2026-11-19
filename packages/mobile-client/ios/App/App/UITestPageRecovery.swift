@@ -117,11 +117,11 @@ enum UITestKillWrites {
         let page = PageCall(runner: webView, serverURL: serverURL)
         Task {
             do {
-                write("progress", "started \(mode)")
+                log("started \(mode)")
                 try await openTestBudget(page)
-                write("progress", "budget open")
+                log("budget open")
                 try await run(mode, page)
-                write("progress", "done \(mode)")
+                log("done \(mode)")
             } catch {
                 write("error", "\(error)")
             }
@@ -129,16 +129,47 @@ enum UITestKillWrites {
     }
 
     // The same local test budget every launch: created once, its id kept beside the results
+    // Every page call is bounded on the page's side, so a stuck engine shows as a timeout
+    private static let bounded = """
+        const within = (promise, ms) => Promise.race([
+          promise, new Promise((_, reject) => setTimeout(() => reject(new Error('no answer in ' + ms + ' ms')), ms)),
+        ]);
+        """
+
     private static func openTestBudget(_ page: PageCall) async throws {
+        log("waiting for the page's bridge")
         try await waitFor { (try? await page.run("return typeof window.$send")) as? String == "function" }
+        _ = try? await page.run(
+            """
+            window.__killErrors = [];
+            addEventListener('error', e => window.__killErrors.push(String(e.message)));
+            addEventListener('unhandledrejection', e => window.__killErrors.push(String(e.reason)));
+            return 'ok';
+            """)
+        log("page's bridge ready")
         let idFile = folder.appendingPathComponent("budget-id")
         if let id = try? String(contentsOf: idFile, encoding: .utf8) {
-            // The reloaded page may reopen it on its own
-            for _ in 0..<50 {
-                if (try? await page.run("return (await window.$send('load-prefs'))?.id ?? null;")) as? String == id { return }
-                try await Task.sleep(nanoseconds: 200_000_000)
+            // First the app's own reopening, with nothing from this test
+            let start = Date()
+            while Date().timeIntervalSince(start) < 60 {
+                let open = try? await page.run(
+                    bounded + "try { return (await within(window.$send('load-prefs'), 2000))?.id ?? 'none'; } catch (e) { return 'error: ' + e.message; }")
+                if open as? String == id {
+                    log("the app reopened the budget by itself after \(Int(Date().timeIntervalSince(start))) s")
+                    return
+                }
+                if let answer = open as? String, answer.hasPrefix("error") { log("load-prefs: \(answer)") }
+                try await Task.sleep(nanoseconds: 500_000_000)
             }
-            _ = try await page.run("await window.$send('load-budget', { id }); return 'ok';", arguments: ["id": id])
+            log("the app did not reopen the budget in 60 s; page: \(await pageState(page))")
+            let opened = try await page.run(
+                bounded + "try { await within(window.$send('load-budget', { id }), 90000); return 'ok'; } catch (e) { return 'error: ' + e.message; }",
+                arguments: ["id": id]) as? String ?? "no answer"
+            log("the test's load-budget: \(opened)")
+            guard opened == "ok" else {
+                log("stalled; page: \(await pageState(page))")
+                throw CancellationError()
+            }
             return
         }
         _ = try await page.run("await window.$send('create-budget', { testMode: true }); return 'ok';")
@@ -186,6 +217,29 @@ enum UITestKillWrites {
                 """) as? String ?? ""
             write("read", read)
         }
+    }
+
+    // What the page shows and any error it reported, for a stall
+    private static func pageState(_ page: PageCall) async -> String {
+        (try? await page.run(
+            """
+            return JSON.stringify({ href: location.href, title: document.title,
+              text: (document.body?.innerText ?? '').slice(0, 400), errors: window.__killErrors ?? [] });
+            """)) as? String ?? "page did not answer"
+    }
+
+    // Appends a timestamped line, so a stall shows where it is
+    private static func log(_ line: String) {
+        let file = folder.appendingPathComponent("progress.log")
+        let text = ISO8601DateFormatter().string(from: Date()) + " " + line + "\n"
+        if let handle = try? FileHandle(forWritingTo: file) {
+            _ = try? handle.seekToEnd()
+            try? handle.write(contentsOf: Data(text.utf8))
+            try? handle.close()
+        } else {
+            try? text.write(to: file, atomically: true, encoding: .utf8)
+        }
+        write("progress", line)
     }
 
     private static func write(_ name: String, _ text: String) {

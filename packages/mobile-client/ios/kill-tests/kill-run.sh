@@ -73,10 +73,34 @@ readback() {
   echo "integrity_check ($1): $(sqlite3 $db 'PRAGMA integrity_check;')"
 }
 
+# A step that never finished: what the app logged, the screen, and the
+# simulator's storage, copied before anything is deleted and checked
+diagnose() { # label
+  local d=$out/stall-$1
+  mkdir -p $d
+  echo "--- stall $1: the app's log"
+  cat $docs/progress.log 2>/dev/null | tail -20
+  cat $docs/error.json 2>/dev/null && echo
+  xcrun simctl io $sim screenshot $d/screen.png > /dev/null 2>&1 && echo "screenshot: $d/screen.png"
+  cp -R "$(xcrun simctl get_app_container $sim $bid data)/Library" $d/Library 2>/dev/null
+  for f in $(find $d/Library -name '*.sqlite3' -o -name '*.sqlite' 2>/dev/null); do
+    echo "integrity_check ${f#$d/}: $(sqlite3 "$f" 'PRAGMA integrity_check;' 2>&1 | head -3 | tr '\n' ' ')"
+  done
+}
+
 kill_after() { # name mode
   rm -f $docs/result-$1.json
   launch "$2:$1"
-  waitfor $docs/result-$1.json || return 1
+  if ! waitfor $docs/result-$1.json; then
+    diagnose $1-a
+    echo "--- repeating $1 once"
+    launch "$2:$1"
+    if ! waitfor $docs/result-$1.json; then
+      diagnose $1-b
+      echo "$1 stalled twice: stopping"
+      return 1
+    fi
+  fi
   echo "$1 answer: $(cat $docs/result-$1.json)"
   zsh $here/simkill.sh $sim
   pause 4

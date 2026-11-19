@@ -20,10 +20,20 @@ enum UITestAccounts {
     // `-UITestStorageLine saving|unstored` holds the storage line up, to see it over the
     // fixtures without slow storage. Kept alive with the window.
     private static var storageLine: WriteStorageLine?
+    private static var lineDelayed = false
 
     // Also on the real app shell, to see the line over real screens
     @MainActor static func holdStorageLine(_ status: WriteStorageStatus) {
         guard let state = UserDefaults.standard.string(forKey: "UITestStorageLine") else { return }
+        // `-UITestStorageLineAfter N`: the line only appears N seconds later,
+        // for a test that needs it to come after the notice strip (story 5362)
+        let after = UserDefaults.standard.double(forKey: "UITestStorageLineAfter")
+        if after > 0, !lineDelayed {
+            // A launch argument can't be removed, so remember the delay was taken
+            lineDelayed = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + after) { holdStorageLine(status) }
+            return
+        }
         if state == "saving" {
             status.writeBegan()
             return

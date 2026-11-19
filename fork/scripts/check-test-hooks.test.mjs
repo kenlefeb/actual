@@ -39,6 +39,9 @@ for (const marker of [
   '__forkTestCommitDelayMs',
   '__forkTestBarrierOff',
   '__FORK_TEST_COMMIT_DELAY_MS__',
+  // sc-5219 guard flip: the storage-failure hook and its engine handler
+  '__forkTestFailStorage',
+  'native/test-fail-storage',
 ]) {
   void test(`Test hooks: finds ${marker}`, () => {
     const dir = build({

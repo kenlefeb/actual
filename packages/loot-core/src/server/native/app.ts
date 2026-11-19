@@ -90,6 +90,9 @@ import {
 } from './transaction-form';
 import { transactionSave } from './transaction-save';
 
+// Defined by the worker build (vite.config.mts): true only in FORK_TEST_HOOKS builds
+declare const __FORK_TEST_HOOKS__: boolean | undefined;
+
 // null: the value doesn't apply to this budget type (or row)
 type Amount = number | null;
 
@@ -321,6 +324,19 @@ app.method('native/server-info', serverInfo);
 app.method('native/persisted', persisted);
 app.method('native/storage-state', storageState);
 app.method('native/enable-storage-guard', enableStorageGuard);
+// Test-only (D10, sc-5219 guard flip): makes the next IndexedDB write abort for
+// real ({ quota: true }: as a full device does), so the failure path can run
+// end to end. Only in FORK_TEST_HOOKS builds; Fork CI checks a production
+// bundle lacks the marker.
+if (typeof __FORK_TEST_HOOKS__ !== 'undefined' && __FORK_TEST_HOOKS__) {
+  app.method(
+    'native/test-fail-storage' as never,
+    (async (args?: { quota?: boolean }) => {
+      (globalThis as { __forkTestFailStorage?: string }).__forkTestFailStorage =
+        args?.quota ? 'quota' : 'abort';
+    }) as never,
+  );
+}
 app.method(
   'native/settings-save',
   mutator(

@@ -1,0 +1,94 @@
+import XCTest
+
+// Fork-only (sc-5219, "Only stored changes reach the server"). Run by hand with
+// fork/scripts/sync-gate-run.sh, never in CI: skips unless the runner sets
+// TEST_RUNNER_SYNC_GATE_URL (a sync server on this Mac, bound to localhost) and
+// TEST_RUNNER_SYNC_GATE_PASSWORD (that server's throwaway password). The staged
+// page delays every storage commit by 3 s, longer than the 2 s storage wait, so a
+// sync after a change must hold ("Waiting for this device to finish saving") and
+// send nothing until storage confirms. The runner counts the server's messages.
+final class SyncGateUITests: XCTestCase {
+    private let app = XCUIApplication()
+    private var env: [String: String] { ProcessInfo.processInfo.environment }
+
+    override func setUp() {
+        continueAfterFailure = false
+    }
+
+    // Wall-clock times, to set beside the server's message times
+    private func evidence(_ text: String) {
+        print("sync gate evidence: \(ISO8601DateFormatter.string(from: Date(), timeZone: .current, formatOptions: [.withInternetDateTime, .withFractionalSeconds])) \(text)")
+    }
+
+    private func anything(_ label: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", label)).firstMatch
+    }
+
+    func testASyncAfterAChangeHoldsUntilStorageConfirms() throws {
+        let url = try XCTUnwrap(env["SYNC_GATE_URL"].flatMap { $0.isEmpty ? nil : $0 }, "needs TEST_RUNNER_SYNC_GATE_URL")
+        let password = try XCTUnwrap(env["SYNC_GATE_PASSWORD"], "needs TEST_RUNNER_SYNC_GATE_PASSWORD")
+        app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+
+        // The welcome screen: connect to the server on this Mac
+        let connect = anything("Connect to a sync server")
+        XCTAssertTrue(connect.waitForExistence(timeout: 180), "no welcome screen")
+        connect.tap()
+        let external = anything("Use an external server")
+        if external.waitForExistence(timeout: 10) { external.tap() }
+        let field = app.textFields.matching(NSPredicate(format: "placeholderValue == %@", "https://example.com")).firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 30), "no server URL field")
+        field.tap()
+        field.typeText(url)
+        app.buttons["Connect"].firstMatch.tap()
+
+        // Sign in with the throwaway password
+        let secret = app.secureTextFields.firstMatch
+        XCTAssertTrue(secret.waitForExistence(timeout: 60), "no password field")
+        secret.tap()
+        secret.typeText(password)
+        app.buttons["Sign in"].firstMatch.tap()
+
+        // A new budget on that server
+        let create = anything("Create new file")
+        XCTAssertTrue(create.waitForExistence(timeout: 60), "no budget list")
+        create.tap()
+        let budgetTab = app.tabBars.buttons["Budget"]
+        XCTAssertTrue(budgetTab.waitForExistence(timeout: 120), "the new budget did not open")
+        evidence("budget open")
+        // Let the budget's own first syncs settle before the change under test
+        sleep(20)
+
+        budgetTab.tap()
+        let food = app.collectionViews.buttons["Food"].firstMatch
+        XCTAssertTrue(food.waitForExistence(timeout: 60), "no Food row on the Budget tab")
+        let amount = app.textFields["Budgeted Food"]
+        for dy in [0.75, 0.45] where !amount.exists {
+            food.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: dy)).tap()
+            _ = amount.waitForExistence(timeout: 5)
+        }
+        XCTAssertTrue(amount.exists, "the budgeted amount's edit sheet did not open")
+        amount.tap()
+        amount.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 20) + "321")
+        app.navigationBars.buttons["Save"].tap()
+        evidence("change saved in the app (Food 321)")
+
+        // The Accounts tab's sync status, each change of it, for 40 s
+        app.tabBars.buttons["Accounts"].tap()
+        let statuses = ["Waiting for this device to finish saving", "Synced", "Syncing", "Sync failed", "Offline"]
+        var last = ""
+        var sawWaiting = false
+        let end = Date().addingTimeInterval(40)
+        while Date() < end {
+            let now = statuses.first { anything($0).exists } ?? "none"
+            if now != last {
+                evidence("status: \(now)")
+                last = now
+                if now.hasPrefix("Waiting") { sawWaiting = true }
+            }
+            usleep(300_000)
+        }
+        XCTAssertTrue(sawWaiting, "the sync never held for storage")
+        XCTAssertEqual(last, "Synced", "the held sync never completed")
+    }
+}

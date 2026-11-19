@@ -230,8 +230,9 @@ final class ReconcileStepOneViewModelTests: XCTestCase {
         XCTAssertTrue(model.showsClearedNote)
     }
 
-    // sc-5303: "Saved from your cleared balance" only once the write is stored
-    func testTheClearedBalanceNoteWaitsUntilTheSaveIsStored() async throws {
+    // sc-5303 and the Designer on PR #496: the note shows only if the write is
+    // stored before step 2 opens; a late "stored" opens no alert
+    func testALateStoredAnswerOpensNoClearedBalanceNote() async throws {
         let page = try FakeReconcilePage()
         let status = WriteStorageStatus()
         status.pageLoaded(epoch: "e")
@@ -239,16 +240,13 @@ final class ReconcileStepOneViewModelTests: XCTestCase {
         page.results["native/persisted"] = #"{"stored":false,"seq":{"epoch":"e","n":1}}"#
         let model = try await model(page)
         model.useCleared()
-        var lateNotes = 0
-        model.onClearedNoteStored = { lateNotes += 1 }
         // Security on PR #496: step 1 never waits for storage
         let saved = await model.confirm()
         XCTAssertTrue(saved)
         XCTAssertFalse(model.showsClearedNote)
         status.storedEvent(seq: 1, epoch: "e")
         try await Task.sleep(nanoseconds: 50_000_000)
-        XCTAssertTrue(model.showsClearedNote)
-        XCTAssertEqual(lateNotes, 1)
+        XCTAssertFalse(model.showsClearedNote)
     }
 
     func testTheClearedBalanceNeverStoredShowsNoNote() async throws {

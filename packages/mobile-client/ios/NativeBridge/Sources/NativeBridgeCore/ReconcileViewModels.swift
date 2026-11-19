@@ -144,9 +144,6 @@ public final class ReconcileStepOneViewModel: ObservableObject {
     @Published public private(set) var isSaving = false
     // A confirmed cleared balance: the fixed note why an assistant cannot use it (D3)
     @Published public private(set) var showsClearedNote = false
-    // sc-5303: the note became due after step 1 moved on
-    public var onClearedNoteStored: (() -> Void)?
-    private let clearedNoteWait = PendingWait()
 
     public let accountId: String
     public let style: BudgetAmountStyle
@@ -231,17 +228,10 @@ public final class ReconcileStepOneViewModel: ObservableObject {
             self.error = ReconcileError.from(error, .saveFailed)
             return false
         }
-        // "Saved from your cleared balance" only once stored; never for a write that may be lost
-        // Never waits here: storage can stay slow or fail, and step 2 must open (Security, PR #496)
+        // "Saved from your cleared balance" only for a write stored before step 2
+        // opens. Never waits: storage can stay slow, and step 2 must open (Security,
+        // PR #496). A later "stored" shows nothing (UX Designer, PR #496).
         showsClearedNote = kind == .cleared && result.stored
-        clearedNoteWait.task?.cancel()
-        if kind == .cleared, !result.stored {
-            clearedNoteWait.task = Task { [weak self, client] in
-                guard await client.whenStored(result), let self else { return }
-                self.showsClearedNote = true
-                self.onClearedNoteStored?()
-            }
-        }
         return true
     }
 }

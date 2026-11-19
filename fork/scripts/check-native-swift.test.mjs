@@ -14,16 +14,14 @@ import {
   storageLineRolloutProblems,
 } from './check-native-swift.mjs';
 
-// native-durable-writes task 3.10: the line ships with the guard, never apart
-void test('Native Swift: the storage line and the guard ship together', () => {
+// native-durable-writes task 3.10 (D7a): one-way. The line on in Release
+// requires the guard on; the guard may be on with the line off
+void test('Native Swift: the storage line needs the guard, not the other way', () => {
   const line = on => `static let isOnInRelease = ${on}`;
-  const guardOn = "forward('native/enable-storage-guard')";
+  const guardOn = "send('native/enable-storage-guard')";
   assert.deepEqual(storageLineRolloutProblems(line('false'), 'no guard'), []);
   assert.deepEqual(storageLineRolloutProblems(line('true'), guardOn), []);
-  assert.match(
-    storageLineRolloutProblems(line('false'), guardOn)[0],
-    /isOnInRelease/,
-  );
+  assert.deepEqual(storageLineRolloutProblems(line('false'), guardOn), []);
   assert.match(
     storageLineRolloutProblems(line('true'), 'no guard')[0],
     /isOnInRelease/,
@@ -39,8 +37,19 @@ void test('Native Swift: the guard switch, its client and the bridge agree', () 
   const app = on =>
     `enum StorageGuardRollout {\n    static let isOn = ${on}\n}`;
   const plugin =
-    'NativeBridgeClient(storage: s, storageGuardOn: StorageGuardRollout.isOn)';
+    'NativeBridgeClient(storage: s, storageGuardOn: StorageGuardRollout.isOn)\n' +
+    'NativeShellScript.source(storageGuard: StorageGuardRollout.isOn, expectedOrigin: o)';
   const guardOn = "forward('native/enable-storage-guard')";
+  // The page only learns the switch from the shell's script
+  assert.match(
+    storageGuardRolloutProblems(
+      app('true'),
+      'NativeBridgeClient(storage: s, storageGuardOn: StorageGuardRollout.isOn)\n' +
+        'NativeShellScript.source(storageGuard: true, expectedOrigin: o)',
+      guardOn,
+    )[0],
+    /NativeShellScript/,
+  );
   assert.deepEqual(
     storageGuardRolloutProblems(app('false'), plugin, 'no guard'),
     [],

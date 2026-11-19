@@ -23,6 +23,9 @@ type BridgeWindow = {
     messageHandlers?: { actualNativeBridge?: { postMessage: Notify } };
   };
   __actualNativeBridge?: NativeBridge;
+  // Set by a native shell's script at the start of the app's own page
+  // (NativeShellScript in Swift): what that shell has opted in to
+  __actualNativeShell?: { storageGuard?: boolean };
 };
 
 declare global {
@@ -520,6 +523,13 @@ export function createNativeBridge({
 export function installNativeBridge(win: BridgeWindow) {
   const handler = win.webkit?.messageHandlers?.actualNativeBridge;
   if (!handler) return;
+
+  // sc-5219 (D7a, task 2.5): a shell that has opted in turns the one-way
+  // storage guard on here, before it hears "ready" and so before any budget
+  // opens; one that hasn't (the Mac until sc-5344) stays stock
+  if (win.__actualNativeShell?.storageGuard === true) {
+    void send('native/enable-storage-guard');
+  }
 
   // send and listen are typed per handler name; the bridge is dynamic by design
   const pageLoad = uuidv4();

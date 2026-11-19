@@ -38,6 +38,8 @@ public class NativeBridgePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
     // Runs before the page loads (CAPBridgeViewController.loadView), so the
     // page sees the message handler when it installs its bridge
     override public func load() {
+        // This shell's opt-in to the storage guard reaches the page with the
+        // native screens' script (NativeChromePlugin), the one user script allowed
         bridge?.webView?.configuration.userContentController.add(self, name: "actualNativeBridge")
     }
 

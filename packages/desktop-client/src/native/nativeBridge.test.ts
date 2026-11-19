@@ -260,17 +260,45 @@ describe('installNativeBridge', () => {
     sent.mockRestore();
   });
 
-  // Task 2.5: the switch-on lands with the failure notices, so no build
-  // carries the guard without them
-  it('does not turn the storage guard on yet', () => {
+  // Task 2.5 (D7a): a shell that has opted in turns the guard on as the bridge
+  // installs, before it tells native code it is ready, so before any budget opens
+  it('turns the storage guard on as it installs when the shell opts in', () => {
+    const order: string[] = [];
+    const sent = vi.spyOn(connection, 'send').mockImplementation((async (
+      name: string,
+    ) => {
+      order.push(name);
+    }) as never);
+    const postMessage = vi.fn((message: { event: string }) => {
+      order.push(message.event);
+    });
+    installNativeBridge({
+      webkit: { messageHandlers: { actualNativeBridge: { postMessage } } },
+      __actualNativeShell: { storageGuard: true },
+    });
+    expect(sent).toHaveBeenCalledWith('native/enable-storage-guard');
+    expect(order).toEqual(['native/enable-storage-guard', 'ready']);
+    sent.mockRestore();
+  });
+
+  // A shell that hasn't opted in (the Mac until sc-5344) stays stock
+  it('leaves the storage guard off when the shell has not opted in', () => {
     const sent = vi
       .spyOn(connection, 'send')
       .mockResolvedValue(undefined as never);
-    installNativeBridge({
-      webkit: {
-        messageHandlers: { actualNativeBridge: { postMessage: vi.fn() } },
-      },
-    });
+    for (const shell of [
+      undefined,
+      {},
+      { storageGuard: false },
+      { storageGuard: 'yes' },
+    ]) {
+      installNativeBridge({
+        webkit: {
+          messageHandlers: { actualNativeBridge: { postMessage: vi.fn() } },
+        },
+        __actualNativeShell: shell as { storageGuard?: boolean } | undefined,
+      });
+    }
     expect(sent).not.toHaveBeenCalled();
     sent.mockRestore();
   });

@@ -160,19 +160,22 @@ function callsStorageGuard(source) {
   return code.includes("'native/enable-storage-guard'");
 }
 
+// One-way (D7a): the line on in Release requires the guard on; the guard may
+// be on with the line off, as it is from the iPhone's guard flip until task 6.6
 export function storageLineRolloutProblems(tabBarSource, bridgeSource) {
   const flag = /\bisOnInRelease\s*=\s*(true|false)\b/.exec(tabBarSource)?.[1];
   if (!flag) return ['WriteStorageLineRollout.isOnInRelease: not found'];
-  const guardIsOn = callsStorageGuard(bridgeSource);
-  return (flag === 'true') === guardIsOn
-    ? []
-    : [
-        `WriteStorageLineRollout.isOnInRelease is ${flag} but the page bridge ${guardIsOn ? 'turns' : 'does not turn'} the storage guard on; they ship together`,
-      ];
+  return flag === 'true' && !callsStorageGuard(bridgeSource)
+    ? [
+        'WriteStorageLineRollout.isOnInRelease is true but the page bridge does not turn the storage guard on; the line needs the guard',
+      ]
+    : [];
 }
 
-// Design D7a: the opened write API follows the iPhone's switch, and the switch
-// agrees with the bridge turning the guard on, so neither changes without the other
+// Design D7a: the opened write API follows the iPhone's switch, the page learns
+// the switch from the shell's script, and the switch agrees with the bridge
+// turning the guard on, so none changes without the others. `pluginSource` is
+// the iPhone's bridge and chrome plugins together.
 export function storageGuardRolloutProblems(
   appSource,
   pluginSource,
@@ -187,6 +190,15 @@ export function storageGuardRolloutProblems(
   if (!pluginSource.includes('storageGuardOn: StorageGuardRollout.isOn')) {
     found.push(
       "NativeBridgePlugin's client must take storageGuardOn from StorageGuardRollout.isOn",
+    );
+  }
+  if (
+    !pluginSource.includes(
+      'NativeShellScript.source(storageGuard: StorageGuardRollout.isOn',
+    )
+  ) {
+    found.push(
+      "The page must learn the switch from NativeShellScript.source(storageGuard: StorageGuardRollout.isOn, …) in the iPhone's plugins",
     );
   }
   const guardIsOn = callsStorageGuard(bridgeSource);
@@ -244,7 +256,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       readFileSync(
         join(SWIFT_ROOT, 'ios/App/App/NativeBridgePlugin.swift'),
         'utf8',
-      ),
+      ) +
+        readFileSync(
+          join(SWIFT_ROOT, 'ios/App/App/NativeChromePlugin.swift'),
+          'utf8',
+        ),
       readFileSync(
         'packages/desktop-client/src/native/nativeBridge.ts',
         'utf8',

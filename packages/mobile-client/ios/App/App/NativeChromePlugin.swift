@@ -46,7 +46,10 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
             others.forEach(controller.addUserScript)
         }
         let origin = PageCall.expectedOrigin(serverURL: bridge?.config.serverURL)
-        let script = WKUserScript(source: NativeScreensScript.source(expectedOrigin: origin), injectionTime: .atDocumentStart, forMainFrameOnly: true)
+        // sc-5219 (D7a): and this shell's opt-in to the storage guard, for the page bridge
+        let source = NativeScreensScript.source(expectedOrigin: origin)
+            + NativeShellScript.source(storageGuard: StorageGuardRollout.isOn, expectedOrigin: origin)
+        let script = WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true)
         screensScript = script
         controller.addUserScript(script)
     }

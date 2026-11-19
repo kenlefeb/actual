@@ -47,6 +47,9 @@ xcrun simctl boot $sim
 xcrun simctl bootstatus $sim -b > /dev/null 2>&1
 xcrun simctl install $sim $app
 docs=$(xcrun simctl get_app_container $sim $bid data)/Documents/kill
+# This simulator's launchd_sim, for the fast kill
+simroot=$(ps -axo pid=,command= | awk -v u="$sim" '$2 ~ /launchd_sim$/ && index($0, u) { print $1 }' | head -1)
+echo "launchd_sim $simroot"
 
 # Seconds a step may wait for the page; the reopen phase raises it (REOPEN_LIMIT)
 limit=300
@@ -61,13 +64,6 @@ launch() {
 waitfor() {
   for i in {1..$(( (limit + 20) * 10 ))}; do
     [ -f "$1" ] && return 0
-    # While a kill step waits, name its target, so the kill needn't walk ps after the answer
-    # (looked up again every 2 s, so a page process that replaced it is found too;
-    # not after a kill, when the app's own reload starts a new one)
-    if [ -n "$want_target" ] && { [ -z "$target" ] || [ $((i % 20)) -eq 0 ]; }; then
-      t=$(zsh $here/simkill.sh $sim --find 2>/dev/null)
-      [[ "$t" =~ '^[0-9]+( [0-9]+)+$' ]] && target=$t
-    fi
     [ -f "$docs/error.json" ] && { echo "app error: $(cat $docs/error.json)"; return 1; }
     # A page alert() holds the page's JavaScript until someone taps it: nothing more will come
     grep -q "page alert shown" $docs/progress.json 2>/dev/null && { echo "page alert: $(cat $docs/progress.json)"; alerted=1; return 1; }
@@ -114,7 +110,6 @@ diagnose() { # label
 kill_after() { # name mode
   rm -f $docs/result-$1.json
   launch "$2:$1"
-  target="" want_target=1
   if ! waitfor $docs/result-$1.json; then
     diagnose $1-a
     if [ $alerted = 1 ]; then
@@ -124,7 +119,6 @@ kill_after() { # name mode
     fi
     echo "--- repeating $1 once"
     launch "$2:$1"
-    target=""
     if ! waitfor $docs/result-$1.json; then
       diagnose $1-b
       echo "$1 stalled twice: stopping, keeping the data"
@@ -132,10 +126,10 @@ kill_after() { # name mode
       return 1
     fi
   fi
-  want_target=""
-  # The target was found while waiting; --fast checks it again from the live table
+  # --fast: this simulator's launchd_sim (found once, checked again now) and its
+  # WebContent children, looked up and killed at once
   verified=yes
-  if [ -z "$target" ] || ! zsh $here/simkill.sh $sim --fast ${=target}; then
+  if [ -z "$simroot" ] || ! zsh $here/simkill.sh $sim --fast $simroot; then
     echo "$1: no checked target found while waiting; the full search"
     zsh $here/simkill.sh $sim
     verified=no

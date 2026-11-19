@@ -11,14 +11,16 @@ if [ -z "$udid" ] || [ "$udid" != "$mine" ]; then
   echo "refused: $udid is not the simulator this run created (${mine:-none})"
   exit 2
 fi
-# sc-5404: `--fast <root> <pid>...` kills the targets found earlier with `--find`,
-# after checking again, from the live process table, that <root> is this simulator's
-# launchd_sim and each <pid> a WebContent process under it; it never kills a stale pid
+# sc-5404: `--fast <root>` kills this simulator's page processes right after an
+# answer: it checks from the live process table that <root> is this simulator's
+# launchd_sim, then takes the WebContent processes whose parent is <root> now
+# (pgrep -P) and checks each again before the kill; it never kills a stale pid
 if [ "$2" = "--fast" ]; then
   root=$3
-  shift 3
   rc=$(ps -o command= -p $root 2>/dev/null)
   [[ "$rc" == *launchd_sim* && "$rc" == *$udid* ]] || { echo "refused: $root is no longer the launchd_sim of $udid"; exit 6; }
+  set -- $(pgrep -P $root -f com.apple.WebKit.WebContent)
+  [ $# -gt 0 ] || { echo "no WebContent process under launchd_sim $root"; exit 4; }
   for t in "$@"; do
     [[ "$(ps -o command= -p $t 2>/dev/null)" == *com.apple.WebKit.WebContent* ]] || { echo "refused: $t is no longer a WebContent process"; exit 7; }
     p=$t chain=$t
@@ -58,11 +60,6 @@ done
 if [ ${#targets} -eq 0 ]; then
   echo "no WebContent process under $udid"
   exit 4
-fi
-# `--find`: only name the targets ("<root> <pid>...") for a later `--fast`
-if [ "$2" = "--find" ]; then
-  echo "$root $targets"
-  exit 0
 fi
 for t in $targets; do
   chain="$t"

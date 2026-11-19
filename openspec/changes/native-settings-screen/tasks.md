@@ -39,7 +39,7 @@
   - it refuses `0-day`, `03-week`, `1000-day`, `3-weeks`, `3-Week`, ` 3-week`, `-1-day`, `NaN-day` and `custom`;
   - an already-stored out-of-pattern value is returned as it is and never blocks saving another key;
   - the view model sends only changed keys. A stored invalid upcoming length shows as Custom with its text, is never rewritten unless the person picks a new value, and is replaced by a valid choice;
-  - limits from 1 to the ceiling, and null resets;
+  - limits from the floor to the ceiling, and null resets;
   - `[native:invalid-setting]` for an unknown key, a bad value, an MCP limit or grant key, or an empty change, with nothing written;
   - a two-key save with one bad key changes neither key;
   - a write failure on the second key leaves both unchanged (one batch);
@@ -101,7 +101,7 @@
 - the Budget type confirmation;
 - the Sign out confirmation, with and without the unsynced-changes warning and Sync now;
 - About with the server unreachable and Retry;
-- the Limits drill-down: name, help line, value, default, ceiling, stepper and field, Reset, and the over-ceiling message;
+- the Limits drill-down: name, help line, value, default, floor, ceiling, stepper and field bounded to floor through ceiling, Reset, and the out-of-range message;
 - AX5 layouts for About, Formatting and Limits;
 - the hardware-keyboard focus appearance.
 
@@ -131,7 +131,7 @@
 ## 4. Limits section (sc-4643)
 
 - [ ] 4.1 The native Limits drill-down under Advanced (design D11):
-  - one row per limit, with its name, help line, value, "Default N", "Up to N", a stepper and field bounded by the ceiling, and Reset;
+  - one row per limit, with its name, help line, value, "Default N", "Up to N", a stepper and field bounded to floor through ceiling, and Reset;
   - a limit with no text falls back to its id.
 
   Write failing view-model tests first, with an injected sleep.

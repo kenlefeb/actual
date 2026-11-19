@@ -351,6 +351,15 @@ public final class WriteStorageStatus: ObservableObject {
 
     public func acknowledgeMayNotBeSaved() { mayNotBeSaved = false }
 
+    // The person's Reload from the failure notice: that notice already told them
+    // this page's unconfirmed writes weren't saved, so they count as lost now and
+    // the next page doesn't report them again ("The person reloads")
+    public func acknowledgeUnstoredOfThisPage() {
+        lost.formUnion(unstored.map(\.ticket))
+        unstored = []
+        settleWaiters()
+    }
+
     // False for a page that has already gone
     private func adopt(_ epoch: String) -> Bool {
         if retiredEpochs.contains(epoch) { return false }

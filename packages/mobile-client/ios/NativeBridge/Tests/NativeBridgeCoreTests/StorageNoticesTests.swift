@@ -170,6 +170,22 @@ final class StorageNoticesTests: XCTestCase {
         XCTAssertNil(slot.current)
     }
 
+    // "The person reloads", with the write that failed still unconfirmed, as on the
+    // simulator with the guard on (PR #505): the failure notice already said its
+    // changes weren't saved, so the new page raises no restart notice for it
+    func testReloadAfterAFailedWriteShowsNoRestartNotice() {
+        firstLoad()
+        storage.pageLoaded(epoch: "failed-page")
+        storage.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "failed-page", n: 1)))
+        notices.failed(lastStoredFlushAt: nil, quota: false)
+        tap()
+        XCTAssertEqual(reloads, 1)
+        storage.pageLoaded(epoch: "new-page")
+        notices.pageLoaded()
+        XCTAssertNil(slot.current, "no restart notice after the person's Reload")
+        XCTAssertFalse(storage.mayNotBeSaved)
+    }
+
     // "The restart notice keeps the earliest cut-off"
     func testALaterFailureUsesItsOwnCutOffAndTheRestartNoticeComesBackWithTheEarliest() {
         firstLoad()

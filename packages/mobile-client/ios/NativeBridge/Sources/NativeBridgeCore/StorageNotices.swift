@@ -117,6 +117,7 @@ public final class StorageNotices {
         switch notice.button {
         case .reload:
             endFailure()
+            storage.acknowledgeUnstoredOfThisPage()
             reload()
         case .ok:
             if notice != Self.closedBudget {

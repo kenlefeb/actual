@@ -86,6 +86,8 @@ final class GuardEvidenceUITests: XCTestCase {
         XCTAssertTrue(waitForNote("after Reload: write:"), "no write after Reload")
         save("\(mode)-after-reload")
         XCTAssertTrue(notes.label.contains("after Reload: write: answered stored=true"), notes.label)
+        // "The person reloads": the notice closes and no restart notice shows
+        XCTAssertFalse(strip.exists, "a notice after the person's Reload: \(strip.exists ? strip.label : "")")
     }
 
     func testAStorageFailureRaisesTheNoticeWithReload() throws {

@@ -59,8 +59,14 @@ final class SyncGateUITests: XCTestCase {
         let budgetTab = app.tabBars.buttons["Budget"]
         XCTAssertTrue(budgetTab.waitForExistence(timeout: 120), "the new budget did not open")
         evidence("budget open")
-        // Let the budget's own first syncs settle before the change under test
-        sleep(20)
+        // The new budget's own writes, at 3 s a commit, are a backlog: wait for the
+        // first Synced (TEST_RUNNER_SYNC_GATE_SETTLE_S, default 600 s) before the change
+        // under test. A backlog drains and syncs; a writer that never stops does not.
+        app.tabBars.buttons["Accounts"].tap()
+        let settle = Double(env["SYNC_GATE_SETTLE_S"] ?? "") ?? 600
+        let settled = anything("Synced").waitForExistence(timeout: settle)
+        evidence("first Synced after the budget opened: \(settled ? "yes" : "no, after \(Int(settle)) s")")
+        XCTAssertTrue(settled, "the new budget's own sync never completed")
 
         budgetTab.tap()
         let food = app.collectionViews.buttons["Food"].firstMatch
@@ -86,7 +92,7 @@ final class SyncGateUITests: XCTestCase {
         var lastLine = ""
         var sawWaiting = false
         var syncedAt: Date?
-        let end = Date().addingTimeInterval(150)
+        let end = Date().addingTimeInterval(Double(env["SYNC_GATE_WATCH_S"] ?? "") ?? 150)
         while Date() < end {
             let now = statuses.first { anything($0).exists } ?? "none"
             let nowLine = line.exists ? line.label : "none"

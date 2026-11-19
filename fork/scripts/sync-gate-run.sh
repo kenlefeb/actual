@@ -67,7 +67,7 @@ sim=$(xcrun simctl create "sc-5219 sync gate" com.apple.CoreSimulator.SimDeviceT
 xcrun simctl bootstatus $sim -b > /dev/null 2>&1
 echo "simulator $sim"
 cd packages/mobile-client/ios/App
-TEST_RUNNER_SYNC_GATE_URL=http://localhost:$PORT TEST_RUNNER_SYNC_GATE_PASSWORD=$(cat $DATA/password) \
+TEST_RUNNER_SYNC_GATE_SETTLE_S=${SYNC_GATE_SETTLE_S:-600} TEST_RUNNER_SYNC_GATE_WATCH_S=${SYNC_GATE_WATCH_S:-150} TEST_RUNNER_SYNC_GATE_URL=http://localhost:$PORT TEST_RUNNER_SYNC_GATE_PASSWORD=$(cat $DATA/password) \
 xcodebuild test -workspace App.xcworkspace -scheme App -configuration Debug \
   -destination "platform=iOS Simulator,id=$sim" -derivedDataPath ${SYNC_GATE_DERIVED:-$TMPDIR/sync-gate-derived} \
   CODE_SIGNING_ALLOWED=NO -only-testing:AppUITests/SyncGateUITests > $D/xcodebuild.log 2>&1

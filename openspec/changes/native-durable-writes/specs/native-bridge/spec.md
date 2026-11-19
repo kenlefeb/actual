@@ -125,7 +125,7 @@ On iPhone, while the storage status line shows, it SHALL NOT cover content or co
 - **THEN** no item of the menu is under the line, because the line hides while the menu is open and returns unchanged when it closes
 
 ### Requirement: The storage status line keeps its place
-On iPhone the line SHALL sit above the tab bar and below the Undo bar, and rest above the keyboard without covering the field being edited, within "The storage status line fits above the keyboard". It SHALL return above the tab bar after a sheet closes and take no touches. It SHALL hide while a context menu, alert or confirmation dialog is open and return unchanged when it closes, with the VoiceOver announcement unaffected, and stay visible over sheets and full-screen screens.
+On iPhone the line SHALL sit above the tab bar and below the Undo bar. With the keyboard up its only place SHALL be just above it, sized by "The storage status line fits above the keyboard", hiding with its space given back if it would cover the field being edited. It SHALL return above the tab bar after a sheet closes, take no touches, and hide while a context menu, alert or confirmation is open, returning unchanged, but not over sheets or full-screen screens.
 
 #### Scenario: With the Undo bar
 - **GIVEN** a write that shows both the line and the Undo bar
@@ -135,7 +135,12 @@ On iPhone the line SHALL sit above the tab bar and below the Undo bar, and rest 
 #### Scenario: Editing with the keyboard up
 - **GIVEN** the line showing
 - **WHEN** the person edits a budget amount
-- **THEN** the line is above the keyboard, or moves to the top if it would cover the field
+- **THEN** the line is above the keyboard, or hidden if it would cover the field
+
+#### Scenario: A short iPhone at a large text size
+- **GIVEN** an iPhone 16e at Accessibility XL, editing the amount on Reconcile step 1 with the line showing
+- **WHEN** the keyboard is up
+- **THEN** the line is directly above the keyboard or hidden, and the sheet's close button, step title and amount field are uncovered and can be tapped
 
 #### Scenario: After a sheet closes
 - **GIVEN** the line showing over a sheet
@@ -168,7 +173,7 @@ While the keyboard is up, with A the height from the top safe area, or from belo
 #### Scenario: Below a notice strip
 - **GIVEN** the restart or failure notice showing in the strip at the top, and the keyboard up
 - **WHEN** the line is placed
-- **THEN** A is measured from below the strip, and the line never covers the strip or its OK or Reload button
+- **THEN** A is measured from below the strip, and the line, whose only place is just above the keyboard, never covers the strip or its OK or Reload button
 
 ### Requirement: The storage status line's VoiceOver announcements
 The not-stored announcement SHALL fire once when that state begins, whatever the line shows; full, short and hidden switches announce nothing, and the label is always the full sentence. When the "Still saving to this device. Keep the app open." state clears, VoiceOver SHALL announce "Saved to this device." once, only if the not-stored state was announced, whether the line was full, short or hidden, and never during an alert. Turning the guard on announces nothing for storage completion.

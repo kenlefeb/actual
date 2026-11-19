@@ -283,11 +283,12 @@ final class StorageLineUITests: XCTestCase {
         undo.tap()
     }
 
-    // Story 5383: with the keyboard up the line keeps its own height. Before
-    // the fix, once it moved to the top to clear the field being edited, it
-    // stretched down to the keyboard and then hid. The size comes from the
-    // SIZE environment value, so a run can also look for the short form.
-    func testWithTheKeyboardUpAtALargeSizeTheLineKeepsItsHeight() {
+    // Story 5383, the Designer's rule: with the keyboard up the line's only
+    // place is directly above the keyboard, and it hides if it would cover the
+    // field being edited. It never goes to the top, where it lay over a
+    // sheet's close button and title. The size comes from the SIZE
+    // environment value, so a run can also look for the short form.
+    func testWithTheKeyboardUpAtALargeSizeTheLineLeavesTheSheetClear() {
         let size = ProcessInfo.processInfo.environment["SIZE"] ?? "UICTContentSizeCategoryAccessibilityXL"
         checkTheRealFlow(["-UIPreferredContentSizeCategoryName", size], shot: "large", stopAtStepOne: true) {
             let keyboard = self.app.keyboards.firstMatch
@@ -295,9 +296,21 @@ final class StorageLineUITests: XCTestCase {
             // The line follows every 0.1 s
             sleep(2)
             self.save("keyboard-\(size.replacingOccurrences(of: "UICTContentSizeCategory", with: ""))", folder: "storage-line-5297")
-            XCTAssertTrue(self.line.exists, "the line is hidden")
-            XCTAssertLessThanOrEqual(self.line.frame.height, keyboard.frame.minY / 3, "the line \(self.line.frame) is stretched")
-            XCTAssertLessThanOrEqual(self.line.frame.maxY, keyboard.frame.minY, "the line is not above the keyboard")
+            let close = self.app.buttons["Close without saving a balance"]
+            let title = self.app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Step 1 of 4")).firstMatch
+            let edited = self.app.descendants(matching: .any).matching(NSPredicate(format: "hasKeyboardFocus == true")).firstMatch
+            for (name, element) in [("close button", close), ("step title", title), ("amount field", edited)] {
+                XCTAssertTrue(element.exists, "no \(name)")
+                if self.line.exists {
+                    XCTAssertFalse(self.pill.intersects(element.frame), "the line \(self.pill) covers the \(name) \(element.frame)")
+                }
+            }
+            XCTAssertTrue(close.isHittable, "the close button can't be tapped")
+            XCTAssertTrue(edited.isHittable, "the amount field can't be tapped")
+            if self.line.exists {
+                XCTAssertLessThanOrEqual(self.pill.maxY, keyboard.frame.minY, "the line is not above the keyboard")
+                XCTAssertGreaterThanOrEqual(self.pill.minY, keyboard.frame.minY * 2 / 3 - 16, "the line is not directly above the keyboard")
+            }
         }
     }
 

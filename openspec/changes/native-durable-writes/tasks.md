@@ -42,6 +42,7 @@
   - iPhone: the background task with an expiration handler, ended at the earliest of the answer, the wait or expiry.
   - Mac: `.terminateLater` on quit, a deferred window close, and a best-effort flush in `EngineLifecycle.willSleep`.
   - Tests with a fake client (D8).
+  - The flush asks `native/persisted` with `allFiles: true`. The page bridge passes on only that: any other argument, or an `allFiles` that is not `true`, is dropped, so the call is the plain one.
 - [ ] 3.3 Mac perf gate in `HomeEconomicsMacTests`: the end-to-end client write (`native/storage-state`, the write, `native/persisted`) against the bare write, 30 runs each, at most 50 ms added to the median and 250 ms to the p95, run in `fork-mac-native`. Record simulator timings in the PR and, before the first TestFlight build with this change, a real iPhone's median and p95 and the largest test budget's write time against the 60 s read deadline (raise the constant if it comes close). If the gate misses, stop and report to the Director. Report any default below 2000 ms to the Product Owner (D7, D11)
 - [ ] 3.4 Kill tests, in the Atlas helper login only:
   - Mac: extend `PageProcessKillTests` with 20 kills after `stored: true`, all kept and `PRAGMA integrity_check` passing, plus one kill mid-write.

@@ -75,7 +75,7 @@ The patched module also adds:
 
 ### D4. `native/persisted`
 
-A fork loot-core handler, allowlisted in both lists as a call with no arguments, with a `coverage.json` skip. It races `whenPersisted()` against `native-persist-wait-ms`:
+A fork loot-core handler, allowlisted in both lists, with a `coverage.json` skip. Its only argument is an optional `allFiles: true` for the lifecycle flushes (D8), which waits for every file rather than only the open budget. It races `whenPersisted()` against `native-persist-wait-ms`:
 - `{ stored: true }` when every pending write fired `complete`;
 - `{ stored: false }` on timeout. The engine keeps waiting and sends `storage-stored` when the writes covered by that call finish, and the page bridge forwards it to Swift as `stored`;
 - `[native:not-stored]` when the latch is set.

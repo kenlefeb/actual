@@ -50,7 +50,14 @@ public class NativeBridgePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
               let event = NativeBridgeEvent.name(of: message.body) else { return }
         // In order, on the main thread, so a page's "ready" comes before anything it answers
         MainActor.assumeIsolated {
-            if let epoch = NativeBridgeEvent.readyEpoch(of: message.body) { writeStorage.pageLoaded(epoch: epoch) }
+            if let epoch = NativeBridgeEvent.readyEpoch(of: message.body) {
+                // sc-5219, Security's mismatch check: logged in every build, flagged on the status
+                let mismatch = StorageGuardMismatch.message(
+                    shellOptedIn: StorageGuardRollout.isOn, pageReported: NativeBridgeEvent.readyGuard(of: message.body))
+                NSLog("actual storage guard: shell opted in = %@, page reports %@%@", "\(StorageGuardRollout.isOn)",
+                      "\(NativeBridgeEvent.readyGuard(of: message.body).map(String.init) ?? "nothing")", mismatch.map { "; \($0)" } ?? "")
+                writeStorage.pageLoaded(epoch: epoch, guardMismatch: mismatch != nil)
+            }
             if let stored = NativeBridgeEvent.stored(of: message.body) { writeStorage.storedEvent(seq: stored.seq, epoch: stored.epoch) }
             if event == "storage-failed" { writeStorage.storageFailed() }
             if event == "storage-failed" || event == "storage-close-failed" { onStorageEvent?(message.body) }

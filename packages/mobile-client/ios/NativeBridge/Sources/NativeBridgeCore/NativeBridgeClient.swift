@@ -129,6 +129,12 @@ public enum NativeBridgeEvent {
         return ((body as? [String: Any])?["payload"] as? [String: Any])?["epoch"] as? String
     }
 
+    // sc-5219: whether the page turned its storage guard on; nil when it doesn't say
+    public static func readyGuard(of body: Any) -> Bool? {
+        guard name(of: body) == "ready" else { return nil }
+        return ((body as? [String: Any])?["payload"] as? [String: Any])?["storageGuard"] as? Bool
+    }
+
     // sc-5219: which native/persisted call, of which page load, is now stored
     public static func stored(of body: Any) -> (seq: Int, epoch: String)? {
         guard name(of: body) == "stored",
@@ -149,6 +155,18 @@ public enum NativeBridgeEvent {
 // in package builds, which stops the iPhone app (it compiles these sources
 // itself, so internal would not). The guard's PR opens them up.
 @MainActor
+// Security's mismatch check (sc-5219): the page's reported guard state against
+// this shell's opt-in; nil when they agree
+public enum StorageGuardMismatch {
+    public static func message(shellOptedIn: Bool, pageReported: Bool?) -> String? {
+        guard pageReported != shellOptedIn else { return nil }
+        let shell = shellOptedIn ? "this shell opted in" : "this shell did not opt in"
+        let page = pageReported.map { $0 ? "the page reports its guard on" : "the page reports its guard off" }
+            ?? "the page does not report its guard"
+        return "storage guard mismatch: \(shell), \(page)"
+    }
+}
+
 public final class WriteStorageStatus: ObservableObject {
     public static let savingMessage = NSLocalizedString("Saving…", comment: "Native screens: a change is being stored on this device")
     public static let notYetStoredMessage = NSLocalizedString(
@@ -294,9 +312,14 @@ public final class WriteStorageStatus: ObservableObject {
     }
 
     // The page bridge's "ready". The same page may already be known from an answer.
-    public func pageLoaded(epoch: String) {
+    // guardMismatch: the page's guard state differs from this shell's opt-in
+    public func pageLoaded(epoch: String, guardMismatch: Bool = false) {
         _ = adopt(epoch)
+        self.guardMismatch = guardMismatch
     }
+
+    // Security's check (sc-5219): flagged for the latest page; logged by the shell
+    @Published public private(set) var guardMismatch = false
 
     // What a page that has gone had not stored may be lost with it
     private func retireCurrentPage() {

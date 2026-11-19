@@ -527,7 +527,8 @@ export function installNativeBridge(win: BridgeWindow) {
   // sc-5219 (D7a, task 2.5): a shell that has opted in turns the one-way
   // storage guard on here, before it hears "ready" and so before any budget
   // opens; one that hasn't (the Mac until sc-5344) stays stock
-  if (win.__actualNativeShell?.storageGuard === true) {
+  const storageGuard = win.__actualNativeShell?.storageGuard === true;
+  if (storageGuard) {
     void send('native/enable-storage-guard');
   }
 
@@ -540,5 +541,9 @@ export function installNativeBridge(win: BridgeWindow) {
     notify: message => handler.postMessage(message),
   });
   // Native calls refused while another page showed can run again (sc-3859)
-  handler.postMessage({ event: 'ready', payload: { epoch: pageLoad } });
+  // ...and says whether it turned the guard on, for native's mismatch check
+  handler.postMessage({
+    event: 'ready',
+    payload: { epoch: pageLoad, storageGuard },
+  });
 }

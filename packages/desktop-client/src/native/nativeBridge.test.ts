@@ -303,6 +303,30 @@ describe('installNativeBridge', () => {
     sent.mockRestore();
   });
 
+  // Security's mismatch check (sc-5219): "ready" says whether this page turned
+  // the guard on, so native code can compare it with its own opt-in
+  it('says in ready whether it turned the storage guard on', () => {
+    const sent = vi
+      .spyOn(connection, 'send')
+      .mockResolvedValue(undefined as never);
+    for (const [shell, storageGuard] of [
+      [{ storageGuard: true }, true],
+      [{ storageGuard: 'yes' }, false],
+      [undefined, false],
+    ] as const) {
+      const postMessage = vi.fn();
+      installNativeBridge({
+        webkit: { messageHandlers: { actualNativeBridge: { postMessage } } },
+        __actualNativeShell: shell as { storageGuard?: boolean } | undefined,
+      });
+      expect(postMessage).toHaveBeenCalledWith({
+        event: 'ready',
+        payload: { epoch: expect.any(String), storageGuard },
+      });
+    }
+    sent.mockRestore();
+  });
+
   it('installs the bridge when the native message handler is present', () => {
     const postMessage = vi.fn();
     const win: Parameters<typeof installNativeBridge>[0] = {
@@ -322,7 +346,7 @@ describe('installNativeBridge', () => {
     installNativeBridge(win);
     expect(postMessage).toHaveBeenCalledWith({
       event: 'ready',
-      payload: { epoch: expect.any(String) },
+      payload: { epoch: expect.any(String), storageGuard: false },
     });
   });
 });

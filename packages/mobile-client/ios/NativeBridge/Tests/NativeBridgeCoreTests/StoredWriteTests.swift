@@ -481,6 +481,39 @@ final class StoredWriteTests: XCTestCase {
         XCTAssertNil(NativeBridgeEvent.readyEpoch(of: ["event": "stored", "payload": ["epoch": "e"]]))
     }
 
+    // Security's mismatch check: the page's guard state against this shell's opt-in
+    func testReadySaysWhetherThePageTurnedTheGuardOn() {
+        XCTAssertEqual(NativeBridgeEvent.readyGuard(of: ["event": "ready", "payload": ["epoch": "e", "storageGuard": true]]), true)
+        XCTAssertEqual(NativeBridgeEvent.readyGuard(of: ["event": "ready", "payload": ["epoch": "e", "storageGuard": false]]), false)
+        // An older page that doesn't say
+        XCTAssertNil(NativeBridgeEvent.readyGuard(of: ["event": "ready", "payload": ["epoch": "e"]]))
+        XCTAssertNil(NativeBridgeEvent.readyGuard(of: ["event": "stored", "payload": ["storageGuard": true]]))
+    }
+
+    func testAGuardMismatchIsNamedAndAMatchIsNot() {
+        XCTAssertNil(StorageGuardMismatch.message(shellOptedIn: true, pageReported: true))
+        XCTAssertNil(StorageGuardMismatch.message(shellOptedIn: false, pageReported: false))
+        XCTAssertEqual(
+            StorageGuardMismatch.message(shellOptedIn: true, pageReported: false),
+            "storage guard mismatch: this shell opted in, the page reports its guard off")
+        XCTAssertEqual(
+            StorageGuardMismatch.message(shellOptedIn: false, pageReported: true),
+            "storage guard mismatch: this shell did not opt in, the page reports its guard on")
+        XCTAssertEqual(
+            StorageGuardMismatch.message(shellOptedIn: true, pageReported: nil),
+            "storage guard mismatch: this shell opted in, the page does not report its guard")
+    }
+
+    func testAMismatchIsFlaggedOnTheWriteStatus() {
+        let status = WriteStorageStatus()
+        XCTAssertFalse(status.guardMismatch)
+        status.pageLoaded(epoch: "e", guardMismatch: true)
+        XCTAssertTrue(status.guardMismatch)
+        // A later page that matches clears it
+        status.pageLoaded(epoch: "f", guardMismatch: false)
+        XCTAssertFalse(status.guardMismatch)
+    }
+
     func testANewEpochAloneRevealsARestart() {
         let status = WriteStorageStatus()
         status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "old", n: 9)))

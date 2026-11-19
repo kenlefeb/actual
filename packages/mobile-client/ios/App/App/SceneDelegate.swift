@@ -8,6 +8,7 @@ import Capacitor
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     var window: UIWindow?
+    private var backgroundFlush: BackgroundFlush<UIBackgroundTaskIdentifier>?
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
@@ -23,10 +24,23 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             return
         }
         #endif
-        window.rootViewController = NativeTabBarController()
+        let root = NativeTabBarController()
+        // sc-5219 (D8): this app uses scenes, so this is where it learns it is going away
+        let client = root.bridgeController.nativeBridge.client
+        backgroundFlush = BackgroundFlush(
+            begin: { onExpiry in
+                UIApplication.shared.beginBackgroundTask(withName: "store-changes") { MainActor.assumeIsolated(onExpiry) }
+            },
+            end: { UIApplication.shared.endBackgroundTask($0) },
+            flush: { await client.flushStorage() })
+        window.rootViewController = root
         self.window = window
         window.makeKeyAndVisible()
         SceneDelegateProxy.shared.scene(scene, willConnectTo: session, options: connectionOptions)
+    }
+
+    func sceneDidEnterBackground(_ scene: UIScene) {
+        backgroundFlush?.run()
     }
 
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {

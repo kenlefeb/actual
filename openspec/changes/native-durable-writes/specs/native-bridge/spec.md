@@ -37,7 +37,7 @@ In the iPhone and Mac apps, the Swift bridge client SHALL follow every allowlist
 - **THEN** the read replies without waiting for storage
 
 ### Requirement: The storage barrier waits for complete
-`native/persisted` SHALL wait, up to `native-persist-wait-ms`, until every pending IndexedDB write of the open budget has fired `complete`, and answer `stored: true`, or `stored: false` when the wait passes. It SHALL be allowlisted in both lists as a call with no arguments, with a `coverage.json` skip. A pending write SHALL settle on `complete`, `abort` or `error`. When a timed-out wait's writes finish, the engine SHALL send `storage-stored`, which the page forwards to Swift as `stored`.
+`native/persisted` SHALL wait, up to `native-persist-wait-ms`, until every pending IndexedDB write of the open budget (of every file with `allFiles: true`, its only argument) has fired `complete`, answering `stored: true`, or `stored: false` on timeout. It SHALL be allowlisted in both lists with a `coverage.json` skip. A pending write SHALL settle on `complete`, `abort` or `error`. When a timed-out wait's writes finish, the engine SHALL send `storage-stored`, forwarded to Swift as `stored`.
 
 #### Scenario: The chain advances
 - **GIVEN** the patched storage on `fake-indexeddb` with three writes queued

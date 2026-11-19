@@ -52,12 +52,14 @@ let epoch: string | undefined;
  * follows once the writes this call waited for are stored. Later writes may
  * still be pending then. Refuses once the failed latch is set.
  */
-export async function persisted(): Promise<{
+export async function persisted({
+  allFiles = false,
+}: { allFiles?: boolean } = {}): Promise<{
   stored: boolean;
   seq: PersistSeq;
 }> {
   if (storageFailed()) throw notStored();
-  const outcome = await waitForStorage().catch(() => {
+  const outcome = await waitForStorage({ allFiles }).catch(() => {
     throw notStored();
   });
   epoch ??= uuidv4();
@@ -76,14 +78,16 @@ export async function persisted(): Promise<{
  * the still-pending promise. Rejects when a write fails. Shared with sync,
  * which sends only stored changes (D6).
  */
-export async function waitForStorage(): Promise<
+export async function waitForStorage({
+  allFiles = false,
+}: { allFiles?: boolean } = {}): Promise<
   { stored: true } | { stored: false; pending: Promise<void> }
 > {
   // With no budget open there are no preferences to read
   const wait = await readLimit('native-persist-wait-ms').catch(
     () => LIMITS['native-persist-wait-ms'].default,
   );
-  const pending = fs.whenPersisted();
+  const pending = fs.whenPersisted({ allFiles });
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timedOut = new Promise<'timeout'>(resolve => {
     timer = setTimeout(() => resolve('timeout'), wait);

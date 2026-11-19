@@ -27,7 +27,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var window: NSWindow?
     private var host: MacEngineHost?
     private var rereads: ChangeCoalescer?
-    private lazy var lifecycle = EngineLifecycle { [weak self] in self?.rereads?.notify() }
+    private lazy var lifecycle = EngineLifecycle(
+        reread: { [weak self] in self?.rereads?.notify() },
+        flush: { [weak self] done in
+            let client = self?.host?.client
+            Task { @MainActor in
+                await client?.flushStorage()
+                done()
+            }
+        })
     private var running = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -68,6 +76,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         EngineLifecycle.terminatesAfterLastWindowClosed
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        lifecycle.shouldTerminate { sender.reply(toApplicationShouldTerminate: true) }
+        return .terminateLater
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

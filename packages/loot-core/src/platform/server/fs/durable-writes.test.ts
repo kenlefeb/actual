@@ -324,6 +324,39 @@ describe('absurd-sql fallback reads', () => {
   });
 });
 
+// D8, Security on PR #481: budget B opens while closing A's last write is
+// pending, and the app then quits or goes to the background
+describe('a lifecycle flush', () => {
+  async function isSettled(wait: Promise<void>) {
+    let settled = false;
+    void wait.then(() => {
+      settled = true;
+    });
+    await new Promise(resolve => setTimeout(resolve));
+    return settled;
+  }
+
+  it("waits for a closed budget's last write while another budget is open", async () => {
+    const { backend, file, ops } = fallbackFile({ guard: false });
+    let finish: () => void = () => undefined;
+    ops.persistance.write = () =>
+      new Promise<void>(resolve => {
+        finish = resolve;
+      });
+    ops.writeBlocks([{ pos: 0, data: block(1) }], BLOCK);
+    file.close();
+    openFile(backend, `/blocked/test-${++counter}.sqlite`);
+    const files = [...backend.files] as StorageFile[];
+
+    // An ordinary wait covers only the open budget
+    expect(await isSettled(filesWhenPersisted(files))).toBe(true);
+    const flush = filesWhenPersisted(files, { allFiles: true });
+    expect(await isSettled(flush)).toBe(false);
+    finish();
+    await expect(flush).resolves.toBeUndefined();
+  });
+});
+
 describe('absurd-sql fallback closes and deletes', () => {
   it('close the connection only after the writes before them', async () => {
     const { backend, file, ops, name } = fallbackFile({ guard: false });

@@ -447,6 +447,65 @@ final class StoredWriteTests: XCTestCase {
         XCTAssertEqual(shown.last, .some(nil))
     }
 
+    // D8: a lifecycle flush asks for every file, and only the storage status hears the answer
+    func testAFlushAsksForEveryFileAndTellsOnlyTheStorageStatus() async {
+        var sent: [(String, String)] = []
+        let status = WriteStorageStatus()
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 1)))
+        let bridge = NativeBridgeClient(storage: status) { name, args in
+            sent.append((name, args))
+            return #"{"stored":true,"seq":{"epoch":"e","n":2}}"#
+        }
+        await bridge.flushStorage()
+        XCTAssertEqual(sent.map(\.0), ["native/persisted"])
+        XCTAssertEqual(sent.first?.1, #"{"allFiles":true}"#)
+        XCTAssertNil(status.message)
+    }
+
+    func testAFlushThatFailsChangesNothing() async {
+        let status = WriteStorageStatus()
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 1)))
+        let bridge = NativeBridgeClient(storage: status) { _, _ in throw NativeBridgeError.noPage }
+        await bridge.flushStorage()
+        XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
+    }
+
+    func testABackgroundFlushEndsItsTaskOnceWhenTheAnswerComes() async {
+        let answer = AsyncGate()
+        var ended: [Int] = []
+        var begun = 0
+        let flush = BackgroundFlush<Int>(
+            begin: { _ in
+                begun += 1
+                return 7
+            }, end: { ended.append($0) }, flush: { await answer.wait() })
+        flush.run()
+        flush.run()
+        XCTAssertEqual(begun, 1)
+        XCTAssertEqual(ended, [])
+        await answer.open()
+        await waitUntil { ended == [7] }
+        try? await Task.sleep(nanoseconds: 10_000_000)
+        XCTAssertEqual(ended, [7])
+    }
+
+    func testABackgroundFlushEndsItsTaskAtOnceOnExpiry() async {
+        let answer = AsyncGate()
+        var expire: () -> Void = {}
+        var ended: [Int] = []
+        let flush = BackgroundFlush<Int>(
+            begin: { onExpiry in
+                expire = onExpiry
+                return 7
+            }, end: { ended.append($0) }, flush: { await answer.wait() })
+        flush.run()
+        expire()
+        XCTAssertEqual(ended, [7])
+        await answer.open()
+        try? await Task.sleep(nanoseconds: 10_000_000)
+        XCTAssertEqual(ended, [7])
+    }
+
     func testSavingStaysUpForItsMinimumOnceShown() async throws {
         let status = WriteStorageStatus()
         var shown: [String?] = []

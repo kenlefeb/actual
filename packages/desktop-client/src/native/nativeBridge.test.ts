@@ -146,6 +146,16 @@ describe('storage through the page bridge', () => {
     },
   );
 
+  it('passes on only a lifecycle flush request to native/persisted', async () => {
+    const { bridge, send } = storageSetup();
+    await bridge.call('native/persisted', { allFiles: true, extra: 1 });
+    await bridge.call('native/persisted', { allFiles: 'yes' });
+    expect(send.mock.calls).toEqual([
+      ['native/persisted', { allFiles: true }],
+      ['native/persisted', undefined],
+    ]);
+  });
+
   // Security on PR #485: one id for this page load, on everything Swift compares
   it('stamps its own page load on storage answers and events', async () => {
     const send = vi.fn(async () => ({

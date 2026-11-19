@@ -27,7 +27,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var window: NSWindow?
     private var host: MacEngineHost?
     private var rereads: ChangeCoalescer?
-    private lazy var lifecycle = EngineLifecycle { [weak self] in self?.rereads?.notify() }
+    private lazy var lifecycle = EngineLifecycle(
+        reread: { [weak self] in self?.rereads?.notify() },
+        flush: { [weak self] done in
+            let client = self?.host?.client
+            Task { @MainActor in
+                await client?.flushStorage()
+                done()
+            }
+        })
     private var running = false
     private var notices: WindowNotices?
     private var inputMonitor: Any?
@@ -45,6 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             self?.notices?.clear()
             self?.showPageGone()
         }
+        host.presentDialog = { [weak self] request, answer in self?.showPageDialog(request, answer: answer) }
         let storage = StorageLossMonitor(defaults: UserDefaults.standard) { [weak self] in self?.showStorageLost() }
         host.onBudgetState = { storage.handle($0) }
         self.host = host
@@ -73,6 +82,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         EngineLifecycle.terminatesAfterLastWindowClosed
     }
 
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        lifecycle.shouldTerminate { sender.reply(toApplicationShouldTerminate: true) }
+        return .terminateLater
+    }
+
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !flag, let window { lifecycle.reopen(window) }
         return true
@@ -91,7 +105,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func updateNoticeWindowState() {
         guard let window else { return }
-        notices?.windowChanged(isKeyAndVisible: window.isKeyWindow && window.occlusionState.contains(.visible))
+        notices?.windowChanged(isActive: window.isKeyWindow && window.occlusionState.contains(.visible))
     }
 
     // Story 5220: the notice strip under the title bar
@@ -140,6 +154,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             localized: "Changes that weren't synced may be lost. Sign in and download your budget again.")
         if let sheet = window.attachedSheet { window.endSheet(sheet) }
         alert.beginSheetModal(for: window)
+    }
+
+    // sc-5399: a page's alert, confirm or prompt, as a sheet on the window. Returns
+    // how to take it off screen, or nil while it can't show (the window is hidden
+    // or has another sheet); PageDialogs then tries again and answers Cancel.
+    private func showPageDialog(_ request: PageDialogRequest, answer: @escaping @MainActor (PageDialogAnswer) -> Void) -> (() -> Void)? {
+        guard let window, window.isVisible, window.attachedSheet == nil else { return nil }
+        let alert = NSAlert()
+        // Another site's dialog is headed with its host, so it can't pass for the app's
+        alert.messageText = request.title ?? request.message
+        if request.title != nil { alert.informativeText = request.message }
+        alert.addButton(withTitle: String(localized: "OK", comment: "Button in a dialog from the app's page"))
+        var field: NSTextField?
+        switch request.kind {
+        case .alert: break
+        case .confirm:
+            alert.addButton(withTitle: String(localized: "Cancel", comment: "Button in a dialog from the app's page"))
+        case .prompt(let defaultText):
+            alert.addButton(withTitle: String(localized: "Cancel", comment: "Button in a dialog from the app's page"))
+            let input = NSTextField(string: defaultText ?? "")
+            input.frame = NSRect(x: 0, y: 0, width: 260, height: 24)
+            alert.accessoryView = input
+            alert.window.initialFirstResponder = input
+            field = input
+        }
+        alert.beginSheetModal(for: window) { response in
+            let ok = response == .alertFirstButtonReturn
+            MainActor.assumeIsolated {
+                switch request.kind {
+                case .alert: answer(.dismissed)
+                case .confirm: answer(.confirmed(ok))
+                case .prompt: answer(.text(ok ? field?.stringValue ?? "" : nil))
+                }
+            }
+        }
+        return { [weak window, weak alert] in
+            if let sheet = alert?.window, sheet.sheetParent != nil { window?.endSheet(sheet, returnCode: .abort) }
+        }
     }
 
     // Until story 4984: a server or sign-in provider the app doesn't list

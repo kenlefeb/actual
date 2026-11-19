@@ -17,9 +17,9 @@
 		7EF2915D6377EA83F8ED104A /* PageProcessKillTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4934778DE83E6B79AA8E5412 /* PageProcessKillTests.swift */; };
 		A071576772926A277BC04DFD /* PageRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40D4FD748B9FD8E90F3DE74 /* PageRecoveryTests.swift */; };
 		BF9FE0EAF5DD0F0176E94BA6 /* ReloadNoticeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8964C38D640768335BEF993 /* ReloadNoticeTests.swift */; };
+		D07166032DF1EB523FA33348 /* MacPageDialogsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 084B87B4A29BAEEF019D00E4 /* MacPageDialogsTests.swift */; };
 		D3C448290DA45717302FF5D8 /* StorageLossMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E78C87304ED3D02413EBD56 /* StorageLossMonitorTests.swift */; };
 		D6673CBB0E01CEBA7D44FA28 /* EngineLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9232DFABC112DDBC56908FBF /* EngineLifecycle.swift */; };
-		D7494474C9328E0EF2EE45B6 /* WindowNotices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4667F751DFA92D3624E71A1F /* WindowNotices.swift */; };
 		DA9C537FB7C598492264F7D8 /* HomeEconomicsMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20D5FA73EC2BF679AC0CC233 /* HomeEconomicsMacApp.swift */; };
 		E2ABA8D1A32401500743525F /* WWWSchemeHandlerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE70CE285A9B6C939404F117 /* WWWSchemeHandlerTests.swift */; };
 		E644DA7DFD4183C213063A62 /* WWWSchemeHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F1C03BA71996E1EB62B964E /* WWWSchemeHandler.swift */; };
@@ -39,10 +39,10 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		084B87B4A29BAEEF019D00E4 /* MacPageDialogsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacPageDialogsTests.swift; sourceTree = "<group>"; };
 		1E78C87304ED3D02413EBD56 /* StorageLossMonitorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageLossMonitorTests.swift; sourceTree = "<group>"; };
 		20D5FA73EC2BF679AC0CC233 /* HomeEconomicsMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeEconomicsMacApp.swift; sourceTree = "<group>"; };
 		333FCD0C5BD9FD1F4DDBBDD9 /* StorageLossMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageLossMonitor.swift; sourceTree = "<group>"; };
-		4667F751DFA92D3624E71A1F /* WindowNotices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowNotices.swift; sourceTree = "<group>"; };
 		4934778DE83E6B79AA8E5412 /* PageProcessKillTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageProcessKillTests.swift; sourceTree = "<group>"; };
 		6F65F9272B94E505672B77A6 /* MacEngineHostTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacEngineHostTests.swift; sourceTree = "<group>"; };
 		7C2AD8712ED066882131A5FE /* EngineSpikeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineSpikeTests.swift; sourceTree = "<group>"; };
@@ -94,7 +94,6 @@
 				B93C4666FA76203E682E2997 /* NavigationPolicy.swift */,
 				B9B419858EECCD61577199EB /* NoticeBanner.swift */,
 				333FCD0C5BD9FD1F4DDBBDD9 /* StorageLossMonitor.swift */,
-				4667F751DFA92D3624E71A1F /* WindowNotices.swift */,
 				7F1C03BA71996E1EB62B964E /* WWWSchemeHandler.swift */,
 			);
 			path = HomeEconomicsMac;
@@ -133,6 +132,7 @@
 				A38DD33146BC5355A150EFF5 /* EngineLifecycleTests.swift */,
 				7C2AD8712ED066882131A5FE /* EngineSpikeTests.swift */,
 				6F65F9272B94E505672B77A6 /* MacEngineHostTests.swift */,
+				084B87B4A29BAEEF019D00E4 /* MacPageDialogsTests.swift */,
 				4934778DE83E6B79AA8E5412 /* PageProcessKillTests.swift */,
 				F40D4FD748B9FD8E90F3DE74 /* PageRecoveryTests.swift */,
 				F8964C38D640768335BEF993 /* ReloadNoticeTests.swift */,
@@ -253,6 +253,7 @@
 				F3CDC31ACE9D1C98C9301252 /* EngineLifecycleTests.swift in Sources */,
 				4D6B1D6CA58D0DA0283D6194 /* EngineSpikeTests.swift in Sources */,
 				F6FDC8769B0DEB3E2FC16ECB /* MacEngineHostTests.swift in Sources */,
+				D07166032DF1EB523FA33348 /* MacPageDialogsTests.swift in Sources */,
 				7EF2915D6377EA83F8ED104A /* PageProcessKillTests.swift in Sources */,
 				A071576772926A277BC04DFD /* PageRecoveryTests.swift in Sources */,
 				BF9FE0EAF5DD0F0176E94BA6 /* ReloadNoticeTests.swift in Sources */,
@@ -273,7 +274,6 @@
 				1CD490DB4AEA89671E540DDA /* NoticeBanner.swift in Sources */,
 				5B3BE3BFD59237810260BB7C /* StorageLossMonitor.swift in Sources */,
 				E644DA7DFD4183C213063A62 /* WWWSchemeHandler.swift in Sources */,
-				D7494474C9328E0EF2EE45B6 /* WindowNotices.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

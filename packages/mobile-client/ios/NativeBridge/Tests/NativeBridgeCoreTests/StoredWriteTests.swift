@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import XCTest
 
@@ -19,7 +20,9 @@ final class StoredWriteTests: XCTestCase {
         status: WriteStorageStatus, calls: Calls = Calls(), timeout: TimeInterval = 5,
         persisted: @escaping (Int) async throws -> String = { _ in #"{"stored":true}"# }
     ) -> NativeBridgeClient {
-        NativeBridgeClient(timeout: timeout, storage: status) { name, _ in
+        status.pageLoaded(epoch: "e")
+        // The barrier as the guard-on shell sees it
+        return NativeBridgeClient(timeout: timeout, storage: status, storageGuardOn: true) { name, _ in
             await calls.add(name)
             guard name == "native/persisted" else { return "null" }
             return try await persisted(await calls.count(name))
@@ -51,7 +54,7 @@ final class StoredWriteTests: XCTestCase {
         let status = WriteStorageStatus()
         let older = status.nextTicket()
         let newer = status.nextTicket()
-        status.record(PersistedAnswer(stored: false, seq: 2), ticket: newer)
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 2)), ticket: newer)
         status.record(PersistedAnswer(stored: true), ticket: older)
         XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
         status.record(PersistedAnswer(stored: true), ticket: status.nextTicket())
@@ -63,25 +66,25 @@ final class StoredWriteTests: XCTestCase {
         let older = status.nextTicket()
         let newer = status.nextTicket()
         status.record(PersistedAnswer(stored: true), ticket: newer)
-        status.record(PersistedAnswer(stored: false, seq: 1), ticket: older)
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 1)), ticket: older)
         XCTAssertNil(status.message)
     }
 
     func testAStoredEventThatArrivesBeforeItsAnswerCounts() {
         let status = WriteStorageStatus()
-        status.storedEvent(seq: 5)
-        status.record(PersistedAnswer(stored: false, seq: 5), ticket: status.nextTicket())
+        status.storedEvent(seq: 5, epoch: "e")
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 5)), ticket: status.nextTicket())
         XCTAssertNil(status.message)
-        status.record(PersistedAnswer(stored: false, seq: 6), ticket: status.nextTicket())
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 6)), ticket: status.nextTicket())
         XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
     }
 
     // A later number's writes include every earlier one's
     func testAStoredEventCoversEarlierNumbers() {
         let status = WriteStorageStatus()
-        status.record(PersistedAnswer(stored: false, seq: 1), ticket: status.nextTicket())
-        status.record(PersistedAnswer(stored: false, seq: 2), ticket: status.nextTicket())
-        status.storedEvent(seq: 2)
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 1)), ticket: status.nextTicket())
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 2)), ticket: status.nextTicket())
+        status.storedEvent(seq: 2, epoch: "e")
         XCTAssertNil(status.message)
     }
 
@@ -89,27 +92,28 @@ final class StoredWriteTests: XCTestCase {
     func testARetrysStoredEventClearsTheTimedOutWrite() {
         let status = WriteStorageStatus()
         status.record(.notStored, ticket: status.nextTicket())
-        status.record(PersistedAnswer(stored: false, seq: 3), ticket: status.nextTicket())
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 3)), ticket: status.nextTicket())
         XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
-        status.storedEvent(seq: 3)
+        status.storedEvent(seq: 3, epoch: "e")
         XCTAssertNil(status.message)
     }
 
     func testARetrysStoredEventCountsEvenBeforeItsAnswer() {
         let status = WriteStorageStatus()
         status.record(.notStored, ticket: status.nextTicket())
-        status.storedEvent(seq: 3)
-        status.record(PersistedAnswer(stored: false, seq: 3), ticket: status.nextTicket())
+        status.storedEvent(seq: 3, epoch: "e")
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 3)), ticket: status.nextTicket())
         XCTAssertNil(status.message)
     }
 
     func testAWriteAfterTheRetryIsNotCovered() {
         let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "e")
         let retry = status.nextTicket()
         let later = status.nextTicket()
         status.record(.notStored, ticket: later)
-        status.record(PersistedAnswer(stored: false, seq: 3), ticket: retry)
-        status.storedEvent(seq: 3)
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 3)), ticket: retry)
+        status.storedEvent(seq: 3, epoch: "e")
         XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
     }
 
@@ -178,20 +182,20 @@ final class StoredWriteTests: XCTestCase {
 
     func testNotStoredShowsAndClearsOnItsStoredEvent() async throws {
         let status = WriteStorageStatus()
-        let result = try await client(status: status) { _ in #"{"stored":false,"seq":4}"# }
+        let result = try await client(status: status) { _ in #"{"stored":false,"seq":{"epoch":"e","n":4}}"# }
             .write("native/account-move", args: move)
         XCTAssertFalse(result.stored)
         XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
-        status.storedEvent(seq: 3)
+        status.storedEvent(seq: 3, epoch: "e")
         XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
-        status.storedEvent(seq: 4)
+        status.storedEvent(seq: 4, epoch: "e")
         XCTAssertNil(status.message)
     }
 
     func testALaterStoredAnswerClearsAnEarlierNotStored() async throws {
         let status = WriteStorageStatus()
         let bridge = client(status: status) { count in
-            count == 1 ? #"{"stored":false,"seq":1}"# : #"{"stored":true}"#
+            count == 1 ? #"{"stored":false,"seq":{"epoch":"e","n":1}}"# : #"{"stored":true,"seq":{"epoch":"e","n":2}}"#
         }
         try await bridge.moveAccount(move)
         try await bridge.moveAccount(move)
@@ -241,10 +245,460 @@ final class StoredWriteTests: XCTestCase {
         XCTAssertNil(status.message)
     }
 
+    // Architect's ruling, task 3.6: a restart may have lost what was not stored
+    func testARestartTurnsPendingWritesIntoMaybeLostAndNoLaterSuccessClearsThem() {
+        let status = WriteStorageStatus()
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "old", n: 1)))
+        status.pageLoaded(epoch: "new")
+        XCTAssertTrue(status.mayNotBeSaved)
+        XCTAssertNil(status.message)
+        status.record(PersistedAnswer(stored: true, seq: PersistedSeq(epoch: "new", n: 99)))
+        XCTAssertTrue(status.mayNotBeSaved)
+        XCTAssertNil(status.message)
+        status.storedEvent(seq: 1, epoch: "new")
+        status.storedEvent(seq: 1, epoch: "old")
+        XCTAssertTrue(status.mayNotBeSaved)
+        XCTAssertNil(status.message)
+        status.acknowledgeMayNotBeSaved()
+        XCTAssertFalse(status.mayNotBeSaved)
+    }
+
+    // The spec's "No answer before the restart"
+    func testAWriteWithNoAnswerBelongsToThePageLoadItWasMadeIn() {
+        let status = WriteStorageStatus()
+        let generation = status.writeBegan()
+        status.pageLoaded(epoch: "new")
+        status.record(.notStored, madeIn: generation)
+        status.writeEnded()
+        status.record(PersistedAnswer(stored: true, seq: PersistedSeq(epoch: "new", n: 1)))
+        XCTAssertTrue(status.mayNotBeSaved)
+        XCTAssertNil(status.message)
+    }
+
+    // Security on PR #482: numbers start again with each page load
+    func testAnEarlierPagesStoredNumberDoesNotHideANewWrite() {
+        let status = WriteStorageStatus()
+        status.storedEvent(seq: 9, epoch: "old")
+        status.pageLoaded(epoch: "new")
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "new", n: 1)), ticket: status.nextTicket())
+        XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
+    }
+
+    func testAnOlderTicketFromBeforeARestartStaysOlderAfterIt() {
+        let status = WriteStorageStatus()
+        let before = status.nextTicket()
+        status.pageLoaded(epoch: "new")
+        let after = status.nextTicket()
+        XCTAssertGreaterThan(after, before)
+    }
+
+    // The new page can answer before its "ready" message is handled
+    func testReadyAfterANewEpochDoesNotRetireTheNewPage() {
+        let status = WriteStorageStatus()
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "old", n: 1)))
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "new", n: 1)))
+        status.pageLoaded(epoch: "new")
+        XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
+        status.record(PersistedAnswer(stored: true, seq: PersistedSeq(epoch: "new", n: 2)))
+        XCTAssertNil(status.message)
+        XCTAssertTrue(status.mayNotBeSaved)
+    }
+
+    // Security's probes on PR #485
+    func testAWriteAnsweredByTheNextPageIsNotStored() async throws {
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "old")
+        let bridge = NativeBridgeClient(storage: status, storageGuardOn: true) { name, _ in
+            name == "native/persisted" ? #"{"stored":true,"seq":{"epoch":"new","n":1}}"# : "null"
+        }
+        let result = try await bridge.write("native/account-move", args: move)
+        XCTAssertFalse(result.stored)
+        XCTAssertTrue(status.mayNotBeSaved)
+    }
+
+    func testAFirstWriteAnsweredBeforeReadyIsNotStored() async throws {
+        let status = WriteStorageStatus()
+        let bridge = NativeBridgeClient(storage: status, storageGuardOn: true) { name, _ in
+            name == "native/persisted" ? #"{"stored":true,"seq":{"epoch":"new","n":1}}"# : "null"
+        }
+        let result = try await bridge.write("native/account-move", args: move)
+        XCTAssertFalse(result.stored)
+        XCTAssertTrue(status.mayNotBeSaved)
+    }
+
+    // sc-5303 (design D7a): with the shell's switch off, the opened API behaves as today
+    func testWithTheGuardOffAWriteCountsAsStoredAtOnce() async throws {
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "e")
+        let bridge = NativeBridgeClient(storage: status) { name, _ in
+            name == "native/persisted" ? #"{"stored":false,"seq":{"epoch":"e","n":1}}"# : "null"
+        }
+        let result = try await bridge.write("native/account-move", args: move)
+        // Without this, a wrong answer would wait forever for a "stored" that never comes
+        guard result.stored else { return XCTFail("with the guard off a write counts as stored at once") }
+        let later = await bridge.whenStored(result)
+        XCTAssertTrue(later)
+    }
+
+    func testWithTheGuardOnAWriteWaitsForItsStoredEvent() async throws {
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "e")
+        let bridge = NativeBridgeClient(storage: status, storageGuardOn: true) { name, _ in
+            name == "native/persisted" ? #"{"stored":false,"seq":{"epoch":"e","n":1}}"# : "null"
+        }
+        let result = try await bridge.write("native/account-move", args: move)
+        XCTAssertFalse(result.stored)
+        let waiting = Task { await bridge.whenStored(result) }
+        try await Task.sleep(nanoseconds: 20_000_000)
+        status.storedEvent(seq: 1, epoch: "e")
+        let stored = await waiting.value
+        XCTAssertTrue(stored)
+    }
+
+    func testWithTheGuardOnARestartMeansNeverStored() async throws {
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "e")
+        let bridge = NativeBridgeClient(storage: status, storageGuardOn: true) { name, _ in
+            name == "native/persisted" ? #"{"stored":false,"seq":{"epoch":"e","n":1}}"# : "null"
+        }
+        let result = try await bridge.write("native/account-move", args: move)
+        let waiting = Task { await bridge.whenStored(result) }
+        try await Task.sleep(nanoseconds: 20_000_000)
+        status.pageLoaded(epoch: "f")
+        let stored = await waiting.value
+        XCTAssertFalse(stored)
+    }
+
+    // Security on PR #496: a later "not stored" that takes a write's place hands its waiters over
+    func testAWaitIsHandedToTheWriteThatTakesItsPlace() async throws {
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "e")
+        let first = status.nextTicket()
+        status.record(.notStored, ticket: first)
+        var answer: Bool?
+        let waiting = Task { answer = await status.waitStored(ticket: first) }
+        try await Task.sleep(nanoseconds: 20_000_000)
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 2)), ticket: status.nextTicket())
+        try await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertNil(answer, "still not stored")
+        XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
+        status.storedEvent(seq: 2, epoch: "e")
+        await waiting.value
+        XCTAssertEqual(answer, true)
+    }
+
+    // A wait ends, with no claim of saving, when storage fails or the waiter goes away
+    func testAWaitEndsNotStoredWhenStorageFails() async throws {
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "e")
+        let ticket = status.nextTicket()
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 1)), ticket: ticket)
+        let waiting = Task { await status.waitStored(ticket: ticket) }
+        try await Task.sleep(nanoseconds: 20_000_000)
+        status.storageFailed()
+        let stored = await waiting.value
+        XCTAssertFalse(stored)
+    }
+
+    func testAWaitEndsNotStoredWhenItsWaiterGoesAway() async throws {
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "e")
+        let ticket = status.nextTicket()
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 1)), ticket: ticket)
+        let waiting = Task { await status.waitStored(ticket: ticket) }
+        try await Task.sleep(nanoseconds: 20_000_000)
+        waiting.cancel()
+        let stored = await waiting.value
+        XCTAssertFalse(stored)
+    }
+
+    // sc-5302: a retired page's own "not stored" stays its own
+    func testARetiredPagesNotStoredAnswerIsALossAndLeavesTheNewPageAlone() {
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "a")
+        let origin = status.writeBegan()
+        status.writeEnded()
+        status.pageLoaded(epoch: "b")
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "b", n: 1)))
+        XCTAssertFalse(status.mayNotBeSaved)
+        let stored = status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "a", n: 7)), madeIn: origin)
+        XCTAssertFalse(stored)
+        XCTAssertTrue(status.mayNotBeSaved)
+        XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage, "b's write is still waiting")
+        status.storedEvent(seq: 1, epoch: "b")
+        XCTAssertNil(status.message)
+        XCTAssertTrue(status.mayNotBeSaved, "b's success does not vouch for a's write")
+    }
+
+    func testALateReadyFromTheSamePageKeepsItsNextUnstoredWrite() {
+        let status = WriteStorageStatus()
+        status.record(PersistedAnswer(stored: true, seq: PersistedSeq(epoch: "live", n: 1)))
+        status.pageLoaded(epoch: "live")
+        status.record(
+            PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "live", n: 2)), madeIn: status.writeBegan())
+        status.writeEnded()
+        XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
+        XCTAssertFalse(status.mayNotBeSaved)
+    }
+
+    func testTheOldPagesOwnLateAnswerStillCounts() {
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "old")
+        let origin = status.writeBegan()
+        status.writeEnded()
+        status.pageLoaded(epoch: "new")
+        XCTAssertTrue(status.record(PersistedAnswer(stored: true, seq: PersistedSeq(epoch: "old", n: 1)), madeIn: origin))
+        XCTAssertFalse(status.mayNotBeSaved)
+    }
+
+    // A possible loss is for the restart notice: the line shows only saving in progress
+    func testAPossibleLossIsNotShownAsSaving() {
+        let status = WriteStorageStatus()
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "old", n: 1)))
+        status.pageLoaded(epoch: "new")
+        XCTAssertNil(status.message)
+        XCTAssertTrue(status.mayNotBeSaved)
+    }
+
+    func testAStalePagesStoredEventIsIgnored() {
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "old")
+        status.pageLoaded(epoch: "new")
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "new", n: 1)))
+        status.storedEvent(seq: 5, epoch: "old")
+        XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
+        // Nor does it count against this page's later writes
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "new", n: 2)))
+        status.storedEvent(seq: 1, epoch: "new")
+        XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
+        status.storedEvent(seq: 2, epoch: "new")
+        XCTAssertNil(status.message)
+    }
+
+    func testReadyCarriesOnlyThePageLoad() {
+        XCTAssertEqual(NativeBridgeEvent.readyEpoch(of: ["event": "ready", "payload": ["epoch": "e"]]), "e")
+        XCTAssertNil(NativeBridgeEvent.readyEpoch(of: ["event": "ready", "payload": NSNull()]))
+        XCTAssertNil(NativeBridgeEvent.readyEpoch(of: ["event": "stored", "payload": ["epoch": "e"]]))
+    }
+
+    func testANewEpochAloneRevealsARestart() {
+        let status = WriteStorageStatus()
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "old", n: 9)))
+        status.record(PersistedAnswer(stored: true, seq: PersistedSeq(epoch: "new", n: 99)))
+        XCTAssertTrue(status.mayNotBeSaved)
+        XCTAssertNil(status.message)
+    }
+
+    func testStoredClearsOnlyItsOwnEpochAndEachWriteIsTracked() {
+        let status = WriteStorageStatus()
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 1)))
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 2)))
+        status.storedEvent(seq: 1, epoch: "e")
+        XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
+        status.storedEvent(seq: 2, epoch: "e")
+        XCTAssertNil(status.message)
+    }
+
+    func testALateAnswerFromTheOldPageVouchesForNothing() {
+        let status = WriteStorageStatus()
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "old", n: 1)))
+        status.pageLoaded(epoch: "new")
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "new", n: 1)))
+        status.record(PersistedAnswer(stored: true, seq: PersistedSeq(epoch: "old", n: 99)))
+        status.acknowledgeMayNotBeSaved()
+        XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
+    }
+
+    func testAStoredAnswerWithoutPendingWritesAfterALoadChangesNothing() {
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "new")
+        status.record(PersistedAnswer(stored: true, seq: PersistedSeq(epoch: "new", n: 99)))
+        XCTAssertNil(status.message)
+    }
+
+    func testThePersonIsToldToKeepTheAppOpen() {
+        XCTAssertEqual(WriteStorageStatus.notYetStoredMessage, "Still saving to this device. Keep the app open.")
+    }
+
+    func testTheLineFollowsAWriteUntilItIsStored() {
+        let status = WriteStorageStatus()
+        XCTAssertNil(status.message)
+        status.writeBegan()
+        XCTAssertEqual(status.message, WriteStorageStatus.savingMessage)
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 1)))
+        status.writeEnded()
+        XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
+        status.storedEvent(seq: 1, epoch: "e")
+        XCTAssertNil(status.message)
+    }
+
+    // A normal write takes milliseconds, so its "Saving…" must not flash
+    func testSavingAppearsOnlyAfterTheDelayAndOtherMessagesAtOnce() async throws {
+        let status = WriteStorageStatus()
+        var shown: [String?] = []
+        let watching = status.shownMessage(savingDelay: 0.05, savingMinimum: 0).sink { shown.append($0) }
+        defer { watching.cancel() }
+        status.writeBegan()
+        status.writeEnded()
+        try await Task.sleep(nanoseconds: 120_000_000)
+        XCTAssertFalse(shown.contains(WriteStorageStatus.savingMessage))
+
+        status.writeBegan()
+        await waitUntil { shown.last == WriteStorageStatus.savingMessage }
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 1)))
+        status.writeEnded()
+        XCTAssertEqual(shown.last, WriteStorageStatus.notYetStoredMessage)
+        status.storedEvent(seq: 1, epoch: "e")
+        XCTAssertEqual(shown.last, .some(nil))
+    }
+
+    // D8: a lifecycle flush asks for every file, and only the storage status hears the answer
+    func testAFlushAsksForEveryFileAndTellsOnlyTheStorageStatus() async {
+        var sent: [(String, String)] = []
+        let status = WriteStorageStatus()
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 1)))
+        let bridge = NativeBridgeClient(storage: status) { name, args in
+            sent.append((name, args))
+            return #"{"stored":true,"seq":{"epoch":"e","n":2}}"#
+        }
+        await bridge.flushStorage()
+        XCTAssertEqual(sent.map(\.0), ["native/persisted"])
+        XCTAssertEqual(sent.first?.1, #"{"allFiles":true}"#)
+        XCTAssertNil(status.message)
+    }
+
+    func testAFlushThatFailsChangesNothing() async {
+        let status = WriteStorageStatus()
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 1)))
+        let bridge = NativeBridgeClient(storage: status) { _, _ in throw NativeBridgeError.noPage }
+        await bridge.flushStorage()
+        XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
+    }
+
+    func testABackgroundFlushEndsItsTaskOnceWhenTheAnswerComes() async {
+        let answer = AsyncGate()
+        var ended: [Int] = []
+        var begun = 0
+        let flush = BackgroundFlush<Int>(
+            begin: { _ in
+                begun += 1
+                return 7
+            }, end: { ended.append($0) }, flush: { await answer.wait() })
+        flush.run()
+        flush.run()
+        XCTAssertEqual(begun, 1)
+        XCTAssertEqual(ended, [])
+        await answer.open()
+        await waitUntil { ended == [7] }
+        try? await Task.sleep(nanoseconds: 10_000_000)
+        XCTAssertEqual(ended, [7])
+    }
+
+    func testABackgroundFlushEndsItsTaskAtOnceOnExpiry() async {
+        let answer = AsyncGate()
+        var expire: () -> Void = {}
+        var ended: [Int] = []
+        let flush = BackgroundFlush<Int>(
+            begin: { onExpiry in
+                expire = onExpiry
+                return 7
+            }, end: { ended.append($0) }, flush: { await answer.wait() })
+        flush.run()
+        expire()
+        XCTAssertEqual(ended, [7])
+        await answer.open()
+        try? await Task.sleep(nanoseconds: 10_000_000)
+        XCTAssertEqual(ended, [7])
+    }
+
+    // sc-5308: a flush waits for every file, writes for the open budget only, so a
+    // flush's "not stored" can't join their order: a narrower "stored" would clear it
+    func testAFlushThatIsNotStoredIsNotRecorded() async {
+        let status = WriteStorageStatus()
+        var reply = #"{"stored":false,"seq":{"epoch":"e","n":1}}"#
+        let bridge = NativeBridgeClient(storage: status) { _, _ in reply }
+        await bridge.flushStorage()
+        XCTAssertNil(status.message)
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 2)))
+        XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
+        reply = #"{"stored":true,"seq":{"epoch":"e","n":3}}"#
+        await bridge.flushStorage()
+        XCTAssertNil(status.message)
+    }
+
+    // sc-5309: an answer or expiry ends only its own background task
+    func testALateFirstFlushDoesNotEndANewerTask() async {
+        let gates = [AsyncGate(), AsyncGate()]
+        var expire: () -> Void = {}
+        var begun = 0
+        var calls = 0
+        var ended: [Int] = []
+        let flush = BackgroundFlush<Int>(
+            begin: { onExpiry in
+                expire = onExpiry
+                begun += 1
+                return begun
+            }, end: { ended.append($0) },
+            flush: {
+                calls += 1
+                await gates[calls - 1].wait()
+            })
+        flush.run()
+        expire()
+        XCTAssertEqual(ended, [1])
+        flush.run()
+        XCTAssertEqual(begun, 2)
+        await gates[0].open()
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertEqual(ended, [1])
+        await gates[1].open()
+        await waitUntil { ended == [1, 2] }
+        XCTAssertEqual(ended, [1, 2])
+    }
+
+    func testSavingStaysUpForItsMinimumOnceShown() async throws {
+        let status = WriteStorageStatus()
+        var shown: [String?] = []
+        let watching = status.shownMessage(savingDelay: 0.01, savingMinimum: 0.25).sink { shown.append($0) }
+        defer { watching.cancel() }
+        status.writeBegan()
+        await waitUntil { shown.last == WriteStorageStatus.savingMessage }
+        status.writeEnded()
+        try await Task.sleep(nanoseconds: 60_000_000)
+        XCTAssertEqual(shown.last, WriteStorageStatus.savingMessage)
+        await waitUntil { shown.last == .some(nil) }
+    }
+
+    // Designer, PR #485: the line never sits on the field being typed in
+    func testTheLineMovesOnlyWhenItWouldCoverTheField() {
+        func covers(_ fieldTop: CGFloat, _ fieldHeight: CGFloat = 40) -> Bool {
+            WriteStorageLinePlacement.coversField(
+                CGRect(x: 0, y: fieldTop, width: 300, height: fieldHeight), lineHeight: 30, keyboardTop: 500)
+        }
+        XCTAssertTrue(covers(450))
+        XCTAssertTrue(covers(435))
+        XCTAssertFalse(covers(100))
+        XCTAssertFalse(covers(422, 40))
+        XCTAssertFalse(
+            WriteStorageLinePlacement.coversField(nil, lineHeight: 30, keyboardTop: 500))
+    }
+
+    func testVoiceOverHearsOnlyTheNotYetStoredMessageOnce() {
+        let saving = WriteStorageStatus.savingMessage
+        let unstored = WriteStorageStatus.notYetStoredMessage
+        XCTAssertNil(WriteStorageStatus.announcement(from: nil, to: saving))
+        XCTAssertEqual(WriteStorageStatus.announcement(from: saving, to: unstored), unstored)
+        XCTAssertNil(WriteStorageStatus.announcement(from: unstored, to: unstored))
+        XCTAssertNil(WriteStorageStatus.announcement(from: unstored, to: nil))
+    }
+
     func testTheStoredEventCarriesOnlyItsNumber() {
-        XCTAssertEqual(NativeBridgeEvent.storedSeq(of: ["event": "stored", "payload": ["seq": 7]]), 7)
-        XCTAssertNil(NativeBridgeEvent.storedSeq(of: ["event": "sync-event", "payload": ["seq": 7]]))
-        XCTAssertNil(NativeBridgeEvent.storedSeq(of: ["event": "stored", "payload": ["seq": "7"]]))
+        let stored = NativeBridgeEvent.stored(of: ["event": "stored", "payload": ["seq": ["epoch": "e", "n": 7], "extra": 1]])
+        XCTAssertEqual(stored?.seq, 7)
+        XCTAssertEqual(stored?.epoch, "e")
+        XCTAssertNil(NativeBridgeEvent.stored(of: ["event": "sync-event", "payload": ["seq": ["epoch": "e", "n": 7]]]))
+        XCTAssertNil(NativeBridgeEvent.stored(of: ["event": "stored", "payload": ["seq": ["epoch": "e", "n": "7"]]]))
+        XCTAssertNil(NativeBridgeEvent.stored(of: ["event": "stored", "payload": ["seq": 7]]))
     }
 
     private func waitUntil(_ condition: () -> Bool) async {

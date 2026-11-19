@@ -6,7 +6,11 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const HOOK_MARKERS = ['__forkTestCommitDelayMs', '__forkTestBarrierOff'];
+export const HOOK_MARKERS = [
+  '__forkTestCommitDelayMs',
+  '__forkTestBarrierOff',
+  '__FORK_TEST_COMMIT_DELAY_MS__',
+];
 
 const DEFAULT_BUILD = 'packages/desktop-client/build';
 

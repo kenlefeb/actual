@@ -18,6 +18,8 @@ public class NativeBridgePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
     // The Schedules & Paychecks overlay (sc-4341): each event with a
     // sync-event's changed table names; it coalesces its own re-reads
     var onPaychecksEvent: ((String, [String]) -> Void)?
+    // sc-5219: storage-failed and storage-close-failed, for the storage notices
+    var onStorageEvent: ((Any) -> Void)?
     var onChange: (() -> Void)?
     // sc-3611: the budget's sync outcome for the Accounts subtitle, kept while
     // the screen comes and goes; main queue
@@ -28,7 +30,7 @@ public class NativeBridgePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
     // sc-5219: whether this device has stored the writes made through `client`
     let writeStorage = WriteStorageStatus()
 
-    lazy var client = NativeBridgeClient(storage: writeStorage) { [weak self] name, argsJSON in
+    lazy var client = NativeBridgeClient(storage: writeStorage, storageGuardOn: StorageGuardRollout.isOn) { [weak self] name, argsJSON in
         guard let self else { throw NativeBridgeError.noPage }
         return try await self.evaluate(name: name, argsJSON: argsJSON)
     }
@@ -44,8 +46,12 @@ public class NativeBridgePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
         let origin = message.frameInfo.securityOrigin
         guard PageOriginGuard.accepts(isMainFrame: message.frameInfo.isMainFrame, scheme: origin.protocol, host: origin.host, port: origin.port, serverURL: bridge?.config.serverURL),
               let event = NativeBridgeEvent.name(of: message.body) else { return }
-        if let seq = NativeBridgeEvent.storedSeq(of: message.body) {
-            Task { @MainActor [writeStorage] in writeStorage.storedEvent(seq: seq) }
+        // In order, on the main thread, so a page's "ready" comes before anything it answers
+        MainActor.assumeIsolated {
+            if let epoch = NativeBridgeEvent.readyEpoch(of: message.body) { writeStorage.pageLoaded(epoch: epoch) }
+            if let stored = NativeBridgeEvent.stored(of: message.body) { writeStorage.storedEvent(seq: stored.seq, epoch: stored.epoch) }
+            if event == "storage-failed" { writeStorage.storageFailed() }
+            if event == "storage-failed" || event == "storage-close-failed" { onStorageEvent?(message.body) }
         }
         onEvent?(event)
         onPaychecksEvent?(event, NativeBridgeEvent.tables(of: message.body))

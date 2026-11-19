@@ -16,16 +16,27 @@ final class EngineLifecycle {
     static let terminatesAfterLastWindowClosed = false
 
     private let reread: () -> Void
+    // sc-5219 (D8): asks storage to finish, then calls back; the client's deadline bounds it
+    private let flush: (@escaping () -> Void) -> Void
     private var isActive = false
     private var isAsleep = false
+    private var isTerminating = false
 
-    init(reread: @escaping () -> Void) {
+    init(reread: @escaping () -> Void, flush: @escaping (@escaping () -> Void) -> Void = { $0() }) {
         self.reread = reread
+        self.flush = flush
     }
 
     func windowShouldClose(_ window: EngineWindow) -> Bool {
-        window.orderOut(nil)
+        flush { window.orderOut(nil) }
         return false
+    }
+
+    // AppKit allows one reply to a deferred quit
+    func shouldTerminate(reply: @escaping () -> Void) {
+        guard !isTerminating else { return }
+        isTerminating = true
+        flush(reply)
     }
 
     func reopen(_ window: EngineWindow) {
@@ -42,8 +53,10 @@ final class EngineLifecycle {
         isActive = false
     }
 
+    // Best effort: sleep cannot be delayed
     func willSleep() {
         isAsleep = true
+        flush {}
     }
 
     func didWake() {

@@ -1,3 +1,4 @@
+import Combine
 import UIKit
 
 // Fork-only (sc-3514, ADR 11). The iPhone app's root: a system tab bar with
@@ -10,6 +11,11 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
     private var router = NativeTabRouter()
     private var containers: [NativeTab: TabContainerViewController] = [:]
     private var foregroundObserver: NSObjectProtocol?
+    private var pageNoticeWindow: PageNoticeWindow?
+    private var noticeHeight: CGFloat = 0
+    private var noticeFollower: Timer?
+    // sc-5219: "Saving…" and "Still saving to this device. Keep the app open.", above the tab bar
+    private var writeStorageLine: WriteStorageLine?
     // The native Budget tab (sc-3751) lies over the web Budget screen while the
     // switch is on and the page shows /budget with the tab bar; otherwise the web screen below shows as before
     private var budgetOverlay: NativeBudgetViewController?
@@ -89,6 +95,85 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
         foregroundObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
         ) { [weak self] _ in self?.bridgeController.nativeChrome.reportRoute() }
+    }
+
+    // sc-5220: the window exists from here on
+    override func viewIsAppearing(_ animated: Bool) {
+        super.viewIsAppearing(animated)
+        guard pageNoticeWindow == nil, let window = view.window, let scene = window.windowScene else { return }
+        pageNoticeWindow = PageNoticeWindow(
+            notices: bridgeController.pageNotices, scene: scene, mainWindow: window,
+            reserve: { [weak self] in self?.reserveNoticeSpace($0) })
+    }
+
+    // Everything below the strip starts under it, sheets included
+    private func reserveNoticeSpace(_ height: CGFloat) {
+        noticeHeight = height
+        additionalSafeAreaInsets.top = height
+        giveSheetsNoticeSpace()
+        // As the storage line does: UIKit says nothing when a sheet opens, so
+        // while the strip is up a sheet opened under it is found by looking
+        noticeFollower?.invalidate()
+        noticeFollower = height > 0
+            ? Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.giveSheetsNoticeSpace() }
+            }
+            : nil
+        // A list under a large title keeps its old inset until its navigation
+        // view is laid out again, which would leave a gap when the strip goes
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            guard let self else { return }
+            Self.navigationControllers(in: self).forEach {
+                $0.view.setNeedsLayout()
+                $0.view.layoutIfNeeded()
+            }
+        }
+    }
+
+    private func giveSheetsNoticeSpace() {
+        var presented = presentedViewController
+        while let screen = presented {
+            if screen.additionalSafeAreaInsets.top != noticeHeight { screen.additionalSafeAreaInsets.top = noticeHeight }
+            presented = screen.presentedViewController
+        }
+        // The storage line's window (sc-5219) ends below the strip too, so the
+        // two never overlap, however large the text, and the line's share of
+        // the space above the keyboard (sc-5296) counts from the strip down.
+        // Repeated while the strip is up, for a line that appears later.
+        for window in view.window?.windowScene?.windows ?? [] where window.windowLevel == .alert {
+            if let root = window.rootViewController, root.additionalSafeAreaInsets.top != noticeHeight {
+                root.additionalSafeAreaInsets.top = noticeHeight
+            }
+        }
+    }
+
+    private static func navigationControllers(in controller: UIViewController) -> [UINavigationController] {
+        controller.children.flatMap { navigationControllers(in: $0) } + [controller as? UINavigationController].compactMap { $0 }
+    }
+
+    private func attachWriteStorageLine() {
+        guard WriteStorageLineRollout.isOn, writeStorageLine == nil, let scene = view.window?.windowScene else { return }
+        #if DEBUG
+        UITestAccounts.holdStorageLine(bridgeController.nativeBridge.writeStorage)
+        #endif
+        writeStorageLine = WriteStorageLine(
+            status: bridgeController.nativeBridge.writeStorage, scene: scene,
+            barHeight: { [weak self] in
+                guard let self, self.tabBarShown else { return 0 }
+                // A context menu is presented too, but only a sheet covers the tab bar
+                let coversTabBar = self.presentedViewController?.sheetPresentationController != nil
+                return coversTabBar ? 0 : self.view.bounds.maxY - self.tabBar.frame.minY
+            },
+            reserve: { [weak self] height, keyboard in
+                guard let self else { return }
+                self.containers.values.forEach { $0.reserveBottom(height) }
+                var presented = self.presentedViewController
+                while let screen = presented {
+                    // A sheet's own keyboard room would otherwise swallow the line's
+                    screen.additionalSafeAreaInsets.bottom = height + keyboard
+                    presented = screen.presentedViewController
+                }
+            })
     }
 
     // MARK: Tabs
@@ -237,10 +322,17 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
         }
     }
 
-    #if DEBUG
-    // Test-only: `-ReconcileDemo checklist|step1|step2` shows the flow on sample data
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        attachWriteStorageLine()
+        #if DEBUG
+        showReconcileDemo()
+        #endif
+    }
+
+    #if DEBUG
+    // Test-only: `-ReconcileDemo checklist|step1|step2` shows the flow on sample data
+    private func showReconcileDemo() {
         guard let request = ReconcileDemo.request, reconcileFlow == nil else { return }
         let month = ReconcileMonthViewModel(client: ReconcileDemo.client)
         Task { @MainActor in
@@ -318,6 +410,248 @@ extension NativeTab {
     }
 }
 
+// sc-5219: whether the storage line can show in this build. Off in Release until
+// the final group 3 PR, which turns it on with the restart and failure notices and
+// the storage guard (task 3.10; `yarn check:native-swift` keeps them together).
+enum WriteStorageLineRollout {
+    static let isOnInRelease = false
+
+    static var isOn: Bool {
+        #if DEBUG
+        true
+        #else
+        isOnInRelease
+        #endif
+    }
+}
+
+// sc-5219: "Saving…" and "Still saving to this device. Keep the app open." One
+// line for every native screen, in its own window, so it stays visible over
+// sheets and rides above the keyboard. It takes real space: the screens below
+// end above it, so it covers neither rows nor the Undo bar. It ignores touches.
+@MainActor
+final class WriteStorageLine {
+    private let window: UIWindow
+    private let screen = WriteStorageLineController()
+    private var observer: AnyCancellable?
+    private var shown: String?
+    // UIKit has no single signal for "a sheet came or went" or "the tab bar
+    // moved", so while the line is up it follows them by looking
+    private var follower: Timer?
+    private let scene: UIWindowScene
+
+    init(
+        status: WriteStorageStatus, scene: UIWindowScene, barHeight: @escaping () -> CGFloat,
+        reserve: @escaping (_ height: CGFloat, _ keyboard: CGFloat) -> Void
+    ) {
+        self.scene = scene
+        window = UIWindow(windowScene: scene)
+        window.windowLevel = .alert
+        window.isUserInteractionEnabled = false
+        window.backgroundColor = .clear
+        window.rootViewController = screen
+        screen.barHeight = barHeight
+        screen.onHeight = reserve
+        observer = status.shownMessage().sink { [weak self] message in self?.show(message) }
+    }
+
+    private func show(_ message: String?) {
+        if let words = WriteStorageStatus.announcement(from: shown, to: message) {
+            // Queued, so it does not cut across what VoiceOver is reading
+            let queued = NSAttributedString(string: words, attributes: [.accessibilitySpeechQueueAnnouncement: true])
+            UIAccessibility.post(notification: .announcement, argument: queued)
+        }
+        shown = message
+        screen.show(message)
+        follow()
+        follower?.invalidate()
+        follower = nil
+        guard message != nil else { return }
+        follower = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.follow() }
+        }
+    }
+
+    private func follow() {
+        // A confirmation sits at the bottom and takes the person's whole attention;
+        // the line ignores touches, so it must not lie over its buttons
+        window.isHidden = shown == nil || isConfirmationUp
+        screen.follow()
+    }
+
+    // An alert, a confirmation or a context menu. A context menu from a low row
+    // can reach the line's place at large text sizes (story 5383).
+    private var isConfirmationUp: Bool {
+        var screen = scene.windows.first(where: \.isKeyWindow)?.rootViewController
+        while let presented = screen?.presentedViewController {
+            let isFullScreen = [.fullScreen, .overFullScreen].contains(presented.modalPresentationStyle)
+            if WriteStorageLineFit.stepsAside(
+                isAlert: presented is UIAlertController, isSheet: presented.sheetPresentationController != nil,
+                isFullScreen: isFullScreen)
+            {
+                return true
+            }
+            screen = presented
+        }
+        return false
+    }
+}
+
+// The view being typed in, wherever it is
+private extension UIResponder {
+    private static weak var found: UIResponder?
+
+    static var current: UIResponder? {
+        found = nil
+        UIApplication.shared.sendAction(#selector(noteFirstResponder), to: nil, from: nil, for: nil)
+        return found
+    }
+
+    @objc private func noteFirstResponder() { UIResponder.found = self }
+}
+
+private final class WriteStorageLineController: UIViewController {
+    var barHeight: () -> CGFloat = { 0 }
+    var onHeight: (_ height: CGFloat, _ keyboard: CGFloat) -> Void = { _, _ in }
+    private let pill = UIView()
+    private let label = UILabel()
+    private var aboveBar: NSLayoutConstraint?
+    private var reserved: CGFloat = 0
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .clear
+        // DESIGN.native.md: label/primary on the opaque bg/grouped-secondary, with a hairline
+        label.font = .preferredFont(forTextStyle: .footnote)
+        label.adjustsFontForContentSizeCategory = true
+        label.textColor = .label
+        label.textAlignment = .center
+        label.numberOfLines = 0
+        label.accessibilityIdentifier = "storage.line"
+        label.translatesAutoresizingMaskIntoConstraints = false
+        pill.backgroundColor = .secondarySystemGroupedBackground
+        pill.layer.cornerRadius = 8
+        pill.layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
+        pill.layer.borderColor = UIColor.separator.resolvedColor(with: traitCollection).cgColor
+        pill.translatesAutoresizingMaskIntoConstraints = false
+        pill.addSubview(label)
+        view.addSubview(pill)
+        let safe = view.safeAreaLayoutGuide
+        let keyboardTop = view.keyboardLayoutGuide.topAnchor
+        let resting = pill.bottomAnchor.constraint(equalTo: keyboardTop, constant: -8)
+        resting.priority = .defaultLow
+        let bar = pill.bottomAnchor.constraint(lessThanOrEqualTo: view.bottomAnchor)
+        aboveBar = bar
+        NSLayoutConstraint.activate([
+            label.topAnchor.constraint(equalTo: pill.topAnchor, constant: 6),
+            label.bottomAnchor.constraint(equalTo: pill.bottomAnchor, constant: -6),
+            label.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 12),
+            label.trailingAnchor.constraint(equalTo: pill.trailingAnchor, constant: -12),
+            pill.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            pill.leadingAnchor.constraint(greaterThanOrEqualTo: safe.leadingAnchor, constant: 16),
+            pill.trailingAnchor.constraint(lessThanOrEqualTo: safe.trailingAnchor, constant: -16),
+            pill.topAnchor.constraint(greaterThanOrEqualTo: safe.topAnchor, constant: 8),
+            pill.bottomAnchor.constraint(lessThanOrEqualTo: keyboardTop, constant: -8),
+            bar, resting,
+        ])
+    }
+
+    // A layer's colour does not follow light, dark or Increase Contrast by itself
+    override func traitCollectionDidChange(_ previous: UITraitCollection?) {
+        super.traitCollectionDidChange(previous)
+        pill.layer.borderColor = UIColor.separator.resolvedColor(with: traitCollection).cgColor
+    }
+
+    // The full sentence, whatever the line shows; VoiceOver always reads it
+    private var message: String?
+
+    func show(_ message: String?) {
+        loadViewIfNeeded()
+        self.message = message
+        label.text = message
+        label.accessibilityLabel = message
+    }
+
+    // Puts the line where it belongs now, and gives the screens under it,
+    // including a sheet that has just opened, the room it takes
+    func follow() {
+        guard let message else {
+            if reserved != 0 { onHeight(0, 0) }
+            reserved = 0
+            return
+        }
+        let resting = -(barHeight() + 8)
+        aboveBar?.constant = resting
+        label.text = message
+        pill.isHidden = false
+        view.layoutIfNeeded()
+        let keyboardTop = view.keyboardLayoutGuide.layoutFrame.minY
+        let keyboardIsUp = keyboardTop < view.safeAreaLayoutGuide.layoutFrame.maxY
+        // sc-5296: with the keyboard up the line takes at most a third of the
+        // space above it, so on a short screen at a large text size it can't
+        // cover the field being edited and the sheet's buttons
+        if keyboardIsUp {
+            let available = keyboardTop - view.safeAreaLayoutGuide.layoutFrame.minY
+            let fullHeight = pill.bounds.height + 16
+            label.text = WriteStorageLineFit.shortForm(of: message)
+            view.layoutIfNeeded()
+            switch WriteStorageLineFit.choose(fullHeight: fullHeight, shortHeight: pill.bounds.height + 16, available: available) {
+            case .full:
+                label.text = message
+                view.layoutIfNeeded()
+            case .short:
+                break
+            case .hidden:
+                pill.isHidden = true
+                if reserved != 0 { onHeight(0, 0) }
+                reserved = 0
+                return
+            }
+        }
+        // Story 5383, the Designer's rule: with the keyboard up the line's only
+        // place is directly above it; if the form chosen there would cover the
+        // field being edited, the line hides until the keyboard goes
+        let field = (UIResponder.current as? UIView).map { $0.convert($0.bounds, to: view) }
+        if keyboardIsUp, WriteStorageLinePlacement.coversField(field, lineHeight: pill.bounds.height, keyboardTop: keyboardTop) {
+            pill.isHidden = true
+            if reserved != 0 { onHeight(0, 0) }
+            reserved = 0
+            return
+        }
+        // sc-5296: iOS can put a sheet's search field at the bottom, where it
+        // ignores the room the line reserves, so the line sits above it instead
+        if !keyboardIsUp, let fieldTop = searchFieldTop(under: pill.frame.minY - 8) {
+            aboveBar?.constant = min(resting, -(view.bounds.maxY - fieldTop + Self.searchFieldMargin))
+        }
+        view.layoutIfNeeded()
+        // The lift counts as room too, so the controls that do follow the safe area stay clear of the line
+        reserved = pill.bounds.height + 8 + ((aboveBar.map { -$0.constant } ?? 0) + resting)
+        let safeBottom = view.safeAreaLayoutGuide.layoutFrame.maxY
+        onHeight(reserved, keyboardIsUp ? safeBottom - keyboardTop : 0)
+    }
+
+    // Room between the line and a search field below it, beyond the field's own rounded background
+    private static let searchFieldMargin: CGFloat = 16
+
+    // The top of the highest visible search field on screen that reaches below
+    // `lineTop`, in screen points (this window fills the screen)
+    private func searchFieldTop(under lineTop: CGFloat) -> CGFloat? {
+        guard let window = view.window?.windowScene?.windows.first(where: \.isKeyWindow) else { return nil }
+        var top: CGFloat?
+        func look(in view: UIView) {
+            guard !view.isHidden, view.alpha > 0.01 else { return }
+            if view is UISearchTextField {
+                let frame = view.convert(view.bounds, to: nil)
+                if frame.maxY > lineTop { top = min(top ?? frame.minY, frame.minY) }
+                return
+            }
+            view.subviews.forEach(look)
+        }
+        look(in: window)
+        return top
+    }
+}
+
 // One tab's screen: the shared web view while this tab shows it, or a native
 // screen for good
 final class TabContainerViewController: UIViewController {
@@ -351,6 +685,13 @@ final class TabContainerViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         onWillAppear?(section)
+    }
+
+    // Room for the storage line: the screen ends above it, and the strip it
+    // sits on matches the grouped page rather than showing as a white band
+    func reserveBottom(_ height: CGFloat) {
+        additionalSafeAreaInsets.bottom = height
+        view.backgroundColor = height > 0 ? .systemGroupedBackground : .systemBackground
     }
 
     // The status bar follows the screen in this tab

@@ -42,11 +42,19 @@ public final class PageRecovery {
     public static let alertAttempts = 5
     public static let alertRetryDelay: TimeInterval = 1
 
+    // sc-5220: for the notice. The person's own Reload is not an event: it shows
+    // no reload notice, and a notice about unsaved changes doesn't depend on it.
+    public enum Event: Equatable {
+        case automaticReload
+        case asking
+    }
+
     private var reloads = ReloadGuard()
     private let now: () -> Date
     private let schedule: (TimeInterval, @escaping @MainActor () -> Void) -> Void
     private let reload: () -> Void
     private let giveUp: () -> Bool
+    private let onEvent: (Event) -> Void
     // The alert is wanted and hasn't shown yet
     private var asking = false
     private var attempts = 0
@@ -60,23 +68,32 @@ public final class PageRecovery {
                 work()
             }
         },
-        reload: @escaping () -> Void, giveUp: @escaping () -> Bool
+        reload: @escaping () -> Void, giveUp: @escaping () -> Bool,
+        onEvent: @escaping (Event) -> Void = { _ in }
     ) {
         self.now = now
         self.schedule = schedule
         self.reload = reload
         self.giveUp = giveUp
+        self.onEvent = onEvent
     }
 
     public func processEnded() {
         guard !asking else { return }
         if reloads.allowsReload(at: now()) {
-            reload()
+            reloadOnItsOwn()
         } else {
             asking = true
             attempts = 0
+            onEvent(.asking)
             ask()
         }
+    }
+
+    // Reported first, so the notice is waiting before the load starts
+    private func reloadOnItsOwn() {
+        onEvent(.automaticReload)
+        reload()
     }
 
     // The user's Reload, after the app stopped reloading on its own
@@ -97,7 +114,7 @@ public final class PageRecovery {
             asking = false
         } else if attempts >= Self.alertAttempts, reloads.allowsReload(at: now()) {
             asking = false
-            reload()
+            reloadOnItsOwn()
         } else if !retryScheduled {
             retryScheduled = true
             schedule(Self.alertRetryDelay) { [weak self] in

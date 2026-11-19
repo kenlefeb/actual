@@ -288,6 +288,25 @@ final class BudgetSaveTests: XCTestCase {
         XCTAssertEqual(writes, 1)
     }
 
+    // sc-5303: "Budget and Reconcile wait for storage before "Saved""
+    func testARefreshFailureBeforeTheWriteIsStoredMakesNoClaim() async throws {
+        var reads = 0
+        let json = try envelope()
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "e")
+        let model = BudgetViewModel(
+            client: NativeBridgeClient(storage: status, storageGuardOn: true) { name, _ in
+                if name == "budget/budget-amount" { return "null" }
+                if name == "native/persisted" { return #"{"stored":false,"seq":{"epoch":"e","n":1}}"# }
+                reads += 1
+                if reads > 1 { throw Boom() }
+                return json
+            }, now: march9, calendar: utc)
+        await model.load()
+        _ = await model.saveBudgeted(month: "2026-03", category: "rent", text: "125.00")
+        XCTAssertEqual(model.saveError?.message, "The budget could not be refreshed.")
+    }
+
     // The sheet's month, not whatever is loaded when Save is tapped
     func testASaveForAMonthOtherThanTheSnapshotsIsNeverSent() async throws {
         var writes = 0

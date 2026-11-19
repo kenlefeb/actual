@@ -1,4 +1,5 @@
 import AppKit
+import NativeBridgeCore
 import WebKit
 import XCTest
 
@@ -74,7 +75,7 @@ final class ReloadNoticeTests: XCTestCase {
     private func readyNotices() -> WindowNotices {
         let notices = notices()
         notices.pageDidLoad()
-        notices.windowChanged(isKeyAndVisible: true)
+        notices.windowChanged(isActive: true)
         return notices
     }
 
@@ -102,7 +103,7 @@ final class ReloadNoticeTests: XCTestCase {
         notices.pageDidLoad()
         XCTAssertNil(notices.current)
         XCTAssertTrue(announced.isEmpty)
-        notices.windowChanged(isKeyAndVisible: true)
+        notices.windowChanged(isActive: true)
         XCTAssertEqual(notices.current, .pageRestarted)
         XCTAssertEqual(announced.count, 1)
         XCTAssertEqual(scheduler.pending.map(\.delay), [15])
@@ -122,10 +123,10 @@ final class ReloadNoticeTests: XCTestCase {
         notices.show(.pageRestarted)
         notices.pageDidLoad()
         let firstHide = scheduler.pending.removeFirst()
-        notices.windowChanged(isKeyAndVisible: false)
+        notices.windowChanged(isActive: false)
         firstHide.work()
         XCTAssertEqual(notices.current, .pageRestarted, "an old timer must not hide it")
-        notices.windowChanged(isKeyAndVisible: true)
+        notices.windowChanged(isActive: true)
         XCTAssertEqual(scheduler.pending.map(\.delay), [15])
         XCTAssertEqual(announced.count, 1)
     }

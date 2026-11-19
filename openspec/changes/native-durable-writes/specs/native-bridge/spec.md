@@ -21,7 +21,7 @@ The page SHALL map loot-core's reason as follows: `network-failure` to `network`
 ## ADDED Requirements
 
 ### Requirement: A write is saved only when storage says so
-In the iPhone and Mac apps, the Swift bridge client SHALL follow every allowlisted write with its own `native/persisted` call, and SHALL return the write's result with `stored: true` or `stored: false` from that call's answer. Swift SHALL treat a write as stored only when that answer, or a later `stored` event, says so. A timed-out `native/persisted` call SHALL never cause the write to be retried. Reads SHALL NOT wait.
+In an opted-in shell, the Swift bridge client SHALL follow every allowlisted write with its own `native/persisted` call, and SHALL return the write's result with `stored: true` or `stored: false` from that call's answer. Swift SHALL treat a write as stored only when that answer, or a later `stored` event, says so. A timed-out `native/persisted` call SHALL never cause the write to be retried. Reads SHALL NOT wait.
 
 #### Scenario: A categorize on the Mac
 - **GIVEN** the Mac app with a budget open
@@ -35,6 +35,32 @@ In the iPhone and Mac apps, the Swift bridge client SHALL follow every allowlist
 #### Scenario: A read does not wait
 - **WHEN** native code reads `native/accounts-list` while a write is still being stored
 - **THEN** the read replies without waiting for storage
+
+### Requirement: Screens say "Saved" only once the write is stored
+In an opted-in shell, a success message saying "Saved" SHALL appear only after the write is stored. Until then the screen SHALL show no success message, and the storage status line carries the interim state. Undo SHALL be offered at once, labelled "Undo", with no claim of saving. If the write is never stored, the failure or restart notice speaks and no "Saved" SHALL ever show.
+
+#### Scenario: Paychecks
+- **GIVEN** a paycheck saved while storage is slow
+- **WHEN** the write replies with `stored: false`
+- **THEN** Undo shows at once, labelled "Undo", and `Saved "Pay".` or `Saved Pay. Undo is available.` shows only when `stored` arrives
+
+#### Scenario: Never stored
+- **GIVEN** a write that replied `stored: false`
+- **WHEN** storage fails, or the page restarts
+- **THEN** the failure or restart notice shows, and no "Saved" message ever shows for that write
+
+### Requirement: Budget and Reconcile wait for storage before "Saved"
+Until a Budget write is stored, a refresh failure SHALL read "The budget could not be refreshed."; "Saved, but the budget could not be refreshed." SHALL be used only once stored. Reconcile's "Saved from your cleared balance" alert SHALL show only once the write is stored. Budget's "Saved" summary label on a tracking budget and the "could not be saved" errors are not affected.
+
+#### Scenario: Budget refresh fails before storage
+- **GIVEN** a budget amount written while storage is slow
+- **WHEN** the refresh after it fails
+- **THEN** the message reads "The budget could not be refreshed."
+
+#### Scenario: Reconcile from the cleared balance
+- **GIVEN** a statement balance saved from the cleared balance while storage is slow
+- **WHEN** the write replies with `stored: false`
+- **THEN** no alert shows until `stored` arrives, and then "Saved from your cleared balance" shows
 
 ### Requirement: The storage barrier waits for complete
 `native/persisted` SHALL wait, up to `native-persist-wait-ms`, until every pending IndexedDB write of the open budget (of every file with `allFiles: true`, its only argument) has fired `complete`, answering `stored: true`, or `stored: false` on timeout. It SHALL be allowlisted in both lists with a `coverage.json` skip. A pending write SHALL settle on `complete`, `abort` or `error`. When a timed-out wait's writes finish, the engine SHALL send `storage-stored`, forwarded to Swift as `stored`.
@@ -94,7 +120,7 @@ On iPhone, while the storage status line shows, it SHALL NOT cover content or co
 - **THEN** no item of the menu is under the line
 
 ### Requirement: The storage status line keeps its place
-On iPhone the line SHALL sit above the tab bar and below the Undo bar, and rest above the keyboard without covering the field being edited. It SHALL return above the tab bar after a sheet closes, hide while an alert or confirmation shows, and take no touches.
+On iPhone the line SHALL sit above the tab bar and below the Undo bar, and rest above the keyboard without covering the field being edited, within "The storage status line fits above the keyboard". It SHALL return above the tab bar after a sheet closes, hide while an alert or confirmation shows, and take no touches.
 
 #### Scenario: With the Undo bar
 - **GIVEN** a write that shows both the line and the Undo bar
@@ -115,6 +141,52 @@ On iPhone the line SHALL sit above the tab bar and below the Undo bar, and rest 
 - **GIVEN** the line showing
 - **WHEN** an alert or the delete confirmation appears
 - **THEN** the line is hidden until it closes
+
+### Requirement: The storage status line fits above the keyboard
+While the keyboard is up, with A the height from the top safe area, or from below a showing notice strip, to the keyboard, and H the line's height with its 8 pt margins: the full text SHALL show if its H is at most A ÷ 3. Otherwise the short form SHALL show on one line, never truncated: "Still saving…" for the not-stored state, and "Saving…" as is. If that H is still over A ÷ 3, the line SHALL hide and give back its space. When the keyboard goes, the full text and place return, unanimated.
+
+#### Scenario: Room for the full text
+- **GIVEN** the not-stored state and a keyboard leaving A at least 3 × the full text's H
+- **WHEN** the line shows
+- **THEN** it reads "Still saving to this device. Keep the app open."
+
+#### Scenario: The short form
+- **GIVEN** the full text's H over A ÷ 3, but the short form's H at most A ÷ 3
+- **WHEN** the line shows
+- **THEN** it reads "Still saving…" on one line, untruncated
+
+#### Scenario: Hidden
+- **GIVEN** an iPhone 16e at the largest text size, editing on Reconcile step 1, where even the short form's H is over A ÷ 3
+- **WHEN** the keyboard is up
+- **THEN** the line is hidden and its space given back, and it returns in full when the keyboard goes
+
+#### Scenario: Below a notice strip
+- **GIVEN** the restart or failure notice showing in the strip at the top, and the keyboard up
+- **WHEN** the line is placed
+- **THEN** A is measured from below the strip, and the line never covers the strip or its OK or Reload button
+
+### Requirement: The storage status line's VoiceOver announcements
+The not-stored announcement SHALL fire once when that state begins, whatever the line shows; full, short and hidden switches announce nothing, and the label is always the full sentence. When the "Still saving to this device. Keep the app open." state clears, VoiceOver SHALL announce "Saved to this device." once, only if the not-stored state was announced, whether the line was full, short or hidden, and never during an alert. Turning the guard on announces nothing for storage completion.
+
+#### Scenario: Short form under VoiceOver
+- **GIVEN** the line showing "Still saving…" with the keyboard up
+- **WHEN** VoiceOver reads it
+- **THEN** it reads "Still saving to this device. Keep the app open.", and the switch made no announcement
+
+#### Scenario: Stored after a slow write
+- **GIVEN** the not-stored state shown and announced
+- **WHEN** the write is stored and no alert is showing
+- **THEN** VoiceOver announces "Saved to this device." once
+
+#### Scenario: Hidden, then stored
+- **GIVEN** the not-stored state announced while the line was hidden above the keyboard
+- **WHEN** the write is stored and no alert is showing
+- **THEN** VoiceOver announces "Saved to this device." once
+
+#### Scenario: A quick write
+- **GIVEN** a write stored while only "Saving…" showed, so nothing was announced
+- **WHEN** it is stored
+- **THEN** nothing is announced
 
 ### Requirement: A restart with unconfirmed writes tells the person
 If a restart leaves a write "may not have been saved" and no failure notice is showing, Swift SHALL show, with OK and in place of the reload notice, "The app restarted. Some recent changes may not have been saved. Check them, and make again any that are missing." This text SHALL appear nowhere else. A failure notice's restart form SHALL take priority.
@@ -198,10 +270,41 @@ The app-level notice SHALL say, from the copy table, that changes can't be saved
 - **WHEN** the notice shows
 - **THEN** it says changes made after 3:42:10 PM need to be made again, so the 3:42:11 change is not reported as saved
 
+#### Scenario: Storage failure
+- **GIVEN** a write that fails, not with a quota error
+- **WHEN** the notice shows
+- **THEN** it reads "Changes can't be saved on this device right now. Reload the app. Changes made after <time> weren't saved and need to be made again.", with Reload
+
 #### Scenario: Device full
 - **GIVEN** a write that fails with a quota error
 - **WHEN** the notice shows
 - **THEN** it reads "This device is full, so changes can't be saved. Free up some space, then reload the app. Changes made after <time> weren't saved and need to be made again. Saved changes can't sync until there's space."
+
+### Requirement: The device-full notice with no time
+When a quota failure comes with no cut-off time, the failure notice SHALL read "This device is full, so changes can't be saved. Free up some space, then reload the app. Changes made since you opened the app weren't saved and need to be made again. Saved changes can't sync until there's space."
+
+#### Scenario: Device full, nothing stored this session
+- **GIVEN** the app opened and its first write failed with a quota error
+- **WHEN** the notice shows
+- **THEN** it reads "This device is full, so changes can't be saved. Free up some space, then reload the app. Changes made since you opened the app weren't saved and need to be made again. Saved changes can't sync until there's space."
+
+### Requirement: Storage notices keep their button until used
+The storage notices SHALL show in the app's notice strip, announced to VoiceOver once, and SHALL NOT hide on their own or after a touch. The restart notices and the closed-budget notice SHALL carry OK, which ends that notice only. The failure notice SHALL carry Reload, which reloads the page, and no OK or Dismiss; it stays until Reload or a restart. Unlike the reload notice, none of them hides after 15 seconds.
+
+#### Scenario: OK ends the restart notice
+- **GIVEN** the restart notice showing
+- **WHEN** the person taps OK
+- **THEN** that notice goes, and any other notice is unchanged
+
+#### Scenario: The failure notice stays
+- **GIVEN** the failure notice showing
+- **WHEN** 15 seconds pass and the person keeps working
+- **THEN** it is still showing, with Reload and no way to dismiss it
+
+#### Scenario: The closed-budget notice
+- **GIVEN** the closed-budget notice showing
+- **WHEN** the person taps OK
+- **THEN** it goes
 
 ### Requirement: The notice's cut-off time is exact
 The notice SHALL show `lastStoredFlushAt` to the second in the person's locale (for example 3:42:10 PM), truncated, never rounded up, so a change stored just before it is never re-entered as a duplicate. When no write has stored since the app opened, it SHALL say "Changes made since you opened the app weren't saved and need to be made again." in place of the sentence with <time>.
@@ -302,7 +405,7 @@ When sync's storage wait expires, the engine SHALL NOT emit sync success. It SHA
 - **THEN** the status line keeps the waiting text and never shows "Syncing…" or "Sync failed" for it
 
 ### Requirement: The storage guard is for the native shells
-The latch, write refusal, sync gate, held-sync reporting and storage notices SHALL stay off until the native bridge turns on the storage guard, a one-way engine switch set when the bridge installs. Browsers never set it. With it off, the patched storage SHALL fail as stock absurd-sql does: no latch, no dropped queue, unseen quota rejections, and `onFallbackFailure` only for the safety check.
+The latch, write refusal, sync gate, held-sync reporting and storage notices SHALL stay off until a native page bridge turns on the storage guard, a one-way engine switch set when the bridge installs in a shell that has opted in. Browsers never set it. With it off, the patched storage SHALL fail as stock absurd-sql does: no latch, no dropped queue, unseen quota rejections, and `onFallbackFailure` only for the safety check.
 
 #### Scenario: A browser after a failed write
 - **GIVEN** a fallback-mode browser, with no native bridge, whose write fails with a quota error
@@ -318,6 +421,19 @@ The latch, write refusal, sync gate, held-sync reporting and storage notices SHA
 - **GIVEN** a browser write refused because another tab changed the file
 - **WHEN** the failure is reported
 - **THEN** `fallback-write-error` fires and the existing one-tab message shows
+
+### Requirement: The storage guard is turned on per shell
+Each native shell SHALL opt in to the storage guard separately, by telling its page bridge as it starts, for example with a flag in its init payload. The bridge SHALL turn the guard on only for a shell that opted in. A shell that has not SHALL behave as stock: no latch, sync gate, storage notices or "Saved" gating, and its client SHALL treat every write as stored at once. The iPhone opts in with the guard-on PR; the Mac stays stock until its own opt-in.
+
+#### Scenario: The iPhone has opted in
+- **GIVEN** the iPhone app with the guard-on PR merged
+- **WHEN** its page bridge installs
+- **THEN** the guard is on, and writes wait for storage before "Saved"
+
+#### Scenario: The Mac has not opted in
+- **GIVEN** the Mac app before its opt-in PR
+- **WHEN** a write is made
+- **THEN** the client returns it as stored at once, "Saved" shows as today, sync runs as today, and no storage notice shows
 
 ### Requirement: A closed budget's failed write is reported
 A failed write in a file with no open handles SHALL NOT set the latch. The engine SHALL send `storage-close-failed` once for that file, and the app SHALL show, with OK, "Some recent changes to the budget you closed weren't saved. Open it and make them again." A showing failure notice SHALL keep priority, and this notice follows it.

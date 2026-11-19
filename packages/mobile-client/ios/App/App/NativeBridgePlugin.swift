@@ -18,6 +18,8 @@ public class NativeBridgePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
     // The Schedules & Paychecks overlay (sc-4341): each event with a
     // sync-event's changed table names; it coalesces its own re-reads
     var onPaychecksEvent: ((String, [String]) -> Void)?
+    // sc-5219: storage-failed and storage-close-failed, for the storage notices
+    var onStorageEvent: ((Any) -> Void)?
     var onChange: (() -> Void)?
     // sc-3611: the budget's sync outcome for the Accounts subtitle, kept while
     // the screen comes and goes; main queue
@@ -48,6 +50,7 @@ public class NativeBridgePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
         MainActor.assumeIsolated {
             if let epoch = NativeBridgeEvent.readyEpoch(of: message.body) { writeStorage.pageLoaded(epoch: epoch) }
             if let stored = NativeBridgeEvent.stored(of: message.body) { writeStorage.storedEvent(seq: stored.seq, epoch: stored.epoch) }
+            if event == "storage-failed" || event == "storage-close-failed" { onStorageEvent?(message.body) }
         }
         onEvent?(event)
         onPaychecksEvent?(event, NativeBridgeEvent.tables(of: message.body))

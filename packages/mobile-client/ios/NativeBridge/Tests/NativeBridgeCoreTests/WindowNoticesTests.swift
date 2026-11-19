@@ -212,4 +212,60 @@ final class WindowNoticesTests: XCTestCase {
         notices.clear()
         XCTAssertEqual(notices.current, mustStay)
     }
+
+    // sc-5219 task 3.12: a storage notice's own button, and one notice waiting behind another
+    private let first = WindowNotice(text: "First", lifetime: .persistent, button: .reload)
+    private let second = WindowNotice(text: "Second", lifetime: .persistent, button: .ok)
+
+    func testTheReloadNoticeKeepsDismiss() {
+        XCTAssertEqual(WindowNotice.pageRestarted.button, .dismiss)
+    }
+
+    func testTheButtonGoesToItsOwner() {
+        let notices = readyNotices()
+        var tapped: [WindowNotice] = []
+        notices.onButton = { tapped.append($0) }
+        notices.show(first)
+        notices.tap()
+        XCTAssertEqual(tapped, [first])
+        XCTAssertEqual(notices.current, first, "only its owner ends it")
+    }
+
+    func testDismissStillClearsTheReloadNotice() {
+        let notices = readyNotices()
+        notices.show(.pageRestarted)
+        notices.pageDidLoad()
+        notices.tap()
+        XCTAssertNil(notices.current)
+    }
+
+    func testANoticeWaitsBehindAShowingOneAndShowsWhenItEnds() {
+        let notices = readyNotices()
+        notices.show(first)
+        notices.queue(second)
+        XCTAssertEqual(notices.current, first)
+        XCTAssertEqual(announced, ["First"])
+        notices.end(first)
+        XCTAssertEqual(notices.current, second)
+        XCTAssertEqual(announced, ["First", "Second"])
+        notices.end(second)
+        XCTAssertNil(notices.current)
+    }
+
+    func testEndingAWaitingNoticeLeavesTheShowingOne() {
+        let notices = readyNotices()
+        notices.show(first)
+        notices.queue(second)
+        notices.end(second)
+        notices.end(first)
+        XCTAssertNil(notices.current)
+    }
+
+    func testAQueuedNoticeShowsAtOnceOverATimedOne() {
+        let notices = readyNotices()
+        notices.show(.pageRestarted)
+        notices.pageDidLoad()
+        notices.queue(second)
+        XCTAssertEqual(notices.current, second)
+    }
 }

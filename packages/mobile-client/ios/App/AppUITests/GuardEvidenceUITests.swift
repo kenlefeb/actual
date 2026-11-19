@@ -77,7 +77,8 @@ final class GuardEvidenceUITests: XCTestCase {
         XCTAssertTrue(strip.waitForExistence(timeout: 20), "no failure notice")
         save("\(mode)-notice")
         XCTAssertTrue(strip.label.hasPrefix(text), strip.label)
-        XCTAssertEqual(button.label, "Reload")
+        // Its VoiceOver label; the button reads "Reload"
+        XCTAssertEqual(button.label, "Reload the app")
         XCTAssertTrue(notes.label.contains("storage failure armed"), notes.label)
         XCTAssertTrue(notes.label.contains(#""failed":true"#), notes.label)
         XCTAssertTrue(notes.label.contains("second write: refused"), notes.label)
@@ -102,7 +103,8 @@ final class GuardEvidenceUITests: XCTestCase {
         XCTAssertTrue(strip.waitForExistence(timeout: 60), "no restart notice")
         save("restart-notice")
         XCTAssertTrue(strip.label.hasPrefix("The app restarted."), strip.label)
-        XCTAssertEqual(button.label, "OK")
+        // Its VoiceOver label; the button reads "OK"
+        XCTAssertEqual(button.label, "OK, close this notice")
         button.tap()
         let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: strip)
         XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: 5), .completed, "OK left the notice up")

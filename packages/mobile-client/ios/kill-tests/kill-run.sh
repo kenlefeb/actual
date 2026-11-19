@@ -3,12 +3,13 @@
 # simulator session. Debug build of the app with a FORK_TEST_HOOKS=true page
 # staged (for the control run). It creates its own simulator, refuses to start
 # if two are already booted, and shuts it down and deletes it at the end.
-#   kill-run.sh <App.app> <out-dir> kills|all
+#   kill-run.sh <App.app> <out-dir> kills|all|rest
 #   kills: 20 kills right after native/persisted answers stored, then one kill
 #          mid-write; it stops at once if a stored write is lost
 #   all:   then the control, 5 kills with the page bridge's barrier off; at
 #          least 1 should be lost. The 300 ms commit delay hook is read in the
 #          engine's worker, which the page can't set, so it isn't used.
+#   rest:  the mid-write kill and the control only
 # Each part ends with a read: the test categories still there, and
 # PRAGMA integrity_check on the exported budget.
 app=$1 out=$2 phase=$3
@@ -82,20 +83,23 @@ kill_after() { # name mode
 
 echo "--- refusal check"
 zsh $here/simkill.sh 00000000-0000-0000-0000-000000000000 --dry
-echo "--- 20 kills right after stored: true"
-for n in {1..20}; do
-  kill_after kill-$n write || exit 1
-  grep -q '"stored":true' $docs/result-kill-$n.json || { echo "kill-$n was not answered stored: stopping"; exit 1; }
-done
-readback after-kills || exit 1
-kept=$(grep -c '^kill-' $out/after-kills-names.txt)
-echo "kept: $kept of 20"
-check=$(sqlite3 $(ls $out/after-kills-db/*.sqlite | head -1) 'PRAGMA integrity_check;')
-if [ "$kept" != 20 ] || [ "$check" != ok ]; then
-  echo "a stored write was lost or the check failed: stopping"
-  exit 1
+if [ $phase != rest ]; then
+  echo "--- 20 kills right after stored: true"
+  for n in {1..20}; do
+    kill_after kill-$n write || exit 1
+    grep -q '"stored":true' $docs/result-kill-$n.json || { echo "kill-$n was not answered stored: stopping"; exit 1; }
+  done
+  readback after-kills || exit 1
+  kept=$(grep -c '^kill-' $out/after-kills-names.txt)
+  echo "kept: $kept of 20"
+  check=$(sqlite3 $(ls $out/after-kills-db/*.sqlite | head -1) 'PRAGMA integrity_check;')
+  if [ "$kept" != 20 ] || [ "$check" != ok ]; then
+    echo "a stored write was lost or the check failed: stopping"
+    exit 1
+  fi
 fi
 echo "--- mid-write"
+readback before-bulk || exit 1
 rm -f $docs/bulk-started.json
 launch bulk
 waitfor $docs/bulk-started.json || exit 1
@@ -103,7 +107,7 @@ pause 2
 zsh $here/simkill.sh $sim
 pause 4
 readback after-bulk || exit 1
-[ $phase = all ] || exit 0
+[ $phase = kills ] && exit 0
 echo "--- control: barrier off (page hook), no commit delay"
 for n in {1..5}; do kill_after control-$n control || exit 1; done
 readback after-control || exit 1

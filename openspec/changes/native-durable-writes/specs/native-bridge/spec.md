@@ -120,7 +120,7 @@ On iPhone, while the storage status line shows, it SHALL NOT cover content or co
 - **THEN** no item of the menu is under the line
 
 ### Requirement: The storage status line keeps its place
-On iPhone the line SHALL sit above the tab bar and below the Undo bar, and rest above the keyboard without covering the field being edited. It SHALL return above the tab bar after a sheet closes, hide while an alert or confirmation shows, and take no touches.
+On iPhone the line SHALL sit above the tab bar and below the Undo bar, and rest above the keyboard without covering the field being edited, within "The storage status line fits above the keyboard". It SHALL return above the tab bar after a sheet closes, hide while an alert or confirmation shows, and take no touches.
 
 #### Scenario: With the Undo bar
 - **GIVEN** a write that shows both the line and the Undo bar
@@ -141,6 +141,42 @@ On iPhone the line SHALL sit above the tab bar and below the Undo bar, and rest 
 - **GIVEN** the line showing
 - **WHEN** an alert or the delete confirmation appears
 - **THEN** the line is hidden until it closes
+
+### Requirement: The storage status line fits above the keyboard
+While the keyboard is up, with A the height from the top safe area to the keyboard and H the line's height with its 8 pt margins: the full text SHALL show if its H is at most A ÷ 3. Otherwise the short form SHALL show on one line, never truncated: "Still saving…" for the not-stored state, and "Saving…" as is. If that H is still over A ÷ 3, the line SHALL hide and give back its space. When the keyboard goes, the full text and place return, with no animation.
+
+#### Scenario: Room for the full text
+- **GIVEN** the not-stored state and a keyboard leaving A at least 3 × the full text's H
+- **WHEN** the line shows
+- **THEN** it reads "Still saving to this device. Keep the app open."
+
+#### Scenario: The short form
+- **GIVEN** the full text's H over A ÷ 3, but the short form's H at most A ÷ 3
+- **WHEN** the line shows
+- **THEN** it reads "Still saving…" on one line, untruncated
+
+#### Scenario: Hidden
+- **GIVEN** an iPhone 16e at the largest text size, editing on Reconcile step 1, where even the short form's H is over A ÷ 3
+- **WHEN** the keyboard is up
+- **THEN** the line is hidden and its space given back, and it returns in full when the keyboard goes
+
+### Requirement: The storage status line's VoiceOver announcements
+The not-stored announcement SHALL fire once when that state begins, whatever the line shows; full, short and hidden switches announce nothing, and the label is always the full sentence. When the "Still saving to this device. Keep the app open." state clears, VoiceOver SHALL announce "Saved to this device." once, never during an alert, and never if that state was not shown. Turning the guard on announces nothing for storage completion.
+
+#### Scenario: Short form under VoiceOver
+- **GIVEN** the line showing "Still saving…" with the keyboard up
+- **WHEN** VoiceOver reads it
+- **THEN** it reads "Still saving to this device. Keep the app open.", and the switch made no announcement
+
+#### Scenario: Stored after a slow write
+- **GIVEN** the not-stored state shown and announced
+- **WHEN** the write is stored and no alert is showing
+- **THEN** VoiceOver announces "Saved to this device." once
+
+#### Scenario: A quick write
+- **GIVEN** a write stored while only "Saving…" showed
+- **WHEN** it is stored
+- **THEN** nothing is announced
 
 ### Requirement: A restart with unconfirmed writes tells the person
 If a restart leaves a write "may not have been saved" and no failure notice is showing, Swift SHALL show, with OK and in place of the reload notice, "The app restarted. Some recent changes may not have been saved. Check them, and make again any that are missing." This text SHALL appear nowhere else. A failure notice's restart form SHALL take priority.

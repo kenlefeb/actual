@@ -15,7 +15,7 @@ final class PageNoticeWindow {
         window.backgroundColor = .clear
         window.rootViewController = screen
         screen.onHeight = reserve
-        screen.onDismiss = { [weak notices] in notices?.clear() }
+        screen.onDismiss = { [weak notices] in notices?.tap() }
         mainWindow.addGestureRecognizer(TouchWatcher { [weak notices] in notices?.noteInput() })
         notices.onChange = { [weak self] in self?.show($0) }
         show(notices.current)
@@ -23,7 +23,7 @@ final class PageNoticeWindow {
 
     private func show(_ notice: WindowNotice?) {
         window.isHidden = notice == nil
-        screen.show(notice?.text)
+        screen.show(notice)
     }
 }
 
@@ -142,13 +142,37 @@ private final class PageNoticeController: UIViewController {
         ])
     }
 
-    func show(_ text: String?) {
+    func show(_ notice: WindowNotice?) {
         loadViewIfNeeded()
-        label.text = text
-        strip.isHidden = text == nil
+        label.text = notice?.text
+        let words = Self.words(for: notice?.button ?? .dismiss)
+        dismiss.configuration?.title = words.0
+        dismiss.accessibilityLabel = words.1
+        strip.isHidden = notice == nil
         view.setNeedsLayout()
         view.layoutIfNeeded()
         report()
+    }
+
+    // sc-5219: OK and Reload on the storage notices, which don't hide on their own
+    private static func words(for button: WindowNotice.Button) -> (String, String) {
+        switch button {
+        case .dismiss:
+            return (
+                NSLocalizedString("Dismiss", comment: "Button: close the notice"),
+                NSLocalizedString("Dismiss this notice", comment: "VoiceOver: the notice's Dismiss button")
+            )
+        case .ok:
+            return (
+                NSLocalizedString("OK", comment: "Button: close a storage notice"),
+                NSLocalizedString("OK, close this notice", comment: "VoiceOver: a storage notice's OK button")
+            )
+        case .reload:
+            return (
+                NSLocalizedString("Reload", comment: "Button: reload the app after a storage failure"),
+                NSLocalizedString("Reload the app", comment: "VoiceOver: the failure notice's Reload button")
+            )
+        }
     }
 
     override func viewWillLayoutSubviews() {

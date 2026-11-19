@@ -55,7 +55,38 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
         super.init()
         configuration.userContentController.add(self, name: "actualNativeBridge")
         webView.navigationDelegate = self
-        webView.uiDelegate = self
+        // sc-5399: the page's alert, confirm and prompt, then this host's own UI calls
+        let dialogs = PageDialogDelegate(
+            forwardingTo: self,
+            isAppPage: { frame in
+                let origin = frame.securityOrigin
+                return Self.acceptsMessage(isMainFrame: frame.isMainFrame, scheme: origin.protocol, host: origin.host, port: origin.port)
+            },
+            onDialog: { [weak self] request, answer in
+                MainActor.assumeIsolated {
+                    guard let self else { return answer(request.kind.safeAnswer) }
+                    self.pageDialogs.show(request, completion: answer)
+                }
+            })
+        webView.uiDelegate = dialogs
+        dialogDelegate = dialogs
+    }
+
+    // sc-5399: without these WebKit drops a page's alert and answers its confirm
+    // and prompt with nothing. The app delegate shows them on the window;
+    // until it can, PageDialogs tries again and then answers Cancel.
+    var presentDialog: PageDialogs.Present?
+    // The web view holds its UI delegate weakly
+    private var dialogDelegate: PageDialogDelegate?
+    private static let dialogLogger = Logger(subsystem: "app.homeeconomics.budget.mac", category: "dialogs")
+    private lazy var pageDialogs = PageDialogs(
+        present: { [weak self] request, answer in self?.presentDialog?(request, answer) },
+        // Why, which kind and whose page; never the page's text
+        reportUnseen: { Self.dialogLogger.notice("\($0.description, privacy: .public)") })
+
+    // The web view goes with this host; a dialog it asked for still gets its answer
+    deinit {
+        MainActor.assumeIsolated { pageDialogs.pageWentAway() }
     }
 
     #if DEBUG
@@ -94,6 +125,8 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
     // the last changes were gone). A bridge call in flight fails, usually at
     // once with `.pageOrigin` (else with its timeout), and is not retried.
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        // sc-5399: a dialog of the page that died goes with it
+        pageDialogs.pageWentAway()
         if reloads.allowsReload(at: now()) {
             Self.logger.notice("page process ended; reloading the app's page")
             load()
@@ -134,6 +167,11 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
     }
 
     // MARK: WKNavigationDelegate
+
+    // sc-5399: a reload or a navigation away: the old page's dialogs go
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        pageDialogs.pageWentAway()
+    }
 
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction) async -> WKNavigationActionPolicy {
         guard let url = action.request.url else { return .cancel }

@@ -532,3 +532,70 @@ A write the client returned with `stored: true` SHALL be there after the page's 
 - **GIVEN** the barrier off and a test-only commit delay of 300 ms
 - **WHEN** the same loop runs
 - **THEN** at least one category is lost, and the database still passes the integrity check
+
+### Requirement: Page dialogs are handled by the shell
+A page `alert()`, `confirm()` or `prompt()` holds all of the page's JavaScript, and with it every bridge call, until it is answered. The iPhone and Mac shells SHALL show each one above every native screen, the notice strip and the storage line, with the buttons OK and Cancel, and SHALL give the page the person's answer.
+
+#### Scenario: An alert over a native screen
+- **GIVEN** a native screen covers the page
+- **WHEN** the page calls `alert()`
+- **THEN** the alert shows above the native screen, and after OK the page goes on and the bridge answers
+
+#### Scenario: Confirm and prompt
+- **WHEN** the page calls `confirm()` or `prompt()` and the person answers
+- **THEN** the page gets `true` for OK and `false` for Cancel, or the typed text and `null` for Cancel
+
+#### Scenario: The Mac no longer drops dialogs
+- **WHEN** the page calls `alert()`, `confirm()` or `prompt()` in the Mac app
+- **THEN** it shows as a sheet on the window, where WebKit used to drop it and the page went on with nothing shown
+
+### Requirement: A page dialog is always answered
+The shells SHALL answer every page dialog exactly once. A dialog on screen SHALL wait for the person with no time limit. The page SHALL get Cancel's answer (an alert closed, `confirm` false, `prompt` null) only when the dialog can't show within five tries a second apart, or when the page goes away, in which case the dialog also leaves the screen.
+
+#### Scenario: A dialog waits for the person
+- **WHEN** a prompt shows and the person types in it for several minutes
+- **THEN** it stays on screen with what they typed, and the page gets it when they tap OK
+
+#### Scenario: No window to show it
+- **WHEN** a dialog can't show (the app isn't active, or the Mac window is hidden or has a sheet)
+- **THEN** the shell tries again every second, and after five tries the page gets Cancel's answer
+
+#### Scenario: The page goes away
+- **WHEN** a dialog shows and its page reloads or navigates away, its process ends, or its web view is released
+- **THEN** the dialog leaves the screen and the page gets Cancel's answer, once
+
+### Requirement: A page that keeps asking is answered for the person
+The shell SHALL keep a sliding ten-second window over the dialogs a page asked for, shown or not. When three are already in it, the next dialog SHALL get Cancel without showing, so a page calling `alert()` in a loop can't hold the person or cover the notice strip's Reload; a dialog answered this way doesn't count. The count SHALL start again when the page goes away.
+
+#### Scenario: A page loops alert()
+- **WHEN** a page shows three dialogs in ten seconds and asks for a fourth
+- **THEN** the fourth gets Cancel's answer and nothing shows, and the person can tap Reload
+
+### Requirement: A Cancel given unseen is logged
+Each Cancel the shell gives without the person seeing the dialog, because the page asked for too many or the dialog couldn't show, SHALL be logged with its reason, its kind and whether the page was the app's own. The log SHALL never hold the page's message, a prompt's default text or an address.
+
+#### Scenario: A page hits the limit
+- **WHEN** the flood rule answers a page's `prompt()` with Cancel
+- **THEN** the log says a prompt was answered unseen because the page asked for too many, and whose page it was, and holds none of the page's text
+
+### Requirement: Another page's dialog names its host
+A dialog from the app's own page SHALL show the page's message only. A dialog from any other page, such as a sign-in provider's, SHALL be headed with that page's host, or "Another page" when it has none, so it can't pass for the app's own. A dialog SHALL show the page's text as plain text, cut to 1,000 characters with an ellipsis.
+
+#### Scenario: A sign-in provider's dialog
+- **WHEN** a sign-in provider's page in the web view calls `alert()`
+- **THEN** the dialog is headed with the provider's host, above its message
+
+#### Scenario: A sandboxed frame's dialog
+- **WHEN** a frame with no host calls `alert()`
+- **THEN** the dialog is headed "Another page"
+
+#### Scenario: A very long message
+- **WHEN** a page's message is longer than 1,000 characters
+- **THEN** the dialog shows the first 999 and an ellipsis, and its buttons stay on screen
+
+### Requirement: Only the app's own page reaches Capacitor's prompt calls
+On iPhone, Capacitor reads its cookie and HTTP settings through `prompt()` with JSON of four types. The shell SHALL pass those to Capacitor only from the app's own page as the main frame; from any other page or frame it SHALL answer `null` and show nothing.
+
+#### Scenario: Another frame sends Capacitor's cookie call
+- **WHEN** a frame that isn't the app's main page calls `prompt('{"type":"CapacitorCookies.get"}')`
+- **THEN** it gets `null`, no dialog shows, and Capacitor's handler is not called

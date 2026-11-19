@@ -47,6 +47,13 @@ class AppBridgeViewController: CAPBridgeViewController {
     private var benchmarkTrigger: NativeBridgeBenchmarkTrigger?
     // The web view holds its navigation delegate weakly
     private var pageProcessDelegate: PageProcessDelegate?
+    // sc-5399: the page's alert, confirm and prompt (the web view holds its UI delegate weakly too)
+    private var pageDialogDelegate: PageDialogDelegate?
+    private let dialogPresenter = PageDialogPresenter()
+    private lazy var pageDialogs = PageDialogs(
+        present: { [weak self] request, answer in self?.dialogPresenter.present(request, answer: answer) },
+        // Why, which kind and whose page; never the page's text
+        reportUnseen: { CAPLog.print("PageDialogs: \($0)") })
     private weak var reloadAlert: UIAlertController?
     private var activeObserver: NSObjectProtocol?
     private var inactiveObserver: NSObjectProtocol?
@@ -88,6 +95,12 @@ class AppBridgeViewController: CAPBridgeViewController {
         return StorageNotices(slot: pageNotices, storage: nativeBridge.writeStorage) { [weak self] in self?.loadWebView() }
     }()
 
+    // sc-5399: the web view goes with this controller; a dialog it asked for still
+    // gets its answer, as WebKit requires, and leaves the screen
+    deinit {
+        MainActor.assumeIsolated { pageDialogs.pageWentAway() }
+    }
+
     override func capacitorDidLoad() {
         bridge?.registerPluginInstance(nativeBridge)
         nativeBridge.onStorageEvent = { [weak self] body in
@@ -101,9 +114,31 @@ class AppBridgeViewController: CAPBridgeViewController {
         _ = storageNotices
         bridge?.registerPluginInstance(nativeChrome)
         if let webView, let handler = webView.navigationDelegate as? NSObject & WKNavigationDelegate {
-            let delegate = PageProcessDelegate(forwardingTo: handler) { [weak self] in self?.pageRecovery.processEnded() }
+            let delegate = PageProcessDelegate(forwardingTo: handler) { [weak self] in
+                // sc-5399: a dialog of the page that died goes with it
+                self?.pageDialogs.pageWentAway()
+                self?.pageRecovery.processEnded()
+            }
             webView.navigationDelegate = delegate
             pageProcessDelegate = delegate
+        }
+        // Capacitor's own handler presents on this controller, which has no window
+        // while a native screen shows; its other UI calls are passed on unchanged
+        if let webView, let handler = webView.uiDelegate as? NSObject & WKUIDelegate {
+            let serverURL = bridge?.config.serverURL
+            let delegate = PageDialogDelegate(
+                forwardingTo: handler,
+                isAppPage: { frame in
+                    let origin = frame.securityOrigin
+                    return PageOriginGuard.accepts(
+                        isMainFrame: frame.isMainFrame, scheme: origin.protocol, host: origin.host, port: origin.port, serverURL: serverURL)
+                },
+                onDialog: { [weak self] request, answer in
+                    guard let self else { return answer(request.kind.safeAnswer) }
+                    self.pageDialogs.show(request, completion: answer)
+                })
+            webView.uiDelegate = delegate
+            pageDialogDelegate = delegate
         }
         #if DEBUG
         NativeBridgeBenchmarkHarness.startIfRequested(plugin: nativeBridge)
@@ -131,6 +166,8 @@ class AppBridgeViewController: CAPBridgeViewController {
         // Finished or failed: either way the app is showing what it can
         loadingObservation = webView?.observe(\.isLoading) { [weak self] webView, _ in
             MainActor.assumeIsolated {
+                // sc-5399: a reload or a navigation away: the old page's dialogs go
+                if webView.isLoading { self?.pageDialogs.pageWentAway() }
                 if !webView.isLoading {
                     self?.pageNotices.pageDidLoad()
                     self?.storageNotices?.pageLoaded()
@@ -146,6 +183,9 @@ class AppBridgeViewController: CAPBridgeViewController {
         if let webView, let pageProcessDelegate, let serverURL = bridge?.config.serverURL {
             UITestPageRecovery.startIfRequested(webView: webView, delegate: pageProcessDelegate, serverURL: serverURL)
             UITestKillWrites.startIfRequested(webView: webView, serverURL: serverURL)
+        }
+        if let webView, let serverURL = bridge?.config.serverURL {
+            UITestPageDialogs.startIfRequested(webView: webView, serverURL: serverURL)
         }
         #endif
     }

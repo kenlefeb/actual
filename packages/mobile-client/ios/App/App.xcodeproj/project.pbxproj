@@ -22,6 +22,7 @@
 		FB3584000000000000000105 /* NativeBridgeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000005 /* NativeBridgeClient.swift */; };
 		FB3584000000000000000106 /* ChangeCoalescer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000006 /* ChangeCoalescer.swift */; };
 		FB5247000000000000000101 /* PageRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5247000000000000000001 /* PageRecovery.swift */; };
+		FB5399000000000000000101 /* PageDialogs.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5399000000000000000001 /* PageDialogs.swift */; };
 		FB5296000000000000000101 /* WriteStorageLineFit.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5296000000000000000001 /* WriteStorageLineFit.swift */; };
 		FB5220000000000000000101 /* WindowNotices.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5220000000000000000001 /* WindowNotices.swift */; };
 		FB5219000000000000000102 /* StorageNotices.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5219000000000000000002 /* StorageNotices.swift */; };
@@ -62,9 +63,12 @@
 		FB434300000000000000103 /* NativePaycheckEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB434300000000000000003 /* NativePaycheckEditorView.swift */; };
 		81468055292F86AB369B94B9 /* UITestAccounts.swift in Sources */ = {isa = PBXBuildFile; fileRef = D246F7DC88D369846186AFFB /* UITestAccounts.swift */; };
 		FB5247000000000000000102 /* UITestPageRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5247000000000000000002 /* UITestPageRecovery.swift */; };
+		FB5399000000000000000102 /* UITestPageDialogs.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5399000000000000000002 /* UITestPageDialogs.swift */; };
+		FB5399000000000000000104 /* PageDialogPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5399000000000000000004 /* PageDialogPresenter.swift */; };
 		FB5220000000000000000102 /* PageNoticeWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5220000000000000000002 /* PageNoticeWindow.swift */; };
 		820DB8ECE5803E95972A13EA /* NativeAccountsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9248F3DFD880A2634F9E61C9 /* NativeAccountsUITests.swift */; };
 		FB5247000000000000000103 /* PageRecoveryUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5247000000000000000003 /* PageRecoveryUITests.swift */; };
+		FB5399000000000000000103 /* PageDialogsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5399000000000000000003 /* PageDialogsUITests.swift */; };
 		FB5296000000000000000103 /* StorageLineUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5296000000000000000003 /* StorageLineUITests.swift */; };
 /* End PBXBuildFile section */
 
@@ -98,6 +102,7 @@
 		FB3584000000000000000005 /* NativeBridgeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBridgeClient.swift; sourceTree = "<group>"; };
 		FB3584000000000000000006 /* ChangeCoalescer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeCoalescer.swift; sourceTree = "<group>"; };
 		FB5247000000000000000001 /* PageRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageRecovery.swift; sourceTree = "<group>"; };
+		FB5399000000000000000001 /* PageDialogs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageDialogs.swift; sourceTree = "<group>"; };
 		FB5296000000000000000001 /* WriteStorageLineFit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WriteStorageLineFit.swift; sourceTree = "<group>"; };
 		FB5220000000000000000001 /* WindowNotices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowNotices.swift; sourceTree = "<group>"; };
 		FB5219000000000000000002 /* StorageNotices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageNotices.swift; sourceTree = "<group>"; };
@@ -139,9 +144,12 @@
 		6DF959A4FBDF81B19F0E9A09 /* AppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		9248F3DFD880A2634F9E61C9 /* NativeAccountsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAccountsUITests.swift; sourceTree = "<group>"; };
 		FB5247000000000000000003 /* PageRecoveryUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageRecoveryUITests.swift; sourceTree = "<group>"; };
+		FB5399000000000000000003 /* PageDialogsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageDialogsUITests.swift; sourceTree = "<group>"; };
 		FB5296000000000000000003 /* StorageLineUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageLineUITests.swift; sourceTree = "<group>"; };
 		D246F7DC88D369846186AFFB /* UITestAccounts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestAccounts.swift; sourceTree = "<group>"; };
 		FB5247000000000000000002 /* UITestPageRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestPageRecovery.swift; sourceTree = "<group>"; };
+		FB5399000000000000000002 /* UITestPageDialogs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestPageDialogs.swift; sourceTree = "<group>"; };
+		FB5399000000000000000004 /* PageDialogPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageDialogPresenter.swift; sourceTree = "<group>"; };
 		FB5220000000000000000002 /* PageNoticeWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageNoticeWindow.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -193,6 +201,8 @@
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				D246F7DC88D369846186AFFB /* UITestAccounts.swift */,
 				FB5247000000000000000002 /* UITestPageRecovery.swift */,
+				FB5399000000000000000002 /* UITestPageDialogs.swift */,
+				FB5399000000000000000004 /* PageDialogPresenter.swift */,
 				FB5220000000000000000002 /* PageNoticeWindow.swift */,
 				FB3584000000000000000001 /* NativeBridgePlugin.swift */,
 				FB3584000000000000000002 /* AppBridgeViewController.swift */,
@@ -235,6 +245,7 @@
 				FB3584000000000000000005 /* NativeBridgeClient.swift */,
 				FB3584000000000000000006 /* ChangeCoalescer.swift */,
 				FB5247000000000000000001 /* PageRecovery.swift */,
+				FB5399000000000000000001 /* PageDialogs.swift */,
 				FB5296000000000000000001 /* WriteStorageLineFit.swift */,
 				FB5220000000000000000001 /* WindowNotices.swift */,
 				FB5219000000000000000002 /* StorageNotices.swift */,
@@ -271,6 +282,7 @@
 			children = (
 				9248F3DFD880A2634F9E61C9 /* NativeAccountsUITests.swift */,
 				FB5247000000000000000003 /* PageRecoveryUITests.swift */,
+				FB5399000000000000000003 /* PageDialogsUITests.swift */,
 				FB5296000000000000000003 /* StorageLineUITests.swift */,
 			);
 			path = AppUITests;
@@ -412,6 +424,8 @@
 			files = (
 				81468055292F86AB369B94B9 /* UITestAccounts.swift in Sources */,
 				FB5247000000000000000102 /* UITestPageRecovery.swift in Sources */,
+				FB5399000000000000000102 /* UITestPageDialogs.swift in Sources */,
+				FB5399000000000000000104 /* PageDialogPresenter.swift in Sources */,
 				FB5220000000000000000102 /* PageNoticeWindow.swift in Sources */,
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				FB3584000000000000000111 /* NativeBridgeBenchmark.swift in Sources */,
@@ -423,6 +437,7 @@
 				FB3584000000000000000105 /* NativeBridgeClient.swift in Sources */,
 				FB3584000000000000000106 /* ChangeCoalescer.swift in Sources */,
 				FB5247000000000000000101 /* PageRecovery.swift in Sources */,
+				FB5399000000000000000101 /* PageDialogs.swift in Sources */,
 				FB5296000000000000000101 /* WriteStorageLineFit.swift in Sources */,
 				FB5220000000000000000101 /* WindowNotices.swift in Sources */,
 				FB5219000000000000000102 /* StorageNotices.swift in Sources */,
@@ -469,6 +484,7 @@
 			files = (
 				820DB8ECE5803E95972A13EA /* NativeAccountsUITests.swift in Sources */,
 				FB5247000000000000000103 /* PageRecoveryUITests.swift in Sources */,
+				FB5399000000000000000103 /* PageDialogsUITests.swift in Sources */,
 				FB5296000000000000000103 /* StorageLineUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

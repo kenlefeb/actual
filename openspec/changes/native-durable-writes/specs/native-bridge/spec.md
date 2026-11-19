@@ -529,7 +529,7 @@ A write the client returned with `stored: true` SHALL be there after the page's 
 - **THEN** at least one category is lost, and the database still passes the integrity check
 
 ### Requirement: Page dialogs are handled by the shell
-A page `alert()`, `confirm()` or `prompt()` holds all of the page's JavaScript, and with it every bridge call, until it is answered. The iPhone and Mac shells SHALL show each one above every native screen, the notice strip and the storage line, and SHALL always answer the page: with the person's answer, or with Cancel (an alert closed, `confirm` false, `prompt` null) when the dialog can't show within five tries a second apart or nobody answers it within 60 seconds. A dialog from the app's own page SHALL show the page's message only; a dialog from any other page SHALL be headed with that page's host. The buttons SHALL read OK and Cancel.
+A page `alert()`, `confirm()` or `prompt()` holds all of the page's JavaScript, and with it every bridge call, until it is answered. The iPhone and Mac shells SHALL show each one above every native screen, the notice strip and the storage line, with the buttons OK and Cancel, and SHALL give the page the person's answer.
 
 #### Scenario: An alert over a native screen
 - **GIVEN** a native screen covers the page
@@ -540,6 +540,13 @@ A page `alert()`, `confirm()` or `prompt()` holds all of the page's JavaScript, 
 - **WHEN** the page calls `confirm()` or `prompt()` and the person answers
 - **THEN** the page gets `true` for OK and `false` for Cancel, or the typed text and `null` for Cancel
 
+#### Scenario: The Mac no longer drops dialogs
+- **WHEN** the page calls `alert()`, `confirm()` or `prompt()` in the Mac app
+- **THEN** it shows as a sheet on the window, where WebKit used to drop it and the page went on with nothing shown
+
+### Requirement: A page dialog is always answered
+The shells SHALL answer every page dialog exactly once. When the dialog can't show within five tries a second apart, or nobody answers it within 60 seconds, the page SHALL get Cancel's answer: an alert closed, `confirm` false, `prompt` null.
+
 #### Scenario: Nobody answers
 - **WHEN** a dialog shows and nobody answers it within 60 seconds
 - **THEN** it leaves the screen and the page gets Cancel's answer
@@ -548,6 +555,9 @@ A page `alert()`, `confirm()` or `prompt()` holds all of the page's JavaScript, 
 - **WHEN** a dialog can't show (the app isn't active, or the Mac window is hidden or has a sheet)
 - **THEN** the shell tries again every second, and after five tries the page gets Cancel's answer
 
-#### Scenario: The Mac no longer drops dialogs
-- **WHEN** the page calls `alert()`, `confirm()` or `prompt()` in the Mac app
-- **THEN** it shows as a sheet on the window, where WebKit used to drop it and the page went on with nothing shown
+### Requirement: Another page's dialog names its host
+A dialog from the app's own page SHALL show the page's message only. A dialog from any other page, such as a sign-in provider's, SHALL be headed with that page's host, so it can't pass for the app's own.
+
+#### Scenario: A sign-in provider's dialog
+- **WHEN** a sign-in provider's page in the web view calls `alert()`
+- **THEN** the dialog is headed with the provider's host, above its message

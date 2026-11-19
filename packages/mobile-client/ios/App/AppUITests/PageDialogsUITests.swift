@@ -23,7 +23,9 @@ final class PageDialogsUITests: XCTestCase {
     private func alert(_ message: String) -> XCUIElement {
         let alert = app.alerts.firstMatch
         XCTAssertTrue(alert.waitForExistence(timeout: 60), "the page's dialog never showed")
-        XCTAssertTrue(alert.staticTexts[message].exists, "the dialog doesn't say \(message)")
+        // By label, once its text is in the tree
+        let text = alert.staticTexts.matching(NSPredicate(format: "label == %@", message)).firstMatch
+        XCTAssertTrue(text.waitForExistence(timeout: 5), "the dialog doesn't say \(message): \(alert.debugDescription)")
         return alert
     }
 

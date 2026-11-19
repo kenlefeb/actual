@@ -56,7 +56,7 @@ echo "server up on 127.0.0.1:$PORT; bootstrap: $(head -c 80 $D/bootstrap.json | 
   while true; do
     for f in $DATA/user-files/group-*.sqlite(N); do
       now=$(sqlite3 $f "select count(*) || ' messages, newest ' || ifnull(max(timestamp),'-') from messages_binary" 2> /dev/null)
-      [ "$now" != "$last" ] && { echo "$(date +%Y-%m-%dT%H:%M:%S.%3N 2>/dev/null || date +%Y-%m-%dT%H:%M:%S) ${f:t}: $now"; last=$now; }
+      [ "$now" != "$last" ] && { echo "$(perl -MTime::HiRes=time -MPOSIX=strftime -e '$t=time; print strftime("%Y-%m-%dT%H:%M:%S", localtime $t), sprintf(".%03d", ($t-int $t)*1000)') ${f:t}: $now"; last=$now; }
     done
     perl -e 'select(undef,undef,undef,0.5)'
   done

@@ -151,6 +151,20 @@ function appSourceEntries(project) {
   );
 }
 
+// native-durable-writes task 3.10: the storage line stays out of Release until
+// the PR that also turns on the storage guard and adds the notices. The page
+// bridge's call to the guard's switch is what says that PR has happened.
+export function storageLineRolloutProblems(tabBarSource, bridgeSource) {
+  const flag = /\bisOnInRelease\s*=\s*(true|false)\b/.exec(tabBarSource)?.[1];
+  if (!flag) return ['WriteStorageLineRollout.isOnInRelease: not found'];
+  const guardIsOn = bridgeSource.includes('native/enable-storage-guard');
+  return (flag === 'true') === guardIsOn
+    ? []
+    : [
+        `WriteStorageLineRollout.isOnInRelease is ${flag} but the page bridge ${guardIsOn ? 'turns' : 'does not turn'} the storage guard on; they ship together`,
+      ];
+}
+
 export function missingFromProject(names, project) {
   const entries = appSourceEntries(project);
   return names.filter(name => !entries.has(name));
@@ -188,6 +202,18 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       `${join(core, name)}: not in the Xcode project's Sources, so the iPhone app build cannot see it`,
     );
   }
+  found.push(
+    ...storageLineRolloutProblems(
+      readFileSync(
+        join(SWIFT_ROOT, 'ios/App/App/NativeTabBarController.swift'),
+        'utf8',
+      ),
+      readFileSync(
+        'packages/desktop-client/src/native/nativeBridge.ts',
+        'utf8',
+      ),
+    ),
+  );
   if (found.length) {
     console.error(`Native Swift check failed:\n  - ${found.join('\n  - ')}`);
     process.exit(1);

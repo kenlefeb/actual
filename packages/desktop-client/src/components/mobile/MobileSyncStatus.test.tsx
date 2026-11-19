@@ -89,6 +89,38 @@ describe('MobileSyncStatus', () => {
     );
   });
 
+  // native-durable-writes: "A held sync says it is waiting" (sc-5219)
+  it('says a held sync is waiting, through its retries, until one succeeds', async () => {
+    const waiting = 'Waiting for this device to finish saving';
+    render(
+      <TestProviders>
+        <MobileSyncStatus />
+      </TestProviders>,
+    );
+    await act(async () => {
+      backend.emit({ type: 'start' });
+    });
+    await act(async () => {
+      backend.emit({ type: 'error', subtype: 'storage-slow' });
+    });
+    expect(screen.getByRole('status')).toHaveTextContent(waiting);
+    await act(async () => {
+      backend.emit({ type: 'start' });
+    });
+    expect(screen.getByRole('status')).toHaveTextContent(waiting);
+    await act(async () => {
+      backend.emit({ type: 'error', subtype: 'storage-slow' });
+    });
+    expect(screen.getByRole('status')).toHaveTextContent(waiting);
+    await act(async () => {
+      backend.emit({ type: 'start' });
+    });
+    await act(async () => {
+      backend.emit({ type: 'success' });
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('Synced');
+  });
+
   it('uses completed sync results after reconnecting from an offline launch', async () => {
     backend.status = 'offline';
     render(

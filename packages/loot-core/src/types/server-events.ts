@@ -114,7 +114,7 @@ export type ServerEvents = {
   // Fork (sc-5219): the last write of a closed budget failed; nothing latches
   'storage-close-failed': undefined;
   // Fork (sc-5219): the writes that timed-out native/persisted call `seq` waited for are stored
-  'storage-stored': { seq: number };
+  'storage-stored': { seq: { epoch: string; n: number } };
   'finish-import': FinishImportEvent;
   'finish-load': FinishLoadEvent;
   'import-progress': ImportProgressEvent;

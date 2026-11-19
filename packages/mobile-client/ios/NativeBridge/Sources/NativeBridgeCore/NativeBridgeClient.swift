@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 
 // Fork-only (sc-3584, ADR 11). Native code reads loot-core only through these
@@ -122,10 +123,20 @@ public enum NativeBridgeEvent {
         return tables.compactMap { $0 as? String }
     }
 
-    // sc-5219: the number of the native/persisted call whose writes are now stored
-    public static func storedSeq(of body: Any) -> Int? {
-        guard name(of: body) == "stored" else { return nil }
-        return ((body as? [String: Any])?["payload"] as? [String: Any])?["seq"] as? Int
+    // sc-5219: the page load announcing itself
+    public static func readyEpoch(of body: Any) -> String? {
+        guard name(of: body) == "ready" else { return nil }
+        return ((body as? [String: Any])?["payload"] as? [String: Any])?["epoch"] as? String
+    }
+
+    // sc-5219: which native/persisted call, of which page load, is now stored
+    public static func stored(of body: Any) -> (seq: Int, epoch: String)? {
+        guard name(of: body) == "stored",
+            let payload = (body as? [String: Any])?["payload"] as? [String: Any],
+            let seq = payload["seq"] as? [String: Any],
+            let number = seq["n"] as? Int, let epoch = seq["epoch"] as? String
+        else { return nil }
+        return (number, epoch)
     }
 }
 
@@ -141,26 +152,80 @@ public enum NativeBridgeEvent {
 public final class WriteStorageStatus: ObservableObject {
     public static let savingMessage = NSLocalizedString("Saving…", comment: "Native screens: a change is being stored on this device")
     public static let notYetStoredMessage = NSLocalizedString(
-        "Saved here, not yet stored on this device.", comment: "Native screens: a change was made but this device has not stored it yet")
+        "Still saving to this device. Keep the app open.", comment: "Native screens: a change was made but this device has not stored it yet")
 
-    @Published private var writesInProgress = 0
-    // Writes not known to be stored: when their native/persisted call was
-    // asked, and its number once answered
-    @Published private var unstored: [(ticket: Int, seq: Int?)] = []
+    // The line a screen may show: saving in progress, never that a change is stored
+    @Published private var line: String?
+    private var writesInProgress = 0 { didSet { updateLine() } }
+    // The current page's writes not known to be stored: when their
+    // native/persisted call was asked, and its number once answered
+    private var unstored: [(ticket: Int, seq: Int?)] = [] { didSet { updateLine() } }
+    // Keeps counting across page loads, so a late ticket can't pass for a new one
     private var lastTicket = 0
     private var newestStoredTicket = 0
     private var storedThroughSeq = 0
+    // A restart came while writes were unstored. No later success can vouch
+    // for them, so only OK on the restart notice clears this. The notice says
+    // so; the status line shows only saving in progress.
+    @Published public private(set) var mayNotBeSaved = false
+    private var currentEpoch: String?
+    private var retiredEpochs: Set<String> = []
 
     public nonisolated init() {}
 
+    private func updateLine() {
+        let next = writesInProgress > 0 ? Self.savingMessage : unstored.isEmpty ? nil : Self.notYetStoredMessage
+        if next != line { line = next }
+    }
+
+    // What a screen shows. A normal write takes milliseconds, so "Saving…"
+    // appears only if it is still saving after `savingDelay`, and once it has
+    // appeared it stays for `savingMinimum` rather than flash.
+    public func shownMessage(savingDelay: TimeInterval = 0.3, savingMinimum: TimeInterval = 0.6) -> AnyPublisher<String?, Never> {
+        var savingShownAt: Date?
+        func later(_ message: String?, by delay: TimeInterval) -> AnyPublisher<String?, Never> {
+            guard delay > 0 else { return Just(message).eraseToAnyPublisher() }
+            return Just(message).delay(for: .seconds(delay), scheduler: RunLoop.main).eraseToAnyPublisher()
+        }
+        return $line
+            .map { message -> AnyPublisher<String?, Never> in
+                if message == Self.savingMessage {
+                    guard savingShownAt == nil else { return Just(message).eraseToAnyPublisher() }
+                    return later(message, by: savingDelay)
+                        .handleEvents(receiveOutput: { _ in savingShownAt = Date() })
+                        .eraseToAnyPublisher()
+                }
+                let shownFor = savingShownAt.map { Date().timeIntervalSince($0) } ?? savingMinimum
+                let wait = message == nil ? max(0, savingMinimum - shownFor) : 0
+                return later(message, by: wait)
+                    .handleEvents(receiveOutput: { _ in savingShownAt = nil })
+                    .eraseToAnyPublisher()
+            }
+            .switchToLatest()
+            .removeDuplicates()
+            .eraseToAnyPublisher()
+    }
+
+    // What VoiceOver says when the shown line changes: "Saving…" would talk over
+    // the person's own action. Nothing is said when the line clears, because
+    // until the storage guard is on that would claim more than is known.
+    public static func announcement(from old: String?, to new: String?) -> String? {
+        new == notYetStoredMessage && old != notYetStoredMessage ? notYetStoredMessage : nil
+    }
+
+    // The page load this write was made in, kept for a write that never gets an answer
+    @discardableResult
+    func writeBegan() -> WriteOrigin {
+        writesInProgress += 1
+        return WriteOrigin(epoch: currentEpoch)
+    }
+
     #if SWIFT_PACKAGE
     var message: String? {
-        if writesInProgress > 0 { return Self.savingMessage }
-        return unstored.isEmpty ? nil : Self.notYetStoredMessage
+        line
     }
     #endif
 
-    func writeBegan() { writesInProgress += 1 }
     func writeEnded() { writesInProgress -= 1 }
 
     // Taken just before asking, because answers can arrive out of order
@@ -169,8 +234,23 @@ public final class WriteStorageStatus: ObservableObject {
         return lastTicket
     }
 
-    // A stored answer covers every write asked about before it, and no later one
-    func record(_ answer: PersistedAnswer, ticket: Int) {
+    // A stored answer covers every write of its own page load asked about
+    // before it, and no later one. Returns whether this write is known stored:
+    // a page can't vouch for a write made on the page before it.
+    @discardableResult
+    func record(_ answer: PersistedAnswer, ticket: Int? = nil, madeIn origin: WriteOrigin? = nil) -> Bool {
+        let ticket = ticket ?? nextTicket()
+        let answeredBy = answer.seq?.epoch
+        let isLive = answeredBy.map(adopt) ?? true
+        if let origin, origin.epoch != (answeredBy ?? currentEpoch) {
+            mayNotBeSaved = true
+            return false
+        }
+        guard isLive else {
+            // The page before this one, about its own write
+            if !answer.stored { mayNotBeSaved = true }
+            return answer.stored
+        }
         if answer.stored {
             newestStoredTicket = max(newestStoredTicket, ticket)
             unstored.removeAll { $0.ticket <= ticket }
@@ -178,22 +258,75 @@ public final class WriteStorageStatus: ObservableObject {
             // This call waits for every write before it, so it speaks for any
             // earlier call that never got an answer
             if answer.seq != nil { unstored.removeAll { $0.seq == nil && $0.ticket < ticket } }
-            if (answer.seq ?? .max) > storedThroughSeq { unstored.append((ticket, answer.seq)) }
+            if (answer.seq?.n ?? .max) > storedThroughSeq { unstored.append((ticket, answer.seq?.n)) }
         }
+        return answer.stored
     }
 
     // The engine's storage-stored, which the page forwards as `stored`. It can
     // arrive before the answer that carries its number. Writes are stored in
-    // order, so it covers every earlier number too.
-    public func storedEvent(seq: Int) {
+    // order, so it covers every earlier number of its page load too.
+    public func storedEvent(seq: Int, epoch: String) {
+        guard adopt(epoch) else { return }
         storedThroughSeq = max(storedThroughSeq, seq)
         unstored.removeAll { $0.seq.map { $0 <= seq } ?? false }
+    }
+
+    // The page bridge's "ready". The same page may already be known from an answer.
+    public func pageLoaded(epoch: String) {
+        _ = adopt(epoch)
+    }
+
+    // What a page that has gone had not stored may be lost with it
+    private func retireCurrentPage() {
+        if let currentEpoch { retiredEpochs.insert(currentEpoch) }
+        currentEpoch = nil
+        newestStoredTicket = 0
+        // The new page's numbers start again
+        storedThroughSeq = 0
+        if !unstored.isEmpty {
+            unstored = []
+            mayNotBeSaved = true
+        }
+    }
+
+    public func acknowledgeMayNotBeSaved() { mayNotBeSaved = false }
+
+    // False for a page that has already gone
+    private func adopt(_ epoch: String) -> Bool {
+        if retiredEpochs.contains(epoch) { return false }
+        if epoch != currentEpoch {
+            if currentEpoch != nil || !unstored.isEmpty { retireCurrentPage() }
+            currentEpoch = epoch
+        }
+        return true
+    }
+}
+
+// The page load a write was made in; nil before the page has announced itself
+struct WriteOrigin: Equatable {
+    let epoch: String?
+}
+
+// The engine's page load, and this call's place in it
+struct PersistedSeq: Decodable, Equatable {
+    let epoch: String
+    let n: Int
+}
+
+// sc-5219: where the storage line may rest while the keyboard is up
+public enum WriteStorageLinePlacement {
+    // The line rests just above the keyboard, unless that would cover the field being edited
+    public static func coversField(_ field: CGRect?, lineHeight: CGFloat, keyboardTop: CGFloat, gap: CGFloat = 8) -> Bool {
+        guard let field else { return false }
+        let bottom = keyboardTop - gap
+        return field.maxY > bottom - lineHeight && field.minY < bottom
     }
 }
 
 struct PersistedAnswer: Decodable, Equatable {
     let stored: Bool
-    var seq: Int?
+    var seq: PersistedSeq?
 
     static let notStored = PersistedAnswer(stored: false)
 }
@@ -405,7 +538,7 @@ public struct NativeBridgeClient {
     // its own. The write is never retried. A failure of the second call only
     // means not stored: the write has already been applied.
     private func sendThenPersist<Args: Encodable>(_ name: String, args: Args) async throws -> (data: Data, stored: Bool) {
-        await storage?.writeBegan()
+        let origin = await storage?.writeBegan()
         let data: Data
         do {
             data = try await send(name, args: args)
@@ -413,7 +546,7 @@ public struct NativeBridgeClient {
             await storage?.writeEnded()
             throw error
         }
-        let stored = await persisted()
+        let stored = await persisted(madeIn: origin)
         await storage?.writeEnded()
         return (data, stored)
     }
@@ -425,22 +558,21 @@ public struct NativeBridgeClient {
     }
     #endif
 
-    private func persisted() async -> Bool {
+    private func persisted(madeIn origin: WriteOrigin?) async -> Bool {
         let ticket = await storage?.nextTicket() ?? 0
         do {
             let answer = try await askPersisted()
-            await storage?.record(answer, ticket: ticket)
-            return answer.stored
+            return await storage?.record(answer, ticket: ticket, madeIn: origin) ?? answer.stored
         } catch NativeBridgeError.timedOut {
-            await storage?.record(.notStored, ticket: ticket)
+            await storage?.record(.notStored, ticket: ticket, madeIn: origin)
             // The one call that may be repeated: it changes nothing
             Task {
                 let retry = await storage?.nextTicket() ?? 0
-                if let answer = try? await askPersisted() { await storage?.record(answer, ticket: retry) }
+                if let answer = try? await askPersisted() { await storage?.record(answer, ticket: retry, madeIn: origin) }
             }
             return false
         } catch {
-            await storage?.record(.notStored, ticket: ticket)
+            await storage?.record(.notStored, ticket: ticket, madeIn: origin)
             return false
         }
     }

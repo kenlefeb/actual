@@ -6,6 +6,7 @@
 // compromised page can call `send` directly. The Swift tests check that both
 // lists match src/data/native-bridge-allowlist.json.
 import { listen, send } from '@actual-app/core/platform/client/connection';
+import { v4 as uuidv4 } from 'uuid';
 
 import allowlist from '#data/native-bridge-allowlist.json';
 
@@ -80,6 +81,15 @@ function isBarrierOff() {
     (globalThis as { __forkTestBarrierOff?: boolean }).__forkTestBarrierOff ===
       true
   );
+}
+
+// Swift compares page loads to tell what a restart may have lost. This page's
+// own id goes on everything it compares, so `ready`, answers and events agree.
+function stampPageLoad(answer: unknown, pageLoad: string) {
+  const seq = (answer as { seq?: object } | null | undefined)?.seq;
+  return seq
+    ? { ...(answer as object), seq: { ...seq, epoch: pageLoad } }
+    : answer;
 }
 
 // The event can come from a closed file or a copy, so the open budget's own
@@ -404,15 +414,19 @@ export function createNativeBridge({
   send: forward,
   listen: subscribe,
   notify,
+  pageLoad = uuidv4(),
 }: {
   send: Send;
   listen: Listen;
   notify: Notify;
+  pageLoad?: string;
 }): NativeBridge {
   for (const event of EVENTS) {
     subscribe(event, payload => notify({ event, payload }));
   }
-  subscribe('storage-stored', payload => notify({ event: 'stored', payload }));
+  subscribe('storage-stored', payload =>
+    notify({ event: 'stored', payload: stampPageLoad(payload, pageLoad) }),
+  );
   subscribe('storage-failed', payload => {
     void reportStorageFailure(forward, notify, payload);
   });
@@ -490,7 +504,12 @@ export function createNativeBridge({
         args = pickFields(args, RECONCILE_FIELDS.get(name) ?? []);
       }
       // A write resolves to undefined, which JSON.stringify does not make a string
-      return JSON.stringify((await forward(name, args)) ?? null);
+      const result = await forward(name, args);
+      return JSON.stringify(
+        (name === 'native/persisted'
+          ? stampPageLoad(result, pageLoad)
+          : result) ?? null,
+      );
     },
   };
 }
@@ -500,11 +519,13 @@ export function installNativeBridge(win: BridgeWindow) {
   if (!handler) return;
 
   // send and listen are typed per handler name; the bridge is dynamic by design
+  const pageLoad = uuidv4();
   win.__actualNativeBridge = createNativeBridge({
+    pageLoad,
     send: send as unknown as Send,
     listen: listen as unknown as Listen,
     notify: message => handler.postMessage(message),
   });
   // Native calls refused while another page showed can run again (sc-3859)
-  handler.postMessage({ event: 'ready', payload: null });
+  handler.postMessage({ event: 'ready', payload: { epoch: pageLoad } });
 }

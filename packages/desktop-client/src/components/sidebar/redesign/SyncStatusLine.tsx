@@ -68,14 +68,21 @@ export function SyncStatusLine() {
       color: theme.sidebarTextPositive,
       label: t('Synced'),
     },
+    waiting: {
+      Icon: SvgCloudUnknown,
+      color: theme.sidebarTextSubdued,
+      label: t('Waiting for this device to finish saving'),
+    },
   };
 
   const statusKey =
     serverStatus === 'no-server'
       ? 'no-server'
-      : isSyncing
-        ? 'syncing'
-        : (syncState ?? 'synced');
+      : syncState === 'waiting'
+        ? 'waiting'
+        : isSyncing
+          ? 'syncing'
+          : (syncState ?? 'synced');
   const { Icon, color, label } = presentations[statusKey];
 
   return (

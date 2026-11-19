@@ -10,7 +10,28 @@ import {
   findNativeSources,
   missingFromProject,
   problems,
+  storageLineRolloutProblems,
 } from './check-native-swift.mjs';
+
+// native-durable-writes task 3.10: the line ships with the guard, never apart
+void test('Native Swift: the storage line and the guard ship together', () => {
+  const line = on => `static let isOnInRelease = ${on}`;
+  const guardOn = "forward('native/enable-storage-guard')";
+  assert.deepEqual(storageLineRolloutProblems(line('false'), 'no guard'), []);
+  assert.deepEqual(storageLineRolloutProblems(line('true'), guardOn), []);
+  assert.match(
+    storageLineRolloutProblems(line('false'), guardOn)[0],
+    /isOnInRelease/,
+  );
+  assert.match(
+    storageLineRolloutProblems(line('true'), 'no guard')[0],
+    /isOnInRelease/,
+  );
+  assert.match(
+    storageLineRolloutProblems('renamed', 'no guard')[0],
+    /not found/,
+  );
+});
 
 // native-bridge: "Only loot-core touches the budget data" (sc-3584)
 void test('Native Swift: fails on a database import and names the file', () => {

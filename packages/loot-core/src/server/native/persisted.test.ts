@@ -54,7 +54,30 @@ describe('the storage guard', () => {
 
 describe('native/persisted', () => {
   it('answers stored once every pending write fired complete', async () => {
-    expect(await h['native/persisted']()).toEqual({ stored: true });
+    expect(await h['native/persisted']()).toEqual({
+      stored: true,
+      seq: { epoch: expect.any(String), n: expect.any(Number) },
+    });
+  });
+
+  // A restarted page is a new engine: native code must tell its answers apart
+  it('names this page load in every answer and event', async () => {
+    const { epoch } = (await h['native/persisted']()).seq;
+    expect(epoch).not.toBe('');
+    vi.useFakeTimers();
+    let finish: () => void = () => undefined;
+    storage.whenPersisted.mockReturnValue(
+      new Promise<void>(resolve => {
+        finish = resolve;
+      }),
+    );
+    const answer = h['native/persisted']();
+    await vi.advanceTimersByTimeAsync(2000);
+    const late = await answer;
+    expect(late.seq.epoch).toBe(epoch);
+    finish();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(send).toHaveBeenCalledWith('storage-stored', { seq: late.seq });
   });
 
   it('answers not stored after native-persist-wait-ms, and reports stored later', async () => {
@@ -77,7 +100,10 @@ describe('native/persisted', () => {
     expect(settled).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
     const { seq } = await answer;
-    expect(await answer).toEqual({ stored: false, seq: expect.any(Number) });
+    expect(await answer).toEqual({
+      stored: false,
+      seq: { epoch: expect.any(String), n: expect.any(Number) },
+    });
     expect(send).not.toHaveBeenCalledWith('storage-stored', expect.anything());
     finish();
     await vi.advanceTimersByTimeAsync(0);
@@ -107,7 +133,7 @@ describe('native/persisted', () => {
   // A lifecycle flush can come with no budget open, so no preferences to read
   it('still answers with no budget open', async () => {
     db.closeDatabase();
-    expect(await h['native/persisted']()).toEqual({ stored: true });
+    expect(await h['native/persisted']()).toMatchObject({ stored: true });
   });
 
   it('refuses with not-stored once storage failed', async () => {

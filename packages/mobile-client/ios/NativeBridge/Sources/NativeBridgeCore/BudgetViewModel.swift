@@ -65,9 +65,13 @@ public enum BudgetRefreshError: Equatable {
     case failed
     // The sync worked but the month could not be read again
     case refreshFailed
+    // sc-5219: held back and retrying by itself. Not shown as an error.
+    case waitingForStorage
 
     public var message: String {
         switch self {
+        case .waitingForStorage:
+            return NativeSyncStatus.waitingMessage
         case .offline:
             return NSLocalizedString("You're offline. Showing the last numbers.", comment: "Native Budget tab: pull to refresh, no network")
         case .signedOut:
@@ -219,6 +223,7 @@ public final class BudgetViewModel: ObservableObject {
         switch result {
         case .failed(.network): failRefresh(.offline)
         case .failed(.unauthorized): failRefresh(.signedOut)
+        case .failed(.storageSlow): break
         case .failed: failRefresh(.failed)
         case .ok:
             // A suspended page would not answer; the read on becoming active covers it

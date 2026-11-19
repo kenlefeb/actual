@@ -78,7 +78,13 @@ enum UITestGuardEvidence {
                         try await Task.sleep(nanoseconds: 500_000_000)
                         if await storageState(page).contains(#""failed":false"#) { break }
                     }
-                    try await Task.sleep(nanoseconds: 3_000_000_000)
+                    // ...and for it to reopen the test budget
+                    for _ in 0..<120 {
+                        let open = try? await page.run("return (await window.$send('load-prefs'))?.id ?? '';") as? String
+                        if open == "_test-budget" { break }
+                        try await Task.sleep(nanoseconds: 500_000_000)
+                    }
+                    try await Task.sleep(nanoseconds: 1_000_000_000)
                     note("after Reload: storage state: \(await storageState(page))")
                     note("after Reload: write: \(await write(4567))")
                 case "restart":

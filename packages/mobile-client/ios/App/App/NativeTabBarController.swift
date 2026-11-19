@@ -551,24 +551,52 @@ private final class WriteStorageLineController: UIViewController {
         pill.layer.borderColor = UIColor.separator.resolvedColor(with: traitCollection).cgColor
     }
 
+    // The full sentence, whatever the line shows; VoiceOver always reads it
+    private var message: String?
+
     func show(_ message: String?) {
         loadViewIfNeeded()
+        self.message = message
         label.text = message
+        label.accessibilityLabel = message
     }
 
     // Puts the line where it belongs now, and gives the screens under it,
     // including a sheet that has just opened, the room it takes
     func follow() {
-        guard label.text != nil else {
+        guard let message else {
             if reserved != 0 { onHeight(0, 0) }
             reserved = 0
             return
         }
         let resting = -(barHeight() + 8)
         aboveBar?.constant = resting
+        label.text = message
+        pill.isHidden = false
         view.layoutIfNeeded()
         let keyboardTop = view.keyboardLayoutGuide.layoutFrame.minY
         let keyboardIsUp = keyboardTop < view.safeAreaLayoutGuide.layoutFrame.maxY
+        // sc-5296: with the keyboard up the line takes at most a third of the
+        // space above it, so on a short screen at a large text size it can't
+        // cover the field being edited and the sheet's buttons
+        if keyboardIsUp {
+            let available = keyboardTop - view.safeAreaLayoutGuide.layoutFrame.minY
+            let fullHeight = pill.bounds.height + 16
+            label.text = WriteStorageLineFit.shortForm(of: message)
+            view.layoutIfNeeded()
+            switch WriteStorageLineFit.choose(fullHeight: fullHeight, shortHeight: pill.bounds.height + 16, available: available) {
+            case .full:
+                label.text = message
+                view.layoutIfNeeded()
+            case .short:
+                break
+            case .hidden:
+                pill.isHidden = true
+                if reserved != 0 { onHeight(0, 0) }
+                reserved = 0
+                return
+            }
+        }
         let field = (UIResponder.current as? UIView).map { $0.convert($0.bounds, to: view) }
         atTop?.isActive = keyboardIsUp
             && WriteStorageLinePlacement.coversField(field, lineHeight: pill.bounds.height, keyboardTop: keyboardTop)

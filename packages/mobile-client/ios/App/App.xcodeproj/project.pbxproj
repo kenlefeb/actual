@@ -22,6 +22,7 @@
 		FB3584000000000000000105 /* NativeBridgeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000005 /* NativeBridgeClient.swift */; };
 		FB3584000000000000000106 /* ChangeCoalescer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000006 /* ChangeCoalescer.swift */; };
 		FB5247000000000000000101 /* PageRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5247000000000000000001 /* PageRecovery.swift */; };
+		FB5296000000000000000101 /* WriteStorageLineFit.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5296000000000000000001 /* WriteStorageLineFit.swift */; };
 		FB5220000000000000000101 /* WindowNotices.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5220000000000000000001 /* WindowNotices.swift */; };
 		FB4942000000000000000101 /* BudgetState.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB4942000000000000000001 /* BudgetState.swift */; };
 		FB3584000000000000000110 /* NativeBridgeBenchmarkTrigger.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB3584000000000000000010 /* NativeBridgeBenchmarkTrigger.swift */; };
@@ -96,6 +97,7 @@
 		FB3584000000000000000005 /* NativeBridgeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBridgeClient.swift; sourceTree = "<group>"; };
 		FB3584000000000000000006 /* ChangeCoalescer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeCoalescer.swift; sourceTree = "<group>"; };
 		FB5247000000000000000001 /* PageRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageRecovery.swift; sourceTree = "<group>"; };
+		FB5296000000000000000001 /* WriteStorageLineFit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WriteStorageLineFit.swift; sourceTree = "<group>"; };
 		FB5220000000000000000001 /* WindowNotices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowNotices.swift; sourceTree = "<group>"; };
 		FB4942000000000000000001 /* BudgetState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetState.swift; sourceTree = "<group>"; };
 		FB3584000000000000000010 /* NativeBridgeBenchmarkTrigger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBridgeBenchmarkTrigger.swift; sourceTree = "<group>"; };
@@ -231,6 +233,7 @@
 				FB3584000000000000000005 /* NativeBridgeClient.swift */,
 				FB3584000000000000000006 /* ChangeCoalescer.swift */,
 				FB5247000000000000000001 /* PageRecovery.swift */,
+				FB5296000000000000000001 /* WriteStorageLineFit.swift */,
 				FB5220000000000000000001 /* WindowNotices.swift */,
 				FB4942000000000000000001 /* BudgetState.swift */,
 				FB3584000000000000000011 /* NativeBridgeBenchmark.swift */,
@@ -417,6 +420,7 @@
 				FB3584000000000000000105 /* NativeBridgeClient.swift in Sources */,
 				FB3584000000000000000106 /* ChangeCoalescer.swift in Sources */,
 				FB5247000000000000000101 /* PageRecovery.swift in Sources */,
+				FB5296000000000000000101 /* WriteStorageLineFit.swift in Sources */,
 				FB5220000000000000000101 /* WindowNotices.swift in Sources */,
 				FB4942000000000000000101 /* BudgetState.swift in Sources */,
 				5C3E1A022EBC000100A1B2C3 /* SceneDelegate.swift in Sources */,

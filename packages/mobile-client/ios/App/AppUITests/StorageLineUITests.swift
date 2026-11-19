@@ -60,26 +60,70 @@ final class StorageLineUITests: XCTestCase {
         let stepDeadline = Date().addingTimeInterval(30)
         while !useCleared.exists && !stepTwo.exists && Date() < stepDeadline { sleep(1) }
         if !stepTwo.exists {
-            element("Use cleared balance").tap()
-            element("Confirm balance").tap()
+            checkTheEditedFieldIsClear()
+            tapOnScreen("Use cleared balance")
+            tapOnScreen("Confirm balance")
             let carryOn = app.buttons["Continue"]
             if carryOn.waitForExistence(timeout: 5) { carryOn.tap() }
         }
+        // CI (iPhone 16e, iOS 26.2, AX5) once ended on the register here, with
+        // the sheet gone, so say so rather than report a missing search field
+        if !stepTwo.waitForExistence(timeout: 30) {
+            keepScreen("Reconcile did not reach step 2")
+            XCTFail("Reconcile did not reach step 2")
+            return
+        }
         checkSearchFieldAndLine(shot: shot)
+    }
+
+    // Step 1 opens with the statement amount being edited and the keyboard up.
+    // The Designer's rule (PR 494): the line then takes at most a third of the
+    // space above the keyboard, so the field stays readable and can be tapped.
+    private func checkTheEditedFieldIsClear() {
+        let edited = app.descendants(matching: .any).matching(NSPredicate(format: "hasKeyboardFocus == true")).firstMatch
+        guard edited.waitForExistence(timeout: 5) else { return }
+        XCTAssertTrue(edited.isHittable, "the field being edited is covered")
+        let line = app.staticTexts["storage.line"]
+        if line.exists {
+            XCTAssertFalse(line.frame.insetBy(dx: -12, dy: -6).intersects(edited.frame), "the line covers the field being edited")
+        }
+        // The keyboard itself can cover the step's buttons, as anywhere in iOS;
+        // a person closes it with its ✓ key before tapping them
+        app.typeText("\n")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5), "the keyboard stayed up")
+    }
+
+    // At the largest text size a button can sit below the sheet's visible
+    // part, where a tap lands on whatever is there instead
+    private func tapOnScreen(_ label: String) {
+        let button = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", label)).firstMatch
+        XCTAssertTrue(button.waitForExistence(timeout: 30), "no \"\(label)\" button")
+        for _ in 0..<5 where !button.isHittable { app.swipeUp() }
+        if !button.isHittable {
+            keepScreen("\"\(label)\" can't be reached")
+            save("unreachable-\(label.prefix(12))")
+            print("unreachable \(label): \(button.frame)")
+        }
+        XCTAssertTrue(button.isHittable, "\"\(label)\" can't be reached")
+        button.tap()
+    }
+
+    // A screenshot kept with the result, and the screen's elements in the log,
+    // since a CI result bundle is a download
+    private func keepScreen(_ name: String) {
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        print("\(name):\n\(app.debugDescription.prefix(8000))")
     }
 
     private func checkSearchFieldAndLine(shot: String?) {
         // Reconcile's own field, not the register's behind the sheet
         let field = app.searchFields.matching(NSPredicate(format: "placeholderValue == %@", "Find amount")).firstMatch
         if !field.waitForExistence(timeout: 60) {
-            // Kept with the result, to see what step 2 showed instead
-            let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-            attachment.name = "step 2 without a search field"
-            attachment.lifetime = .keepAlways
-            add(attachment)
+            keepScreen("step 2 without a search field")
             if let shot { save("\(shot)-no-field") }
-            // The same, as text in the log, since a CI result bundle is a download
-            print("step 2 without a search field:\n\(app.debugDescription.prefix(8000))")
             XCTFail("no search field on step 2")
             return
         }

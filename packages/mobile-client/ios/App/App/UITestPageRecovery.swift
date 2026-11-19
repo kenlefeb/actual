@@ -157,6 +157,18 @@ enum UITestKillWrites {
         ]);
         """
 
+    // sc-5404: open means the database answers, not just the prefs: load-budget sets
+    // the prefs (and their id) before it awaits db.openDatabase, so in between the id
+    // shows while a query hits a null handle ("db.prepare")
+    private static let openCheck = bounded + """
+        try {
+          const p = await within(window.$send('load-prefs'), 2000);
+          if (p?.id !== id) return p?.id ?? 'none';
+          await within(window.$send('get-categories'), 2000);
+          return id;
+        } catch (e) { return 'error: ' + e.message; }
+        """
+
     private static func openTestBudget(_ page: PageCall) async throws {
         log("waiting for the page's bridge")
         try await waitFor { (try? await page.run("return typeof window.$send")) as? String == "function" }
@@ -174,7 +186,7 @@ enum UITestKillWrites {
             let start = Date()
             while Date().timeIntervalSince(start) < 60 {
                 let open = try? await page.run(
-                    bounded + "try { return (await within(window.$send('load-prefs'), 2000))?.id ?? 'none'; } catch (e) { return 'error: ' + e.message; }")
+                    openCheck, arguments: ["id": id])
                 if open as? String == id {
                     log("the app reopened the budget by itself after \(Int(Date().timeIntervalSince(start))) s")
                     return
@@ -277,7 +289,7 @@ enum UITestKillWrites {
         var bySelf = -1
         while bridge >= 0, seconds() < Int(limit) {
             let open = try? await page.run(
-                bounded + "try { return (await within(window.$send('load-prefs'), 2000))?.id ?? 'none'; } catch (e) { return 'error: ' + e.message; }")
+                openCheck, arguments: ["id": id])
             if open as? String == id {
                 bySelf = seconds()
                 break

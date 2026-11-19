@@ -44,6 +44,8 @@ None.
 - `native-bridge`: "Sync failure reasons map to a closed set" is modified. New requirements:
   - "A write is saved only when storage says so"
   - "The storage barrier waits for complete"
+  - "Screens say "Saved" only once the write is stored"
+  - "Budget and Reconcile wait for storage before "Saved""
   - "A not-yet-stored write belongs to its page load"
   - "The storage status line shows only saving states"
   - "The storage status line never covers what a person needs"

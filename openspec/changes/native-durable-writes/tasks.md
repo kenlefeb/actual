@@ -78,3 +78,10 @@
 - [ ] 6.4 In a Release build with the switch on, repeat the placement screenshots for both storage line requirements, in light, dark and at the largest text size: tab bar, keyboard, sheets, context menu, alerts, the delete confirmation (which must hide the line) and Reconcile step 2. Include native Accounts offline: the status stays "Offline" and the rows do not move during a write. Check the Undo bar by comparing frames, not from a screenshot: its `maxY` is at or above the line's `minY`
 - [ ] 6.5 VoiceOver on a real iPhone: rows stay reachable, the line can be read, and the announcement is heard once and not during an alert. This needs Ken's device, so `ready-for-human` goes on only once the build exists
 - [ ] 6.6 Turn the line on in Release (`WriteStorageLineRollout.isOnInRelease`, PR #485's task 3.10) only after 5.1, 6.1 to 6.5 and the iPhone gate in task 3.7. The PR links them, and the UX Designer approves the Release placement. Turning the line on does not change the native Accounts offline status, which stays "Offline"
+
+## 7. Saying "Saved" only once stored (sc-5303)
+
+The stored answer only reaches screens once the storage guard is on; with the guard off, a failed write still answers stored. So this group lands as a commit inside the guard-on PR, or as a PR stacked directly under it, and the guard-on PR doesn't merge without it (Product Owner, sc-5303 comment 5331).
+
+- [ ] 7.1 Failing tests first for "Screens say "Saved" only once the write is stored" and "Budget and Reconcile wait for storage before "Saved"": Paychecks (`Saved "%@".`, `Saved %@. Undo is available.`), Budget's refresh-failure wording, the Reconcile alert, Undo offered at once and labelled "Undo", and no "Saved" for a write that never stores
+- [ ] 7.2 Change Paychecks, Budget and Reconcile to show those messages only on `stored: true` or the `stored` event, with no new copy

@@ -167,7 +167,8 @@ public final class WriteStorageStatus: ObservableObject {
     }
     // Writes a restart or a page mismatch may have lost, for whoever waits on them
     private var lost: Set<Int> = []
-    private var waiters: [Int: [CheckedContinuation<Bool, Never>]] = [:]
+    private var waiters: [Int: [(id: Int, continuation: CheckedContinuation<Bool, Never>)]] = [:]
+    private var lastWaiter = 0
     // Keeps counting across page loads, so a late ticket can't pass for a new one
     private var lastTicket = 0
     private var newestStoredTicket = 0
@@ -269,8 +270,16 @@ public final class WriteStorageStatus: ObservableObject {
         } else if ticket > newestStoredTicket {
             // This call waits for every write before it, so it speaks for any
             // earlier call that never got an answer
-            if answer.seq != nil { unstored.removeAll { $0.seq == nil && $0.ticket < ticket } }
-            if (answer.seq?.n ?? .max) > storedThroughSeq { unstored.append((ticket, answer.seq?.n)) }
+            // One change, so no wait is settled halfway; a replaced write's
+            // waiters now wait on this one, which still isn't stored
+            var next = unstored
+            if answer.seq != nil {
+                let replaced = next.filter { $0.seq == nil && $0.ticket < ticket }.map(\.ticket)
+                next.removeAll { $0.seq == nil && $0.ticket < ticket }
+                for old in replaced { waiters[ticket, default: []] += waiters.removeValue(forKey: old) ?? [] }
+            }
+            if (answer.seq?.n ?? .max) > storedThroughSeq { next.append((ticket, answer.seq?.n)) }
+            unstored = next
         }
         return answer.stored
     }
@@ -308,13 +317,35 @@ public final class WriteStorageStatus: ObservableObject {
     func waitStored(ticket: Int) async -> Bool {
         if lost.contains(ticket) { return false }
         guard unstored.contains(where: { $0.ticket == ticket }) else { return true }
-        return await withCheckedContinuation { waiters[ticket, default: []].append($0) }
+        lastWaiter += 1
+        let id = lastWaiter
+        // A waiter that goes away (its screen closed) ends its wait, with no claim of saving
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { waiters[ticket, default: []].append((id, $0)) }
+        } onCancel: {
+            Task { @MainActor [weak self] in self?.endWait(id) }
+        }
+    }
+
+    private func endWait(_ id: Int) {
+        for ticket in Array(waiters.keys) {
+            guard let index = waiters[ticket]?.firstIndex(where: { $0.id == id }) else { continue }
+            waiters[ticket]?.remove(at: index).continuation.resume(returning: false)
+        }
+    }
+
+    // The page's storage-failed: nothing waiting now can be stored, so every wait ends
+    public func storageFailed() {
+        lost.formUnion(waiters.keys)
+        let ending = waiters.values.flatMap { $0 }
+        waiters = [:]
+        ending.forEach { $0.continuation.resume(returning: false) }
     }
 
     private func settleWaiters() {
         for ticket in Array(waiters.keys) where !unstored.contains(where: { $0.ticket == ticket }) {
             let stored = !lost.contains(ticket)
-            waiters.removeValue(forKey: ticket)?.forEach { $0.resume(returning: stored) }
+            waiters.removeValue(forKey: ticket)?.forEach { $0.continuation.resume(returning: stored) }
         }
     }
 

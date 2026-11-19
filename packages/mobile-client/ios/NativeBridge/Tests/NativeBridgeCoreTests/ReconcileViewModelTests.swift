@@ -239,13 +239,16 @@ final class ReconcileStepOneViewModelTests: XCTestCase {
         page.results["native/persisted"] = #"{"stored":false,"seq":{"epoch":"e","n":1}}"#
         let model = try await model(page)
         model.useCleared()
-        let confirming = Task { await model.confirm() }
-        try await Task.sleep(nanoseconds: 50_000_000)
+        var lateNotes = 0
+        model.onClearedNoteStored = { lateNotes += 1 }
+        // Security on PR #496: step 1 never waits for storage
+        let saved = await model.confirm()
+        XCTAssertTrue(saved)
         XCTAssertFalse(model.showsClearedNote)
         status.storedEvent(seq: 1, epoch: "e")
-        let saved = await confirming.value
-        XCTAssertTrue(saved)
+        try await Task.sleep(nanoseconds: 50_000_000)
         XCTAssertTrue(model.showsClearedNote)
+        XCTAssertEqual(lateNotes, 1)
     }
 
     func testTheClearedBalanceNeverStoredShowsNoNote() async throws {
@@ -256,10 +259,9 @@ final class ReconcileStepOneViewModelTests: XCTestCase {
         page.results["native/persisted"] = #"{"stored":false,"seq":{"epoch":"e","n":1}}"#
         let model = try await model(page)
         model.useCleared()
-        let confirming = Task { await model.confirm() }
-        try await Task.sleep(nanoseconds: 50_000_000)
+        _ = await model.confirm()
         status.pageLoaded(epoch: "f")
-        _ = await confirming.value
+        try await Task.sleep(nanoseconds: 50_000_000)
         XCTAssertFalse(model.showsClearedNote)
     }
 

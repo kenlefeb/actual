@@ -154,10 +154,16 @@ function appSourceEntries(project) {
 // native-durable-writes task 3.10: the storage line stays out of Release until
 // the PR that also turns on the storage guard and adds the notices. The page
 // bridge's call to the guard's switch is what says that PR has happened.
+// The bridge turns the guard on only by calling it; a comment naming it doesn't count
+function callsStorageGuard(source) {
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  return code.includes("'native/enable-storage-guard'");
+}
+
 export function storageLineRolloutProblems(tabBarSource, bridgeSource) {
   const flag = /\bisOnInRelease\s*=\s*(true|false)\b/.exec(tabBarSource)?.[1];
   if (!flag) return ['WriteStorageLineRollout.isOnInRelease: not found'];
-  const guardIsOn = bridgeSource.includes('native/enable-storage-guard');
+  const guardIsOn = callsStorageGuard(bridgeSource);
   return (flag === 'true') === guardIsOn
     ? []
     : [
@@ -183,7 +189,7 @@ export function storageGuardRolloutProblems(
       "NativeBridgePlugin's client must take storageGuardOn from StorageGuardRollout.isOn",
     );
   }
-  const guardIsOn = bridgeSource.includes('native/enable-storage-guard');
+  const guardIsOn = callsStorageGuard(bridgeSource);
   if ((flag === 'true') !== guardIsOn) {
     found.push(
       `StorageGuardRollout.isOn is ${flag} but the page bridge ${guardIsOn ? 'turns' : 'does not turn'} the storage guard on; they change together`,

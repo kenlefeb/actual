@@ -44,7 +44,7 @@ public final class PaycheckEditorViewModel: ObservableObject {
     private let debounce: TimeInterval
     private let onWrite: (PaychecksUndoOffer) -> Void
     // sc-5303: a write that answered not stored, once storage says it is
-    private let onStored: (String) -> Void
+    private let onPending: (String, @escaping () async -> Bool) -> Void
     private var original: PaycheckDraft
     private var previewGeneration = 0
     private var previewTask: Task<Void, Never>?
@@ -52,13 +52,13 @@ public final class PaycheckEditorViewModel: ObservableObject {
     // `onWrite` gets the Undo offer of a save or delete that went through
     public init(
         client: NativeBridgeClient, paycheckId: String?, today: String, debounce: TimeInterval = 0.25,
-        onWrite: @escaping (PaychecksUndoOffer) -> Void = { _ in }, onStored: @escaping (String) -> Void = { _ in }
+        onWrite: @escaping (PaychecksUndoOffer) -> Void = { _ in }, onPending: @escaping (String, @escaping () async -> Bool) -> Void = { _, _ in }
     ) {
         self.client = client
         self.paycheckId = paycheckId
         self.debounce = debounce
         self.onWrite = onWrite
-        self.onStored = onStored
+        self.onPending = onPending
         // A new paycheck creates its clearing account unless the user picks one
         let draft = PaycheckDraft(name: "", definition: .new(today: today), isNewAccount: paycheckId == nil)
         self.draft = draft
@@ -172,9 +172,7 @@ public final class PaycheckEditorViewModel: ObservableObject {
                 token: token, paycheckName: draft.name, date: "", action: isNew ? .create : .save, isStored: result.stored))
         if !result.stored {
             // The sheet closes now; the list says "Saved" once storage does
-            Task { [client, onStored] in
-                if await client.whenStored(result) { onStored(token) }
-            }
+            onPending(token) { [client] in await client.whenStored(result) }
         }
         return true
     }

@@ -369,6 +369,49 @@ final class StoredWriteTests: XCTestCase {
         XCTAssertFalse(stored)
     }
 
+    // Security on PR #496: a later "not stored" that takes a write's place hands its waiters over
+    func testAWaitIsHandedToTheWriteThatTakesItsPlace() async throws {
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "e")
+        let first = status.nextTicket()
+        status.record(.notStored, ticket: first)
+        var answer: Bool?
+        let waiting = Task { answer = await status.waitStored(ticket: first) }
+        try await Task.sleep(nanoseconds: 20_000_000)
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 2)), ticket: status.nextTicket())
+        try await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertNil(answer, "still not stored")
+        XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
+        status.storedEvent(seq: 2, epoch: "e")
+        await waiting.value
+        XCTAssertEqual(answer, true)
+    }
+
+    // A wait ends, with no claim of saving, when storage fails or the waiter goes away
+    func testAWaitEndsNotStoredWhenStorageFails() async throws {
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "e")
+        let ticket = status.nextTicket()
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 1)), ticket: ticket)
+        let waiting = Task { await status.waitStored(ticket: ticket) }
+        try await Task.sleep(nanoseconds: 20_000_000)
+        status.storageFailed()
+        let stored = await waiting.value
+        XCTAssertFalse(stored)
+    }
+
+    func testAWaitEndsNotStoredWhenItsWaiterGoesAway() async throws {
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "e")
+        let ticket = status.nextTicket()
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 1)), ticket: ticket)
+        let waiting = Task { await status.waitStored(ticket: ticket) }
+        try await Task.sleep(nanoseconds: 20_000_000)
+        waiting.cancel()
+        let stored = await waiting.value
+        XCTAssertFalse(stored)
+    }
+
     // sc-5302: a retired page's own "not stored" stays its own
     func testARetiredPagesNotStoredAnswerIsALossAndLeavesTheNewPageAlone() {
         let status = WriteStorageStatus()

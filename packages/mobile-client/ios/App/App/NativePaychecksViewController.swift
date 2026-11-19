@@ -108,7 +108,7 @@ struct PaychecksScreen: View {
                 PaycheckEditorSheet(
                     request: request, client: client, style: style,
                     onWrite: { offer in Task { await model.wrote(offer) } },
-                    onStored: { token in model.stored(token: token) })
+                    onPending: { token, stored in model.pending(token: token, until: stored) })
             }
         }
         .safeAreaInset(edge: .bottom) { undoBar }

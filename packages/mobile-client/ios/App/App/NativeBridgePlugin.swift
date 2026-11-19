@@ -50,6 +50,7 @@ public class NativeBridgePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
         MainActor.assumeIsolated {
             if let epoch = NativeBridgeEvent.readyEpoch(of: message.body) { writeStorage.pageLoaded(epoch: epoch) }
             if let stored = NativeBridgeEvent.stored(of: message.body) { writeStorage.storedEvent(seq: stored.seq, epoch: stored.epoch) }
+            if event == "storage-failed" { writeStorage.storageFailed() }
             if event == "storage-failed" || event == "storage-close-failed" { onStorageEvent?(message.body) }
         }
         onEvent?(event)

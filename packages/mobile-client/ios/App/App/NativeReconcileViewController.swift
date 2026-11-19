@@ -63,6 +63,7 @@ final class ReconcileFlowModel: ObservableObject {
 
     @Published var screen: Screen
     @Published private(set) var stepOne: ReconcileStepOneViewModel?
+    @Published var showsLateClearedNote = false
     @Published private(set) var tick: ReconcileTickViewModel?
     @Published private(set) var resolve: ReconcileResolveViewModel?
     @Published private(set) var lock: ReconcileLockViewModel?
@@ -89,6 +90,8 @@ final class ReconcileFlowModel: ObservableObject {
     func open(_ id: String) {
         guard let style else { return }
         stepOne = ReconcileStepOneViewModel(client: client, accountId: id, style: style)
+        // The cleared-balance note can come after step 1 has moved on (sc-5303)
+        stepOne?.onClearedNoteStored = { [weak self] in self?.showsLateClearedNote = true }
         (tick, resolve, lock, adjustmentToken) = (nil, nil, nil, nil)
         let account = month.state.read?.accounts.first { $0.id == id }
         if account?.status == .inProgress {
@@ -203,6 +206,11 @@ struct ReconcileFlowView: View {
         .navigationViewStyle(.stack)
         .tint(NativeReconcileTokens.accent)
         .task { if month.state.read == nil { await month.load() } }
+        .alert(ReconcileWords.clearedNoteTitle, isPresented: $flow.showsLateClearedNote) {
+            Button(ReconcileWords.continueButton) {}
+        } message: {
+            Text(ReconcileWords.clearedNote)
+        }
     }
 
     private func account(_ id: String) -> ReconcileMonth.Account? {

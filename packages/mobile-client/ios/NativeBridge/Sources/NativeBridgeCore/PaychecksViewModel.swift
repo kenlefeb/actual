@@ -212,6 +212,16 @@ public final class PaychecksViewModel: ObservableObject {
         }
     }
 
+    // sc-5303: waits for the editor's write to be stored. One wait at a time; it
+    // ends when a newer offer replaces this one or the list goes away.
+    public func pending(token: String, until stored: @escaping () async -> Bool) {
+        storedWait.task?.cancel()
+        storedWait.task = Task { [weak self] in
+            guard await stored(), !Task.isCancelled else { return }
+            self?.stored(token: token)
+        }
+    }
+
     // sc-5303: the editor's write is now stored, so the offer may say "Saved"
     public func stored(token: String) {
         guard var offer = undoOffer, offer.token == token, !offer.isStored else { return }
@@ -239,6 +249,8 @@ public final class PaychecksViewModel: ObservableObject {
                     offer.paycheckName)
             }
     }
+
+    private let storedWait = PendingWait()
 
     private func withdrawOffer() {
         offerGeneration += 1

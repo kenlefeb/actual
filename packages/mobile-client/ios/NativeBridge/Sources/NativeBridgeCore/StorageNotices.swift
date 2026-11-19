@@ -204,6 +204,12 @@ public final class StorageNotices {
     }
 }
 
+// A wait a screen started, cancelled when the screen goes away
+final class PendingWait {
+    var task: Task<Void, Never>?
+    deinit { task?.cancel() }
+}
+
 extension NativeBridgeEvent {
     // The page's storage-failed: when the last stored write was flushed (ms), and whether storage is full
     public static func storageFailure(of body: Any) -> (lastStoredFlushAt: Double?, quota: Bool)? {

@@ -69,6 +69,20 @@ void test('Native Swift: the guard switch, its client and the bridge agree', () 
     storageGuardRolloutProblems('renamed', plugin, 'no guard')[0],
     /not found/,
   );
+  // Security on PR #496: only the call counts, not a comment naming it
+  for (const comment of [
+    "// later: forward('native/enable-storage-guard')",
+    "/* 'native/enable-storage-guard' */",
+  ]) {
+    assert.deepEqual(
+      storageGuardRolloutProblems(app('false'), plugin, comment),
+      [],
+    );
+    assert.match(
+      storageGuardRolloutProblems(app('true'), plugin, comment)[0],
+      /change together/,
+    );
+  }
 });
 
 // native-bridge: "Only loot-core touches the budget data" (sc-3584)

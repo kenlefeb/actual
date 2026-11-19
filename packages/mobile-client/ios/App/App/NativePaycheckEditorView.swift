@@ -23,11 +23,12 @@ struct PaycheckEditorSheet: View {
 
     init(
         request: PaycheckEditorRequest, client: NativeBridgeClient, style: BudgetAmountStyle,
-        onWrite: @escaping (PaychecksUndoOffer) -> Void, onStored: @escaping (String) -> Void = { _ in }
+        onWrite: @escaping (PaychecksUndoOffer) -> Void,
+        onPending: @escaping (String, @escaping () async -> Bool) -> Void = { _, _ in }
     ) {
         _model = StateObject(
             wrappedValue: PaycheckEditorViewModel(
-                client: client, paycheckId: request.paycheckId, today: EditorDates.today(), onWrite: onWrite, onStored: onStored))
+                client: client, paycheckId: request.paycheckId, today: EditorDates.today(), onWrite: onWrite, onPending: onPending))
         self.style = style
         // A new paycheck starts open; an existing one starts as summaries, as the web
         _expanded = State(initialValue: request.paycheckId == nil ? Set(PaycheckEditorViewModel.Field.allCases) : [])

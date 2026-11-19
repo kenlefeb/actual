@@ -28,7 +28,7 @@
 
 ## 3. iPhone and Mac shells (sc-5219)
 
-- [ ] 3.1 Failing Swift tests first:
+- [ ] 3.1 iPhone: failing Swift tests first:
   - the read/write table in `NativeBridgeClient` (every allowlisted name classified);
   - the two-call write returning `stored`, with only `native/persisted` retried;
   - "Saving…" until stored, and "Still saving to this device. Keep the app open." on `stored: false`, cleared on `stored`;
@@ -52,7 +52,8 @@
 - [ ] 3.5 Run the `NativeBridgeCore` tests, the Mac tests and the iOS build; all pass. The next TestFlight build carries this change (Product Owner, comment 5222)
 - [x] 3.6 Failing test first for "A not-yet-stored write belongs to its page load": `seq` carries the page load's epoch; Swift also records each write's page-load generation, for a write with no answer and so no `seq`; `stored: true` and `stored` clear only their own epoch; a restart turns older pending writes into "may not have been saved", and no later success clears them (D4)
 - [ ] 3.9 Failing tests first, in the PR that adds the restart notice and turns the guard on: OK on the notice calls `acknowledgeMayNotBeSaved()`, so "may not have been saved" does not last the whole session (Product Owner, PR #485); VoiceOver is told when pending writes finish storing, which can't be claimed while the guard is off (Designer, PR #485)
-- [ ] 3.10 The final group 3 PR sets `WriteStorageLineRollout.isOnInRelease` to true, together with the restart and failure notices and the guard switch-on, and checks the line in a Release build. Until then the line is unreachable in Release builds. `yarn check:native-swift` fails if the switch and the guard call disagree (Director, PR #485)
+- [ ] 3.10 The final group 3 PR opts the iPhone in and turns the guard on, together with the restart and failure notices and the sc-5303 "Saved" gating (group 7). It does not turn the storage line on; that is task 6.6, after sc-5297. It merges after the kill tests (3.4), so the flip is last. `yarn check:native-swift` is one-way: `WriteStorageLineRollout.isOnInRelease` true requires the guard on, and the guard may be on with the line off. It also checks that each shell's `StorageGuardRollout.isOn` and its bridge's guard call agree. While a shell's switch is off, `write`, `StoredWrite` and `message` behave as today (Architect, design D7a)
+- [ ] 3.11 Mac: a separate opt-in PR after PR #470 and the Mac notices, with the Mac's own evidence (the 3.4 kill test and the 3.3 perf gate on the Mac). It repeats 3.1's tests for the Mac, then sets the Mac's `StorageGuardRollout.isOn` ("The storage guard is turned on per shell")
 - [ ] 3.7 **Gate:** do not turn the storage guard on in the iPhone app until sc-5247 (iPhone page-death reload) and the iPhone part of sc-5220 (reload notice) have merged. The PR that turns it on links both merged PRs (Product Owner, sc-5219 comment 5277; design D7a)
 - [ ] 3.8 Failing tests first for "The storage status line shows only saving states", "A restart with unconfirmed writes tells the person" and "The native Accounts offline status is constant": the two line states, "Saving…" held 0.6 s without delaying a reply, the line clearing at a restart, the notice with OK in place of the reload notice, and the native Accounts offline status staying "Offline" through writes without moving the rows (D4)
 

@@ -66,6 +66,7 @@ None.
   - "Durable platforms do not wait for storage"
   - "A held sync never reports success"
   - "The storage guard is for the native shells"
+  - "The storage guard is turned on per shell"
   - "A closed budget's failed write is reported"
   - "Limits report their floor"
   - "Test hooks are absent from production"

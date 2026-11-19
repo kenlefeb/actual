@@ -21,7 +21,7 @@ The page SHALL map loot-core's reason as follows: `network-failure` to `network`
 ## ADDED Requirements
 
 ### Requirement: A write is saved only when storage says so
-In the iPhone and Mac apps, the Swift bridge client SHALL follow every allowlisted write with its own `native/persisted` call, and SHALL return the write's result with `stored: true` or `stored: false` from that call's answer. Swift SHALL treat a write as stored only when that answer, or a later `stored` event, says so. A timed-out `native/persisted` call SHALL never cause the write to be retried. Reads SHALL NOT wait.
+In an opted-in shell, the Swift bridge client SHALL follow every allowlisted write with its own `native/persisted` call, and SHALL return the write's result with `stored: true` or `stored: false` from that call's answer. Swift SHALL treat a write as stored only when that answer, or a later `stored` event, says so. A timed-out `native/persisted` call SHALL never cause the write to be retried. Reads SHALL NOT wait.
 
 #### Scenario: A categorize on the Mac
 - **GIVEN** the Mac app with a budget open
@@ -37,7 +37,7 @@ In the iPhone and Mac apps, the Swift bridge client SHALL follow every allowlist
 - **THEN** the read replies without waiting for storage
 
 ### Requirement: Screens say "Saved" only once the write is stored
-On iPhone and Mac, a success message saying "Saved" SHALL appear only after the write is stored. Until then the screen SHALL show no success message, and the storage status line carries the interim state. Undo SHALL be offered at once, labelled "Undo", with no claim of saving. If the write is never stored, the failure or restart notice speaks and no "Saved" SHALL ever show.
+In an opted-in shell, a success message saying "Saved" SHALL appear only after the write is stored. Until then the screen SHALL show no success message, and the storage status line carries the interim state. Undo SHALL be offered at once, labelled "Undo", with no claim of saving. If the write is never stored, the failure or restart notice speaks and no "Saved" SHALL ever show.
 
 #### Scenario: Paychecks
 - **GIVEN** a paycheck saved while storage is slow
@@ -328,7 +328,7 @@ When sync's storage wait expires, the engine SHALL NOT emit sync success. It SHA
 - **THEN** the status line keeps the waiting text and never shows "Syncing…" or "Sync failed" for it
 
 ### Requirement: The storage guard is for the native shells
-The latch, write refusal, sync gate, held-sync reporting and storage notices SHALL stay off until the native bridge turns on the storage guard, a one-way engine switch set when the bridge installs. Browsers never set it. With it off, the patched storage SHALL fail as stock absurd-sql does: no latch, no dropped queue, unseen quota rejections, and `onFallbackFailure` only for the safety check.
+The latch, write refusal, sync gate, held-sync reporting and storage notices SHALL stay off until a native page bridge turns on the storage guard, a one-way engine switch set when the bridge installs in a shell that has opted in. Browsers never set it. With it off, the patched storage SHALL fail as stock absurd-sql does: no latch, no dropped queue, unseen quota rejections, and `onFallbackFailure` only for the safety check.
 
 #### Scenario: A browser after a failed write
 - **GIVEN** a fallback-mode browser, with no native bridge, whose write fails with a quota error
@@ -344,6 +344,19 @@ The latch, write refusal, sync gate, held-sync reporting and storage notices SHA
 - **GIVEN** a browser write refused because another tab changed the file
 - **WHEN** the failure is reported
 - **THEN** `fallback-write-error` fires and the existing one-tab message shows
+
+### Requirement: The storage guard is turned on per shell
+Each native shell SHALL opt in to the storage guard separately, by telling its page bridge as it starts, for example with a flag in its init payload. The bridge SHALL turn the guard on only for a shell that opted in. A shell that has not SHALL behave as stock: no latch, sync gate, storage notices or "Saved" gating, and its client SHALL treat every write as stored at once. The iPhone opts in with the guard-on PR; the Mac stays stock until its own opt-in.
+
+#### Scenario: The iPhone has opted in
+- **GIVEN** the iPhone app with the guard-on PR merged
+- **WHEN** its page bridge installs
+- **THEN** the guard is on, and writes wait for storage before "Saved"
+
+#### Scenario: The Mac has not opted in
+- **GIVEN** the Mac app before its opt-in PR
+- **WHEN** a write is made
+- **THEN** the client returns it as stored at once, "Saved" shows as today, sync runs as today, and no storage notice shows
 
 ### Requirement: A closed budget's failed write is reported
 A failed write in a file with no open handles SHALL NOT set the latch. The engine SHALL send `storage-close-failed` once for that file, and the app SHALL show, with OK, "Some recent changes to the budget you closed weren't saved. Open it and make them again." A showing failure notice SHALL keep priority, and this notice follows it.

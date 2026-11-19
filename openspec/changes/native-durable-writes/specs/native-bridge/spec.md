@@ -143,7 +143,7 @@ On iPhone the line SHALL sit above the tab bar and below the Undo bar, and rest 
 - **THEN** the line is hidden until it closes
 
 ### Requirement: The storage status line fits above the keyboard
-While the keyboard is up, with A the height from the top safe area to the keyboard and H the line's height with its 8 pt margins: the full text SHALL show if its H is at most A ÷ 3. Otherwise the short form SHALL show on one line, never truncated: "Still saving…" for the not-stored state, and "Saving…" as is. If that H is still over A ÷ 3, the line SHALL hide and give back its space. When the keyboard goes, the full text and place return, with no animation.
+While the keyboard is up, with A the height from the top safe area, or from below a showing notice strip, to the keyboard, and H the line's height with its 8 pt margins: the full text SHALL show if its H is at most A ÷ 3. Otherwise the short form SHALL show on one line, never truncated: "Still saving…" for the not-stored state, and "Saving…" as is. If that H is still over A ÷ 3, the line SHALL hide and give back its space. When the keyboard goes, the full text and place return, with no animation.
 
 #### Scenario: Room for the full text
 - **GIVEN** the not-stored state and a keyboard leaving A at least 3 × the full text's H
@@ -160,8 +160,13 @@ While the keyboard is up, with A the height from the top safe area to the keyboa
 - **WHEN** the keyboard is up
 - **THEN** the line is hidden and its space given back, and it returns in full when the keyboard goes
 
+#### Scenario: Below a notice strip
+- **GIVEN** the restart or failure notice showing in the strip at the top, and the keyboard up
+- **WHEN** the line is placed
+- **THEN** A is measured from below the strip, and the line never covers the strip or its OK or Reload button
+
 ### Requirement: The storage status line's VoiceOver announcements
-The not-stored announcement SHALL fire once when that state begins, whatever the line shows; full, short and hidden switches announce nothing, and the label is always the full sentence. When the "Still saving to this device. Keep the app open." state clears, VoiceOver SHALL announce "Saved to this device." once, never during an alert, and never if that state was not shown. Turning the guard on announces nothing for storage completion.
+The not-stored announcement SHALL fire once when that state begins, whatever the line shows; full, short and hidden switches announce nothing, and the label is always the full sentence. When the "Still saving to this device. Keep the app open." state clears, VoiceOver SHALL announce "Saved to this device." once, only if the not-stored state was announced, whether the line was full, short or hidden, and never during an alert. Turning the guard on announces nothing for storage completion.
 
 #### Scenario: Short form under VoiceOver
 - **GIVEN** the line showing "Still saving…" with the keyboard up
@@ -173,8 +178,13 @@ The not-stored announcement SHALL fire once when that state begins, whatever the
 - **WHEN** the write is stored and no alert is showing
 - **THEN** VoiceOver announces "Saved to this device." once
 
+#### Scenario: Hidden, then stored
+- **GIVEN** the not-stored state announced while the line was hidden above the keyboard
+- **WHEN** the write is stored and no alert is showing
+- **THEN** VoiceOver announces "Saved to this device." once
+
 #### Scenario: A quick write
-- **GIVEN** a write stored while only "Saving…" showed
+- **GIVEN** a write stored while only "Saving…" showed, so nothing was announced
 - **WHEN** it is stored
 - **THEN** nothing is announced
 

@@ -229,13 +229,16 @@ if [ $phase = delay ]; then
   grep -q '"stored":true' $docs/result-warm-up-2.json || { echo "the warm-up was not stored in time: stopping"; exit 1; }
   held_read warm-up || exit 1
   echo "--- barrier on, 300 ms commit delay: $kills kills right after stored: true, each read back"
-  # Under load a write can miss native-persist-wait-ms and be answered stored:
-  # false; it makes no promise, so it is killed but not counted (up to 3x tries)
+  # A write can still miss native-persist-wait-ms under load and be answered
+  # stored: false; it makes no promise, so it is killed but not counted (up to 3x tries)
   echo "try | answer | write took | load | counted | this write kept | all stored writes kept | integrity_check" > $out/delayed-table.txt
   stored=() a=0
   while [ ${#stored} -lt $kills ] && [ $a -lt $((kills * 3)) ]; do
     a=$((a + 1))
-    kill_after kill-delayed-$a write || exit 1
+    # The counted write is the second after the launch: with the test's 300 ms
+    # delay the reopen's commits put the first past the 2 s wait (series-1200:
+    # first 2.0-2.3 s, later 1.5-1.9 s; without the delay 0.1-0.4 s at load 650)
+    kill_after kill-delayed-$a prewrite || exit 1
     answer="$(cat $docs/result-kill-delayed-$a.json) | $(grep -o 'answered in [0-9]* ms' $docs/progress.log | tail -1 | cut -d' ' -f3-) | $(uptime | sed 's/.*averages: //' | cut -d' ' -f1)"
     if ! grep -q '"stored":true' $docs/result-kill-delayed-$a.json; then
       echo "$a | $answer | no (not stored in time) | - | - | -" | tee -a $out/delayed-table.txt

@@ -205,9 +205,12 @@ enum UITestKillWrites {
             await window.$send('category-create', { name, groupId: group.id });
             return await window.__actualNativeBridge.call('native/persisted');
             """
-        if mode.hasPrefix("write:") || mode.hasPrefix("control:") {
+        if mode.hasPrefix("write:") || mode.hasPrefix("control:") || mode.hasPrefix("prewrite:") {
             let name = String(mode.split(separator: ":", maxSplits: 1)[1])
             if mode.hasPrefix("control:") { _ = try await page.run("window.__forkTestBarrierOff = true; return 'ok';") }
+            // sc-5404: with the test's 300 ms commit delay the reopen's own commits put the
+            // first write past the 2 s wait, so `prewrite:` makes an untimed write first
+            if mode.hasPrefix("prewrite:") { _ = try await page.run(createAndAsk, arguments: ["name": name + "-pre"]) }
             let start = Date()
             let answer = try await page.run(createAndAsk, arguments: ["name": name]) as? String ?? ""
             log("answered in \(Int(Date().timeIntervalSince(start) * 1000)) ms")

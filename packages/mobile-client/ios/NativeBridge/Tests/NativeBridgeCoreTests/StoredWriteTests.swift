@@ -21,7 +21,8 @@ final class StoredWriteTests: XCTestCase {
         persisted: @escaping (Int) async throws -> String = { _ in #"{"stored":true}"# }
     ) -> NativeBridgeClient {
         status.pageLoaded(epoch: "e")
-        return NativeBridgeClient(timeout: timeout, storage: status) { name, _ in
+        // The barrier as the guard-on shell sees it
+        return NativeBridgeClient(timeout: timeout, storage: status, storageGuardOn: true) { name, _ in
             await calls.add(name)
             guard name == "native/persisted" else { return "null" }
             return try await persisted(await calls.count(name))

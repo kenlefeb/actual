@@ -10,6 +10,7 @@ import {
   findNativeSources,
   missingFromProject,
   problems,
+  storageGuardRolloutProblems,
   storageLineRolloutProblems,
 } from './check-native-swift.mjs';
 
@@ -31,6 +32,22 @@ void test('Native Swift: the storage line and the guard ship together', () => {
     storageLineRolloutProblems('renamed', 'no guard')[0],
     /not found/,
   );
+});
+
+// Design D7a: the iPhone's guard switch, its client and the bridge agree
+void test('Native Swift: the guard switch, its client and the bridge agree', () => {
+  const app = on => `enum StorageGuardRollout {\n    static let isOn = ${on}\n}`;
+  const plugin = 'NativeBridgeClient(storage: s, storageGuardOn: StorageGuardRollout.isOn)';
+  const guardOn = "forward('native/enable-storage-guard')";
+  assert.deepEqual(storageGuardRolloutProblems(app('false'), plugin, 'no guard'), []);
+  assert.deepEqual(storageGuardRolloutProblems(app('true'), plugin, guardOn), []);
+  assert.match(storageGuardRolloutProblems(app('true'), plugin, 'no guard')[0], /change together/);
+  assert.match(storageGuardRolloutProblems(app('false'), plugin, guardOn)[0], /change together/);
+  assert.match(
+    storageGuardRolloutProblems(app('false'), 'NativeBridgeClient(storage: s)', 'no guard')[0],
+    /storageGuardOn/,
+  );
+  assert.match(storageGuardRolloutProblems('renamed', plugin, 'no guard')[0], /not found/);
 });
 
 // native-bridge: "Only loot-core touches the budget data" (sc-3584)

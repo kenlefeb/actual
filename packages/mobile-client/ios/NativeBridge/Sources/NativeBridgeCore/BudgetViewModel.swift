@@ -41,6 +41,8 @@ public enum BudgetSaveError: Equatable {
     case timedOut
     // The write landed but the month could not be read again
     case refreshFailed
+    // sc-5303: as refreshFailed, before the write is stored, so no claim of saving
+    case refreshFailedNotYetStored
 
     public var message: String {
         switch self {
@@ -52,6 +54,8 @@ public enum BudgetSaveError: Equatable {
             return NSLocalizedString("The budget did not answer in time. The amount was not saved.", comment: "Native Budget tab: save timed out")
         case .refreshFailed:
             return NSLocalizedString("Saved, but the budget could not be refreshed.", comment: "Native Budget tab: re-read failed after a save")
+        case .refreshFailedNotYetStored:
+            return NSLocalizedString("The budget could not be refreshed.", comment: "Native Budget tab: re-read failed before the change was stored")
         }
     }
 }
@@ -312,11 +316,12 @@ public final class BudgetViewModel: ObservableObject {
     }
 
     // One write, then the generation-counted re-read; a failed write is never retried
-    private func write(_ send: () async throws -> Void) async -> Bool {
+    private func write(_ send: () async throws -> Bool) async -> Bool {
         isSaving = true
         defer { isSaving = false }
+        let stored: Bool
         do {
-            try await send()
+            stored = try await send()
         } catch {
             if case NativeBridgeError.timedOut = error { saveError = .timedOut } else { saveError = .failed }
             return false
@@ -324,7 +329,7 @@ public final class BudgetViewModel: ObservableObject {
         // The same generation-counted read as a change event, so an older read cannot win
         await load()
         switch state {
-        case .stale, .failed: saveError = .refreshFailed
+        case .stale, .failed: saveError = stored ? .refreshFailed : .refreshFailedNotYetStored
         default: break
         }
         return true

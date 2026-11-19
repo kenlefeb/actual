@@ -221,13 +221,19 @@ public final class ReconcileStepOneViewModel: ObservableObject {
         error = nil
         isSaving = true
         defer { isSaving = false }
+        let result: StoredWrite
         do {
-            try await client.saveStatementBalance(save)
+            result = try await client.write("account-statement-balance-save", args: save)
         } catch {
             self.error = ReconcileError.from(error, .saveFailed)
             return false
         }
-        showsClearedNote = kind == .cleared
+        // "Saved from your cleared balance" only once stored; never for a write that may be lost
+        if kind == .cleared {
+            showsClearedNote = await client.whenStored(result)
+        } else {
+            showsClearedNote = false
+        }
         return true
     }
 }

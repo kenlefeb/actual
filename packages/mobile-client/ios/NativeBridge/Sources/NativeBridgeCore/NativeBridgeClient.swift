@@ -647,10 +647,10 @@ public struct NativeBridgeClient {
                 let retry = await storage?.nextTicket() ?? 0
                 if let answer = try? await askPersisted() { await storage?.record(answer, ticket: retry, madeIn: origin) }
             }
-            return false
+            return (false, ticket)
         } catch {
             await storage?.record(.notStored, ticket: ticket, madeIn: origin)
-            return false
+            return (false, ticket)
         }
     }
 
@@ -710,12 +710,15 @@ public struct NativeBridgeClient {
         return result
     }
 
-    public func setBudgetAmount(_ write: BudgetAmountWrite) async throws {
-        _ = try await call("budget/budget-amount", args: write)
+    // Whether this device has stored it (sc-5303)
+    @discardableResult
+    public func setBudgetAmount(_ write: BudgetAmountWrite) async throws -> Bool {
+        try await self.write("budget/budget-amount", args: write).stored
     }
 
-    public func transfer(_ transfer: Transfer) async throws {
-        _ = try await call(transfer.handler, args: transfer)
+    @discardableResult
+    public func transfer(_ transfer: Transfer) async throws -> Bool {
+        try await write(transfer.handler, args: transfer).stored
     }
 
     public func schedulesPaychecks() async throws -> SchedulesPaychecks {

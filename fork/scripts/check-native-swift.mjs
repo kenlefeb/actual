@@ -165,6 +165,24 @@ export function storageLineRolloutProblems(tabBarSource, bridgeSource) {
       ];
 }
 
+// Design D7a: the opened write API follows the iPhone's switch, and the switch
+// agrees with the bridge turning the guard on, so neither changes without the other
+export function storageGuardRolloutProblems(appSource, pluginSource, bridgeSource) {
+  const flag = /enum StorageGuardRollout \{\s*static let isOn = (true|false)\b/.exec(appSource)?.[1];
+  if (!flag) return ['StorageGuardRollout.isOn: not found'];
+  const found = [];
+  if (!pluginSource.includes('storageGuardOn: StorageGuardRollout.isOn')) {
+    found.push("NativeBridgePlugin's client must take storageGuardOn from StorageGuardRollout.isOn");
+  }
+  const guardIsOn = bridgeSource.includes('native/enable-storage-guard');
+  if ((flag === 'true') !== guardIsOn) {
+    found.push(
+      `StorageGuardRollout.isOn is ${flag} but the page bridge ${guardIsOn ? 'turns' : 'does not turn'} the storage guard on; they change together`,
+    );
+  }
+  return found;
+}
+
 export function missingFromProject(names, project) {
   const entries = appSourceEntries(project);
   return names.filter(name => !entries.has(name));
@@ -203,6 +221,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     );
   }
   found.push(
+    ...storageGuardRolloutProblems(
+      readFileSync(join(SWIFT_ROOT, 'ios/App/App/AppBridgeViewController.swift'), 'utf8'),
+      readFileSync(join(SWIFT_ROOT, 'ios/App/App/NativeBridgePlugin.swift'), 'utf8'),
+      readFileSync('packages/desktop-client/src/native/nativeBridge.ts', 'utf8'),
+    ),
     ...storageLineRolloutProblems(
       readFileSync(
         join(SWIFT_ROOT, 'ios/App/App/NativeTabBarController.swift'),

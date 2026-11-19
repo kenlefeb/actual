@@ -51,7 +51,7 @@ public final class StorageNotices {
     }
 
     // To the second, in the person's locale
-    public static func localTime(_ date: Date) -> String {
+    public nonisolated static func localTime(_ date: Date) -> String {
         DateFormatter.localizedString(from: date, dateStyle: .none, timeStyle: .medium)
     }
 

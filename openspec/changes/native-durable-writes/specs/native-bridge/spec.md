@@ -75,6 +75,47 @@ The native storage status line SHALL show only "Saving…" while a write awaits 
 - **WHEN** the client returns `stored: false`
 - **THEN** the line changes to "Still saving to this device. Keep the app open."
 
+### Requirement: The storage status line never covers what a person needs
+On iPhone, while the storage status line shows, it SHALL NOT cover content or controls a person needs, in light, dark or at the largest text size. The last row of a screen or sheet SHALL be able to scroll clear of it. A control that does not follow the screen's safe area, and every context menu item, SHALL stay fully readable.
+
+#### Scenario: Reconcile search field
+- **GIVEN** the line showing on Reconcile step 2
+- **WHEN** the search field is at the bottom of the sheet
+- **THEN** the line and the field's text are both fully readable, and the field takes taps
+
+#### Scenario: The last row of a sheet
+- **GIVEN** the line showing over the Categorize sheet
+- **WHEN** the person scrolls to the end of the list
+- **THEN** the last row, such as "Internet", sits clear of the line
+
+#### Scenario: A context menu from a low row
+- **GIVEN** the line showing
+- **WHEN** the person long-presses a row near the bottom of the screen
+- **THEN** no item of the menu is under the line
+
+### Requirement: The storage status line keeps its place
+On iPhone the line SHALL sit above the tab bar and below the Undo bar, and rest above the keyboard without covering the field being edited. It SHALL return above the tab bar after a sheet closes, hide while an alert or confirmation shows, and take no touches.
+
+#### Scenario: With the Undo bar
+- **GIVEN** a write that shows both the line and the Undo bar
+- **WHEN** the screen shows them
+- **THEN** the line is above the tab bar and the Undo bar is above the line, with neither covered
+
+#### Scenario: Editing with the keyboard up
+- **GIVEN** the line showing
+- **WHEN** the person edits a budget amount
+- **THEN** the line is above the keyboard, or moves to the top if it would cover the field
+
+#### Scenario: After a sheet closes
+- **GIVEN** the line showing over a sheet
+- **WHEN** the sheet closes
+- **THEN** the line is back above the tab bar
+
+#### Scenario: An alert or confirmation
+- **GIVEN** the line showing
+- **WHEN** an alert or the delete confirmation appears
+- **THEN** the line is hidden until it closes
+
 ### Requirement: A restart with unconfirmed writes tells the person
 If a restart leaves a write "may not have been saved" and no failure notice is showing, Swift SHALL show, with OK and in place of the reload notice, "The app restarted. Some recent changes may not have been saved. Check them, and make again any that are missing." This text SHALL appear nowhere else. A failure notice's restart form SHALL take priority.
 
@@ -83,13 +124,28 @@ If a restart leaves a write "may not have been saved" and no failure notice is s
 - **WHEN** the page restarts on its own
 - **THEN** the line clears, this notice shows, no reload notice shows, and OK dismisses it
 
-### Requirement: Offline never claims saved while a write is pending
-The native "Offline — changes saved on this iPhone" status SHALL show only when no write is pending. While one is, the status SHALL show the storage status line's text instead, so "Still saving to this device. Keep the app open." wins over it.
+### Requirement: The native Accounts offline status is constant
+On native Accounts, the offline status SHALL always read "Offline", whether or not a write is pending or "may not have been saved", and whether the storage status line is on or off. It SHALL promise nothing about saving or syncing and SHALL NOT change with writes, so the rows below it do not move. Only the storage status line and the restart and failure notices SHALL describe saving.
 
-#### Scenario: Offline with slow storage
-- **GIVEN** the app is offline and a write has returned `stored: false`
-- **WHEN** the Accounts status shows
-- **THEN** it reads "Still saving to this device. Keep the app open.", and returns to the offline text once the write is stored
+#### Scenario: A write while offline
+- **GIVEN** native Accounts offline, at any text size
+- **WHEN** a write starts and finishes
+- **THEN** the status reads "Offline" throughout, and the rows below it do not move
+
+#### Scenario: Line on, slow storage
+- **GIVEN** the line on, the app offline, and a write that returned `stored: false`
+- **WHEN** the screen shows
+- **THEN** the status reads "Offline", and the line reads "Still saving to this device. Keep the app open."
+
+#### Scenario: Line off in Release
+- **GIVEN** a Release build with the line off, the app offline, and a write pending
+- **WHEN** the screen shows
+- **THEN** the status reads "Offline"
+
+#### Scenario: After a restart
+- **GIVEN** the app offline and a write that "may not have been saved"
+- **WHEN** the screen shows
+- **THEN** the status reads "Offline", and the restart notice describes the write
 
 ### Requirement: Any storage failure latches and is shown app-wide
 With the storage guard on, any failed IndexedDB write of the open budget, from any source (bridge write, web-screen edit or sync), SHALL set a failed latch. The patched storage SHALL write nothing more, the page SHALL send a `storage-failed` event with `lastStoredFlushAt` (when the last write that stored was flushed), and Swift SHALL show a persistent app-level notice, whichever screen is showing, until the person reloads or, after a restart, taps OK.

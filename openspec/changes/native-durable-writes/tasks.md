@@ -53,7 +53,7 @@
 - [ ] 3.9 Failing tests first, in the PR that adds the restart notice and turns the guard on: OK on the notice calls `acknowledgeMayNotBeSaved()`, so "may not have been saved" does not last the whole session (Product Owner, PR #485); VoiceOver is told when pending writes finish storing, which can't be claimed while the guard is off (Designer, PR #485)
 - [ ] 3.10 The final group 3 PR sets `WriteStorageLineRollout.isOnInRelease` to true, together with the restart and failure notices and the guard switch-on, and checks the line in a Release build. Until then the line is unreachable in Release builds. `yarn check:native-swift` fails if the switch and the guard call disagree (Director, PR #485)
 - [ ] 3.7 **Gate:** do not turn the storage guard on in the iPhone app until sc-5247 (iPhone page-death reload) and the iPhone part of sc-5220 (reload notice) have merged. The PR that turns it on links both merged PRs (Product Owner, sc-5219 comment 5277; design D7a)
-- [ ] 3.8 Failing tests first for "The storage status line shows only saving states", "A restart with unconfirmed writes tells the person" and "Offline never claims saved while a write is pending": the two line states, "Saving…" held 0.6 s without delaying a reply, the line clearing at a restart, the notice with OK in place of the reload notice, and the offline text only with nothing pending (D4)
+- [ ] 3.8 Failing tests first for "The storage status line shows only saving states", "A restart with unconfirmed writes tells the person" and "The native Accounts offline status is constant": the two line states, "Saving…" held 0.6 s without delaying a reply, the line clearing at a restart, the notice with OK in place of the reload notice, and the native Accounts offline status staying "Offline" through writes without moving the rows (D4)
 
 ## 4. Review decisions from the engine PR (sc-5219)
 
@@ -64,3 +64,16 @@
 - [ ] 4.5 The closed-budget notice in the shells, with the Product Owner's wording in the copy table; the restart notices' approved wording goes there too
 - [x] 4.6 Failing tests first, then the status lines (`NativeAccountsViewController` and its Accounts sync state; `MobileSyncStatus.tsx`): "Waiting for this device to finish saving" on `storage-slow`, kept through held retries, and normal again when the wait clears
 - [x] 4.7 The patch as specified in D2 and D7: rejection from `trans.onabort` only; a `Set` of files; the per-database queue with the guard on or off; the 60 s deadline covering only the wait for pending writes, with a test that a read slower than the deadline still opens; `initialFullSync` completing under `storage-slow`
+
+## 5. Reconcile search field and the storage line (sc-5296)
+
+- [ ] 5.1 Failing UI or screenshot check first: on Reconcile step 2, with the line showing, the line and the search field's text are both fully readable and the field takes taps, in light, dark and at the largest text size ("The storage status line never covers what a person needs")
+
+## 6. Turning the storage line on in Release (sc-5297)
+
+- [ ] 6.1 The last row of a sheet scrolls clear of the line: show it on the Categorize sheet, and fix it if it can't
+- [ ] 6.2 A context menu opened from a row near the bottom has no item under the line: show it, and fix it if one is covered
+- [ ] 6.3 One UI test: with the line showing, open a sheet and close it, and the line is back above the tab bar ("The storage status line keeps its place")
+- [ ] 6.4 In a Release build with the switch on, repeat the placement screenshots for both storage line requirements, in light, dark and at the largest text size: tab bar, keyboard, sheets, context menu, alerts, the delete confirmation (which must hide the line) and Reconcile step 2. Include native Accounts offline: the status stays "Offline" and the rows do not move during a write. Check the Undo bar by comparing frames, not from a screenshot: its `maxY` is at or above the line's `minY`
+- [ ] 6.5 VoiceOver on a real iPhone: rows stay reachable, the line can be read, and the announcement is heard once and not during an alert. This needs Ken's device, so `ready-for-human` goes on only once the build exists
+- [ ] 6.6 Turn the line on in Release (`WriteStorageLineRollout.isOnInRelease`, PR #485's task 3.10) only after 5.1, 6.1 to 6.5 and the iPhone gate in task 3.7. The PR links them, and the UX Designer approves the Release placement. Turning the line on does not change the native Accounts offline status, which stays "Offline"

@@ -80,7 +80,7 @@ The web screen shows until loot-core has answered the first list read. If that r
 
 ## D7. Screens (iPhone)
 
-- **List:** large title "Accounts", with sync status as the subtitle ("Synced just now", "Offline — changes saved on this iPhone", "Sync failed — tap to retry" in warning text).
+- **List:** large title "Accounts", with sync status as the subtitle ("Synced just now", "Offline", "Sync failed — tap to retry" in warning text).
   - Rows: an "All accounts" row (web until sc-4387), On budget and Off budget sections with their totals, and a "Closed accounts" row with its count.
   - Each account row shows its name, a detail line (`clearingFor` note, else "Synced …" from `lastSync`, else "Updated …" from `lastTransactionDate`) and the signed balance; negatives in the negative colour.
   - Long-press offers Reconcile.

@@ -10,10 +10,10 @@
 #   all:   then 5 kills with the page bridge's barrier off
 #   rest:  the mid-write kill and those 5 only
 #   delay: with a page built FORK_TEST_COMMIT_DELAY_MS=300, the budget opened
-#          and stored first (out of the migration window), DELAY_KILLS (default
-#          5) kills with the barrier on, each read back (all must be kept; rows
-#          in <out-dir>/delayed-table.txt), then the control (barrier off, at
-#          least 1 must be lost): the pair that shows the barrier saves them
+#          and stored first (out of the migration window), the control (barrier
+#          off, 5 kills: at least 1 must be lost, else it stops), then
+#          DELAY_KILLS (default 5) kills with the barrier on, each read back (all
+#          must be kept; rows with each kill's latency in <out-dir>/delayed-table.txt)
 # Each part ends with a read: the test categories still there, and
 # PRAGMA integrity_check on the exported budget.
 app=$1 out=$2 phase=$3
@@ -247,6 +247,17 @@ if [ $phase = delay ]; then
   kill_after warm-up-2 prewrite || exit 1
   grep -q '"stored":true' $docs/result-warm-up-2.json || { echo "the warm-up was not stored in time: stopping"; exit 1; }
   held_read warm-up || exit 1
+  # The control first (barrier off): at least one write must be lost, or the kill
+  # lands too late for this run to show anything, and it stops
+  echo "--- control: barrier off, 300 ms commit delay"
+  for n in {1..5}; do kill_after control-$n control || exit 1; echo "control-$n | kill latency $latency ms" >> $out/control-latency.txt; done
+  held_read after-control || exit 1
+  kept=$(grep -c '^control-' $out/after-control-names.txt)
+  echo "control kept: $kept of 5 (integrity: $(sqlite3 $(ls $out/after-control-db/*.sqlite | head -1) 'PRAGMA integrity_check;'))"
+  if [ "$kept" = 5 ]; then
+    echo "the control lost nothing: the kill lands too late to show the barrier; stopping"
+    exit 1
+  fi
   echo "--- barrier on, 300 ms commit delay: $kills kills right after stored: true, each read back"
   # A write can still miss native-persist-wait-ms under load and be answered
   # stored: false; it makes no promise, so it is killed but not counted (up to 3x tries)
@@ -282,16 +293,6 @@ if [ $phase = delay ]; then
     exit 1
   fi
   echo "all $kills stored writes kept"
-  # The control last, so a budget it strands can't spoil the barrier result
-  echo "--- control: barrier off, 300 ms commit delay"
-  for n in {1..5}; do kill_after control-$n control || exit 1; echo "control-$n | kill latency $latency ms" >> $out/control-latency.txt; done
-  held_read after-control || exit 1
-  kept=$(grep -c '^control-' $out/after-control-names.txt)
-  echo "control kept: $kept of 5 (integrity: $(sqlite3 $(ls $out/after-control-db/*.sqlite | head -1) 'PRAGMA integrity_check;'))"
-  if [ "$kept" = 5 ]; then
-    echo "the control lost nothing: the delay didn't bite, so the barrier result is inconclusive"
-    exit 1
-  fi
   exit 0
 fi
 if [ $phase != rest ]; then

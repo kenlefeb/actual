@@ -337,6 +337,18 @@ final class BudgetRefreshTests: XCTestCase {
         XCTAssertNil(model.refreshError)
     }
 
+    // sc-5219: the sync retries by itself and shows no alert
+    func testAHeldPullIsNotAFailure() async throws {
+        let json = try fixtureJSON("budget-month-envelope")
+        let page = Page(month: json)
+        page.syncReply = { #"{"ok":false,"reason":"storage-slow"}"# }
+        let model = model(page)
+        await model.load()
+        await model.refresh()
+        XCTAssertNil(model.refreshError)
+        XCTAssertEqual(model.state, .loaded(try month(json)))
+    }
+
     func testATrackingBudgetRefreshesTheSameWay() async throws {
         let json = try fixtureJSON("budget-month-tracking")
         let page = Page(month: json)

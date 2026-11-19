@@ -10,7 +10,9 @@ export type SyncState =
   | 'offline'
   | 'local'
   | 'disabled'
-  | 'error';
+  | 'error'
+  // Fork (sc-5219): held back until this device finishes saving; retries by itself
+  | 'waiting';
 
 type UseSyncStatusOpts = {
   syncingEndDelayMs?: number;
@@ -36,7 +38,8 @@ export function useSyncStatus({
           endTimeout = null;
         }
         setIsSyncing(true);
-        setSyncState(null);
+        // A held sync's retry keeps saying it is waiting
+        setSyncState(state => (state === 'waiting' ? state : null));
       } else if (syncingEndDelayMs > 0) {
         endTimeout = setTimeout(() => {
           setIsSyncing(false);
@@ -47,7 +50,9 @@ export function useSyncStatus({
       }
 
       if (event.type === 'error') {
-        if (event.subtype === 'network') {
+        if (event.subtype === 'storage-slow') {
+          setSyncState('waiting');
+        } else if (event.subtype === 'network') {
           setSyncState('offline');
         } else if (!cloudFileId) {
           setSyncState('local');

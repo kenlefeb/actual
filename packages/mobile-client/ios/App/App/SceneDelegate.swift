@@ -15,9 +15,11 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         #if DEBUG
         // Test-only (sc-5177): the UI tests launch the Accounts screen on fixtures
         if UITestAccounts.isOn {
-            window.rootViewController = UITestAccounts.makeRoot()
+            let root = UITestAccounts.makeRoot()
+            window.rootViewController = root
             self.window = window
             window.makeKeyAndVisible()
+            UITestAccounts.showStorageLine(over: root, in: windowScene)
             return
         }
         #endif

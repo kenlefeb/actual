@@ -59,6 +59,13 @@ launch() {
 waitfor() {
   for i in {1..$(( (limit + 20) * 10 ))}; do
     [ -f "$1" ] && return 0
+    # While a kill step waits, name its target, so the kill needn't walk ps after the answer
+    # (looked up again every 2 s, so a page process that replaced it is found too;
+    # not after a kill, when the app's own reload starts a new one)
+    if [ -n "$want_target" ] && { [ -z "$target" ] || [ $((i % 20)) -eq 0 ]; }; then
+      t=$(zsh $here/simkill.sh $sim --find 2>/dev/null)
+      [[ "$t" =~ '^[0-9]+( [0-9]+)+$' ]] && target=$t
+    fi
     [ -f "$docs/error.json" ] && { echo "app error: $(cat $docs/error.json)"; return 1; }
     # A page alert() holds the page's JavaScript until someone taps it: nothing more will come
     grep -q "page alert shown" $docs/progress.json 2>/dev/null && { echo "page alert: $(cat $docs/progress.json)"; alerted=1; return 1; }
@@ -105,6 +112,7 @@ diagnose() { # label
 kill_after() { # name mode
   rm -f $docs/result-$1.json
   launch "$2:$1"
+  target="" want_target=1
   if ! waitfor $docs/result-$1.json; then
     diagnose $1-a
     if [ $alerted = 1 ]; then
@@ -114,6 +122,7 @@ kill_after() { # name mode
     fi
     echo "--- repeating $1 once"
     launch "$2:$1"
+    target=""
     if ! waitfor $docs/result-$1.json; then
       diagnose $1-b
       echo "$1 stalled twice: stopping, keeping the data"
@@ -121,11 +130,17 @@ kill_after() { # name mode
       return 1
     fi
   fi
-  echo "$1 answer: $(cat $docs/result-$1.json)"
-  zsh $here/simkill.sh $sim
+  want_target=""
+  # The target was found while waiting; --fast checks it again from the live table
+  if [ -z "$target" ] || ! zsh $here/simkill.sh $sim --fast ${=target}; then
+    echo "$1: no checked target found while waiting; the full search"
+    zsh $here/simkill.sh $sim
+  fi
   # How long after the answer was written the kill landed (sc-5404: a control's
   # commit delay must be longer than this for the kill to land inside it)
-  echo "$1 kill latency: $(perl -MTime::HiRes=time,stat -e 'printf "%d", (time - (stat($ARGV[0]))[9]) * 1000' $docs/result-$1.json) ms after the answer"
+  latency=$(perl -MTime::HiRes=time,stat -e 'printf "%d", (time - (stat($ARGV[0]))[9]) * 1000' $docs/result-$1.json)
+  echo "$1 answer: $(cat $docs/result-$1.json)"
+  echo "$1 kill latency: $latency ms after the answer"
   pause 4
 }
 
@@ -235,7 +250,7 @@ if [ $phase = delay ]; then
   echo "--- barrier on, 300 ms commit delay: $kills kills right after stored: true, each read back"
   # A write can still miss native-persist-wait-ms under load and be answered
   # stored: false; it makes no promise, so it is killed but not counted (up to 3x tries)
-  echo "try | answer | write took | load | counted | this write kept | all stored writes kept | integrity_check" > $out/delayed-table.txt
+  echo "try | answer | write took | load | kill latency | counted | this write kept | all stored writes kept | integrity_check" > $out/delayed-table.txt
   stored=() a=0
   while [ ${#stored} -lt $kills ] && [ $a -lt $((kills * 3)) ]; do
     a=$((a + 1))
@@ -243,7 +258,7 @@ if [ $phase = delay ]; then
     # delay the reopen's commits put the first past the 2 s wait (series-1200:
     # first 2.0-2.3 s, later 1.5-1.9 s; without the delay 0.1-0.4 s at load 650)
     kill_after kill-delayed-$a prewrite || exit 1
-    answer="$(cat $docs/result-kill-delayed-$a.json) | $(grep -o 'answered in [0-9]* ms' $docs/progress.log | tail -1 | cut -d' ' -f3-) | $(uptime | sed 's/.*averages: //' | cut -d' ' -f1)"
+    answer="$(cat $docs/result-kill-delayed-$a.json) | $(grep -o 'answered in [0-9]* ms' $docs/progress.log | tail -1 | cut -d' ' -f3-) | $(uptime | sed 's/.*averages: //' | cut -d' ' -f1) | $latency ms"
     if ! grep -q '"stored":true' $docs/result-kill-delayed-$a.json; then
       echo "$a | $answer | no (not stored in time) | - | - | -" | tee -a $out/delayed-table.txt
       continue
@@ -269,7 +284,7 @@ if [ $phase = delay ]; then
   echo "all $kills stored writes kept"
   # The control last, so a budget it strands can't spoil the barrier result
   echo "--- control: barrier off, 300 ms commit delay"
-  for n in {1..5}; do kill_after control-$n control || exit 1; done
+  for n in {1..5}; do kill_after control-$n control || exit 1; echo "control-$n | kill latency $latency ms" >> $out/control-latency.txt; done
   held_read after-control || exit 1
   kept=$(grep -c '^control-' $out/after-control-names.txt)
   echo "control kept: $kept of 5 (integrity: $(sqlite3 $(ls $out/after-control-db/*.sqlite | head -1) 'PRAGMA integrity_check;'))"

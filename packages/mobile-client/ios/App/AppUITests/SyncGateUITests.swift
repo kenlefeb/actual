@@ -49,10 +49,13 @@ final class SyncGateUITests: XCTestCase {
         secret.typeText(password)
         app.buttons["Sign in"].firstMatch.tap()
 
-        // A new budget on that server
+        // A new budget on that server: with no files yet the welcome screen offers "Start budgeting"
+        let start = app.buttons["Start budgeting"].firstMatch
         let create = anything("Create new file")
-        XCTAssertTrue(create.waitForExistence(timeout: 60), "no budget list")
-        create.tap()
+        let deadline = Date().addingTimeInterval(60)
+        while !start.exists && !create.exists && Date() < deadline { sleep(1) }
+        XCTAssertTrue(start.exists || create.exists, "neither Start budgeting nor Create new file")
+        (start.exists ? start : create).tap()
         let budgetTab = app.tabBars.buttons["Budget"]
         XCTAssertTrue(budgetTab.waitForExistence(timeout: 120), "the new budget did not open")
         evidence("budget open")

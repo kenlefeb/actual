@@ -198,9 +198,17 @@ if [ $phase = delay ]; then
   # Create and migrate the budget, then wait until all of it is stored: every
   # migration is its own commit, so with the delay they reach storage well
   # after the budget opens, and a kill before then lands in the migration window
+  # (native/persisted answers at once, so the first write's answer is still
+  # stored: false). Wait, then a second write: commits are stored in order, so
+  # its stored: true means every migration before it is stored too
   echo "--- warm-up: open the test budget and wait until it is stored"
-  kill_after warm-up write || exit 1
-  grep -q '"stored":true' $docs/result-warm-up.json || { echo "the warm-up was not answered stored: stopping"; exit 1; }
+  rm -f $docs/result-warm-up.json
+  launch write:warm-up
+  waitfor $docs/result-warm-up.json || { diagnose warm-up; keep=1; exit 1; }
+  echo "warm-up answer: $(cat $docs/result-warm-up.json); waiting ${WARMUP_SECONDS:-90} s for storage"
+  pause ${WARMUP_SECONDS:-90}
+  kill_after warm-up-2 write || exit 1
+  grep -q '"stored":true' $docs/result-warm-up-2.json || { echo "the warm-up was not stored in time: stopping"; exit 1; }
   held_read warm-up || exit 1
   echo "--- barrier on, 300 ms commit delay: $kills kills right after stored: true, each read back"
   echo "kill | answer | kept after the kill | all earlier kept | integrity_check" > $out/delayed-table.txt

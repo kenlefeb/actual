@@ -157,6 +157,18 @@ enum UITestKillWrites {
         ]);
         """
 
+    // sc-5404: open means the database answers, not just the prefs: load-budget sets
+    // the prefs (and their id) before it awaits db.openDatabase, so in between the id
+    // shows while a query hits a null handle ("db.prepare")
+    private static let openCheck = bounded + """
+        try {
+          const p = await within(window.$send('load-prefs'), 2000);
+          if (p?.id !== id) return p?.id ?? 'none';
+          await within(window.$send('get-categories'), 2000);
+          return id;
+        } catch (e) { return 'error: ' + e.message; }
+        """
+
     private static func openTestBudget(_ page: PageCall) async throws {
         log("waiting for the page's bridge")
         try await waitFor { (try? await page.run("return typeof window.$send")) as? String == "function" }
@@ -174,7 +186,7 @@ enum UITestKillWrites {
             let start = Date()
             while Date().timeIntervalSince(start) < 60 {
                 let open = try? await page.run(
-                    bounded + "try { return (await within(window.$send('load-prefs'), 2000))?.id ?? 'none'; } catch (e) { return 'error: ' + e.message; }")
+                    openCheck, arguments: ["id": id])
                 if open as? String == id {
                     log("the app reopened the budget by itself after \(Int(Date().timeIntervalSince(start))) s")
                     return
@@ -205,11 +217,29 @@ enum UITestKillWrites {
             await window.$send('category-create', { name, groupId: group.id });
             return await window.__actualNativeBridge.call('native/persisted');
             """
-        if mode.hasPrefix("write:") || mode.hasPrefix("control:") {
+        if mode.hasPrefix("write:") || mode.hasPrefix("control:") || mode.hasPrefix("prewrite:") {
             let name = String(mode.split(separator: ":", maxSplits: 1)[1])
             if mode.hasPrefix("control:") { _ = try await page.run("window.__forkTestBarrierOff = true; return 'ok';") }
+            // sc-5404: with the test's 300 ms commit delay the reopen's own commits put the
+            // first write past the 2 s wait, so `prewrite:` makes an untimed write first
+            if mode.hasPrefix("prewrite:") { _ = try await page.run(createAndAsk, arguments: ["name": name + "-pre"]) }
+            let start = Date()
             let answer = try await page.run(createAndAsk, arguments: ["name": name]) as? String ?? ""
+            log("answered in \(Int(Date().timeIntervalSince(start) * 1000)) ms")
             write("result-\(name)", answer)
+        } else if mode.hasPrefix("writes:") {
+            // sc-5404: several barrier-on writes in one launch, no kill between,
+            // each answer with how long it took (`writes:<count>`)
+            let count = Int(mode.dropFirst("writes:".count)) ?? 5
+            var rows: [String] = []
+            // Unique per launch: a category name can't repeat in its group
+            let launch = UUID().uuidString.prefix(6)
+            for n in 1...count {
+                let start = Date()
+                let answer = try await page.run(createAndAsk, arguments: ["name": "series-\(launch)-\(n)"]) as? String ?? ""
+                rows.append("\(n) | \(Int(Date().timeIntervalSince(start) * 1000)) ms | \(answer)")
+            }
+            write("writes", rows.joined(separator: "\n"))
         } else if mode == "bulk" {
             write("bulk-started", "")
             _ = try await page.run(
@@ -259,7 +289,7 @@ enum UITestKillWrites {
         var bySelf = -1
         while bridge >= 0, seconds() < Int(limit) {
             let open = try? await page.run(
-                bounded + "try { return (await within(window.$send('load-prefs'), 2000))?.id ?? 'none'; } catch (e) { return 'error: ' + e.message; }")
+                openCheck, arguments: ["id": id])
             if open as? String == id {
                 bySelf = seconds()
                 break

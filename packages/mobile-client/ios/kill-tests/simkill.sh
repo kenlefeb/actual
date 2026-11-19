@@ -11,6 +11,29 @@ if [ -z "$udid" ] || [ "$udid" != "$mine" ]; then
   echo "refused: $udid is not the simulator this run created (${mine:-none})"
   exit 2
 fi
+# sc-5404: `--fast <root>` kills this simulator's page processes right after an
+# answer: it checks from the live process table that <root> is this simulator's
+# launchd_sim, then takes the WebContent processes whose parent is <root> now
+# (pgrep -P) and checks each again before the kill; it never kills a stale pid
+if [ "$2" = "--fast" ]; then
+  root=$3
+  rc=$(ps -o command= -p $root 2>/dev/null)
+  [[ "$rc" == *launchd_sim* && "$rc" == *$udid* ]] || { echo "refused: $root is no longer the launchd_sim of $udid"; exit 6; }
+  set -- $(pgrep -P $root -f com.apple.WebKit.WebContent)
+  [ $# -gt 0 ] || { echo "no WebContent process under launchd_sim $root"; exit 4; }
+  for t in "$@"; do
+    [[ "$(ps -o command= -p $t 2>/dev/null)" == *com.apple.WebKit.WebContent* ]] || { echo "refused: $t is no longer a WebContent process"; exit 7; }
+    p=$t chain=$t
+    while [ "$p" != "$root" ] && [ "$p" != 1 ] && [ -n "$p" ]; do
+      p=$(ps -o ppid= -p $p 2>/dev/null | tr -d ' ')
+      chain="$chain <- $p"
+    done
+    [ "$p" = "$root" ] || { echo "refused: $t is not under launchd_sim $root"; exit 5; }
+  done
+  kill -9 "$@"
+  echo "target pids $*, under launchd_sim $root of $udid"
+  exit 0
+fi
 table=$(ps -axo pid=,ppid=,command=)
 root=$(echo "$table" | awk -v u="$udid" '$3 ~ /launchd_sim$/ && index($0, u) { print $1 }' | head -1)
 if [ -z "$root" ]; then

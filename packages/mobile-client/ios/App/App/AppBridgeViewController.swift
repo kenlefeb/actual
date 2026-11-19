@@ -180,6 +180,7 @@ class AppBridgeViewController: CAPBridgeViewController {
         #if DEBUG
         if let webView, let pageProcessDelegate, let serverURL = bridge?.config.serverURL {
             UITestPageRecovery.startIfRequested(webView: webView, delegate: pageProcessDelegate, serverURL: serverURL)
+            UITestKillWrites.startIfRequested(webView: webView, serverURL: serverURL)
         }
         if let webView, let serverURL = bridge?.config.serverURL {
             UITestPageDialogs.startIfRequested(webView: webView, serverURL: serverURL)

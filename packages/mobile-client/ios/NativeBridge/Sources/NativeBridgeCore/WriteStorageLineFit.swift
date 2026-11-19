@@ -16,6 +16,13 @@ public enum WriteStorageLineFit: Equatable {
         return shortHeight <= available / 3 ? .short : .hidden
     }
 
+    // Story 5383, the Designer's rule: the line hides while a context menu,
+    // alert or confirmation is presented, and stays over sheets and full-screen
+    // screens. A context menu is presented as neither a sheet nor full screen.
+    public static func stepsAside(isAlert: Bool, isSheet: Bool, isFullScreen: Bool) -> Bool {
+        isAlert || (!isSheet && !isFullScreen)
+    }
+
     // "Saving…" is already short
     public static func shortForm(of message: String) -> String {
         message == WriteStorageStatus.notYetStoredMessage ? stillSavingShort : message

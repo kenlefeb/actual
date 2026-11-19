@@ -72,12 +72,15 @@
 
 - [x] 5.1 Failing UI or screenshot check first: on Reconcile step 2, with the line showing, the line and the search field's text are both fully readable and the field takes taps, in light, dark and at the largest text size ("The storage status line never covers what a person needs")
 
-## 6. Turning the storage line on in Release (sc-5297)
+## 6. Storage line placement (sc-5383)
 
 - [ ] 6.1 The last row of a sheet scrolls clear of the line: show it on the Categorize sheet, and fix it if it can't
 - [ ] 6.2 A context menu opened from a row near the bottom has no item under the line: show it, and fix it if one is covered
 - [ ] 6.3 One UI test: with the line showing, open a sheet and close it, and the line is back above the tab bar ("The storage status line keeps its place")
 - [ ] 6.4 In a Release build with the switch on, repeat the placement screenshots for both storage line requirements, in light, dark and at the largest text size: tab bar, keyboard, sheets, context menu, alerts, the delete confirmation (which must hide the line) and Reconcile step 2. Include native Accounts offline: the status stays "Offline" and the rows do not move during a write. Check the Undo bar by comparing frames, not from a screenshot: its `maxY` is at or above the line's `minY`
+
+## 6. Turning the storage line on in Release, continued (sc-5297)
+
 - [ ] 6.5 VoiceOver on a real iPhone: rows stay reachable, the line can be read, and the announcement is heard once and not during an alert. This needs Ken's device, so `ready-for-human` goes on only once the build exists
 - [ ] 6.6 Turn the line on in Release (`WriteStorageLineRollout.isOnInRelease`, PR #485's task 3.10) only after 5.1, 6.1 to 6.5 and the iPhone gate in task 3.7. The PR links them, and the UX Designer approves the Release placement. Turning the line on does not change the native Accounts offline status, which stays "Offline"
 - [ ] 6.7 "Saved to this device." announced once when the not-stored state clears, only if that state was announced (line full, short or hidden), never during an alert; failing tests first ("The storage status line's VoiceOver announcements")

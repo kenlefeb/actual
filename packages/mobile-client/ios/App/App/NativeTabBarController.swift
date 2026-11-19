@@ -479,10 +479,18 @@ final class WriteStorageLine {
         screen.follow()
     }
 
+    // An alert, a confirmation or a context menu. A context menu from a low row
+    // can reach the line's place at large text sizes (story 5383).
     private var isConfirmationUp: Bool {
         var screen = scene.windows.first(where: \.isKeyWindow)?.rootViewController
         while let presented = screen?.presentedViewController {
-            if presented is UIAlertController { return true }
+            let isFullScreen = [.fullScreen, .overFullScreen].contains(presented.modalPresentationStyle)
+            if WriteStorageLineFit.stepsAside(
+                isAlert: presented is UIAlertController, isSheet: presented.sheetPresentationController != nil,
+                isFullScreen: isFullScreen)
+            {
+                return true
+            }
             screen = presented
         }
         return false
@@ -508,7 +516,6 @@ private final class WriteStorageLineController: UIViewController {
     private let pill = UIView()
     private let label = UILabel()
     private var aboveBar: NSLayoutConstraint?
-    private var atTop: NSLayoutConstraint?
     private var reserved: CGFloat = 0
 
     override func viewDidLoad() {
@@ -535,7 +542,6 @@ private final class WriteStorageLineController: UIViewController {
         resting.priority = .defaultLow
         let bar = pill.bottomAnchor.constraint(lessThanOrEqualTo: view.bottomAnchor)
         aboveBar = bar
-        atTop = pill.topAnchor.constraint(equalTo: safe.topAnchor, constant: 8)
         NSLayoutConstraint.activate([
             label.topAnchor.constraint(equalTo: pill.topAnchor, constant: 6),
             label.bottomAnchor.constraint(equalTo: pill.bottomAnchor, constant: -6),
@@ -602,9 +608,16 @@ private final class WriteStorageLineController: UIViewController {
                 return
             }
         }
+        // Story 5383, the Designer's rule: with the keyboard up the line's only
+        // place is directly above it; if the form chosen there would cover the
+        // field being edited, the line hides until the keyboard goes
         let field = (UIResponder.current as? UIView).map { $0.convert($0.bounds, to: view) }
-        atTop?.isActive = keyboardIsUp
-            && WriteStorageLinePlacement.coversField(field, lineHeight: pill.bounds.height, keyboardTop: keyboardTop)
+        if keyboardIsUp, WriteStorageLinePlacement.coversField(field, lineHeight: pill.bounds.height, keyboardTop: keyboardTop) {
+            pill.isHidden = true
+            if reserved != 0 { onHeight(0, 0) }
+            reserved = 0
+            return
+        }
         // sc-5296: iOS can put a sheet's search field at the bottom, where it
         // ignores the room the line reserves, so the line sits above it instead
         if !keyboardIsUp, let fieldTop = searchFieldTop(under: pill.frame.minY - 8) {
@@ -614,7 +627,7 @@ private final class WriteStorageLineController: UIViewController {
         // The lift counts as room too, so the controls that do follow the safe area stay clear of the line
         reserved = pill.bounds.height + 8 + ((aboveBar.map { -$0.constant } ?? 0) + resting)
         let safeBottom = view.safeAreaLayoutGuide.layoutFrame.maxY
-        onHeight(reserved, keyboardIsUp && atTop?.isActive != true ? safeBottom - keyboardTop : 0)
+        onHeight(reserved, keyboardIsUp ? safeBottom - keyboardTop : 0)
     }
 
     // Room between the line and a search field below it, beyond the field's own rounded background

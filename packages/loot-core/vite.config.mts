@@ -74,6 +74,13 @@ export default defineConfig(({ mode }) => {
       __FORK_TEST_HOOKS__: JSON.stringify(
         process.env.FORK_TEST_HOOKS === 'true',
       ),
+      // The kill tests' control (sc-5219 task 3.4): a commit delay this worker
+      // uses when nothing set one at run time. 0 unless a test build asks
+      __FORK_TEST_COMMIT_DELAY_MS__: JSON.stringify(
+        process.env.FORK_TEST_HOOKS === 'true'
+          ? Number(process.env.FORK_TEST_COMMIT_DELAY_MS ?? 0)
+          : 0,
+      ),
     },
     plugins: [
       peggyLoader(),

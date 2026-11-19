@@ -73,7 +73,8 @@ final class ReleaseSmokeUITests: XCTestCase {
         openReconcile()
         // TEST_RUNNER_RELEASE_SMOKE_ARM_S: when the page arms itself, so the write comes after
         let armed = Double(ProcessInfo.processInfo.environment["RELEASE_SMOKE_ARM_S"] ?? "0") ?? 0
-        let wait = armed + 3 - Date().timeIntervalSince(launched)
+        // Counted from the worker's start, which comes some seconds after launch
+        let wait = armed + 30 - Date().timeIntervalSince(launched)
         if wait > 0 { Thread.sleep(forTimeInterval: wait) }
         if useCleared.waitForExistence(timeout: 30) { useCleared.tap() }
         XCTAssertTrue(strip.waitForExistence(timeout: 150), "no failure notice in a Release build")

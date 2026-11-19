@@ -45,6 +45,18 @@ class AppBridgeViewController: CAPBridgeViewController {
     private var benchmarkTrigger: NativeBridgeBenchmarkTrigger?
     // The web view holds its navigation delegate weakly
     private var pageProcessDelegate: PageProcessDelegate?
+    // sc-5399: the page's alert, confirm and prompt (the web view holds its UI delegate weakly too)
+    private var pageDialogDelegate: PageDialogDelegate?
+    private let dialogPresenter = PageDialogPresenter()
+    private lazy var pageDialogs: PageDialogs = {
+        var timeout = PageDialogs.answerTimeout
+        #if DEBUG
+        timeout = UITestPageDialogs.timeout ?? timeout
+        #endif
+        return PageDialogs(answerTimeout: timeout) { [weak self] request, answer in
+            self?.dialogPresenter.present(request, answer: answer)
+        }
+    }()
     private weak var reloadAlert: UIAlertController?
     private var activeObserver: NSObjectProtocol?
     private var inactiveObserver: NSObjectProtocol?
@@ -103,6 +115,24 @@ class AppBridgeViewController: CAPBridgeViewController {
             webView.navigationDelegate = delegate
             pageProcessDelegate = delegate
         }
+        // Capacitor's own handler presents on this controller, which has no window
+        // while a native screen shows; its other UI calls are passed on unchanged
+        if let webView, let handler = webView.uiDelegate as? NSObject & WKUIDelegate {
+            let serverURL = bridge?.config.serverURL
+            let delegate = PageDialogDelegate(
+                forwardingTo: handler,
+                isAppPage: { frame in
+                    let origin = frame.securityOrigin
+                    return PageOriginGuard.accepts(
+                        isMainFrame: frame.isMainFrame, scheme: origin.protocol, host: origin.host, port: origin.port, serverURL: serverURL)
+                },
+                onDialog: { [weak self] request, answer in
+                    guard let self else { return answer(request.kind.safeAnswer) }
+                    self.pageDialogs.show(request, completion: answer)
+                })
+            webView.uiDelegate = delegate
+            pageDialogDelegate = delegate
+        }
         #if DEBUG
         NativeBridgeBenchmarkHarness.startIfRequested(plugin: nativeBridge)
         #endif
@@ -143,6 +173,9 @@ class AppBridgeViewController: CAPBridgeViewController {
         #if DEBUG
         if let webView, let pageProcessDelegate, let serverURL = bridge?.config.serverURL {
             UITestPageRecovery.startIfRequested(webView: webView, delegate: pageProcessDelegate, serverURL: serverURL)
+        }
+        if let webView, let serverURL = bridge?.config.serverURL {
+            UITestPageDialogs.startIfRequested(webView: webView, serverURL: serverURL)
         }
         #endif
     }

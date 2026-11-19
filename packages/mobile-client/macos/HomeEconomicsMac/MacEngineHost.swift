@@ -55,7 +55,31 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
         super.init()
         configuration.userContentController.add(self, name: "actualNativeBridge")
         webView.navigationDelegate = self
-        webView.uiDelegate = self
+        // sc-5399: the page's alert, confirm and prompt, then this host's own UI calls
+        let dialogs = PageDialogDelegate(
+            forwardingTo: self,
+            isAppPage: { frame in
+                let origin = frame.securityOrigin
+                return Self.acceptsMessage(isMainFrame: frame.isMainFrame, scheme: origin.protocol, host: origin.host, port: origin.port)
+            },
+            onDialog: { [weak self] request, answer in
+                MainActor.assumeIsolated {
+                    guard let self else { return answer(request.kind.safeAnswer) }
+                    self.pageDialogs.show(request, completion: answer)
+                }
+            })
+        webView.uiDelegate = dialogs
+        dialogDelegate = dialogs
+    }
+
+    // sc-5399: without these WebKit drops a page's alert and answers its confirm
+    // and prompt with nothing. The app delegate shows them on the window;
+    // until it can, PageDialogs tries again and then answers Cancel.
+    var presentDialog: PageDialogs.Present?
+    // The web view holds its UI delegate weakly
+    private var dialogDelegate: PageDialogDelegate?
+    private lazy var pageDialogs = PageDialogs { [weak self] request, answer in
+        self?.presentDialog?(request, answer)
     }
 
     #if DEBUG

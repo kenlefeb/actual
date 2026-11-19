@@ -216,6 +216,17 @@ Fork CI, after the production web build, searches the built page and worker bund
   - **Control:** the barrier hook off and a 300 ms commit delay. It must lose at least one, or the run is inconclusive and fails (Architect, non-blocking 7). Its loss count is the "before" the Product Owner asked for.
 - **iPhone simulator kill test:** the same loop in the iOS test target, killing the simulator's WebContent process by pid (`_webProcessIdentifier` behind `responds(to:)`, in the test-only target).
 
+### D13. Page dialogs (sc-5399)
+
+The kill tests (sc-5368) found that a failed budget open calls `alert()`, and that holds all of the page's JavaScript until someone taps OK. On iPhone, Capacitor presents it on the bridge's controller, which has no window while a native screen shows, so it never appears and the bridge waits for ever. On the Mac there is no handler, so WebKit drops it and the page goes on with nothing shown.
+
+- **One delegate in front, as for navigation.** `PageDialogDelegate` (NativeBridgeCore) takes `alert`, `confirm` and `prompt` and passes every other UI-delegate call to the handler behind it: Capacitor's on iPhone (window opening and media permissions stay as they are), the host's own `createWebViewWith` on the Mac.
+- **Always answered, once.** `PageDialogs` answers each dialog exactly once. Not shown: tried every second, five times, then Cancel. Shown: Cancel after 60 seconds, and the dialog leaves the screen. Cancel is the safe answer: an alert closed, `confirm` false, `prompt` null.
+- **Above everything.** iPhone: a window of its own at `.alert + 1` on the active scene, so it lies over the notice strip (`.normal + 1`) and the storage line (`.alert`), and it is key, so the storage line hides as for any confirmation. Mac: a sheet on the window; while another sheet shows, it waits like a hidden window.
+- **Whose dialog.** The app's own page shows its message only. Any other page (a sign-in provider) is headed with its host, as a browser names the site, so it can't pass for the app.
+- **Copy.** The buttons are "OK" and "Cancel". The shell adds no other words.
+- **Tests.** Core unit tests for the answer rules; Mac tests on a real page for each dialog; iPhone UI tests with a native screen over the page, OK and Cancel, a typed prompt, and a confirm nobody answers.
+
 ## Risks / Trade-offs
 
 - [Patched third-party code] → Small, version-pinned, visible in `.yarn/patches`, guarded by a test, reviewed by Security.

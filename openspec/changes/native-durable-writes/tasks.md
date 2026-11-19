@@ -89,3 +89,11 @@ The stored answer only reaches screens once the storage guard is on; with the gu
 
 - [x] 7.1 Failing tests first for "Screens say "Saved" only once the write is stored" and "Budget and Reconcile wait for storage before "Saved"": Paychecks (`Saved "%@".`, `Saved %@. Undo is available.`), Budget's refresh-failure wording, the Reconcile alert (stored at once shows it; stored after step 2 opens shows nothing), Undo offered at once and labelled "Undo", and no "Saved" for a write that never stores
 - [x] 7.2 Change Paychecks and Budget to show those messages only on `stored: true` or the `stored` event, and Reconcile to show its alert only if stored before step 2 opens (never late; UX Designer, PR #496), with no new copy
+
+## 8. Page dialogs (sc-5399)
+
+Lands before the iPhone guard flip (task 3.10), which links it (design D13).
+
+- [x] 8.1 Failing tests first for "Page dialogs are handled by the shell": the answer rules (core), each dialog on a real page (Mac), and on iPhone an alert over a native screen, confirm OK and Cancel, a typed prompt, and a confirm nobody answers
+- [x] 8.2 `PageDialogs` and `PageDialogDelegate` in NativeBridgeCore; the iPhone shows dialogs in its own window above the strip and the storage line, the Mac as a sheet
+- [ ] 8.3 Screenshots for the Designer (light, dark, largest text; over a native screen, with the strip and the storage line showing) in `~/Library/Developer/HomeEconomicsSpike/page-dialogs-5399/`, and Security's review of the forwarding and the other-page title

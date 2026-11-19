@@ -527,3 +527,27 @@ A write the client returned with `stored: true` SHALL be there after the page's 
 - **GIVEN** the barrier off and a test-only commit delay of 300 ms
 - **WHEN** the same loop runs
 - **THEN** at least one category is lost, and the database still passes the integrity check
+
+### Requirement: Page dialogs are handled by the shell
+A page `alert()`, `confirm()` or `prompt()` holds all of the page's JavaScript, and with it every bridge call, until it is answered. The iPhone and Mac shells SHALL show each one above every native screen, the notice strip and the storage line, and SHALL always answer the page: with the person's answer, or with Cancel (an alert closed, `confirm` false, `prompt` null) when the dialog can't show within five tries a second apart or nobody answers it within 60 seconds. A dialog from the app's own page SHALL show the page's message only; a dialog from any other page SHALL be headed with that page's host. The buttons SHALL read OK and Cancel.
+
+#### Scenario: An alert over a native screen
+- **GIVEN** a native screen covers the page
+- **WHEN** the page calls `alert()`
+- **THEN** the alert shows above the native screen, and after OK the page goes on and the bridge answers
+
+#### Scenario: Confirm and prompt
+- **WHEN** the page calls `confirm()` or `prompt()` and the person answers
+- **THEN** the page gets `true` for OK and `false` for Cancel, or the typed text and `null` for Cancel
+
+#### Scenario: Nobody answers
+- **WHEN** a dialog shows and nobody answers it within 60 seconds
+- **THEN** it leaves the screen and the page gets Cancel's answer
+
+#### Scenario: No window to show it
+- **WHEN** a dialog can't show (the app isn't active, or the Mac window is hidden or has a sheet)
+- **THEN** the shell tries again every second, and after five tries the page gets Cancel's answer
+
+#### Scenario: The Mac no longer drops dialogs
+- **WHEN** the page calls `alert()`, `confirm()` or `prompt()` in the Mac app
+- **THEN** it shows as a sheet on the window, where WebKit used to drop it and the page went on with nothing shown

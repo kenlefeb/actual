@@ -9,6 +9,9 @@ import XCTest
 //   slow             a page built with a 3,000 ms commit delay
 // The failure write is a real one: a budgeted amount typed on the native Budget
 // tab, which the guard evidence showed reaches storage; the slow check uses Reconcile.
+// A Release build refuses a hooks page (fork/scripts/check-release-page.sh) unless the
+// run passes the build setting FORK_RELEASE_SMOKE_TEST_PAGE=YES, honoured only for a
+// simulator build that isn't an archive.
 // TEST_RUNNER_RELEASE_SMOKE_RUN names the screenshot folder; TEST_RUNNER_RELEASE_SMOKE_LOOK
 // is "light", "dark" or "ax5".
 final class ReleaseSmokeUITests: XCTestCase {

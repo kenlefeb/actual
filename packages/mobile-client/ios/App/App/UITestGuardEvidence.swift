@@ -31,7 +31,11 @@ enum UITestGuardEvidence {
         endPageProcess: @escaping () -> Void
     ) {
         guard let mode else { return }
-        try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        // Ours, and the kill tests' folder, where the test budget's id is kept
+        for folder in ["guard", "kill"] {
+            try? FileManager.default.createDirectory(at: documents.appendingPathComponent(folder), withIntermediateDirectories: true)
+        }
         try? Data().write(to: file)
         let page = PageCall(runner: webView, serverURL: serverURL)
         watcher = storage.shownMessage().sink { note("storage status shows: \($0 ?? "nothing")") }
@@ -107,23 +111,27 @@ enum UITestGuardEvidence {
         show(notes.suffix(6).joined(separator: "\n"))
     }
 
-    // Small, at the bottom, clear of the strip and the dialogs
+    // Small, at the bottom, clear of the strip and the dialogs, on whatever is
+    // on top of the main window (where the UI test can find it)
     private static func show(_ text: String) {
         let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
-        guard let window = scene?.windows.first(where: { $0.windowLevel == .normal }) else { return }
-        if label == nil {
+        guard var top = scene?.windows.first(where: { $0.windowLevel == .normal })?.rootViewController else { return }
+        while let next = top.presentedViewController { top = next }
+        if label == nil || label?.superview !== top.view {
+            label?.removeFromSuperview()
             let made = UILabel()
             made.numberOfLines = 0
             made.font = .monospacedSystemFont(ofSize: 9, weight: .regular)
             made.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.85)
             made.accessibilityIdentifier = "uiTestGuard"
-            window.addSubview(made)
+            top.view.addSubview(made)
             label = made
         }
-        label?.text = text
-        label?.frame = CGRect(x: 4, y: window.bounds.height - 200, width: window.bounds.width - 8, height: 110)
-        label?.accessibilityLabel = notes.joined(separator: "\n")
-        window.bringSubviewToFront(label!)
+        guard let label else { return }
+        label.text = text
+        label.frame = CGRect(x: 4, y: top.view.bounds.height - 200, width: top.view.bounds.width - 8, height: 110)
+        label.accessibilityLabel = notes.joined(separator: "\n")
+        top.view.bringSubviewToFront(label)
     }
 }
 #endif

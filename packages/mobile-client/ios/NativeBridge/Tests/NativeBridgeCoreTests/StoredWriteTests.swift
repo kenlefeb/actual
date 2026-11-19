@@ -325,6 +325,24 @@ final class StoredWriteTests: XCTestCase {
         XCTAssertTrue(status.mayNotBeSaved)
     }
 
+    // sc-5302: a retired page's own "not stored" stays its own
+    func testARetiredPagesNotStoredAnswerIsALossAndLeavesTheNewPageAlone() {
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "a")
+        let origin = status.writeBegan()
+        status.writeEnded()
+        status.pageLoaded(epoch: "b")
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "b", n: 1)))
+        XCTAssertFalse(status.mayNotBeSaved)
+        let stored = status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "a", n: 7)), madeIn: origin)
+        XCTAssertFalse(stored)
+        XCTAssertTrue(status.mayNotBeSaved)
+        XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage, "b's write is still waiting")
+        status.storedEvent(seq: 1, epoch: "b")
+        XCTAssertNil(status.message)
+        XCTAssertTrue(status.mayNotBeSaved, "b's success does not vouch for a's write")
+    }
+
     func testALateReadyFromTheSamePageKeepsItsNextUnstoredWrite() {
         let status = WriteStorageStatus()
         status.record(PersistedAnswer(stored: true, seq: PersistedSeq(epoch: "live", n: 1)))

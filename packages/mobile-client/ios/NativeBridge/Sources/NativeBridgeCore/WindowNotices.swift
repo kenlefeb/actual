@@ -8,12 +8,19 @@ public struct WindowNotice: Equatable {
         case persistent
     }
 
+    // Dismiss clears the notice; OK and Reload go to the notice's owner (sc-5219)
+    public enum Button: Equatable {
+        case dismiss, ok, reload
+    }
+
     public let text: String
     public let lifetime: Lifetime
+    public let button: Button
 
-    public init(text: String, lifetime: Lifetime) {
+    public init(text: String, lifetime: Lifetime, button: Button = .dismiss) {
         self.text = text
         self.lifetime = lifetime
+        self.button = button
     }
 
     // The page's process ended and the app reloaded it on its own
@@ -40,11 +47,15 @@ public final class WindowNotices {
         }
     }
     public var onChange: ((WindowNotice?) -> Void)?
+    // OK or Reload on the showing notice; its owner decides what ends it
+    public var onButton: ((WindowNotice) -> Void)?
 
     private let schedule: (TimeInterval, @escaping () -> Void) -> Void
     private let announce: (String) -> Void
     private let now: () -> Date
     private var waiting: WindowNotice?
+    // Persistent notices waiting for the showing one to end, in order
+    private var behind: [WindowNotice] = []
     private var pageLoaded = false
     private var windowActive = false
     private var lastInput = Date.distantPast
@@ -65,6 +76,11 @@ public final class WindowNotices {
         if notice.lifetime == .persistent {
             waiting = nil
             hideToken = nil
+            // Already showing: announced once is enough
+            guard current != notice else { return }
+            behind.removeAll { $0 == notice }
+            // A notice still waiting for its button comes back when this one ends
+            if let shown = current, shown.lifetime == .persistent { behind.insert(shown, at: 0) }
             current = notice
             announce(notice.text)
             return
@@ -82,6 +98,30 @@ public final class WindowNotices {
         guard current?.lifetime != .persistent else { return }
         hideToken = nil
         current = nil
+    }
+
+    // The strip's button
+    public func tap() {
+        guard let current else { return }
+        if current.button == .dismiss {
+            clear()
+        } else {
+            onButton?(current)
+        }
+    }
+
+    // A persistent notice that waits behind a showing persistent one
+    public func queue(_ notice: WindowNotice) {
+        guard current?.lifetime == .persistent, current != notice else { return show(notice) }
+        if !behind.contains(notice) { behind.append(notice) }
+    }
+
+    // Ends one notice, shown or waiting; the next waiting one then shows
+    public func end(_ notice: WindowNotice) {
+        behind.removeAll { $0 == notice }
+        guard current == notice else { return }
+        current = nil
+        if !behind.isEmpty { show(behind.removeFirst()) }
     }
 
     public func pageDidLoad() {

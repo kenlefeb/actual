@@ -123,6 +123,9 @@ kill_after() { # name mode
   fi
   echo "$1 answer: $(cat $docs/result-$1.json)"
   zsh $here/simkill.sh $sim
+  # How long after the answer was written the kill landed (sc-5404: a control's
+  # commit delay must be longer than this for the kill to land inside it)
+  echo "$1 kill latency: $(perl -MTime::HiRes=time -e 'printf "%d", (time - (stat($ARGV[0]))[9]) * 1000' $docs/result-$1.json) ms after the answer"
   pause 4
 }
 

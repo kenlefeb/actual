@@ -13,7 +13,6 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
     private var foregroundObserver: NSObjectProtocol?
     // sc-5219: "Saving…" and "Still saving to this device. Keep the app open.", above the tab bar
     private var writeStorageLine: WriteStorageLine?
-    private var writePendingObserver: AnyCancellable?
     // The native Budget tab (sc-3751) lies over the web Budget screen while the
     // switch is on and the page shows /budget with the tab bar; otherwise the web screen below shows as before
     private var budgetOverlay: NativeBudgetViewController?
@@ -89,7 +88,6 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
         chrome.onPresentReconcile = { [weak self] body in self?.presentReconcile(body) }
         // Hidden until a budget is open (sign-in and the budget list have none)
         setTabBarVisible(false)
-        followPendingWrites()
 
         foregroundObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
@@ -119,12 +117,6 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
                     presented = screen.presentedViewController
                 }
             })
-    }
-
-    private func followPendingWrites() {
-        let storage = bridgeController.nativeBridge.writeStorage
-        writePendingObserver = storage.pendingChanges.combineLatest(storage.savingLineChanges)
-            .sink { [weak self] in self?.accountsOverlay?.writePendingChanged($0, savingLine: $1) }
     }
 
     // MARK: Tabs
@@ -205,8 +197,6 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
             let screen = NativeAccountsViewController(
                 client: bridgeController.nativeBridge.client, chrome: chrome, syncStatus: bridgeController.nativeBridge.syncStatus,
                 presentReconcile: { [weak self] in self?.presentReconcile($0) })
-            let storage = bridgeController.nativeBridge.writeStorage
-            screen.writePendingChanged(storage.isPending, savingLine: storage.savingLine)
             accountsOverlay = screen
             container.setOverlay(screen)
         }
@@ -363,10 +353,9 @@ extension NativeTab {
     }
 }
 
-// sc-5219: whether the storage line, and the Accounts offline wording that goes
-// with it, can show in this build. Off in Release until the final group 3 PR,
-// which turns it on with the restart and failure notices and the storage guard
-// (task 3.10; `yarn check:native-swift` keeps them together).
+// sc-5219: whether the storage line can show in this build. Off in Release until
+// the final group 3 PR, which turns it on with the restart and failure notices and
+// the storage guard (task 3.10; `yarn check:native-swift` keeps them together).
 enum WriteStorageLineRollout {
     static let isOnInRelease = false
 

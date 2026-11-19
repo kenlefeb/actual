@@ -346,27 +346,13 @@ final class StoredWriteTests: XCTestCase {
         XCTAssertFalse(status.mayNotBeSaved)
     }
 
-    func testAPossibleLossCountsAsPending() {
+    // A possible loss is for the restart notice: the line shows only saving in progress
+    func testAPossibleLossIsNotShownAsSaving() {
         let status = WriteStorageStatus()
         status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "old", n: 1)))
         status.pageLoaded(epoch: "new")
         XCTAssertNil(status.message)
-        XCTAssertNil(status.savingLine)
-        XCTAssertTrue(status.isPending)
-    }
-
-    // This publisher is what the Accounts screen follows
-    func testPendingChangesIncludeAPossibleLoss() {
-        let status = WriteStorageStatus()
-        var seen: [Bool] = []
-        let watching = status.pendingChanges.sink { seen.append($0) }
-        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "old", n: 1)))
-        status.pageLoaded(epoch: "new")
-        XCTAssertNil(status.message)
-        XCTAssertEqual(seen.last, true)
-        status.acknowledgeMayNotBeSaved()
-        XCTAssertEqual(seen.last, false)
-        watching.cancel()
+        XCTAssertTrue(status.mayNotBeSaved)
     }
 
     func testAStalePagesStoredEventIsIgnored() {
@@ -429,16 +415,16 @@ final class StoredWriteTests: XCTestCase {
         XCTAssertEqual(WriteStorageStatus.notYetStoredMessage, "Still saving to this device. Keep the app open.")
     }
 
-    func testAWriteIsPendingWhileSavingAndWhileNotYetStored() {
+    func testTheLineFollowsAWriteUntilItIsStored() {
         let status = WriteStorageStatus()
-        XCTAssertFalse(status.isPending)
+        XCTAssertNil(status.message)
         status.writeBegan()
-        XCTAssertTrue(status.isPending)
+        XCTAssertEqual(status.message, WriteStorageStatus.savingMessage)
         status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 1)))
         status.writeEnded()
-        XCTAssertTrue(status.isPending)
+        XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
         status.storedEvent(seq: 1, epoch: "e")
-        XCTAssertFalse(status.isPending)
+        XCTAssertNil(status.message)
     }
 
     // A normal write takes milliseconds, so its "Saving…" must not flash

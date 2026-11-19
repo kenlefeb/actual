@@ -90,12 +90,6 @@ final class NativeAccountsViewController: UIHostingController<AccountsScreen> {
     // loot-core's sync outcome, as NativeBridgePlugin follows it
     func syncStatusChanged(_ status: NativeSyncStatus) { model.syncStatus = status }
 
-    // sc-5219: whether a change is unconfirmed, and the line's words if one is being saved
-    func writePendingChanged(_ isPending: Bool, savingLine: String?) {
-        model.isWritePending = isPending
-        model.writeSavingLine = savingLine
-    }
-
     // The closed set of web flows (D7a); an action or account it does not allow is dropped
     func handOff(_ action: String, accountId: String? = nil) {
         guard let list = model.state.value,
@@ -280,7 +274,7 @@ struct AccountsScreen: View {
 
     @ViewBuilder private func loaded(_ list: AccountsList, staleError: AccountsLoadError?) -> some View {
         if list.isEmpty {
-            AccountsEmpty(status: model.syncStatus, isWritePending: model.isWritePending, savingLine: model.writeSavingLine, staleError: staleError, handOff: actions.handOff) { Task { await model.refresh() } }
+            AccountsEmpty(status: model.syncStatus, staleError: staleError, handOff: actions.handOff) { Task { await model.refresh() } }
         } else {
             AccountsListBody(
                 list: list, status: model.syncStatus, isSyncing: model.isSyncing, staleError: staleError, model: model,
@@ -341,7 +335,7 @@ private struct AccountsListBody: View {
         List {
             Group {
             if hasSubtitle {
-                Section(header: SyncSubtitle(status: isSyncing && status != .waitingForStorage ? .syncing : status, isWritePending: model.isWritePending, savingLine: model.writeSavingLine, staleError: staleError) { Task { await model.refresh() } }) {
+                Section(header: SyncSubtitle(status: isSyncing && status != .waitingForStorage ? .syncing : status, staleError: staleError) { Task { await model.refresh() } }) {
                     firstRows
                 }
             } else {
@@ -431,8 +425,6 @@ struct OptionalAccessibilityAction: ViewModifier {
 // failed re-read in place of it. A failure is warning text and a tap retries.
 private struct SyncSubtitle: View {
     let status: NativeSyncStatus
-    let isWritePending: Bool
-    let savingLine: String?
     let staleError: AccountsLoadError?
     let retry: () -> Void
 
@@ -460,11 +452,7 @@ private struct SyncSubtitle: View {
         case .unknown: return ("", false)
         case .syncing: return (AccountsWords.syncing, false)
         case .synced(let date): return (AccountsWords.synced(date, now: now), false)
-        case .offline:
-            let words = NativeSyncStatus.offlineWords(
-                AccountsWords.offline, plain: AccountsWords.offlinePlain, savingLine: savingLine,
-                mayNotBeSaved: isWritePending, storageLineIsOn: WriteStorageLineRollout.isOn)
-            return (words, false)
+        case .offline: return (NativeSyncStatus.offlineMessage, false)
         case .failed: return (AccountsWords.syncFailed, true)
         case .local: return (AccountsWords.localFile, false)
         case .waitingForStorage: return (NativeSyncStatus.waitingMessage, false)
@@ -613,15 +601,13 @@ private struct ClosedAccountsView: View {
 // D7 States: no accounts. Add and Link hand off to the web flows (D7a).
 private struct AccountsEmpty: View {
     let status: NativeSyncStatus
-    let isWritePending: Bool
-    let savingLine: String?
     let staleError: AccountsLoadError?
     let handOff: (String, String?) -> Void
     let retry: () -> Void
 
     var body: some View {
         List {
-            Section(header: SyncSubtitle(status: status, isWritePending: isWritePending, savingLine: savingLine, staleError: staleError, retry: retry)) {
+            Section(header: SyncSubtitle(status: status, staleError: staleError, retry: retry)) {
                 VStack(spacing: 12) {
                     Text(AccountsWords.firstAccount).font(.headline).accessibilityAddTraits(.isHeader)
                     Text(AccountsWords.firstAccountDetail).foregroundColor(.secondary).multilineTextAlignment(.center)
@@ -703,8 +689,6 @@ enum AccountsWords {
     static let firstAccountDetail = NSLocalizedString(
         "Add an account by hand, or link your bank to bring in transactions automatically.", comment: "Native Accounts: no accounts")
     static let syncing = NSLocalizedString("Syncing…", comment: "Native Accounts: sync status")
-    static let offline = NSLocalizedString("Offline — changes saved on this iPhone", comment: "Native Accounts: sync status")
-    static let offlinePlain = NSLocalizedString("Offline", comment: "Native Accounts: sync status while a change may not be stored yet")
     static let syncFailed = NSLocalizedString("Sync failed — tap to retry", comment: "Native Accounts: sync status")
     static let localFile = NSLocalizedString("Local file — not syncing", comment: "Native Accounts: sync status")
     static let syncedJustNow = NSLocalizedString("Synced just now", comment: "Native Accounts: sync status")

@@ -173,9 +173,6 @@ public final class WriteStorageStatus: ObservableObject {
 
     public nonisolated init() {}
 
-    // Pending too once a restart may have lost something: nothing may then say it is saved
-    public var isPending: Bool { line != nil || mayNotBeSaved }
-
     private func updateLine() {
         let next = writesInProgress > 0 ? Self.savingMessage : unstored.isEmpty ? nil : Self.notYetStoredMessage
         if next != line { line = next }
@@ -215,15 +212,6 @@ public final class WriteStorageStatus: ObservableObject {
     public static func announcement(from old: String?, to new: String?) -> String? {
         new == notYetStoredMessage && old != notYetStoredMessage ? notYetStoredMessage : nil
     }
-
-    // Whether a change is still being saved, for wording that must not claim otherwise
-    public var pendingChanges: AnyPublisher<Bool, Never> {
-        $line.combineLatest($mayNotBeSaved).map { $0 != nil || $1 }.removeDuplicates().eraseToAnyPublisher()
-    }
-
-    // The line's words while a change is really being saved, unlike a possible loss
-    public var savingLine: String? { line }
-    public var savingLineChanges: AnyPublisher<String?, Never> { $line.removeDuplicates().eraseToAnyPublisher() }
 
     // The page load this write was made in, kept for a write that never gets an answer
     @discardableResult

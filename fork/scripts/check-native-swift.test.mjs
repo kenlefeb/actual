@@ -9,7 +9,6 @@ import { test } from 'node:test';
 import {
   findNativeSources,
   missingFromProject,
-  offlineWordingRolloutProblems,
   problems,
   storageLineRolloutProblems,
 } from './check-native-swift.mjs';
@@ -31,19 +30,6 @@ void test('Native Swift: the storage line and the guard ship together', () => {
   assert.match(
     storageLineRolloutProblems('renamed', 'no guard')[0],
     /not found/,
-  );
-});
-
-void test('Native Swift: the offline wording follows the line switch', () => {
-  assert.deepEqual(
-    offlineWordingRolloutProblems(
-      'storageLineIsOn: WriteStorageLineRollout.isOn)',
-    ),
-    [],
-  );
-  assert.match(
-    offlineWordingRolloutProblems('storageLineIsOn: true)')[0],
-    /WriteStorageLineRollout/,
   );
 });
 

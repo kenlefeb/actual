@@ -89,15 +89,8 @@ public enum NativeSyncStatus: Equatable {
     public static let waitingMessage = NSLocalizedString(
         "Waiting for this device to finish saving", comment: "Native sync status: sync is held until local storage catches up")
 
-    // The offline line says changes are saved here, so not while one is being
-    // stored or may have been lost. Only a write really being saved may say so,
-    // and only where the storage line is on.
-    public static func offlineWords(
-        _ offline: String, plain: String, savingLine: String?, mayNotBeSaved: Bool, storageLineIsOn: Bool
-    ) -> String {
-        if let savingLine { return storageLineIsOn ? savingLine : plain }
-        return mayNotBeSaved ? plain : offline
-    }
+    // Says nothing about saving, so it stays true whatever is being stored (PR #485)
+    public static let offlineMessage = NSLocalizedString("Offline", comment: "Native Accounts: sync status")
 
     // A page event's body ({event, payload}); anything but a sync outcome keeps the status
     public func next(after body: Any, now: Date) -> NativeSyncStatus {

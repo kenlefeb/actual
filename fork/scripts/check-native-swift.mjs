@@ -165,16 +165,6 @@ export function storageLineRolloutProblems(tabBarSource, bridgeSource) {
       ];
 }
 
-export function offlineWordingRolloutProblems(accountsSource) {
-  return accountsSource.includes(
-    'storageLineIsOn: WriteStorageLineRollout.isOn',
-  )
-    ? []
-    : [
-        'NativeAccountsViewController: the offline wording must follow WriteStorageLineRollout.isOn',
-      ];
-}
-
 export function missingFromProject(names, project) {
   const entries = appSourceEntries(project);
   return names.filter(name => !entries.has(name));
@@ -213,12 +203,6 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     );
   }
   found.push(
-    ...offlineWordingRolloutProblems(
-      readFileSync(
-        join(SWIFT_ROOT, 'ios/App/App/NativeAccountsViewController.swift'),
-        'utf8',
-      ),
-    ),
     ...storageLineRolloutProblems(
       readFileSync(
         join(SWIFT_ROOT, 'ios/App/App/NativeTabBarController.swift'),

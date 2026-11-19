@@ -124,11 +124,10 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
             if let state = BudgetState.parse(body) { onBudgetState?(state) }
             return
         }
-        if let stored = NativeBridgeEvent.stored(of: body) {
-            Task { @MainActor [writeStorage] in writeStorage.storedEvent(seq: stored.seq, epoch: stored.epoch) }
-        }
-        if event == "ready" {
-            Task { @MainActor [writeStorage] in writeStorage.pageLoaded() }
+        // In order, on the main thread, so a page's "ready" comes before anything it answers
+        MainActor.assumeIsolated {
+            if let epoch = NativeBridgeEvent.readyEpoch(of: body) { writeStorage.pageLoaded(epoch: epoch) }
+            if let stored = NativeBridgeEvent.stored(of: body) { writeStorage.storedEvent(seq: stored.seq, epoch: stored.epoch) }
         }
         onEvent?(event)
         coalescer.notify()

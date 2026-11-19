@@ -12,9 +12,7 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
     private var containers: [NativeTab: TabContainerViewController] = [:]
     private var foregroundObserver: NSObjectProtocol?
     // sc-5219: "Saving…" and "Still saving to this device. Keep the app open.", above the tab bar
-    private let writeStorageLine = UIView()
-    private var writeStorageObserver: AnyCancellable?
-    private var writePendingObserver: AnyCancellable?
+    private var writeStorageLine: WriteStorageLine?
     // The native Budget tab (sc-3751) lies over the web Budget screen while the
     // switch is on and the page shows /budget with the tab bar; otherwise the web screen below shows as before
     private var budgetOverlay: NativeBudgetViewController?
@@ -90,52 +88,35 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
         chrome.onPresentReconcile = { [weak self] body in self?.presentReconcile(body) }
         // Hidden until a budget is open (sign-in and the budget list have none)
         setTabBarVisible(false)
-        showWriteStorageLine()
 
         foregroundObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
         ) { [weak self] _ in self?.bridgeController.nativeChrome.reportRoute() }
     }
 
-    // One line for every native screen, since a write can come from any of them
-    private func showWriteStorageLine() {
-        let label = UILabel()
-        label.font = .preferredFont(forTextStyle: .footnote)
-        label.adjustsFontForContentSizeCategory = true
-        label.textColor = .secondaryLabel
-        label.textAlignment = .center
-        label.numberOfLines = 0
-        label.translatesAutoresizingMaskIntoConstraints = false
-
-        let line = writeStorageLine
-        line.backgroundColor = .secondarySystemBackground
-        line.layer.cornerRadius = 8
-        line.isUserInteractionEnabled = false
-        line.isHidden = true
-        line.translatesAutoresizingMaskIntoConstraints = false
-        line.addSubview(label)
-        view.addSubview(line)
-        NSLayoutConstraint.activate([
-            label.topAnchor.constraint(equalTo: line.topAnchor, constant: 6),
-            label.bottomAnchor.constraint(equalTo: line.bottomAnchor, constant: -6),
-            label.leadingAnchor.constraint(equalTo: line.leadingAnchor, constant: 12),
-            label.trailingAnchor.constraint(equalTo: line.trailingAnchor, constant: -12),
-            line.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            line.bottomAnchor.constraint(equalTo: tabBar.topAnchor, constant: -8),
-            line.leadingAnchor.constraint(greaterThanOrEqualTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
-            line.trailingAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
-        ])
-        writeStorageObserver = bridgeController.nativeBridge.writeStorage.shownMessage().sink { [weak self] message in
-            guard let self else { return }
-            label.text = message
-            line.isHidden = message == nil
-            self.view.bringSubviewToFront(line)
-            if let message { UIAccessibility.post(notification: .announcement, argument: message) }
-        }
-        writePendingObserver = bridgeController.nativeBridge.writeStorage.$message
-            .map { $0 != nil }
-            .removeDuplicates()
-            .sink { [weak self] in self?.accountsOverlay?.writePendingChanged($0) }
+    private func attachWriteStorageLine() {
+        guard WriteStorageLineRollout.isOn, writeStorageLine == nil, let scene = view.window?.windowScene else { return }
+        #if DEBUG
+        UITestAccounts.holdStorageLine(bridgeController.nativeBridge.writeStorage)
+        #endif
+        writeStorageLine = WriteStorageLine(
+            status: bridgeController.nativeBridge.writeStorage, scene: scene,
+            barHeight: { [weak self] in
+                guard let self, self.tabBarShown else { return 0 }
+                // A context menu is presented too, but only a sheet covers the tab bar
+                let coversTabBar = self.presentedViewController?.sheetPresentationController != nil
+                return coversTabBar ? 0 : self.view.bounds.maxY - self.tabBar.frame.minY
+            },
+            reserve: { [weak self] height, keyboard in
+                guard let self else { return }
+                self.containers.values.forEach { $0.reserveBottom(height) }
+                var presented = self.presentedViewController
+                while let screen = presented {
+                    // A sheet's own keyboard room would otherwise swallow the line's
+                    screen.additionalSafeAreaInsets.bottom = height + keyboard
+                    presented = screen.presentedViewController
+                }
+            })
     }
 
     // MARK: Tabs
@@ -216,7 +197,6 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
             let screen = NativeAccountsViewController(
                 client: bridgeController.nativeBridge.client, chrome: chrome, syncStatus: bridgeController.nativeBridge.syncStatus,
                 presentReconcile: { [weak self] in self?.presentReconcile($0) })
-            screen.writePendingChanged(bridgeController.nativeBridge.writeStorage.isPending)
             accountsOverlay = screen
             container.setOverlay(screen)
         }
@@ -285,10 +265,17 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
         }
     }
 
-    #if DEBUG
-    // Test-only: `-ReconcileDemo checklist|step1|step2` shows the flow on sample data
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        attachWriteStorageLine()
+        #if DEBUG
+        showReconcileDemo()
+        #endif
+    }
+
+    #if DEBUG
+    // Test-only: `-ReconcileDemo checklist|step1|step2` shows the flow on sample data
+    private func showReconcileDemo() {
         guard let request = ReconcileDemo.request, reconcileFlow == nil else { return }
         let month = ReconcileMonthViewModel(client: ReconcileDemo.client)
         Task { @MainActor in
@@ -366,6 +353,179 @@ extension NativeTab {
     }
 }
 
+// sc-5219: whether the storage line can show in this build. Off in Release until
+// the final group 3 PR, which turns it on with the restart and failure notices and
+// the storage guard (task 3.10; `yarn check:native-swift` keeps them together).
+enum WriteStorageLineRollout {
+    static let isOnInRelease = false
+
+    static var isOn: Bool {
+        #if DEBUG
+        true
+        #else
+        isOnInRelease
+        #endif
+    }
+}
+
+// sc-5219: "Saving…" and "Still saving to this device. Keep the app open." One
+// line for every native screen, in its own window, so it stays visible over
+// sheets and rides above the keyboard. It takes real space: the screens below
+// end above it, so it covers neither rows nor the Undo bar. It ignores touches.
+@MainActor
+final class WriteStorageLine {
+    private let window: UIWindow
+    private let screen = WriteStorageLineController()
+    private var observer: AnyCancellable?
+    private var shown: String?
+    // UIKit has no single signal for "a sheet came or went" or "the tab bar
+    // moved", so while the line is up it follows them by looking
+    private var follower: Timer?
+    private let scene: UIWindowScene
+
+    init(
+        status: WriteStorageStatus, scene: UIWindowScene, barHeight: @escaping () -> CGFloat,
+        reserve: @escaping (_ height: CGFloat, _ keyboard: CGFloat) -> Void
+    ) {
+        self.scene = scene
+        window = UIWindow(windowScene: scene)
+        window.windowLevel = .alert
+        window.isUserInteractionEnabled = false
+        window.backgroundColor = .clear
+        window.rootViewController = screen
+        screen.barHeight = barHeight
+        screen.onHeight = reserve
+        observer = status.shownMessage().sink { [weak self] message in self?.show(message) }
+    }
+
+    private func show(_ message: String?) {
+        if let words = WriteStorageStatus.announcement(from: shown, to: message) {
+            // Queued, so it does not cut across what VoiceOver is reading
+            let queued = NSAttributedString(string: words, attributes: [.accessibilitySpeechQueueAnnouncement: true])
+            UIAccessibility.post(notification: .announcement, argument: queued)
+        }
+        shown = message
+        screen.show(message)
+        follow()
+        follower?.invalidate()
+        follower = nil
+        guard message != nil else { return }
+        follower = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.follow() }
+        }
+    }
+
+    private func follow() {
+        // A confirmation sits at the bottom and takes the person's whole attention;
+        // the line ignores touches, so it must not lie over its buttons
+        window.isHidden = shown == nil || isConfirmationUp
+        screen.follow()
+    }
+
+    private var isConfirmationUp: Bool {
+        var screen = scene.windows.first(where: \.isKeyWindow)?.rootViewController
+        while let presented = screen?.presentedViewController {
+            if presented is UIAlertController { return true }
+            screen = presented
+        }
+        return false
+    }
+}
+
+// The view being typed in, wherever it is
+private extension UIResponder {
+    private static weak var found: UIResponder?
+
+    static var current: UIResponder? {
+        found = nil
+        UIApplication.shared.sendAction(#selector(noteFirstResponder), to: nil, from: nil, for: nil)
+        return found
+    }
+
+    @objc private func noteFirstResponder() { UIResponder.found = self }
+}
+
+private final class WriteStorageLineController: UIViewController {
+    var barHeight: () -> CGFloat = { 0 }
+    var onHeight: (_ height: CGFloat, _ keyboard: CGFloat) -> Void = { _, _ in }
+    private let pill = UIView()
+    private let label = UILabel()
+    private var aboveBar: NSLayoutConstraint?
+    private var atTop: NSLayoutConstraint?
+    private var reserved: CGFloat = 0
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .clear
+        // DESIGN.native.md: label/primary on the opaque bg/grouped-secondary, with a hairline
+        label.font = .preferredFont(forTextStyle: .footnote)
+        label.adjustsFontForContentSizeCategory = true
+        label.textColor = .label
+        label.textAlignment = .center
+        label.numberOfLines = 0
+        label.accessibilityIdentifier = "storage.line"
+        label.translatesAutoresizingMaskIntoConstraints = false
+        pill.backgroundColor = .secondarySystemGroupedBackground
+        pill.layer.cornerRadius = 8
+        pill.layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
+        pill.layer.borderColor = UIColor.separator.resolvedColor(with: traitCollection).cgColor
+        pill.translatesAutoresizingMaskIntoConstraints = false
+        pill.addSubview(label)
+        view.addSubview(pill)
+        let safe = view.safeAreaLayoutGuide
+        let keyboardTop = view.keyboardLayoutGuide.topAnchor
+        let resting = pill.bottomAnchor.constraint(equalTo: keyboardTop, constant: -8)
+        resting.priority = .defaultLow
+        let bar = pill.bottomAnchor.constraint(lessThanOrEqualTo: view.bottomAnchor)
+        aboveBar = bar
+        atTop = pill.topAnchor.constraint(equalTo: safe.topAnchor, constant: 8)
+        NSLayoutConstraint.activate([
+            label.topAnchor.constraint(equalTo: pill.topAnchor, constant: 6),
+            label.bottomAnchor.constraint(equalTo: pill.bottomAnchor, constant: -6),
+            label.leadingAnchor.constraint(equalTo: pill.leadingAnchor, constant: 12),
+            label.trailingAnchor.constraint(equalTo: pill.trailingAnchor, constant: -12),
+            pill.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            pill.leadingAnchor.constraint(greaterThanOrEqualTo: safe.leadingAnchor, constant: 16),
+            pill.trailingAnchor.constraint(lessThanOrEqualTo: safe.trailingAnchor, constant: -16),
+            pill.topAnchor.constraint(greaterThanOrEqualTo: safe.topAnchor, constant: 8),
+            pill.bottomAnchor.constraint(lessThanOrEqualTo: keyboardTop, constant: -8),
+            bar, resting,
+        ])
+    }
+
+    // A layer's colour does not follow light, dark or Increase Contrast by itself
+    override func traitCollectionDidChange(_ previous: UITraitCollection?) {
+        super.traitCollectionDidChange(previous)
+        pill.layer.borderColor = UIColor.separator.resolvedColor(with: traitCollection).cgColor
+    }
+
+    func show(_ message: String?) {
+        loadViewIfNeeded()
+        label.text = message
+    }
+
+    // Puts the line where it belongs now, and gives the screens under it,
+    // including a sheet that has just opened, the room it takes
+    func follow() {
+        guard label.text != nil else {
+            if reserved != 0 { onHeight(0, 0) }
+            reserved = 0
+            return
+        }
+        aboveBar?.constant = -(barHeight() + 8)
+        view.layoutIfNeeded()
+        let keyboardTop = view.keyboardLayoutGuide.layoutFrame.minY
+        let keyboardIsUp = keyboardTop < view.safeAreaLayoutGuide.layoutFrame.maxY
+        let field = (UIResponder.current as? UIView).map { $0.convert($0.bounds, to: view) }
+        atTop?.isActive = keyboardIsUp
+            && WriteStorageLinePlacement.coversField(field, lineHeight: pill.bounds.height, keyboardTop: keyboardTop)
+        view.layoutIfNeeded()
+        reserved = pill.bounds.height + 8
+        let safeBottom = view.safeAreaLayoutGuide.layoutFrame.maxY
+        onHeight(reserved, keyboardIsUp && atTop?.isActive != true ? safeBottom - keyboardTop : 0)
+    }
+}
+
 // One tab's screen: the shared web view while this tab shows it, or a native
 // screen for good
 final class TabContainerViewController: UIViewController {
@@ -399,6 +559,13 @@ final class TabContainerViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         onWillAppear?(section)
+    }
+
+    // Room for the storage line: the screen ends above it, and the strip it
+    // sits on matches the grouped page rather than showing as a white band
+    func reserveBottom(_ height: CGFloat) {
+        additionalSafeAreaInsets.bottom = height
+        view.backgroundColor = height > 0 ? .systemGroupedBackground : .systemBackground
     }
 
     // The status bar follows the screen in this tab

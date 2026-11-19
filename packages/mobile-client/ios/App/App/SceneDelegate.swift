@@ -16,9 +16,11 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         #if DEBUG
         // Test-only (sc-5177): the UI tests launch the Accounts screen on fixtures
         if UITestAccounts.isOn {
-            window.rootViewController = UITestAccounts.makeRoot()
+            let root = UITestAccounts.makeRoot()
+            window.rootViewController = root
             self.window = window
             window.makeKeyAndVisible()
+            UITestAccounts.showStorageLine(over: root, in: windowScene)
             return
         }
         #endif
@@ -30,7 +32,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                 UIApplication.shared.beginBackgroundTask(withName: "store-changes") { MainActor.assumeIsolated(onExpiry) }
             },
             end: { UIApplication.shared.endBackgroundTask($0) },
-            flush: { _ = await client.flushStorage() })
+            flush: { await client.flushStorage() })
         window.rootViewController = root
         self.window = window
         window.makeKeyAndVisible()

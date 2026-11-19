@@ -32,7 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         flush: { [weak self] done in
             let client = self?.host?.client
             Task { @MainActor in
-                _ = await client?.flushStorage()
+                await client?.flushStorage()
                 done()
             }
         })

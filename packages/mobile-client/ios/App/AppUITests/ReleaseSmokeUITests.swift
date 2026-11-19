@@ -81,7 +81,8 @@ final class ReleaseSmokeUITests: XCTestCase {
         let launched = Date()
         openDemo()
         app.tabBars.buttons["Budget"].tap()
-        let food = app.buttons["Food"]
+        // The native row, not the web page's own "Food" button under it
+        let food = app.collectionViews.buttons["Food"].firstMatch
         XCTAssertTrue(food.waitForExistence(timeout: 60), "no Food row on the Budget tab")
         // TEST_RUNNER_RELEASE_SMOKE_ARM_S: when the page arms itself, so the write comes after.
         // Counted from the worker's start, which comes some seconds after launch
@@ -103,11 +104,9 @@ final class ReleaseSmokeUITests: XCTestCase {
         let shown = strip.waitForExistence(timeout: 60)
         sleep(1)
         save("\(page)-notice")
-        // What the write did: a failed one keeps the sheet up with its reason, or the notice shows
-        let onScreen = app.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.joined(separator: " | ")
+        // What the write did: the notice names when unsaved changes began; the row shows the typed amount
         evidence("notice shown = \(shown)\(shown ? ": " + strip.label : ""); edit sheet still open = \(field.exists)")
         evidence("Food before: \(before); Food now: \(food.exists ? (food.value as? String ?? "") : "not visible")")
-        evidence("on screen: \(onScreen.prefix(600))")
         XCTAssertTrue(shown, "no failure notice after a write that should have failed (see the evidence lines)")
         XCTAssertTrue(strip.label.hasPrefix(text), strip.label)
         XCTAssertEqual(button.label, "Reload the app")

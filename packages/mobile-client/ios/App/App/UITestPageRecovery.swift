@@ -217,9 +217,11 @@ enum UITestKillWrites {
             // each answer with how long it took (`writes:<count>`)
             let count = Int(mode.dropFirst("writes:".count)) ?? 5
             var rows: [String] = []
+            // Unique per launch: a category name can't repeat in its group
+            let launch = UUID().uuidString.prefix(6)
             for n in 1...count {
                 let start = Date()
-                let answer = try await page.run(createAndAsk, arguments: ["name": "series-\(n)"]) as? String ?? ""
+                let answer = try await page.run(createAndAsk, arguments: ["name": "series-\(launch)-\(n)"]) as? String ?? ""
                 rows.append("\(n) | \(Int(Date().timeIntervalSince(start) * 1000)) ms | \(answer)")
             }
             write("writes", rows.joined(separator: "\n"))

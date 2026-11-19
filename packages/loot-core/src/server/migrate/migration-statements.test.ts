@@ -38,5 +38,11 @@ describe('Migration statements', () => {
     expect(migrationSql('CREATE TABLE a (id TEXT);')).toBe(
       'CREATE TABLE a (id TEXT);',
     );
+    // As some real migrations are written: a comment first, no `;` after COMMIT
+    expect(
+      migrationSql(
+        '-- Migration: a\nBEGIN TRANSACTION;\n\nCREATE TABLE a (id TEXT);\n\nCOMMIT',
+      ).trim(),
+    ).toBe('-- Migration: a\n\n\nCREATE TABLE a (id TEXT);');
   });
 });

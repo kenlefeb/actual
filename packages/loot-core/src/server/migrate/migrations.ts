@@ -108,7 +108,19 @@ async function applyJavaScript(db, id) {
     runQuery: (query, params, fetchAll) =>
       sqlite.runQuery(db, query, params, fetchAll),
     execQuery: query => sqlite.execQuery(db, query),
-    transaction: func => sqlite.transaction(db, func),
+    // The migration already runs in applyMigration's transaction, so a
+    // migration's own transaction is a savepoint inside it
+    transaction: func => {
+      sqlite.execQuery(db, 'SAVEPOINT migration_step');
+      try {
+        func();
+        sqlite.execQuery(db, 'RELEASE migration_step');
+      } catch (e) {
+        sqlite.execQuery(db, 'ROLLBACK TO migration_step');
+        sqlite.execQuery(db, 'RELEASE migration_step');
+        throw e;
+      }
+    },
   };
 
   if (javascriptMigrations[id] == null) {
@@ -131,20 +143,65 @@ async function applySql(db, sql) {
   }
 }
 
+// A SQL migration without its own outer `BEGIN TRANSACTION;` and `COMMIT;`:
+// it runs inside applyMigration's transaction instead
+export function migrationSql(sql: string): string {
+  return (
+    sql
+      // Leading comments may come first; a trailing COMMIT may lack its `;`
+      .replace(/^((?:\s|--[^\n]*\n)*)BEGIN(\s+TRANSACTION)?\s*;/i, '$1')
+      .replace(/\s*\bCOMMIT\s*;?\s*$/i, '\n')
+  );
+}
+
+// A migration and its `__migrations__` row are one transaction, so they are
+// stored together or not at all. Written separately, a crash between them
+// left the migration applied but not recorded, and every later open ran it
+// again, failed, and never opened the budget.
 export async function applyMigration(
   db: Database,
   name: string,
   migrationsDir: string,
 ): Promise<void> {
   const code = await fs.readFile(fs.join(migrationsDir, name));
-  if (name.match(/\.js$/)) {
-    await applyJavaScript(db, getMigrationId(name));
-  } else {
-    await applySql(db, code);
+  // IMMEDIATE takes the write lock before the first read (see sqlite.transaction)
+  sqlite.execQuery(db, 'BEGIN IMMEDIATE');
+  try {
+    if (name.match(/\.js$/)) {
+      await applyJavaScript(db, getMigrationId(name));
+    } else {
+      await applySql(db, migrationSql(code));
+    }
+    sqlite.runQuery(db, 'INSERT INTO __migrations__ (id) VALUES (?)', [
+      getMigrationId(name),
+    ]);
+    sqlite.execQuery(db, 'COMMIT');
+  } catch (e) {
+    try {
+      sqlite.execQuery(db, 'ROLLBACK');
+    } catch (rollbackError) {
+      // The migration's own error is the one that matters
+      logger.error('Rolling back a failed migration failed:', rollbackError);
+    }
+    throw e;
   }
-  sqlite.runQuery(db, 'INSERT INTO __migrations__ (id) VALUES (?)', [
-    getMigrationId(name),
-  ]);
+}
+
+// Before applyMigration was atomic, a crash could leave
+// 1686139660866_remove_account_type applied but not recorded (sc-5368), and
+// running it again fails ("no such column: type"). Only for that migration,
+// and only when its effect is there (`accounts` exists without `type`), it is
+// recorded instead of run. Older half-applied states are not repaired.
+const removeAccountType = 1686139660866;
+
+function accountTypeAlreadyRemoved(db: Database, name: string): boolean {
+  if (getMigrationId(name) !== removeAccountType) {
+    return false;
+  }
+  const columns = sqlite
+    .runQuery<{ name: string }>(db, 'PRAGMA table_info(accounts)', [], true)
+    .map(column => column.name);
+  return columns.length > 0 && !columns.includes('type');
 }
 
 // Migrations with ids after this point are additive-only, enforced by
@@ -257,6 +314,15 @@ export async function migrate(db: Database): Promise<string[]> {
   const pending = getPending(appliedIds, available);
 
   for (const migration of pending) {
+    if (accountTypeAlreadyRemoved(db, migration)) {
+      logger.warn('Recording a migration that ran but was not recorded:', {
+        migration,
+      });
+      sqlite.runQuery(db, 'INSERT INTO __migrations__ (id) VALUES (?)', [
+        removeAccountType,
+      ]);
+      continue;
+    }
     await applyMigration(db, migration, MIGRATIONS_DIR);
   }
 

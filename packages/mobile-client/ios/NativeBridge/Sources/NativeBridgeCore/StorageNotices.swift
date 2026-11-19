@@ -29,9 +29,11 @@ public final class StorageNotices {
     private let time: (Date) -> String
     private var observer: AnyCancellable?
     private var hasLoaded = false
+    private var loads = 0
     // A load after the app's first: its time stands in when nothing has stored since
     private var reloadedAt: Date?
-    private var failure: (cutOff: CutOff, quota: Bool)?
+    private var failure: (cutOff: CutOff, quota: Bool, load: Int)?
+    private var shownFailure: WindowNotice?
     // The restart notice waiting for OK, with the earliest cut-off and the
     // latest failure's reason, which the engine forgets at a restart
     private var held: CutOff?
@@ -55,6 +57,7 @@ public final class StorageNotices {
     public func pageLoaded() {
         if hasLoaded { reloadedAt = now() }
         hasLoaded = true
+        loads += 1
         // After a reload or restart: a failure notice still showing keeps its place
         if let held, failure == nil { slot.show(restartNotice(held, quota: heldQuota)) }
     }
@@ -64,21 +67,35 @@ public final class StorageNotices {
         guard failure != nil || held != nil else { return }
         if let cutOff = failure?.cutOff, held.map({ cutOff.isEarlier(than: $0) }) ?? true { held = cutOff }
         if let failure { heldQuota = failure.quota }
-        failure = nil
+        endFailure()
+        // The restart notice says the same, and its OK clears it
+        slot.end(Self.someMayNotBeSaved)
         if let held { slot.show(restartNotice(held, quota: heldQuota)) }
     }
 
     // The page's storage-failed event; `lastStoredFlushAt` in milliseconds
     public func failed(lastStoredFlushAt: Double?, quota: Bool) {
-        let cutOff: CutOff =
+        var cutOff: CutOff =
             lastStoredFlushAt.map { .at(Date(timeIntervalSince1970: $0 / 1000)) } ?? reloadedAt.map { .at($0) } ?? .sinceOpened
-        failure = (cutOff, quota)
-        slot.show(failureNotice(cutOff, quota: quota))
+        // Another report of the same failure keeps the earlier cut-off; a failure
+        // after a reload or restart has its own
+        if let failure, failure.load == loads, failure.cutOff.isEarlier(than: cutOff) { cutOff = failure.cutOff }
+        let notice = failureNotice(cutOff, quota: quota)
+        if let shownFailure, shownFailure != notice { slot.end(shownFailure) }
+        failure = (cutOff, quota, loads)
+        shownFailure = notice
+        slot.show(notice)
     }
 
     // A closed budget's last write failed; it follows any notice showing
     public func closeFailed() {
         slot.queue(Self.closedBudget)
+    }
+
+    private func endFailure() {
+        if let shownFailure { slot.end(shownFailure) }
+        failure = nil
+        shownFailure = nil
     }
 
     private func possibleLoss() {
@@ -89,14 +106,14 @@ public final class StorageNotices {
     private func tapped(_ notice: WindowNotice) {
         switch notice.button {
         case .reload:
-            failure = nil
-            slot.end(notice)
+            endFailure()
             reload()
         case .ok:
             if notice != Self.closedBudget {
                 held = nil
                 heldQuota = false
                 storage.acknowledgeMayNotBeSaved()
+                slot.end(Self.someMayNotBeSaved)
             }
             slot.end(notice)
         case .dismiss:

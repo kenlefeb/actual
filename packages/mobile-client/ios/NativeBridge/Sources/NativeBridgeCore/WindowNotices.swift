@@ -78,6 +78,9 @@ public final class WindowNotices {
             hideToken = nil
             // Already showing: announced once is enough
             guard current != notice else { return }
+            behind.removeAll { $0 == notice }
+            // A notice still waiting for its button comes back when this one ends
+            if let shown = current, shown.lifetime == .persistent { behind.insert(shown, at: 0) }
             current = notice
             announce(notice.text)
             return

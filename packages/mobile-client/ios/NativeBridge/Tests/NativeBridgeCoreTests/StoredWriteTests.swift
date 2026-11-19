@@ -334,7 +334,8 @@ final class StoredWriteTests: XCTestCase {
             name == "native/persisted" ? #"{"stored":false,"seq":{"epoch":"e","n":1}}"# : "null"
         }
         let result = try await bridge.write("native/account-move", args: move)
-        XCTAssertTrue(result.stored)
+        // Without this, a wrong answer would wait forever for a "stored" that never comes
+        guard result.stored else { return XCTFail("with the guard off a write counts as stored at once") }
         let later = await bridge.whenStored(result)
         XCTAssertTrue(later)
     }

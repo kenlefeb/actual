@@ -116,7 +116,8 @@ kill_after() { # name mode
     launch "$2:$1"
     if ! waitfor $docs/result-$1.json; then
       diagnose $1-b
-      echo "$1 stalled twice: stopping"
+      echo "$1 stalled twice: stopping, keeping the data"
+      keep=1
       return 1
     fi
   fi

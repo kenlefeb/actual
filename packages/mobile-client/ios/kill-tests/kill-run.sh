@@ -121,13 +121,33 @@ kill_after() { # name mode
   pause 4
 }
 
+# sc-5393: how many migrations the test budget's database holds in this simulator's
+# IndexedDB right now, rebuilt from absurd-sql's blocks; fewer than all of them after a
+# kill means the kill landed while the budget was being migrated
+stored_migrations() {
+  local t=$(mktemp -d) found=0
+  for f in $(find "$(xcrun simctl get_app_container $sim $bid data)/Library/WebKit" -name IndexedDB.sqlite3); do
+    # The name is UTF-16, which sqlite3 prints with `^@` between the letters
+    sqlite3 "$f" "select value from IDBDatabaseInfo where key = 'DatabaseName'" | sed 's/\^@//g' | tr -d '\0' \
+      | grep -q "_test-budget-db.sqlite" || continue
+    cp "${f%/*}"/IndexedDB.sqlite3* $t/ && found=1
+  done
+  if [ $found = 1 ] && python3 -I $here/absurd-rebuild.py $t/IndexedDB.sqlite3 $t/budget.sqlite > /dev/null 2>&1; then
+    sqlite3 $t/budget.sqlite 'select count(*) from __migrations__' 2>/dev/null || echo "?"
+  else
+    echo "none"
+  fi
+  rm -rf $t
+}
+all_migrations=$(ls $here/../../../loot-core/migrations | grep -cE '\.(sql|js)$')
+
 echo "--- refusal check"
 zsh $here/simkill.sh 00000000-0000-0000-0000-000000000000 --dry
 if [ $phase = migrate ]; then
   # Kill while a fresh budget is created and migrated (every migration is its
   # own commit), at offsets spread over the open, then relaunch: does it open?
   limit=${REOPEN_LIMIT:-120}
-  echo "round | kill offset after the bridge | reopened by itself | screen"
+  echo "round | kill offset after the bridge | migrations stored at the kill (of $all_migrations) | reopened by itself | test's open"
   for n in {1..${REOPEN_ROUNDS:-10}}; do
     offset=$(( n * ${MIGRATE_STEP_MS:-250} ))
     rm -f $docs/budget-id $docs/result-mig-$n.json
@@ -137,18 +157,19 @@ if [ $phase = migrate ]; then
     echo "mig-$n at $offset ms, stage then: $(cat $docs/progress.json 2>/dev/null)"
     zsh $here/simkill.sh $sim
     pause 4
+    stored=$(stored_migrations)
     # The test budget's id is fixed; the kill may come before the hook saved it
     print -n _test-budget > $docs/budget-id
     rm -f $docs/reopen-mig-$n.json
     launch reopen:mig-$n
     if ! waitfor $docs/reopen-mig-$n.json; then
-      echo "$n | $offset ms | no (page alert) | $(cat $docs/progress.json)"
+      echo "$n | $offset ms | $stored | no (page alert) | $(cat $docs/progress.json)"
       cp $docs/progress.log $out/progress-mig-$n.log 2>/dev/null
       diagnose mig-$n
       keep=1
       exit 1
     fi
-    echo "$n | $offset ms | $(node -e 'const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); console.log((r.reopenedBySelfSeconds < 0 ? "no" : r.reopenedBySelfSeconds + " s") + " | " + r.testOpen)' $docs/reopen-mig-$n.json)"
+    echo "$n | $offset ms | $stored | $(node -e 'const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); console.log((r.reopenedBySelfSeconds < 0 ? "no" : r.reopenedBySelfSeconds + " s") + " | " + r.testOpen)' $docs/reopen-mig-$n.json)"
   done
   exit 0
 fi

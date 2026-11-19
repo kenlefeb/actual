@@ -128,9 +128,10 @@ CREATE TABLE kvcache_key (id INTEGER PRIMARY KEY, key REAL);
     });
   });
 
+  // The database is no longer compacted here: that can't run inside the
+  // migration's transaction, and it only reclaimed space
   db.execQuery(`
     DROP TABLE spreadsheet_cells;
     ANALYZE;
-    VACUUM;
   `);
 }

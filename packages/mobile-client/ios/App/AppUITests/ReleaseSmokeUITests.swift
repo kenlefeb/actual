@@ -7,7 +7,8 @@ import XCTest
 //                    (and FORK_TEST_FAIL_STORAGE_QUOTA): the worker arms the
 //                    storage failure by itself, so the app binary holds no hook
 //   slow             a page built with a 3,000 ms commit delay
-// The write is a real one through the native Reconcile flow ("Use cleared balance").
+// The failure write is a real one: a budgeted amount typed on the native Budget
+// tab, which the guard evidence showed reaches storage; the slow check uses Reconcile.
 // TEST_RUNNER_RELEASE_SMOKE_RUN names the screenshot folder; TEST_RUNNER_RELEASE_SMOKE_LOOK
 // is "light", "dark" or "ax5".
 final class ReleaseSmokeUITests: XCTestCase {
@@ -38,8 +39,8 @@ final class ReleaseSmokeUITests: XCTestCase {
         try? shot.pngRepresentation.write(to: folder.appendingPathComponent("\(name)-\(look).png"))
     }
 
-    // The demo budget, its Bank of America register, More, Reconcile
-    private func openReconcile() {
+    // The demo budget open on its Accounts tab
+    private func openDemo() {
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         if look == "ax5" { app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] }
         if look == "dark" { XCUIDevice.shared.appearance = .dark }
@@ -50,7 +51,12 @@ final class ReleaseSmokeUITests: XCTestCase {
         while !accounts.exists && !demo.exists && Date() < deadline { sleep(1) }
         if !accounts.exists { demo.tap() }
         XCTAssertTrue(accounts.waitForExistence(timeout: 120), "the demo budget did not open")
-        accounts.tap()
+    }
+
+    // The demo budget, its Bank of America register, More, Reconcile
+    private func openReconcile() {
+        openDemo()
+        app.tabBars.buttons["Accounts"].tap()
         let row = NSPredicate(format: "label CONTAINS %@", "Bank of America")
         let account = app.buttons.matching(row).firstMatch
         _ = account.waitForExistence(timeout: 30)
@@ -65,21 +71,44 @@ final class ReleaseSmokeUITests: XCTestCase {
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Use cleared balance")).firstMatch
     }
 
+    private func evidence(_ text: String) { print("release smoke evidence: \(text)") }
+
     // The worker arms the failure FORK_TEST_FAIL_STORAGE_AFTER_MS after it starts:
     // the next write to storage fails for real, and the failure notice must show,
-    // which it can only do with the guard on (the opt-in reached the page)
+    // which it can only do with the guard on (the opt-in reached the page).
+    // Says what it saw, so a write that never happened can't pass for a missing notice.
     private func checkFailure(saying text: String) throws {
         let launched = Date()
-        openReconcile()
-        // TEST_RUNNER_RELEASE_SMOKE_ARM_S: when the page arms itself, so the write comes after
-        let armed = Double(ProcessInfo.processInfo.environment["RELEASE_SMOKE_ARM_S"] ?? "0") ?? 0
+        openDemo()
+        app.tabBars.buttons["Budget"].tap()
+        let food = app.buttons["Food"]
+        XCTAssertTrue(food.waitForExistence(timeout: 60), "no Food row on the Budget tab")
+        // TEST_RUNNER_RELEASE_SMOKE_ARM_S: when the page arms itself, so the write comes after.
         // Counted from the worker's start, which comes some seconds after launch
+        let armed = Double(ProcessInfo.processInfo.environment["RELEASE_SMOKE_ARM_S"] ?? "0") ?? 0
         let wait = armed + 30 - Date().timeIntervalSince(launched)
         if wait > 0 { Thread.sleep(forTimeInterval: wait) }
-        if useCleared.waitForExistence(timeout: 30) { useCleared.tap() }
-        XCTAssertTrue(strip.waitForExistence(timeout: 150), "no failure notice in a Release build")
+        evidence("editing at \(Int(Date().timeIntervalSince(launched))) s after launch; the page arms \(Int(armed)) s after its worker starts")
+        let before = food.value as? String ?? ""
+        let field = app.textFields["Budgeted Food"]
+        // The budgeted amount is the first column, under the name
+        for dy in [0.75, 0.45] where !field.exists {
+            food.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: dy)).tap()
+            _ = field.waitForExistence(timeout: 5)
+        }
+        XCTAssertTrue(field.exists, "the budgeted amount's edit sheet did not open")
+        field.tap()
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 20) + "123")
+        app.navigationBars.buttons["Save"].tap()
+        let shown = strip.waitForExistence(timeout: 60)
         sleep(1)
         save("\(page)-notice")
+        // What the write did: a failed one keeps the sheet up with its reason, or the notice shows
+        let onScreen = app.staticTexts.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.joined(separator: " | ")
+        evidence("notice shown = \(shown)\(shown ? ": " + strip.label : ""); edit sheet still open = \(field.exists)")
+        evidence("Food before: \(before); Food now: \(food.exists ? (food.value as? String ?? "") : "not visible")")
+        evidence("on screen: \(onScreen.prefix(600))")
+        XCTAssertTrue(shown, "no failure notice after a write that should have failed (see the evidence lines)")
         XCTAssertTrue(strip.label.hasPrefix(text), strip.label)
         XCTAssertEqual(button.label, "Reload the app")
     }

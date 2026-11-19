@@ -34,8 +34,11 @@ export async function withMigrationsDir(
 ): Promise<void> {
   const oldDir = MIGRATIONS_DIR;
   MIGRATIONS_DIR = dir;
-  await func();
-  MIGRATIONS_DIR = oldDir;
+  try {
+    await func();
+  } finally {
+    MIGRATIONS_DIR = oldDir;
+  }
 }
 
 export function getMigrationsDir(): string {

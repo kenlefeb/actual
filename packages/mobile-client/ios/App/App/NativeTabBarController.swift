@@ -111,10 +111,6 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
         noticeHeight = height
         additionalSafeAreaInsets.top = height
         giveSheetsNoticeSpace()
-        // The storage line's window (sc-5219) ends below the strip too, so the
-        // two never overlap, however large the text
-        view.window?.windowScene?.windows.filter { $0.windowLevel == .alert }
-            .forEach { $0.rootViewController?.additionalSafeAreaInsets.top = height }
         // As the storage line does: UIKit says nothing when a sheet opens, so
         // while the strip is up a sheet opened under it is found by looking
         noticeFollower?.invalidate()
@@ -139,6 +135,15 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
         while let screen = presented {
             if screen.additionalSafeAreaInsets.top != noticeHeight { screen.additionalSafeAreaInsets.top = noticeHeight }
             presented = screen.presentedViewController
+        }
+        // The storage line's window (sc-5219) ends below the strip too, so the
+        // two never overlap, however large the text, and the line's share of
+        // the space above the keyboard (sc-5296) counts from the strip down.
+        // Repeated while the strip is up, for a line that appears later.
+        for window in view.window?.windowScene?.windows ?? [] where window.windowLevel == .alert {
+            if let root = window.rootViewController, root.additionalSafeAreaInsets.top != noticeHeight {
+                root.additionalSafeAreaInsets.top = noticeHeight
+            }
         }
     }
 
@@ -551,30 +556,86 @@ private final class WriteStorageLineController: UIViewController {
         pill.layer.borderColor = UIColor.separator.resolvedColor(with: traitCollection).cgColor
     }
 
+    // The full sentence, whatever the line shows; VoiceOver always reads it
+    private var message: String?
+
     func show(_ message: String?) {
         loadViewIfNeeded()
+        self.message = message
         label.text = message
+        label.accessibilityLabel = message
     }
 
     // Puts the line where it belongs now, and gives the screens under it,
     // including a sheet that has just opened, the room it takes
     func follow() {
-        guard label.text != nil else {
+        guard let message else {
             if reserved != 0 { onHeight(0, 0) }
             reserved = 0
             return
         }
-        aboveBar?.constant = -(barHeight() + 8)
+        let resting = -(barHeight() + 8)
+        aboveBar?.constant = resting
+        label.text = message
+        pill.isHidden = false
         view.layoutIfNeeded()
         let keyboardTop = view.keyboardLayoutGuide.layoutFrame.minY
         let keyboardIsUp = keyboardTop < view.safeAreaLayoutGuide.layoutFrame.maxY
+        // sc-5296: with the keyboard up the line takes at most a third of the
+        // space above it, so on a short screen at a large text size it can't
+        // cover the field being edited and the sheet's buttons
+        if keyboardIsUp {
+            let available = keyboardTop - view.safeAreaLayoutGuide.layoutFrame.minY
+            let fullHeight = pill.bounds.height + 16
+            label.text = WriteStorageLineFit.shortForm(of: message)
+            view.layoutIfNeeded()
+            switch WriteStorageLineFit.choose(fullHeight: fullHeight, shortHeight: pill.bounds.height + 16, available: available) {
+            case .full:
+                label.text = message
+                view.layoutIfNeeded()
+            case .short:
+                break
+            case .hidden:
+                pill.isHidden = true
+                if reserved != 0 { onHeight(0, 0) }
+                reserved = 0
+                return
+            }
+        }
         let field = (UIResponder.current as? UIView).map { $0.convert($0.bounds, to: view) }
         atTop?.isActive = keyboardIsUp
             && WriteStorageLinePlacement.coversField(field, lineHeight: pill.bounds.height, keyboardTop: keyboardTop)
+        // sc-5296: iOS can put a sheet's search field at the bottom, where it
+        // ignores the room the line reserves, so the line sits above it instead
+        if !keyboardIsUp, let fieldTop = searchFieldTop(under: pill.frame.minY - 8) {
+            aboveBar?.constant = min(resting, -(view.bounds.maxY - fieldTop + Self.searchFieldMargin))
+        }
         view.layoutIfNeeded()
-        reserved = pill.bounds.height + 8
+        // The lift counts as room too, so the controls that do follow the safe area stay clear of the line
+        reserved = pill.bounds.height + 8 + ((aboveBar.map { -$0.constant } ?? 0) + resting)
         let safeBottom = view.safeAreaLayoutGuide.layoutFrame.maxY
         onHeight(reserved, keyboardIsUp && atTop?.isActive != true ? safeBottom - keyboardTop : 0)
+    }
+
+    // Room between the line and a search field below it, beyond the field's own rounded background
+    private static let searchFieldMargin: CGFloat = 16
+
+    // The top of the highest visible search field on screen that reaches below
+    // `lineTop`, in screen points (this window fills the screen)
+    private func searchFieldTop(under lineTop: CGFloat) -> CGFloat? {
+        guard let window = view.window?.windowScene?.windows.first(where: \.isKeyWindow) else { return nil }
+        var top: CGFloat?
+        func look(in view: UIView) {
+            guard !view.isHidden, view.alpha > 0.01 else { return }
+            if view is UISearchTextField {
+                let frame = view.convert(view.bounds, to: nil)
+                if frame.maxY > lineTop { top = min(top ?? frame.minY, frame.minY) }
+                return
+            }
+            view.subviews.forEach(look)
+        }
+        look(in: window)
+        return top
     }
 }
 

@@ -3,7 +3,7 @@
 # simulator session. Debug build of the app with a FORK_TEST_HOOKS=true page
 # staged (for the control run). It creates its own simulator, refuses to start
 # if two are already booted, and shuts it down and deletes it at the end.
-#   kill-run.sh <App.app> <out-dir> kills|all|rest|delay
+#   kill-run.sh <App.app> <out-dir> kills|all|rest|delay|reopen
 #   kills: 20 kills right after native/persisted answers stored, then one kill
 #          mid-write; it stops at once if a stored write is lost
 #   all:   then 5 kills with the page bridge's barrier off
@@ -43,15 +43,17 @@ xcrun simctl bootstatus $sim -b > /dev/null 2>&1
 xcrun simctl install $sim $app
 docs=$(xcrun simctl get_app_container $sim $bid data)/Documents/kill
 
+# Seconds a step may wait for the page; the reopen phase raises it (REOPEN_LIMIT)
+limit=300
 pause() { perl -e "select(undef,undef,undef,$1)"; }
 launch() {
   xcrun simctl terminate $sim $bid > /dev/null 2>&1
   # A killed step leaves its own error behind; it isn't the next step's
   rm -f $docs/error.json $docs/progress.json
-  xcrun simctl launch $sim $bid -UITestKill "$1" > /dev/null
+  xcrun simctl launch $sim $bid -UITestKill "$1" -UITestKillLimit $limit > /dev/null
 }
 waitfor() {
-  for i in {1..3000}; do
+  for i in {1..$(( (limit + 20) * 10 ))}; do
     [ -f "$1" ] && return 0
     [ -f "$docs/error.json" ] && { echo "app error: $(cat $docs/error.json)"; return 1; }
     [ $((i % 300)) -eq 0 ] && echo "  still waiting ($((i / 10)) s): $(cat $docs/progress.json 2>/dev/null)"
@@ -114,15 +116,19 @@ kill_after() { # name mode
 echo "--- refusal check"
 zsh $here/simkill.sh 00000000-0000-0000-0000-000000000000 --dry
 if [ $phase = reopen ]; then
-  # Kill during a held commit (barrier off, 300 ms delay), then relaunch and
-  # let the app reopen the budget by itself before the test opens it
+  # Kill, then relaunch and let the app reopen the budget by itself before the
+  # test opens it. REOPEN_MODE=control (barrier off: with a delayed page the
+  # kill lands in a held commit) or write (barrier on: killed after stored).
+  # REOPEN_LIMIT: seconds each relaunch may take (default 600).
+  mode=${REOPEN_MODE:-control} limit=${REOPEN_LIMIT:-600}
+  echo "mode $mode, limit $limit s per relaunch"
   echo "round | page's bridge ready | reopened by itself | test's own open | screen"
-  for n in {1..5}; do
-    kill_after reopen-kill-$n control || exit 1
+  for n in {1..${REOPEN_ROUNDS:-5}}; do
+    kill_after reopen-kill-$n $mode || exit 1
     pause 1
     rm -f $docs/reopen-$n.json
     launch reopen:$n
-    waitfor $docs/reopen-$n.json || { diagnose reopen-$n; keep=1; exit 1; }
+    waitfor $docs/reopen-$n.json || { cp $docs/progress.log $out/progress-$n.log 2>/dev/null; diagnose reopen-$n; keep=1; exit 1; }
     xcrun simctl io $sim screenshot $out/reopen-$n.png > /dev/null 2>&1
     cp $docs/progress.log $out/progress-$n.log 2>/dev/null
     row=$(node -e '
@@ -139,6 +145,8 @@ if [ $phase = reopen ]; then
       exit 1
     fi
   done
+  readback after-reopen || exit 1
+  echo "kept: $(grep -c '^reopen-kill-' $out/after-reopen-names.txt) of ${REOPEN_ROUNDS:-5}"
   exit 0
 fi
 if [ $phase = delay ]; then

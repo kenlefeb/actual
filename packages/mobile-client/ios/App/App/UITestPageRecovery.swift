@@ -108,6 +108,11 @@ enum UITestPageRecovery {
 @MainActor
 enum UITestKillWrites {
     private static var mode: String? { UserDefaults.standard.string(forKey: "UITestKill") }
+    // `-UITestKillLimit <seconds>`: how long a step waits for the page (default 180)
+    private static var limit: Double {
+        let value = UserDefaults.standard.double(forKey: "UITestKillLimit")
+        return value > 0 ? value : 180
+    }
     private static let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("kill")
 
@@ -209,7 +214,7 @@ enum UITestKillWrites {
             let read = try await page.run(
                 """
                 const cats = await window.$send('get-categories');
-                const names = cats.list.map(c => c.name).filter(n => n.startsWith('kill-') || n.startsWith('control-'));
+                const names = cats.list.map(c => c.name).filter(n => ['kill-', 'control-', 'reopen-'].some(p => n.startsWith(p)));
                 const bulk = cats.list.filter(c => c.name.startsWith('bulk-')).length;
                 const exported = await window.$send('export-budget');
                 const bytes = new Uint8Array(exported.data ?? []);
@@ -230,7 +235,7 @@ enum UITestKillWrites {
         func seconds() -> Int { Int(Date().timeIntervalSince(start)) }
         log("reopen \(round): launched")
         var bridge = -1
-        while seconds() < 180 {
+        while seconds() < Int(limit) {
             if (try? await page.run("return typeof window.$send")) as? String == "function" {
                 bridge = seconds()
                 break
@@ -240,7 +245,7 @@ enum UITestKillWrites {
         log("reopen \(round): page's bridge ready after \(bridge) s")
         let id = (try? String(contentsOf: folder.appendingPathComponent("budget-id"), encoding: .utf8)) ?? ""
         var bySelf = -1
-        while bridge >= 0, seconds() < 180 {
+        while bridge >= 0, seconds() < Int(limit) {
             let open = try? await page.run(
                 bounded + "try { return (await within(window.$send('load-prefs'), 2000))?.id ?? 'none'; } catch (e) { return 'error: ' + e.message; }")
             if open as? String == id {
@@ -292,7 +297,7 @@ enum UITestKillWrites {
     }
 
     private static func waitFor(_ condition: () async -> Bool) async throws {
-        for _ in 0..<300 {
+        for _ in 0..<Int(limit * 10) {
             if await condition() { return }
             try await Task.sleep(nanoseconds: 100_000_000)
         }

@@ -95,4 +95,109 @@ enum UITestPageRecovery {
         window.addSubview(label)
     }
 }
+
+// Test-only (sc-5219 task 3.4, design D12): the iPhone kill tests. With
+// `-UITestKill <mode>` the app does one step against a local test budget and
+// writes the outcome to Documents/kill/, for packages/mobile-client/ios/kill-tests
+// to read from the Mac side, which then ends this simulator's page process:
+//   write:<name>    creates a category and asks native/persisted (kill on "stored")
+//   control:<name>  the same with the page bridge's barrier off (FORK_TEST_HOOKS build)
+//   bulk            creates categories one after another until killed (mid-write)
+//   read            lists the test categories and exports the budget
+// Debug builds only.
+@MainActor
+enum UITestKillWrites {
+    private static var mode: String? { UserDefaults.standard.string(forKey: "UITestKill") }
+    private static let folder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("kill")
+
+    static func startIfRequested(webView: WKWebView, serverURL: URL) {
+        guard let mode else { return }
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let page = PageCall(runner: webView, serverURL: serverURL)
+        Task {
+            do {
+                write("progress", "started \(mode)")
+                try await openTestBudget(page)
+                write("progress", "budget open")
+                try await run(mode, page)
+                write("progress", "done \(mode)")
+            } catch {
+                write("error", "\(error)")
+            }
+        }
+    }
+
+    // The same local test budget every launch: created once, its id kept beside the results
+    private static func openTestBudget(_ page: PageCall) async throws {
+        try await waitFor { (try? await page.run("return typeof window.$send")) as? String == "function" }
+        let idFile = folder.appendingPathComponent("budget-id")
+        if let id = try? String(contentsOf: idFile, encoding: .utf8) {
+            // The reloaded page may reopen it on its own
+            for _ in 0..<50 {
+                if (try? await page.run("return (await window.$send('load-prefs'))?.id ?? null;")) as? String == id { return }
+                try await Task.sleep(nanoseconds: 200_000_000)
+            }
+            _ = try await page.run("await window.$send('load-budget', { id }); return 'ok';", arguments: ["id": id])
+            return
+        }
+        _ = try await page.run("await window.$send('create-budget', { testMode: true }); return 'ok';")
+        let id = try await page.run("return (await window.$send('load-prefs')).id;") as? String ?? ""
+        try id.write(to: idFile, atomically: true, encoding: .utf8)
+    }
+
+    private static func run(_ mode: String, _ page: PageCall) async throws {
+        let createAndAsk = """
+            const cats = await window.$send('get-categories');
+            const group = cats.grouped.find(g => !g.is_income);
+            await window.$send('category-create', { name, groupId: group.id });
+            return await window.__actualNativeBridge.call('native/persisted');
+            """
+        if mode.hasPrefix("write:") || mode.hasPrefix("control:") {
+            let name = String(mode.split(separator: ":", maxSplits: 1)[1])
+            if mode.hasPrefix("control:") { _ = try await page.run("window.__forkTestBarrierOff = true; return 'ok';") }
+            let answer = try await page.run(createAndAsk, arguments: ["name": name]) as? String ?? ""
+            write("result-\(name)", answer)
+        } else if mode == "bulk" {
+            write("bulk-started", "")
+            _ = try await page.run(
+                """
+                const cats = await window.$send('get-categories');
+                const group = cats.grouped.find(g => !g.is_income);
+                for (let i = 0; i < 2000; i++) {
+                  await window.$send('category-create', { name: 'bulk-' + i, groupId: group.id });
+                }
+                return 'done';
+                """)
+            write("bulk-done", "")
+        } else if mode == "read" {
+            let read = try await page.run(
+                """
+                const cats = await window.$send('get-categories');
+                const names = cats.list.map(c => c.name).filter(n => n.startsWith('kill-') || n.startsWith('control-'));
+                const bulk = cats.list.filter(c => c.name.startsWith('bulk-')).length;
+                const exported = await window.$send('export-budget');
+                const bytes = new Uint8Array(exported.data ?? []);
+                let text = '';
+                for (let i = 0; i < bytes.length; i += 0x8000) {
+                  text += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+                }
+                return JSON.stringify({ names, bulk, error: exported.error ?? null, zip: btoa(text) });
+                """) as? String ?? ""
+            write("read", read)
+        }
+    }
+
+    private static func write(_ name: String, _ text: String) {
+        try? text.write(to: folder.appendingPathComponent("\(name).json"), atomically: true, encoding: .utf8)
+    }
+
+    private static func waitFor(_ condition: () async -> Bool) async throws {
+        for _ in 0..<300 {
+            if await condition() { return }
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+        throw CancellationError()
+    }
+}
 #endif

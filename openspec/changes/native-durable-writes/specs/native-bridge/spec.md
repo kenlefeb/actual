@@ -234,6 +234,14 @@ The app-level notice SHALL say, from the copy table, that changes can't be saved
 - **WHEN** the notice shows
 - **THEN** it reads "This device is full, so changes can't be saved. Free up some space, then reload the app. Changes made after <time> weren't saved and need to be made again. Saved changes can't sync until there's space."
 
+### Requirement: The device-full notice with no time
+When a quota failure comes with no cut-off time, the failure notice SHALL read "This device is full, so changes can't be saved. Free up some space, then reload the app. Changes made since you opened the app weren't saved and need to be made again. Saved changes can't sync until there's space."
+
+#### Scenario: Device full, nothing stored this session
+- **GIVEN** the app opened and its first write failed with a quota error
+- **WHEN** the notice shows
+- **THEN** it reads "This device is full, so changes can't be saved. Free up some space, then reload the app. Changes made since you opened the app weren't saved and need to be made again. Saved changes can't sync until there's space."
+
 ### Requirement: Storage notices keep their button until used
 The storage notices SHALL show in the app's notice strip, announced to VoiceOver once, and SHALL NOT hide on their own or after a touch. The restart notices and the closed-budget notice SHALL carry OK, which ends that notice only. The failure notice SHALL carry Reload, which reloads the page, and no OK or Dismiss; it stays until Reload or a restart. Unlike the reload notice, none of them hides after 15 seconds.
 

@@ -193,9 +193,17 @@ final class StorageLineUITests: XCTestCase {
     }
 
     // For the Designer, outside the scratchpad; does nothing on a CI runner without that folder
+    // One folder per test run, so a run from another branch can't overwrite
+    // this one's evidence (story 5428: another worktree's run replaced a shot)
+    private static let run: String = {
+        let format = DateFormatter()
+        format.dateFormat = "yyyyMMdd-HHmmss"
+        return "run-\(format.string(from: Date()))"
+    }()
+
     private func save(_ name: String, folder: String = "storage-line-5296") {
         let home = NSHomeDirectory().components(separatedBy: "/Library/Developer/CoreSimulator").first ?? NSHomeDirectory()
-        let directory = "\(home)/Library/Developer/HomeEconomicsSpike/\(folder)"
+        let directory = "\(home)/Library/Developer/HomeEconomicsSpike/\(folder)/\(Self.run)"
         try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
         try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(directory)/\(name).png"))
     }

@@ -50,6 +50,8 @@ None.
   - "The storage status line shows only saving states"
   - "The storage status line never covers what a person needs"
   - "The storage status line keeps its place"
+  - "The storage status line fits above the keyboard"
+  - "The storage status line's VoiceOver announcements"
   - "A restart with unconfirmed writes tells the person"
   - "The native Accounts offline status is constant"
   - "Any storage failure latches and is shown app-wide"

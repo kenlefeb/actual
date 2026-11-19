@@ -127,7 +127,9 @@ kill_after() { # name mode
 stored_migrations() {
   local t=$(mktemp -d) found=0
   for f in $(find "$(xcrun simctl get_app_container $sim $bid data)/Library/WebKit" -name IndexedDB.sqlite3); do
-    sqlite3 "$f" "select value from IDBDatabaseInfo where key = 'DatabaseName'" | tr -d '\0' | grep -q "_test-budget-db.sqlite" || continue
+    # The name is UTF-16, which sqlite3 prints with `^@` between the letters
+    sqlite3 "$f" "select value from IDBDatabaseInfo where key = 'DatabaseName'" | sed 's/\^@//g' | tr -d '\0' \
+      | grep -q "_test-budget-db.sqlite" || continue
     cp "${f%/*}"/IndexedDB.sqlite3* $t/ && found=1
   done
   if [ $found = 1 ] && python3 -I $here/absurd-rebuild.py $t/IndexedDB.sqlite3 $t/budget.sqlite > /dev/null 2>&1; then

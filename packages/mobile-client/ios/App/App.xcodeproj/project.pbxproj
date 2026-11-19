@@ -72,6 +72,7 @@
 		FB5399000000000000000103 /* PageDialogsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5399000000000000000003 /* PageDialogsUITests.swift */; };
 		FB5219E00000000000000103 /* GuardEvidenceUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5219E00000000000000003 /* GuardEvidenceUITests.swift */; };
 		FB5219E00000000000000104 /* ReleaseSmokeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5219E00000000000000004 /* ReleaseSmokeUITests.swift */; };
+		FB5219E00000000000000105 /* UnguardedPageUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5219E00000000000000005 /* UnguardedPageUITests.swift */; };
 		FB5296000000000000000103 /* StorageLineUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5296000000000000000003 /* StorageLineUITests.swift */; };
 /* End PBXBuildFile section */
 
@@ -150,6 +151,7 @@
 		FB5399000000000000000003 /* PageDialogsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageDialogsUITests.swift; sourceTree = "<group>"; };
 		FB5219E00000000000000003 /* GuardEvidenceUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuardEvidenceUITests.swift; sourceTree = "<group>"; };
 		FB5219E00000000000000004 /* ReleaseSmokeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseSmokeUITests.swift; sourceTree = "<group>"; };
+		FB5219E00000000000000005 /* UnguardedPageUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnguardedPageUITests.swift; sourceTree = "<group>"; };
 		FB5296000000000000000003 /* StorageLineUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageLineUITests.swift; sourceTree = "<group>"; };
 		D246F7DC88D369846186AFFB /* UITestAccounts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestAccounts.swift; sourceTree = "<group>"; };
 		FB5247000000000000000002 /* UITestPageRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestPageRecovery.swift; sourceTree = "<group>"; };
@@ -292,6 +294,7 @@
 				FB5399000000000000000003 /* PageDialogsUITests.swift */,
 				FB5219E00000000000000003 /* GuardEvidenceUITests.swift */,
 				FB5219E00000000000000004 /* ReleaseSmokeUITests.swift */,
+				FB5219E00000000000000005 /* UnguardedPageUITests.swift */,
 				FB5296000000000000000003 /* StorageLineUITests.swift */,
 			);
 			path = AppUITests;
@@ -514,6 +517,7 @@
 				FB5399000000000000000103 /* PageDialogsUITests.swift in Sources */,
 				FB5219E00000000000000103 /* GuardEvidenceUITests.swift in Sources */,
 				FB5219E00000000000000104 /* ReleaseSmokeUITests.swift in Sources */,
+				FB5219E00000000000000105 /* UnguardedPageUITests.swift in Sources */,
 				FB5296000000000000000103 /* StorageLineUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

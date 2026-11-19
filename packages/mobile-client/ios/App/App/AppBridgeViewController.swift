@@ -183,6 +183,9 @@ class AppBridgeViewController: CAPBridgeViewController {
         if let webView, let pageProcessDelegate, let serverURL = bridge?.config.serverURL {
             UITestPageRecovery.startIfRequested(webView: webView, delegate: pageProcessDelegate, serverURL: serverURL)
             UITestKillWrites.startIfRequested(webView: webView, serverURL: serverURL)
+            UITestGuardEvidence.startIfRequested(
+                webView: webView, serverURL: serverURL, client: nativeBridge.client, storage: nativeBridge.writeStorage,
+                endPageProcess: { [weak pageProcessDelegate] in pageProcessDelegate?.webViewWebContentProcessDidTerminate(webView) })
         }
         if let webView, let serverURL = bridge?.config.serverURL {
             UITestPageDialogs.startIfRequested(webView: webView, serverURL: serverURL)

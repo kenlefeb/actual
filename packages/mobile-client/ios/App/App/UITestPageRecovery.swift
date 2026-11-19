@@ -157,7 +157,8 @@ enum UITestKillWrites {
         ]);
         """
 
-    private static func openTestBudget(_ page: PageCall) async throws {
+    // Also the guard-flip evidence's (UITestGuardEvidence.swift)
+    static func openTestBudget(_ page: PageCall) async throws {
         log("waiting for the page's bridge")
         try await waitFor { (try? await page.run("return typeof window.$send")) as? String == "function" }
         _ = try? await page.run(

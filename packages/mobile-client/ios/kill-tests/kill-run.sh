@@ -3,7 +3,8 @@
 # simulator session. Debug build of the app with a FORK_TEST_HOOKS=true page
 # staged (for the control run). It creates its own simulator, refuses to start
 # if two are already booted, and shuts it down and deletes it at the end.
-#   kill-run.sh <App.app> <out-dir> kills|all|rest|delay|reopen
+#   kill-run.sh <App.app> <out-dir> kills|all|rest|delay|reopen|migrate|series
+#   series: SERIES_ROUNDS launches of SERIES_WRITES barrier-on writes each, no kill between (sc-5404)
 #   kills: 20 kills right after native/persisted answers stored, then one kill
 #          mid-write; it stops at once if a stored write is lost
 #   all:   then 5 kills with the page bridge's barrier off
@@ -189,6 +190,23 @@ if [ $phase = reopen ]; then
   echo "kept: $(grep -c '^reopen-kill-' $out/after-reopen-names.txt) of ${REOPEN_ROUNDS:-5}"
   exit 0
 fi
+if [ $phase = series ]; then
+  # sc-5404: SERIES_WRITES barrier-on writes in one launch, no kill between,
+  # after the budget is created and stored; each answer and how long it took
+  launch write:warm-up
+  waitfor $docs/result-warm-up.json || exit 1
+  echo "warm-up: $(cat $docs/result-warm-up.json); waiting ${WARMUP_SECONDS:-90} s"
+  pause ${WARMUP_SECONDS:-90}
+  for round in {1..${SERIES_ROUNDS:-3}}; do
+    rm -f $docs/writes.json
+    launch writes:${SERIES_WRITES:-5}
+    waitfor $docs/writes.json || exit 1
+    echo "--- round $round (relaunched), load $(uptime | sed 's/.*averages: //')"
+    cat $docs/writes.json; echo
+    pause ${SERIES_PAUSE:-0}
+  done
+  exit 0
+fi
 if [ $phase = delay ]; then
   # A page built with FORK_TEST_COMMIT_DELAY_MS=300: every commit waits 300 ms.
   # DELAY_KILLS (default 5): barrier-on kills, each read back on its own.
@@ -213,12 +231,12 @@ if [ $phase = delay ]; then
   echo "--- barrier on, 300 ms commit delay: $kills kills right after stored: true, each read back"
   # Under load a write can miss native-persist-wait-ms and be answered stored:
   # false; it makes no promise, so it is killed but not counted (up to 3x tries)
-  echo "try | answer | counted | this write kept | all stored writes kept | integrity_check" > $out/delayed-table.txt
+  echo "try | answer | write took | load | counted | this write kept | all stored writes kept | integrity_check" > $out/delayed-table.txt
   stored=() a=0
   while [ ${#stored} -lt $kills ] && [ $a -lt $((kills * 3)) ]; do
     a=$((a + 1))
     kill_after kill-delayed-$a write || exit 1
-    answer=$(cat $docs/result-kill-delayed-$a.json)
+    answer="$(cat $docs/result-kill-delayed-$a.json) | $(grep -o 'answered in [0-9]* ms' $docs/progress.log | tail -1 | cut -d' ' -f3-) | $(uptime | sed 's/.*averages: //' | cut -d' ' -f1)"
     if ! grep -q '"stored":true' $docs/result-kill-delayed-$a.json; then
       echo "$a | $answer | no (not stored in time) | - | - | -" | tee -a $out/delayed-table.txt
       continue

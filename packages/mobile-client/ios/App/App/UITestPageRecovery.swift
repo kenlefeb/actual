@@ -208,8 +208,21 @@ enum UITestKillWrites {
         if mode.hasPrefix("write:") || mode.hasPrefix("control:") {
             let name = String(mode.split(separator: ":", maxSplits: 1)[1])
             if mode.hasPrefix("control:") { _ = try await page.run("window.__forkTestBarrierOff = true; return 'ok';") }
+            let start = Date()
             let answer = try await page.run(createAndAsk, arguments: ["name": name]) as? String ?? ""
+            log("answered in \(Int(Date().timeIntervalSince(start) * 1000)) ms")
             write("result-\(name)", answer)
+        } else if mode.hasPrefix("writes:") {
+            // sc-5404: several barrier-on writes in one launch, no kill between,
+            // each answer with how long it took (`writes:<count>`)
+            let count = Int(mode.dropFirst("writes:".count)) ?? 5
+            var rows: [String] = []
+            for n in 1...count {
+                let start = Date()
+                let answer = try await page.run(createAndAsk, arguments: ["name": "series-\(n)"]) as? String ?? ""
+                rows.append("\(n) | \(Int(Date().timeIntervalSince(start) * 1000)) ms | \(answer)")
+            }
+            write("writes", rows.joined(separator: "\n"))
         } else if mode == "bulk" {
             write("bulk-started", "")
             _ = try await page.run(

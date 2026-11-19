@@ -143,7 +143,7 @@ On iPhone the line SHALL sit above the tab bar and below the Undo bar, and rest 
 - **THEN** the line is hidden until it closes
 
 ### Requirement: The storage status line fits above the keyboard
-While the keyboard is up, with A the height from the top safe area, or from below a showing notice strip, to the keyboard, and H the line's height with its 8 pt margins: the full text SHALL show if its H is at most A ÷ 3. Otherwise the short form SHALL show on one line, never truncated: "Still saving…" for the not-stored state, and "Saving…" as is. If that H is still over A ÷ 3, the line SHALL hide and give back its space. When the keyboard goes, the full text and place return, with no animation.
+While the keyboard is up, with A the height from the top safe area, or from below a showing notice strip, to the keyboard, and H the line's height with its 8 pt margins: the full text SHALL show if its H is at most A ÷ 3. Otherwise the short form SHALL show on one line, never truncated: "Still saving…" for the not-stored state, and "Saving…" as is. If that H is still over A ÷ 3, the line SHALL hide and give back its space. When the keyboard goes, the full text and place return, unanimated.
 
 #### Scenario: Room for the full text
 - **GIVEN** the not-stored state and a keyboard leaving A at least 3 × the full text's H

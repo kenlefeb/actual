@@ -28,7 +28,9 @@ final class StorageLineUITests: XCTestCase {
     // its ••• menu, Reconcile, then step 1 into step 2. Bank of America is
     // already balanced, so step 2 has no rows, and then iOS puts the search
     // field at the bottom of the sheet (the case -ReconcileDemo step2 lacks).
-    private func checkTheRealFlow(_ extra: [String], shot: String) {
+    private func checkTheRealFlow(
+        _ extra: [String], shot: String, stopAtStepOne: Bool = false, atStepOne: (() -> Void)? = nil
+    ) {
         app.launchArguments = ["-UITestStorageLine", "unstored", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"] + extra
         app.launch()
         // A later run in the same simulator finds the demo budget already open
@@ -60,7 +62,14 @@ final class StorageLineUITests: XCTestCase {
         let stepDeadline = Date().addingTimeInterval(30)
         while !useCleared.exists && !stepTwo.exists && Date() < stepDeadline { sleep(1) }
         if !stepTwo.exists {
-            checkTheEditedFieldIsClear()
+            atStepOne?()
+            checkTheEditedFieldIsClear(shot: stopAtStepOne ? "\(shot)-keyboard" : nil)
+            if stopAtStepOne {
+                save(shot)
+                reachOnScreen("Use cleared balance")
+                reachOnScreen("Confirm balance")
+                return
+            }
             tapOnScreen("Use cleared balance")
             tapOnScreen("Confirm balance")
             let carryOn = app.buttons["Continue"]
@@ -79,9 +88,12 @@ final class StorageLineUITests: XCTestCase {
     // Step 1 opens with the statement amount being edited and the keyboard up.
     // The Designer's rule (PR 494): the line then takes at most a third of the
     // space above the keyboard, so the field stays readable and can be tapped.
-    private func checkTheEditedFieldIsClear() {
+    private func checkTheEditedFieldIsClear(shot: String? = nil) {
         let edited = app.descendants(matching: .any).matching(NSPredicate(format: "hasKeyboardFocus == true")).firstMatch
         guard edited.waitForExistence(timeout: 5) else { return }
+        // The line follows every 0.1 s
+        sleep(1)
+        if let shot { save(shot) }
         XCTAssertTrue(edited.isHittable, "the field being edited is covered")
         let line = app.staticTexts["storage.line"]
         if line.exists {
@@ -96,16 +108,21 @@ final class StorageLineUITests: XCTestCase {
     // At the largest text size a button can sit below the sheet's visible
     // part, where a tap lands on whatever is there instead
     private func tapOnScreen(_ label: String) {
+        reachOnScreen(label).tap()
+    }
+
+    // Scrolls a button into reach and checks nothing, the line included, covers it
+    @discardableResult
+    private func reachOnScreen(_ label: String) -> XCUIElement {
         let button = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", label)).firstMatch
         XCTAssertTrue(button.waitForExistence(timeout: 30), "no \"\(label)\" button")
         for _ in 0..<5 where !button.isHittable { app.swipeUp() }
         if !button.isHittable {
             keepScreen("\"\(label)\" can't be reached")
-            save("unreachable-\(label.prefix(12))")
             print("unreachable \(label): \(button.frame)")
         }
         XCTAssertTrue(button.isHittable, "\"\(label)\" can't be reached")
-        button.tap()
+        return button
     }
 
     // A screenshot kept with the result, and the screen's elements in the log,
@@ -148,6 +165,31 @@ final class StorageLineUITests: XCTestCase {
             to: URL(fileURLWithPath: "\(home)/Library/Developer/HomeEconomicsSpike/storage-line-5296/\(name).png"))
     }
 
+    // The Architect's review of the spec (PR 495): with the restart notice's
+    // strip showing and the keyboard up, the line's space starts below the
+    // strip, so it never draws over the strip or its button
+    func testWithANoticeInTheStripAndTheKeyboardUpTheLineStaysBelowTheStrip() {
+        // `-UITestStorageNotice failure` holds a notice in the strip from the first
+        // page load (one that stays, unlike the 15 s restart notice), so it is
+        // still up when step 1 opens with its amount being edited
+        checkTheRealFlow(["-UITestStorageNotice", "failure"], shot: "strip-keyboard", stopAtStepOne: true) {
+            let strip = self.app.staticTexts["pageNotice.text"]
+            XCTAssertTrue(strip.waitForExistence(timeout: 30), "no notice in the strip")
+            // A hidden keyboard can still be listed, so its "1" key must be hittable
+            let one = self.app.keyboards.keys["1"]
+            XCTAssertTrue(one.waitForExistence(timeout: 10) && one.isHittable, "the keyboard is not up on step 1")
+            // The line follows every 0.1 s
+            sleep(1)
+            self.save("strip-keyboard-up")
+            let stripBottom = max(strip.frame.maxY, self.app.buttons["pageNotice.dismiss"].frame.maxY)
+            let line = self.app.staticTexts["storage.line"]
+            if line.exists {
+                XCTAssertGreaterThanOrEqual(line.frame.minY - 6, stripBottom, "the line draws over the strip")
+            }
+            XCTAssertTrue(self.app.buttons["pageNotice.dismiss"].isHittable, "the strip's button is covered")
+        }
+    }
+
     func testOnReconcileStepTwoTheLineLeavesTheSearchFieldReadable() {
         checkReconcileSearchField([])
     }
@@ -163,8 +205,15 @@ final class StorageLineUITests: XCTestCase {
         checkTheRealFlow([], shot: "real-flow-step2-dark")
     }
 
-    func testThroughTheRealFlowAtTheLargestTextSizeTooTheLineLeavesTheSearchFieldReadable() {
-        checkTheRealFlow(["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"], shot: "real-flow-step2-ax5")
+    // At the largest text size on a short iPhone (CI's iPhone 16e) step 1 opens
+    // with the keyboard up: the line must leave the field and both buttons
+    // clear. It stops there: on that phone at that size the sheet closes after
+    // Confirm balance even without the line (story 5357), so step 2 at the
+    // largest size is checked on a taller phone by hand.
+    func testThroughTheRealFlowAtTheLargestTextSizeStepOneStaysClear() {
+        checkTheRealFlow(
+            ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"], shot: "real-flow-step1-ax5",
+            stopAtStepOne: true)
     }
 
     func testAtTheLargestTextSizeTooTheLineLeavesTheSearchFieldReadable() {

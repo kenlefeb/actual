@@ -111,10 +111,6 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
         noticeHeight = height
         additionalSafeAreaInsets.top = height
         giveSheetsNoticeSpace()
-        // The storage line's window (sc-5219) ends below the strip too, so the
-        // two never overlap, however large the text
-        view.window?.windowScene?.windows.filter { $0.windowLevel == .alert }
-            .forEach { $0.rootViewController?.additionalSafeAreaInsets.top = height }
         // As the storage line does: UIKit says nothing when a sheet opens, so
         // while the strip is up a sheet opened under it is found by looking
         noticeFollower?.invalidate()
@@ -139,6 +135,15 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
         while let screen = presented {
             if screen.additionalSafeAreaInsets.top != noticeHeight { screen.additionalSafeAreaInsets.top = noticeHeight }
             presented = screen.presentedViewController
+        }
+        // The storage line's window (sc-5219) ends below the strip too, so the
+        // two never overlap, however large the text, and the line's share of
+        // the space above the keyboard (sc-5296) counts from the strip down.
+        // Repeated while the strip is up, for a line that appears later.
+        for window in view.window?.windowScene?.windows ?? [] where window.windowLevel == .alert {
+            if let root = window.rootViewController, root.additionalSafeAreaInsets.top != noticeHeight {
+                root.additionalSafeAreaInsets.top = noticeHeight
+            }
         }
     }
 

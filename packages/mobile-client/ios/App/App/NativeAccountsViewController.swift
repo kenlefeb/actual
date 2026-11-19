@@ -335,7 +335,7 @@ private struct AccountsListBody: View {
         List {
             Group {
             if hasSubtitle {
-                Section(header: SyncSubtitle(status: isSyncing ? .syncing : status, staleError: staleError) { Task { await model.refresh() } }) {
+                Section(header: SyncSubtitle(status: isSyncing && status != .waitingForStorage ? .syncing : status, staleError: staleError) { Task { await model.refresh() } }) {
                     firstRows
                 }
             } else {
@@ -452,9 +452,10 @@ private struct SyncSubtitle: View {
         case .unknown: return ("", false)
         case .syncing: return (AccountsWords.syncing, false)
         case .synced(let date): return (AccountsWords.synced(date, now: now), false)
-        case .offline: return (AccountsWords.offline, false)
+        case .offline: return (NativeSyncStatus.offlineMessage, false)
         case .failed: return (AccountsWords.syncFailed, true)
         case .local: return (AccountsWords.localFile, false)
+        case .waitingForStorage: return (NativeSyncStatus.waitingMessage, false)
         }
     }
 }
@@ -688,7 +689,6 @@ enum AccountsWords {
     static let firstAccountDetail = NSLocalizedString(
         "Add an account by hand, or link your bank to bring in transactions automatically.", comment: "Native Accounts: no accounts")
     static let syncing = NSLocalizedString("Syncing…", comment: "Native Accounts: sync status")
-    static let offline = NSLocalizedString("Offline — changes saved on this iPhone", comment: "Native Accounts: sync status")
     static let syncFailed = NSLocalizedString("Sync failed — tap to retry", comment: "Native Accounts: sync status")
     static let localFile = NSLocalizedString("Local file — not syncing", comment: "Native Accounts: sync status")
     static let syncedJustNow = NSLocalizedString("Synced just now", comment: "Native Accounts: sync status")

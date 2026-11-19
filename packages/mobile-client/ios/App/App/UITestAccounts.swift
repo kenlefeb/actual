@@ -17,6 +17,39 @@ import UIKit
 enum UITestAccounts {
     static var isOn: Bool { UserDefaults.standard.bool(forKey: "UITestAccounts") }
 
+    // `-UITestStorageLine saving|unstored` holds the storage line up, to see it over the
+    // fixtures without slow storage. Kept alive with the window.
+    private static var storageLine: WriteStorageLine?
+
+    // Also on the real app shell, to see the line over real screens
+    @MainActor static func holdStorageLine(_ status: WriteStorageStatus) {
+        guard let state = UserDefaults.standard.string(forKey: "UITestStorageLine") else { return }
+        if state == "saving" {
+            status.writeBegan()
+            return
+        }
+        status.record(.notStored)
+        // The page's load clears it, as a restart would: put it back
+        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+            MainActor.assumeIsolated {
+                status.acknowledgeMayNotBeSaved()
+                status.record(.notStored)
+            }
+        }
+    }
+
+    @MainActor static func showStorageLine(over root: UIViewController, in scene: UIWindowScene) {
+        guard UserDefaults.standard.string(forKey: "UITestStorageLine") != nil else { return }
+        let status = WriteStorageStatus()
+        holdStorageLine(status)
+        storageLine = WriteStorageLine(
+            status: status, scene: scene, barHeight: { 0 },
+            reserve: { [weak root] height, keyboard in
+                (root as? TabContainerViewController)?.reserveBottom(height)
+                root?.presentedViewController?.additionalSafeAreaInsets.bottom = height + keyboard
+            })
+    }
+
     @MainActor static func makeRoot() -> UIViewController {
         // A held read must stay held: the default 5 s deadline would turn it into the error screen
         let holding = ["UITestSlowList", "UITestSlowRegister"].contains { UserDefaults.standard.bool(forKey: $0) }
@@ -49,10 +82,16 @@ enum UITestAccounts {
             openRegister: { nav.register = AccountRegisterViewModel(client: client, accountId: $0) },
             closeRegister: { nav.register = nil },
             reconcile: { handOff.text = "reconcile:\($0 ?? "checklist")" })
-        return UIHostingController(
+        let screen = UIHostingController(
             rootView: UITestAccountsRoot(
                 screen: AccountsScreen(model: model, nav: nav, reconcileMonth: monthModel, actions: actions),
                 handOff: handOff, model: model, month: monthModel))
+        guard UserDefaults.standard.string(forKey: "UITestStorageLine") != nil else { return screen }
+        // Laid out as in the app, so the line's reserved space is the real one
+        let container = TabContainerViewController(tab: .accounts)
+        container.tabBarVisible = true
+        container.embed(screen)
+        return container
     }
 
     // loot-core filters by scope on its side; the fake does the same to the fixture

@@ -146,6 +146,34 @@ describe('storage through the page bridge', () => {
     },
   );
 
+  // Security on PR #485: one id for this page load, on everything Swift compares
+  it('stamps its own page load on storage answers and events', async () => {
+    const send = vi.fn(async () => ({
+      stored: false,
+      seq: { epoch: 'engine', n: 4 },
+    }));
+    const listeners = new Map<string, (payload: unknown) => void>();
+    const notify = vi.fn();
+    const bridge = createNativeBridge({
+      send,
+      listen: (name, cb) => {
+        listeners.set(name, cb);
+        return () => listeners.delete(name);
+      },
+      notify,
+      pageLoad: 'this-page',
+    });
+    expect(JSON.parse(await bridge.call('native/persisted'))).toEqual({
+      stored: false,
+      seq: { epoch: 'this-page', n: 4 },
+    });
+    listeners.get('storage-stored')?.({ seq: { epoch: 'engine', n: 4 } });
+    expect(notify).toHaveBeenCalledWith({
+      event: 'stored',
+      payload: { seq: { epoch: 'this-page', n: 4 } },
+    });
+  });
+
   it('keeps the guard switch away from native code', async () => {
     const { bridge } = storageSetup();
     await expect(bridge.call('native/enable-storage-guard')).rejects.toThrow(
@@ -183,10 +211,10 @@ describe('storage through the page bridge', () => {
 
   it('forwards storage-stored as stored, and a closed budget failure', () => {
     const { listeners, notify } = storageSetup();
-    listeners.get('storage-stored')?.({ seq: 3 });
+    listeners.get('storage-stored')?.({ other: 3 });
     listeners.get('storage-close-failed')?.(undefined);
     expect(notify.mock.calls).toEqual([
-      [{ event: 'stored', payload: { seq: 3 } }],
+      [{ event: 'stored', payload: { other: 3 } }],
       [{ event: 'storage-close-failed', payload: undefined }],
     ]);
   });
@@ -254,6 +282,9 @@ describe('installNativeBridge', () => {
     });
     win.webkit = { messageHandlers: { actualNativeBridge: { postMessage } } };
     installNativeBridge(win);
-    expect(postMessage).toHaveBeenCalledWith({ event: 'ready', payload: null });
+    expect(postMessage).toHaveBeenCalledWith({
+      event: 'ready',
+      payload: { epoch: expect.any(String) },
+    });
   });
 });

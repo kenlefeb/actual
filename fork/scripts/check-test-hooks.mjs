@@ -13,6 +13,9 @@ export const HOOK_MARKERS = [
   // The storage-failure hook (sc-5219 guard flip) and the handler that arms it
   '__forkTestFailStorage',
   'native/test-fail-storage',
+  // The Release smoke run's self-arming test page
+  '__FORK_TEST_FAIL_STORAGE_AFTER_MS__',
+  '__FORK_TEST_FAIL_STORAGE_QUOTA__',
 ];
 
 const DEFAULT_BUILD = 'packages/desktop-client/build';

@@ -92,6 +92,8 @@ import { transactionSave } from './transaction-save';
 
 // Defined by the worker build (vite.config.mts): true only in FORK_TEST_HOOKS builds
 declare const __FORK_TEST_HOOKS__: boolean | undefined;
+declare const __FORK_TEST_FAIL_STORAGE_AFTER_MS__: number | undefined;
+declare const __FORK_TEST_FAIL_STORAGE_QUOTA__: boolean | undefined;
 
 // null: the value doesn't apply to this budget type (or row)
 type Amount = number | null;
@@ -336,6 +338,21 @@ if (typeof __FORK_TEST_HOOKS__ !== 'undefined' && __FORK_TEST_HOOKS__) {
         args?.quota ? 'quota' : 'abort';
     }) as never,
   );
+  // A test page can also arm it by itself, for a Release binary with no test
+  // harness to call the handler (the guard flip's Release smoke run)
+  const after =
+    typeof __FORK_TEST_FAIL_STORAGE_AFTER_MS__ !== 'undefined'
+      ? __FORK_TEST_FAIL_STORAGE_AFTER_MS__
+      : 0;
+  if (after > 0) {
+    setTimeout(() => {
+      (globalThis as { __forkTestFailStorage?: string }).__forkTestFailStorage =
+        typeof __FORK_TEST_FAIL_STORAGE_QUOTA__ !== 'undefined' &&
+        __FORK_TEST_FAIL_STORAGE_QUOTA__
+          ? 'quota'
+          : 'abort';
+    }, after);
+  }
 }
 app.method(
   'native/settings-save',

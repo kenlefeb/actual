@@ -42,6 +42,9 @@ for (const marker of [
   // sc-5219 guard flip: the storage-failure hook and its engine handler
   '__forkTestFailStorage',
   'native/test-fail-storage',
+  // The Release smoke run's self-arming test page
+  '__FORK_TEST_FAIL_STORAGE_AFTER_MS__',
+  '__FORK_TEST_FAIL_STORAGE_QUOTA__',
 ]) {
   void test(`Test hooks: finds ${marker}`, () => {
     const dir = build({

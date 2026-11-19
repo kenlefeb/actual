@@ -34,6 +34,8 @@ public final class StorageNotices {
     private var reloadedAt: Date?
     private var failure: (cutOff: CutOff, quota: Bool, load: Int)?
     private var shownFailure: WindowNotice?
+    // The restart notice on screen or waiting: a newer form replaces it, never joins it
+    private var shownRestart: WindowNotice?
     // The restart notice waiting for OK, with the earliest cut-off and the
     // latest failure's reason, which the engine forgets at a restart
     private var held: CutOff?
@@ -59,7 +61,7 @@ public final class StorageNotices {
         hasLoaded = true
         loads += 1
         // After a reload or restart: a failure notice still showing keeps its place
-        if let held, failure == nil { slot.show(restartNotice(held, quota: heldQuota)) }
+        if held != nil, failure == nil { showHeld() }
     }
 
     // The page's process ended and the app reloaded it on its own
@@ -70,7 +72,7 @@ public final class StorageNotices {
         endFailure()
         // The restart notice says the same, and its OK clears it
         slot.end(Self.someMayNotBeSaved)
-        if let held { slot.show(restartNotice(held, quota: heldQuota)) }
+        if held != nil { showHeld() }
     }
 
     // The page's storage-failed event; `lastStoredFlushAt` in milliseconds
@@ -90,6 +92,14 @@ public final class StorageNotices {
     // A closed budget's last write failed; it follows any notice showing
     public func closeFailed() {
         slot.queue(Self.closedBudget)
+    }
+
+    private func showHeld() {
+        guard let held else { return }
+        let notice = restartNotice(held, quota: heldQuota)
+        if let shownRestart, shownRestart != notice { slot.end(shownRestart) }
+        shownRestart = notice
+        slot.show(notice)
     }
 
     private func endFailure() {
@@ -112,6 +122,8 @@ public final class StorageNotices {
             if notice != Self.closedBudget {
                 held = nil
                 heldQuota = false
+                if let shownRestart { slot.end(shownRestart) }
+                shownRestart = nil
                 storage.acknowledgeMayNotBeSaved()
                 slot.end(Self.someMayNotBeSaved)
             }

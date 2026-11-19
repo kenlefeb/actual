@@ -316,6 +316,72 @@ final class StorageNoticesTests: XCTestCase {
         XCTAssertTrue(storage.mayNotBeSaved)
     }
 
+    // Security on PR #493: every pair of storage notices. A notice replaced by one
+    // that says the same is gone; one that says something else comes back after.
+    // Each case drains the strip with its buttons and lists what showed in turn.
+    func testReplacingANoticeNeverBringsBackOneTheReplacementCovers() {
+        let flushed = millis(Self.at(15, 42, 10))
+        let earlier = millis(Self.at(15, 40, 0))
+        func lose(_ storage: WriteStorageStatus) {
+            storage.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "old", n: 1)))
+            storage.pageLoaded(epoch: "new")
+        }
+        let cases: [(String, (StorageNotices, WriteStorageStatus) -> Void, [String])] = [
+            ("restart, then restart while full", { n, _ in
+                n.failed(lastStoredFlushAt: flushed, quota: false); n.restarted(); n.pageLoaded()
+                n.failed(lastStoredFlushAt: flushed, quota: true); n.restarted()
+            }, ["The app restarted, and this device is out of space"]),
+            ("restart, then restart with an earlier cut-off", { n, _ in
+                n.failed(lastStoredFlushAt: flushed, quota: false); n.restarted(); n.pageLoaded()
+                n.failed(lastStoredFlushAt: earlier, quota: false); n.restarted()
+            }, ["The app restarted. Changes made after 3:40:00 PM"]),
+            ("failure over a restart notice", { n, _ in
+                n.failed(lastStoredFlushAt: flushed, quota: false); n.restarted(); n.pageLoaded()
+                n.failed(lastStoredFlushAt: flushed, quota: false)
+            }, ["Changes can't", "The app restarted. Changes made after 3:42:10 PM"]),
+            ("restart over a failure", { n, _ in
+                n.failed(lastStoredFlushAt: flushed, quota: false); n.restarted()
+            }, ["The app restarted. Changes made after 3:42:10 PM"]),
+            ("failure over a possible loss", { n, s in
+                lose(s); n.failed(lastStoredFlushAt: nil, quota: false)
+            }, ["Changes can't", "The app restarted. Some recent"]),
+            ("restart over a possible loss", { n, s in
+                lose(s); n.failed(lastStoredFlushAt: nil, quota: false); n.restarted()
+            }, ["The app restarted. Changes made since"]),
+            ("failure over the closed-budget notice", { n, _ in
+                n.closeFailed(); n.failed(lastStoredFlushAt: nil, quota: false)
+            }, ["Changes can't", "Some recent changes to the budget"]),
+            ("restart over the closed-budget notice", { n, _ in
+                n.closeFailed(); n.failed(lastStoredFlushAt: nil, quota: false); n.restarted()
+            }, ["The app restarted. Changes made since", "Some recent changes to the budget"]),
+            ("possible loss over the closed-budget notice", { n, s in
+                n.closeFailed(); lose(s)
+            }, ["The app restarted. Some recent", "Some recent changes to the budget"]),
+            ("closed-budget notice behind a possible loss", { n, s in
+                lose(s); n.closeFailed()
+            }, ["The app restarted. Some recent", "Some recent changes to the budget"]),
+        ]
+        for (name, setUp, expected) in cases {
+            let slot = WindowNotices(schedule: { _, _ in }, announce: { _ in })
+            slot.pageDidLoad()
+            slot.windowChanged(isActive: true)
+            let storage = WriteStorageStatus()
+            let notices = StorageNotices(slot: slot, storage: storage, reload: {}, now: { self.clock }, time: Self.time)
+            notices.pageLoaded()
+            setUp(notices, storage)
+            var shown: [String] = []
+            while let current = slot.current, shown.count < 6 {
+                shown.append(current.text)
+                slot.tap()
+                // A Reload loads the page again
+                if current.button == .reload { notices.pageLoaded() }
+            }
+            XCTAssertEqual(shown.count, expected.count, "\(name): \(shown)")
+            for (text, start) in zip(shown, expected) { XCTAssertTrue(text.hasPrefix(start), "\(name): \(text)") }
+            XCTAssertFalse(storage.mayNotBeSaved, "\(name): OK leaves nothing pending")
+        }
+    }
+
     func testStorageFailedEventsAreRead() {
         let failure = NativeBridgeEvent.storageFailure(of: [
             "event": "storage-failed", "payload": ["lastStoredFlushAt": 1_800_000_000_500, "quota": true],

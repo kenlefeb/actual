@@ -8,9 +8,11 @@
 #          mid-write; it stops at once if a stored write is lost
 #   all:   then 5 kills with the page bridge's barrier off
 #   rest:  the mid-write kill and those 5 only
-#   delay: with a page built FORK_TEST_COMMIT_DELAY_MS=300, the control (barrier
-#          off, at least 1 must be lost) and then 5 kills with the barrier on
-#          (all 5 must be kept): the pair that shows the barrier saves them
+#   delay: with a page built FORK_TEST_COMMIT_DELAY_MS=300, the budget opened
+#          first (out of the migration window), the control (barrier off, at
+#          least 1 must be lost) and then DELAY_KILLS (default 5) kills with the
+#          barrier on, each read back (all must be kept): the pair that shows
+#          the barrier saves them; the rows go to <out-dir>/delayed-table.txt
 # Each part ends with a read: the test categories still there, and
 # PRAGMA integrity_check on the exported budget.
 app=$1 out=$2 phase=$3
@@ -187,7 +189,13 @@ if [ $phase = reopen ]; then
   exit 0
 fi
 if [ $phase = delay ]; then
-  # A page built with FORK_TEST_COMMIT_DELAY_MS=300: every commit waits 300 ms
+  # A page built with FORK_TEST_COMMIT_DELAY_MS=300: every commit waits 300 ms.
+  # DELAY_KILLS (default 5): barrier-on kills, each read back on its own.
+  kills=${DELAY_KILLS:-5}
+  # Open (create and migrate) the budget first, so no kill lands in the
+  # migration window and a migration strand isn't taken for a lost write
+  echo "--- warm-up: open the test budget before any kill"
+  readback warm-up || exit 1
   echo "--- control: barrier off, 300 ms commit delay"
   for n in {1..5}; do kill_after control-$n control || exit 1; done
   readback after-control || exit 1
@@ -197,19 +205,25 @@ if [ $phase = delay ]; then
     echo "the control lost nothing: inconclusive, stopping"
     exit 1
   fi
-  echo "--- barrier on, 300 ms commit delay: 5 kills right after stored: true"
-  for n in {1..5}; do
+  echo "--- barrier on, 300 ms commit delay: $kills kills right after stored: true, each read back"
+  echo "kill | answer | kept after the kill | all earlier kept | integrity_check" > $out/delayed-table.txt
+  for n in {1..$kills}; do
     kill_after kill-delayed-$n write || exit 1
+    answer=$(cat $docs/result-kill-delayed-$n.json)
     grep -q '"stored":true' $docs/result-kill-delayed-$n.json || { echo "kill-delayed-$n was not answered stored: stopping"; exit 1; }
+    readback after-delayed-$n || exit 1
+    names=$out/after-delayed-$n-names.txt
+    grep -qx "kill-delayed-$n" $names && kept=yes || kept=no
+    earlier=$(grep -c '^kill-delayed-' $names)
+    check=$(sqlite3 $(ls $out/after-delayed-$n-db/*.sqlite | head -1) 'PRAGMA integrity_check;')
+    echo "$n | $answer | $kept | $earlier of $n | $check" | tee -a $out/delayed-table.txt
+    if [ $kept != yes ] || [ "$earlier" != $n ] || [ "$check" != ok ]; then
+      echo "a stored write was lost or the check failed after kill $n: stopping"
+      keep=1
+      exit 1
+    fi
   done
-  readback after-delayed || exit 1
-  kept=$(grep -c '^kill-delayed-' $out/after-delayed-names.txt)
-  echo "kept: $kept of 5"
-  check=$(sqlite3 $(ls $out/after-delayed-db/*.sqlite | head -1) 'PRAGMA integrity_check;')
-  if [ "$kept" != 5 ] || [ "$check" != ok ]; then
-    echo "a stored write was lost or the check failed: stopping"
-    exit 1
-  fi
+  echo "all $kills stored writes kept"
   exit 0
 fi
 if [ $phase != rest ]; then

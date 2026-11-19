@@ -122,10 +122,10 @@ On iPhone, while the storage status line shows, it SHALL NOT cover content or co
 #### Scenario: A context menu from a low row
 - **GIVEN** the line showing
 - **WHEN** the person long-presses a row near the bottom of the screen
-- **THEN** no item of the menu is under the line
+- **THEN** no item of the menu is under the line, because the line hides while the menu is open and returns unchanged when it closes
 
 ### Requirement: The storage status line keeps its place
-On iPhone the line SHALL sit above the tab bar and below the Undo bar, and rest above the keyboard without covering the field being edited, within "The storage status line fits above the keyboard". It SHALL return above the tab bar after a sheet closes, hide while an alert or confirmation shows, and take no touches.
+On iPhone the line SHALL sit above the tab bar and below the Undo bar, and rest above the keyboard without covering the field being edited, within "The storage status line fits above the keyboard". It SHALL return above the tab bar after a sheet closes and take no touches. It SHALL hide while a context menu, alert or confirmation dialog is open and return unchanged when it closes, with the VoiceOver announcement unaffected, and stay visible over sheets and full-screen screens.
 
 #### Scenario: With the Undo bar
 - **GIVEN** a write that shows both the line and the Undo bar

@@ -479,10 +479,18 @@ final class WriteStorageLine {
         screen.follow()
     }
 
+    // An alert, a confirmation or a context menu. A context menu from a low row
+    // can reach the line's place at large text sizes (story 5383).
     private var isConfirmationUp: Bool {
         var screen = scene.windows.first(where: \.isKeyWindow)?.rootViewController
         while let presented = screen?.presentedViewController {
-            if presented is UIAlertController { return true }
+            let isFullScreen = [.fullScreen, .overFullScreen].contains(presented.modalPresentationStyle)
+            if WriteStorageLineFit.stepsAside(
+                isAlert: presented is UIAlertController, isSheet: presented.sheetPresentationController != nil,
+                isFullScreen: isFullScreen)
+            {
+                return true
+            }
             screen = presented
         }
         return false
@@ -532,7 +540,9 @@ private final class WriteStorageLineController: UIViewController {
         let safe = view.safeAreaLayoutGuide
         let keyboardTop = view.keyboardLayoutGuide.topAnchor
         let resting = pill.bottomAnchor.constraint(equalTo: keyboardTop, constant: -8)
-        resting.priority = .defaultLow
+        // Below the label's hugging, so the pill never stretches down to the
+        // keyboard when it sits at the top (story 5383)
+        resting.priority = UILayoutPriority(UILayoutPriority.defaultLow.rawValue - 1)
         let bar = pill.bottomAnchor.constraint(lessThanOrEqualTo: view.bottomAnchor)
         aboveBar = bar
         atTop = pill.topAnchor.constraint(equalTo: safe.topAnchor, constant: 8)
@@ -576,6 +586,8 @@ private final class WriteStorageLineController: UIViewController {
         }
         let resting = -(barHeight() + 8)
         aboveBar?.constant = resting
+        // Measured in the resting place each time, not where the last check put it
+        atTop?.isActive = false
         label.text = message
         pill.isHidden = false
         view.layoutIfNeeded()

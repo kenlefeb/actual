@@ -31,6 +31,15 @@ final class StorageLineUITests: XCTestCase {
     private func checkTheRealFlow(
         _ extra: [String], shot: String, stopAtStepOne: Bool = false, atStepOne: (() -> Void)? = nil
     ) {
+        openBankOfAmerica(extra)
+        XCTAssertTrue(app.buttons["More"].waitForExistence(timeout: 30), "the register did not open")
+        app.buttons["More"].tap()
+        app.buttons["Reconcile"].tap()
+        continueToStepTwo(shot: shot, stopAtStepOne: stopAtStepOne, atStepOne: atStepOne)
+    }
+
+    // The demo budget's Bank of America register, with the line held up
+    private func openBankOfAmerica(_ extra: [String]) {
         app.launchArguments = ["-UITestStorageLine", "unstored", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"] + extra
         app.launch()
         // A later run in the same simulator finds the demo budget already open
@@ -53,9 +62,9 @@ final class StorageLineUITests: XCTestCase {
             XCTAssertTrue(text.waitForExistence(timeout: 5), "no Bank of America row")
             text.tap()
         }
-        XCTAssertTrue(app.buttons["More"].waitForExistence(timeout: 30), "the register did not open")
-        app.buttons["More"].tap()
-        app.buttons["Reconcile"].tap()
+    }
+
+    private func continueToStepTwo(shot: String, stopAtStepOne: Bool, atStepOne: (() -> Void)?) {
         // A reconcile an earlier test left in progress opens again at step 2
         let useCleared = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Use cleared balance")).firstMatch
         let stepTwo = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Step 2 of 4")).firstMatch
@@ -86,7 +95,12 @@ final class StorageLineUITests: XCTestCase {
     private func checkTheEditedFieldIsClear(shot: String? = nil) {
         // A hidden keyboard can still be listed, so its "1" key must be hittable
         let one = app.keyboards.keys["1"]
-        guard one.waitForExistence(timeout: 5), one.isHittable else { return }
+        // Step 1 always opens with the amount being edited (story 5378: a
+        // keyboard that never came must fail the test, not skip the check)
+        guard one.waitForExistence(timeout: 5), one.isHittable else {
+            XCTFail("the keyboard is not up on step 1")
+            return
+        }
         // The line follows every 0.1 s
         sleep(1)
         if let shot { save(shot) }
@@ -179,10 +193,120 @@ final class StorageLineUITests: XCTestCase {
     }
 
     // For the Designer, outside the scratchpad; does nothing on a CI runner without that folder
-    private func save(_ name: String) {
+    private func save(_ name: String, folder: String = "storage-line-5296") {
         let home = NSHomeDirectory().components(separatedBy: "/Library/Developer/CoreSimulator").first ?? NSHomeDirectory()
-        try? XCUIScreen.main.screenshot().pngRepresentation.write(
-            to: URL(fileURLWithPath: "\(home)/Library/Developer/HomeEconomicsSpike/storage-line-5296/\(name).png"))
+        let directory = "\(home)/Library/Developer/HomeEconomicsSpike/\(folder)"
+        try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
+        try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(directory)/\(name).png"))
+    }
+
+    // MARK: Placement (story 5383, tasks 6.1 to 6.3 of native-durable-writes)
+
+    private var line: XCUIElement { app.staticTexts["storage.line"] }
+
+    // The line's pill, around its label
+    private var pill: CGRect { line.frame.insetBy(dx: -12, dy: -6) }
+
+    private func shot(_ name: String) {
+        let size = app.launchArguments.contains("UICTContentSizeCategoryAccessibilityXXXL") ? "ax5" : "default"
+        let look = XCUIDevice.shared.appearance == .dark ? "dark" : "light"
+        save("\(name)-\(size)-\(look)", folder: "storage-line-5297")
+    }
+
+    // A posted register row whose bottom is close to the line: the lowest one
+    // wholly above it (scheduled rows have no menu)
+    private func lowRow() -> XCUIElement {
+        let origin = app.coordinate(withNormalizedOffset: .zero)
+        let rows = app.buttons.matching(NSPredicate(
+            format: "label CONTAINS ', ' AND NOT (label CONTAINS 'Bank of America') AND NOT (label CONTAINS[c] 'scheduled')"))
+        // At the largest text size the upcoming rows take several screens, so
+        // keep scrolling until a posted row sits wholly above the line
+        for _ in 0..<12 {
+            origin.withOffset(CGVector(dx: 200, dy: 500)).press(forDuration: 0.05, thenDragTo: origin.withOffset(CGVector(dx: 200, dy: 250)))
+            sleep(1)
+            let top = pill.minY
+            let candidates = (0..<min(rows.count, 40)).map { rows.element(boundBy: $0) }
+                .filter { $0.frame.maxY <= top && $0.frame.minY > 150 }
+            if let lowest = candidates.max(by: { $0.frame.maxY < $1.frame.maxY }) { return lowest }
+        }
+        keepScreen("no posted row above the line")
+        return rows.firstMatch
+    }
+
+    // One pass through the places tasks 6.1 to 6.3 name: a context menu from a
+    // low row, the Categorize sheet scrolled to its end, the Undo bar after
+    // the change, and the line back above the tab bar once the sheet closes
+    private func checkPlacementInTheRegister(_ extra: [String]) {
+        openBankOfAmerica(extra)
+        XCTAssertTrue(app.buttons["More"].waitForExistence(timeout: 30), "the register did not open")
+        XCTAssertTrue(line.waitForExistence(timeout: 30), "the line is not showing")
+        sleep(1)
+        shot("register")
+
+        // 6.2: a context menu from a low row has no item under the line
+        let row = lowRow()
+        row.press(forDuration: 1.2)
+        let categorize = app.buttons["Categorize"]
+        XCTAssertTrue(categorize.waitForExistence(timeout: 10), "no context menu on \(row.label)")
+        sleep(1)
+        shot("context-menu")
+        if line.exists {
+            for item in ["Categorize", "Clear", "Unclear", "Delete"] where app.buttons[item].exists {
+                XCTAssertFalse(pill.intersects(app.buttons[item].frame), "the line \(pill) covers the menu's \(item) \(app.buttons[item].frame)")
+            }
+        }
+
+        // 6.1: the last row of the Categorize sheet scrolls clear of the line
+        categorize.tap()
+        let cancel = app.buttons["Cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 10), "the Categorize sheet did not open")
+        let last = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Income")).firstMatch
+        let origin = app.coordinate(withNormalizedOffset: .zero)
+        for _ in 0..<15 {
+            origin.withOffset(CGVector(dx: 200, dy: 500)).press(forDuration: 0.05, thenDragTo: origin.withOffset(CGVector(dx: 200, dy: 250)))
+        }
+        sleep(1)
+        shot("sheet-end")
+        XCTAssertTrue(last.exists, "no Income row (the last category) in the Categorize sheet")
+        XCTAssertLessThanOrEqual(last.frame.maxY, pill.minY, "the sheet's last row \(last.frame) ends under the line \(pill)")
+
+        // 6.3: the Undo bar above the line, by frames, and the line back above the tab bar
+        last.tap()
+        let undo = app.buttons["Undo"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 10), "no Undo after the change")
+        sleep(1)
+        shot("undo")
+        // The Undo bar is the button plus the bar's 16-point padding
+        XCTAssertLessThanOrEqual(undo.frame.maxY + 16, pill.minY, "the Undo bar ends under the line")
+        let tabBar = app.tabBars.firstMatch
+        XCTAssertLessThanOrEqual(pill.maxY, tabBar.frame.minY, "the line \(pill) is not above the tab bar \(tabBar.frame)")
+        undo.tap()
+    }
+
+    // Story 5383: with the keyboard up the line keeps its own height. Before
+    // the fix, once it moved to the top to clear the field being edited, it
+    // stretched down to the keyboard and then hid. The size comes from the
+    // SIZE environment value, so a run can also look for the short form.
+    func testWithTheKeyboardUpAtALargeSizeTheLineKeepsItsHeight() {
+        let size = ProcessInfo.processInfo.environment["SIZE"] ?? "UICTContentSizeCategoryAccessibilityXL"
+        checkTheRealFlow(["-UIPreferredContentSizeCategoryName", size], shot: "large", stopAtStepOne: true) {
+            let keyboard = self.app.keyboards.firstMatch
+            XCTAssertTrue(keyboard.waitForExistence(timeout: 10), "the keyboard is not up on step 1")
+            // The line follows every 0.1 s
+            sleep(2)
+            self.save("keyboard-\(size.replacingOccurrences(of: "UICTContentSizeCategory", with: ""))", folder: "storage-line-5297")
+            XCTAssertTrue(self.line.exists, "the line is hidden")
+            XCTAssertLessThanOrEqual(self.line.frame.height, keyboard.frame.minY / 3, "the line \(self.line.frame) is stretched")
+            XCTAssertLessThanOrEqual(self.line.frame.maxY, keyboard.frame.minY, "the line is not above the keyboard")
+        }
+    }
+
+    func testInTheRegisterTheLineLeavesMenusSheetsAndTheUndoBarClear() {
+        checkPlacementInTheRegister([])
+    }
+
+    func testAtTheLargestTextSizeTooTheLineLeavesMenusSheetsAndTheUndoBarClear() {
+        checkPlacementInTheRegister(["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
     }
 
     // The Architect's review of the spec (PR 495): with the restart notice's

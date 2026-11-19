@@ -87,5 +87,5 @@
 
 The stored answer only reaches screens once the storage guard is on; with the guard off, a failed write still answers stored. So this group lands as a commit inside the guard-on PR, or as a PR stacked directly under it, and the guard-on PR doesn't merge without it (Product Owner, sc-5303 comment 5331).
 
-- [x] 7.1 Failing tests first for "Screens say "Saved" only once the write is stored" and "Budget and Reconcile wait for storage before "Saved"": Paychecks (`Saved "%@".`, `Saved %@. Undo is available.`), Budget's refresh-failure wording, the Reconcile alert, Undo offered at once and labelled "Undo", and no "Saved" for a write that never stores
-- [x] 7.2 Change Paychecks, Budget and Reconcile to show those messages only on `stored: true` or the `stored` event, with no new copy
+- [x] 7.1 Failing tests first for "Screens say "Saved" only once the write is stored" and "Budget and Reconcile wait for storage before "Saved"": Paychecks (`Saved "%@".`, `Saved %@. Undo is available.`), Budget's refresh-failure wording, the Reconcile alert (stored at once shows it; stored after step 2 opens shows nothing), Undo offered at once and labelled "Undo", and no "Saved" for a write that never stores
+- [x] 7.2 Change Paychecks and Budget to show those messages only on `stored: true` or the `stored` event, and Reconcile to show its alert only if stored before step 2 opens (never late; UX Designer, PR #496), with no new copy

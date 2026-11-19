@@ -50,17 +50,22 @@ In an opted-in shell, a success message saying "Saved" SHALL appear only after t
 - **THEN** the failure or restart notice shows, and no "Saved" message ever shows for that write
 
 ### Requirement: Budget and Reconcile wait for storage before "Saved"
-Until a Budget write is stored, a refresh failure SHALL read "The budget could not be refreshed."; "Saved, but the budget could not be refreshed." SHALL be used only once stored. Reconcile's "Saved from your cleared balance" alert SHALL show only once the write is stored. Budget's "Saved" summary label on a tracking budget and the "could not be saved" errors are not affected.
+Until a Budget write is stored, a refresh failure SHALL read "The budget could not be refreshed."; "Saved, but the budget could not be refreshed." SHALL be used only once stored. Reconcile's "Saved from your cleared balance" alert SHALL show only if the write is stored before step 2 opens; stored later, no alert shows and nothing is announced. Budget's "Saved" summary label on a tracking budget and the "could not be saved" errors are not affected.
 
 #### Scenario: Budget refresh fails before storage
 - **GIVEN** a budget amount written while storage is slow
 - **WHEN** the refresh after it fails
 - **THEN** the message reads "The budget could not be refreshed."
 
-#### Scenario: Reconcile from the cleared balance
+#### Scenario: Reconcile, stored at once
+- **GIVEN** a statement balance saved from the cleared balance
+- **WHEN** the write is stored before step 2 opens
+- **THEN** "Saved from your cleared balance" shows
+
+#### Scenario: Reconcile, stored later
 - **GIVEN** a statement balance saved from the cleared balance while storage is slow
-- **WHEN** the write replies with `stored: false`
-- **THEN** no alert shows until `stored` arrives, and then "Saved from your cleared balance" shows
+- **WHEN** step 2 opens and the write is stored afterwards
+- **THEN** no alert shows and nothing is announced; the balance still shows its source
 
 ### Requirement: The storage barrier waits for complete
 `native/persisted` SHALL wait, up to `native-persist-wait-ms`, until every pending IndexedDB write of the open budget (of every file with `allFiles: true`, its only argument) has fired `complete`, answering `stored: true`, or `stored: false` on timeout. It SHALL be allowlisted in both lists with a `coverage.json` skip. A pending write SHALL settle on `complete`, `abort` or `error`. When a timed-out wait's writes finish, the engine SHALL send `storage-stored`, forwarded to Swift as `stored`.

@@ -116,6 +116,10 @@ enum UITestKillWrites {
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let page = PageCall(runner: webView, serverURL: serverURL)
         Task {
+            if mode.hasPrefix("reopen:") {
+                await reopen(String(mode.dropFirst("reopen:".count)), page)
+                return
+            }
             do {
                 log("started \(mode)")
                 try await openTestBudget(page)
@@ -217,6 +221,47 @@ enum UITestKillWrites {
                 """) as? String ?? ""
             write("read", read)
         }
+    }
+
+    // `reopen:<round>`, after a kill during a held commit: does the app reopen
+    // the budget by itself, how long does it take, and only then the test's own open
+    private static func reopen(_ round: String, _ page: PageCall) async {
+        let start = Date()
+        func seconds() -> Int { Int(Date().timeIntervalSince(start)) }
+        log("reopen \(round): launched")
+        var bridge = -1
+        while seconds() < 180 {
+            if (try? await page.run("return typeof window.$send")) as? String == "function" {
+                bridge = seconds()
+                break
+            }
+            try? await Task.sleep(nanoseconds: 250_000_000)
+        }
+        log("reopen \(round): page's bridge ready after \(bridge) s")
+        let id = (try? String(contentsOf: folder.appendingPathComponent("budget-id"), encoding: .utf8)) ?? ""
+        var bySelf = -1
+        while bridge >= 0, seconds() < 180 {
+            let open = try? await page.run(
+                bounded + "try { return (await within(window.$send('load-prefs'), 2000))?.id ?? 'none'; } catch (e) { return 'error: ' + e.message; }")
+            if open as? String == id {
+                bySelf = seconds()
+                break
+            }
+            try? await Task.sleep(nanoseconds: 500_000_000)
+        }
+        log("reopen \(round): reopened by itself after \(bySelf) s")
+        var byTest = "not needed"
+        if bySelf < 0, bridge >= 0 {
+            byTest = (try? await page.run(
+                bounded + "try { await within(window.$send('load-budget', { id }), 90000); return 'ok'; } catch (e) { return 'error: ' + e.message; }",
+                arguments: ["id": id])) as? String ?? "no answer"
+            log("reopen \(round): the test's own open: \(byTest)")
+        }
+        let result: [String: Any] = [
+            "bridgeSeconds": bridge, "reopenedBySelfSeconds": bySelf, "testOpen": byTest, "page": await pageState(page),
+        ]
+        let data = (try? JSONSerialization.data(withJSONObject: result)) ?? Data()
+        write("reopen-\(round)", String(decoding: data, as: UTF8.self))
     }
 
     // What the page shows and any error it reported, for a stall

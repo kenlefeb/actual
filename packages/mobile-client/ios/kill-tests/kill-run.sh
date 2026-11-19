@@ -27,10 +27,15 @@ fi
 sim=$(xcrun simctl create "sc-5219 kill $phase" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro com.apple.CoreSimulator.SimRuntime.iOS-27-0)
 echo $sim > $KILL_SIM_FILE
 echo "simulator $sim"
+keep=0
 cleanup() {
   xcrun simctl shutdown $sim > /dev/null 2>&1
-  xcrun simctl delete $sim > /dev/null 2>&1
-  echo "simulator deleted: $sim"
+  if [ $keep = 1 ]; then
+    echo "simulator kept, shut down, for its data: $sim"
+  else
+    xcrun simctl delete $sim > /dev/null 2>&1
+    echo "simulator deleted: $sim"
+  fi
 }
 trap cleanup EXIT
 xcrun simctl boot $sim
@@ -108,6 +113,34 @@ kill_after() { # name mode
 
 echo "--- refusal check"
 zsh $here/simkill.sh 00000000-0000-0000-0000-000000000000 --dry
+if [ $phase = reopen ]; then
+  # Kill during a held commit (barrier off, 300 ms delay), then relaunch and
+  # let the app reopen the budget by itself before the test opens it
+  echo "round | page's bridge ready | reopened by itself | test's own open | screen"
+  for n in {1..5}; do
+    kill_after reopen-kill-$n control || exit 1
+    pause 1
+    rm -f $docs/reopen-$n.json
+    launch reopen:$n
+    waitfor $docs/reopen-$n.json || { diagnose reopen-$n; keep=1; exit 1; }
+    xcrun simctl io $sim screenshot $out/reopen-$n.png > /dev/null 2>&1
+    cp $docs/progress.log $out/progress-$n.log 2>/dev/null
+    row=$(node -e '
+      const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+      const p = JSON.parse(r.page || "{}");
+      console.log([r.bridgeSeconds + " s", r.reopenedBySelfSeconds < 0 ? "no" : r.reopenedBySelfSeconds + " s",
+        r.testOpen, (p.text || "").replace(/\s+/g, " ").slice(0, 60)].join(" | "));
+    ' $docs/reopen-$n.json)
+    echo "$n | $row"
+    if grep -q '"reopenedBySelfSeconds":-1' $docs/reopen-$n.json; then
+      echo "round $n: the app did not reopen the budget by itself: keeping the data"
+      diagnose reopen-$n
+      keep=1
+      exit 1
+    fi
+  done
+  exit 0
+fi
 if [ $phase = delay ]; then
   # A page built with FORK_TEST_COMMIT_DELAY_MS=300: every commit waits 300 ms
   echo "--- control: barrier off, 300 ms commit delay"

@@ -159,7 +159,16 @@ public final class WriteStorageStatus: ObservableObject {
     private var writesInProgress = 0 { didSet { updateLine() } }
     // The current page's writes not known to be stored: when their
     // native/persisted call was asked, and its number once answered
-    private var unstored: [(ticket: Int, seq: Int?)] = [] { didSet { updateLine() } }
+    private var unstored: [(ticket: Int, seq: Int?)] = [] {
+        didSet {
+            updateLine()
+            settleWaiters()
+        }
+    }
+    // Writes a restart or a page mismatch may have lost, for whoever waits on them
+    private var lost: Set<Int> = []
+    private var waiters: [Int: [(id: Int, continuation: CheckedContinuation<Bool, Never>)]] = [:]
+    private var lastWaiter = 0
     // Keeps counting across page loads, so a late ticket can't pass for a new one
     private var lastTicket = 0
     private var newestStoredTicket = 0
@@ -244,11 +253,15 @@ public final class WriteStorageStatus: ObservableObject {
         let isLive = answeredBy.map(adopt) ?? true
         if let origin, origin.epoch != (answeredBy ?? currentEpoch) {
             mayNotBeSaved = true
+            lost.insert(ticket)
             return false
         }
         guard isLive else {
             // The page before this one, about its own write
-            if !answer.stored { mayNotBeSaved = true }
+            if !answer.stored {
+                mayNotBeSaved = true
+                lost.insert(ticket)
+            }
             return answer.stored
         }
         if answer.stored {
@@ -257,8 +270,16 @@ public final class WriteStorageStatus: ObservableObject {
         } else if ticket > newestStoredTicket {
             // This call waits for every write before it, so it speaks for any
             // earlier call that never got an answer
-            if answer.seq != nil { unstored.removeAll { $0.seq == nil && $0.ticket < ticket } }
-            if (answer.seq?.n ?? .max) > storedThroughSeq { unstored.append((ticket, answer.seq?.n)) }
+            // One change, so no wait is settled halfway; a replaced write's
+            // waiters now wait on this one, which still isn't stored
+            var next = unstored
+            if answer.seq != nil {
+                let replaced = next.filter { $0.seq == nil && $0.ticket < ticket }.map(\.ticket)
+                next.removeAll { $0.seq == nil && $0.ticket < ticket }
+                for old in replaced { waiters[ticket, default: []] += waiters.removeValue(forKey: old) ?? [] }
+            }
+            if (answer.seq?.n ?? .max) > storedThroughSeq { next.append((ticket, answer.seq?.n)) }
+            unstored = next
         }
         return answer.stored
     }
@@ -285,8 +306,46 @@ public final class WriteStorageStatus: ObservableObject {
         // The new page's numbers start again
         storedThroughSeq = 0
         if !unstored.isEmpty {
+            lost.formUnion(unstored.map(\.ticket))
             unstored = []
             mayNotBeSaved = true
+        }
+    }
+
+    // sc-5303: waits for one write that answered not stored. True once storage
+    // says so, false if a restart or another page may have lost it.
+    func waitStored(ticket: Int) async -> Bool {
+        if lost.contains(ticket) { return false }
+        guard unstored.contains(where: { $0.ticket == ticket }) else { return true }
+        lastWaiter += 1
+        let id = lastWaiter
+        // A waiter that goes away (its screen closed) ends its wait, with no claim of saving
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { waiters[ticket, default: []].append((id, $0)) }
+        } onCancel: {
+            Task { @MainActor [weak self] in self?.endWait(id) }
+        }
+    }
+
+    private func endWait(_ id: Int) {
+        for ticket in Array(waiters.keys) {
+            guard let index = waiters[ticket]?.firstIndex(where: { $0.id == id }) else { continue }
+            waiters[ticket]?.remove(at: index).continuation.resume(returning: false)
+        }
+    }
+
+    // The page's storage-failed: nothing waiting now can be stored, so every wait ends
+    public func storageFailed() {
+        lost.formUnion(waiters.keys)
+        let ending = waiters.values.flatMap { $0 }
+        waiters = [:]
+        ending.forEach { $0.continuation.resume(returning: false) }
+    }
+
+    private func settleWaiters() {
+        for ticket in Array(waiters.keys) where !unstored.contains(where: { $0.ticket == ticket }) {
+            let stored = !lost.contains(ticket)
+            waiters.removeValue(forKey: ticket)?.forEach { $0.continuation.resume(returning: stored) }
         }
     }
 
@@ -368,13 +427,14 @@ public final class BackgroundFlush<Token> {
     }
 }
 
-#if SWIFT_PACKAGE
-// A write's result, and whether this device has stored it
+// A write's result, and whether this device has stored it. Opened to the
+// screens for sc-5303; it follows the shell's guard switch (design D7a).
 struct StoredWrite {
     let data: Data
     let stored: Bool
+    // Which native/persisted call answered for it, to wait on a later "stored"
+    let ticket: Int
 }
-#endif
 
 // sc-3611 (native-bridge: "Native refusals carry a stable code"). A loot-core
 // refusal native code reacts to starts with `[native:<code>]` or
@@ -549,14 +609,18 @@ public struct NativeBridgeClient {
     // The app's clients have one, so every write waits for storage. Demo and
     // screen-test clients have no page storage to wait for.
     private let storage: WriteStorageStatus?
+    // sc-5219 (D7a): whether this shell has opted in to the storage guard. While
+    // it hasn't, every write counts as stored at once, exactly as before.
+    private let storageGuardOn: Bool
 
     public init(
         timeout: TimeInterval = NativeBridgeClient.defaultTimeout, syncTimeout: TimeInterval = NativeBridgeClient.defaultSyncTimeout,
-        storage: WriteStorageStatus? = nil, transport: @escaping Transport
+        storage: WriteStorageStatus? = nil, storageGuardOn: Bool = false, transport: @escaping Transport
     ) {
         self.timeout = timeout
         self.syncTimeout = syncTimeout
         self.storage = storage
+        self.storageGuardOn = storageGuardOn
         self.transport = transport
     }
 
@@ -574,7 +638,7 @@ public struct NativeBridgeClient {
     // sc-5219 (D3): the write with its own deadline, then native/persisted with
     // its own. The write is never retried. A failure of the second call only
     // means not stored: the write has already been applied.
-    private func sendThenPersist<Args: Encodable>(_ name: String, args: Args) async throws -> (data: Data, stored: Bool) {
+    private func sendThenPersist<Args: Encodable>(_ name: String, args: Args) async throws -> (data: Data, stored: Bool, ticket: Int) {
         let origin = await storage?.writeBegan()
         let data: Data
         do {
@@ -583,23 +647,30 @@ public struct NativeBridgeClient {
             await storage?.writeEnded()
             throw error
         }
-        let stored = await persisted(madeIn: origin)
+        let (stored, ticket) = await persisted(madeIn: origin)
         await storage?.writeEnded()
-        return (data, stored)
+        return (data, stored, ticket)
     }
 
-    #if SWIFT_PACKAGE
+    // A write with whether it is stored. With the shell's guard off it counts
+    // as stored at once, exactly as `call` behaves, so no screen changes.
     func write<Args: Encodable>(_ name: String, args: Args) async throws -> StoredWrite {
+        guard storage != nil else { return StoredWrite(data: try await call(name, args: args), stored: true, ticket: 0) }
         let result = try await sendThenPersist(name, args: args)
-        return StoredWrite(data: result.data, stored: result.stored)
+        return StoredWrite(data: result.data, stored: storageGuardOn ? result.stored : true, ticket: result.ticket)
     }
-    #endif
 
-    private func persisted(madeIn origin: WriteOrigin?) async -> Bool {
+    // For a write that answered not stored: true once storage says so, false if it may be lost
+    func whenStored(_ write: StoredWrite) async -> Bool {
+        guard !write.stored, let storage else { return true }
+        return await storage.waitStored(ticket: write.ticket)
+    }
+
+    private func persisted(madeIn origin: WriteOrigin?) async -> (stored: Bool, ticket: Int) {
         let ticket = await storage?.nextTicket() ?? 0
         do {
             let answer = try await askPersisted()
-            return await storage?.record(answer, ticket: ticket, madeIn: origin) ?? answer.stored
+            return (await storage?.record(answer, ticket: ticket, madeIn: origin) ?? answer.stored, ticket)
         } catch NativeBridgeError.timedOut {
             await storage?.record(.notStored, ticket: ticket, madeIn: origin)
             // The one call that may be repeated: it changes nothing
@@ -607,10 +678,10 @@ public struct NativeBridgeClient {
                 let retry = await storage?.nextTicket() ?? 0
                 if let answer = try? await askPersisted() { await storage?.record(answer, ticket: retry, madeIn: origin) }
             }
-            return false
+            return (false, ticket)
         } catch {
             await storage?.record(.notStored, ticket: ticket, madeIn: origin)
-            return false
+            return (false, ticket)
         }
     }
 
@@ -670,12 +741,15 @@ public struct NativeBridgeClient {
         return result
     }
 
-    public func setBudgetAmount(_ write: BudgetAmountWrite) async throws {
-        _ = try await call("budget/budget-amount", args: write)
+    // Whether this device has stored it (sc-5303)
+    @discardableResult
+    public func setBudgetAmount(_ write: BudgetAmountWrite) async throws -> Bool {
+        try await self.write("budget/budget-amount", args: write).stored
     }
 
-    public func transfer(_ transfer: Transfer) async throws {
-        _ = try await call(transfer.handler, args: transfer)
+    @discardableResult
+    public func transfer(_ transfer: Transfer) async throws -> Bool {
+        try await write(transfer.handler, args: transfer).stored
     }
 
     public func schedulesPaychecks() async throws -> SchedulesPaychecks {

@@ -49,9 +49,11 @@ public struct PaychecksUndoOffer: Equatable {
     // The pay date that was skipped, as the list showed it; empty otherwise
     public let date: String
     public let action: Action
+    // sc-5303: whether the write is stored; until it is, the offer makes no claim of saving
+    public var isStored: Bool
 
-    public init(token: String, paycheckName: String, date: String, action: Action = .skip) {
-        (self.token, self.paycheckName, self.date, self.action) = (token, paycheckName, date, action)
+    public init(token: String, paycheckName: String, date: String, action: Action = .skip, isStored: Bool = true) {
+        (self.token, self.paycheckName, self.date, self.action, self.isStored) = (token, paycheckName, date, action, isStored)
     }
 }
 
@@ -201,22 +203,7 @@ public final class PaychecksViewModel: ObservableObject {
         offerGeneration += 1
         let generation = offerGeneration
         undoOffer = offer
-        announcement =
-            switch offer.action {
-            case .skip:
-                String(
-                    format: NSLocalizedString(
-                        "Skipped the paycheck on %@. Undo is available.", comment: "Native Paychecks: VoiceOver after a skip"),
-                    offer.date)
-            case .create, .save:
-                String(
-                    format: NSLocalizedString("Saved %@. Undo is available.", comment: "Native Paychecks: VoiceOver after a save"),
-                    offer.paycheckName)
-            case .delete:
-                String(
-                    format: NSLocalizedString("Deleted %@. Undo is available.", comment: "Native Paychecks: VoiceOver after a delete"),
-                    offer.paycheckName)
-            }
+        announcement = Self.announcement(for: offer)
         let nanoseconds = UInt64(undoInterval * 1_000_000_000)
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: nanoseconds)
@@ -224,6 +211,46 @@ public final class PaychecksViewModel: ObservableObject {
             self.undoOffer = nil
         }
     }
+
+    // sc-5303: waits for the editor's write to be stored. One wait at a time; it
+    // ends when a newer offer replaces this one or the list goes away.
+    public func pending(token: String, until stored: @escaping () async -> Bool) {
+        storedWait.task?.cancel()
+        storedWait.task = Task { [weak self] in
+            guard await stored(), !Task.isCancelled else { return }
+            self?.stored(token: token)
+        }
+    }
+
+    // sc-5303: the editor's write is now stored, so the offer may say "Saved"
+    public func stored(token: String) {
+        guard var offer = undoOffer, offer.token == token, !offer.isStored else { return }
+        offer.isStored = true
+        undoOffer = offer
+        announcement = Self.announcement(for: offer)
+    }
+
+    // No claim of saving until the write is stored ("Screens say "Saved" only once the write is stored")
+    private static func announcement(for offer: PaychecksUndoOffer) -> String? {
+        switch offer.action {
+            case .skip:
+                String(
+                    format: NSLocalizedString(
+                        "Skipped the paycheck on %@. Undo is available.", comment: "Native Paychecks: VoiceOver after a skip"),
+                    offer.date)
+            case .create, .save:
+                offer.isStored
+                ? String(
+                    format: NSLocalizedString("Saved %@. Undo is available.", comment: "Native Paychecks: VoiceOver after a save"),
+                    offer.paycheckName) : nil
+            case .delete:
+                String(
+                    format: NSLocalizedString("Deleted %@. Undo is available.", comment: "Native Paychecks: VoiceOver after a delete"),
+                    offer.paycheckName)
+            }
+    }
+
+    private let storedWait = PendingWait()
 
     private func withdrawOffer() {
         offerGeneration += 1

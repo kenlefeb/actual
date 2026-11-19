@@ -30,7 +30,7 @@ public class NativeBridgePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
     // sc-5219: whether this device has stored the writes made through `client`
     let writeStorage = WriteStorageStatus()
 
-    lazy var client = NativeBridgeClient(storage: writeStorage) { [weak self] name, argsJSON in
+    lazy var client = NativeBridgeClient(storage: writeStorage, storageGuardOn: StorageGuardRollout.isOn) { [weak self] name, argsJSON in
         guard let self else { throw NativeBridgeError.noPage }
         return try await self.evaluate(name: name, argsJSON: argsJSON)
     }
@@ -50,6 +50,7 @@ public class NativeBridgePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
         MainActor.assumeIsolated {
             if let epoch = NativeBridgeEvent.readyEpoch(of: message.body) { writeStorage.pageLoaded(epoch: epoch) }
             if let stored = NativeBridgeEvent.stored(of: message.body) { writeStorage.storedEvent(seq: stored.seq, epoch: stored.epoch) }
+            if event == "storage-failed" { writeStorage.storageFailed() }
             if event == "storage-failed" || event == "storage-close-failed" { onStorageEvent?(message.body) }
         }
         onEvent?(event)

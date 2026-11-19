@@ -39,6 +39,8 @@ docs=$(xcrun simctl get_app_container $sim $bid data)/Documents/kill
 pause() { perl -e "select(undef,undef,undef,$1)"; }
 launch() {
   xcrun simctl terminate $sim $bid > /dev/null 2>&1
+  # A killed step leaves its own error behind; it isn't the next step's
+  rm -f $docs/error.json $docs/progress.json
   xcrun simctl launch $sim $bid -UITestKill "$1" > /dev/null
 }
 waitfor() {

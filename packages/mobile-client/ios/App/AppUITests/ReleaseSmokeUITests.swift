@@ -89,19 +89,30 @@ final class ReleaseSmokeUITests: XCTestCase {
         let armed = Double(ProcessInfo.processInfo.environment["RELEASE_SMOKE_ARM_S"] ?? "0") ?? 0
         let wait = armed + 30 - Date().timeIntervalSince(launched)
         if wait > 0 { Thread.sleep(forTimeInterval: wait) }
-        evidence("editing at \(Int(Date().timeIntervalSince(launched))) s after launch; the page arms \(Int(armed)) s after its worker starts")
         let before = food.value as? String ?? ""
         let field = app.textFields["Budgeted Food"]
-        // The budgeted amount is the first column, under the name
-        for dy in [0.75, 0.45] where !field.exists {
-            food.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: dy)).tap()
-            _ = field.waitForExistence(timeout: 5)
+        // The timer starts with the worker, and a worker that restarted (a reload, a new
+        // WebContent process) arms later than launch + ARM_S: so edit again, a new amount
+        // each time, until the notice shows or the latest arming is well past. Each edit is
+        // a stored write unless armed, so the attempts say when the failure took effect.
+        var shown = false
+        var attempt = 0
+        while !shown && Date().timeIntervalSince(launched) < armed + 180 {
+            attempt += 1
+            let amount = "\(122 + attempt)"
+            evidence("edit \(attempt): \(amount) at \(Int(Date().timeIntervalSince(launched))) s after launch; the page arms \(Int(armed)) s after its worker starts")
+            // The budgeted amount is the first column, under the name
+            for dy in [0.75, 0.45] where !field.exists {
+                food.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: dy)).tap()
+                _ = field.waitForExistence(timeout: 5)
+            }
+            XCTAssertTrue(field.exists, "the budgeted amount's edit sheet did not open")
+            field.tap()
+            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 20) + amount)
+            app.navigationBars.buttons["Save"].tap()
+            shown = strip.waitForExistence(timeout: 20)
+            if !shown { evidence("edit \(attempt) stored with no notice; Food now: \(food.value as? String ?? "")") }
         }
-        XCTAssertTrue(field.exists, "the budgeted amount's edit sheet did not open")
-        field.tap()
-        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 20) + "123")
-        app.navigationBars.buttons["Save"].tap()
-        let shown = strip.waitForExistence(timeout: 60)
         sleep(1)
         save("\(page)-notice")
         // What the write did: the notice names when unsaved changes began; the row shows the typed amount

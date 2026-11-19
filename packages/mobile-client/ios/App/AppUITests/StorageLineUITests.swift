@@ -193,9 +193,17 @@ final class StorageLineUITests: XCTestCase {
     }
 
     // For the Designer, outside the scratchpad; does nothing on a CI runner without that folder
+    // One folder per test run, so a run from another branch can't overwrite
+    // this one's evidence (story 5428: another worktree's run replaced a shot)
+    private static let run: String = {
+        let format = DateFormatter()
+        format.dateFormat = "yyyyMMdd-HHmmss"
+        return "run-\(format.string(from: Date()))"
+    }()
+
     private func save(_ name: String, folder: String = "storage-line-5296") {
         let home = NSHomeDirectory().components(separatedBy: "/Library/Developer/CoreSimulator").first ?? NSHomeDirectory()
-        let directory = "\(home)/Library/Developer/HomeEconomicsSpike/\(folder)"
+        let directory = "\(home)/Library/Developer/HomeEconomicsSpike/\(folder)/\(Self.run)"
         try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
         try? XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "\(directory)/\(name).png"))
     }
@@ -214,12 +222,13 @@ final class StorageLineUITests: XCTestCase {
     }
 
     // A posted register row whose bottom is close to the line: the lowest one
-    // wholly above it (scheduled rows have no menu, and a split can't be
-    // categorized, so its menu has no Categorize)
+    // wholly above it (scheduled rows have no menu, a split can't be
+    // categorized, so its menu has no Categorize, and a transfer or a
+    // reconciled row asks before the change; Security's note on story 5428)
     private func lowRow() -> XCUIElement {
         let origin = app.coordinate(withNormalizedOffset: .zero)
         let rows = app.buttons.matching(NSPredicate(
-            format: "label CONTAINS ', ' AND NOT (label CONTAINS 'Bank of America') AND NOT (label CONTAINS[c] 'scheduled') AND NOT (label CONTAINS 'Split (')"))
+            format: "label CONTAINS ', ' AND NOT (label CONTAINS 'Bank of America') AND NOT (label CONTAINS[c] 'scheduled') AND NOT (label CONTAINS 'Split (') AND NOT (label CONTAINS 'Transfer · ') AND NOT (label CONTAINS 'Reconciled')"))
         // At the largest text size the upcoming rows take several screens, so
         // keep scrolling until a posted row sits wholly above the line
         for _ in 0..<12 {
@@ -276,9 +285,22 @@ final class StorageLineUITests: XCTestCase {
         shot("undo")
         // The Undo bar is the button plus the bar's 16-point padding
         XCTAssertLessThanOrEqual(undo.frame.maxY + 16, pill.minY, "the Undo bar ends under the line")
+        checkTheUndoBarLayout(undo)
         let tabBar = app.tabBars.firstMatch
         XCTAssertLessThanOrEqual(pill.maxY, tabBar.frame.minY, "the line \(pill) is not above the tab bar \(tabBar.frame)")
         undo.tap()
+    }
+
+    // Story 5428: at accessibility sizes the Undo button sits under its text,
+    // full width, so the text has the whole line and breaks only between words
+    private func checkTheUndoBarLayout(_ undo: XCUIElement) {
+        guard app.launchArguments.contains(where: { $0.hasPrefix("UICTContentSizeCategoryAccessibility") }) else { return }
+        let text = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Changed the category of")).firstMatch
+        XCTAssertTrue(text.exists, "no Undo bar text")
+        XCTAssertLessThanOrEqual(text.frame.maxY, undo.frame.minY, "the Undo button \(undo.frame) is beside its text \(text.frame), not under it")
+        // The text's own frame is as wide as its longest line, so only the button's width is checked
+        let width = app.windows.firstMatch.frame.width
+        XCTAssertGreaterThanOrEqual(undo.frame.width, width * 0.8, "the Undo button \(undo.frame) isn't full width")
     }
 
     // Story 5383, the Designer's rule: with the keyboard up the line's only

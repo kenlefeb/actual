@@ -226,6 +226,96 @@ final class StorageNoticesTests: XCTestCase {
         XCTAssertNil(slot.current)
     }
 
+    // Security on PR #493: a failure notice must not drop a notice still waiting for OK
+    func testTheClosedBudgetNoticeComesBackAfterAFailureAndReload() {
+        firstLoad()
+        notices.closeFailed()
+        notices.failed(lastStoredFlushAt: nil, quota: false)
+        XCTAssertEqual(slot.current?.button, .reload)
+        tap()
+        XCTAssertEqual(slot.current, StorageNotices.closedBudget)
+    }
+
+    func testThePossibleLossNoticeComesBackAfterAFailureAndReload() {
+        firstLoad()
+        storage.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "old", n: 1)))
+        storage.pageLoaded(epoch: "new")
+        XCTAssertEqual(slot.current, StorageNotices.someMayNotBeSaved)
+        notices.failed(lastStoredFlushAt: nil, quota: false)
+        tap()
+        XCTAssertEqual(slot.current, StorageNotices.someMayNotBeSaved)
+        tap()
+        XCTAssertFalse(storage.mayNotBeSaved)
+    }
+
+    // The earliest cut-off: a later time never replaces an earlier one, at a restart or in one load
+    func testARestartKeepsTheEarlierHeldCutOff() {
+        firstLoad()
+        notices.failed(lastStoredFlushAt: millis(Self.at(15, 42, 10)), quota: false)
+        notices.restarted()
+        notices.pageLoaded()
+        notices.failed(lastStoredFlushAt: millis(Self.at(15, 50, 0)), quota: false)
+        notices.restarted()
+        XCTAssertEqual(
+            slot.current?.text,
+            "The app restarted. Changes made after 3:42:10 PM may not have been saved. Check them, and make again any that are missing.")
+    }
+
+    func testASecondFailureInTheSameLoadKeepsTheEarlierCutOff() {
+        firstLoad()
+        notices.failed(lastStoredFlushAt: millis(Self.at(15, 42, 10)), quota: false)
+        notices.failed(lastStoredFlushAt: millis(Self.at(15, 50, 0)), quota: false)
+        XCTAssertEqual(
+            slot.current?.text,
+            "Changes can't be saved on this device right now. Reload the app. Changes made after 3:42:10 PM weren't saved and need to be made again.")
+        notices.failed(lastStoredFlushAt: nil, quota: false)
+        XCTAssertEqual(
+            slot.current?.text,
+            "Changes can't be saved on this device right now. Reload the app. Changes made since you opened the app weren't saved and need to be made again.")
+        XCTAssertEqual(announced.filter { $0.hasPrefix("Changes can't") }.count, 2, "a changed time is announced, a repeat is not")
+    }
+
+    func testSinceYouOpenedTheAppIsTheEarliestCutOff() {
+        firstLoad()
+        notices.failed(lastStoredFlushAt: nil, quota: false)
+        notices.failed(lastStoredFlushAt: millis(Self.at(15, 42, 10)), quota: false)
+        notices.restarted()
+        XCTAssertEqual(
+            slot.current?.text,
+            "The app restarted. Changes made since you opened the app may not have been saved. Check them, and make again any that are missing.")
+    }
+
+    // Priority: nothing shows over a failure notice
+    func testAHeldRestartNoticeWaitsWhileAFailureShows() {
+        firstLoad()
+        notices.failed(lastStoredFlushAt: millis(Self.at(15, 42, 10)), quota: false)
+        notices.restarted()
+        notices.pageLoaded()
+        notices.failed(lastStoredFlushAt: millis(Self.at(15, 50, 0)), quota: false)
+        notices.pageLoaded()
+        XCTAssertEqual(slot.current?.button, .reload)
+    }
+
+    func testAPossibleLossWaitsWhileAFailureShows() {
+        firstLoad()
+        notices.failed(lastStoredFlushAt: nil, quota: false)
+        storage.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "old", n: 1)))
+        storage.pageLoaded(epoch: "new")
+        XCTAssertEqual(slot.current?.button, .reload)
+    }
+
+    func testOKOnTheClosedBudgetNoticeLeavesAPossibleLoss() {
+        firstLoad()
+        notices.closeFailed()
+        notices.failed(lastStoredFlushAt: nil, quota: false)
+        storage.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "old", n: 1)))
+        storage.pageLoaded(epoch: "new")
+        tap()
+        XCTAssertEqual(slot.current, StorageNotices.closedBudget)
+        tap()
+        XCTAssertTrue(storage.mayNotBeSaved)
+    }
+
     func testStorageFailedEventsAreRead() {
         let failure = NativeBridgeEvent.storageFailure(of: [
             "event": "storage-failed", "payload": ["lastStoredFlushAt": 1_800_000_000_500, "quota": true],

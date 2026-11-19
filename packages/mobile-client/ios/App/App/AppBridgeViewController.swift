@@ -126,6 +126,7 @@ class AppBridgeViewController: CAPBridgeViewController {
                     return PageOriginGuard.accepts(
                         isMainFrame: frame.isMainFrame, scheme: origin.protocol, host: origin.host, port: origin.port, serverURL: serverURL)
                 },
+                handlerAnswersPrompt: PageDialogRequest.isCapacitorCall,
                 onDialog: { [weak self] request, answer in
                     guard let self else { return answer(request.kind.safeAnswer) }
                     self.pageDialogs.show(request, completion: answer)

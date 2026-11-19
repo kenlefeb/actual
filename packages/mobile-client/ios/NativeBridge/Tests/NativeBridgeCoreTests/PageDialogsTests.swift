@@ -100,6 +100,18 @@ final class PageDialogsTests: XCTestCase {
         XCTAssertEqual(PageDialogRequest.title(isAppPage: false, host: ""), "")
     }
 
+    // Capacitor's page script asks the shell for cookie and HTTP settings with a
+    // prompt carrying JSON; those are its own calls, not dialogs for the person
+    func testCapacitorsOwnPromptsAreNotDialogs() {
+        for type in ["CapacitorCookies.get", "CapacitorCookies.set", "CapacitorCookies.isEnabled", "CapacitorHttp"] {
+            XCTAssertTrue(PageDialogRequest.isCapacitorCall(#"{"type":"\#(type)"}"#), type)
+        }
+        XCTAssertFalse(PageDialogRequest.isCapacitorCall("Name the new category"))
+        XCTAssertFalse(PageDialogRequest.isCapacitorCall(#"{"type":"something else"}"#))
+        XCTAssertFalse(PageDialogRequest.isCapacitorCall(#"["CapacitorHttp"]"#))
+        XCTAssertFalse(PageDialogRequest.isCapacitorCall("{"))
+    }
+
     func testTheSafeAnswerIsCancel() {
         XCTAssertEqual(PageDialogKind.alert.safeAnswer, .dismissed)
         XCTAssertEqual(PageDialogKind.confirm.safeAnswer, .confirmed(false))

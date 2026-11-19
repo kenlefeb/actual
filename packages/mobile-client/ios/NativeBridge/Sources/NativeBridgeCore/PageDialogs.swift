@@ -45,6 +45,21 @@ public struct PageDialogRequest: Equatable {
     public static func title(isAppPage: Bool, host: String) -> String? {
         isAppPage ? nil : host
     }
+
+    // Capacitor's page script reads its cookie and HTTP settings with a prompt
+    // carrying JSON, which its own handler answers without showing anything
+    // (WebViewDelegationHandler). Those stay with Capacitor.
+    public static let capacitorPromptTypes: Set<String> = [
+        "CapacitorCookies.get", "CapacitorCookies.set", "CapacitorCookies.isEnabled", "CapacitorHttp",
+    ]
+
+    public static func isCapacitorCall(_ prompt: String) -> Bool {
+        guard let data = prompt.data(using: .utf8),
+            let payload = try? JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed) as? [String: Any],
+            let type = payload["type"] as? String
+        else { return false }
+        return capacitorPromptTypes.contains(type)
+    }
 }
 
 @MainActor
@@ -126,14 +141,19 @@ public final class PageDialogs {
 public final class PageDialogDelegate: NSObject, WKUIDelegate {
     private let handler: NSObject & WKUIDelegate
     private let isAppPage: (WKFrameInfo) -> Bool
+    private let handlerAnswersPrompt: (String) -> Bool
     private let onDialog: (PageDialogRequest, @escaping (PageDialogAnswer) -> Void) -> Void
 
+    // `handlerAnswersPrompt`: a prompt that is the handler's own call, not a dialog
+    // (on iPhone, Capacitor's; see PageDialogRequest.isCapacitorCall)
     public init(
         forwardingTo handler: NSObject & WKUIDelegate, isAppPage: @escaping (WKFrameInfo) -> Bool,
+        handlerAnswersPrompt: @escaping (String) -> Bool = { _ in false },
         onDialog: @escaping (PageDialogRequest, @escaping (PageDialogAnswer) -> Void) -> Void
     ) {
         self.handler = handler
         self.isAppPage = isAppPage
+        self.handlerAnswersPrompt = handlerAnswersPrompt
         self.onDialog = onDialog
     }
 
@@ -161,6 +181,11 @@ public final class PageDialogDelegate: NSObject, WKUIDelegate {
         _ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?,
         initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void
     ) {
+        if handlerAnswersPrompt(prompt),
+            let answer = handler.webView(_:runJavaScriptTextInputPanelWithPrompt:defaultText:initiatedByFrame:completionHandler:)
+        {
+            return answer(webView, prompt, defaultText, frame, completionHandler)
+        }
         onDialog(request(.prompt(defaultText: defaultText), prompt, frame)) { answer in
             if case .text(let text) = answer { completionHandler(text) } else { completionHandler(nil) }
         }

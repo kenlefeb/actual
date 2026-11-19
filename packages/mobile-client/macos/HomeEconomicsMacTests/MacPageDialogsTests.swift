@@ -76,13 +76,21 @@ final class MacPageDialogsTests: XCTestCase {
         for _ in 0..<100 where host.webView.isLoading || host.webView.url == nil {
             try await Task.sleep(nanoseconds: 50_000_000)
         }
-        let call = Task { try? await self.run(host, "return confirm('Delete the Groceries category?')") }
+        var answered = false
+        let call = Task {
+            _ = try? await self.run(host, "return confirm('Delete the Groceries category?')")
+            answered = true
+        }
         for _ in 0..<100 where shown.isEmpty { try await Task.sleep(nanoseconds: 50_000_000) }
         XCTAssertEqual(shown.count, 1, "the dialog never showed")
         host.webView.reload()
         for _ in 0..<100 where dismissed == 0 { try await Task.sleep(nanoseconds: 50_000_000) }
         XCTAssertEqual(dismissed, 1, "the dialog stayed over the reloaded page")
-        _ = await call.value
+        // Bounded: a dialog nobody answers holds the page's call, and an
+        // unbounded wait for it hung the whole suite on CI
+        for _ in 0..<100 where !answered { try await Task.sleep(nanoseconds: 50_000_000) }
+        call.cancel()
+        XCTAssertTrue(answered, "the page's call was never answered")
         XCTAssertEqual(dismissed, 1)
     }
 

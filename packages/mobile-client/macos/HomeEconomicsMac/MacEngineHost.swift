@@ -70,7 +70,18 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
             })
         webView.uiDelegate = dialogs
         dialogDelegate = dialogs
+        // A reload or navigation asked for while a dialog holds the page starts
+        // no provisional navigation until the dialog is answered, but the web
+        // view says at once that it is loading: the old page's dialogs go then,
+        // as on iPhone (AppBridgeViewController)
+        loadingObservation = webView.observe(\.isLoading) { [weak self] webView, _ in
+            MainActor.assumeIsolated {
+                if webView.isLoading { self?.pageDialogs.pageWentAway() }
+            }
+        }
     }
+
+    private var loadingObservation: NSKeyValueObservation?
 
     // sc-5399: without these WebKit drops a page's alert and answers its confirm
     // and prompt with nothing. The app delegate shows them on the window;

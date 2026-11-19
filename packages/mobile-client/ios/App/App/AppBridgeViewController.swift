@@ -14,11 +14,32 @@ class AppBridgeViewController: CAPBridgeViewController {
     private var pageProcessDelegate: PageProcessDelegate?
     private weak var reloadAlert: UIAlertController?
     private var activeObserver: NSObjectProtocol?
+    private var inactiveObserver: NSObjectProtocol?
+    private var loadingObservation: NSKeyValueObservation?
+    // sc-5220: the strip at the top of the screen (PageNoticeWindow)
+    let pageNotices = WindowNotices(
+        schedule: { delay, work in
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                work()
+            }
+        },
+        announce: { text in
+            // Queued, so it does not cut across what VoiceOver is reading
+            let queued = NSAttributedString(string: text, attributes: [.accessibilitySpeechQueueAnnouncement: true])
+            UIAccessibility.post(notification: .announcement, argument: queued)
+        })
     // sc-5247: `loadWebView` loads the app's own start page, never the URL the
     // page last showed, which can be a used one-time sign-in callback
     private lazy var pageRecovery = PageRecovery(
         reload: { [weak self] in self?.loadWebView() },
-        giveUp: { [weak self] in self?.askToReload() ?? false })
+        giveUp: { [weak self] in self?.askToReload() ?? false },
+        onEvent: { [weak self] event in
+            switch event {
+            case .automaticReload: self?.pageNotices.show(.pageRestarted)
+            case .asking: self?.pageNotices.clear()
+            }
+        })
 
     override func capacitorDidLoad() {
         bridge?.registerPluginInstance(nativeBridge)
@@ -40,7 +61,22 @@ class AppBridgeViewController: CAPBridgeViewController {
         activeObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.pageRecovery.appBecameActive() }
+            MainActor.assumeIsolated {
+                self?.pageRecovery.appBecameActive()
+                self?.pageNotices.windowChanged(isActive: true)
+            }
+        }
+        inactiveObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.willResignActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.pageNotices.windowChanged(isActive: false) }
+        }
+        pageNotices.windowChanged(isActive: UIApplication.shared.applicationState == .active)
+        // Finished or failed: either way the app is showing what it can
+        loadingObservation = webView?.observe(\.isLoading) { [weak self] webView, _ in
+            MainActor.assumeIsolated {
+                if !webView.isLoading { self?.pageNotices.pageDidLoad() }
+            }
         }
         #if DEBUG
         if let webView, let pageProcessDelegate, let serverURL = bridge?.config.serverURL {

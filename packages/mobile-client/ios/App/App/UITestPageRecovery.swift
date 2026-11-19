@@ -12,6 +12,7 @@ import WebKit
 @MainActor
 enum UITestPageRecovery {
     private static var deaths: Int { UserDefaults.standard.integer(forKey: "UITestPageDeaths") }
+    private static var deathDelay: Double { UserDefaults.standard.double(forKey: "UITestPageDeathDelay") }
     private static var startPath: String? { UserDefaults.standard.string(forKey: "UITestPageStartPath") }
     private static var observation: NSKeyValueObservation?
 
@@ -28,7 +29,12 @@ enum UITestPageRecovery {
                 webView.load(URLRequest(url: url))
                 await settle(webView)
             }
-            guard deaths > 0 else { return }
+            guard deaths > 0 else {
+                show("ready", identifier: "uiTestPageRecoveryReady", in: webView)
+                return
+            }
+            // Time for a test to open a budget first (sc-5220's screenshots)
+            try? await Task.sleep(nanoseconds: UInt64(deathDelay * 1_000_000_000))
             let before = address(webView)
             var after = ""
             for _ in 0..<deaths {
@@ -37,8 +43,24 @@ enum UITestPageRecovery {
                 after = address(webView)
                 await settle(webView)
             }
-            show("before=\(before) after=\(after)", in: webView)
+            show("before=\(before) after=\(after)", identifier: "uiTestPageRecovery", in: webView)
+            if UserDefaults.standard.bool(forKey: "UITestPageNoticeSheet") { presentSheet(over: webView) }
         }
+    }
+
+    // `-UITestPageNoticeSheet`: a sheet with a top bar, opened while the notice
+    // shows (sc-5220), as the person would open a transaction to check it
+    private static func presentSheet(over webView: WKWebView) {
+        guard var top = webView.window?.rootViewController else { return }
+        while let next = top.presentedViewController { top = next }
+        let content = UIViewController()
+        content.view.backgroundColor = .systemBackground
+        content.title = "Sheet"
+        content.navigationItem.leftBarButtonItem = UIBarButtonItem(systemItem: .cancel, primaryAction: UIAction { [weak content] _ in
+            content?.dismiss(animated: false)
+        })
+        content.navigationItem.leftBarButtonItem?.accessibilityIdentifier = "uiTestSheet.cancel"
+        top.present(UINavigationController(rootViewController: content), animated: false)
     }
 
     private static func append(_ line: String, to log: URL) {
@@ -60,14 +82,16 @@ enum UITestPageRecovery {
         }
     }
 
-    private static func show(_ text: String, in webView: WKWebView) {
-        guard let window = webView.window else { return }
-        let label = UILabel(frame: CGRect(x: 0, y: 60, width: window.bounds.width, height: 40))
+    // At the bottom of the screen, clear of the notice strip
+    private static func show(_ text: String, identifier: String, in webView: WKWebView) {
+        // With a delay the run is for looking at the screen, so nothing is added to it
+        guard let window = webView.window, deathDelay == 0 else { return }
+        let label = UILabel(frame: CGRect(x: 0, y: window.bounds.height - 80, width: window.bounds.width, height: 40))
         label.text = text
         label.numberOfLines = 2
         label.font = .systemFont(ofSize: 10)
         label.backgroundColor = .systemBackground
-        label.accessibilityIdentifier = "uiTestPageRecovery"
+        label.accessibilityIdentifier = identifier
         window.addSubview(label)
     }
 }

@@ -11,6 +11,9 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
     private var router = NativeTabRouter()
     private var containers: [NativeTab: TabContainerViewController] = [:]
     private var foregroundObserver: NSObjectProtocol?
+    private var pageNoticeWindow: PageNoticeWindow?
+    private var noticeHeight: CGFloat = 0
+    private var noticeFollower: Timer?
     // sc-5219: "Saving…" and "Still saving to this device. Keep the app open.", above the tab bar
     private var writeStorageLine: WriteStorageLine?
     // The native Budget tab (sc-3751) lies over the web Budget screen while the
@@ -92,6 +95,55 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
         foregroundObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
         ) { [weak self] _ in self?.bridgeController.nativeChrome.reportRoute() }
+    }
+
+    // sc-5220: the window exists from here on
+    override func viewIsAppearing(_ animated: Bool) {
+        super.viewIsAppearing(animated)
+        guard pageNoticeWindow == nil, let window = view.window, let scene = window.windowScene else { return }
+        pageNoticeWindow = PageNoticeWindow(
+            notices: bridgeController.pageNotices, scene: scene, mainWindow: window,
+            reserve: { [weak self] in self?.reserveNoticeSpace($0) })
+    }
+
+    // Everything below the strip starts under it, sheets included
+    private func reserveNoticeSpace(_ height: CGFloat) {
+        noticeHeight = height
+        additionalSafeAreaInsets.top = height
+        giveSheetsNoticeSpace()
+        // The storage line's window (sc-5219) ends below the strip too, so the
+        // two never overlap, however large the text
+        view.window?.windowScene?.windows.filter { $0.windowLevel == .alert }
+            .forEach { $0.rootViewController?.additionalSafeAreaInsets.top = height }
+        // As the storage line does: UIKit says nothing when a sheet opens, so
+        // while the strip is up a sheet opened under it is found by looking
+        noticeFollower?.invalidate()
+        noticeFollower = height > 0
+            ? Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.giveSheetsNoticeSpace() }
+            }
+            : nil
+        // A list under a large title keeps its old inset until its navigation
+        // view is laid out again, which would leave a gap when the strip goes
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            guard let self else { return }
+            Self.navigationControllers(in: self).forEach {
+                $0.view.setNeedsLayout()
+                $0.view.layoutIfNeeded()
+            }
+        }
+    }
+
+    private func giveSheetsNoticeSpace() {
+        var presented = presentedViewController
+        while let screen = presented {
+            if screen.additionalSafeAreaInsets.top != noticeHeight { screen.additionalSafeAreaInsets.top = noticeHeight }
+            presented = screen.presentedViewController
+        }
+    }
+
+    private static func navigationControllers(in controller: UIViewController) -> [UINavigationController] {
+        controller.children.flatMap { navigationControllers(in: $0) } + [controller as? UINavigationController].compactMap { $0 }
     }
 
     private func attachWriteStorageLine() {

@@ -15,6 +15,8 @@ final class PageRecoveryTests: XCTestCase {
     private var clock = Date(timeIntervalSince1970: 1_000_000)
     private var alertCanShow = true
     private var scheduled: [(delay: TimeInterval, work: () -> Void)] = []
+    private var events: [PageRecovery.Event] = []
+    private var reloadsAtLastEvent = 0
 
     private func recovery() -> PageRecovery {
         PageRecovery(
@@ -24,8 +26,49 @@ final class PageRecoveryTests: XCTestCase {
             giveUp: { [unowned self] in
                 self.gaveUp += 1
                 return self.alertCanShow
+            },
+            onEvent: { [unowned self] in
+                self.events.append($0)
+                self.reloadsAtLastEvent = self.reloads
             })
     }
+
+    // MARK: What the notice is told (sc-5220)
+
+    func testEachAutomaticReloadIsReportedBeforeItStarts() {
+        let recovery = recovery()
+        for _ in 0..<3 { recovery.processEnded() }
+        XCTAssertEqual(events, [.automaticReload, .automaticReload, .automaticReload])
+        XCTAssertEqual(reloadsAtLastEvent, 2, "the notice must be waiting before the load starts")
+    }
+
+    func testReachingTheCapReportsTheAlert() {
+        reachTheCap(recovery())
+        XCTAssertEqual(events.last, .asking)
+        XCTAssertEqual(events.filter { $0 == .automaticReload }.count, 3)
+    }
+
+    func testTheCappedFallbackCountsAsAnAutomaticReload() {
+        let recovery = recovery()
+        alertCanShow = false
+        reachTheCap(recovery)
+        for _ in 0..<PageRecovery.alertAttempts { runScheduled() }
+        clock += 61
+        runScheduled()
+        XCTAssertEqual(reloads, 4)
+        XCTAssertEqual(events.last, .automaticReload)
+    }
+
+    func testThePersonsReloadIsNotReported() {
+        let recovery = recovery()
+        reachTheCap(recovery)
+        let before = events
+        recovery.userReload()
+        XCTAssertEqual(reloads, 4)
+        XCTAssertEqual(events, before)
+    }
+
+    // MARK: Recovery
 
     private func reachTheCap(_ recovery: PageRecovery) {
         for _ in 0..<4 { recovery.processEnded() }

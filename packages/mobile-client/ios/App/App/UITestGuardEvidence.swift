@@ -45,9 +45,20 @@ enum UITestGuardEvidence {
                 let shell = try? await page.run("return String(window.__actualNativeShell?.storageGuard)")
                 note("guard: shell opted in = \(shell as? String ?? "?")")
                 note("storage state: \(await storageState(page))")
-                let category = try await page.run(
-                    "const c = await window.$send('get-categories'); return c.list.find(x => !x.is_income && !x.hidden)?.id ?? '';"
-                ) as? String ?? ""
+                // A new budget's own setup writes may still be on their way to
+                // storage: wait for them, so the armed failure takes the test's write
+                for _ in 0..<60 {
+                    let answer = try? await page.run(
+                        "return await window.__actualNativeBridge.call('native/persisted', { allFiles: true });") as? String
+                    if answer?.contains(#""stored":true"#) == true { break }
+                    try await Task.sleep(nanoseconds: 500_000_000)
+                }
+                func firstCategory() async throws -> String {
+                    try await page.run(
+                        "const c = await window.$send('get-categories'); return c.list.find(x => !x.is_income && !x.hidden)?.id ?? '';"
+                    ) as? String ?? ""
+                }
+                var category = try await firstCategory()
                 let month = String(ISO8601DateFormatter().string(from: Date()).prefix(7))
                 func write(_ amount: Int) async -> String {
                     let began = Date()
@@ -85,6 +96,7 @@ enum UITestGuardEvidence {
                         try await Task.sleep(nanoseconds: 500_000_000)
                     }
                     try await Task.sleep(nanoseconds: 1_000_000_000)
+                    category = try await firstCategory()
                     note("after Reload: storage state: \(await storageState(page))")
                     note("after Reload: write: \(await write(4567))")
                 case "restart":

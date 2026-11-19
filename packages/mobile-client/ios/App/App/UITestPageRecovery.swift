@@ -120,6 +120,18 @@ enum UITestKillWrites {
         guard let mode else { return }
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let page = PageCall(runner: webView, serverURL: serverURL)
+        // A page alert() holds the page's JavaScript, so every page call waits behind it: log its text
+        Task {
+            var seen = ""
+            while true {
+                var top = webView.window?.rootViewController
+                while let next = top?.presentedViewController { top = next }
+                let text = (top as? UIAlertController)?.message ?? ""
+                if text != seen, !text.isEmpty { log("page alert shown: \(text)") }
+                seen = text
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+            }
+        }
         Task {
             if mode.hasPrefix("reopen:") {
                 await reopen(String(mode.dropFirst("reopen:".count)), page)
@@ -172,7 +184,7 @@ enum UITestKillWrites {
             }
             log("the app did not reopen the budget in 60 s; page: \(await pageState(page))")
             let opened = try await page.run(
-                bounded + "try { await within(window.$send('load-budget', { id }), 90000); return 'ok'; } catch (e) { return 'error: ' + e.message; }",
+                bounded + "try { const r = await within(window.$send('load-budget', { id }), 90000); return r?.error ? 'error: ' + JSON.stringify(r) : 'ok'; } catch (e) { return 'error: ' + e.message; }",
                 arguments: ["id": id]) as? String ?? "no answer"
             log("the test's load-budget: \(opened)")
             guard opened == "ok" else {
@@ -258,7 +270,7 @@ enum UITestKillWrites {
         var byTest = "not needed"
         if bySelf < 0, bridge >= 0 {
             byTest = (try? await page.run(
-                bounded + "try { await within(window.$send('load-budget', { id }), 90000); return 'ok'; } catch (e) { return 'error: ' + e.message; }",
+                bounded + "try { const r = await within(window.$send('load-budget', { id }), 90000); return r?.error ? 'error: ' + JSON.stringify(r) : 'ok'; } catch (e) { return 'error: ' + e.message; }",
                 arguments: ["id": id])) as? String ?? "no answer"
             log("reopen \(round): the test's own open: \(byTest)")
         }

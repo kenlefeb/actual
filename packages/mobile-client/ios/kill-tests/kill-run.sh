@@ -45,6 +45,7 @@ docs=$(xcrun simctl get_app_container $sim $bid data)/Documents/kill
 
 # Seconds a step may wait for the page; the reopen phase raises it (REOPEN_LIMIT)
 limit=300
+alerted=0
 pause() { perl -e "select(undef,undef,undef,$1)"; }
 launch() {
   xcrun simctl terminate $sim $bid > /dev/null 2>&1
@@ -56,6 +57,8 @@ waitfor() {
   for i in {1..$(( (limit + 20) * 10 ))}; do
     [ -f "$1" ] && return 0
     [ -f "$docs/error.json" ] && { echo "app error: $(cat $docs/error.json)"; return 1; }
+    # A page alert() holds the page's JavaScript until someone taps it: nothing more will come
+    grep -q "page alert shown" $docs/progress.json 2>/dev/null && { echo "page alert: $(cat $docs/progress.json)"; alerted=1; return 1; }
     [ $((i % 300)) -eq 0 ] && echo "  still waiting ($((i / 10)) s): $(cat $docs/progress.json 2>/dev/null)"
     pause 0.1
   done
@@ -100,6 +103,11 @@ kill_after() { # name mode
   launch "$2:$1"
   if ! waitfor $docs/result-$1.json; then
     diagnose $1-a
+    if [ $alerted = 1 ]; then
+      echo "$1: the budget did not open (page alert): keeping the data"
+      keep=1
+      return 1
+    fi
     echo "--- repeating $1 once"
     launch "$2:$1"
     if ! waitfor $docs/result-$1.json; then
@@ -128,7 +136,7 @@ if [ $phase = reopen ]; then
     pause 1
     rm -f $docs/reopen-$n.json
     launch reopen:$n
-    waitfor $docs/reopen-$n.json || { cp $docs/progress.log $out/progress-$n.log 2>/dev/null; diagnose reopen-$n; keep=1; exit 1; }
+    waitfor $docs/reopen-$n.json || { echo "$n | did not reopen"; cp $docs/progress.log $out/progress-$n.log 2>/dev/null; diagnose reopen-$n; keep=1; exit 1; }
     xcrun simctl io $sim screenshot $out/reopen-$n.png > /dev/null 2>&1
     cp $docs/progress.log $out/progress-$n.log 2>/dev/null
     row=$(node -e '

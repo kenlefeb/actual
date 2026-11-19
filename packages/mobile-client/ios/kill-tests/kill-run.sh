@@ -123,6 +123,35 @@ kill_after() { # name mode
 
 echo "--- refusal check"
 zsh $here/simkill.sh 00000000-0000-0000-0000-000000000000 --dry
+if [ $phase = migrate ]; then
+  # Kill while a fresh budget is created and migrated (every migration is its
+  # own commit), at offsets spread over the open, then relaunch: does it open?
+  limit=${REOPEN_LIMIT:-120}
+  echo "round | kill offset after the bridge | reopened by itself | screen"
+  for n in {1..${REOPEN_ROUNDS:-10}}; do
+    offset=$(( n * ${MIGRATE_STEP_MS:-250} ))
+    rm -f $docs/budget-id $docs/result-mig-$n.json
+    launch control:mig-$n
+    for i in {1..600}; do grep -q "page's bridge ready" $docs/progress.json 2>/dev/null && break; pause 0.1; done
+    pause $(( offset / 1000.0 ))
+    echo "mig-$n at $offset ms, stage then: $(cat $docs/progress.json 2>/dev/null)"
+    zsh $here/simkill.sh $sim
+    pause 4
+    # The test budget's id is fixed; the kill may come before the hook saved it
+    print -n _test-budget > $docs/budget-id
+    rm -f $docs/reopen-mig-$n.json
+    launch reopen:mig-$n
+    if ! waitfor $docs/reopen-mig-$n.json; then
+      echo "$n | $offset ms | no (page alert) | $(cat $docs/progress.json)"
+      cp $docs/progress.log $out/progress-mig-$n.log 2>/dev/null
+      diagnose mig-$n
+      keep=1
+      exit 1
+    fi
+    echo "$n | $offset ms | $(node -e 'const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); console.log((r.reopenedBySelfSeconds < 0 ? "no" : r.reopenedBySelfSeconds + " s") + " | " + r.testOpen)' $docs/reopen-mig-$n.json)"
+  done
+  exit 0
+fi
 if [ $phase = reopen ]; then
   # Kill, then relaunch and let the app reopen the budget by itself before the
   # test opens it. REOPEN_MODE=control (barrier off: with a delayed page the

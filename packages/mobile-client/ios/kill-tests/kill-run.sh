@@ -13,7 +13,9 @@
 #          and stored first (out of the migration window), the control (barrier
 #          off, 5 kills: at least 1 must be lost, else it stops), then
 #          DELAY_KILLS (default 5) kills with the barrier on, each read back (all
-#          must be kept; rows with each kill's latency in <out-dir>/delayed-table.txt)
+#          must be kept; rows with each kill's latency in <out-dir>/delayed-table.txt).
+#          A kill counts only after a stored answer, with a re-checked pid, within
+#          FAST_MS (500) of the answer; SKIP_CONTROL=1 for a page with no delay
 # Each part ends with a read: the test categories still there, and
 # PRAGMA integrity_check on the exported budget.
 app=$1 out=$2 phase=$3
@@ -132,9 +134,11 @@ kill_after() { # name mode
   fi
   want_target=""
   # The target was found while waiting; --fast checks it again from the live table
+  verified=yes
   if [ -z "$target" ] || ! zsh $here/simkill.sh $sim --fast ${=target}; then
     echo "$1: no checked target found while waiting; the full search"
     zsh $here/simkill.sh $sim
+    verified=no
   fi
   # How long after the answer was written the kill landed (sc-5404: a control's
   # commit delay must be longer than this for the kill to land inside it)
@@ -249,6 +253,7 @@ if [ $phase = delay ]; then
   held_read warm-up || exit 1
   # The control first (barrier off): at least one write must be lost, or the kill
   # lands too late for this run to show anything, and it stops
+  if [ -z "$SKIP_CONTROL" ]; then
   echo "--- control: barrier off, 300 ms commit delay"
   for n in {1..5}; do kill_after control-$n control || exit 1; echo "control-$n | kill latency $latency ms" >> $out/control-latency.txt; done
   held_read after-control || exit 1
@@ -258,41 +263,59 @@ if [ $phase = delay ]; then
     echo "the control lost nothing: the kill lands too late to show the barrier; stopping"
     exit 1
   fi
-  echo "--- barrier on, 300 ms commit delay: $kills kills right after stored: true, each read back"
+  fi
+  # A kill counts only after a stored answer, with its pid re-checked just before
+  # it (--fast) and landing within FAST_MS (default 500) of the answer; slower
+  # stored kills are still checked for loss but not counted (Architect, sc-5404)
+  fast=${FAST_MS:-500} slow=0 killed=0 counted=0
+  echo "--- barrier on: $kills counted kills (stored answer, re-checked pid, kill within $fast ms), each read back"
   # A write can still miss native-persist-wait-ms under load and be answered
   # stored: false; it makes no promise, so it is killed but not counted (up to 3x tries)
-  echo "try | answer | write took | load | kill latency | counted | this write kept | all stored writes kept | integrity_check" > $out/delayed-table.txt
+  echo "try | answer | write took | load | kill latency | pid re-checked | counted | this write kept | all stored writes kept | integrity_check" > $out/delayed-table.txt
   stored=() a=0
-  while [ ${#stored} -lt $kills ] && [ $a -lt $((kills * 3)) ]; do
+  while [ $counted -lt $kills ] && [ $a -lt $((kills * 3)) ]; do
     a=$((a + 1))
     # The counted write is the second after the launch: with the test's 300 ms
     # delay the reopen's commits put the first past the 2 s wait (series-1200:
     # first 2.0-2.3 s, later 1.5-1.9 s; without the delay 0.1-0.4 s at load 650)
     kill_after kill-delayed-$a prewrite || exit 1
-    answer="$(cat $docs/result-kill-delayed-$a.json) | $(grep -o 'answered in [0-9]* ms' $docs/progress.log | tail -1 | cut -d' ' -f3-) | $(uptime | sed 's/.*averages: //' | cut -d' ' -f1) | $latency ms"
+    answer="$(cat $docs/result-kill-delayed-$a.json) | $(grep -o 'answered in [0-9]* ms' $docs/progress.log | tail -1 | cut -d' ' -f3-) | $(uptime | sed 's/.*averages: //' | cut -d' ' -f1) | $latency ms | $verified"
+    killed=$((killed + 1))
+    [ $latency -gt $fast ] && slow=$((slow + 1))
+    # More than one kill in five slower than the limit: the harness needs fixing first
+    if [ $killed -ge 5 ] && [ $((slow * 5)) -gt $killed ]; then
+      echo "$slow of $killed kills landed later than $fast ms after the answer: stopping to fix the harness"
+      exit 1
+    fi
     if ! grep -q '"stored":true' $docs/result-kill-delayed-$a.json; then
       echo "$a | $answer | no (not stored in time) | - | - | -" | tee -a $out/delayed-table.txt
+      echo "$a | $latency ms" >> $out/not-stored-kills.txt
       continue
     fi
     stored+=(kill-delayed-$a)
+    if [ $verified = yes ] && [ $latency -le $fast ]; then
+      counted=$((counted + 1)) count=$counted
+    else
+      count="no (slow or unchecked kill)"
+    fi
     held_read after-delayed-$a || exit 1
     names=$out/after-delayed-$a-names.txt
     grep -qx "kill-delayed-$a" $names && kept=yes || kept=no
     all=0
     for w in $stored; do grep -qx $w $names && all=$((all + 1)); done
     check=$(sqlite3 $(ls $out/after-delayed-$a-db/*.sqlite | head -1) 'PRAGMA integrity_check;')
-    echo "$a | $answer | ${#stored} | $kept | $all of ${#stored} | $check" | tee -a $out/delayed-table.txt
+    echo "$a | $answer | $count | $kept | $all of ${#stored} | $check" | tee -a $out/delayed-table.txt
     if [ $kept != yes ] || [ $all != ${#stored} ] || [ "$check" != ok ]; then
       echo "a stored write was lost or the check failed after try $a: stopping"
       keep=1
       exit 1
     fi
   done
-  if [ ${#stored} -lt $kills ]; then
-    echo "only ${#stored} of $kills writes were answered stored in $a tries: stopping"
+  if [ $counted -lt $kills ]; then
+    echo "only $counted of $kills kills counted in $a tries: stopping"
     exit 1
   fi
-  echo "all $kills stored writes kept"
+  echo "all $kills counted kills kept ($killed kills, $slow later than $fast ms, $(wc -l < $out/not-stored-kills.txt 2>/dev/null || echo 0) after not-stored answers)"
   exit 0
 fi
 if [ $phase != rest ]; then

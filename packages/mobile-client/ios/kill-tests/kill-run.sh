@@ -9,10 +9,10 @@
 #   all:   then 5 kills with the page bridge's barrier off
 #   rest:  the mid-write kill and those 5 only
 #   delay: with a page built FORK_TEST_COMMIT_DELAY_MS=300, the budget opened
-#          first (out of the migration window), the control (barrier off, at
-#          least 1 must be lost) and then DELAY_KILLS (default 5) kills with the
-#          barrier on, each read back (all must be kept): the pair that shows
-#          the barrier saves them; the rows go to <out-dir>/delayed-table.txt
+#          and stored first (out of the migration window), DELAY_KILLS (default
+#          5) kills with the barrier on, each read back (all must be kept; rows
+#          in <out-dir>/delayed-table.txt), then the control (barrier off, at
+#          least 1 must be lost): the pair that shows the barrier saves them
 # Each part ends with a read: the test categories still there, and
 # PRAGMA integrity_check on the exported budget.
 app=$1 out=$2 phase=$3
@@ -90,6 +90,7 @@ readback() {
 diagnose() { # label
   local d=$out/stall-$1
   mkdir -p $d
+  cp $docs/progress.log $d/ 2>/dev/null
   echo "--- stall $1: the app's log"
   cat $docs/progress.log 2>/dev/null | tail -20
   cat $docs/error.json 2>/dev/null && echo
@@ -192,26 +193,22 @@ if [ $phase = delay ]; then
   # A page built with FORK_TEST_COMMIT_DELAY_MS=300: every commit waits 300 ms.
   # DELAY_KILLS (default 5): barrier-on kills, each read back on its own.
   kills=${DELAY_KILLS:-5}
-  # Open (create and migrate) the budget first, so no kill lands in the
-  # migration window and a migration strand isn't taken for a lost write
-  echo "--- warm-up: open the test budget before any kill"
-  readback warm-up || exit 1
-  echo "--- control: barrier off, 300 ms commit delay"
-  for n in {1..5}; do kill_after control-$n control || exit 1; done
-  readback after-control || exit 1
-  kept=$(grep -c '^control-' $out/after-control-names.txt)
-  echo "kept: $kept of 5 (integrity: $(sqlite3 $(ls $out/after-control-db/*.sqlite | head -1) 'PRAGMA integrity_check;'))"
-  if [ "$kept" = 5 ]; then
-    echo "the control lost nothing: inconclusive, stopping"
-    exit 1
-  fi
+  # A read that stalls keeps the simulator and its storage
+  held_read() { readback $1 && return 0; diagnose $1; keep=1; return 1; }
+  # Create and migrate the budget, then wait until all of it is stored: every
+  # migration is its own commit, so with the delay they reach storage well
+  # after the budget opens, and a kill before then lands in the migration window
+  echo "--- warm-up: open the test budget and wait until it is stored"
+  kill_after warm-up write || exit 1
+  grep -q '"stored":true' $docs/result-warm-up.json || { echo "the warm-up was not answered stored: stopping"; exit 1; }
+  held_read warm-up || exit 1
   echo "--- barrier on, 300 ms commit delay: $kills kills right after stored: true, each read back"
   echo "kill | answer | kept after the kill | all earlier kept | integrity_check" > $out/delayed-table.txt
   for n in {1..$kills}; do
     kill_after kill-delayed-$n write || exit 1
     answer=$(cat $docs/result-kill-delayed-$n.json)
     grep -q '"stored":true' $docs/result-kill-delayed-$n.json || { echo "kill-delayed-$n was not answered stored: stopping"; exit 1; }
-    readback after-delayed-$n || exit 1
+    held_read after-delayed-$n || exit 1
     names=$out/after-delayed-$n-names.txt
     grep -qx "kill-delayed-$n" $names && kept=yes || kept=no
     earlier=$(grep -c '^kill-delayed-' $names)
@@ -224,6 +221,16 @@ if [ $phase = delay ]; then
     fi
   done
   echo "all $kills stored writes kept"
+  # The control last, so a budget it strands can't spoil the barrier result
+  echo "--- control: barrier off, 300 ms commit delay"
+  for n in {1..5}; do kill_after control-$n control || exit 1; done
+  held_read after-control || exit 1
+  kept=$(grep -c '^control-' $out/after-control-names.txt)
+  echo "control kept: $kept of 5 (integrity: $(sqlite3 $(ls $out/after-control-db/*.sqlite | head -1) 'PRAGMA integrity_check;'))"
+  if [ "$kept" = 5 ]; then
+    echo "the control lost nothing: the delay didn't bite, so the barrier result is inconclusive"
+    exit 1
+  fi
   exit 0
 fi
 if [ $phase != rest ]; then

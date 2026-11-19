@@ -3,13 +3,14 @@
 # simulator session. Debug build of the app with a FORK_TEST_HOOKS=true page
 # staged (for the control run). It creates its own simulator, refuses to start
 # if two are already booted, and shuts it down and deletes it at the end.
-#   kill-run.sh <App.app> <out-dir> kills|all|rest
+#   kill-run.sh <App.app> <out-dir> kills|all|rest|delay
 #   kills: 20 kills right after native/persisted answers stored, then one kill
 #          mid-write; it stops at once if a stored write is lost
-#   all:   then the control, 5 kills with the page bridge's barrier off; at
-#          least 1 should be lost. The 300 ms commit delay hook is read in the
-#          engine's worker, which the page can't set, so it isn't used.
-#   rest:  the mid-write kill and the control only
+#   all:   then 5 kills with the page bridge's barrier off
+#   rest:  the mid-write kill and those 5 only
+#   delay: with a page built FORK_TEST_COMMIT_DELAY_MS=300, the control (barrier
+#          off, at least 1 must be lost) and then 5 kills with the barrier on
+#          (all 5 must be kept): the pair that shows the barrier saves them
 # Each part ends with a read: the test categories still there, and
 # PRAGMA integrity_check on the exported budget.
 app=$1 out=$2 phase=$3
@@ -83,6 +84,32 @@ kill_after() { # name mode
 
 echo "--- refusal check"
 zsh $here/simkill.sh 00000000-0000-0000-0000-000000000000 --dry
+if [ $phase = delay ]; then
+  # A page built with FORK_TEST_COMMIT_DELAY_MS=300: every commit waits 300 ms
+  echo "--- control: barrier off, 300 ms commit delay"
+  for n in {1..5}; do kill_after control-$n control || exit 1; done
+  readback after-control || exit 1
+  kept=$(grep -c '^control-' $out/after-control-names.txt)
+  echo "kept: $kept of 5 (integrity: $(sqlite3 $(ls $out/after-control-db/*.sqlite | head -1) 'PRAGMA integrity_check;'))"
+  if [ "$kept" = 5 ]; then
+    echo "the control lost nothing: inconclusive, stopping"
+    exit 1
+  fi
+  echo "--- barrier on, 300 ms commit delay: 5 kills right after stored: true"
+  for n in {1..5}; do
+    kill_after kill-delayed-$n write || exit 1
+    grep -q '"stored":true' $docs/result-kill-delayed-$n.json || { echo "kill-delayed-$n was not answered stored: stopping"; exit 1; }
+  done
+  readback after-delayed || exit 1
+  kept=$(grep -c '^kill-delayed-' $out/after-delayed-names.txt)
+  echo "kept: $kept of 5"
+  check=$(sqlite3 $(ls $out/after-delayed-db/*.sqlite | head -1) 'PRAGMA integrity_check;')
+  if [ "$kept" != 5 ] || [ "$check" != ok ]; then
+    echo "a stored write was lost or the check failed: stopping"
+    exit 1
+  fi
+  exit 0
+fi
 if [ $phase != rest ]; then
   echo "--- 20 kills right after stored: true"
   for n in {1..20}; do

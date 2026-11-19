@@ -35,7 +35,11 @@ void test('Test hooks: names the worker bundle holding a marker', () => {
 });
 
 // Named here, not read from HOOK_MARKERS, so dropping one from the list fails
-for (const marker of ['__forkTestCommitDelayMs', '__forkTestBarrierOff']) {
+for (const marker of [
+  '__forkTestCommitDelayMs',
+  '__forkTestBarrierOff',
+  '__FORK_TEST_COMMIT_DELAY_MS__',
+]) {
   void test(`Test hooks: finds ${marker}`, () => {
     const dir = build({
       'index.js': `x(${marker})`,

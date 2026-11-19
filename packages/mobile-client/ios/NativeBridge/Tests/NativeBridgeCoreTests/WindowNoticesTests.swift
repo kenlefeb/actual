@@ -52,6 +52,18 @@ final class WindowNoticesTests: XCTestCase {
         XCTAssertEqual(scheduler.pending.map(\.delay), [15])
     }
 
+    // Security's review of PR 489: the app becoming active is not enough
+    func testReturningToTheAppBeforeThePageLoadsStillWaits() {
+        let notices = notices()
+        notices.show(.pageRestarted)
+        notices.windowChanged(isActive: true)
+        XCTAssertNil(notices.current, "the page has not loaded yet")
+        XCTAssertTrue(announced.isEmpty)
+        XCTAssertTrue(scheduler.pending.isEmpty)
+        notices.pageDidLoad()
+        XCTAssertEqual(notices.current, .pageRestarted)
+    }
+
     func testARestartInTheBackgroundShowsInFullOnReturn() {
         let notices = notices()
         notices.show(.pageRestarted)

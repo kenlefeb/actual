@@ -44,7 +44,23 @@ enum UITestPageRecovery {
                 await settle(webView)
             }
             show("before=\(before) after=\(after)", identifier: "uiTestPageRecovery", in: webView)
+            if UserDefaults.standard.bool(forKey: "UITestPageNoticeSheet") { presentSheet(over: webView) }
         }
+    }
+
+    // `-UITestPageNoticeSheet`: a sheet with a top bar, opened while the notice
+    // shows (sc-5220), as the person would open a transaction to check it
+    private static func presentSheet(over webView: WKWebView) {
+        guard var top = webView.window?.rootViewController else { return }
+        while let next = top.presentedViewController { top = next }
+        let content = UIViewController()
+        content.view.backgroundColor = .systemBackground
+        content.title = "Sheet"
+        content.navigationItem.leftBarButtonItem = UIBarButtonItem(systemItem: .cancel, primaryAction: UIAction { [weak content] _ in
+            content?.dismiss(animated: false)
+        })
+        content.navigationItem.leftBarButtonItem?.accessibilityIdentifier = "uiTestSheet.cancel"
+        top.present(UINavigationController(rootViewController: content), animated: false)
     }
 
     private static func append(_ line: String, to log: URL) {

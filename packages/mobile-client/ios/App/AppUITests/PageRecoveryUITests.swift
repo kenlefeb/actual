@@ -48,6 +48,22 @@ final class PageRecoveryUITests: XCTestCase {
         XCTAssertTrue(disappears(notice, within: 3), "Dismiss left the notice up")
     }
 
+    // The Designer's review of PR 489: the strip takes touches, so it must not
+    // lie over a sheet's top bar
+    func testASheetOpenedUnderTheNoticeStartsBelowIt() {
+        app.launchArguments = ["-UITestPageDeaths", "1", "-UITestPageNoticeSheet", "YES", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+        let cancel = app.buttons["uiTestSheet.cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 60), "the sheet never opened")
+        XCTAssertTrue(notice.exists, "the notice should still show")
+        // The sheet gets its room on the next look, within a moment
+        sleep(1)
+        let stripBottom = max(notice.frame.maxY, app.buttons["pageNotice.dismiss"].frame.maxY)
+        XCTAssertGreaterThanOrEqual(cancel.frame.minY, stripBottom, "the strip covers the sheet's Cancel")
+        cancel.tap()
+        XCTAssertTrue(disappears(cancel, within: 3), "Cancel under the strip did not get the tap")
+    }
+
     func testTheNoticeHidesByItself() {
         launch(deaths: 1)
         XCTAssertTrue(notice.waitForExistence(timeout: 60))

@@ -63,6 +63,7 @@
 		FB5220000000000000000102 /* PageNoticeWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5220000000000000000002 /* PageNoticeWindow.swift */; };
 		820DB8ECE5803E95972A13EA /* NativeAccountsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9248F3DFD880A2634F9E61C9 /* NativeAccountsUITests.swift */; };
 		FB5247000000000000000103 /* PageRecoveryUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5247000000000000000003 /* PageRecoveryUITests.swift */; };
+		FB5296000000000000000103 /* StorageLineUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5296000000000000000003 /* StorageLineUITests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -134,6 +135,7 @@
 		6DF959A4FBDF81B19F0E9A09 /* AppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		9248F3DFD880A2634F9E61C9 /* NativeAccountsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAccountsUITests.swift; sourceTree = "<group>"; };
 		FB5247000000000000000003 /* PageRecoveryUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageRecoveryUITests.swift; sourceTree = "<group>"; };
+		FB5296000000000000000003 /* StorageLineUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageLineUITests.swift; sourceTree = "<group>"; };
 		D246F7DC88D369846186AFFB /* UITestAccounts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestAccounts.swift; sourceTree = "<group>"; };
 		FB5247000000000000000002 /* UITestPageRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestPageRecovery.swift; sourceTree = "<group>"; };
 		FB5220000000000000000002 /* PageNoticeWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageNoticeWindow.swift; sourceTree = "<group>"; };
@@ -263,6 +265,7 @@
 			children = (
 				9248F3DFD880A2634F9E61C9 /* NativeAccountsUITests.swift */,
 				FB5247000000000000000003 /* PageRecoveryUITests.swift */,
+				FB5296000000000000000003 /* StorageLineUITests.swift */,
 			);
 			path = AppUITests;
 			sourceTree = "<group>";
@@ -458,6 +461,7 @@
 			files = (
 				820DB8ECE5803E95972A13EA /* NativeAccountsUITests.swift in Sources */,
 				FB5247000000000000000103 /* PageRecoveryUITests.swift in Sources */,
+				FB5296000000000000000103 /* StorageLineUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

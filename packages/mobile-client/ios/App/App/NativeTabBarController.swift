@@ -564,17 +564,45 @@ private final class WriteStorageLineController: UIViewController {
             reserved = 0
             return
         }
-        aboveBar?.constant = -(barHeight() + 8)
+        let resting = -(barHeight() + 8)
+        aboveBar?.constant = resting
         view.layoutIfNeeded()
         let keyboardTop = view.keyboardLayoutGuide.layoutFrame.minY
         let keyboardIsUp = keyboardTop < view.safeAreaLayoutGuide.layoutFrame.maxY
         let field = (UIResponder.current as? UIView).map { $0.convert($0.bounds, to: view) }
         atTop?.isActive = keyboardIsUp
             && WriteStorageLinePlacement.coversField(field, lineHeight: pill.bounds.height, keyboardTop: keyboardTop)
+        // sc-5296: iOS can put a sheet's search field at the bottom, where it
+        // ignores the room the line reserves, so the line sits above it instead
+        if !keyboardIsUp, let fieldTop = searchFieldTop(under: pill.frame.minY - 8) {
+            aboveBar?.constant = min(resting, -(view.bounds.maxY - fieldTop + Self.searchFieldMargin))
+        }
         view.layoutIfNeeded()
-        reserved = pill.bounds.height + 8
+        // The lift counts as room too, so the controls that do follow the safe area stay clear of the line
+        reserved = pill.bounds.height + 8 + ((aboveBar.map { -$0.constant } ?? 0) + resting)
         let safeBottom = view.safeAreaLayoutGuide.layoutFrame.maxY
         onHeight(reserved, keyboardIsUp && atTop?.isActive != true ? safeBottom - keyboardTop : 0)
+    }
+
+    // Room between the line and a search field below it, beyond the field's own rounded background
+    private static let searchFieldMargin: CGFloat = 16
+
+    // The top of the highest visible search field on screen that reaches below
+    // `lineTop`, in screen points (this window fills the screen)
+    private func searchFieldTop(under lineTop: CGFloat) -> CGFloat? {
+        guard let window = view.window?.windowScene?.windows.first(where: \.isKeyWindow) else { return nil }
+        var top: CGFloat?
+        func look(in view: UIView) {
+            guard !view.isHidden, view.alpha > 0.01 else { return }
+            if view is UISearchTextField {
+                let frame = view.convert(view.bounds, to: nil)
+                if frame.maxY > lineTop { top = min(top ?? frame.minY, frame.minY) }
+                return
+            }
+            view.subviews.forEach(look)
+        }
+        look(in: window)
+        return top
     }
 }
 

@@ -68,7 +68,7 @@
 
 ## 5. Reconcile search field and the storage line (sc-5296)
 
-- [ ] 5.1 Failing UI or screenshot check first: on Reconcile step 2, with the line showing, the line and the search field's text are both fully readable and the field takes taps, in light, dark and at the largest text size ("The storage status line never covers what a person needs")
+- [x] 5.1 Failing UI or screenshot check first: on Reconcile step 2, with the line showing, the line and the search field's text are both fully readable and the field takes taps, in light, dark and at the largest text size ("The storage status line never covers what a person needs")
 
 ## 6. Turning the storage line on in Release (sc-5297)
 

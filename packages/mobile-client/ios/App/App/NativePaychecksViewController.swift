@@ -264,15 +264,9 @@ struct PaychecksScreen: View {
 
     @ViewBuilder private var undoBar: some View {
         if let offer = model.undoOffer {
-            HStack {
-                if let text = undoText(offer) { Text(text).fixedSize(horizontal: false, vertical: true) }
-                Spacer()
-                Button(Words.undo) { Task { await model.undo() } }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(model.isWorking)
-            }
-            .padding()
-            .background(.regularMaterial)
+            UndoBarRow(text: undoText(offer), label: Words.undo, isWorking: model.isWorking) { Task { await model.undo() } }
+                .padding()
+                .background(.regularMaterial)
         }
     }
 }

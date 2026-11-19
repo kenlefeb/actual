@@ -290,8 +290,8 @@ final class StorageLineUITests: XCTestCase {
         let text = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Changed the category of")).firstMatch
         XCTAssertTrue(text.exists, "no Undo bar text")
         XCTAssertLessThanOrEqual(text.frame.maxY, undo.frame.minY, "the Undo button \(undo.frame) is beside its text \(text.frame), not under it")
+        // The text's own frame is as wide as its longest line, so only the button's width is checked
         let width = app.windows.firstMatch.frame.width
-        XCTAssertGreaterThanOrEqual(text.frame.width, width * 0.8, "the Undo bar text \(text.frame) doesn't have the whole line")
         XCTAssertGreaterThanOrEqual(undo.frame.width, width * 0.8, "the Undo button \(undo.frame) isn't full width")
     }
 

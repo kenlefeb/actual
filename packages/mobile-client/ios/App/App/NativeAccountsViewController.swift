@@ -291,18 +291,44 @@ struct UndoBar: View {
 
     var body: some View {
         if let offer {
-            HStack {
-                Text(AccountsWords.undoText(offer)).fixedSize(horizontal: false, vertical: true)
-                Spacer()
-                Button(AccountsWords.undo, action: undo)
-                    .buttonStyle(.borderedProminent)
-                    .disabled(isWorking)
-            }
-            .padding()
-            .background(.regularMaterial)
-            // The bar sits outside the screen's tint (a safe-area inset), so it takes the accent itself
-            .tint(Color(NativeTabBarController.accent))
+            UndoBarRow(text: AccountsWords.undoText(offer), label: AccountsWords.undo, isWorking: isWorking, undo: undo)
+                .padding()
+                .background(.regularMaterial)
+                // The bar sits outside the screen's tint (a safe-area inset), so it takes the accent itself
+                .tint(Color(NativeTabBarController.accent))
         }
+    }
+}
+
+// An Undo bar's text and button. At accessibility sizes the button goes under
+// the text, both full width, so the text has the whole line and wraps only
+// between words (sc-5428: beside it, "Changed" broke as "Change / d")
+struct UndoBarRow: View {
+    let text: String?
+    let label: String
+    let isWorking: Bool
+    let undo: () -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 12) {
+                if let text { Text(text).fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading) }
+                button.frame(maxWidth: .infinity)
+            }
+        } else {
+            HStack {
+                if let text { Text(text).fixedSize(horizontal: false, vertical: true) }
+                Spacer()
+                button
+            }
+        }
+    }
+
+    private var button: some View {
+        Button(action: undo) { Text(label).frame(maxWidth: typeSize.isAccessibilitySize ? .infinity : nil) }
+            .buttonStyle(.borderedProminent)
+            .disabled(isWorking)
     }
 }
 

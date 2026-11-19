@@ -146,6 +146,24 @@ public enum NativeBridgeEvent {
     }
 }
 
+// Security's mismatch check (sc-5219): the page's reported guard state against
+// this shell's opt-in
+public enum StorageGuardMismatch {
+    // nil when they agree
+    public static func message(shellOptedIn: Bool, pageReported: Bool?) -> String? {
+        guard pageReported != shellOptedIn else { return nil }
+        let shell = shellOptedIn ? "this shell opted in" : "this shell did not opt in"
+        let page = pageReported.map { $0 ? "the page reports its guard on" : "the page reports its guard off" }
+            ?? "the page does not report its guard"
+        return "storage guard mismatch: \(shell), \(page)"
+    }
+
+    // The shell relies on a guard the page doesn't have: no write of that page is confirmed
+    public static func writesUnconfirmed(shellOptedIn: Bool, pageReported: Bool?) -> Bool {
+        shellOptedIn && pageReported != true
+    }
+}
+
 // sc-5219 (native-durable-writes D3, D4): whether this device has stored the
 // writes made through the client. One per page.
 //
@@ -155,18 +173,6 @@ public enum NativeBridgeEvent {
 // in package builds, which stops the iPhone app (it compiles these sources
 // itself, so internal would not). The guard's PR opens them up.
 @MainActor
-// Security's mismatch check (sc-5219): the page's reported guard state against
-// this shell's opt-in; nil when they agree
-public enum StorageGuardMismatch {
-    public static func message(shellOptedIn: Bool, pageReported: Bool?) -> String? {
-        guard pageReported != shellOptedIn else { return nil }
-        let shell = shellOptedIn ? "this shell opted in" : "this shell did not opt in"
-        let page = pageReported.map { $0 ? "the page reports its guard on" : "the page reports its guard off" }
-            ?? "the page does not report its guard"
-        return "storage guard mismatch: \(shell), \(page)"
-    }
-}
-
 public final class WriteStorageStatus: ObservableObject {
     public static let savingMessage = NSLocalizedString("Saving…", comment: "Native screens: a change is being stored on this device")
     public static let notYetStoredMessage = NSLocalizedString(
@@ -267,6 +273,7 @@ public final class WriteStorageStatus: ObservableObject {
     @discardableResult
     func record(_ answer: PersistedAnswer, ticket: Int? = nil, madeIn origin: WriteOrigin? = nil) -> Bool {
         let ticket = ticket ?? nextTicket()
+        let answer = writesUnconfirmed ? PersistedAnswer(stored: false, seq: answer.seq) : answer
         let answeredBy = answer.seq?.epoch
         let isLive = answeredBy.map(adopt) ?? true
         if let origin, origin.epoch != (answeredBy ?? currentEpoch) {
@@ -306,20 +313,25 @@ public final class WriteStorageStatus: ObservableObject {
     // arrive before the answer that carries its number. Writes are stored in
     // order, so it covers every earlier number of its page load too.
     public func storedEvent(seq: Int, epoch: String) {
-        guard adopt(epoch) else { return }
+        guard adopt(epoch), !writesUnconfirmed else { return }
         storedThroughSeq = max(storedThroughSeq, seq)
         unstored.removeAll { $0.seq.map { $0 <= seq } ?? false }
     }
 
     // The page bridge's "ready". The same page may already be known from an answer.
-    // guardMismatch: the page's guard state differs from this shell's opt-in
-    public func pageLoaded(epoch: String, guardMismatch: Bool = false) {
+    // guardMismatch: the page's guard state differs from this shell's opt-in;
+    // writesUnconfirmed: and so none of its writes can be confirmed stored
+    public func pageLoaded(epoch: String, guardMismatch: Bool = false, writesUnconfirmed: Bool = false) {
         _ = adopt(epoch)
         self.guardMismatch = guardMismatch
+        self.writesUnconfirmed = writesUnconfirmed
     }
 
     // Security's check (sc-5219): flagged for the latest page; logged by the shell
     @Published public private(set) var guardMismatch = false
+    // Security's ruling: a page without the guard answers "stored" for writes that
+    // may have failed, so its answers and stored events count for nothing
+    private var writesUnconfirmed = false
 
     // What a page that has gone had not stored may be lost with it
     private func retireCurrentPage() {

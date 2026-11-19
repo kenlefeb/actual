@@ -40,6 +40,8 @@ public final class StorageNotices {
     // latest failure's reason, which the engine forgets at a restart
     private var held: CutOff?
     private var heldQuota = false
+    // The page load the unguarded notice was last shown for
+    private var unguardedEpoch: String?
 
     public init(
         slot: WindowNotices, storage: WriteStorageStatus, reload: @escaping () -> Void,
@@ -89,6 +91,15 @@ public final class StorageNotices {
         slot.show(notice)
     }
 
+    // Security's ruling: this page loaded without the guard this shell relies on.
+    // Once per page load, never a reload of its own, so a mismatch that survives
+    // the person's Reload leaves the notice up rather than looping.
+    public func pageUnguarded(epoch: String) {
+        guard epoch != unguardedEpoch else { return }
+        unguardedEpoch = epoch
+        slot.show(Self.unguarded)
+    }
+
     // A closed budget's last write failed; it follows any notice showing
     public func closeFailed() {
         slot.queue(Self.closedBudget)
@@ -117,6 +128,7 @@ public final class StorageNotices {
         switch notice.button {
         case .reload:
             endFailure()
+            slot.end(Self.unguarded)
             storage.acknowledgeUnstoredOfThisPage()
             reload()
         case .ok:
@@ -141,6 +153,13 @@ public final class StorageNotices {
             "The app restarted. Some recent changes may not have been saved. Check them, and make again any that are missing.",
             comment: "Storage notice: the app restarted while a change was still being saved"),
         lifetime: .persistent, button: .ok)
+
+    // Proposed wording (Security's ruling), awaiting the Designer and Product Owner
+    static let unguarded = WindowNotice(
+        text: NSLocalizedString(
+            "This device can't confirm that changes are saved. Reload the app. Changes made before you reload may not have been saved.",
+            comment: "Storage notice: the page loaded without the storage guard, so no change can be confirmed saved"),
+        lifetime: .persistent, button: .reload)
 
     static let closedBudget = WindowNotice(
         text: NSLocalizedString(

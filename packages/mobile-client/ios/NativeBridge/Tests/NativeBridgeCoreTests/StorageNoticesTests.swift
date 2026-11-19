@@ -411,4 +411,28 @@ final class StorageNoticesTests: XCTestCase {
         XCTAssertNil(none?.lastStoredFlushAt)
         XCTAssertNil(NativeBridgeEvent.storageFailure(of: ["event": "sync-event", "payload": [:]]))
     }
+
+    // Security's ruling: a page without the guard under a shell that opted in.
+    // "The unguarded page notice offers Reload once per page load"
+    func testAnUnguardedPageShowsItsNoticeWithReloadOncePerPageLoad() {
+        firstLoad()
+        notices.pageUnguarded(epoch: "e")
+        XCTAssertEqual(
+            slot.current?.text,
+            "This device can't confirm that changes are saved. Reload the app. Changes made before you reload may not have been saved.")
+        XCTAssertEqual(slot.current?.button, .reload)
+        XCTAssertEqual(slot.current?.lifetime, .persistent)
+        // The same page again: no second notice, no reload
+        notices.pageUnguarded(epoch: "e")
+        XCTAssertEqual(reloads, 0)
+        tap()
+        XCTAssertEqual(reloads, 1)
+        XCTAssertNil(slot.current, "Reload closes it")
+        // "The mismatch survives the reload": the new page's notice stays up, and nothing reloads on its own
+        notices.pageLoaded()
+        notices.pageUnguarded(epoch: "f")
+        XCTAssertEqual(slot.current?.button, .reload)
+        notices.pageUnguarded(epoch: "f")
+        XCTAssertEqual(reloads, 1)
+    }
 }

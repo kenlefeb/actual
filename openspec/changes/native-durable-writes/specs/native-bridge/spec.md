@@ -599,3 +599,25 @@ On iPhone, Capacitor reads its cookie and HTTP settings through `prompt()` with 
 #### Scenario: Another frame sends Capacitor's cookie call
 - **WHEN** a frame that isn't the app's main page calls `prompt('{"type":"CapacitorCookies.get"}')`
 - **THEN** it gets `null`, no dialog shows, and Capacitor's handler is not called
+
+### Requirement: The page reports its storage guard
+The page bridge SHALL say in `ready` whether it turned the storage guard on. The iPhone shell SHALL compare that with its own opt-in on every page load, log both and any mismatch in every build, and flag a mismatch on its write status.
+
+#### Scenario: Shell and page agree
+- **WHEN** the iPhone shell has opted in and the page's `ready` says its guard is on
+- **THEN** the shell logs both and flags nothing
+
+#### Scenario: The page turned the guard on without the shell
+- **WHEN** the shell has not opted in and the page's `ready` says its guard is on
+- **THEN** the shell logs the mismatch and changes nothing else
+
+### Requirement: A page without the guard confirms no write
+When the shell has opted in and the page's `ready` says its guard is off, or says nothing, no write of that page load SHALL count as stored: no "Saved", and the storage line stays at "not yet stored". A notice SHALL offer Reload once per page load; the shell SHALL never reload on its own.
+
+#### Scenario: The page loads without the guard
+- **WHEN** the opted-in shell gets a `ready` with the guard off or missing, and the person makes a change
+- **THEN** the change is never shown as saved, and a notice says this device can't confirm that changes are saved, with Reload
+
+#### Scenario: The mismatch survives the reload
+- **WHEN** the person taps Reload and the new page also loads without the guard
+- **THEN** the notice shows again for the new page, stays up, nothing reloads on its own, and the shell keeps logging

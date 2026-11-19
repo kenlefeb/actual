@@ -504,6 +504,32 @@ final class StoredWriteTests: XCTestCase {
             "storage guard mismatch: this shell opted in, the page does not report its guard")
     }
 
+    // Security's ruling: only a shell that opted in, with a page that reports its guard off or nothing
+    func testWritesAreUnconfirmedOnlyWhenTheShellOptedInAndThePageIsNotGuarded() {
+        XCTAssertTrue(StorageGuardMismatch.writesUnconfirmed(shellOptedIn: true, pageReported: false))
+        XCTAssertTrue(StorageGuardMismatch.writesUnconfirmed(shellOptedIn: true, pageReported: nil))
+        XCTAssertFalse(StorageGuardMismatch.writesUnconfirmed(shellOptedIn: true, pageReported: true))
+        // The reverse only logs
+        XCTAssertFalse(StorageGuardMismatch.writesUnconfirmed(shellOptedIn: false, pageReported: true))
+        XCTAssertFalse(StorageGuardMismatch.writesUnconfirmed(shellOptedIn: false, pageReported: false))
+    }
+
+    // "A page without the guard confirms no write": no "stored", the line stays at not yet stored
+    func testAnUnguardedPageConfirmsNoWrite() {
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "e", guardMismatch: true, writesUnconfirmed: true)
+        XCTAssertFalse(status.record(PersistedAnswer(stored: true, seq: PersistedSeq(epoch: "e", n: 1))))
+        XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
+        status.storedEvent(seq: 1, epoch: "e")
+        XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
+        // A page that agrees after the person's Reload confirms its own writes again
+        status.acknowledgeUnstoredOfThisPage()
+        status.pageLoaded(epoch: "f")
+        XCTAssertTrue(status.record(PersistedAnswer(stored: true, seq: PersistedSeq(epoch: "f", n: 1))))
+        XCTAssertNil(status.message)
+        XCTAssertFalse(status.mayNotBeSaved)
+    }
+
     func testAMismatchIsFlaggedOnTheWriteStatus() {
         let status = WriteStorageStatus()
         XCTAssertFalse(status.guardMismatch)

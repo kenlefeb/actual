@@ -225,7 +225,7 @@ if [ $phase = delay ]; then
   waitfor $docs/result-warm-up.json || { diagnose warm-up; keep=1; exit 1; }
   echo "warm-up answer: $(cat $docs/result-warm-up.json); waiting ${WARMUP_SECONDS:-90} s for storage"
   pause ${WARMUP_SECONDS:-90}
-  kill_after warm-up-2 write || exit 1
+  kill_after warm-up-2 prewrite || exit 1
   grep -q '"stored":true' $docs/result-warm-up-2.json || { echo "the warm-up was not stored in time: stopping"; exit 1; }
   held_read warm-up || exit 1
   echo "--- barrier on, 300 ms commit delay: $kills kills right after stored: true, each read back"

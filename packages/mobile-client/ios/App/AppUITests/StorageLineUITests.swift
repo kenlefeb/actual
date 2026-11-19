@@ -214,11 +214,12 @@ final class StorageLineUITests: XCTestCase {
     }
 
     // A posted register row whose bottom is close to the line: the lowest one
-    // wholly above it (scheduled rows have no menu)
+    // wholly above it (scheduled rows have no menu, and a split can't be
+    // categorized, so its menu has no Categorize)
     private func lowRow() -> XCUIElement {
         let origin = app.coordinate(withNormalizedOffset: .zero)
         let rows = app.buttons.matching(NSPredicate(
-            format: "label CONTAINS ', ' AND NOT (label CONTAINS 'Bank of America') AND NOT (label CONTAINS[c] 'scheduled')"))
+            format: "label CONTAINS ', ' AND NOT (label CONTAINS 'Bank of America') AND NOT (label CONTAINS[c] 'scheduled') AND NOT (label CONTAINS 'Split (')"))
         // At the largest text size the upcoming rows take several screens, so
         // keep scrolling until a posted row sits wholly above the line
         for _ in 0..<12 {
@@ -250,11 +251,8 @@ final class StorageLineUITests: XCTestCase {
         XCTAssertTrue(categorize.waitForExistence(timeout: 10), "no context menu on \(row.label)")
         sleep(1)
         shot("context-menu")
-        if line.exists {
-            for item in ["Categorize", "Clear", "Unclear", "Delete"] where app.buttons[item].exists {
-                XCTAssertFalse(pill.intersects(app.buttons[item].frame), "the line \(pill) covers the menu's \(item) \(app.buttons[item].frame)")
-            }
-        }
+        // The Designer's rule: the line steps aside while a context menu is open
+        XCTAssertFalse(line.exists, "the line shows while the context menu is open")
 
         // 6.1: the last row of the Categorize sheet scrolls clear of the line
         categorize.tap()

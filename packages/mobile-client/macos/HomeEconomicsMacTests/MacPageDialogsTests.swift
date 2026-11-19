@@ -64,6 +64,28 @@ final class MacPageDialogsTests: XCTestCase {
         XCTAssertEqual(shown.map(\.kind), [.prompt(defaultText: "Groceries")])
     }
 
+    // The page going away takes its dialog off the window and answers it once
+    func testAReloadTakesTheDialogAway() async throws {
+        let host = MacEngineHost(www: www, version: "test")
+        var dismissed = 0
+        host.presentDialog = { [unowned self] request, _ in
+            self.shown.append(request)
+            return { dismissed += 1 }
+        }
+        host.load()
+        for _ in 0..<100 where host.webView.isLoading || host.webView.url == nil {
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        let call = Task { try? await self.run(host, "return confirm('Delete the Groceries category?')") }
+        for _ in 0..<100 where shown.isEmpty { try await Task.sleep(nanoseconds: 50_000_000) }
+        XCTAssertEqual(shown.count, 1, "the dialog never showed")
+        host.webView.reload()
+        for _ in 0..<100 where dismissed == 0 { try await Task.sleep(nanoseconds: 50_000_000) }
+        XCTAssertEqual(dismissed, 1, "the dialog stayed over the reloaded page")
+        _ = await call.value
+        XCTAssertEqual(dismissed, 1)
+    }
+
     func testACancelledPromptGivesThePageNull() async throws {
         let host = try await loadedHost(answering: .text(nil))
         let result = try await run(host, "return String(prompt('Name the new category'))")

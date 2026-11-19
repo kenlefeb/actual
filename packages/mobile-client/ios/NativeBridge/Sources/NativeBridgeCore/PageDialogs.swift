@@ -7,13 +7,15 @@ import WebKit
 // Fork-only (sc-5399). A page's alert, confirm and prompt hold all of the
 // page's JavaScript until WebKit gets an answer, and with it every bridge call.
 // So the shell always answers: the person's answer, or the safe one (Cancel)
-// when the dialog can't show or nobody answers. The Mac and iPhone apps share it.
+// when the dialog can't show, the page keeps asking, or the page goes away.
+// Once on screen a dialog waits for the person for as long as it takes. The
+// Mac and iPhone apps share it.
 public enum PageDialogKind: Equatable {
     case alert
     case confirm
     case prompt(defaultText: String?)
 
-    // What the page gets when nobody answers: Cancel
+    // What the page gets when the person can't answer: Cancel
     public var safeAnswer: PageDialogAnswer {
         switch self {
         case .alert: .dismissed
@@ -42,13 +44,29 @@ public struct PageDialogRequest: Equatable {
         self.title = title
     }
 
+    // The heading for a page that has no host (a sandboxed frame, about:blank).
+    // The one place these words live; the Product Owner confirms them.
+    public static let otherPageLabel = NSLocalizedString(
+        "Another page", comment: "Heading of a dialog from a page that isn't the app's and has no address to name")
+
     public static func title(isAppPage: Bool, host: String) -> String? {
-        isAppPage ? nil : host
+        if isAppPage { return nil }
+        return host.isEmpty ? otherPageLabel : shown(host)
+    }
+
+    // What of a page's text a dialog shows: plain text, cut with an ellipsis so
+    // a huge message can't push the buttons off screen
+    public static let maxShownLength = 1000
+
+    public static func shown(_ text: String) -> String {
+        guard text.count > maxShownLength else { return text }
+        return String(text.prefix(maxShownLength - 1)) + "…"
     }
 
     // Capacitor's page script reads its cookie and HTTP settings with a prompt
     // carrying JSON, which its own handler answers without showing anything
-    // (WebViewDelegationHandler). Those stay with Capacitor.
+    // (WebViewDelegationHandler). The test against the pinned Capacitor keeps
+    // this list in step with it.
     public static let capacitorPromptTypes: Set<String> = [
         "CapacitorCookies.get", "CapacitorCookies.set", "CapacitorCookies.isEnabled", "CapacitorHttp",
     ]
@@ -60,25 +78,51 @@ public struct PageDialogRequest: Equatable {
         else { return false }
         return capacitorPromptTypes.contains(type)
     }
+
+    public enum PromptRoute: Equatable {
+        // Capacitor's own call from the app's page: its handler answers
+        case handler
+        // One of Capacitor's calls from anywhere else: null, and nothing shown
+        case refuse
+        // A dialog for the person
+        case dialog
+    }
+
+    // Security (PR #500): only the app's own page, as the main frame, reaches
+    // Capacitor's cookie and HTTP handlers. Another page or a frame could
+    // otherwise read or set the app server's cookies, or crash the app with a
+    // malformed "set" (Capacitor force-unwraps its fields).
+    public static func route(prompt: String, isAppPage: Bool) -> PromptRoute {
+        guard isCapacitorCall(prompt) else { return .dialog }
+        return isAppPage ? .handler : .refuse
+    }
 }
 
 @MainActor
 public final class PageDialogs {
-    // Shown: how long the dialog waits for the person before Cancel answers it.
-    // Not shown (no active window): tried every second, five times.
-    public static let answerTimeout: TimeInterval = 60
+    // Named exceptions to "the person answers" (design D13). They are fixed,
+    // not configurable limits: limits live in the budget, and a dialog such as
+    // "We had an unknown problem opening" comes when no budget could be read.
+    // Can't show (no active window): tried every second, five times, then Cancel.
     public static let presentAttempts = 5
     public static let retryDelay: TimeInterval = 1
+    // A page that keeps asking: past three dialogs in ten seconds it gets
+    // Cancel unseen, so a page looping alert() can't pin the person or keep the
+    // notice strip's Reload covered.
+    public static let floodLimit = 3
+    public static let floodWindow: TimeInterval = 10
 
     // Shows the dialog and returns how to take it off screen, or nil if it can't show now
     public typealias Present = (PageDialogRequest, @escaping @MainActor (PageDialogAnswer) -> Void) -> (() -> Void)?
 
-    private let answerTimeout: TimeInterval
+    private let now: () -> Date
     private let schedule: (TimeInterval, @escaping @MainActor () -> Void) -> Void
     private let present: Present
+    private var pending: [Pending] = []
+    private var recent: [Date] = []
 
     public init(
-        answerTimeout: TimeInterval = PageDialogs.answerTimeout,
+        now: @escaping () -> Date = Date.init,
         schedule: @escaping (TimeInterval, @escaping @MainActor () -> Void) -> Void = { delay, work in
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
@@ -87,19 +131,39 @@ public final class PageDialogs {
         },
         present: @escaping Present
     ) {
-        self.answerTimeout = answerTimeout
+        self.now = now
         self.schedule = schedule
         self.present = present
     }
 
     public func show(_ request: PageDialogRequest, completion: @escaping (PageDialogAnswer) -> Void) {
-        Pending(request: request, owner: self, completion: completion).tryToShow(attempt: 1)
+        let time = now()
+        recent.removeAll { time.timeIntervalSince($0) >= Self.floodWindow }
+        guard recent.count < Self.floodLimit else { return completion(request.kind.safeAnswer) }
+        recent.append(time)
+        let dialog = Pending(request: request, owner: self, completion: completion)
+        pending.append(dialog)
+        dialog.tryToShow(attempt: 1)
+    }
+
+    // The page reloaded or navigated away, its process ended, or its web view is
+    // going: every dialog it asked for leaves the screen and gets Cancel, once
+    public func pageWentAway() {
+        let gone = pending
+        pending = []
+        recent = []
+        gone.forEach { $0.cancel() }
+    }
+
+    private func finished(_ dialog: Pending) {
+        pending.removeAll { $0 === dialog }
     }
 
     // One dialog: answered exactly once, whatever happens
+    @MainActor
     private final class Pending {
         let request: PageDialogRequest
-        let owner: PageDialogs
+        weak var owner: PageDialogs?
         var completion: ((PageDialogAnswer) -> Void)?
         var dismiss: (() -> Void)?
 
@@ -110,24 +174,25 @@ public final class PageDialogs {
         }
 
         func tryToShow(attempt: Int) {
+            guard completion != nil, let owner else { return }
             dismiss = owner.present(request) { [self] answer in finish(answer) }
-            if dismiss != nil {
-                owner.schedule(owner.answerTimeout) { [self] in
-                    guard completion != nil else { return }
-                    dismiss?()
-                    finish(request.kind.safeAnswer)
-                }
-            } else if completion != nil {
-                guard attempt < PageDialogs.presentAttempts else { return finish(request.kind.safeAnswer) }
-                owner.schedule(PageDialogs.retryDelay) { [self] in tryToShow(attempt: attempt + 1) }
-            }
+            guard dismiss == nil else { return }
+            guard attempt < PageDialogs.presentAttempts else { return finish(request.kind.safeAnswer) }
+            owner.schedule(PageDialogs.retryDelay) { [self] in tryToShow(attempt: attempt + 1) }
+        }
+
+        func cancel() {
+            let shown = dismiss
+            finish(request.kind.safeAnswer)
+            shown?()
         }
 
         private func finish(_ answer: PageDialogAnswer) {
-            let completion = completion
+            guard let completion else { return }
             self.completion = nil
             dismiss = nil
-            completion?(answer)
+            owner?.finished(self)
+            completion(answer)
         }
     }
 }
@@ -141,24 +206,22 @@ public final class PageDialogs {
 public final class PageDialogDelegate: NSObject, WKUIDelegate {
     private let handler: NSObject & WKUIDelegate
     private let isAppPage: (WKFrameInfo) -> Bool
-    private let handlerAnswersPrompt: (String) -> Bool
     private let onDialog: (PageDialogRequest, @escaping (PageDialogAnswer) -> Void) -> Void
 
-    // `handlerAnswersPrompt`: a prompt that is the handler's own call, not a dialog
-    // (on iPhone, Capacitor's; see PageDialogRequest.isCapacitorCall)
+    // `isAppPage`: the app's own page, as the main frame, from the frame's security origin
     public init(
         forwardingTo handler: NSObject & WKUIDelegate, isAppPage: @escaping (WKFrameInfo) -> Bool,
-        handlerAnswersPrompt: @escaping (String) -> Bool = { _ in false },
         onDialog: @escaping (PageDialogRequest, @escaping (PageDialogAnswer) -> Void) -> Void
     ) {
         self.handler = handler
         self.isAppPage = isAppPage
-        self.handlerAnswersPrompt = handlerAnswersPrompt
         self.onDialog = onDialog
     }
 
     private func request(_ kind: PageDialogKind, _ message: String, _ frame: WKFrameInfo) -> PageDialogRequest {
-        PageDialogRequest(kind: kind, message: message, title: PageDialogRequest.title(isAppPage: isAppPage(frame), host: frame.securityOrigin.host))
+        PageDialogRequest(
+            kind: kind, message: PageDialogRequest.shown(message),
+            title: PageDialogRequest.title(isAppPage: isAppPage(frame), host: frame.securityOrigin.host))
     }
 
     public func webView(
@@ -181,12 +244,18 @@ public final class PageDialogDelegate: NSObject, WKUIDelegate {
         _ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?,
         initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void
     ) {
-        if handlerAnswersPrompt(prompt),
-            let answer = handler.webView(_:runJavaScriptTextInputPanelWithPrompt:defaultText:initiatedByFrame:completionHandler:)
-        {
+        switch PageDialogRequest.route(prompt: prompt, isAppPage: isAppPage(frame)) {
+        case .handler:
+            // On iPhone, Capacitor's own call; a handler with none (the Mac) answers nothing
+            guard let answer = handler.webView(_:runJavaScriptTextInputPanelWithPrompt:defaultText:initiatedByFrame:completionHandler:)
+            else { return completionHandler(nil) }
             return answer(webView, prompt, defaultText, frame, completionHandler)
+        case .refuse:
+            return completionHandler(nil)
+        case .dialog:
+            break
         }
-        onDialog(request(.prompt(defaultText: defaultText), prompt, frame)) { answer in
+        onDialog(request(.prompt(defaultText: defaultText.map(PageDialogRequest.shown)), prompt, frame)) { answer in
             if case .text(let text) = answer { completionHandler(text) } else { completionHandler(nil) }
         }
     }

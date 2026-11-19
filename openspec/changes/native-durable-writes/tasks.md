@@ -96,4 +96,5 @@ Lands before the iPhone guard flip (task 3.10), which links it (design D13).
 
 - [x] 8.1 Failing tests first for "Page dialogs are handled by the shell": the answer rules (core), each dialog on a real page (Mac), and on iPhone an alert over a native screen, confirm OK and Cancel, a typed prompt, and a confirm nobody answers
 - [x] 8.2 `PageDialogs` and `PageDialogDelegate` in NativeBridgeCore; the iPhone shows dialogs in its own window above the strip and the storage line, the Mac as a sheet
+- [x] 8.4 Review changes, tests first: no time limit on screen and the page going away answers Cancel and dismisses (Designer, Architect); Capacitor's calls only from the app's own page, "Another page", the flood guard and the length bound (Security)
 - [ ] 8.3 Screenshots for the Designer (light, dark, largest text; over a native screen, with the strip and the storage line showing) in `~/Library/Developer/HomeEconomicsSpike/page-dialogs-5399/`, and Security's review of the forwarding and the other-page title

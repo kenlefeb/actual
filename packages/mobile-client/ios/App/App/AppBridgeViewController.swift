@@ -48,15 +48,9 @@ class AppBridgeViewController: CAPBridgeViewController {
     // sc-5399: the page's alert, confirm and prompt (the web view holds its UI delegate weakly too)
     private var pageDialogDelegate: PageDialogDelegate?
     private let dialogPresenter = PageDialogPresenter()
-    private lazy var pageDialogs: PageDialogs = {
-        var timeout = PageDialogs.answerTimeout
-        #if DEBUG
-        timeout = UITestPageDialogs.timeout ?? timeout
-        #endif
-        return PageDialogs(answerTimeout: timeout) { [weak self] request, answer in
-            self?.dialogPresenter.present(request, answer: answer)
-        }
-    }()
+    private lazy var pageDialogs = PageDialogs { [weak self] request, answer in
+        self?.dialogPresenter.present(request, answer: answer)
+    }
     private weak var reloadAlert: UIAlertController?
     private var activeObserver: NSObjectProtocol?
     private var inactiveObserver: NSObjectProtocol?
@@ -98,6 +92,12 @@ class AppBridgeViewController: CAPBridgeViewController {
         return StorageNotices(slot: pageNotices, storage: nativeBridge.writeStorage) { [weak self] in self?.loadWebView() }
     }()
 
+    // sc-5399: the web view goes with this controller; a dialog it asked for still
+    // gets its answer, as WebKit requires, and leaves the screen
+    deinit {
+        MainActor.assumeIsolated { pageDialogs.pageWentAway() }
+    }
+
     override func capacitorDidLoad() {
         bridge?.registerPluginInstance(nativeBridge)
         nativeBridge.onStorageEvent = { [weak self] body in
@@ -111,7 +111,11 @@ class AppBridgeViewController: CAPBridgeViewController {
         _ = storageNotices
         bridge?.registerPluginInstance(nativeChrome)
         if let webView, let handler = webView.navigationDelegate as? NSObject & WKNavigationDelegate {
-            let delegate = PageProcessDelegate(forwardingTo: handler) { [weak self] in self?.pageRecovery.processEnded() }
+            let delegate = PageProcessDelegate(forwardingTo: handler) { [weak self] in
+                // sc-5399: a dialog of the page that died goes with it
+                self?.pageDialogs.pageWentAway()
+                self?.pageRecovery.processEnded()
+            }
             webView.navigationDelegate = delegate
             pageProcessDelegate = delegate
         }
@@ -126,7 +130,6 @@ class AppBridgeViewController: CAPBridgeViewController {
                     return PageOriginGuard.accepts(
                         isMainFrame: frame.isMainFrame, scheme: origin.protocol, host: origin.host, port: origin.port, serverURL: serverURL)
                 },
-                handlerAnswersPrompt: PageDialogRequest.isCapacitorCall,
                 onDialog: { [weak self] request, answer in
                     guard let self else { return answer(request.kind.safeAnswer) }
                     self.pageDialogs.show(request, completion: answer)
@@ -160,6 +163,8 @@ class AppBridgeViewController: CAPBridgeViewController {
         // Finished or failed: either way the app is showing what it can
         loadingObservation = webView?.observe(\.isLoading) { [weak self] webView, _ in
             MainActor.assumeIsolated {
+                // sc-5399: a reload or a navigation away: the old page's dialogs go
+                if webView.isLoading { self?.pageDialogs.pageWentAway() }
                 if !webView.isLoading {
                     self?.pageNotices.pageDidLoad()
                     self?.storageNotices?.pageLoaded()

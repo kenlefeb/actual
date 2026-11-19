@@ -7,16 +7,13 @@ import WebKit
 // page got back and whether the page still answers afterwards, for
 // PageDialogsUITests to read. `-UITestPageDialogCover YES` first presents a
 // full-screen native screen, as the native tabs and Reconcile do, so the page's
-// own view is not on screen. `-UITestPageDialogTimeout N` shortens how long a
-// dialog nobody answers stays up. Debug builds only.
+// own view is not on screen. `-UITestPageDialogReloadAfter N` reloads the page
+// N seconds after the dialog opens, as the page going away would. Debug builds only.
 @MainActor
 enum UITestPageDialogs {
     private static var kind: String? { UserDefaults.standard.string(forKey: "UITestPageDialog") }
     private static var cover: Bool { UserDefaults.standard.bool(forKey: "UITestPageDialogCover") }
-    static var timeout: TimeInterval? {
-        let value = UserDefaults.standard.double(forKey: "UITestPageDialogTimeout")
-        return value > 0 ? value : nil
-    }
+    private static var reloadAfter: Double { UserDefaults.standard.double(forKey: "UITestPageDialogReloadAfter") }
     private static var report: UILabel?
 
     static func startIfRequested(webView: WKWebView, serverURL: URL) {
@@ -30,6 +27,12 @@ enum UITestPageDialogs {
             case "confirm": script = "return String(confirm('Delete the Groceries category?'))"
             case "prompt": script = "return String(prompt('Name the new category', 'Groceries'))"
             default: script = "alert('We had an unknown problem opening the budget.'); return 'closed'"
+            }
+            if reloadAfter > 0 {
+                Task {
+                    try? await Task.sleep(nanoseconds: UInt64(reloadAfter * 1_000_000_000))
+                    webView.reload()
+                }
             }
             let answer = (try? await page.run(script)) as? String ?? "no answer"
             let after = (try? await page.run("return 'answers'")) as? String ?? "silent"

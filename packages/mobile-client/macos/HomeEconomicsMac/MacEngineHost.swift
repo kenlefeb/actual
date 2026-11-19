@@ -82,6 +82,11 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
         self?.presentDialog?(request, answer)
     }
 
+    // The web view goes with this host; a dialog it asked for still gets its answer
+    deinit {
+        MainActor.assumeIsolated { pageDialogs.pageWentAway() }
+    }
+
     #if DEBUG
     static let isDebugBuild = true
     #else
@@ -118,6 +123,8 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
     // the last changes were gone). A bridge call in flight fails, usually at
     // once with `.pageOrigin` (else with its timeout), and is not retried.
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        // sc-5399: a dialog of the page that died goes with it
+        pageDialogs.pageWentAway()
         if reloads.allowsReload(at: now()) {
             Self.logger.notice("page process ended; reloading the app's page")
             load()
@@ -158,6 +165,11 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
     }
 
     // MARK: WKNavigationDelegate
+
+    // sc-5399: a reload or a navigation away: the old page's dialogs go
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        pageDialogs.pageWentAway()
+    }
 
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction) async -> WKNavigationActionPolicy {
         guard let url = action.request.url else { return .cancel }

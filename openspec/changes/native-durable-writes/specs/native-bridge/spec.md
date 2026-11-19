@@ -36,6 +36,32 @@ In the iPhone and Mac apps, the Swift bridge client SHALL follow every allowlist
 - **WHEN** native code reads `native/accounts-list` while a write is still being stored
 - **THEN** the read replies without waiting for storage
 
+### Requirement: Screens say "Saved" only once the write is stored
+On iPhone and Mac, a success message saying "Saved" SHALL appear only after the write is stored. Until then the screen SHALL show no success message, and the storage status line carries the interim state. Undo SHALL be offered at once, labelled "Undo", with no claim of saving. If the write is never stored, the failure or restart notice speaks and no "Saved" SHALL ever show.
+
+#### Scenario: Paychecks
+- **GIVEN** a paycheck saved while storage is slow
+- **WHEN** the write replies with `stored: false`
+- **THEN** Undo shows at once, labelled "Undo", and `Saved "Pay".` or `Saved Pay. Undo is available.` shows only when `stored` arrives
+
+#### Scenario: Never stored
+- **GIVEN** a write that replied `stored: false`
+- **WHEN** storage fails, or the page restarts
+- **THEN** the failure or restart notice shows, and no "Saved" message ever shows for that write
+
+### Requirement: Budget and Reconcile wait for storage before "Saved"
+Until a Budget write is stored, a refresh failure SHALL read "The budget could not be refreshed."; "Saved, but the budget could not be refreshed." SHALL be used only once stored. Reconcile's "Saved from your cleared balance" alert SHALL show only once the write is stored. Budget's "Saved" summary label on a tracking budget and the "could not be saved" errors are not affected.
+
+#### Scenario: Budget refresh fails before storage
+- **GIVEN** a budget amount written while storage is slow
+- **WHEN** the refresh after it fails
+- **THEN** the message reads "The budget could not be refreshed."
+
+#### Scenario: Reconcile from the cleared balance
+- **GIVEN** a statement balance saved from the cleared balance while storage is slow
+- **WHEN** the write replies with `stored: false`
+- **THEN** no alert shows until `stored` arrives, and then "Saved from your cleared balance" shows
+
 ### Requirement: The storage barrier waits for complete
 `native/persisted` SHALL wait, up to `native-persist-wait-ms`, until every pending IndexedDB write of the open budget (of every file with `allFiles: true`, its only argument) has fired `complete`, answering `stored: true`, or `stored: false` on timeout. It SHALL be allowlisted in both lists with a `coverage.json` skip. A pending write SHALL settle on `complete`, `abort` or `error`. When a timed-out wait's writes finish, the engine SHALL send `storage-stored`, forwarded to Swift as `stored`.
 

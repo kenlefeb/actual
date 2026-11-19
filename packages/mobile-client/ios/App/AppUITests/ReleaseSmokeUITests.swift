@@ -104,8 +104,8 @@ final class ReleaseSmokeUITests: XCTestCase {
             attempt += 1
             let amount = "\(122 + attempt)"
             evidence("edit \(attempt): \(amount) at \(Int(Date().timeIntervalSince(launched))) s after launch; the page arms \(Int(armed)) s after its worker starts")
-            // The budgeted amount is the first column, under the name
-            for dy in [0.75, 0.45] where !field.exists {
+            // The budgeted amount is the first column, under the name (stacked at AX sizes)
+            for dy in [0.75, 0.45, 0.3, 0.2] where !field.exists {
                 food.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: dy)).tap()
                 _ = field.waitForExistence(timeout: 5)
             }
@@ -143,6 +143,10 @@ final class ReleaseSmokeUITests: XCTestCase {
         openReconcile()
         XCTAssertTrue(useCleared.waitForExistence(timeout: 30), "no Use cleared balance on step 1")
         useCleared.tap()
+        // "Use cleared balance" only fills the amount; Confirm balance moves on
+        let confirm = app.buttons["Confirm balance"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10), "no Confirm balance on step 1")
+        confirm.tap()
         let stepTwo = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Step 2 of 4")).firstMatch
         XCTAssertTrue(stepTwo.waitForExistence(timeout: 30), "step 2 never opened")
         save("slow-step-two")

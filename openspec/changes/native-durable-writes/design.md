@@ -224,7 +224,9 @@ The kill tests (sc-5368) found that a failed budget open calls `alert()`, and th
 - **Always answered, once; no time limit on screen.** `PageDialogs` answers each dialog exactly once. A dialog on screen waits for the person as long as it takes (Architect, PR #500, after the Designer showed a 60 s limit losing a half-typed prompt and an unread alert). Cancel (an alert closed, `confirm` false, `prompt` null) answers for the person only in these cases:
   - **The page goes away:** it reloads or navigates away, its process ends, or its web view is released. The dialog leaves the screen too, so a dead page leaves none behind.
   - **Named exception: it can't show.** Tried every second, five times (no active scene, a hidden Mac window, another sheet), then Cancel.
-  - **Named exception: the page keeps asking.** A fourth dialog within ten seconds of the page's first three gets Cancel unseen, so a page calling `alert()` in a loop can't hold the person or keep the notice strip's Reload covered. The count starts again when the page goes away.
+  - **Named exception: the page keeps asking.** A sliding ten-second window over the dialogs the page asked for, shown or not (one that couldn't show still counts): with three in it, the next gets Cancel unseen, so a page calling `alert()` in a loop can't hold the person or keep the notice strip's Reload covered. A dialog this rule answers doesn't count, so a page that keeps looping gets one again as the window slides. The count starts again when the page goes away.
+
+  Every Cancel given unseen, by either exception, is logged (`CAPLog` on iPhone, the `dialogs` Logger category on the Mac) with its reason, the dialog's kind and whether the page was the app's own, so a real page that hits a limit can be found (Designer, PR #500). Never the message, the prompt's default or an address: page text can hold personal or financial detail.
 
   Both exceptions are fixed numbers, not configurable limits: the fork's limits are settings stored in the budget, and the dialog that matters most here ("We had an unknown problem opening …") comes when no budget could be read.
 

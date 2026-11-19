@@ -115,9 +115,26 @@ public final class PageDialogs {
     // Shows the dialog and returns how to take it off screen, or nil if it can't show now
     public typealias Present = (PageDialogRequest, @escaping @MainActor (PageDialogAnswer) -> Void) -> (() -> Void)?
 
+    // A Cancel given without the person seeing the dialog, for the log (Designer,
+    // PR #500): why, which kind, and whose page. Never the page's text or address.
+    public struct Unseen: Equatable, CustomStringConvertible {
+        public enum Reason: String {
+            case couldNotShow = "it could not show"
+            case tooMany = "the page asked for too many"
+        }
+        public let reason: Reason
+        public let kind: String
+        public let isAppPage: Bool
+
+        public var description: String {
+            "Answered a page \(kind) with Cancel unseen: \(reason.rawValue) (\(isAppPage ? "the app's own page" : "another page"))"
+        }
+    }
+
     private let now: () -> Date
     private let schedule: (TimeInterval, @escaping @MainActor () -> Void) -> Void
     private let present: Present
+    private let reportUnseen: (Unseen) -> Void
     private var pending: [Pending] = []
     private var recent: [Date] = []
 
@@ -129,17 +146,34 @@ public final class PageDialogs {
                 work()
             }
         },
-        present: @escaping Present
+        present: @escaping Present,
+        reportUnseen: @escaping (Unseen) -> Void = { _ in }
     ) {
         self.now = now
         self.schedule = schedule
         self.present = present
+        self.reportUnseen = reportUnseen
     }
 
+    fileprivate func report(_ reason: Unseen.Reason, _ request: PageDialogRequest) {
+        let kind: String
+        switch request.kind {
+        case .alert: kind = "alert"
+        case .confirm: kind = "confirm"
+        case .prompt: kind = "prompt"
+        }
+        reportUnseen(Unseen(reason: reason, kind: kind, isAppPage: request.title == nil))
+    }
+
+    // A sliding window over the dialogs the page asked for in the last
+    // `floodWindow` seconds, shown or not; one this rule answers isn't counted
     public func show(_ request: PageDialogRequest, completion: @escaping (PageDialogAnswer) -> Void) {
         let time = now()
         recent.removeAll { time.timeIntervalSince($0) >= Self.floodWindow }
-        guard recent.count < Self.floodLimit else { return completion(request.kind.safeAnswer) }
+        guard recent.count < Self.floodLimit else {
+            report(.tooMany, request)
+            return completion(request.kind.safeAnswer)
+        }
         recent.append(time)
         let dialog = Pending(request: request, owner: self, completion: completion)
         pending.append(dialog)
@@ -177,7 +211,10 @@ public final class PageDialogs {
             guard completion != nil, let owner else { return }
             dismiss = owner.present(request) { [self] answer in finish(answer) }
             guard dismiss == nil else { return }
-            guard attempt < PageDialogs.presentAttempts else { return finish(request.kind.safeAnswer) }
+            guard attempt < PageDialogs.presentAttempts else {
+                owner.report(.couldNotShow, request)
+                return finish(request.kind.safeAnswer)
+            }
             owner.schedule(PageDialogs.retryDelay) { [self] in tryToShow(attempt: attempt + 1) }
         }
 

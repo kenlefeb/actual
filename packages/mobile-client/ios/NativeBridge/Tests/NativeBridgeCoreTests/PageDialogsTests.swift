@@ -218,6 +218,67 @@ final class PageDialogsTests: XCTestCase {
         XCTAssertEqual(shown.last?.message, "later")
     }
 
+    // Designer (PR #500): each Cancel given unseen is logged, without the page's
+    // text, so a real page that hits a limit can be found
+    func testEachCancelGivenUnseenIsReportedWithoutThePagesText() {
+        var reported: [PageDialogs.Unseen] = []
+        var clock = Date(timeIntervalSince1970: 1_000_000)
+        canShow = false
+        let dialogs = PageDialogs(
+            now: { clock },
+            schedule: { [unowned self] in self.scheduled.append(($0, $1)) },
+            present: { [unowned self] request, answer in
+                guard self.canShow else { return nil }
+                self.answerShown = answer
+                return {}
+            },
+            reportUnseen: { reported.append($0) })
+        dialogs.show(PageDialogRequest(kind: .confirm, message: "secret", title: nil)) { _ in }
+        for _ in 1..<PageDialogs.presentAttempts { runScheduled(after: PageDialogs.retryDelay) }
+        XCTAssertEqual(reported, [PageDialogs.Unseen(reason: .couldNotShow, kind: "confirm", isAppPage: true)])
+
+        canShow = true
+        for _ in 1..<PageDialogs.floodLimit {
+            dialogs.show(PageDialogRequest(kind: .alert, message: "secret", title: nil)) { _ in }
+            answerShown?(.dismissed)
+            clock += 1
+        }
+        dialogs.show(PageDialogRequest(kind: .prompt(defaultText: "secret"), message: "secret", title: "login.example.com")) { _ in }
+        XCTAssertEqual(reported.last, PageDialogs.Unseen(reason: .tooMany, kind: "prompt", isAppPage: false))
+        XCTAssertFalse(reported.map(\.description).joined().contains("secret"), "the page's text is never logged")
+        XCTAssertFalse(reported.map(\.description).joined().contains("example"), "nor the other page's address")
+    }
+
+    // Architect (PR #500): a sliding window over the dialogs the page asked for,
+    // shown or not; one the rule itself answers unseen doesn't count
+    func testTheFloodRuleIsASlidingWindowOverDialogsAsked() {
+        var clock = Date(timeIntervalSince1970: 1_000_000)
+        canShow = false
+        let dialogs = PageDialogs(
+            now: { clock },
+            schedule: { [unowned self] in self.scheduled.append(($0, $1)) },
+            present: { [unowned self] request, _ in
+                guard self.canShow else { return nil }
+                self.shown.append(request)
+                return {}
+            })
+        // Three that never showed still count
+        for second in 0..<PageDialogs.floodLimit {
+            clock = Date(timeIntervalSince1970: 1_000_000 + Double(second * 3))
+            ask(dialogs, .alert, "asked \(second)")
+        }
+        canShow = true
+        clock = Date(timeIntervalSince1970: 1_000_009)
+        ask(dialogs, .alert, "fourth within ten seconds")
+        XCTAssertTrue(shown.isEmpty)
+        // At 10 s the first has slid out of the window; the other two still count
+        clock = Date(timeIntervalSince1970: 1_000_010)
+        ask(dialogs, .alert, "slid")
+        XCTAssertEqual(shown.map(\.message), ["slid"])
+        ask(dialogs, .alert, "full again")
+        XCTAssertEqual(shown.map(\.message), ["slid"])
+    }
+
     func testANewPageStartsTheCountAgain() {
         let dialogs = dialogs()
         for _ in 0..<PageDialogs.floodLimit {

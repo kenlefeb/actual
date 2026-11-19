@@ -48,9 +48,10 @@ class AppBridgeViewController: CAPBridgeViewController {
     // sc-5399: the page's alert, confirm and prompt (the web view holds its UI delegate weakly too)
     private var pageDialogDelegate: PageDialogDelegate?
     private let dialogPresenter = PageDialogPresenter()
-    private lazy var pageDialogs = PageDialogs { [weak self] request, answer in
-        self?.dialogPresenter.present(request, answer: answer)
-    }
+    private lazy var pageDialogs = PageDialogs(
+        present: { [weak self] request, answer in self?.dialogPresenter.present(request, answer: answer) },
+        // Why, which kind and whose page; never the page's text
+        reportUnseen: { CAPLog.print("PageDialogs: \($0)") })
     private weak var reloadAlert: UIAlertController?
     private var activeObserver: NSObjectProtocol?
     private var inactiveObserver: NSObjectProtocol?

@@ -78,9 +78,11 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
     var presentDialog: PageDialogs.Present?
     // The web view holds its UI delegate weakly
     private var dialogDelegate: PageDialogDelegate?
-    private lazy var pageDialogs = PageDialogs { [weak self] request, answer in
-        self?.presentDialog?(request, answer)
-    }
+    private static let dialogLogger = Logger(subsystem: "app.homeeconomics.budget.mac", category: "dialogs")
+    private lazy var pageDialogs = PageDialogs(
+        present: { [weak self] request, answer in self?.presentDialog?(request, answer) },
+        // Why, which kind and whose page; never the page's text
+        reportUnseen: { Self.dialogLogger.notice("\($0.description, privacy: .public)") })
 
     // The web view goes with this host; a dialog it asked for still gets its answer
     deinit {

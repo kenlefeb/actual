@@ -560,11 +560,18 @@ The shells SHALL answer every page dialog exactly once. A dialog on screen SHALL
 - **THEN** the dialog leaves the screen and the page gets Cancel's answer, once
 
 ### Requirement: A page that keeps asking is answered for the person
-When a page asks for a fourth dialog within ten seconds of its first three, the shell SHALL answer it with Cancel without showing it, so a page calling `alert()` in a loop can't hold the person or cover the notice strip's Reload. The count SHALL start again when the page goes away.
+The shell SHALL keep a sliding ten-second window over the dialogs a page asked for, shown or not. When three are already in it, the next dialog SHALL get Cancel without showing, so a page calling `alert()` in a loop can't hold the person or cover the notice strip's Reload; a dialog answered this way doesn't count. The count SHALL start again when the page goes away.
 
 #### Scenario: A page loops alert()
 - **WHEN** a page shows three dialogs in ten seconds and asks for a fourth
 - **THEN** the fourth gets Cancel's answer and nothing shows, and the person can tap Reload
+
+### Requirement: A Cancel given unseen is logged
+Each Cancel the shell gives without the person seeing the dialog, because the page asked for too many or the dialog couldn't show, SHALL be logged with its reason, its kind and whether the page was the app's own. The log SHALL never hold the page's message, a prompt's default text or an address.
+
+#### Scenario: A page hits the limit
+- **WHEN** the flood rule answers a page's `prompt()` with Cancel
+- **THEN** the log says a prompt was answered unseen because the page asked for too many, and whose page it was, and holds none of the page's text
 
 ### Requirement: Another page's dialog names its host
 A dialog from the app's own page SHALL show the page's message only. A dialog from any other page, such as a sign-in provider's, SHALL be headed with that page's host, or "Another page" when it has none, so it can't pass for the app's own. A dialog SHALL show the page's text as plain text, cut to 1,000 characters with an ellipsis.

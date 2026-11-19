@@ -214,12 +214,13 @@ final class StorageLineUITests: XCTestCase {
     }
 
     // A posted register row whose bottom is close to the line: the lowest one
-    // wholly above it (scheduled rows have no menu, and a split can't be
-    // categorized, so its menu has no Categorize)
+    // wholly above it (scheduled rows have no menu, a split can't be
+    // categorized, so its menu has no Categorize, and a transfer or a
+    // reconciled row asks before the change; Security's note on story 5428)
     private func lowRow() -> XCUIElement {
         let origin = app.coordinate(withNormalizedOffset: .zero)
         let rows = app.buttons.matching(NSPredicate(
-            format: "label CONTAINS ', ' AND NOT (label CONTAINS 'Bank of America') AND NOT (label CONTAINS[c] 'scheduled') AND NOT (label CONTAINS 'Split (')"))
+            format: "label CONTAINS ', ' AND NOT (label CONTAINS 'Bank of America') AND NOT (label CONTAINS[c] 'scheduled') AND NOT (label CONTAINS 'Split (') AND NOT (label CONTAINS 'Transfer · ') AND NOT (label CONTAINS 'Reconciled')"))
         // At the largest text size the upcoming rows take several screens, so
         // keep scrolling until a posted row sits wholly above the line
         for _ in 0..<12 {
@@ -276,9 +277,22 @@ final class StorageLineUITests: XCTestCase {
         shot("undo")
         // The Undo bar is the button plus the bar's 16-point padding
         XCTAssertLessThanOrEqual(undo.frame.maxY + 16, pill.minY, "the Undo bar ends under the line")
+        checkTheUndoBarLayout(undo)
         let tabBar = app.tabBars.firstMatch
         XCTAssertLessThanOrEqual(pill.maxY, tabBar.frame.minY, "the line \(pill) is not above the tab bar \(tabBar.frame)")
         undo.tap()
+    }
+
+    // Story 5428: at accessibility sizes the Undo button sits under its text,
+    // full width, so the text has the whole line and breaks only between words
+    private func checkTheUndoBarLayout(_ undo: XCUIElement) {
+        guard app.launchArguments.contains(where: { $0.hasPrefix("UICTContentSizeCategoryAccessibility") }) else { return }
+        let text = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Changed the category of")).firstMatch
+        XCTAssertTrue(text.exists, "no Undo bar text")
+        XCTAssertLessThanOrEqual(text.frame.maxY, undo.frame.minY, "the Undo button \(undo.frame) is beside its text \(text.frame), not under it")
+        let width = app.windows.firstMatch.frame.width
+        XCTAssertGreaterThanOrEqual(text.frame.width, width * 0.8, "the Undo bar text \(text.frame) doesn't have the whole line")
+        XCTAssertGreaterThanOrEqual(undo.frame.width, width * 0.8, "the Undo button \(undo.frame) isn't full width")
     }
 
     // Story 5383, the Designer's rule: with the keyboard up the line's only

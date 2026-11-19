@@ -506,6 +506,51 @@ final class StoredWriteTests: XCTestCase {
         XCTAssertEqual(ended, [7])
     }
 
+    // sc-5308: a flush waits for every file, writes for the open budget only, so a
+    // flush's "not stored" can't join their order: a narrower "stored" would clear it
+    func testAFlushThatIsNotStoredIsNotRecorded() async {
+        let status = WriteStorageStatus()
+        var reply = #"{"stored":false,"seq":{"epoch":"e","n":1}}"#
+        let bridge = NativeBridgeClient(storage: status) { _, _ in reply }
+        await bridge.flushStorage()
+        XCTAssertNil(status.message)
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 2)))
+        XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
+        reply = #"{"stored":true,"seq":{"epoch":"e","n":3}}"#
+        await bridge.flushStorage()
+        XCTAssertNil(status.message)
+    }
+
+    // sc-5309: an answer or expiry ends only its own background task
+    func testALateFirstFlushDoesNotEndANewerTask() async {
+        let gates = [AsyncGate(), AsyncGate()]
+        var expire: () -> Void = {}
+        var begun = 0
+        var calls = 0
+        var ended: [Int] = []
+        let flush = BackgroundFlush<Int>(
+            begin: { onExpiry in
+                expire = onExpiry
+                begun += 1
+                return begun
+            }, end: { ended.append($0) },
+            flush: {
+                calls += 1
+                await gates[calls - 1].wait()
+            })
+        flush.run()
+        expire()
+        XCTAssertEqual(ended, [1])
+        flush.run()
+        XCTAssertEqual(begun, 2)
+        await gates[0].open()
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertEqual(ended, [1])
+        await gates[1].open()
+        await waitUntil { ended == [1, 2] }
+        XCTAssertEqual(ended, [1, 2])
+    }
+
     func testSavingStaysUpForItsMinimumOnceShown() async throws {
         let status = WriteStorageStatus()
         var shown: [String?] = []

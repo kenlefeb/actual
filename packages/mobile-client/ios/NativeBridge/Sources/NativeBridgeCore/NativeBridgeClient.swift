@@ -340,6 +340,8 @@ public final class BackgroundFlush<Token> {
     private let end: (Token) -> Void
     private let flush: () async -> Void
     private var token: Token?
+    // Which run the token belongs to: a late answer or expiry ends only its own task
+    private var current = 0
 
     public init(
         begin: @escaping (_ onExpiry: @escaping () -> Void) -> Token, end: @escaping (Token) -> Void,
@@ -350,15 +352,17 @@ public final class BackgroundFlush<Token> {
 
     public func run() {
         guard token == nil else { return }
-        token = begin { [weak self] in self?.finish() }
+        current += 1
+        let run = current
+        token = begin { [weak self] in self?.finish(run) }
         Task { [weak self, flush] in
             await flush()
-            self?.finish()
+            self?.finish(run)
         }
     }
 
-    private func finish() {
-        guard let token else { return }
+    private func finish(_ run: Int) {
+        guard run == current, let token else { return }
         self.token = nil
         end(token)
     }
@@ -613,8 +617,10 @@ public struct NativeBridgeClient {
     // D8: before the app may stop running. Covers every file, so a budget just
     // closed is included. Its own route to native/persisted: the answer goes to
     // the storage status only, never to app code, until the guard can vouch for it.
+    // Only a stored answer: writes' answers cover the open budget alone, so a later
+    // one could clear a flush's "not stored" while another file is unconfirmed.
     public func flushStorage() async {
-        guard let answer = try? await askPersisted(argsJSON: #"{"allFiles":true}"#) else { return }
+        guard let answer = try? await askPersisted(argsJSON: #"{"allFiles":true}"#), answer.stored else { return }
         await storage?.record(answer)
     }
 

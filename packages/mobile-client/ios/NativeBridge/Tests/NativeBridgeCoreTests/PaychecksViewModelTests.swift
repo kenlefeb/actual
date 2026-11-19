@@ -32,6 +32,46 @@ private struct Boom: Error {}
 
 @MainActor
 final class PaychecksViewModelTests: XCTestCase {
+    // sc-5303: "Screens say "Saved" only once the write is stored"
+    func testASaveNotYetStoredOffersUndoAndSaysSavedOnlyOnceStored() async throws {
+        let model = model(try FakePaychecksPage())
+        await model.wrote(PaychecksUndoOffer(token: "t", paycheckName: "Pay", date: "", action: .save, isStored: false))
+        XCTAssertEqual(model.undoOffer?.token, "t")
+        XCTAssertEqual(model.undoOffer?.isStored, false)
+        XCTAssertNil(model.announcement)
+        model.stored(token: "t")
+        XCTAssertEqual(model.undoOffer?.isStored, true)
+        XCTAssertEqual(model.announcement, "Saved Pay. Undo is available.")
+    }
+
+    // Security on PR #496: no wait outlives the list that started it
+    func testAPendingWaitEndsWhenTheListGoesAway() async throws {
+        final class Ended: @unchecked Sendable { var value = false }
+        let ended = Ended()
+        var model: PaychecksViewModel? = model(try FakePaychecksPage())
+        model?.pending(token: "t") {
+            await withTaskCancellationHandler {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                return true
+            } onCancel: {
+                ended.value = true
+            }
+        }
+        try await Task.sleep(nanoseconds: 20_000_000)
+        model = nil
+        try await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertTrue(ended.value)
+    }
+
+    func testAStoredAnswerForAnOfferThatHasGoneChangesNothing() async throws {
+        let model = model(try FakePaychecksPage())
+        await model.wrote(PaychecksUndoOffer(token: "t", paycheckName: "Pay", date: "", action: .create, isStored: false))
+        await model.wrote(PaychecksUndoOffer(token: "u", paycheckName: "Rent", date: "", action: .delete))
+        model.stored(token: "t")
+        XCTAssertEqual(model.undoOffer?.token, "u")
+        XCTAssertEqual(model.announcement, "Deleted Rent. Undo is available.")
+    }
+
     private func model(_ page: FakePaychecksPage, undoFor interval: TimeInterval = 60) -> PaychecksViewModel {
         PaychecksViewModel(client: page.client, undoInterval: interval, changeInterval: 0.001)
     }

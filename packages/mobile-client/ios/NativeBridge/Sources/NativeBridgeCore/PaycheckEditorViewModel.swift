@@ -43,6 +43,8 @@ public final class PaycheckEditorViewModel: ObservableObject {
     private let client: NativeBridgeClient
     private let debounce: TimeInterval
     private let onWrite: (PaychecksUndoOffer) -> Void
+    // sc-5303: a write that answered not stored, once storage says it is
+    private let onPending: (String, @escaping () async -> Bool) -> Void
     private var original: PaycheckDraft
     private var previewGeneration = 0
     private var previewTask: Task<Void, Never>?
@@ -50,12 +52,13 @@ public final class PaycheckEditorViewModel: ObservableObject {
     // `onWrite` gets the Undo offer of a save or delete that went through
     public init(
         client: NativeBridgeClient, paycheckId: String?, today: String, debounce: TimeInterval = 0.25,
-        onWrite: @escaping (PaychecksUndoOffer) -> Void = { _ in }
+        onWrite: @escaping (PaychecksUndoOffer) -> Void = { _ in }, onPending: @escaping (String, @escaping () async -> Bool) -> Void = { _, _ in }
     ) {
         self.client = client
         self.paycheckId = paycheckId
         self.debounce = debounce
         self.onWrite = onWrite
+        self.onPending = onPending
         // A new paycheck creates its clearing account unless the user picks one
         let draft = PaycheckDraft(name: "", definition: .new(today: today), isNewAccount: paycheckId == nil)
         self.draft = draft
@@ -155,14 +158,22 @@ public final class PaycheckEditorViewModel: ObservableObject {
         }
         isSaving = true
         defer { isSaving = false }
+        let result: StoredWrite
         do {
-            _ = try await client.savePaycheck(write)
+            result = try await client.write("native/paycheck-save", args: write)
         } catch {
             actionError = Self.message(for: error)
             announcement = actionError
             return false
         }
-        onWrite(PaychecksUndoOffer(token: write.undoToken, paycheckName: draft.name, date: "", action: isNew ? .create : .save))
+        let token = write.undoToken
+        onWrite(
+            PaychecksUndoOffer(
+                token: token, paycheckName: draft.name, date: "", action: isNew ? .create : .save, isStored: result.stored))
+        if !result.stored {
+            // The sheet closes now; the list says "Saved" once storage does
+            onPending(token) { [client] in await client.whenStored(result) }
+        }
         return true
     }
 

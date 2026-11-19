@@ -21,7 +21,8 @@ final class StoredWriteTests: XCTestCase {
         persisted: @escaping (Int) async throws -> String = { _ in #"{"stored":true}"# }
     ) -> NativeBridgeClient {
         status.pageLoaded(epoch: "e")
-        return NativeBridgeClient(timeout: timeout, storage: status) { name, _ in
+        // The barrier as the guard-on shell sees it
+        return NativeBridgeClient(timeout: timeout, storage: status, storageGuardOn: true) { name, _ in
             await calls.add(name)
             guard name == "native/persisted" else { return "null" }
             return try await persisted(await calls.count(name))
@@ -307,7 +308,7 @@ final class StoredWriteTests: XCTestCase {
     func testAWriteAnsweredByTheNextPageIsNotStored() async throws {
         let status = WriteStorageStatus()
         status.pageLoaded(epoch: "old")
-        let bridge = NativeBridgeClient(storage: status) { name, _ in
+        let bridge = NativeBridgeClient(storage: status, storageGuardOn: true) { name, _ in
             name == "native/persisted" ? #"{"stored":true,"seq":{"epoch":"new","n":1}}"# : "null"
         }
         let result = try await bridge.write("native/account-move", args: move)
@@ -317,12 +318,98 @@ final class StoredWriteTests: XCTestCase {
 
     func testAFirstWriteAnsweredBeforeReadyIsNotStored() async throws {
         let status = WriteStorageStatus()
-        let bridge = NativeBridgeClient(storage: status) { name, _ in
+        let bridge = NativeBridgeClient(storage: status, storageGuardOn: true) { name, _ in
             name == "native/persisted" ? #"{"stored":true,"seq":{"epoch":"new","n":1}}"# : "null"
         }
         let result = try await bridge.write("native/account-move", args: move)
         XCTAssertFalse(result.stored)
         XCTAssertTrue(status.mayNotBeSaved)
+    }
+
+    // sc-5303 (design D7a): with the shell's switch off, the opened API behaves as today
+    func testWithTheGuardOffAWriteCountsAsStoredAtOnce() async throws {
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "e")
+        let bridge = NativeBridgeClient(storage: status) { name, _ in
+            name == "native/persisted" ? #"{"stored":false,"seq":{"epoch":"e","n":1}}"# : "null"
+        }
+        let result = try await bridge.write("native/account-move", args: move)
+        // Without this, a wrong answer would wait forever for a "stored" that never comes
+        guard result.stored else { return XCTFail("with the guard off a write counts as stored at once") }
+        let later = await bridge.whenStored(result)
+        XCTAssertTrue(later)
+    }
+
+    func testWithTheGuardOnAWriteWaitsForItsStoredEvent() async throws {
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "e")
+        let bridge = NativeBridgeClient(storage: status, storageGuardOn: true) { name, _ in
+            name == "native/persisted" ? #"{"stored":false,"seq":{"epoch":"e","n":1}}"# : "null"
+        }
+        let result = try await bridge.write("native/account-move", args: move)
+        XCTAssertFalse(result.stored)
+        let waiting = Task { await bridge.whenStored(result) }
+        try await Task.sleep(nanoseconds: 20_000_000)
+        status.storedEvent(seq: 1, epoch: "e")
+        let stored = await waiting.value
+        XCTAssertTrue(stored)
+    }
+
+    func testWithTheGuardOnARestartMeansNeverStored() async throws {
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "e")
+        let bridge = NativeBridgeClient(storage: status, storageGuardOn: true) { name, _ in
+            name == "native/persisted" ? #"{"stored":false,"seq":{"epoch":"e","n":1}}"# : "null"
+        }
+        let result = try await bridge.write("native/account-move", args: move)
+        let waiting = Task { await bridge.whenStored(result) }
+        try await Task.sleep(nanoseconds: 20_000_000)
+        status.pageLoaded(epoch: "f")
+        let stored = await waiting.value
+        XCTAssertFalse(stored)
+    }
+
+    // Security on PR #496: a later "not stored" that takes a write's place hands its waiters over
+    func testAWaitIsHandedToTheWriteThatTakesItsPlace() async throws {
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "e")
+        let first = status.nextTicket()
+        status.record(.notStored, ticket: first)
+        var answer: Bool?
+        let waiting = Task { answer = await status.waitStored(ticket: first) }
+        try await Task.sleep(nanoseconds: 20_000_000)
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 2)), ticket: status.nextTicket())
+        try await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertNil(answer, "still not stored")
+        XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
+        status.storedEvent(seq: 2, epoch: "e")
+        await waiting.value
+        XCTAssertEqual(answer, true)
+    }
+
+    // A wait ends, with no claim of saving, when storage fails or the waiter goes away
+    func testAWaitEndsNotStoredWhenStorageFails() async throws {
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "e")
+        let ticket = status.nextTicket()
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 1)), ticket: ticket)
+        let waiting = Task { await status.waitStored(ticket: ticket) }
+        try await Task.sleep(nanoseconds: 20_000_000)
+        status.storageFailed()
+        let stored = await waiting.value
+        XCTAssertFalse(stored)
+    }
+
+    func testAWaitEndsNotStoredWhenItsWaiterGoesAway() async throws {
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "e")
+        let ticket = status.nextTicket()
+        status.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "e", n: 1)), ticket: ticket)
+        let waiting = Task { await status.waitStored(ticket: ticket) }
+        try await Task.sleep(nanoseconds: 20_000_000)
+        waiting.cancel()
+        let stored = await waiting.value
+        XCTAssertFalse(stored)
     }
 
     // sc-5302: a retired page's own "not stored" stays its own

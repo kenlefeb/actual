@@ -105,9 +105,10 @@ struct PaychecksScreen: View {
         .task { await model.load() }
         .sheet(item: $editing) { request in
             if let style = model.state.read?.amountStyle {
-                PaycheckEditorSheet(request: request, client: client, style: style) { offer in
-                    Task { await model.wrote(offer) }
-                }
+                PaycheckEditorSheet(
+                    request: request, client: client, style: style,
+                    onWrite: { offer in Task { await model.wrote(offer) } },
+                    onPending: { token, stored in model.pending(token: token, until: stored) })
             }
         }
         .safeAreaInset(edge: .bottom) { undoBar }
@@ -252,10 +253,11 @@ struct PaychecksScreen: View {
         .padding(.vertical, 4)
     }
 
-    private func undoText(_ offer: PaychecksUndoOffer) -> String {
+    // sc-5303: no "Saved" until the write is stored; Undo shows at once
+    private func undoText(_ offer: PaychecksUndoOffer) -> String? {
         switch offer.action {
         case .skip: String(format: Words.skipped, Dates.long(offer.date))
-        case .create, .save: String(format: Words.saved, offer.paycheckName)
+        case .create, .save: offer.isStored ? String(format: Words.saved, offer.paycheckName) : nil
         case .delete: String(format: Words.deleted, offer.paycheckName)
         }
     }
@@ -263,7 +265,7 @@ struct PaychecksScreen: View {
     @ViewBuilder private var undoBar: some View {
         if let offer = model.undoOffer {
             HStack {
-                Text(undoText(offer)).fixedSize(horizontal: false, vertical: true)
+                if let text = undoText(offer) { Text(text).fixedSize(horizontal: false, vertical: true) }
                 Spacer()
                 Button(Words.undo) { Task { await model.undo() } }
                     .buttonStyle(.borderedProminent)

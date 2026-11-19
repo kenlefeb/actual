@@ -51,7 +51,7 @@ public final class StorageNotices {
     }
 
     // To the second, in the person's locale
-    public static func localTime(_ date: Date) -> String {
+    public nonisolated static func localTime(_ date: Date) -> String {
         DateFormatter.localizedString(from: date, dateStyle: .none, timeStyle: .medium)
     }
 
@@ -202,6 +202,12 @@ public final class StorageNotices {
     private func shown(_ date: Date) -> String {
         time(Date(timeIntervalSince1970: date.timeIntervalSince1970.rounded(.down)))
     }
+}
+
+// A wait a screen started, cancelled when the screen goes away
+final class PendingWait {
+    var task: Task<Void, Never>?
+    deinit { task?.cancel() }
 }
 
 extension NativeBridgeEvent {

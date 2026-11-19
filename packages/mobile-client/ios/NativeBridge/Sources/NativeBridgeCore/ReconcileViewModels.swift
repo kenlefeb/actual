@@ -221,13 +221,17 @@ public final class ReconcileStepOneViewModel: ObservableObject {
         error = nil
         isSaving = true
         defer { isSaving = false }
+        let result: StoredWrite
         do {
-            try await client.saveStatementBalance(save)
+            result = try await client.write("account-statement-balance-save", args: save)
         } catch {
             self.error = ReconcileError.from(error, .saveFailed)
             return false
         }
-        showsClearedNote = kind == .cleared
+        // "Saved from your cleared balance" only for a write stored before step 2
+        // opens. Never waits: storage can stay slow, and step 2 must open (Security,
+        // PR #496). A later "stored" shows nothing (UX Designer, PR #496).
+        showsClearedNote = kind == .cleared && result.stored
         return true
     }
 }

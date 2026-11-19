@@ -56,6 +56,7 @@ None.
   - "No write applies after a storage failure"
   - "Only stored changes reach the server"
   - "The failure notice says what was lost"
+  - "Storage notices keep their button until used"
   - "The notice's cut-off time is exact"
   - "The restart notice asks the person to check"
   - "A restart keeps the device-full reason"

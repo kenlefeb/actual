@@ -224,10 +224,33 @@ The app-level notice SHALL say, from the copy table, that changes can't be saved
 - **WHEN** the notice shows
 - **THEN** it says changes made after 3:42:10 PM need to be made again, so the 3:42:11 change is not reported as saved
 
+#### Scenario: Storage failure
+- **GIVEN** a write that fails, not with a quota error
+- **WHEN** the notice shows
+- **THEN** it reads "Changes can't be saved on this device right now. Reload the app. Changes made after <time> weren't saved and need to be made again.", with Reload
+
 #### Scenario: Device full
 - **GIVEN** a write that fails with a quota error
 - **WHEN** the notice shows
 - **THEN** it reads "This device is full, so changes can't be saved. Free up some space, then reload the app. Changes made after <time> weren't saved and need to be made again. Saved changes can't sync until there's space."
+
+### Requirement: Storage notices keep their button until used
+The storage notices SHALL show in the app's notice strip, announced to VoiceOver once, and SHALL NOT hide on their own or after a touch. The restart notices and the closed-budget notice SHALL carry OK, which ends that notice only. The failure notice SHALL carry Reload, which reloads the page, and no OK or Dismiss; it stays until Reload or a restart. Unlike the reload notice, none of them hides after 15 seconds.
+
+#### Scenario: OK ends the restart notice
+- **GIVEN** the restart notice showing
+- **WHEN** the person taps OK
+- **THEN** that notice goes, and any other notice is unchanged
+
+#### Scenario: The failure notice stays
+- **GIVEN** the failure notice showing
+- **WHEN** 15 seconds pass and the person keeps working
+- **THEN** it is still showing, with Reload and no way to dismiss it
+
+#### Scenario: The closed-budget notice
+- **GIVEN** the closed-budget notice showing
+- **WHEN** the person taps OK
+- **THEN** it goes
 
 ### Requirement: The notice's cut-off time is exact
 The notice SHALL show `lastStoredFlushAt` to the second in the person's locale (for example 3:42:10 PM), truncated, never rounded up, so a change stored just before it is never re-entered as a duplicate. When no write has stored since the app opened, it SHALL say "Changes made since you opened the app weren't saved and need to be made again." in place of the sentence with <time>.

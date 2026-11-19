@@ -76,19 +76,27 @@ final class SyncGateUITests: XCTestCase {
         app.navigationBars.buttons["Save"].tap()
         evidence("change saved in the app (Food 321)")
 
-        // The Accounts tab's sync status, each change of it, for 40 s
+        // The Accounts tab's sync status and the storage line, each change of them, for
+        // 150 s or until Synced has held for 10 s: a line that never clears means writes
+        // keep coming, a clear line with the sync still held means the retry doesn't follow
         app.tabBars.buttons["Accounts"].tap()
         let statuses = ["Waiting for this device to finish saving", "Synced", "Syncing", "Sync failed", "Offline"]
+        let line = app.staticTexts["storage.line"]
         var last = ""
+        var lastLine = ""
         var sawWaiting = false
-        let end = Date().addingTimeInterval(40)
+        var syncedAt: Date?
+        let end = Date().addingTimeInterval(150)
         while Date() < end {
             let now = statuses.first { anything($0).exists } ?? "none"
-            if now != last {
-                evidence("status: \(now)")
-                last = now
+            let nowLine = line.exists ? line.label : "none"
+            if now != last || nowLine != lastLine {
+                evidence("status: \(now); storage line: \(nowLine)")
+                (last, lastLine) = (now, nowLine)
                 if now.hasPrefix("Waiting") { sawWaiting = true }
+                syncedAt = now == "Synced" ? (syncedAt ?? Date()) : nil
             }
+            if let syncedAt, Date().timeIntervalSince(syncedAt) > 10 { break }
             usleep(300_000)
         }
         XCTAssertTrue(sawWaiting, "the sync never held for storage")

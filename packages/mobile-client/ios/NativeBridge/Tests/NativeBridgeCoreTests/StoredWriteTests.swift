@@ -307,7 +307,7 @@ final class StoredWriteTests: XCTestCase {
     func testAWriteAnsweredByTheNextPageIsNotStored() async throws {
         let status = WriteStorageStatus()
         status.pageLoaded(epoch: "old")
-        let bridge = NativeBridgeClient(storage: status) { name, _ in
+        let bridge = NativeBridgeClient(storage: status, storageGuardOn: true) { name, _ in
             name == "native/persisted" ? #"{"stored":true,"seq":{"epoch":"new","n":1}}"# : "null"
         }
         let result = try await bridge.write("native/account-move", args: move)
@@ -317,12 +317,54 @@ final class StoredWriteTests: XCTestCase {
 
     func testAFirstWriteAnsweredBeforeReadyIsNotStored() async throws {
         let status = WriteStorageStatus()
-        let bridge = NativeBridgeClient(storage: status) { name, _ in
+        let bridge = NativeBridgeClient(storage: status, storageGuardOn: true) { name, _ in
             name == "native/persisted" ? #"{"stored":true,"seq":{"epoch":"new","n":1}}"# : "null"
         }
         let result = try await bridge.write("native/account-move", args: move)
         XCTAssertFalse(result.stored)
         XCTAssertTrue(status.mayNotBeSaved)
+    }
+
+    // sc-5303 (design D7a): with the shell's switch off, the opened API behaves as today
+    func testWithTheGuardOffAWriteCountsAsStoredAtOnce() async throws {
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "e")
+        let bridge = NativeBridgeClient(storage: status) { name, _ in
+            name == "native/persisted" ? #"{"stored":false,"seq":{"epoch":"e","n":1}}"# : "null"
+        }
+        let result = try await bridge.write("native/account-move", args: move)
+        XCTAssertTrue(result.stored)
+        let later = await bridge.whenStored(result)
+        XCTAssertTrue(later)
+    }
+
+    func testWithTheGuardOnAWriteWaitsForItsStoredEvent() async throws {
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "e")
+        let bridge = NativeBridgeClient(storage: status, storageGuardOn: true) { name, _ in
+            name == "native/persisted" ? #"{"stored":false,"seq":{"epoch":"e","n":1}}"# : "null"
+        }
+        let result = try await bridge.write("native/account-move", args: move)
+        XCTAssertFalse(result.stored)
+        let waiting = Task { await bridge.whenStored(result) }
+        try await Task.sleep(nanoseconds: 20_000_000)
+        status.storedEvent(seq: 1, epoch: "e")
+        let stored = await waiting.value
+        XCTAssertTrue(stored)
+    }
+
+    func testWithTheGuardOnARestartMeansNeverStored() async throws {
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "e")
+        let bridge = NativeBridgeClient(storage: status, storageGuardOn: true) { name, _ in
+            name == "native/persisted" ? #"{"stored":false,"seq":{"epoch":"e","n":1}}"# : "null"
+        }
+        let result = try await bridge.write("native/account-move", args: move)
+        let waiting = Task { await bridge.whenStored(result) }
+        try await Task.sleep(nanoseconds: 20_000_000)
+        status.pageLoaded(epoch: "f")
+        let stored = await waiting.value
+        XCTAssertFalse(stored)
     }
 
     // sc-5302: a retired page's own "not stored" stays its own

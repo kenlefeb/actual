@@ -40,8 +40,11 @@ private final class FakeReconcilePage {
         ]
     }
 
+    // sc-5303: a page whose storage has opted in to the guard
+    var storage: WriteStorageStatus?
+
     var client: NativeBridgeClient {
-        NativeBridgeClient(timeout: 1) { name, args in
+        NativeBridgeClient(timeout: 1, storage: storage, storageGuardOn: storage != nil) { name, args in
             try await MainActor.run {
                 self.calls.append((name, args))
                 if let failure = self.failures[name] { throw failure }
@@ -225,6 +228,39 @@ final class ReconcileStepOneViewModelTests: XCTestCase {
         saved = await model.confirm()
         XCTAssertTrue(saved)
         XCTAssertTrue(model.showsClearedNote)
+    }
+
+    // sc-5303: "Saved from your cleared balance" only once the write is stored
+    func testTheClearedBalanceNoteWaitsUntilTheSaveIsStored() async throws {
+        let page = try FakeReconcilePage()
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "e")
+        page.storage = status
+        page.results["native/persisted"] = #"{"stored":false,"seq":{"epoch":"e","n":1}}"#
+        let model = try await model(page)
+        model.useCleared()
+        let confirming = Task { await model.confirm() }
+        try await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertFalse(model.showsClearedNote)
+        status.storedEvent(seq: 1, epoch: "e")
+        let saved = await confirming.value
+        XCTAssertTrue(saved)
+        XCTAssertTrue(model.showsClearedNote)
+    }
+
+    func testTheClearedBalanceNeverStoredShowsNoNote() async throws {
+        let page = try FakeReconcilePage()
+        let status = WriteStorageStatus()
+        status.pageLoaded(epoch: "e")
+        page.storage = status
+        page.results["native/persisted"] = #"{"stored":false,"seq":{"epoch":"e","n":1}}"#
+        let model = try await model(page)
+        model.useCleared()
+        let confirming = Task { await model.confirm() }
+        try await Task.sleep(nanoseconds: 50_000_000)
+        status.pageLoaded(epoch: "f")
+        _ = await confirming.value
+        XCTAssertFalse(model.showsClearedNote)
     }
 
     func testAFailedSaveSaysSoAndMovesOn() async throws {

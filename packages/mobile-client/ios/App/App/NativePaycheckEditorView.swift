@@ -298,14 +298,14 @@ struct PaycheckEditorSheet: View {
                         String(format: EditorWords.payDay, index + 1),
                         selection: Binding(
                             get: { pattern.value },
-                            set: { value in model.update { $0.definition.date.patterns?[index].value = value } })
+                            set: { value in model.update { if $0.definition.date.patterns?.indices.contains(index) == true { $0.definition.date.patterns?[index].value = value } } })
                     ) {
                         ForEach(Array(1...31) + [-1], id: \.self) { day in
                             Text(day == -1 ? EditorWords.lastDay : String(day)).tag(day)
                         }
                     }
                     Button {
-                        model.update { $0.definition.date.patterns?.remove(at: index) }
+                        model.update { if $0.definition.date.patterns?.indices.contains(index) == true { $0.definition.date.patterns?.remove(at: index) } }
                     } label: {
                         Image(systemName: "minus.circle")
                     }
@@ -352,7 +352,7 @@ struct PaycheckEditorSheet: View {
                     String(format: EditorWords.deductionCategory, number), selection: deductionBinding(deduction, \.category),
                     none: EditorWords.noCategory, options: model.options.categories.filter { !$0.is_income }.map { ($0.id, $0.name) })
                 Button(EditorWords.remove, role: .destructive) {
-                    model.update { $0.definition.deductions.remove(at: index) }
+                    model.update { $0.definition.deductions.remove(id: deduction.id) }
                 }
                 .buttonStyle(.borderless)
                 .accessibilityLabel(Text(String(format: EditorWords.removeDeduction, number)))
@@ -379,8 +379,8 @@ struct PaycheckEditorSheet: View {
                         get: { deposit.kind },
                         set: { kind in
                             model.update {
-                                $0.definition.deposits[index].kind = kind
-                                $0.definition.deposits[index].value = 0
+                                $0.definition.deposits.write(deposit.id, \.kind, kind)
+                                $0.definition.deposits.write(deposit.id, \.value, 0)
                             }
                         })
                 ) {
@@ -393,14 +393,14 @@ struct PaycheckEditorSheet: View {
                         label: String(format: EditorWords.depositFixed, number),
                         value: Binding(
                             get: { Int(deposit.value) },
-                            set: { value in model.update { $0.definition.deposits[index].value = Double(value) } }),
+                            set: { value in model.update { $0.definition.deposits.write(deposit.id, \.value, Double(value)) } }),
                         style: style)
                 } else if deposit.kind == "percent" {
                     PercentField(
                         label: String(format: EditorWords.depositPercent, number),
                         value: Binding(
                             get: { deposit.value },
-                            set: { value in model.update { $0.definition.deposits[index].value = value } }))
+                            set: { value in model.update { $0.definition.deposits.write(deposit.id, \.value, value) } }))
                 }
                 if let answer {
                     HStack {
@@ -418,7 +418,7 @@ struct PaycheckEditorSheet: View {
                     EditorWords.postAutomatically,
                     isOn: Binding(
                         get: { deposit.postAutomatically ?? false },
-                        set: { value in model.update { $0.definition.deposits[index].postAutomatically = value } }))
+                        set: { value in model.update { $0.definition.deposits.write(deposit.id, \.postAutomatically, value) } }))
                 if deposit.postAutomatically == true {
                     Text(EditorWords.postNote).font(.footnote).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
@@ -436,7 +436,7 @@ struct PaycheckEditorSheet: View {
                     }
                 }
                 Button(EditorWords.remove, role: .destructive) {
-                    model.update { $0.definition.deposits.remove(at: index) }
+                    model.update { $0.definition.deposits.remove(id: deposit.id) }
                 }
                 .buttonStyle(.borderless)
                 .accessibilityLabel(Text(String(format: EditorWords.removeDeposit, number)))

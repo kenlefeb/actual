@@ -33,4 +33,21 @@ final class EditorRowBindingTests: XCTestCase {
         rows.write("b", \.amount, 300)
         XCTAssertEqual(rows.map(\.amount), [300])
     }
+
+    func testWritingAMissingIdIsANoOp() {
+        var rows = deductions()
+        rows.write("nope", \.name, "x")
+        XCTAssertEqual(rows.map(\.name), ["Health", "401k"])
+    }
+
+    func testRemovingByIdRemovesTheRightRowAndALaterWriteFollowsTheRowById() {
+        var rows = deductions()
+        rows.remove(id: "a")
+        XCTAssertEqual(rows.map(\.id), ["b"])
+        rows.write("b", \.name, "Retirement")
+        XCTAssertEqual(rows.map(\.name), ["Retirement"])
+        // A second Remove of a row that is already gone changes nothing
+        rows.remove(id: "a")
+        XCTAssertEqual(rows.map(\.id), ["b"])
+    }
 }

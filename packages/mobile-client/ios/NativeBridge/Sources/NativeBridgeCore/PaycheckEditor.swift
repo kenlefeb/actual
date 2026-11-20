@@ -469,4 +469,8 @@ extension Array where Element: Identifiable {
         guard let index = firstIndex(where: { $0.id == id }) else { return }
         self[index][keyPath: path] = value
     }
+
+    public mutating func remove(id: Element.ID) {
+        removeAll { $0.id == id }
+    }
 }

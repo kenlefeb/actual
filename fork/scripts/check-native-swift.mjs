@@ -73,7 +73,8 @@ function weakensWebKit(path, text) {
 }
 
 // sc-5177: the iPhone UI tests launch the app on fixtures through a hook
-// (UITestAccounts). Every line that names it must sit inside `#if DEBUG`, so a
+// (UITestAccounts; sc-5504 adds UITestPaycheckEditor, caught by the same
+// UITest* pattern). Every line that names it must sit inside `#if DEBUG`, so a
 // Release build, which TestFlight ships, has neither the hook nor its launch
 // argument. The UI-test target itself is never part of the app.
 // shortcut: counts #if/#endif lines, not a parser; an `#if DEBUG && x` or a

@@ -15,16 +15,16 @@
   - audit attempt and outcome lines with the created id.
 - [ ] 1.4 `write_update_schedule`. Failing tests first: one field changes only that field; the next date follows the engine; no field, a paycheck-managed schedule and a duplicate name are refused; before and after are logged.
 - [ ] 1.5 `dry_run` on create and update. Failing tests first: next dates are returned; nothing is written, including the audit log.
-- [ ] 1.6 `write_skip_schedule_date` and `write_post_schedule_transaction`, each declared in `NOT_UNDOABLE` with its reason. Failing tests first: results match the app's actions; completed, accountless and paycheck-managed schedules are refused; `write_undo` gives the reason.
+- [ ] 1.6 `write_skip_schedule_date` (`schedules:write`) and `write_post_schedule_transaction` (`schedules:write`, `transactions:write`), each declared in `NOT_UNDOABLE` with its reason. Failing tests first: results match the app's actions; completed, accountless and paycheck-managed schedules are refused; `write_undo` gives the reason.
 - [ ] 1.7 Undo of create and update in `undo.ts` and the `UNDOABLE` table. Failing tests first: create removed; update restored; refused after another edit, with linked transactions or dependents; refused the second time.
-- [ ] 1.8 Scope tests: each tool is refused without `schedules:write` and names it; its description names its scopes and its undo sentence.
-- [ ] 1.9 `coverage.json` lines for the handlers these tools call, `README.md` tool list and the production grant note; `yarn check:mcp-coverage` passes.
+- [ ] 1.8 Scope tests: each tool is refused without `schedules:write` and names it, and post without `transactions:write`; its description names its scopes and its undo sentence.
+- [ ] 1.9 `coverage.json` lines for the handlers these tools call, `README.md` tool list and the production grant note (`schedules:write`, and `transactions:write` for post); `yarn check:mcp-coverage` passes.
 
 ## 2. Schedule delete and paychecks (sc-4650)
 
-- [ ] 2.1 `write_delete_schedule` (`schedules:write`, `delete`, destructive). Failing tests first: refused without `delete`; dry run and `confirm` under `confirm_destructive`; a paycheck-managed schedule is refused; the attempt line holds the undo snapshot and relative dependents, within the audit-line limit.
-- [ ] 2.2 Undo of a schedule delete per design Q3 (extend `api/undelete-rows` to the schedule rows, or declare it not undoable if the Architect decides so). Failing tests first: same ids back, linked transactions linked again, dependents refreshed; refused on any conflict.
-- [ ] 2.3 `write_create_paycheck` (`schedules:write`). Failing tests first: the paycheck and schedules equal the app's for the same input; bad clearing account, deductions above the row limit; undo deletes while no pay posted.
-- [ ] 2.4 `write_delete_paycheck` (`schedules:write`, `delete`, destructive; not undoable). Failing tests first: confirm flow; the dry run returns the definition; `write_undo` gives the reason.
+- [ ] 2.1 `write_delete_schedule` (`schedules:write`, `delete`, destructive, `alwaysConfirm`). Failing tests first: refused without `delete`; the first call is always a dry run with a `confirm` and the definition, even with `confirm_destructive` off; a paycheck-managed schedule is refused; the attempt line holds the definition and relative dependents, within the audit-line limit.
+- [ ] 2.2 Declare `write_delete_schedule` in `NOT_UNDOABLE` with the reason "recreate from the dry run's definition; a restore is planned in sc-5522". Failing tests first: `list_writes` and `write_undo` give the reason and change nothing. Do not touch `api/undelete-rows`.
+- [ ] 2.3 `write_create_paycheck` (`schedules:write`, `structure:write`). Failing tests first: the paycheck, its schedules and the account's calendar and days early equal the app's for the same input; refused without `structure:write`; bad clearing account; deductions above the row limit; undo deletes while no pay posted.
+- [ ] 2.4 `write_delete_paycheck` (`schedules:write`, `delete`, destructive, `alwaysConfirm`; `NOT_UNDOABLE` naming sc-5522). Failing tests first: always a dry run first, even with `confirm_destructive` off; it returns the definition; `write_undo` gives the reason.
 - [ ] 2.5 `coverage.json`: `paycheck-create` and `paycheck-delete` (and their API names) map to the tools, replacing their skips; `paycheck-update` keeps its skip (sc-4208). `yarn check:mcp-coverage` passes.
 - [ ] 2.6 Tell Ken the production grant line (design D5) when the build ships; do not edit the production grant.

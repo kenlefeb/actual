@@ -16,10 +16,10 @@ Ken's standing rule is that the MCP does everything he can do in the app, limite
   - `list_schedules` gains the fields an edit needs (payee, account, amount rule, date definition, posts automatically).
   - Create and update accept `dry_run: true`, which shows the stored result and the next dates and writes nothing.
   - Create and update are undoable.
-- **Group 2 (sc-4650): deletes and paychecks** (`schedules:write` and `delete` for deletes).
+- **Group 2 (sc-4650): deletes and paychecks** (`schedules:write`; `structure:write` for a paycheck create; `delete` for deletes).
   - `write_delete_schedule`, `write_create_paycheck`, `write_delete_paycheck`.
-  - Deletes follow the existing dry run and `confirm` flow.
-  - A schedule delete and a paycheck create are undoable; a paycheck delete is not (design Q2).
+  - Both deletes are not undoable, so both always answer the first call with a dry run and a `confirm`, whatever `confirm_destructive` says (design Q2, Q3).
+  - A paycheck create is undoable.
 - **No new scope.** `schedules:write` already exists in `grants.ts` and in the spec ("schedules, paychecks, business calendars"), and `write_skip_paycheck` already needs it. Ken's production grant must list it (design D5).
 - **No new limit.** One schedule or paycheck per call; the only list input (a paycheck's deductions and deposits) uses the connection's existing row limit.
 
@@ -44,6 +44,6 @@ Not in this change:
 ## Impact
 
 - **MCP code:** new `packages/mcp/src/tools/write/schedules.ts`; `paychecks.ts` (two tools); `declarations.ts` (undo table); `undo.ts` (two planners); `read/core.ts` (`list_schedules` fields); `coverage.json`, `README.md` and tests.
-- **API and loot-core:** `packages/api/methods.ts` gains `skipScheduleNextDate` and `postScheduleTransaction`; `api/undelete-rows` is extended to the schedule rows if the Architect accepts design Q3.
-- **Production:** Ken's production grant must list `schedules:write` (and `delete` for the delete tools). That is a production change and needs his approval.
+- **API and loot-core:** `packages/api/methods.ts` gains `skipScheduleNextDate` and `postScheduleTransaction`; `api/undelete-rows` is not touched (the same-id restore is sc-5522).
+- **Production:** Ken's production grant must list `schedules:write`, plus `transactions:write` (post), `structure:write` (paycheck create) and `delete` (the deletes). That is a production change and needs his approval.
 - **Reviews:** Architect, Product Owner and Security Analyst (scope, delete, undo).

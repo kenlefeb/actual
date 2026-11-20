@@ -43,7 +43,7 @@
 - **THEN** the result lists the next dates, and `list_schedules` and the audit log are unchanged
 
 ### Requirement: Schedule skip and post tools
-`write_skip_schedule_date` and `write_post_schedule_transaction` (both `schedules:write`) SHALL do what the app's "Skip next date" and "Post transaction" (or "Post transaction today" with `today`) do, by schedule id, and refuse a paycheck-managed or completed schedule, or one with no account. Both are not undoable, and say why.
+`write_skip_schedule_date` (`schedules:write`) and `write_post_schedule_transaction` (`schedules:write` and `transactions:write`) SHALL do what the app's "Skip next date" and "Post transaction" (or "Post transaction today" with `today`) do, by schedule id, and refuse a paycheck-managed or completed schedule, or one with no account. Both are not undoable, and say why.
 
 #### Scenario: Skip
 - **GIVEN** a monthly schedule with next date 2026-12-01
@@ -55,10 +55,10 @@
 - **THEN** the call is refused with the declared reason and nothing changed
 
 ### Requirement: Schedule delete tool
-`write_delete_schedule` (`schedules:write` and `delete`) SHALL delete a schedule by id. Under `confirm_destructive` the first call SHALL be a dry run with a `confirm` naming the schedule, its next date and its relative dependents; the delete SHALL write only with it. It SHALL refuse a paycheck-managed schedule. Its attempt line SHALL hold what its undo needs.
+`write_delete_schedule` (`schedules:write` and `delete`) SHALL delete a schedule by id. It is not undoable ("recreate from the dry run's definition; a restore is planned in sc-5522"), so the first call SHALL always be a dry run with a `confirm` naming the schedule, its next date, its relative dependents and its definition, and it writes only with that `confirm`. It SHALL refuse a paycheck-managed schedule.
 
 #### Scenario: Delete with confirm
-- **GIVEN** a grant with `schedules:write`, `delete` and `confirm_destructive`
+- **GIVEN** a grant with `schedules:write` and `delete`, and `confirm_destructive` off
 - **WHEN** a client calls `write_delete_schedule`, then again with the returned `confirm`
 - **THEN** the first call changes nothing and the second deletes the schedule
 
@@ -68,7 +68,7 @@
 - **THEN** the call is refused naming `delete`, and nothing changed
 
 ### Requirement: Undo of schedule writes
-`write_undo` SHALL reverse `write_create_schedule` by deleting the schedule while it has no linked transactions or relative dependents and is unchanged, `write_update_schedule` by restoring the logged fields while each still holds its logged value, and `write_delete_schedule` by restoring the deleted rows under their own ids. It SHALL refuse on any conflict, and a write is undone once.
+`write_undo` SHALL reverse `write_create_schedule` by deleting the schedule while it has no linked transactions or relative dependents and is unchanged, and `write_update_schedule` by restoring the logged fields while each still holds its logged value. It SHALL refuse on any conflict, and a write is undone once.
 
 #### Scenario: Undo a create
 - **GIVEN** a schedule created by `write_create_schedule` and unchanged since
@@ -88,18 +88,19 @@
 - **THEN** each row has the fields a `write_update_schedule` call refers to
 
 ### Requirement: Paycheck create and delete tools
-`write_create_paycheck` (`schedules:write`) SHALL create a paycheck from a name and a definition (the app's paycheck form, with an existing clearing account) through the engine, and return its id and schedule ids; `write_delete_paycheck` (`schedules:write` and `delete`) SHALL delete one by id under the delete confirm flow. Deductions and deposits SHALL be bounded by the connection's row limit. A create is undone by deleting while no pay posted; a delete is not undoable.
+`write_create_paycheck` (`schedules:write`, `structure:write`) SHALL create a paycheck from a name and a definition (the app's form, with an existing clearing account) through the engine, returning its id and schedule ids; undo deletes it while no pay posted. `write_delete_paycheck` (`schedules:write`, `delete`) SHALL delete one by id; it is not undoable (sc-5522), so its first call SHALL always be a dry run with a `confirm`. Deductions and deposits SHALL be bounded by the connection's row limit.
 
 #### Scenario: Create a paycheck
 - **WHEN** a client calls `write_create_paycheck` with a valid definition
 - **THEN** the paycheck and its schedules exist, as the app makes them for the same input
 
 #### Scenario: A delete is not undoable
-- **WHEN** a client calls `write_undo` for its own `write_delete_paycheck` write
+- **GIVEN** a `write_delete_paycheck` write that was confirmed
+- **WHEN** a client calls `write_undo` for it
 - **THEN** the call is refused with the declared reason and nothing changed
 
 ### Requirement: Schedule scopes and the production grant
-The schedule and paycheck tools SHALL use the existing `schedules:write` scope, and the delete tools also `delete`; no new scope SHALL be added. A grant SHALL hold the scope only when it lists it, and each tool's description SHALL name its scopes.
+The schedule and paycheck tools SHALL use the existing `schedules:write` scope; post also needs `transactions:write`, paycheck create `structure:write`, and the delete tools `delete`. No new scope SHALL be added. A grant SHALL hold the scope only when it lists it, and each tool's description SHALL name its scopes.
 
 #### Scenario: Read-only grant
 - **GIVEN** a grant with `budget:read` only

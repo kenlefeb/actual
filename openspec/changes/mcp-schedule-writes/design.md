@@ -21,9 +21,9 @@ Read from the code on `development` (2026-11-20).
 | `write_create_schedule` | `schedules:write` | payee_id, account_id, one date form, amount rule | delete it while unused |
 | `write_update_schedule` | `schedules:write` | schedule_id and any field | restore the fields |
 | `write_skip_schedule_date` | `schedules:write` | schedule_id | not undoable |
-| `write_post_schedule_transaction` | `schedules:write` | schedule_id, `today` optional | not undoable |
-| `write_delete_schedule` | `schedules:write`, `delete` | schedule_id | restore the rows (Q3) |
-| `write_create_paycheck` | `schedules:write` | name, definition | delete it while unused |
+| `write_post_schedule_transaction` | `schedules:write`, `transactions:write` | schedule_id, `today` optional | not undoable |
+| `write_delete_schedule` | `schedules:write`, `delete` | schedule_id | not undoable (Q3) |
+| `write_create_paycheck` | `schedules:write`, `structure:write` | name, definition | delete it while unused |
 | `write_delete_paycheck` | `schedules:write`, `delete` | paycheck_id | not undoable (Q2) |
 
 Inputs use ids, never names. A create takes:
@@ -43,7 +43,7 @@ The API gains `skipScheduleNextDate` and `postScheduleTransaction` (thin `send` 
 
 `dry_run: true` on create and update returns `{ dry_run: true, ids, changes, next_dates }` and writes nothing, not even an audit line. The next dates come from `getScheduleDates` with the existing count limit of `get_schedule_next_dates`. It needs no `confirm`: a create and an update are not destructive, and the existing rule is that only destructive and permanent actions answer a first call with a `confirm`.
 
-Delete follows "Confirm before a destructive write": under `confirm_destructive` the first call is a dry run with a `confirm`. Its preview names the schedule, its next date, how many linked transactions it keeps (they stay, unlinked in meaning) and any relative dependents.
+Schedule delete and paycheck delete are not undoable, so both always answer the first call with a dry run and a `confirm`, whatever `confirm_destructive` says (`alwaysConfirm`, the "Permanent actions always confirm" rule). The schedule's preview names it, its next date, how many linked transactions it leaves behind and any relative dependents, and returns its definition so it can be recreated. The paycheck's preview returns its definition.
 
 ## D3. Errors
 
@@ -57,18 +57,23 @@ All refusals use fixed text, name `Nothing changed.`, and come before any audit 
 
 ## D4. Audit, undo and the undo table
 
-Every write appends the attempt and outcome lines through `loggedWrite`. A create logs `new` ids replaced by the created id on the outcome line, as `write_create_category` does. An update logs each changed field with before and after (the date definition as JSON). A delete logs the snapshot its undo needs: the schedule's fields, its rule's conditions and its next-date row.
+Every write appends the attempt and outcome lines through `loggedWrite`. A create logs `new` ids replaced by the created id on the outcome line, as `write_create_category` does. An update logs each changed field with before and after (the date definition as JSON). A delete logs the definition it removed (the schedule's fields and conditions, or the paycheck's definition), for the record and for recreating it by hand.
 
 - **Create:** undo deletes the schedule, refused when it has linked transactions, relative dependents or changed since.
 - **Update:** undo restores the before-values of the logged fields through the same engine update, refused when a field changed since. The next date is recomputed by the engine, so a date skipped after the update is not restored. A write is used once, as today.
 - **Skip and post:** `NOT_UNDOABLE`. Skip: the engine cannot put back a skipped date (as `write_skip_paycheck`). Post: delete the transaction with `write_delete_transactions`.
 - **Paycheck create:** undo deletes the paycheck while it has no posted pay transactions.
+- **Schedule delete and paycheck delete:** `NOT_UNDOABLE`. Schedule delete: "recreate from the dry run's definition". The same-id restore, for schedule and paycheck deletes, is the separate story sc-5522; this change does not touch `api/undelete-rows`.
 
 ## D5. Scope and the production grant
 
-No new scope. The spec's scope list already says `schedules:write` covers schedules and paychecks; the deleting tools need `delete` as well (existing rule). Ken's first use, adding a loan schedule, needs only `schedules:write`.
+No new scope. The spec's scope list already says `schedules:write` covers schedules and paychecks; the deleting tools need `delete` as well (existing rule). Two tools need a second area scope:
+- `write_post_schedule_transaction` adds a transaction, so it also needs `transactions:write`;
+- `write_create_paycheck` sets the clearing account's business calendar and days early, so it also needs `structure:write`, as `write_set_account_business_days` does (`structure:write` and `schedules:write`).
 
-The production grant is the server file named by `ACTUAL_MCP_GRANTS_FILE`. In the row whose `client` is `claude-production`, the `scopes` array must contain `"schedules:write"` (check whether it already does, since `write_skip_paycheck` needs it). To allow the delete tools Ken also adds `"delete"` to that same array. Keep `confirm_destructive` true. The server re-reads the file on every call, so no restart is needed. This is a production change and needs Ken's approval.
+Ken's first use, adding a loan schedule, needs only `schedules:write`.
+
+The production grant is the server file named by `ACTUAL_MCP_GRANTS_FILE`. In the row whose `client` is `claude-production`, the `scopes` array must contain `"schedules:write"` (check whether it already does, since `write_skip_paycheck` needs it). For the group 1 tools that is `"schedules:write"`, and `"transactions:write"` for `write_post_schedule_transaction`. For group 2 he also adds `"structure:write"` (paycheck create) and `"delete"` (the two deletes) to that same array. Keep `confirm_destructive` true. The server re-reads the file on every call, so no restart is needed. This is a production change and needs Ken's approval.
 
 ## D6. Limits
 
@@ -77,7 +82,7 @@ No new setting. Each call changes one schedule or paycheck. A paycheck's deducti
 ## Risks
 
 - **Date definition drift.** Hand-mapping recurrence to the engine's types can diverge from the app; the same-stored-result test guards it.
-- **Same-id restore.** A delete undo that recreates under a new id would lose the links of posted transactions; only a same-id row restore is safe (Q3).
+- **Delete is final.** Neither delete is undoable here; the always-confirm call and the logged definition are the safeguards (Q2, Q3).
 - **Payee must exist.** A new lender is not yet a payee and the MCP has no payee create (Q4).
 
 ## Questions
@@ -85,7 +90,7 @@ No new setting. Each call changes one schedule or paycheck. A paycheck's deducti
 Recommendations first; none blocks the proposal review.
 
 - **Q1. What does "mark it complete" mean?** The app has no such action; `completed` is set by the service and the API refuses it. Recommend: map it to the app's "Post transaction" (`write_post_schedule_transaction`), which is how a one-time schedule is finished, and build no direct complete tool. Product Owner to confirm.
-- **Q2. Is a paycheck delete undoable?** The app's delete is undoable by the engine's stack. An MCP undo would have to restore the paycheck, its generated schedules and their links with the same ids. Recommend: not undoable in this change (the dry run returns the definition, so `write_create_paycheck` can rebuild it), and a Backlog story if Ken wants more. This departs from the sc-4650 acceptance ("undoable"); Product Owner to decide.
-- **Q3. How does a schedule delete undo?** Recommend extending `api/undelete-rows` to `schedules`, `rules` and `schedules_next_date`, restoring the same ids, then refreshing relative dependents through the engine. If the Architect finds that unsafe, declare it not undoable with a fixed reason and drop that undo from this change.
+- **Q2. Is a paycheck delete undoable?** Ruled (Architect): not undoable now, with a fixed reason naming sc-5522; it always confirms. This departs from the sc-4650 acceptance ("undoable"); the Product Owner is confirming.
+- **Q3. How does a schedule delete undo?** Ruled (Architect): it does not. Declared not undoable in `declarations.ts` with the reason "recreate from the dry run's definition; a restore is planned in sc-5522", and it always confirms. The same-id restore (extending `api/undelete-rows`) is the separate story sc-5522; it is not in this change.
 - **Q4. Payee create.** Ken's lender may not be a payee. Recommend a separate Backlog story (`write_create_payee`, `structure:write`), filed by the Product Owner; until then he adds the payee in the app.
 - **Q5. Inline clearing account.** `write_create_paycheck` takes an existing `clearing_account_id`; the app can also create one inline. Recommend leaving it out (use `write_create_account`).

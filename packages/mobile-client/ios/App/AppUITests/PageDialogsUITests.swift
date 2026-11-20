@@ -81,7 +81,10 @@ final class PageDialogsUITests: XCTestCase {
 
     // The page going away takes its dialog with it: none is left over a dead page
     func testThePageReloadingTakesItsDialogAway() {
-        launch("alert", reloadAfter: 5)
+        // The dialog is on screen this long before the reload takes it away; at 5 s a
+        // slow runner's UI queries missed it (CI, 2026-11-20: the recording shows it
+        // up, then gone, the app having answered correctly)
+        launch("alert", reloadAfter: 15)
         let dialog = alert("We had an unknown problem opening the budget.")
         let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: dialog)
         XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: 20), .completed, "the dialog stayed over the reloaded page")

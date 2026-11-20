@@ -88,7 +88,7 @@
 - **THEN** each row has the fields a `write_update_schedule` call refers to
 
 ### Requirement: Paycheck create and delete tools
-`write_create_paycheck` (`schedules:write`, `structure:write`) SHALL create a paycheck from a name and a definition (the app's form, with an existing clearing account) through the engine, returning its id and schedule ids; undo deletes it while no pay posted. `write_delete_paycheck` (`schedules:write`, `delete`) SHALL delete one by id; it is not undoable (sc-5522), so its first call SHALL always be a dry run with a `confirm`. Deductions and deposits SHALL be bounded by the connection's row limit.
+`write_create_paycheck` (`schedules:write`, `structure:write`) SHALL create a paycheck from a name and a definition (the app's form, existing clearing account) through the engine, returning its id and schedule ids; undo deletes it. `write_delete_paycheck` (`schedules:write`, `delete`) SHALL delete one by id; it is not undoable (sc-5522), so its first call SHALL always be a dry run with a `confirm`. Deductions and deposits SHALL be bounded by the connection's row limit.
 
 #### Scenario: Create a paycheck
 - **WHEN** a client calls `write_create_paycheck` with a valid definition

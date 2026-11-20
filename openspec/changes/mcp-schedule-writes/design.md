@@ -63,7 +63,7 @@ Every write appends the attempt and outcome lines through `loggedWrite`. A creat
 - **Update:** undo restores the before-values of the logged fields through the same engine update, refused when a field changed since. The next date is recomputed by the engine, so a date skipped after the update is not restored. A write is used once, as today.
 - **Skip and post:** `NOT_UNDOABLE`. Skip: the engine cannot put back a skipped date (as `write_skip_paycheck`). Post: delete the transaction with `write_delete_transactions`.
 - **Paycheck create:** undo deletes the paycheck while it has no posted pay transactions.
-- **Schedule delete and paycheck delete:** `NOT_UNDOABLE`. Schedule delete: "recreate from the dry run's definition". The same-id restore, for schedule and paycheck deletes, is the separate story sc-5522; this change does not touch `api/undelete-rows`.
+- **Schedule delete and paycheck delete:** `NOT_UNDOABLE`. Schedule delete: "recreate from the dry run's definition; a restore is planned in sc-5522". The same-id restore, for schedule and paycheck deletes, is the separate story sc-5522; this change does not touch `api/undelete-rows`.
 
 ## D5. Scope and the production grant
 

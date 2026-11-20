@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { internal } from '#connection';
 import { Refusal } from '#refusal';
 import { withText } from '#sanitize';
+import { SCHEDULE_DATES_COUNT } from '#tools/read/shared';
 
 import { findAccount, NOTHING } from './accounts';
 import type { RegisterWriteTool } from './shared';
@@ -48,11 +49,18 @@ export const SCHEDULE_FIELDS = [
 
 const NO_MATCH =
   'Cannot expand schedule date: Failed to find a matching occurrence';
-/** The next dates a dry run shows (the default of `get_schedule_next_dates`). */
-const DRY_RUN_DATES = 10;
+
+/** Refuses (fixed text, before any audit line) when no engine handle is loaded, as when the API's CJS build hides it. */
+function requireEngine() {
+  const engine = internal();
+  if (!engine) {
+    throw new Refusal('The budget engine is not available. Nothing changed.');
+  }
+  return engine;
+}
 
 const send = (name: string, payload: unknown) =>
-  internal()!.send(name as never, payload as never) as Promise<unknown>;
+  requireEngine().send(name as never, payload as never) as Promise<unknown>;
 
 /** A schedule's value for one of the logged fields, as the logs hold it. */
 export function scheduleValue(s: Schedule, field: string): unknown {
@@ -232,7 +240,7 @@ async function relativeValue(
 async function nextDates(date: DateValue) {
   try {
     return await api.getScheduleDates(date as never, {
-      count: DRY_RUN_DATES,
+      count: SCHEDULE_DATES_COUNT,
     });
   } catch (error) {
     const message = String((error as { message?: unknown })?.message);
@@ -458,6 +466,7 @@ export function registerScheduleWriteTools(tool: RegisterWriteTool) {
         );
       }
       let created = '';
+      requireEngine();
       return loggedWrite(
         auditLog,
         'write_create_schedule',
@@ -491,7 +500,7 @@ export function registerScheduleWriteTools(tool: RegisterWriteTool) {
 
   tool(
     'write_update_schedule',
-    `Change a schedule's fields, as the app's schedule form does, by schedule id (never a name; payee and account by id). Give any of name, payee_id, account_id, posts_transaction, an amount (${AMOUNT_NOTE}), one date form (${DATE_NOTE}) and reset_next_date. A schedule a paycheck manages is refused. \`dry_run\` returns the changes and the next dates and writes nothing. Returns each changed field before and after and the next date before and after.`,
+    `Change a schedule's fields, as the app's schedule form does, by schedule id (never a name; payee and account by id). Give any of name, payee_id, account_id, posts_transaction, an amount (${AMOUNT_NOTE}), one date form (${DATE_NOTE}) and reset_next_date. A schedule a paycheck manages is refused. \`dry_run\` returns the changes and the next dates and writes nothing. Returns each changed field before and after and the next date before and after. A reset of the next date is not undone by write_undo.`,
     {
       schedule_id: id,
       name: z.string().optional(),
@@ -546,15 +555,9 @@ export function registerScheduleWriteTools(tool: RegisterWriteTool) {
           ? [{ id: cur.id, field, before, after }]
           : [];
       });
-      if (a.reset_next_date) {
-        changes.push({
-          id: cur.id,
-          field: 'next_date' as never,
-          before: cur.next_date as never,
-          after: 'reset' as never,
-        });
+      if (changes.length === 0 && !a.reset_next_date) {
+        throw refuse('Nothing to change.');
       }
-      if (changes.length === 0) throw refuse('Nothing to change.');
       const effective = next.date ?? cur.date;
       if (a.dry_run) {
         return withText(
@@ -562,10 +565,15 @@ export function registerScheduleWriteTools(tool: RegisterWriteTool) {
           { changes },
         );
       }
+      requireEngine();
       return loggedWrite(
         auditLog,
         'write_update_schedule',
-        { ids: [cur.id], changes },
+        {
+          ids: [cur.id],
+          changes,
+          ...(a.reset_next_date ? { reset_next_date: true } : {}),
+        },
         async () => {
           await applyScheduleFields(cur.id, next, a.reset_next_date);
           return { applied: [cur.id] };
@@ -578,6 +586,12 @@ export function registerScheduleWriteTools(tool: RegisterWriteTool) {
                 before: cur.next_date,
                 after: await nextDateOf(cur.id),
               },
+              ...(a.reset_next_date
+                ? {
+                    reset_note:
+                      'The next date was reset; a reset is not undone by write_undo.',
+                  }
+                : {}),
             },
             {
               changes: changes.map(({ field, before, after }) => ({
@@ -598,6 +612,7 @@ export function registerScheduleWriteTools(tool: RegisterWriteTool) {
     { schedule_id: id },
     async ({ schedule_id }, auditLog) => {
       const cur = await requireRunnable(schedule_id);
+      requireEngine();
       return loggedWrite(
         auditLog,
         'write_skip_schedule_date',
@@ -635,6 +650,7 @@ export function registerScheduleWriteTools(tool: RegisterWriteTool) {
     async ({ schedule_id, today = false }, auditLog) => {
       const cur = await requireRunnable(schedule_id);
       const before = new Set(await transactionIds(schedule_id));
+      requireEngine();
       return loggedWrite(
         auditLog,
         'write_post_schedule_transaction',

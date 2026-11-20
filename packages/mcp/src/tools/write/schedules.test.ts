@@ -5,8 +5,10 @@ import * as db from '@actual-app/core/server/db/index';
 import { currentDay } from '@actual-app/core/shared/months';
 
 import { startHarness } from '#client-harness';
+import * as connection from '#connection';
 import { internal } from '#connection';
 import type { Grant, Scope } from '#grants';
+import { SCHEDULE_DATES_COUNT } from '#tools/read/shared';
 
 import { NOT_UNDOABLE, UNDOABLE } from './declarations';
 
@@ -791,5 +793,96 @@ describe('Scopes (1.8)', () => {
     expect(res.isError).toBe(true);
     expect(res.text).toContain(missing);
     expect(auditLines().every(l => l.phase === 'refused')).toBe(true);
+  });
+});
+
+describe('reset_next_date, a missing engine and engine failures', () => {
+  beforeEach(async () => start());
+
+  async function made() {
+    return (await h.call('write_create_schedule', await loan())).json
+      .schedule_id as string;
+  }
+
+  it('reset_next_date is not logged as a change, and says it is not undone', async () => {
+    const id = await made();
+    const res = await h.call('write_update_schedule', {
+      schedule_id: id,
+      reset_next_date: true,
+    });
+    expect(res.isError, res.text).toBe(false);
+    expect(res.json.reset_note).toMatch(/not undone/i);
+    const attempt = auditLines().find(
+      l => l.tool === 'write_update_schedule' && l.phase === 'attempt',
+    );
+    expect(attempt.changes).toEqual([]);
+    expect(attempt.reset_next_date).toBe(true);
+    const undo = await h.call('write_undo', { write_id: res.json.write_id });
+    expect(undo.isError).toBe(true);
+    expect(undo.text).toMatch(/nothing to put back/i);
+  });
+
+  it('With a field, undo puts back the field and not the reset', async () => {
+    const id = await made();
+    const res = await h.call('write_update_schedule', {
+      schedule_id: id,
+      amount: -1,
+      reset_next_date: true,
+    });
+    expect(res.json.reset_note).toBeDefined();
+    const undo = await h.call('write_undo', { write_id: res.json.write_id });
+    expect(undo.isError, undo.text).toBe(false);
+    expect((await byName('Car loan')).amount).toBe(-35000);
+  });
+
+  it('A missing engine is refused with fixed text, writing no audit line', async () => {
+    const id = await made();
+    const logged = auditLines().length;
+    vi.spyOn(connection, 'internal').mockReturnValue(null);
+    const calls: Array<[string, Record<string, unknown>]> = [
+      ['write_create_schedule', await loan({ name: 'Other' })],
+      ['write_update_schedule', { schedule_id: id, amount: -1 }],
+      ['write_skip_schedule_date', { schedule_id: id }],
+      ['write_post_schedule_transaction', { schedule_id: id }],
+    ];
+    for (const [tool, args] of calls) {
+      const res = await h.call(tool, args);
+      expect(res.isError, tool).toBe(true);
+      expect(res.text, tool).toMatch(
+        /engine is not available.*Nothing changed/,
+      );
+    }
+    expect(auditLines().length).toBe(logged);
+    expect((await schedules()).length).toBe(1);
+  });
+
+  it('An engine refusal after the pre-checks gives a failed outcome line', async () => {
+    const real = internal()!;
+    vi.spyOn(connection, 'internal').mockReturnValue({
+      send: (name: string, ...rest: unknown[]) =>
+        name === 'schedule/create'
+          ? Promise.reject(new Error('engine said no'))
+          : (real.send as (...a: unknown[]) => Promise<unknown>)(name, ...rest),
+    } as never);
+    const res = await h.call('write_create_schedule', await loan());
+    expect(res.isError).toBe(true);
+    const lines = auditLines().filter(l => l.tool === 'write_create_schedule');
+    expect(lines.map(l => `${l.phase}:${l.status ?? ''}`)).toEqual([
+      'attempt:',
+      'outcome:failed',
+    ]);
+    expect(await schedules()).toEqual([]);
+  });
+
+  it('A dry run and get_schedule_next_dates share one date count', async () => {
+    const dry = await h.call(
+      'write_create_schedule',
+      await loan({ dry_run: true }),
+    );
+    expect(dry.json.next_dates).toHaveLength(SCHEDULE_DATES_COUNT);
+    const read = await h.call('get_schedule_next_dates', {
+      date: monthly(),
+    });
+    expect(read.json.dates).toHaveLength(SCHEDULE_DATES_COUNT);
   });
 });

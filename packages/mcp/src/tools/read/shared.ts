@@ -27,3 +27,6 @@ export function moneyAs(name: string, amount: number) {
   const m = money(amount);
   return { [name]: m.amount, [`${name}_decimal`]: m.amount_decimal };
 }
+
+/** How many dates `get_schedule_next_dates` returns by default, and a schedule dry run shows. */
+export const SCHEDULE_DATES_COUNT = 10;

@@ -13,7 +13,7 @@
   - each date form (one-time, recurrence with each end mode, relative with a business calendar);
   - refusals: unknown or closed ids, bad amount, `isbetween` with min above max, two date forms, bad recurrence, duplicate name, with no audit line;
   - audit attempt and outcome lines with the created id.
-- [x] 1.4 `write_update_schedule`. Failing tests first: one field changes only that field; the next date follows the engine; no field, a paycheck-managed schedule and a duplicate name are refused; before and after are logged.
+- [x] 1.4 `write_update_schedule`. Failing tests first: one field changes only that field; the next date follows the engine; no field, a paycheck-managed schedule and a duplicate name are refused; before and after are logged; `reset_next_date` is not logged as a change and the result says undo does not undo it; a missing engine is refused with fixed text and no audit line.
 - [x] 1.5 `dry_run` on create and update. Failing tests first: next dates are returned; nothing is written, including the audit log.
 - [x] 1.6 `write_skip_schedule_date` (`schedules:write`) and `write_post_schedule_transaction` (`schedules:write`, `transactions:write`), each declared in `NOT_UNDOABLE` with its reason. Failing tests first: results match the app's actions; completed, accountless and paycheck-managed schedules are refused; `write_undo` gives the reason.
 - [x] 1.7 Undo of create and update in `undo.ts` and the `UNDOABLE` table. Failing tests first: create removed; update restored; refused after another edit, with linked transactions or dependents; refused the second time.

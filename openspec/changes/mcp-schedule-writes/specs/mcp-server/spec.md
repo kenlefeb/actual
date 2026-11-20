@@ -24,7 +24,7 @@
 - **THEN** the call is refused and nothing changed
 
 ### Requirement: Schedule update tool
-`write_update_schedule` (`schedules:write`) SHALL change the given fields of a schedule by id through the engine's update, with the same fields as create plus `reset_next_date`, and return the before and after of each. It SHALL refuse an unknown id, a schedule a paycheck manages (naming the paycheck id), a call with no field, and any invalid value, changing nothing.
+`write_update_schedule` (`schedules:write`) SHALL change the given fields of a schedule by id through the engine's update, with the same fields as create plus `reset_next_date`, and return the before and after of each. `reset_next_date` SHALL NOT be logged as a change and SHALL be named in the result as not undone by `write_undo`. It SHALL refuse an unknown id, a schedule a paycheck manages (naming the paycheck id), a call with no field, and any invalid value, changing nothing.
 
 #### Scenario: Change the amount
 - **GIVEN** the "Car loan" schedule

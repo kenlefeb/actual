@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { pageList } from '#paging';
 import { withText } from '#sanitize';
 
-import { date, pageShape } from './shared';
+import { date, pageShape, SCHEDULE_DATES_COUNT } from './shared';
 import type { RegisterTool } from './shared';
 
 // A day, a repeat rule or a date relative to another schedule (by id); the
@@ -37,7 +37,7 @@ export function registerCalendarTools(tool: RegisterTool) {
 
   tool(
     'get_schedule_next_dates',
-    'Expand a schedule date into upcoming dates (YYYY-MM-DD): a day, a repeat rule, or a date relative to another schedule ({ relativeTo: { scheduleId, offset, unit: "days" | "business-days", direction: "before" | "after" } }). Starts today unless `start` is given; `count` caps the dates (default 10, at most 100).',
+    `Expand a schedule date into upcoming dates (YYYY-MM-DD): a day, a repeat rule, or a date relative to another schedule ({ relativeTo: { scheduleId, offset, unit: "days" | "business-days", direction: "before" | "after" } }). Starts today unless \`start\` is given; \`count\` caps the dates (default ${SCHEDULE_DATES_COUNT}, at most 100).`,
     {
       date: scheduleDate,
       start: date.optional(),
@@ -50,7 +50,7 @@ export function registerCalendarTools(tool: RegisterTool) {
           dates: await api.getScheduleDates(d as ScheduleDate, {
             start,
             end,
-            count: count ?? 10,
+            count: count ?? SCHEDULE_DATES_COUNT,
           }),
         };
       } catch (error) {

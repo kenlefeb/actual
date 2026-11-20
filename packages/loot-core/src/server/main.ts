@@ -30,6 +30,7 @@ import { app as formulasApp } from './formulas/app';
 import { app } from './main-app';
 import { mutator, runHandler } from './mutators';
 import { app as nativeApp } from './native/app';
+import { gateNativeHandlers } from './native/open-gate';
 import { app as notesApp } from './notes/app';
 import { app as paychecksApp } from './paychecks/app';
 import { app as payeesApp } from './payees/app';
@@ -141,7 +142,8 @@ app.combine(
   budgetApp,
   dashboardApp,
   notesApp,
-  nativeApp,
+  // sc-5463: native reads wait for the budget to open
+  gateNativeHandlers(nativeApp),
   preferencesApp,
   toolsApp,
   filtersApp,

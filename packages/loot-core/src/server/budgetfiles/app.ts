@@ -18,6 +18,7 @@ import { handleBudgetImport } from '#server/importers';
 import type { ImportableBudgetType } from '#server/importers';
 import { app as mainApp } from '#server/main-app';
 import { mutator } from '#server/mutators';
+import { markBudgetClosed, markBudgetOpen } from '#server/native/open-gate';
 import * as prefs from '#server/prefs';
 import {
   loadScheduleDateLookup,
@@ -304,6 +305,7 @@ async function createDemoBudget() {
 
 async function closeBudget() {
   captureBreadcrumb({ message: 'Closing budget' });
+  markBudgetClosed();
   resetFormulaPreferencesCache();
 
   // The spreadsheet may be running, wait for it to complete
@@ -731,6 +733,7 @@ async function _loadBudget(id: Budget['id']): Promise<{
     setSyncingMode('disabled');
   }
 
+  markBudgetOpen();
   app.events.emit('load-budget', { id });
 
   return {};

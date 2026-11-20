@@ -6,19 +6,19 @@
 
 ## 1. Schedule tools (sc-4207)
 
-- [ ] 1.1 `list_schedules` fields (payee id, account id, amount operator and amount, date definition, `posts_transaction`, managing paycheck id). Failing tests first: a created schedule shows every field; a paycheck's schedule names its paycheck.
-- [ ] 1.2 `packages/api/methods.ts`: `skipScheduleNextDate` and `postScheduleTransaction` (`send` wrappers). Failing tests first: skip moves the next date; post adds a linked transaction.
-- [ ] 1.3 `write_create_schedule` in `tools/write/schedules.ts` (`schedules:write`). Failing tests first:
+- [x] 1.1 `list_schedules` fields (payee id, account id, amount operator and amount, date definition, `posts_transaction`, managing paycheck id). Failing tests first: a created schedule shows every field; a paycheck's schedule names its paycheck.
+- [x] 1.2 `packages/api/methods.ts`: `skipScheduleNextDate` and `postScheduleTransaction` (`send` wrappers). Failing tests first: skip moves the next date; post adds a linked transaction.
+- [x] 1.3 `write_create_schedule` in `tools/write/schedules.ts` (`schedules:write`). Failing tests first:
   - the monthly loan payment scenario, and the stored rule equals the one `schedule/create` makes from the app form's input;
   - each date form (one-time, recurrence with each end mode, relative with a business calendar);
   - refusals: unknown or closed ids, bad amount, `isbetween` with min above max, two date forms, bad recurrence, duplicate name, with no audit line;
   - audit attempt and outcome lines with the created id.
-- [ ] 1.4 `write_update_schedule`. Failing tests first: one field changes only that field; the next date follows the engine; no field, a paycheck-managed schedule and a duplicate name are refused; before and after are logged.
-- [ ] 1.5 `dry_run` on create and update. Failing tests first: next dates are returned; nothing is written, including the audit log.
-- [ ] 1.6 `write_skip_schedule_date` (`schedules:write`) and `write_post_schedule_transaction` (`schedules:write`, `transactions:write`), each declared in `NOT_UNDOABLE` with its reason. Failing tests first: results match the app's actions; completed, accountless and paycheck-managed schedules are refused; `write_undo` gives the reason.
-- [ ] 1.7 Undo of create and update in `undo.ts` and the `UNDOABLE` table. Failing tests first: create removed; update restored; refused after another edit, with linked transactions or dependents; refused the second time.
-- [ ] 1.8 Scope tests: each tool is refused without `schedules:write` and names it, and post without `transactions:write`; its description names its scopes and its undo sentence.
-- [ ] 1.9 `coverage.json` lines for the handlers these tools call, `README.md` tool list and the production grant note (`schedules:write`, and `transactions:write` for post); `yarn check:mcp-coverage` passes.
+- [x] 1.4 `write_update_schedule`. Failing tests first: one field changes only that field; the next date follows the engine; no field, a paycheck-managed schedule and a duplicate name are refused; before and after are logged.
+- [x] 1.5 `dry_run` on create and update. Failing tests first: next dates are returned; nothing is written, including the audit log.
+- [x] 1.6 `write_skip_schedule_date` (`schedules:write`) and `write_post_schedule_transaction` (`schedules:write`, `transactions:write`), each declared in `NOT_UNDOABLE` with its reason. Failing tests first: results match the app's actions; completed, accountless and paycheck-managed schedules are refused; `write_undo` gives the reason.
+- [x] 1.7 Undo of create and update in `undo.ts` and the `UNDOABLE` table. Failing tests first: create removed; update restored; refused after another edit, with linked transactions or dependents; refused the second time.
+- [x] 1.8 Scope tests: each tool is refused without `schedules:write` and names it, and post without `transactions:write`; its description names its scopes and its undo sentence.
+- [x] 1.9 `coverage.json` lines for the handlers these tools call, `README.md` tool list and the production grant note (`schedules:write`, and `transactions:write` for post); `yarn check:mcp-coverage` passes.
 
 ## 2. Schedule delete and paychecks (sc-4650)
 

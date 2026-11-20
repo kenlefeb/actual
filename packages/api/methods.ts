@@ -532,6 +532,19 @@ export function deleteSchedule(scheduleId: APIScheduleEntity['id']) {
   return send('api/schedule-delete', scheduleId);
 }
 
+/** Skips a schedule's next date, as the schedules page's "Skip next date" does. */
+export function skipScheduleNextDate(id: APIScheduleEntity['id']) {
+  return send('schedule/skip-next-date', { id });
+}
+
+/** Posts a schedule's transaction, as "Post transaction" does (dated today with `today`). */
+export function postScheduleTransaction(
+  id: APIScheduleEntity['id'],
+  today?: boolean,
+) {
+  return send('schedule/post-transaction', { id, today });
+}
+
 export function getSchedules() {
   return send('api/schedules-get');
 }

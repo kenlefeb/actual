@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'fs';
 import * as api from '@actual-app/api';
 
 import { startHarness } from '#client-harness';
+import { internal } from '#connection';
 import { SCOPES } from '#grants';
 
 import { UNDOABLE } from './declarations';
@@ -105,6 +106,28 @@ async function firstRow() {
   return data[0].id;
 }
 
+/** A schedule with the longest name and the widest amounts and dates. */
+async function worstSchedule() {
+  return {
+    name: NAME,
+    payee_id: await api.createPayee({ name: NAME }),
+    account_id: h!.fixture.accountId,
+    posts_transaction: true,
+    amount_op: 'isbetween',
+    amount_min: -1e12,
+    amount_max: 1e12,
+    recurrence: {
+      frequency: 'monthly',
+      interval: 99999,
+      start: '2026-01-05',
+      end_mode: 'on_date',
+      end_date: '2100-12-31',
+      skip_weekend: true,
+      weekend_solve_mode: 'before',
+    },
+  };
+}
+
 /** Each undoable tool, with a write of worst-case content. */
 const WRITES: Record<string, () => Promise<{ write_id: string }>> = {
   write_update_transactions: async () =>
@@ -187,6 +210,25 @@ const WRITES: Record<string, () => Promise<{ write_id: string }>> = {
       group_id: await api.createCategoryGroup({ name: 'G' }),
       before_group_id: (await bills()).id,
     }),
+  write_create_schedule: async () =>
+    call('write_create_schedule', await worstSchedule()),
+  write_update_schedule: async () => {
+    // Set up outside the audited tools, so only the update is gated
+    const schedule_id = (await internal()!.send(
+      'schedule/create' as never,
+      {
+        schedule: { name: 'Small', posts_transaction: false },
+        conditions: [
+          { op: 'isapprox', field: 'date', value: '2026-02-01' },
+          { op: 'is', field: 'amount', value: -100 },
+        ],
+      } as never,
+    )) as unknown as string;
+    return call('write_update_schedule', {
+      ...(await worstSchedule()),
+      schedule_id,
+    });
+  },
 };
 
 describe('The undo-line estimate never undercounts', () => {

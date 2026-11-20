@@ -511,14 +511,14 @@ struct PaycheckEditorSheet: View {
 
     private func deductionBinding<Value>(_ row: PaycheckDefinition.Deduction, _ path: WritableKeyPath<PaycheckDefinition.Deduction, Value>) -> Binding<Value> {
         let (id, fallback) = (row.id, row[keyPath: path])
-        Binding(
+        return Binding(
             get: { model.draft.definition.deductions.read(id, path, fallback: fallback) },
             set: { value in model.update { $0.definition.deductions.write(id, path, value) } })
     }
 
     private func depositBinding<Value>(_ row: PaycheckDefinition.Deposit, _ path: WritableKeyPath<PaycheckDefinition.Deposit, Value>) -> Binding<Value> {
         let (id, fallback) = (row.id, row[keyPath: path])
-        Binding(
+        return Binding(
             get: { model.draft.definition.deposits.read(id, path, fallback: fallback) },
             set: { value in model.update { $0.definition.deposits.write(id, path, value) } })
     }

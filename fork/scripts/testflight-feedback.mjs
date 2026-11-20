@@ -4,10 +4,14 @@
 //   ASC_KEY_ID=... ASC_ISSUER_ID=... ASC_KEY_P8=... \
 //     node fork/scripts/testflight-feedback.mjs [--since YYYY-MM-DD]
 //
+//   ... --crash-log <feedbackId> [--out <file>]   saves that crash's log text
+// to a file (default ./crash-<id>.log) and prints the build version and number.
+//
 // Without --since it uses the commit date of the newest change under
 // fork/release-notes. Prints one block per submission; never prints the key.
 import { execFileSync } from 'node:child_process';
 import { createSign } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { normalizePem } from './normalize-pem.mjs';
@@ -91,6 +95,26 @@ async function fetchAll(url, kind, token) {
   return out;
 }
 
+// Crash log text and build "version (number)" for one crash submission.
+export function parseCrashLog(logJson, subJson) {
+  const included = subJson.included ?? [];
+  const b = included.find(r => r.type === 'builds')?.attributes ?? {};
+  const pre = included.find(r => r.type === 'preReleaseVersions')?.attributes;
+  return {
+    text: logJson.data?.attributes?.logText ?? '',
+    build: `${pre?.version ?? b.version ?? '?'} (${b.version ?? '?'})`,
+  };
+}
+
+async function crashLog(id, out, token) {
+  const base = `${API}/betaFeedbackCrashSubmissions/${id}`;
+  const sub = await get(`${base}?include=build`, token);
+  const log = parseCrashLog(await get(`${base}/crashLog`, token), sub);
+  if (!log.text) throw new Error(`No log text returned for ${id}.`);
+  writeFileSync(out, log.text);
+  console.log(`build: ${log.build}\nlog (${log.text.length} chars): ${out}`);
+}
+
 const lastReleaseDate = () =>
   execFileSync(
     'git',
@@ -100,21 +124,36 @@ const lastReleaseDate = () =>
     },
   ).trim();
 
+function tokenFrom(env) {
+  const { ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 } = env;
+  if (!ASC_KEY_ID || !ASC_ISSUER_ID || !ASC_KEY_P8) {
+    throw new Error('Set ASC_KEY_ID, ASC_ISSUER_ID and ASC_KEY_P8.');
+  }
+  return makeToken({
+    keyId: ASC_KEY_ID,
+    issuerId: ASC_ISSUER_ID,
+    pem: normalizePem(ASC_KEY_P8),
+  });
+}
+
 async function main(argv, env) {
+  const c = argv.indexOf('--crash-log');
+  if (c >= 0) {
+    const id = argv[c + 1];
+    if (!id) throw new Error('Pass --crash-log <feedbackId>.');
+    const o = argv.indexOf('--out');
+    return crashLog(
+      id,
+      o >= 0 ? argv[o + 1] : `crash-${id}.log`,
+      tokenFrom(env),
+    );
+  }
   const i = argv.indexOf('--since');
   const since = i >= 0 ? argv[i + 1] : lastReleaseDate();
   if (!since || Number.isNaN(Date.parse(since))) {
     throw new Error('Pass --since YYYY-MM-DD (a valid date).');
   }
-  const { ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 } = env;
-  if (!ASC_KEY_ID || !ASC_ISSUER_ID || !ASC_KEY_P8) {
-    throw new Error('Set ASC_KEY_ID, ASC_ISSUER_ID and ASC_KEY_P8.');
-  }
-  const token = makeToken({
-    keyId: ASC_KEY_ID,
-    issuerId: ASC_ISSUER_ID,
-    pem: normalizePem(ASC_KEY_P8),
-  });
+  const token = tokenFrom(env);
   const apps = await get(`${API}/apps?filter[bundleId]=${BUNDLE_ID}`, token);
   const appId = apps.data?.[0]?.id;
   if (!appId) throw new Error(`No app with bundle id ${BUNDLE_ID}.`);

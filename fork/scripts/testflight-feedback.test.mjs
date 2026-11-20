@@ -5,6 +5,7 @@ import { test } from 'node:test';
 
 import {
   makeToken,
+  parseCrashLog,
   parseSubmissions,
   summarise,
 } from './testflight-feedback.mjs';
@@ -78,4 +79,19 @@ void test('signs an ES256 JWT that verifies and holds no key', () => {
         Buffer.from(s, 'base64url'),
       ),
   );
+});
+
+void test('parses crash log text and build version', () => {
+  const sub = {
+    included: [
+      { type: 'builds', attributes: { version: '42' } },
+      {
+        type: 'preReleaseVersions',
+        attributes: { version: '26.10.1-alpha.36' },
+      },
+    ],
+  };
+  const r = parseCrashLog({ data: { attributes: { logText: 'LOG' } } }, sub);
+  assert.deepEqual(r, { text: 'LOG', build: '26.10.1-alpha.36 (42)' });
+  assert.equal(parseCrashLog({}, {}).text, '');
 });

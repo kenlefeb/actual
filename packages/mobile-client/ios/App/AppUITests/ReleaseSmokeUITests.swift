@@ -94,6 +94,13 @@ final class ReleaseSmokeUITests: XCTestCase {
         if wait > 0 { Thread.sleep(forTimeInterval: wait) }
         let before = food.value as? String ?? ""
         let field = app.textFields["Budgeted Food"]
+        // At the largest text size the row starts under the tab bar: bring it up first
+        let bar = app.tabBars.firstMatch
+        for _ in 0..<6 where food.frame.maxY > bar.frame.minY - 8 {
+            let list = app.collectionViews.firstMatch
+            list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7))
+                .press(forDuration: 0.05, thenDragTo: list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4)))
+        }
         // The timer starts with the worker, and a worker that restarted (a reload, a new
         // WebContent process) arms later than launch + ARM_S: so edit again, a new amount
         // each time, until the notice shows or the latest arming is well past. Each edit is

@@ -100,6 +100,13 @@ final class UnguardedPageUITests: XCTestCase {
 
         // A change: never confirmed, and the line says so, even in Release where the line is otherwise off
         let field = app.textFields["Budgeted Food"]
+        // At the largest text size the row starts under the tab bar: bring it up first
+        let bar = app.tabBars.firstMatch
+        for _ in 0..<6 where food.frame.maxY > bar.frame.minY - 8 {
+            let list = app.collectionViews.firstMatch
+            list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7))
+                .press(forDuration: 0.05, thenDragTo: list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4)))
+        }
         for dy in [0.75, 0.45, 0.3, 0.2] where !field.exists {
             food.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: dy)).tap()
             _ = field.waitForExistence(timeout: 5)

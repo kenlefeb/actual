@@ -2,11 +2,13 @@ import Capacitor
 import UIKit
 import WebKit
 
-// sc-5219 (design D7a, "The storage guard is turned on per shell"): whether the
-// iPhone has opted in to the storage guard. Off until the guard-on PR, which
-// sets it with the bridge's guard call; until then no storage notice runs.
+// sc-5219 (design D7a, "The storage guard is turned on per shell"): the iPhone
+// has opted in to the storage guard (task 3.10). It reaches the page bridge
+// through NativeShellScript, and the write API and the storage notices follow
+// it. The Mac stays stock until sc-5344. `yarn check:native-swift` keeps this
+// switch and the bridge's guard call together.
 enum StorageGuardRollout {
-    static let isOn = false
+    static let isOn = true
 }
 
 #if DEBUG
@@ -108,6 +110,8 @@ class AppBridgeViewController: CAPBridgeViewController {
                 self?.storageNotices?.closeFailed()
             }
         }
+        nativeBridge.onPageUnguarded = { [weak self] in self?.storageNotices?.pageUnguarded(epoch: $0) }
+        nativeBridge.onPageGuarded = { [weak self] in self?.storageNotices?.pageGuarded() }
         // Follows "may not have been saved" from the first page load on
         _ = storageNotices
         bridge?.registerPluginInstance(nativeChrome)
@@ -181,6 +185,9 @@ class AppBridgeViewController: CAPBridgeViewController {
         if let webView, let pageProcessDelegate, let serverURL = bridge?.config.serverURL {
             UITestPageRecovery.startIfRequested(webView: webView, delegate: pageProcessDelegate, serverURL: serverURL)
             UITestKillWrites.startIfRequested(webView: webView, serverURL: serverURL)
+            UITestGuardEvidence.startIfRequested(
+                webView: webView, serverURL: serverURL, client: nativeBridge.client, storage: nativeBridge.writeStorage,
+                endPageProcess: { [weak pageProcessDelegate] in pageProcessDelegate?.webViewWebContentProcessDidTerminate(webView) })
         }
         if let webView, let serverURL = bridge?.config.serverURL {
             UITestPageDialogs.startIfRequested(webView: webView, serverURL: serverURL)

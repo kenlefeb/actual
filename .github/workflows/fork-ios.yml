@@ -110,6 +110,12 @@ jobs:
           grep -c "PRODUCT_BUNDLE_IDENTIFIER = $BUNDLE_ID;" \
             packages/mobile-client/ios/App/App.xcodeproj/project.pbxproj
 
+      # sc-5219 (native-durable-writes D10): the page the archive will carry
+      # holds no storage test hook, whatever this job's environment was. The
+      # archive check below reads only compiled code, never the page.
+      - name: Check the staged page holds no test hooks
+        run: node fork/scripts/check-test-hooks.mjs packages/mobile-client/ios/App/App/public
+
       - name: Archive
         working-directory: packages/mobile-client
         env:

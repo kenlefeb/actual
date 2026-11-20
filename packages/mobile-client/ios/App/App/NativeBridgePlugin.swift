@@ -20,6 +20,10 @@ public class NativeBridgePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
     var onPaychecksEvent: ((String, [String]) -> Void)?
     // sc-5219: storage-failed and storage-close-failed, for the storage notices
     var onStorageEvent: ((Any) -> Void)?
+    // sc-5219: a page load without the storage guard this shell opted in to
+    var onPageUnguarded: ((String) -> Void)?
+    // ...and one that has it, which clears that
+    var onPageGuarded: (() -> Void)?
     var onChange: (() -> Void)?
     // sc-3611: the budget's sync outcome for the Accounts subtitle, kept while
     // the screen comes and goes; main queue
@@ -38,6 +42,8 @@ public class NativeBridgePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
     // Runs before the page loads (CAPBridgeViewController.loadView), so the
     // page sees the message handler when it installs its bridge
     override public func load() {
+        // This shell's opt-in to the storage guard reaches the page with the
+        // native screens' script (NativeChromePlugin), the one user script allowed
         bridge?.webView?.configuration.userContentController.add(self, name: "actualNativeBridge")
     }
 
@@ -48,7 +54,17 @@ public class NativeBridgePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
               let event = NativeBridgeEvent.name(of: message.body) else { return }
         // In order, on the main thread, so a page's "ready" comes before anything it answers
         MainActor.assumeIsolated {
-            if let epoch = NativeBridgeEvent.readyEpoch(of: message.body) { writeStorage.pageLoaded(epoch: epoch) }
+            if let epoch = NativeBridgeEvent.readyEpoch(of: message.body) {
+                // sc-5219, Security's mismatch check: logged in every build, flagged on the status
+                let reported = NativeBridgeEvent.readyGuard(of: message.body)
+                let mismatch = StorageGuardMismatch.message(shellOptedIn: StorageGuardRollout.isOn, pageReported: reported)
+                NSLog("actual storage guard: shell opted in = %@, page reports %@%@", "\(StorageGuardRollout.isOn)",
+                      "\(reported.map(String.init) ?? "nothing")", mismatch.map { "; \($0)" } ?? "")
+                // Security's ruling: writes of a page without the guard are never confirmed, and a notice offers Reload
+                let unconfirmed = StorageGuardMismatch.writesUnconfirmed(shellOptedIn: StorageGuardRollout.isOn, pageReported: reported)
+                writeStorage.pageLoaded(epoch: epoch, guardMismatch: mismatch != nil, writesUnconfirmed: unconfirmed)
+                if unconfirmed { onPageUnguarded?(epoch) } else { onPageGuarded?() }
+            }
             if let stored = NativeBridgeEvent.stored(of: message.body) { writeStorage.storedEvent(seq: stored.seq, epoch: stored.epoch) }
             if event == "storage-failed" { writeStorage.storageFailed() }
             if event == "storage-failed" || event == "storage-close-failed" { onStorageEvent?(message.body) }

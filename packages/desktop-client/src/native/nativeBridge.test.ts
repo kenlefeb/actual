@@ -260,18 +260,99 @@ describe('installNativeBridge', () => {
     sent.mockRestore();
   });
 
-  // Task 2.5: the switch-on lands with the failure notices, so no build
-  // carries the guard without them
-  it('does not turn the storage guard on yet', () => {
+  // Task 2.5 (D7a): a shell that has opted in turns the guard on as the bridge
+  // installs, before it tells native code it is ready, so before any budget opens
+  it('turns the storage guard on as it installs when the shell opts in', () => {
+    const order: string[] = [];
+    const sent = vi.spyOn(connection, 'send').mockImplementation((async (
+      name: string,
+    ) => {
+      order.push(name);
+    }) as never);
+    const postMessage = vi.fn((message: { event: string }) => {
+      order.push(message.event);
+    });
+    installNativeBridge({
+      webkit: { messageHandlers: { actualNativeBridge: { postMessage } } },
+      __actualNativeShell: { storageGuard: true },
+    });
+    expect(sent).toHaveBeenCalledWith('native/enable-storage-guard');
+    expect(order).toEqual(['native/enable-storage-guard', 'ready']);
+    sent.mockRestore();
+  });
+
+  // A shell that hasn't opted in (the Mac until sc-5344) stays stock
+  it('leaves the storage guard off when the shell has not opted in', () => {
     const sent = vi
       .spyOn(connection, 'send')
       .mockResolvedValue(undefined as never);
-    installNativeBridge({
-      webkit: {
-        messageHandlers: { actualNativeBridge: { postMessage: vi.fn() } },
-      },
-    });
+    for (const shell of [
+      undefined,
+      {},
+      { storageGuard: false },
+      { storageGuard: 'yes' },
+    ]) {
+      installNativeBridge({
+        webkit: {
+          messageHandlers: { actualNativeBridge: { postMessage: vi.fn() } },
+        },
+        __actualNativeShell: shell as { storageGuard?: boolean } | undefined,
+      });
+    }
     expect(sent).not.toHaveBeenCalled();
+    sent.mockRestore();
+  });
+
+  // Security's mismatch check (sc-5219): "ready" says whether this page turned
+  // the guard on, so native code can compare it with its own opt-in
+  it('says in ready whether it turned the storage guard on', () => {
+    const sent = vi
+      .spyOn(connection, 'send')
+      .mockResolvedValue(undefined as never);
+    for (const [shell, storageGuard] of [
+      [{ storageGuard: true }, true],
+      [{ storageGuard: 'yes' }, false],
+      [undefined, false],
+    ] as const) {
+      const postMessage = vi.fn();
+      installNativeBridge({
+        webkit: { messageHandlers: { actualNativeBridge: { postMessage } } },
+        __actualNativeShell: shell as { storageGuard?: boolean } | undefined,
+      });
+      expect(postMessage).toHaveBeenCalledWith({
+        event: 'ready',
+        payload: { epoch: expect.any(String), storageGuard },
+      });
+    }
+    sent.mockRestore();
+  });
+
+  // Test-only (the Designer's ruling): a test page that loads without the guard
+  // under a shell that opted in, for a Release-configured check of the mismatch.
+  // Both build constants are needed; the page also marks itself for check-test-hooks.
+  it('loads without the guard only in a test build that asks for it', () => {
+    const sent = vi
+      .spyOn(connection, 'send')
+      .mockResolvedValue(undefined as never);
+    const install = () => {
+      const postMessage = vi.fn();
+      installNativeBridge({
+        webkit: { messageHandlers: { actualNativeBridge: { postMessage } } },
+        __actualNativeShell: { storageGuard: true },
+      });
+      return postMessage.mock.calls.at(-1)?.[0]?.payload?.storageGuard;
+    };
+    vi.stubGlobal('__FORK_TEST_PAGE_UNGUARDED__', true);
+    expect(install()).toBe(true);
+    vi.stubGlobal('__FORK_TEST_HOOKS__', true);
+    sent.mockClear();
+    expect(install()).toBe(false);
+    expect(sent).not.toHaveBeenCalledWith('native/enable-storage-guard');
+    expect(
+      (globalThis as { __forkTestPageUnguarded?: boolean })
+        .__forkTestPageUnguarded,
+    ).toBe(true);
+    vi.unstubAllGlobals();
     sent.mockRestore();
   });
 
@@ -294,7 +375,7 @@ describe('installNativeBridge', () => {
     installNativeBridge(win);
     expect(postMessage).toHaveBeenCalledWith({
       event: 'ready',
-      payload: { epoch: expect.any(String) },
+      payload: { epoch: expect.any(String), storageGuard: false },
     });
   });
 });

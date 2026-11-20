@@ -346,5 +346,8 @@
   },
   "native/enable-storage-guard": {
     "skip": "One-way switch the native bridge sets as it installs (sc-5219, design D7a); the API's writes are durable when they return"
+  },
+  "native/test-fail-storage": {
+    "skip": "Test-only storage failure, registered only in FORK_TEST_HOOKS builds for the iPhone simulator evidence (sc-5219, design D10); never in a production build"
   }
 }

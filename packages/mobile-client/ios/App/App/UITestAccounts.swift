@@ -23,7 +23,7 @@ enum UITestAccounts {
     private static var lineDelayed = false
 
     // Also on the real app shell, to see the line over real screens
-    @MainActor static func holdStorageLine(_ status: WriteStorageStatus) {
+    @MainActor static func holdStorageLine(_ status: WriteStorageStatus, waitForPage: Bool = true) {
         guard let state = UserDefaults.standard.string(forKey: "UITestStorageLine") else { return }
         // `-UITestStorageLineAfter N`: the line only appears N seconds later,
         // for a test that needs it to come after the notice strip (story 5362)
@@ -31,17 +31,21 @@ enum UITestAccounts {
         if after > 0, !lineDelayed {
             // A launch argument can't be removed, so remember the delay was taken
             lineDelayed = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + after) { holdStorageLine(status) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + after) { holdStorageLine(status, waitForPage: waitForPage) }
             return
         }
         if state == "saving" {
             status.writeBegan()
             return
         }
-        status.record(.notStored)
-        // The page's load clears it, as a restart would: put it back
+        // The app's own status is held only once its page has announced itself: an
+        // unstored write held before that is retired by the page's ready as a restart's
+        // would be, and with the storage guard on that raises the restart notice, which
+        // these tests don't mean. A status of its own (showStorageLine) has no page.
+        if !waitForPage { status.record(.notStored) }
         Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             MainActor.assumeIsolated {
+                guard !waitForPage || status.hasPage else { return }
                 status.acknowledgeMayNotBeSaved()
                 status.record(.notStored)
             }
@@ -51,7 +55,7 @@ enum UITestAccounts {
     @MainActor static func showStorageLine(over root: UIViewController, in scene: UIWindowScene) {
         guard UserDefaults.standard.string(forKey: "UITestStorageLine") != nil else { return }
         let status = WriteStorageStatus()
-        holdStorageLine(status)
+        holdStorageLine(status, waitForPage: false)
         storageLine = WriteStorageLine(
             status: status, scene: scene, barHeight: { 0 },
             reserve: { [weak root] height, keyboard in

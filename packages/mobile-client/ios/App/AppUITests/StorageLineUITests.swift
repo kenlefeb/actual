@@ -230,14 +230,20 @@ final class StorageLineUITests: XCTestCase {
         let rows = app.buttons.matching(NSPredicate(
             format: "label CONTAINS ', ' AND NOT (label CONTAINS 'Bank of America') AND NOT (label CONTAINS[c] 'scheduled') AND NOT (label CONTAINS 'Split (') AND NOT (label CONTAINS 'Transfer · ') AND NOT (label CONTAINS 'Reconciled')"))
         // At the largest text size the upcoming rows take several screens, so
-        // keep scrolling until a posted row sits wholly above the line
-        for _ in 0..<12 {
-            origin.withOffset(CGVector(dx: 200, dy: 500)).press(forDuration: 0.05, thenDragTo: origin.withOffset(CGVector(dx: 200, dy: 250)))
-            sleep(1)
+        // keep scrolling until a posted row sits wholly above the line. A row is
+        // up to ~290 pt tall and must start in the ~150 pt band between the
+        // search field and the line, so once posted rows are in the tree the
+        // steps are small enough (130 pt, slow and held so they don't fling)
+        // that no band position is skipped
+        // (a fixed 250 pt step could jump over it for a whole run: CI, 2026-11-20).
+        for _ in 0..<40 {
             let top = pill.minY
             let candidates = (0..<min(rows.count, 40)).map { rows.element(boundBy: $0) }
                 .filter { $0.frame.maxY <= top && $0.frame.minY > 150 }
             if let lowest = candidates.max(by: { $0.frame.maxY < $1.frame.maxY }) { return lowest }
+            let step: CGFloat = rows.count > 0 ? 130 : 250
+            origin.withOffset(CGVector(dx: 200, dy: 500)).press(forDuration: 0.05, thenDragTo: origin.withOffset(CGVector(dx: 200, dy: 500 - step)), withVelocity: .slow, thenHoldForDuration: 0.3)
+            sleep(1)
         }
         keepScreen("no posted row above the line")
         return rows.firstMatch

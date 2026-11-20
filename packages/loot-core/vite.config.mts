@@ -81,6 +81,19 @@ export default defineConfig(({ mode }) => {
           ? Number(process.env.FORK_TEST_COMMIT_DELAY_MS ?? 0)
           : 0,
       ),
+      // The guard flip's Release smoke run (sc-5219): this many ms after the
+      // worker starts, the next IndexedDB write fails (a full device when
+      // FORK_TEST_FAIL_STORAGE_QUOTA=true), with no code in the app binary.
+      // 0 unless a test build asks
+      __FORK_TEST_FAIL_STORAGE_AFTER_MS__: JSON.stringify(
+        process.env.FORK_TEST_HOOKS === 'true'
+          ? Number(process.env.FORK_TEST_FAIL_STORAGE_AFTER_MS ?? 0)
+          : 0,
+      ),
+      __FORK_TEST_FAIL_STORAGE_QUOTA__: JSON.stringify(
+        process.env.FORK_TEST_HOOKS === 'true' &&
+          process.env.FORK_TEST_FAIL_STORAGE_QUOTA === 'true',
+      ),
     },
     plugins: [
       peggyLoader(),

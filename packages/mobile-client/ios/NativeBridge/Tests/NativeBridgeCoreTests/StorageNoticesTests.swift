@@ -170,6 +170,22 @@ final class StorageNoticesTests: XCTestCase {
         XCTAssertNil(slot.current)
     }
 
+    // "The person reloads", with the write that failed still unconfirmed, as on the
+    // simulator with the guard on (PR #505): the failure notice already said its
+    // changes weren't saved, so the new page raises no restart notice for it
+    func testReloadAfterAFailedWriteShowsNoRestartNotice() {
+        firstLoad()
+        storage.pageLoaded(epoch: "failed-page")
+        storage.record(PersistedAnswer(stored: false, seq: PersistedSeq(epoch: "failed-page", n: 1)))
+        notices.failed(lastStoredFlushAt: nil, quota: false)
+        tap()
+        XCTAssertEqual(reloads, 1)
+        storage.pageLoaded(epoch: "new-page")
+        notices.pageLoaded()
+        XCTAssertNil(slot.current, "no restart notice after the person's Reload")
+        XCTAssertFalse(storage.mayNotBeSaved)
+    }
+
     // "The restart notice keeps the earliest cut-off"
     func testALaterFailureUsesItsOwnCutOffAndTheRestartNoticeComesBackWithTheEarliest() {
         firstLoad()
@@ -394,5 +410,61 @@ final class StorageNoticesTests: XCTestCase {
         XCTAssertNotNil(none)
         XCTAssertNil(none?.lastStoredFlushAt)
         XCTAssertNil(NativeBridgeEvent.storageFailure(of: ["event": "sync-event", "payload": [:]]))
+    }
+
+    // Security's ruling: a page without the guard under a shell that opted in.
+    // "The unguarded page notice offers Reload once per page load"
+    func testAnUnguardedPageShowsItsNoticeWithReloadOncePerPageLoad() {
+        firstLoad()
+        notices.pageUnguarded(epoch: "e")
+        XCTAssertEqual(
+            slot.current?.text,
+            "This device can't confirm that changes are saved. Reload the app. Changes made before you reload may not have been saved.")
+        XCTAssertEqual(slot.current?.button, .reload)
+        XCTAssertEqual(slot.current?.lifetime, .persistent)
+        // The same page again: no second notice, no reload
+        notices.pageUnguarded(epoch: "e")
+        XCTAssertEqual(reloads, 0)
+        tap()
+        XCTAssertEqual(reloads, 1)
+        XCTAssertNil(slot.current, "Reload closes it")
+        // "The mismatch survives the reload": once more, now with OK and the PO's words, and nothing reloads on its own
+        notices.pageLoaded()
+        notices.pageUnguarded(epoch: "f")
+        XCTAssertEqual(
+            slot.current?.text,
+            "Reload didn't fix it. Changes may not be saved on this device. Keep the app open until this is fixed or the app is updated.")
+        XCTAssertEqual(slot.current?.button, .ok)
+        XCTAssertEqual(slot.current?.lifetime, .persistent)
+        notices.pageUnguarded(epoch: "f")
+        XCTAssertEqual(reloads, 1)
+        tap()
+        XCTAssertNil(slot.current, "OK closes it")
+        // Not again this session while the mismatch lasts, on any later page load
+        notices.pageLoaded()
+        notices.pageUnguarded(epoch: "g")
+        XCTAssertNil(slot.current)
+        XCTAssertEqual(reloads, 1)
+    }
+
+    // A matching page clears it: a later mismatch is told again, from the start
+    func testAMatchingPageResetsTheUnguardedNotices() {
+        firstLoad()
+        notices.pageUnguarded(epoch: "e")
+        tap()
+        notices.pageUnguarded(epoch: "f")
+        tap()
+        notices.pageGuarded()
+        notices.pageUnguarded(epoch: "h")
+        XCTAssertEqual(slot.current?.button, .reload)
+        XCTAssertTrue(slot.current?.text.hasPrefix("This device can't confirm") ?? false)
+    }
+
+    // A matching page also takes down an unguarded notice still showing
+    func testAMatchingPageEndsAnUnguardedNoticeStillShowing() {
+        firstLoad()
+        notices.pageUnguarded(epoch: "e")
+        notices.pageGuarded()
+        XCTAssertNil(slot.current)
     }
 }

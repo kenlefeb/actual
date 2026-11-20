@@ -23,6 +23,9 @@ type BridgeWindow = {
     messageHandlers?: { actualNativeBridge?: { postMessage: Notify } };
   };
   __actualNativeBridge?: NativeBridge;
+  // Set by a native shell's script at the start of the app's own page
+  // (NativeShellScript in Swift): what that shell has opted in to
+  __actualNativeShell?: { storageGuard?: boolean };
 };
 
 declare global {
@@ -81,6 +84,28 @@ function isBarrierOff() {
     (globalThis as { __forkTestBarrierOff?: boolean }).__forkTestBarrierOff ===
       true
   );
+}
+
+declare const __FORK_TEST_PAGE_UNGUARDED__: boolean | undefined;
+
+// Test-only (sc-5219, the Designer's ruling): a test page that loads without the
+// storage guard under a shell that opted in, so the mismatch can be checked in a
+// Release-configured build. Needs both build constants; production builds set
+// them false and drop this. The global it sets is the marker check-test-hooks
+// and the iPhone Release build phase refuse.
+function isPageUnguardedForTest() {
+  if (
+    typeof __FORK_TEST_HOOKS__ !== 'undefined' &&
+    __FORK_TEST_HOOKS__ &&
+    typeof __FORK_TEST_PAGE_UNGUARDED__ !== 'undefined' &&
+    __FORK_TEST_PAGE_UNGUARDED__
+  ) {
+    (
+      globalThis as { __forkTestPageUnguarded?: boolean }
+    ).__forkTestPageUnguarded = true;
+    return true;
+  }
+  return false;
 }
 
 // Swift compares page loads to tell what a restart may have lost. This page's
@@ -521,6 +546,15 @@ export function installNativeBridge(win: BridgeWindow) {
   const handler = win.webkit?.messageHandlers?.actualNativeBridge;
   if (!handler) return;
 
+  // sc-5219 (D7a, task 2.5): a shell that has opted in turns the one-way
+  // storage guard on here, before it hears "ready" and so before any budget
+  // opens; one that hasn't (the Mac until sc-5344) stays stock
+  const storageGuard =
+    win.__actualNativeShell?.storageGuard === true && !isPageUnguardedForTest();
+  if (storageGuard) {
+    void send('native/enable-storage-guard');
+  }
+
   // send and listen are typed per handler name; the bridge is dynamic by design
   const pageLoad = uuidv4();
   win.__actualNativeBridge = createNativeBridge({
@@ -530,5 +564,9 @@ export function installNativeBridge(win: BridgeWindow) {
     notify: message => handler.postMessage(message),
   });
   // Native calls refused while another page showed can run again (sc-3859)
-  handler.postMessage({ event: 'ready', payload: { epoch: pageLoad } });
+  // ...and says whether it turned the guard on, for native's mismatch check
+  handler.postMessage({
+    event: 'ready',
+    payload: { epoch: pageLoad, storageGuard },
+  });
 }

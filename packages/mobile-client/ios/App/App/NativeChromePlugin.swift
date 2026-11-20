@@ -46,7 +46,13 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
             others.forEach(controller.addUserScript)
         }
         let origin = PageCall.expectedOrigin(serverURL: bridge?.config.serverURL)
-        let script = WKUserScript(source: NativeScreensScript.source(expectedOrigin: origin), injectionTime: .atDocumentStart, forMainFrameOnly: true)
+        // sc-5219 (D7a): and this shell's opt-in to the storage guard, for the page bridge
+        var source = NativeScreensScript.source(expectedOrigin: origin)
+            + NativeShellScript.source(storageGuard: StorageGuardRollout.isOn, expectedOrigin: origin)
+        #if DEBUG
+        source += UITestPageUnguarded.script
+        #endif
+        let script = WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true)
         screensScript = script
         controller.addUserScript(script)
     }
@@ -127,3 +133,18 @@ public class NativeChromePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
         }
     }
 }
+
+#if DEBUG
+// Test-only (sc-5219, Security's ruling): `-UITestPageUnguarded off|missing` makes
+// the page load without the storage guard while this shell stays opted in, so the
+// unguarded-page notice and unconfirmed writes can be seen. After the opt-in script.
+enum UITestPageUnguarded {
+    static var script: String {
+        switch UserDefaults.standard.string(forKey: "UITestPageUnguarded") {
+        case "off": return " window.__actualNativeShell = {\"storageGuard\": false};"
+        case "missing": return " delete window.__actualNativeShell;"
+        default: return ""
+        }
+    }
+}
+#endif

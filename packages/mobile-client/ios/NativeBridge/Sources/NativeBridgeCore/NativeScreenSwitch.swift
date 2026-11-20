@@ -65,3 +65,14 @@ public enum NativeScreensScript {
         return "if (location.origin === \(String(decoding: literal, as: UTF8.self))) { window.__actualNativeScreens = {\(screens.joined(separator: ", "))}; }"
     }
 }
+
+// sc-5219 (native-durable-writes D7a): what this shell has opted in to, set at
+// the start of every load of the app's own page, so the page bridge turns the
+// one-way storage guard on as it installs, before any budget opens. A shell
+// that doesn't add it (the Mac until sc-5344) stays stock.
+public enum NativeShellScript {
+    public static func source(storageGuard: Bool, expectedOrigin: String?) -> String {
+        guard let origin = expectedOrigin, let literal = try? JSONEncoder().encode(origin) else { return "" }
+        return "if (location.origin === \(String(decoding: literal, as: UTF8.self))) { window.__actualNativeShell = {\"storageGuard\": \(storageGuard)}; }"
+    }
+}

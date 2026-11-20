@@ -16,6 +16,7 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
     private var noticeFollower: Timer?
     // sc-5219: "Saving…" and "Still saving to this device. Keep the app open.", above the tab bar
     private var writeStorageLine: WriteStorageLine?
+    private var unconfirmedObserver: AnyCancellable?
     // The native Budget tab (sc-3751) lies over the web Budget screen while the
     // switch is on and the page shows /budget with the tab bar; otherwise the web screen below shows as before
     private var budgetOverlay: NativeBudgetViewController?
@@ -152,7 +153,9 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
     }
 
     private func attachWriteStorageLine() {
-        guard WriteStorageLineRollout.isOn, writeStorageLine == nil, let scene = view.window?.windowScene else { return }
+        let shows = WriteStorageLineSwitch.shows(
+            rolloutOn: WriteStorageLineRollout.isOn, writesUnconfirmed: bridgeController.nativeBridge.writeStorage.writesUnconfirmed)
+        guard shows, writeStorageLine == nil, let scene = view.window?.windowScene else { return }
         #if DEBUG
         UITestAccounts.holdStorageLine(bridgeController.nativeBridge.writeStorage)
         #endif
@@ -325,6 +328,12 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         attachWriteStorageLine()
+        // The Designer's ruling: a page whose writes can't be confirmed brings the line
+        // up even where it is off (Release), and keeps it up for as long as that lasts
+        unconfirmedObserver = unconfirmedObserver ?? bridgeController.nativeBridge.writeStorage.$writesUnconfirmed
+            .filter { $0 }
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.attachWriteStorageLine() }
         #if DEBUG
         showReconcileDemo()
         #endif

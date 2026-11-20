@@ -64,11 +64,16 @@
 		81468055292F86AB369B94B9 /* UITestAccounts.swift in Sources */ = {isa = PBXBuildFile; fileRef = D246F7DC88D369846186AFFB /* UITestAccounts.swift */; };
 		FB5247000000000000000102 /* UITestPageRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5247000000000000000002 /* UITestPageRecovery.swift */; };
 		FB5399000000000000000102 /* UITestPageDialogs.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5399000000000000000002 /* UITestPageDialogs.swift */; };
+		FB5219E00000000000000102 /* UITestGuardEvidence.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5219E00000000000000002 /* UITestGuardEvidence.swift */; };
 		FB5399000000000000000104 /* PageDialogPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5399000000000000000004 /* PageDialogPresenter.swift */; };
 		FB5220000000000000000102 /* PageNoticeWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5220000000000000000002 /* PageNoticeWindow.swift */; };
 		820DB8ECE5803E95972A13EA /* NativeAccountsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9248F3DFD880A2634F9E61C9 /* NativeAccountsUITests.swift */; };
 		FB5247000000000000000103 /* PageRecoveryUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5247000000000000000003 /* PageRecoveryUITests.swift */; };
 		FB5399000000000000000103 /* PageDialogsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5399000000000000000003 /* PageDialogsUITests.swift */; };
+		FB5219E00000000000000103 /* GuardEvidenceUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5219E00000000000000003 /* GuardEvidenceUITests.swift */; };
+		FB5219E00000000000000104 /* ReleaseSmokeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5219E00000000000000004 /* ReleaseSmokeUITests.swift */; };
+		FB5219E00000000000000106 /* SyncGateUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5219E00000000000000006 /* SyncGateUITests.swift */; };
+		FB5219E00000000000000105 /* UnguardedPageUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5219E00000000000000005 /* UnguardedPageUITests.swift */; };
 		FB5296000000000000000103 /* StorageLineUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5296000000000000000003 /* StorageLineUITests.swift */; };
 /* End PBXBuildFile section */
 
@@ -145,10 +150,15 @@
 		9248F3DFD880A2634F9E61C9 /* NativeAccountsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAccountsUITests.swift; sourceTree = "<group>"; };
 		FB5247000000000000000003 /* PageRecoveryUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageRecoveryUITests.swift; sourceTree = "<group>"; };
 		FB5399000000000000000003 /* PageDialogsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageDialogsUITests.swift; sourceTree = "<group>"; };
+		FB5219E00000000000000003 /* GuardEvidenceUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GuardEvidenceUITests.swift; sourceTree = "<group>"; };
+		FB5219E00000000000000004 /* ReleaseSmokeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseSmokeUITests.swift; sourceTree = "<group>"; };
+		FB5219E00000000000000006 /* SyncGateUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncGateUITests.swift; sourceTree = "<group>"; };
+		FB5219E00000000000000005 /* UnguardedPageUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnguardedPageUITests.swift; sourceTree = "<group>"; };
 		FB5296000000000000000003 /* StorageLineUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageLineUITests.swift; sourceTree = "<group>"; };
 		D246F7DC88D369846186AFFB /* UITestAccounts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestAccounts.swift; sourceTree = "<group>"; };
 		FB5247000000000000000002 /* UITestPageRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestPageRecovery.swift; sourceTree = "<group>"; };
 		FB5399000000000000000002 /* UITestPageDialogs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestPageDialogs.swift; sourceTree = "<group>"; };
+		FB5219E00000000000000002 /* UITestGuardEvidence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestGuardEvidence.swift; sourceTree = "<group>"; };
 		FB5399000000000000000004 /* PageDialogPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageDialogPresenter.swift; sourceTree = "<group>"; };
 		FB5220000000000000000002 /* PageNoticeWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageNoticeWindow.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -202,6 +212,7 @@
 				D246F7DC88D369846186AFFB /* UITestAccounts.swift */,
 				FB5247000000000000000002 /* UITestPageRecovery.swift */,
 				FB5399000000000000000002 /* UITestPageDialogs.swift */,
+				FB5219E00000000000000002 /* UITestGuardEvidence.swift */,
 				FB5399000000000000000004 /* PageDialogPresenter.swift */,
 				FB5220000000000000000002 /* PageNoticeWindow.swift */,
 				FB3584000000000000000001 /* NativeBridgePlugin.swift */,
@@ -283,6 +294,10 @@
 				9248F3DFD880A2634F9E61C9 /* NativeAccountsUITests.swift */,
 				FB5247000000000000000003 /* PageRecoveryUITests.swift */,
 				FB5399000000000000000003 /* PageDialogsUITests.swift */,
+				FB5219E00000000000000003 /* GuardEvidenceUITests.swift */,
+				FB5219E00000000000000004 /* ReleaseSmokeUITests.swift */,
+				FB5219E00000000000000006 /* SyncGateUITests.swift */,
+				FB5219E00000000000000005 /* UnguardedPageUITests.swift */,
 				FB5296000000000000000003 /* StorageLineUITests.swift */,
 			);
 			path = AppUITests;
@@ -299,6 +314,7 @@
 				504EC3001FED79650016851F /* Sources */,
 				504EC3011FED79650016851F /* Frameworks */,
 				504EC3021FED79650016851F /* Resources */,
+				FB5219F01FED79650016851F /* Check the bundled page holds no test hooks */,
 				9592DBEFFC6D2A0C8D5DEB22 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
@@ -415,6 +431,22 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-App/Pods-App-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
+		FB5219F01FED79650016851F /* Check the bundled page holds no test hooks */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Check the bundled page holds no test hooks";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Fork-only (sc-5219): Release builds only; see the script for its one escape\n/bin/sh \"${SRCROOT}/../../../../fork/scripts/check-release-page.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -425,6 +457,7 @@
 				81468055292F86AB369B94B9 /* UITestAccounts.swift in Sources */,
 				FB5247000000000000000102 /* UITestPageRecovery.swift in Sources */,
 				FB5399000000000000000102 /* UITestPageDialogs.swift in Sources */,
+				FB5219E00000000000000102 /* UITestGuardEvidence.swift in Sources */,
 				FB5399000000000000000104 /* PageDialogPresenter.swift in Sources */,
 				FB5220000000000000000102 /* PageNoticeWindow.swift in Sources */,
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
@@ -485,6 +518,10 @@
 				820DB8ECE5803E95972A13EA /* NativeAccountsUITests.swift in Sources */,
 				FB5247000000000000000103 /* PageRecoveryUITests.swift in Sources */,
 				FB5399000000000000000103 /* PageDialogsUITests.swift in Sources */,
+				FB5219E00000000000000103 /* GuardEvidenceUITests.swift in Sources */,
+				FB5219E00000000000000104 /* ReleaseSmokeUITests.swift in Sources */,
+				FB5219E00000000000000106 /* SyncGateUITests.swift in Sources */,
+				FB5219E00000000000000105 /* UnguardedPageUITests.swift in Sources */,
 				FB5296000000000000000103 /* StorageLineUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -535,6 +535,58 @@ describe('the commit-delay test hook', () => {
   });
 });
 
+// D10 (sc-5219 guard flip): a test build can make the next IndexedDB write
+// fail for real, so the failure path runs end to end on a simulator
+describe('the storage-failure test hook', () => {
+  const hooks = globalThis as {
+    __FORK_TEST_HOOKS__?: boolean;
+    __forkTestFailStorage?: 'abort' | 'quota' | null;
+  };
+
+  afterEach(() => {
+    delete hooks.__FORK_TEST_HOOKS__;
+    delete hooks.__forkTestFailStorage;
+  });
+
+  it('aborts the next write in IndexedDB once, and it fails as an abort does', async () => {
+    hooks.__FORK_TEST_HOOKS__ = true;
+    const { ops, onFailure, dbName } = fallbackFile();
+    ops.writeBlocks([{ pos: 0, data: block(1) }], BLOCK);
+    await ops.whenPersisted();
+    hooks.__forkTestFailStorage = 'abort';
+    ops.writeBlocks([{ pos: 0, data: block(2) }], BLOCK);
+    await expect(ops.whenPersisted()).rejects.toBeTruthy();
+    expect(hooks.__forkTestFailStorage).toBeNull();
+    expect(ops.storageState()).toMatchObject({ quota: false });
+    expect(ops.storageState().failed).toBeTruthy();
+    expect(onFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ quota: false }),
+      ops,
+    );
+    // The aborted transaction stored nothing
+    expect(await stored(dbName, 0)).toBe(1);
+  });
+
+  it('fails the next write as a full device does', async () => {
+    hooks.__FORK_TEST_HOOKS__ = true;
+    hooks.__forkTestFailStorage = 'quota';
+    const { ops } = fallbackFile();
+    ops.writeBlocks([{ pos: 0, data: block(1) }], BLOCK);
+    await expect(ops.whenPersisted()).rejects.toMatchObject({
+      name: 'QuotaExceededError',
+    });
+    expect(ops.storageState()).toMatchObject({ quota: true });
+  });
+
+  it('does nothing without the constant', async () => {
+    hooks.__forkTestFailStorage = 'abort';
+    const { ops, dbName } = fallbackFile();
+    ops.writeBlocks([{ pos: 0, data: block(7) }], BLOCK);
+    await ops.whenPersisted();
+    expect(await stored(dbName, 0)).toBe(7);
+  });
+});
+
 // "Of the open budget": a closed budget's file neither latches nor blocks
 describe('the storage state across files', () => {
   const file = (

@@ -10,6 +10,15 @@ export const HOOK_MARKERS = [
   '__forkTestCommitDelayMs',
   '__forkTestBarrierOff',
   '__FORK_TEST_COMMIT_DELAY_MS__',
+  // The storage-failure hook (sc-5219 guard flip) and the handler that arms it
+  '__forkTestFailStorage',
+  'native/test-fail-storage',
+  // The Release smoke run's self-arming test page
+  '__FORK_TEST_FAIL_STORAGE_AFTER_MS__',
+  '__FORK_TEST_FAIL_STORAGE_QUOTA__',
+  // A test page that loads without the storage guard (the Designer's ruling)
+  '__forkTestPageUnguarded',
+  '__FORK_TEST_PAGE_UNGUARDED__',
 ];
 
 const DEFAULT_BUILD = 'packages/desktop-client/build';

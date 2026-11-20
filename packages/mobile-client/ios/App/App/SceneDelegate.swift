@@ -23,6 +23,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             UITestAccounts.showStorageLine(over: root, in: windowScene)
             return
         }
+        if UITestPaycheckEditor.isOn {
+            window.rootViewController = UITestPaycheckEditor.makeRoot()
+            self.window = window
+            window.makeKeyAndVisible()
+            return
+        }
         #endif
         let root = NativeTabBarController()
         // sc-5219 (D8): this app uses scenes, so this is where it learns it is going away

@@ -298,14 +298,14 @@ struct PaycheckEditorSheet: View {
                         String(format: EditorWords.payDay, index + 1),
                         selection: Binding(
                             get: { pattern.value },
-                            set: { value in model.update { $0.definition.date.patterns?[index].value = value } })
+                            set: { value in model.update { if $0.definition.date.patterns?.indices.contains(index) == true { $0.definition.date.patterns?[index].value = value } } })
                     ) {
                         ForEach(Array(1...31) + [-1], id: \.self) { day in
                             Text(day == -1 ? EditorWords.lastDay : String(day)).tag(day)
                         }
                     }
                     Button {
-                        model.update { $0.definition.date.patterns?.remove(at: index) }
+                        model.update { if $0.definition.date.patterns?.indices.contains(index) == true { $0.definition.date.patterns?.remove(at: index) } }
                     } label: {
                         Image(systemName: "minus.circle")
                     }
@@ -328,15 +328,15 @@ struct PaycheckEditorSheet: View {
         ForEach(Array(model.draft.definition.deductions.enumerated()), id: \.element.id) { index, deduction in
             let number = index + 1
             VStack(alignment: .leading, spacing: 8) {
-                TextField(EditorWords.name, text: deductionBinding(index, \.name))
+                TextField(EditorWords.name, text: deductionBinding(deduction, \.name))
                     .accessibilityLabel(Text(String(format: EditorWords.deductionName, number)))
                 AmountField(
-                    label: String(format: EditorWords.deductionAmount, number), value: deductionBinding(index, \.amount), style: style)
+                    label: String(format: EditorWords.deductionAmount, number), value: deductionBinding(deduction, \.amount), style: style)
                 Picker(
                     String(format: EditorWords.deductionGoesTo, number),
                     selection: Binding(
                         get: { deduction.isTransfer },
-                        set: { isTransfer in model.update { $0.definition.deductions[index].transferAccount = isTransfer ? "" : nil } })
+                        set: { isTransfer in model.update { $0.definition.deductions.write(deduction.id, \.transferAccount, isTransfer ? "" : nil) } })
                 ) {
                     Text(EditorWords.category).tag(false)
                     Text(EditorWords.transfer).tag(true)
@@ -346,13 +346,13 @@ struct PaycheckEditorSheet: View {
                         String(format: EditorWords.deductionTransfer, number),
                         selection: Binding(
                             get: { deduction.transferAccount ?? "" },
-                            set: { value in model.update { $0.definition.deductions[index].transferAccount = value } }))
+                            set: { value in model.update { $0.definition.deductions.write(deduction.id, \.transferAccount, value) } }))
                 }
                 optionPicker(
-                    String(format: EditorWords.deductionCategory, number), selection: deductionBinding(index, \.category),
+                    String(format: EditorWords.deductionCategory, number), selection: deductionBinding(deduction, \.category),
                     none: EditorWords.noCategory, options: model.options.categories.filter { !$0.is_income }.map { ($0.id, $0.name) })
                 Button(EditorWords.remove, role: .destructive) {
-                    model.update { $0.definition.deductions.remove(at: index) }
+                    model.update { $0.definition.deductions.remove(id: deduction.id) }
                 }
                 .buttonStyle(.borderless)
                 .accessibilityLabel(Text(String(format: EditorWords.removeDeduction, number)))
@@ -372,15 +372,15 @@ struct PaycheckEditorSheet: View {
             let number = index + 1
             let answer = model.preview?.deposits.first { $0.id == deposit.id }
             VStack(alignment: .leading, spacing: 8) {
-                accountPicker(String(format: EditorWords.depositAccount, number), selection: depositBinding(index, \.account))
+                accountPicker(String(format: EditorWords.depositAccount, number), selection: depositBinding(deposit, \.account))
                 Picker(
                     String(format: EditorWords.depositKind, number),
                     selection: Binding(
                         get: { deposit.kind },
                         set: { kind in
                             model.update {
-                                $0.definition.deposits[index].kind = kind
-                                $0.definition.deposits[index].value = 0
+                                $0.definition.deposits.write(deposit.id, \.kind, kind)
+                                $0.definition.deposits.write(deposit.id, \.value, 0)
                             }
                         })
                 ) {
@@ -393,14 +393,14 @@ struct PaycheckEditorSheet: View {
                         label: String(format: EditorWords.depositFixed, number),
                         value: Binding(
                             get: { Int(deposit.value) },
-                            set: { value in model.update { $0.definition.deposits[index].value = Double(value) } }),
+                            set: { value in model.update { $0.definition.deposits.write(deposit.id, \.value, Double(value)) } }),
                         style: style)
                 } else if deposit.kind == "percent" {
                     PercentField(
                         label: String(format: EditorWords.depositPercent, number),
                         value: Binding(
                             get: { deposit.value },
-                            set: { value in model.update { $0.definition.deposits[index].value = value } }))
+                            set: { value in model.update { $0.definition.deposits.write(deposit.id, \.value, value) } }))
                 }
                 if let answer {
                     HStack {
@@ -418,7 +418,7 @@ struct PaycheckEditorSheet: View {
                     EditorWords.postAutomatically,
                     isOn: Binding(
                         get: { deposit.postAutomatically ?? false },
-                        set: { value in model.update { $0.definition.deposits[index].postAutomatically = value } }))
+                        set: { value in model.update { $0.definition.deposits.write(deposit.id, \.postAutomatically, value) } }))
                 if deposit.postAutomatically == true {
                     Text(EditorWords.postNote).font(.footnote).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
@@ -436,7 +436,7 @@ struct PaycheckEditorSheet: View {
                     }
                 }
                 Button(EditorWords.remove, role: .destructive) {
-                    model.update { $0.definition.deposits.remove(at: index) }
+                    model.update { $0.definition.deposits.remove(id: deposit.id) }
                 }
                 .buttonStyle(.borderless)
                 .accessibilityLabel(Text(String(format: EditorWords.removeDeposit, number)))
@@ -509,16 +509,18 @@ struct PaycheckEditorSheet: View {
         Binding(get: { model.draft[keyPath: path] }, set: { value in model.update { $0[keyPath: path] = value } })
     }
 
-    private func deductionBinding<Value>(_ index: Int, _ path: WritableKeyPath<PaycheckDefinition.Deduction, Value>) -> Binding<Value> {
-        Binding(
-            get: { model.draft.definition.deductions[index][keyPath: path] },
-            set: { value in model.update { $0.definition.deductions[index][keyPath: path] = value } })
+    private func deductionBinding<Value>(_ row: PaycheckDefinition.Deduction, _ path: WritableKeyPath<PaycheckDefinition.Deduction, Value>) -> Binding<Value> {
+        let (id, fallback) = (row.id, row[keyPath: path])
+        return Binding(
+            get: { model.draft.definition.deductions.read(id, path, fallback: fallback) },
+            set: { value in model.update { $0.definition.deductions.write(id, path, value) } })
     }
 
-    private func depositBinding<Value>(_ index: Int, _ path: WritableKeyPath<PaycheckDefinition.Deposit, Value>) -> Binding<Value> {
-        Binding(
-            get: { model.draft.definition.deposits[index][keyPath: path] },
-            set: { value in model.update { $0.definition.deposits[index][keyPath: path] = value } })
+    private func depositBinding<Value>(_ row: PaycheckDefinition.Deposit, _ path: WritableKeyPath<PaycheckDefinition.Deposit, Value>) -> Binding<Value> {
+        let (id, fallback) = (row.id, row[keyPath: path])
+        return Binding(
+            get: { model.draft.definition.deposits.read(id, path, fallback: fallback) },
+            set: { value in model.update { $0.definition.deposits.write(id, path, value) } })
     }
 
     // Open accounts, plus the chosen one if it has closed since

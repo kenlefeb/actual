@@ -64,6 +64,8 @@
 		81468055292F86AB369B94B9 /* UITestAccounts.swift in Sources */ = {isa = PBXBuildFile; fileRef = D246F7DC88D369846186AFFB /* UITestAccounts.swift */; };
 		FB5247000000000000000102 /* UITestPageRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5247000000000000000002 /* UITestPageRecovery.swift */; };
 		FB5399000000000000000102 /* UITestPageDialogs.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5399000000000000000002 /* UITestPageDialogs.swift */; };
+		FB5504000000000000000101 /* UITestPaycheckEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5504000000000000000001 /* UITestPaycheckEditor.swift */; };
+		FB5504000000000000000102 /* PaycheckEditorUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5504000000000000000002 /* PaycheckEditorUITests.swift */; };
 		FB5219E00000000000000102 /* UITestGuardEvidence.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5219E00000000000000002 /* UITestGuardEvidence.swift */; };
 		FB5399000000000000000104 /* PageDialogPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5399000000000000000004 /* PageDialogPresenter.swift */; };
 		FB5220000000000000000102 /* PageNoticeWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5220000000000000000002 /* PageNoticeWindow.swift */; };
@@ -158,6 +160,8 @@
 		D246F7DC88D369846186AFFB /* UITestAccounts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestAccounts.swift; sourceTree = "<group>"; };
 		FB5247000000000000000002 /* UITestPageRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestPageRecovery.swift; sourceTree = "<group>"; };
 		FB5399000000000000000002 /* UITestPageDialogs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestPageDialogs.swift; sourceTree = "<group>"; };
+		FB5504000000000000000001 /* UITestPaycheckEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestPaycheckEditor.swift; sourceTree = "<group>"; };
+		FB5504000000000000000002 /* PaycheckEditorUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaycheckEditorUITests.swift; sourceTree = "<group>"; };
 		FB5219E00000000000000002 /* UITestGuardEvidence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestGuardEvidence.swift; sourceTree = "<group>"; };
 		FB5399000000000000000004 /* PageDialogPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageDialogPresenter.swift; sourceTree = "<group>"; };
 		FB5220000000000000000002 /* PageNoticeWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageNoticeWindow.swift; sourceTree = "<group>"; };
@@ -212,6 +216,7 @@
 				D246F7DC88D369846186AFFB /* UITestAccounts.swift */,
 				FB5247000000000000000002 /* UITestPageRecovery.swift */,
 				FB5399000000000000000002 /* UITestPageDialogs.swift */,
+				FB5504000000000000000001 /* UITestPaycheckEditor.swift */,
 				FB5219E00000000000000002 /* UITestGuardEvidence.swift */,
 				FB5399000000000000000004 /* PageDialogPresenter.swift */,
 				FB5220000000000000000002 /* PageNoticeWindow.swift */,
@@ -294,6 +299,7 @@
 				9248F3DFD880A2634F9E61C9 /* NativeAccountsUITests.swift */,
 				FB5247000000000000000003 /* PageRecoveryUITests.swift */,
 				FB5399000000000000000003 /* PageDialogsUITests.swift */,
+				FB5504000000000000000002 /* PaycheckEditorUITests.swift */,
 				FB5219E00000000000000003 /* GuardEvidenceUITests.swift */,
 				FB5219E00000000000000004 /* ReleaseSmokeUITests.swift */,
 				FB5219E00000000000000006 /* SyncGateUITests.swift */,
@@ -457,6 +463,7 @@
 				81468055292F86AB369B94B9 /* UITestAccounts.swift in Sources */,
 				FB5247000000000000000102 /* UITestPageRecovery.swift in Sources */,
 				FB5399000000000000000102 /* UITestPageDialogs.swift in Sources */,
+				FB5504000000000000000101 /* UITestPaycheckEditor.swift in Sources */,
 				FB5219E00000000000000102 /* UITestGuardEvidence.swift in Sources */,
 				FB5399000000000000000104 /* PageDialogPresenter.swift in Sources */,
 				FB5220000000000000000102 /* PageNoticeWindow.swift in Sources */,
@@ -516,6 +523,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				820DB8ECE5803E95972A13EA /* NativeAccountsUITests.swift in Sources */,
+				FB5504000000000000000102 /* PaycheckEditorUITests.swift in Sources */,
 				FB5247000000000000000103 /* PageRecoveryUITests.swift in Sources */,
 				FB5399000000000000000103 /* PageDialogsUITests.swift in Sources */,
 				FB5219E00000000000000103 /* GuardEvidenceUITests.swift in Sources */,

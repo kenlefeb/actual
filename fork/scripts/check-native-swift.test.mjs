@@ -406,6 +406,30 @@ void test('Native Swift: a project with no App target names every source', () =>
   );
 });
 
+// sc-5504: the paycheck editor's UI-test host is held to the same rule
+void test('Native Swift: the paycheck editor UI-test hook outside #if DEBUG fails', () => {
+  const host = 'packages/mobile-client/ios/App/App/UITestPaycheckEditor.swift';
+  assert.deepEqual(
+    problems({ [host]: '#if DEBUG\nenum UITestPaycheckEditor {}\n#endif\n' }),
+    [],
+  );
+  assert.match(
+    problems({ [host]: 'enum UITestPaycheckEditor {}\n' })[0],
+    /UITestPaycheckEditor\.swift: .*UI-test hook.*#if DEBUG/,
+  );
+  const scene = 'packages/mobile-client/ios/App/App/SceneDelegate.swift';
+  assert.equal(
+    problems({ [scene]: 'if UITestPaycheckEditor.isOn { run() }\n' }).length,
+    1,
+  );
+  assert.deepEqual(
+    problems({
+      [scene]: '#if DEBUG\nif UITestPaycheckEditor.isOn { run() }\n#endif\n',
+    }),
+    [],
+  );
+});
+
 // sc-5177: the UI-test hook (UITestAccounts) must not reach a Release build
 void test('Native Swift: the UI-test hook outside #if DEBUG fails', () => {
   const host = 'packages/mobile-client/ios/App/App/UITestAccounts.swift';

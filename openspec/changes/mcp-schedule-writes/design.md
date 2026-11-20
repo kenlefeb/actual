@@ -23,7 +23,7 @@ Read from the code on `development` (2026-11-20).
 | `write_skip_schedule_date` | `schedules:write` | schedule_id | not undoable |
 | `write_post_schedule_transaction` | `schedules:write`, `transactions:write` | schedule_id, `today` optional | not undoable |
 | `write_delete_schedule` | `schedules:write`, `delete` | schedule_id | not undoable (Q3) |
-| `write_create_paycheck` | `schedules:write`, `structure:write` | name, definition | delete it while unused |
+| `write_create_paycheck` | `schedules:write` | name, definition | delete it while unused |
 | `write_delete_paycheck` | `schedules:write`, `delete` | paycheck_id | not undoable (Q2) |
 
 Inputs use ids, never names. A create takes:
@@ -67,13 +67,11 @@ Every write appends the attempt and outcome lines through `loggedWrite`. A creat
 
 ## D5. Scope and the production grant
 
-No new scope. The spec's scope list already says `schedules:write` covers schedules and paychecks; the deleting tools need `delete` as well (existing rule). Two tools need a second area scope:
-- `write_post_schedule_transaction` adds a transaction, so it also needs `transactions:write`;
-- `write_create_paycheck` sets the clearing account's business calendar and days early, so it also needs `structure:write`, as `write_set_account_business_days` does (`structure:write` and `schedules:write`).
+No new scope. The spec's scope list already says `schedules:write` covers schedules and paychecks; the deleting tools need `delete` as well (existing rule). One tool needs a second area scope: `write_post_schedule_transaction` adds a transaction, so it also needs `transactions:write`. `write_create_paycheck` needs `schedules:write` alone: the engine only reads an account's business calendar and days early to compute dates (`setAccountBusinessDays` writes them), and the inline clearing account it could create is not exposed (Q5).
 
 Ken's first use, adding a loan schedule, needs only `schedules:write`.
 
-The production grant is the server file named by `ACTUAL_MCP_GRANTS_FILE`. In the row whose `client` is `claude-production`, the `scopes` array must contain `"schedules:write"` (check whether it already does, since `write_skip_paycheck` needs it). For the group 1 tools that is `"schedules:write"`, and `"transactions:write"` for `write_post_schedule_transaction`. For group 2 he also adds `"structure:write"` (paycheck create) and `"delete"` (the two deletes) to that same array. Keep `confirm_destructive` true. The server re-reads the file on every call, so no restart is needed. This is a production change and needs Ken's approval.
+The production grant is the server file named by `ACTUAL_MCP_GRANTS_FILE`. In the row whose `client` is `claude-production`, the `scopes` array must contain `"schedules:write"` (check whether it already does, since `write_skip_paycheck` needs it). For the group 1 tools that is `"schedules:write"`, and `"transactions:write"` for `write_post_schedule_transaction`. Group 2 needs no scope beyond `"schedules:write"` and `"delete"` (the two deletes); `"delete"` is already in the grant since alpha.45, so nothing more is added for it. Keep `confirm_destructive` true. The server re-reads the file on every call, so no restart is needed. This is a production change and needs Ken's approval.
 
 ## D6. Limits
 

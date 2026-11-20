@@ -88,7 +88,7 @@
 - **THEN** each row has the fields a `write_update_schedule` call refers to
 
 ### Requirement: Paycheck create and delete tools
-`write_create_paycheck` (`schedules:write`, `structure:write`) SHALL create a paycheck from a name and a definition (the app's form, existing clearing account) through the engine, returning its id and schedule ids; undo deletes it. `write_delete_paycheck` (`schedules:write`, `delete`) SHALL delete one by id; it is not undoable (sc-5522), so its first call SHALL always be a dry run with a `confirm`. Deductions and deposits SHALL be bounded by the connection's row limit.
+`write_create_paycheck` (`schedules:write`) SHALL create a paycheck from a name and a definition (the app's form, existing clearing account) through the engine, returning its id and schedule ids; undo deletes it. `write_delete_paycheck` (`schedules:write`, `delete`) SHALL delete one by id; it is not undoable (sc-5522), so its first call SHALL always be a dry run with a `confirm`. Deductions and deposits SHALL be bounded by the connection's row limit.
 
 #### Scenario: Create a paycheck
 - **WHEN** a client calls `write_create_paycheck` with a valid definition
@@ -100,7 +100,7 @@
 - **THEN** the call is refused with the declared reason and nothing changed
 
 ### Requirement: Schedule scopes and the production grant
-The schedule and paycheck tools SHALL use the existing `schedules:write` scope; post also needs `transactions:write`, paycheck create `structure:write`, and the delete tools `delete`. No new scope SHALL be added. A grant SHALL hold the scope only when it lists it, and each tool's description SHALL name its scopes.
+The schedule and paycheck tools SHALL use the existing `schedules:write` scope; post also needs `transactions:write` and the delete tools `delete`. No new scope SHALL be added. A grant SHALL hold the scope only when it lists it, and each tool's description SHALL name its scopes.
 
 #### Scenario: Read-only grant
 - **GIVEN** a grant with `budget:read` only

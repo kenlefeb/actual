@@ -16,7 +16,7 @@ Ken's standing rule is that the MCP does everything he can do in the app, limite
   - `list_schedules` gains the fields an edit needs (payee, account, amount rule, date definition, posts automatically).
   - Create and update accept `dry_run: true`, which shows the stored result and the next dates and writes nothing.
   - Create and update are undoable.
-- **Group 2 (sc-4650): deletes and paychecks** (`schedules:write`; `structure:write` for a paycheck create; `delete` for deletes).
+- **Group 2 (sc-4650): deletes and paychecks** (`schedules:write`; `delete` for deletes).
   - `write_delete_schedule`, `write_create_paycheck`, `write_delete_paycheck`.
   - Both deletes are not undoable, so both always answer the first call with a dry run and a `confirm`, whatever `confirm_destructive` says (design Q2, Q3).
   - A paycheck create is undoable.
@@ -45,5 +45,5 @@ Not in this change:
 
 - **MCP code:** new `packages/mcp/src/tools/write/schedules.ts`; `paychecks.ts` (two tools); `declarations.ts` (undo table); `undo.ts` (two planners); `read/core.ts` (`list_schedules` fields); `coverage.json`, `README.md` and tests.
 - **API and loot-core:** `packages/api/methods.ts` gains `skipScheduleNextDate` and `postScheduleTransaction`; `api/undelete-rows` is not touched (the same-id restore is sc-5522).
-- **Production:** Ken's production grant must list `schedules:write`, plus `transactions:write` (post), `structure:write` (paycheck create) and `delete` (the deletes). That is a production change and needs his approval.
+- **Production:** Ken's production grant must list `schedules:write`, plus `transactions:write` (post) and `delete` (the deletes). That is a production change and needs his approval.
 - **Reviews:** Architect, Product Owner and Security Analyst (scope, delete, undo).

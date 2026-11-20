@@ -522,12 +522,22 @@ final class StoredWriteTests: XCTestCase {
         XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
         status.storedEvent(seq: 1, epoch: "e")
         XCTAssertEqual(status.message, WriteStorageStatus.notYetStoredMessage)
+        // The shell shows the line for as long as this lasts, even where it is off (Release)
+        XCTAssertTrue(status.writesUnconfirmed)
         // A page that agrees after the person's Reload confirms its own writes again
         status.acknowledgeUnstoredOfThisPage()
         status.pageLoaded(epoch: "f")
         XCTAssertTrue(status.record(PersistedAnswer(stored: true, seq: PersistedSeq(epoch: "f", n: 1))))
         XCTAssertNil(status.message)
         XCTAssertFalse(status.mayNotBeSaved)
+        XCTAssertFalse(status.writesUnconfirmed)
+    }
+
+    // The Designer's ruling: while writes are unconfirmed the line shows, even with it off in Release
+    func testUnconfirmedWritesForceTheStorageLineOn() {
+        XCTAssertTrue(WriteStorageLineSwitch.shows(rolloutOn: false, writesUnconfirmed: true))
+        XCTAssertTrue(WriteStorageLineSwitch.shows(rolloutOn: true, writesUnconfirmed: false))
+        XCTAssertFalse(WriteStorageLineSwitch.shows(rolloutOn: false, writesUnconfirmed: false))
     }
 
     func testAMismatchIsFlaggedOnTheWriteStatus() {

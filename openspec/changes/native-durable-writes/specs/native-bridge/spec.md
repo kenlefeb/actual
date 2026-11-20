@@ -612,12 +612,27 @@ The page bridge SHALL say in `ready` whether it turned the storage guard on. The
 - **THEN** the shell logs the mismatch and changes nothing else
 
 ### Requirement: A page without the guard confirms no write
-When the shell has opted in and the page's `ready` says its guard is off, or says nothing, no write of that page load SHALL count as stored: no "Saved", and the storage line stays at "not yet stored". A notice SHALL offer Reload once per page load; the shell SHALL never reload on its own.
+When the shell has opted in and the page's `ready` says its guard is off, or says nothing, no write of that page load SHALL count as stored: no "Saved", and the storage line SHALL show "not yet stored" while this lasts, even where the line is otherwise off. A notice SHALL offer Reload once per page load; the shell SHALL never reload on its own.
 
 #### Scenario: The page loads without the guard
 - **WHEN** the opted-in shell gets a `ready` with the guard off or missing, and the person makes a change
-- **THEN** the change is never shown as saved, and a notice says this device can't confirm that changes are saved, with Reload
+- **THEN** the change is never shown as saved, the storage line shows it isn't yet stored, and a notice says this device can't confirm that changes are saved, with Reload
+
+#### Scenario: The line shows in Release
+- **WHEN** this happens in a Release build, where the storage line is otherwise off
+- **THEN** the storage line shows its unconfirmed text for as long as the mismatch lasts
+
+### Requirement: A mismatch Reload didn't fix is told once with OK
+When a page loaded after the person's Reload from that notice is still without the guard, the shell SHALL show once more a notice with OK in place of Reload, and SHALL NOT show either notice again that session unless a page with the guard loads in between. It SHALL still log every page load.
 
 #### Scenario: The mismatch survives the reload
 - **WHEN** the person taps Reload and the new page also loads without the guard
-- **THEN** the notice shows again for the new page, stays up, nothing reloads on its own, and the shell keeps logging
+- **THEN** a notice with OK says Reload didn't fix it, nothing reloads on its own, and the shell keeps logging
+
+#### Scenario: After OK
+- **WHEN** the person taps OK and a later page load is still without the guard
+- **THEN** no notice shows, and the storage line still shows the change isn't yet stored
+
+#### Scenario: A matching page in between
+- **WHEN** a page with the guard loads, and a later one is again without it
+- **THEN** the notice with Reload shows again

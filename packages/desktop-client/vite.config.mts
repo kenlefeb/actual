@@ -368,6 +368,10 @@ export default defineConfig(async ({ mode, command }) => {
           __FORK_TEST_HOOKS__: JSON.stringify(
             process.env.FORK_TEST_HOOKS === 'true',
           ),
+          // sc-5219: a test page that loads without the storage guard
+          __FORK_TEST_PAGE_UNGUARDED__: JSON.stringify(
+            process.env.FORK_TEST_PAGE_UNGUARDED === 'true',
+          ),
         },
     resolve: {
       ...(mode !== 'browser' && {

@@ -111,6 +111,7 @@ class AppBridgeViewController: CAPBridgeViewController {
             }
         }
         nativeBridge.onPageUnguarded = { [weak self] in self?.storageNotices?.pageUnguarded(epoch: $0) }
+        nativeBridge.onPageGuarded = { [weak self] in self?.storageNotices?.pageGuarded() }
         // Follows "may not have been saved" from the first page load on
         _ = storageNotices
         bridge?.registerPluginInstance(nativeChrome)

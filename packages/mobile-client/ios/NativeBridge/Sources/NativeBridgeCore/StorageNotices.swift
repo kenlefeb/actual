@@ -40,8 +40,10 @@ public final class StorageNotices {
     // latest failure's reason, which the engine forgets at a restart
     private var held: CutOff?
     private var heldQuota = false
-    // The page load the unguarded notice was last shown for
+    // The page load the unguarded notice was last shown for, and how far it has gone
     private var unguardedEpoch: String?
+    private enum UnguardedStage { case none, offered, reloaded, told, acknowledged }
+    private var unguardedStage = UnguardedStage.none
 
     public init(
         slot: WindowNotices, storage: WriteStorageStatus, reload: @escaping () -> Void,
@@ -91,13 +93,32 @@ public final class StorageNotices {
         slot.show(notice)
     }
 
-    // Security's ruling: this page loaded without the guard this shell relies on.
-    // Once per page load, never a reload of its own, so a mismatch that survives
-    // the person's Reload leaves the notice up rather than looping.
+    // Security's ruling, as the Designer revised it: this page loaded without the
+    // guard this shell relies on. Reload is offered once per page load until the
+    // person reloads; a mismatch that survives their Reload is told once more with
+    // OK, and after OK not again this session unless a matching page clears it.
+    // Never a reload of its own.
     public func pageUnguarded(epoch: String) {
         guard epoch != unguardedEpoch else { return }
         unguardedEpoch = epoch
-        slot.show(Self.unguarded)
+        switch unguardedStage {
+        case .none, .offered:
+            unguardedStage = .offered
+            slot.show(Self.unguarded)
+        case .reloaded, .told:
+            unguardedStage = .told
+            slot.show(Self.unguardedAfterReload)
+        case .acknowledged:
+            break
+        }
+    }
+
+    // A page that has the guard: a later mismatch is told again from the start
+    public func pageGuarded() {
+        unguardedStage = .none
+        unguardedEpoch = nil
+        slot.end(Self.unguarded)
+        slot.end(Self.unguardedAfterReload)
     }
 
     // A closed budget's last write failed; it follows any notice showing
@@ -128,9 +149,15 @@ public final class StorageNotices {
         switch notice.button {
         case .reload:
             endFailure()
-            slot.end(Self.unguarded)
+            if notice == Self.unguarded {
+                slot.end(Self.unguarded)
+                unguardedStage = .reloaded
+            }
             storage.acknowledgeUnstoredOfThisPage()
             reload()
+        case .ok where notice == Self.unguardedAfterReload:
+            unguardedStage = .acknowledged
+            slot.end(notice)
         case .ok:
             if notice != Self.closedBudget {
                 held = nil
@@ -160,6 +187,13 @@ public final class StorageNotices {
             "This device can't confirm that changes are saved. Reload the app. Changes made before you reload may not have been saved.",
             comment: "Storage notice: the page loaded without the storage guard, so no change can be confirmed saved"),
         lifetime: .persistent, button: .reload)
+
+    // The Product Owner's words (PR #505 comment 7039547330) for a mismatch Reload didn't fix
+    static let unguardedAfterReload = WindowNotice(
+        text: NSLocalizedString(
+            "Reload didn't fix it. Changes may not be saved on this device. Keep the app open until this is fixed or the app is updated.",
+            comment: "Storage notice: the page still loaded without the storage guard after the person reloaded"),
+        lifetime: .persistent, button: .ok)
 
     static let closedBudget = WindowNotice(
         text: NSLocalizedString(

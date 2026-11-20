@@ -22,6 +22,8 @@ public class NativeBridgePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
     var onStorageEvent: ((Any) -> Void)?
     // sc-5219: a page load without the storage guard this shell opted in to
     var onPageUnguarded: ((String) -> Void)?
+    // ...and one that has it, which clears that
+    var onPageGuarded: (() -> Void)?
     var onChange: (() -> Void)?
     // sc-3611: the budget's sync outcome for the Accounts subtitle, kept while
     // the screen comes and goes; main queue
@@ -61,7 +63,7 @@ public class NativeBridgePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
                 // Security's ruling: writes of a page without the guard are never confirmed, and a notice offers Reload
                 let unconfirmed = StorageGuardMismatch.writesUnconfirmed(shellOptedIn: StorageGuardRollout.isOn, pageReported: reported)
                 writeStorage.pageLoaded(epoch: epoch, guardMismatch: mismatch != nil, writesUnconfirmed: unconfirmed)
-                if unconfirmed { onPageUnguarded?(epoch) }
+                if unconfirmed { onPageUnguarded?(epoch) } else { onPageGuarded?() }
             }
             if let stored = NativeBridgeEvent.stored(of: message.body) { writeStorage.storedEvent(seq: stored.seq, epoch: stored.epoch) }
             if event == "storage-failed" { writeStorage.storageFailed() }

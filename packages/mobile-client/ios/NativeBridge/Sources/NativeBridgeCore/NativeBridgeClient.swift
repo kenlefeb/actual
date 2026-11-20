@@ -164,6 +164,14 @@ public enum StorageGuardMismatch {
     }
 }
 
+// The Designer's ruling (sc-5219): while a page's writes can't be confirmed the
+// storage line shows its unconfirmed text, even in a build where the line is off
+public enum WriteStorageLineSwitch {
+    public static func shows(rolloutOn: Bool, writesUnconfirmed: Bool) -> Bool {
+        rolloutOn || writesUnconfirmed
+    }
+}
+
 // sc-5219 (native-durable-writes D3, D4): whether this device has stored the
 // writes made through the client. One per page.
 //
@@ -333,8 +341,9 @@ public final class WriteStorageStatus: ObservableObject {
     // Security's check (sc-5219): flagged for the latest page; logged by the shell
     @Published public private(set) var guardMismatch = false
     // Security's ruling: a page without the guard answers "stored" for writes that
-    // may have failed, so its answers and stored events count for nothing
-    private var writesUnconfirmed = false
+    // may have failed, so its answers and stored events count for nothing; the
+    // shell shows the storage line while this lasts (WriteStorageLineSwitch)
+    @Published public private(set) var writesUnconfirmed = false
 
     // What a page that has gone had not stored may be lost with it
     private func retireCurrentPage() {

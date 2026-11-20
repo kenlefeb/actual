@@ -86,6 +86,28 @@ function isBarrierOff() {
   );
 }
 
+declare const __FORK_TEST_PAGE_UNGUARDED__: boolean | undefined;
+
+// Test-only (sc-5219, the Designer's ruling): a test page that loads without the
+// storage guard under a shell that opted in, so the mismatch can be checked in a
+// Release-configured build. Needs both build constants; production builds set
+// them false and drop this. The global it sets is the marker check-test-hooks
+// and the iPhone Release build phase refuse.
+function isPageUnguardedForTest() {
+  if (
+    typeof __FORK_TEST_HOOKS__ !== 'undefined' &&
+    __FORK_TEST_HOOKS__ &&
+    typeof __FORK_TEST_PAGE_UNGUARDED__ !== 'undefined' &&
+    __FORK_TEST_PAGE_UNGUARDED__
+  ) {
+    (
+      globalThis as { __forkTestPageUnguarded?: boolean }
+    ).__forkTestPageUnguarded = true;
+    return true;
+  }
+  return false;
+}
+
 // Swift compares page loads to tell what a restart may have lost. This page's
 // own id goes on everything it compares, so `ready`, answers and events agree.
 function stampPageLoad(answer: unknown, pageLoad: string) {
@@ -527,7 +549,8 @@ export function installNativeBridge(win: BridgeWindow) {
   // sc-5219 (D7a, task 2.5): a shell that has opted in turns the one-way
   // storage guard on here, before it hears "ready" and so before any budget
   // opens; one that hasn't (the Mac until sc-5344) stays stock
-  const storageGuard = win.__actualNativeShell?.storageGuard === true;
+  const storageGuard =
+    win.__actualNativeShell?.storageGuard === true && !isPageUnguardedForTest();
   if (storageGuard) {
     void send('native/enable-storage-guard');
   }

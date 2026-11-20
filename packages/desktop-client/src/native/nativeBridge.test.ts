@@ -327,6 +327,35 @@ describe('installNativeBridge', () => {
     sent.mockRestore();
   });
 
+  // Test-only (the Designer's ruling): a test page that loads without the guard
+  // under a shell that opted in, for a Release-configured check of the mismatch.
+  // Both build constants are needed; the page also marks itself for check-test-hooks.
+  it('loads without the guard only in a test build that asks for it', () => {
+    const sent = vi
+      .spyOn(connection, 'send')
+      .mockResolvedValue(undefined as never);
+    const install = () => {
+      const postMessage = vi.fn();
+      installNativeBridge({
+        webkit: { messageHandlers: { actualNativeBridge: { postMessage } } },
+        __actualNativeShell: { storageGuard: true },
+      });
+      return postMessage.mock.calls.at(-1)?.[0]?.payload?.storageGuard;
+    };
+    vi.stubGlobal('__FORK_TEST_PAGE_UNGUARDED__', true);
+    expect(install()).toBe(true);
+    vi.stubGlobal('__FORK_TEST_HOOKS__', true);
+    sent.mockClear();
+    expect(install()).toBe(false);
+    expect(sent).not.toHaveBeenCalledWith('native/enable-storage-guard');
+    expect(
+      (globalThis as { __forkTestPageUnguarded?: boolean })
+        .__forkTestPageUnguarded,
+    ).toBe(true);
+    vi.unstubAllGlobals();
+    sent.mockRestore();
+  });
+
   it('installs the bridge when the native message handler is present', () => {
     const postMessage = vi.fn();
     const win: Parameters<typeof installNativeBridge>[0] = {

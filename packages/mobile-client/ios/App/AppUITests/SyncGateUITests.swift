@@ -25,8 +25,10 @@ final class SyncGateUITests: XCTestCase {
     }
 
     func testASyncAfterAChangeHoldsUntilStorageConfirms() throws {
-        let url = try XCTUnwrap(env["SYNC_GATE_URL"].flatMap { $0.isEmpty ? nil : $0 }, "needs TEST_RUNNER_SYNC_GATE_URL")
-        let password = try XCTUnwrap(env["SYNC_GATE_PASSWORD"], "needs TEST_RUNNER_SYNC_GATE_PASSWORD")
+        // Only under fork/scripts/sync-gate-run.sh; CI has no local server
+        guard let url = env["SYNC_GATE_URL"], !url.isEmpty, let password = env["SYNC_GATE_PASSWORD"] else {
+            throw XCTSkip("needs TEST_RUNNER_SYNC_GATE_URL and TEST_RUNNER_SYNC_GATE_PASSWORD (fork/scripts/sync-gate-run.sh)")
+        }
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         app.launch()
 

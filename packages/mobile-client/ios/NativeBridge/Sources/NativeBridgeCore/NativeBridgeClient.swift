@@ -327,6 +327,9 @@ public final class WriteStorageStatus: ObservableObject {
         self.writesUnconfirmed = writesUnconfirmed
     }
 
+    // Whether a page has announced itself (its ready or an answer)
+    public var hasPage: Bool { currentEpoch != nil }
+
     // Security's check (sc-5219): flagged for the latest page; logged by the shell
     @Published public private(set) var guardMismatch = false
     // Security's ruling: a page without the guard answers "stored" for writes that

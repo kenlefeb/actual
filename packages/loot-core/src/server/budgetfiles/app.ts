@@ -727,6 +727,9 @@ async function _loadBudgetNow(id: Budget['id']): Promise<{
 
   clearUndo();
 
+  // Reads can be served from here on; the upload below is a network call
+  markBudgetOpen();
+
   // Ensure that syncing is enabled
   if (process.env.NODE_ENV !== 'test') {
     if (id === DEMO_BUDGET_ID) {
@@ -747,7 +750,6 @@ async function _loadBudgetNow(id: Budget['id']): Promise<{
     setSyncingMode('disabled');
   }
 
-  markBudgetOpen();
   app.events.emit('load-budget', { id });
 
   return {};

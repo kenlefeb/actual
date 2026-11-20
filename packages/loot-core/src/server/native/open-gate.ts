@@ -5,8 +5,6 @@
 // finish, then answers "budget-not-open" so the screen shows its own failure.
 // With no open pending (first launch, closed on purpose, a failed open) it
 // answers at once; waiting would only hold the screen.
-import { LIMITS, readLimit } from './limits';
-
 // Handlers that run before any budget opens (the storage guard is turned on
 // before "ready") or that never touch the budget
 const UNGATED = new Set([
@@ -37,6 +35,10 @@ export function markBudgetOpen() {
   settle();
 }
 
+export function isBudgetOpen() {
+  return isOpen;
+}
+
 export function markBudgetClosed() {
   isOpen = false;
 }
@@ -52,27 +54,21 @@ export async function whileOpening<T>(load: () => Promise<T>): Promise<T> {
   }
 }
 
-// The limit is read from the budget's preferences, so while the database is
-// still opening the default applies
-async function openWaitMs() {
-  return readLimit('native-open-wait-ms').catch(
-    () => LIMITS['native-open-wait-ms'].default,
-  );
-}
+// Named exception to the limits rule, like the 60 s read deadline (sc-5269
+// tracks a device-level setting for every such deadline). Limits are stored in
+// the budget's preferences, which cannot be read while that budget is still
+// opening, and the Swift bridge's read deadline is 5 s, so a longer wait only
+// ends in a timeout.
+const OPEN_WAIT_MS = 4000;
 
-async function waitForOpenBudget(
-  timeoutMs: number | undefined,
-): Promise<boolean> {
+async function waitForOpenBudget(timeoutMs: number): Promise<boolean> {
   if (isOpen) return true;
   if (opening === 0) return false;
   let timedOut = false;
-  const timer = setTimeout(
-    () => {
-      timedOut = true;
-      settle();
-    },
-    timeoutMs ?? (await openWaitMs()),
-  );
+  const timer = setTimeout(() => {
+    timedOut = true;
+    settle();
+  }, timeoutMs);
   while (!isOpen && opening > 0 && !timedOut) {
     await new Promise<void>(resolve => waiters.push(resolve));
   }
@@ -85,7 +81,7 @@ async function waitForOpenBudget(
 // shortcut: one flag for the one loaded budget, as loot-core itself has
 export function gateNativeHandlers<
   T extends { handlers: object; services: unknown; events: unknown },
->(app: T, timeoutMs?: number): T {
+>(app: T, timeoutMs: number = OPEN_WAIT_MS): T {
   const handlers: Record<string, (args?: unknown) => Promise<unknown>> = {
     ...(app.handlers as Record<string, (args?: unknown) => Promise<unknown>>),
   };

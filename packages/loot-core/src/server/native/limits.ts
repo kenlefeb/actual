@@ -119,16 +119,6 @@ export const LIMITS = {
     ceiling: 4000,
     hasReader: true,
   },
-  // sc-5463: native reads wait this long for a budget that is still opening;
-  // under the 5 s bridge deadline, so the answer beats the Swift timeout
-  'native-open-wait-ms': {
-    name: 'Opening: wait for the budget',
-    help: 'How long a screen waits for the budget to finish opening before it says it is not open yet',
-    default: 4000,
-    floor: 100,
-    ceiling: 4500,
-    hasReader: true,
-  },
 } as const;
 
 /** The smallest allowed value: a limit's own floor, else 1. */

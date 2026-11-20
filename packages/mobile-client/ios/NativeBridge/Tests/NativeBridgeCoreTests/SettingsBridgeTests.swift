@@ -32,9 +32,8 @@ final class SettingsBridgeTests: XCTestCase {
             NativeSettings.Limit(id: "accounts-register-page-size", value: 120, defaultValue: 50, floor: 1, ceiling: 200))
         XCTAssertEqual(settings.limits.first { $0.id == "native-persist-wait-ms" }?.floor, 100)
         // Every limit an engine handler reads: the Add transaction sheet's five
-        // and story 4973's two scheduled-row limits included, sc-5219's storage wait
-        // and sc-5463's wait for the budget to open
-        XCTAssertEqual(settings.limits.count, 15)
+        // and story 4973's two scheduled-row limits included, and sc-5219's storage wait
+        XCTAssertEqual(settings.limits.count, 14)
     }
 
     func testServerInfoDecodesReachableAndUnreachable() async throws {

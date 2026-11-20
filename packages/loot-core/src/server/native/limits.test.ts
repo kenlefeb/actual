@@ -112,6 +112,14 @@ const D11 = [
     2000,
     4000,
   ],
+  // sc-5463: native reads wait for the budget to open; under the 5 s deadline
+  [
+    'native-open-wait-ms',
+    'Opening: wait for the budget',
+    'How long a screen waits for the budget to finish opening before it says it is not open yet',
+    4000,
+    4500,
+  ],
 ] as const;
 
 // What the MCP server enforces itself (packages/mcp/src/limits.ts and the
@@ -257,5 +265,18 @@ describe('the limits registry', () => {
       value: '1',
     });
     expect(await readLimit('accounts-write-max-ids')).toBe(1);
+  });
+
+  // sc-5463: under the 5 s bridge deadline, so a longer wait is never kept
+  it('reads native-open-wait-ms inside 100 to 4500, else 4000', async () => {
+    const read = async (value: string) => {
+      await db.update('preferences', { id: 'native-open-wait-ms', value });
+      return readLimit('native-open-wait-ms');
+    };
+    for (const bad of ['50', '4501', '30000', 'abc']) {
+      expect(await read(bad), bad).toBe(4000);
+    }
+    expect(await read('100')).toBe(100);
+    expect(await read('4500')).toBe(4500);
   });
 });

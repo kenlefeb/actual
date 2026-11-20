@@ -124,6 +124,13 @@
       "default": 2000,
       "floor": 100,
       "ceiling": 4000
+    },
+    {
+      "id": "native-open-wait-ms",
+      "value": 4000,
+      "default": 4000,
+      "floor": 100,
+      "ceiling": 4500
     }
   ]
 }

@@ -455,3 +455,18 @@ public enum PaycheckDateText {
         (amount > 0 ? "+" : "") + BudgetAmountFormat.string(amount, style: style)
     }
 }
+
+
+// Rows of an editor list (deductions, deposits) are read and written by id.
+// SwiftUI re-reads a row's bindings once after the row is removed; a captured
+// index is then out of range and traps (sc-5504).
+extension Array where Element: Identifiable {
+    public func read<Value>(_ id: Element.ID, _ path: KeyPath<Element, Value>, fallback: Value) -> Value {
+        first { $0.id == id }.map { $0[keyPath: path] } ?? fallback
+    }
+
+    public mutating func write<Value>(_ id: Element.ID, _ path: WritableKeyPath<Element, Value>, _ value: Value) {
+        guard let index = firstIndex(where: { $0.id == id }) else { return }
+        self[index][keyPath: path] = value
+    }
+}

@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { appendAudit } from '#audit';
 import type { AuditChange, AuditIdentity } from '#audit';
+import { internal } from '#connection';
 import { SCOPES } from '#grants';
 import type { Grant, Scope } from '#grants';
 import { cellLimit, deleteLimit, reconcileLimit, rowLimit } from '#limits';
@@ -55,7 +56,7 @@ export function requireMonth(value: string) {
 
 /** The loaded budget's sync id (its local id when it was never synced); every schema 2 audit line carries it. */
 export async function budgetId() {
-  const prefs = (await api.internal?.send('load-prefs')) as
+  const prefs = (await internal()?.send('load-prefs')) as
     | { groupId?: string; id?: string }
     | undefined;
   const found = prefs?.groupId ?? prefs?.id;

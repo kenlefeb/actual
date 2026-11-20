@@ -16,6 +16,7 @@
     "#audit": "./src/audit.ts",
     "#client-harness": "./src/client-harness.ts",
     "#config": "./src/config.ts",
+    "#connection": "./src/connection.ts",
     "#grants": "./src/grants.ts",
     "#limits": "./src/limits.ts",
     "#paging": "./src/paging.ts",

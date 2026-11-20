@@ -18,6 +18,11 @@ import { handleBudgetImport } from '#server/importers';
 import type { ImportableBudgetType } from '#server/importers';
 import { app as mainApp } from '#server/main-app';
 import { mutator } from '#server/mutators';
+import {
+  markBudgetClosed,
+  markBudgetOpen,
+  whileOpening,
+} from '#server/native/open-gate';
 import * as prefs from '#server/prefs';
 import {
   loadScheduleDateLookup,
@@ -271,7 +276,13 @@ async function syncBudget() {
   return result;
 }
 
-async function loadBudget({ id }: { id: Budget['id'] }) {
+// The close of a budget being switched away from and the open of the next one
+// are one pending open (sc-5463): native reads wait through both
+function loadBudget(args: { id: Budget['id'] }) {
+  return whileOpening(() => loadBudgetNow(args));
+}
+
+async function loadBudgetNow({ id }: { id: Budget['id'] }) {
   const currentPrefs = prefs.getPrefs();
 
   if (currentPrefs) {
@@ -304,6 +315,7 @@ async function createDemoBudget() {
 
 async function closeBudget() {
   captureBreadcrumb({ message: 'Closing budget' });
+  markBudgetClosed();
   resetFormulaPreferencesCache();
 
   // The spreadsheet may be running, wait for it to complete
@@ -585,7 +597,11 @@ function onSheetChange({ names }: { names: string[] }) {
   connection.send('cells-changed', nodes);
 }
 
-async function _loadBudget(id: Budget['id']): Promise<{
+function _loadBudget(id: Budget['id']) {
+  return whileOpening(() => _loadBudgetNow(id));
+}
+
+async function _loadBudgetNow(id: Budget['id']): Promise<{
   error?:
     | 'budget-not-found'
     | 'loading-budget'
@@ -710,6 +726,9 @@ async function _loadBudget(id: Budget['id']): Promise<{
   mainApp.startServices();
 
   clearUndo();
+
+  // Reads can be served from here on; the upload below is a network call
+  markBudgetOpen();
 
   // Ensure that syncing is enabled
   if (process.env.NODE_ENV !== 'test') {

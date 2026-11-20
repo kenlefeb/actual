@@ -68,6 +68,7 @@ import {
   transactionsDelete,
 } from './accounts-writes';
 import type { RecordedState, Touched } from './accounts-writes';
+import { ungated } from './open-gate';
 import { enableStorageGuard, persisted, storageState } from './persisted';
 import {
   reconcileListSet,
@@ -331,6 +332,7 @@ app.method('native/enable-storage-guard', enableStorageGuard);
 // end to end. Only in FORK_TEST_HOOKS builds; Fork CI checks a production
 // bundle lacks the marker.
 if (typeof __FORK_TEST_HOOKS__ !== 'undefined' && __FORK_TEST_HOOKS__) {
+  ungated('native/test-fail-storage'); // sc-5463: runs before any budget opens
   app.method(
     'native/test-fail-storage' as never,
     (async (args?: { quota?: boolean }) => {

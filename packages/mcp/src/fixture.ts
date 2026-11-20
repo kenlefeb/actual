@@ -4,6 +4,8 @@ import { join } from 'path';
 
 import * as api from '@actual-app/api';
 
+import { closeBudget, initEngine } from './connection';
+
 export type FixtureTransaction = {
   payee_name?: string;
   imported_payee?: string;
@@ -20,7 +22,7 @@ export async function buildFixtureBudget({
   overrides = {},
 }: { count?: number; overrides?: FixtureTransaction } = {}) {
   const dataDir = await mkdtemp(join(tmpdir(), 'actual-mcp-fixture-'));
-  await api.init({ dataDir });
+  await initEngine({ dataDir });
   let accountId = '';
   await api.runImport('fixture', async () => {
     accountId = await api.createAccount({ name: 'Checking', offbudget: false });
@@ -42,7 +44,7 @@ export async function buildFixtureBudget({
     dataDir,
     accountId,
     cleanup: async () => {
-      await api.shutdown();
+      await closeBudget();
       await rm(dataDir, { recursive: true, force: true });
     },
   };

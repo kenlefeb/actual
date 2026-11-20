@@ -1,6 +1,7 @@
 import * as api from '@actual-app/api';
 import { z } from 'zod';
 
+import { internal } from '#connection';
 import type { Limits } from '#limits';
 import { ENVELOPE_BYTES } from '#paging';
 import { Refusal } from '#refusal';
@@ -58,7 +59,7 @@ async function carryoverFlag(m: string, categoryId: string) {
 
 /** Hold is an envelope-budget feature; a tracking budget has no to-budget to hold. */
 async function requireEnvelope() {
-  const prefs = (await api.internal?.send('preferences/get')) as
+  const prefs = (await internal()?.send('preferences/get')) as
     | { budgetType?: string }
     | undefined;
   if (prefs?.budgetType === 'tracking') {
@@ -377,7 +378,7 @@ async function writeTemplates(
 
 /** A month's budgeted amounts and goals, and the stored automations, as the engine left them. */
 async function readTemplateState(month: string) {
-  const prefs = (await api.internal?.send('preferences/get')) as
+  const prefs = (await internal()?.send('preferences/get')) as
     | { budgetType?: string }
     | undefined;
   const table =

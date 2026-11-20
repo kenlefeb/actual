@@ -13,6 +13,7 @@ const WRITE_TOOLS = [
   'write_create_account_group',
   'write_create_category',
   'write_create_category_group',
+  'write_create_payee',
   'write_create_schedule',
   'write_create_transactions',
   'write_delete_account',

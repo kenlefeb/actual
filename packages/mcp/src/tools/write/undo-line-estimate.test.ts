@@ -186,6 +186,7 @@ const WRITES: Record<string, () => Promise<{ write_id: string }>> = {
     call('write_create_category', { name: NAME, group_id: (await bills()).id }),
   write_create_category_group: async () =>
     call('write_create_category_group', { name: NAME }),
+  write_create_payee: async () => call('write_create_payee', { name: NAME }),
   write_delete_transactions: async () => {
     const id = await firstRow();
     await api.updateTransaction(id, { notes: NOTES });

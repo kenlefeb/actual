@@ -367,5 +367,11 @@
   },
   "postScheduleTransaction": {
     "tool": "write_post_schedule_transaction"
+  },
+  "payee-create": {
+    "tool": "write_create_payee"
+  },
+  "createPayee": {
+    "tool": "write_create_payee"
   }
 }

@@ -536,6 +536,31 @@ async function planCategoryCreate(ctx: Ctx, group: boolean): Promise<Plan> {
   };
 }
 
+/** A created payee: removed while its name is as logged and no transaction, schedule or rule uses it. */
+async function planPayeeCreate(ctx: Ctx): Promise<Plan> {
+  const [rowId, ...rest] = strings(ctx.entry.outcome?.created);
+  if (!rowId || rest.length > 0) {
+    throw notUndoable('Its created row was not recorded.');
+  }
+  const found = (await api.getPayees()).find(p => p.id === rowId);
+  const logged = changesOf(ctx.entry).find(c => c.field === 'name')?.after;
+  if (!found || found.name !== logged) throw conflict([`${rowId} (name)`]);
+  const used = (await api.runQuery(
+    api.q('transactions').filter({ payee: rowId }).select(['id']).limit(1),
+  )) as { data: unknown[] };
+  // shortcut: rules and schedules are found by id text, as for a category
+  const refs = JSON.stringify([await api.getRules(), await api.getSchedules()]);
+  if (used.data.length > 0 || refs.includes(rowId)) {
+    throw conflict([`${rowId} (in use)`]);
+  }
+  return {
+    ids: [rowId],
+    deletes: true,
+    changes: [{ id: rowId, field: 'name', before: found.name, after: null }],
+    steps: [{ id: rowId, run: () => api.deletePayee(rowId) }],
+  };
+}
+
 const swapped = (changes: Change[]): AuditChange[] =>
   changes.map(c => ({
     id: c.id,
@@ -1115,6 +1140,7 @@ export const PLANNERS: Record<string, (ctx: Ctx) => Promise<Plan>> = {
   write_delete_category_group: ctx => planDeleteCategories(ctx, true),
   write_move_category: ctx => planMove(ctx, false),
   write_move_category_group: ctx => planMove(ctx, true),
+  write_create_payee: planPayeeCreate,
   write_create_schedule: planScheduleCreate,
   write_update_schedule: planScheduleUpdate,
 };
@@ -1167,7 +1193,7 @@ export function registerUndoTools(
 
   tool(
     'write_undo',
-    "Undo one of this identity's earlier writes by its write_id (from the write's result or list_writes): transaction creates and updates, budget amounts (also copy last month and set to average), category and group creates and updates, deletes of transactions, categories and category groups (sync first; the deleted rows come back with their ids), schedule creates and updates, and category and group moves (sync first; the row goes back before its old next sibling, or is refused naming what changed). It restores the logged values and is refused, changing nothing, if any of them changed since or a created row is in use. A write can be undone once. Reversing a write needs the scopes that write needed. Paycheck skips and account tools are not undoable.",
+    "Undo one of this identity's earlier writes by its write_id (from the write's result or list_writes): transaction creates and updates, budget amounts (also copy last month and set to average), category and group creates and updates, payee creates, deletes of transactions, categories and category groups (sync first; the deleted rows come back with their ids), schedule creates and updates, and category and group moves (sync first; the row goes back before its old next sibling, or is refused naming what changed). It restores the logged values and is refused, changing nothing, if any of them changed since or a created row is in use. A write can be undone once. Reversing a write needs the scopes that write needed. Paycheck skips and account tools are not undoable.",
     {
       write_id: id,
       allow_reconciled: z.boolean().optional(),

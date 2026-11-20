@@ -159,6 +159,8 @@ describe('write_create_payee', () => {
     expect(res.isError).toBe(true);
     expect(res.text).toMatch(/structure:write/);
     expect(await named('Nope')).toHaveLength(0);
+    // the refusal is itself logged, as for every other write tool
+    expect(auditLines().some(l => l.tool === 'write_create_payee')).toBe(true);
   });
 
   it('declares the scope and says write_undo reverses it', async () => {

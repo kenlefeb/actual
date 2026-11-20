@@ -5,7 +5,7 @@
 ## 1. `write_create_payee` (sc-5521)
 
 - [x] 1.1 `write_create_payee` in `tools/write/payees.ts` (`structure:write`). Failing tests first:
-  - a new name creates one payee, returns `payee_id`, `name` and `created: true`, and `list_payees` shows it;
+  - a new name creates one payee, returns `payee_id`, `created: true` and the name as `text.name`, and `list_payees` shows it;
   - the stored payee equals the one the app's `payee-create` makes;
   - the name is trimmed; an empty or over-long name is refused;
   - an existing name ignoring case returns the existing id with `created: false`, writes no row and no audit line;

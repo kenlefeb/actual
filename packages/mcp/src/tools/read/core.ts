@@ -5,7 +5,8 @@ import { buildPage, pageList, pageParams } from '#paging';
 import { sanitizeDeep, withText } from '#sanitize';
 import { syncNow } from '#sync';
 
-import { date, money, pageShape } from './shared';
+import { withIds } from './paychecks';
+import { date, money, moneyAs, pageShape } from './shared';
 import type { RegisterTool } from './shared';
 
 // Tables run_query may read.
@@ -235,23 +236,56 @@ export function registerCoreTools(tool: RegisterTool) {
     },
   );
 
-  tool('list_schedules', 'List scheduled transactions.', pageShape, async p => {
-    const schedules = await api.getSchedules();
-    return pageList(
-      schedules.map(s =>
-        withText(
-          {
-            id: s.id,
-            completed: s.completed,
-            next_date: s.next_date,
-            ...(typeof s.amount === 'number' ? money(s.amount) : {}),
-          },
-          { name: s.name },
-        ),
-      ),
-      p,
-    );
-  });
+  tool(
+    'list_schedules',
+    'List scheduled transactions with the fields an edit refers to: payee and account ids, amount operator and amount (a range has amount_min and amount_max), the date definition (under text), whether it posts a transaction, and the id of the paycheck that manages it, if any.',
+    pageShape,
+    async p => {
+      const schedules = await api.getSchedules();
+      const managedBy = new Map<string, string>();
+      for (const c of await api.getPaychecks()) {
+        for (const sid of [
+          c.definition.paySchedule,
+          ...c.definition.deposits.map(d => d.schedule),
+        ]) {
+          if (sid) managedBy.set(sid, c.id);
+        }
+      }
+      const part = (s: (typeof schedules)[number], key: 'num1' | 'num2') => {
+        const a = s.amount as unknown;
+        const v =
+          a && typeof a === 'object'
+            ? (a as Record<string, unknown>)[key]
+            : undefined;
+        return typeof v === 'number' ? v : undefined;
+      };
+      return pageList(
+        schedules.map(s => {
+          const min = part(s, 'num1');
+          const max = part(s, 'num2');
+          return withIds(
+            {
+              id: s.id,
+              completed: s.completed,
+              next_date: s.next_date,
+              amount_op: s.amountOp ?? null,
+              posts_transaction: s.posts_transaction,
+              ...(typeof s.amount === 'number' ? money(s.amount) : {}),
+              ...(min === undefined ? {} : moneyAs('amount_min', min)),
+              ...(max === undefined ? {} : moneyAs('amount_max', max)),
+            },
+            {
+              payee_id: s.payee ?? null,
+              account_id: s.account ?? null,
+              paycheck_id: managedBy.get(s.id) ?? null,
+            },
+            { name: s.name, date: s.date },
+          );
+        }),
+        p,
+      );
+    },
+  );
 
   tool(
     'list_rules',

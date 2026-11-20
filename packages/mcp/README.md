@@ -17,17 +17,17 @@ fetches a URL named in the data.
 List tools take `limit` (default 50, at most 200) and `cursor`, and return `has_more` and
 `next_cursor`. A response stays under 100 KB; rows past that wait for the next page.
 
-| Tool                                   | Returns                                                                                        |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `list_accounts`, `get_account_balance` | Accounts with balances; one balance, optionally as of a date                                   |
-| `list_account_groups`                  | Account groups with their account ids (each account in `list_accounts` has `account_group_id`) |
-| `list_category_groups`                 | Category groups with their categories                                                          |
-| `list_payees`                          | Payees, optional name search                                                                   |
-| `list_transactions`                    | By `account_id`, `category_id`, `start_date`, `end_date`                                       |
-| `get_budget_month`                     | One month's totals and paged per-category budgeted/spent/balance                               |
-| `list_schedules`, `list_rules`         | Schedules; rules with conditions and actions                                                   |
-| `run_query`                            | A read-only ActualQL select over one table; all else refused                                   |
-| `sync_budget`                          | Syncs the local copy with the server (see below)                                               |
+| Tool                                   | Returns                                                                                                                                         |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_accounts`, `get_account_balance` | Accounts with balances; one balance, optionally as of a date                                                                                    |
+| `list_account_groups`                  | Account groups with their account ids (each account in `list_accounts` has `account_group_id`)                                                  |
+| `list_category_groups`                 | Category groups with their categories                                                                                                           |
+| `list_payees`                          | Payees, optional name search                                                                                                                    |
+| `list_transactions`                    | By `account_id`, `category_id`, `start_date`, `end_date`                                                                                        |
+| `get_budget_month`                     | One month's totals and paged per-category budgeted/spent/balance                                                                                |
+| `list_schedules`, `list_rules`         | Schedules (payee and account ids, amount operator and amount, date definition, auto-post, managing paycheck); rules with conditions and actions |
+| `run_query`                            | A read-only ActualQL select over one table; all else refused                                                                                    |
+| `sync_budget`                          | Syncs the local copy with the server (see below)                                                                                                |
 
 Fork read tools (all take ids, never names):
 
@@ -64,6 +64,10 @@ and prompt on every write.
 | `write_apply_budget_templates`     | `budget:write`                                             | Applies or overwrites a month's budget templates (the notes' `#template` and `#goal` lines, no AI; optionally only listed categories); counts changed cells and goals against the cell limit; a dry run lists every cell, goal and stored automation; **not undoable**                        |
 | `write_set_budget_to_average`      | `budget:write`                                             | Sets a month to the 3, 6 or 12 month average (the budget menu's action); counts only changed cells; a dry run lists every cell; undoable                                                                                                                                                      |
 | `write_skip_paycheck`              | `schedules:write`                                          | Skips a paycheck's next pay date                                                                                                                                                                                                                                                              |
+| `write_create_schedule`            | `schedules:write`                                          | Creates a schedule as the app's form does (payee and account ids, `is`, `isapprox` or `isbetween` amount, one date form: a day, a recurrence or relative to another schedule); `dry_run` shows the next dates and writes nothing; undoable                                                    |
+| `write_update_schedule`            | `schedules:write`                                          | Changes the given fields of a schedule (not one a paycheck manages) with before and after; `dry_run` shows the next dates and writes nothing; undoable                                                                                                                                        |
+| `write_skip_schedule_date`         | `schedules:write`                                          | Skips a schedule's next date (the app's "Skip next date"); **not undoable**                                                                                                                                                                                                                   |
+| `write_post_schedule_transaction`  | `schedules:write`, `transactions:write`                    | Posts a schedule's transaction (the app's "Post transaction", or today with `today`); **not undoable** (delete the transaction)                                                                                                                                                               |
 | `write_move_on_budget`             | `structure:write`                                          | Moves an off-budget account on budget; needs a `confirm` (below)                                                                                                                                                                                                                              |
 | `write_create_account`             | `structure:write`                                          | Creates an account (on or off budget, optional opening balance in cents); a duplicate name is allowed with a warning                                                                                                                                                                          |
 | `write_update_account`             | `structure:write`                                          | Renames an account or sets its account group; never closes it or changes its off-budget flag or opening balance                                                                                                                                                                               |
@@ -322,6 +326,7 @@ change applies on the next call with no restart or reconnect. The access token k
 }
 ```
 
+- **Schedule writes.** `write_create_schedule`, `write_update_schedule` and `write_skip_schedule_date` need `schedules:write`; `write_post_schedule_transaction` also needs `transactions:write`. A grant that adds loan schedules needs only `schedules:write`.
 - **Strict schema.** `version` is 1; no unknown keys anywhere; `subject` is a literal OAuth subject,
   never a wildcard; `client` is a client id or `*`; `scopes` is a non-empty list of known scopes;
   `max_rows`, `max_cells` and `max_delete_rows` positive integers not above the server's ceilings; `confirm_destructive` a boolean, `true`

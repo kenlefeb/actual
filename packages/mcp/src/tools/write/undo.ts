@@ -16,6 +16,13 @@ import { groupOrder, load, nextOf } from './categories';
 import { NOT_UNDOABLE, UNDOABLE } from './declarations';
 import { checkRows, rowKey as stateKey } from './delete-snapshot';
 import {
+  applyScheduleFields,
+  sameValue,
+  SCHEDULE_FIELDS,
+  scheduleValue,
+} from './schedules';
+import type { ScheduleFields } from './schedules';
+import {
   budgetId,
   confirm,
   id,
@@ -537,6 +544,82 @@ const swapped = (changes: Change[]): AuditChange[] =>
     after: c.before,
   }));
 
+/** A created schedule: deleted while it still holds what was logged and nothing uses it. */
+async function planScheduleCreate(ctx: Ctx): Promise<Plan> {
+  const [rowId, ...rest] = strings(ctx.entry.outcome?.created);
+  if (!rowId || rest.length > 0) {
+    throw notUndoable('Its created row was not recorded.');
+  }
+  const all = await api.getSchedules();
+  const found = all.find(s => s.id === rowId);
+  const stale = found
+    ? SCHEDULE_FIELDS.filter(
+        f =>
+          !sameValue(
+            scheduleValue(found, f),
+            changesOf(ctx.entry).find(c => c.field === f)?.after,
+          ),
+      ).map(f => `${rowId} (${f})`)
+    : [`${rowId} (missing)`];
+  if (stale.length > 0) throw conflict(stale);
+  const linked = (await api.runQuery(
+    api.q('transactions').filter({ schedule: rowId }).select(['id']).limit(1),
+  )) as { data: unknown[] };
+  const dependents = all.some(
+    s =>
+      typeof s.date === 'object' &&
+      'relativeTo' in s.date &&
+      s.date.relativeTo.scheduleId === rowId,
+  );
+  if (linked.data.length > 0 || dependents) {
+    throw conflict([`${rowId} (in use)`]);
+  }
+  return {
+    ids: [rowId],
+    deletes: true,
+    changes: [
+      { id: rowId, field: 'name', before: found!.name ?? null, after: null },
+    ],
+    steps: [{ id: rowId, run: () => api.deleteSchedule(rowId) }],
+  };
+}
+
+/** An updated schedule: the logged before-values go back through the same engine update. */
+async function planScheduleUpdate(ctx: Ctx): Promise<Plan> {
+  const applied = appliedOf(ctx.entry);
+  const wanted = changesOf(ctx.entry).filter(
+    c =>
+      applied.has(c.id) &&
+      (SCHEDULE_FIELDS as readonly string[]).includes(c.field),
+  );
+  const rowId = wanted[0]?.id;
+  if (!rowId || wanted.some(c => c.id !== rowId)) {
+    throw notUndoable('There is nothing to put back.');
+  }
+  const all = await api.getSchedules();
+  const now = all.find(s => s.id === rowId);
+  const stale = wanted
+    .filter(c => !now || !sameValue(scheduleValue(now, c.field), c.after))
+    .map(c => `${rowId} (${c.field})`);
+  const name = wanted.find(c => c.field === 'name')?.before;
+  if (
+    typeof name === 'string' &&
+    all.some(s => s.id !== rowId && s.name === name)
+  ) {
+    stale.push(`${rowId} (name)`);
+  }
+  if (stale.length > 0) throw conflict(stale);
+  const fields = Object.fromEntries(
+    wanted.map(c => [c.field, c.before]),
+  ) as ScheduleFields;
+  return {
+    ids: [rowId],
+    deletes: false,
+    changes: swapped(wanted),
+    steps: [{ id: rowId, run: () => applyScheduleFields(rowId, fields) }],
+  };
+}
+
 /** Syncs first, so the checks see what other devices sent; a failed sync refuses the undo. */
 async function syncFirst() {
   try {
@@ -1032,6 +1115,8 @@ export const PLANNERS: Record<string, (ctx: Ctx) => Promise<Plan>> = {
   write_delete_category_group: ctx => planDeleteCategories(ctx, true),
   write_move_category: ctx => planMove(ctx, false),
   write_move_category_group: ctx => planMove(ctx, true),
+  write_create_schedule: planScheduleCreate,
+  write_update_schedule: planScheduleUpdate,
 };
 
 type RegisterRead = <S extends z.ZodRawShape>(
@@ -1082,7 +1167,7 @@ export function registerUndoTools(
 
   tool(
     'write_undo',
-    "Undo one of this identity's earlier writes by its write_id (from the write's result or list_writes): transaction creates and updates, budget amounts (also copy last month and set to average), category and group creates and updates, deletes of transactions, categories and category groups (sync first; the deleted rows come back with their ids), and category and group moves (sync first; the row goes back before its old next sibling, or is refused naming what changed). It restores the logged values and is refused, changing nothing, if any of them changed since or a created row is in use. A write can be undone once. Reversing a write needs the scopes that write needed. Paycheck skips and account tools are not undoable.",
+    "Undo one of this identity's earlier writes by its write_id (from the write's result or list_writes): transaction creates and updates, budget amounts (also copy last month and set to average), category and group creates and updates, deletes of transactions, categories and category groups (sync first; the deleted rows come back with their ids), schedule creates and updates, and category and group moves (sync first; the row goes back before its old next sibling, or is refused naming what changed). It restores the logged values and is refused, changing nothing, if any of them changed since or a created row is in use. A write can be undone once. Reversing a write needs the scopes that write needed. Paycheck skips and account tools are not undoable.",
     {
       write_id: id,
       allow_reconciled: z.boolean().optional(),

@@ -349,5 +349,23 @@
   },
   "native/test-fail-storage": {
     "skip": "Test-only storage failure, registered only in FORK_TEST_HOOKS builds for the iPhone simulator evidence (sc-5219, design D10); never in a production build"
+  },
+  "schedule/create": {
+    "tool": "write_create_schedule"
+  },
+  "schedule/update": {
+    "tool": "write_update_schedule"
+  },
+  "schedule/skip-next-date": {
+    "tool": "write_skip_schedule_date"
+  },
+  "skipScheduleNextDate": {
+    "tool": "write_skip_schedule_date"
+  },
+  "schedule/post-transaction": {
+    "tool": "write_post_schedule_transaction"
+  },
+  "postScheduleTransaction": {
+    "tool": "write_post_schedule_transaction"
   }
 }

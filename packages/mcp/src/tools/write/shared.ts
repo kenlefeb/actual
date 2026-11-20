@@ -237,7 +237,7 @@ const CONFIRM_REFUSED =
   'The budget changed since the dry run, the call differs, or the confirm expired. Nothing changed.';
 
 /** JSON with object keys sorted, so equal values give equal text. */
-function canonical(value: unknown) {
+export function canonical(value: unknown) {
   return JSON.stringify(value, (_, v: unknown) =>
     v && typeof v === 'object' && !Array.isArray(v)
       ? Object.fromEntries(

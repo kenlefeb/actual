@@ -54,10 +54,10 @@
     "tool": "preview_move_on_budget"
   },
   "paycheck-create": {
-    "skip": "Not in the v1 write set (mcp-server \"Write tools\"): paychecks are created and edited in the app"
+    "tool": "write_create_paycheck"
   },
   "createPaycheck": {
-    "skip": "Not in the v1 write set (mcp-server \"Write tools\"): paychecks are created and edited in the app"
+    "tool": "write_create_paycheck"
   },
   "paycheck-update": {
     "skip": "Not in the v1 write set (mcp-server \"Write tools\"): paychecks are created and edited in the app"
@@ -66,10 +66,10 @@
     "skip": "Not in the v1 write set (mcp-server \"Write tools\"): paychecks are created and edited in the app"
   },
   "paycheck-delete": {
-    "skip": "Destructive: no delete tools in v1 (mcp-server \"Write tools\"); destructive tools are sc-1556"
+    "tool": "write_delete_paycheck"
   },
   "deletePaycheck": {
-    "skip": "Destructive: no delete tools in v1 (mcp-server \"Write tools\"); destructive tools are sc-1556"
+    "tool": "write_delete_paycheck"
   },
   "paycheck-skip-next": {
     "tool": "write_skip_paycheck"
@@ -355,6 +355,9 @@
   },
   "schedule/update": {
     "tool": "write_update_schedule"
+  },
+  "schedule/delete": {
+    "tool": "write_delete_schedule"
   },
   "schedule/skip-next-date": {
     "tool": "write_skip_schedule_date"

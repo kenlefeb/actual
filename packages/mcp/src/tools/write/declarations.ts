@@ -25,6 +25,7 @@ export const UNDOABLE: Record<string, Scope[]> = {
   write_move_category_group: ['structure:write'],
   write_create_schedule: ['schedules:write'],
   write_update_schedule: ['schedules:write'],
+  write_create_paycheck: ['schedules:write'],
 };
 
 const PLANNED = 'not undoable yet; undo is planned in sc-5097';
@@ -41,6 +42,10 @@ export const NOT_UNDOABLE: Record<string, string> = {
   write_skip_schedule_date: 'the engine cannot put back a skipped date',
   write_post_schedule_transaction:
     'delete the transaction it added with write_delete_transactions',
+  write_delete_schedule:
+    "recreate from the dry run's definition; a restore is planned in sc-5522",
+  write_delete_paycheck:
+    "recreate with write_create_paycheck from the dry run's definition; a restore is planned in sc-5522",
   write_create_account: 'delete the account with write_delete_account',
   write_update_account: PLANNED,
   write_reopen_account: PLANNED,

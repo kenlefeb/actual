@@ -13,6 +13,7 @@ const WRITE_TOOLS = [
   'write_create_account_group',
   'write_create_category',
   'write_create_category_group',
+  'write_create_paycheck',
   'write_create_payee',
   'write_create_schedule',
   'write_create_transactions',
@@ -20,6 +21,8 @@ const WRITE_TOOLS = [
   'write_delete_account_group',
   'write_delete_category',
   'write_delete_category_group',
+  'write_delete_paycheck',
+  'write_delete_schedule',
   'write_delete_transactions',
   'write_hold_budget_for_next_month',
   'write_move_category',
@@ -134,6 +137,8 @@ describe('write entry', () => {
       'write_delete_account_group',
       'write_delete_category',
       'write_delete_category_group',
+      'write_delete_paycheck',
+      'write_delete_schedule',
       'write_delete_transactions',
     ]);
     for (const t of writes) {

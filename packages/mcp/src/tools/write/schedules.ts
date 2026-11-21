@@ -14,6 +14,7 @@ import { findAccount, NOTHING } from './accounts';
 import type { RegisterWriteTool } from './shared';
 import {
   canonical,
+  confirm,
   id,
   loggedWrite,
   requireAmount,
@@ -51,7 +52,7 @@ const NO_MATCH =
   'Cannot expand schedule date: Failed to find a matching occurrence';
 
 /** Refuses (fixed text, before any audit line) when no engine handle is loaded, as when the API's CJS build hides it. */
-function requireEngine() {
+export function requireEngine() {
   const engine = internal();
   if (!engine) {
     throw new Refusal('The budget engine is not available. Nothing changed.');
@@ -89,7 +90,7 @@ const isRelative = (d: unknown): d is RelativeDateConfig =>
   typeof d === 'object' && d !== null && 'relativeTo' in d;
 
 const calendarShape = id.optional();
-const recurrenceShape = z.object({
+export const recurrenceShape = z.object({
   frequency: z.enum(['daily', 'weekly', 'monthly', 'yearly']),
   interval: z.number().int().optional(),
   start: z.string(),
@@ -141,7 +142,7 @@ type DateInput = {
   relative_to?: z.infer<typeof relativeShape>;
 };
 
-const refuse = (text: string) => new Refusal(`${text} ${NOTHING}`);
+export const refuse = (text: string) => new Refusal(`${text} ${NOTHING}`);
 
 async function requireCalendar(calendarId: string | undefined) {
   if (
@@ -154,7 +155,7 @@ async function requireCalendar(calendarId: string | undefined) {
   }
 }
 
-async function recurrenceValue(r: NonNullable<DateInput['recurrence']>) {
+export async function recurrenceValue(r: NonNullable<DateInput['recurrence']>) {
   requireDate(r.start);
   if (r.interval !== undefined && r.interval < 1) {
     throw refuse('interval must be at least 1.');
@@ -368,7 +369,7 @@ async function paycheckManaging(scheduleId: string) {
 }
 
 /** An existing schedule that no paycheck manages. */
-async function requireSchedule(scheduleId: string) {
+export async function requireSchedule(scheduleId: string) {
   const all = await api.getSchedules();
   const found = all.find(s => s.id === scheduleId);
   if (!found) {
@@ -416,7 +417,7 @@ async function requireRunnable(scheduleId: string) {
 const nextDateOf = async (scheduleId: string) =>
   (await api.getSchedules()).find(s => s.id === scheduleId)?.next_date ?? null;
 
-const transactionIds = async (scheduleId: string) =>
+export const transactionIds = async (scheduleId: string) =>
   (
     (await api.runQuery(
       api.q('transactions').filter({ schedule: scheduleId }).select(['id']),
@@ -676,5 +677,60 @@ export function registerScheduleWriteTools(tool: RegisterWriteTool) {
       );
     },
     { scopes: ['schedules:write', 'transactions:write'] },
+  );
+
+  tool(
+    'write_delete_schedule',
+    'Delete a schedule, as the app\'s "Delete" does, by schedule id (never a name). A schedule a paycheck manages is refused. Always two steps, whatever confirm_destructive says: the first call changes nothing and returns a dry run with `confirm`, the schedule\'s definition (to recreate it with write_create_schedule), its next date, how many transactions stay linked to the deleted id and the schedules relative to it (which the engine then clears); call again with the `confirm` within 5 minutes. Returns the deleted id.',
+    { schedule_id: id, confirm },
+    async ({ schedule_id }, auditLog) => {
+      const { all, found } = await requireSchedule(schedule_id);
+      const definition = Object.fromEntries(
+        SCHEDULE_FIELDS.map(f => [f, scheduleValue(found, f)]),
+      );
+      const dependents = all
+        .filter(
+          s =>
+            isRelative(s.date) && s.date.relativeTo.scheduleId === schedule_id,
+        )
+        .map(s => s.id);
+      const linked = (await transactionIds(schedule_id)).length;
+      requireEngine();
+      return loggedWrite(
+        auditLog,
+        'write_delete_schedule',
+        {
+          ids: [schedule_id],
+          changes: SCHEDULE_FIELDS.map(field => ({
+            id: schedule_id,
+            field,
+            before: definition[field],
+            after: null,
+          })),
+          relative_dependents: dependents,
+        },
+        async () => {
+          await api.deleteSchedule(schedule_id);
+          return { applied: [schedule_id] };
+        },
+        async () =>
+          withText(
+            { schedule_id, deleted: true, linked_transactions: linked },
+            { name: found.name },
+          ),
+        {
+          alwaysConfirm: true,
+          dryRun: {
+            definition,
+            next_date: found.next_date,
+            linked_transactions: linked,
+            relative_dependents: dependents,
+            note: 'Not undoable: recreate it from this definition.',
+          },
+          preview: { name: found.name },
+        },
+      );
+    },
+    { scopes: ['schedules:write', 'delete'], destructive: true },
   );
 }

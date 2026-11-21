@@ -16,6 +16,7 @@ export const UNDOABLE: Record<string, Scope[]> = {
   write_update_category: ['structure:write'],
   write_update_category_group: ['structure:write'],
   write_create_category: ['structure:write'],
+  write_create_payee: ['structure:write'],
   write_create_category_group: ['structure:write'],
   write_delete_transactions: ['transactions:write', 'delete'],
   write_delete_category: ['structure:write', 'delete'],

@@ -67,6 +67,7 @@ const NEEDS: Record<string, Scope[]> = {
   write_move_on_budget: ['structure:write'],
   write_create_category_group: ['structure:write'],
   write_create_category: ['structure:write'],
+  write_create_payee: ['structure:write'],
   write_update_category_group: ['structure:write'],
   write_update_category: ['structure:write'],
   write_move_category_group: ['structure:write'],

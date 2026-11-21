@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Payee create tool
-`write_create_payee` (`structure:write`) SHALL create a payee from `name` through the engine's payee creation, as the app does, and return `payee_id`, `name` and `created`. The name SHALL be trimmed and 1 to 100 characters, or the call is refused with fixed text, changing nothing. The call SHALL be audit-logged with the created id on its outcome line.
+`write_create_payee` (`structure:write`) SHALL create a payee from `name` through the engine's payee creation, as the app does, and return `payee_id`, `created` and the name as `text.name` (untrusted text). The name SHALL be trimmed and 1 to 100 characters, or the call is refused with fixed text, changing nothing. The call SHALL be audit-logged with the created id on its outcome line.
 
 #### Scenario: A new lender
 - **GIVEN** no payee "Car Loan Co" and a grant with `structure:write`
@@ -13,7 +13,7 @@
 - **THEN** the call is refused with fixed text, nothing changed, and no audit line is written
 
 ### Requirement: Payee names are not duplicated
-A name equal, ignoring case, to a live payee SHALL return that payee's id and stored name with `created` false, writing no row and no audit line. A name equal to a transfer payee's name SHALL be refused, changing nothing.
+A name equal, ignoring case, to a live payee SHALL return that payee's id and stored name (`text.name`) with `created` false, writing no row and no audit line. A name equal to a transfer payee's name SHALL be refused, changing nothing.
 
 #### Scenario: The payee already exists
 - **GIVEN** a payee "Car Loan Co"

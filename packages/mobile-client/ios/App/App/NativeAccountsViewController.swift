@@ -87,6 +87,9 @@ final class NativeAccountsViewController: UIHostingController<AccountsScreen> {
         }
     }
 
+    // sc-5496: a slow open ended; a screen still failed or loading re-reads once
+    func budgetOpened() { Task { await model.budgetOpened() } }
+
     // loot-core's sync outcome, as NativeBridgePlugin follows it
     func syncStatusChanged(_ status: NativeSyncStatus) { model.syncStatus = status }
 

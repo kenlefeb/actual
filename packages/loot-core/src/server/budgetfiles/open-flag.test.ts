@@ -12,6 +12,7 @@ import {
   runHandler,
 } from '#server/mutators';
 import { isBudgetOpen } from '#server/native/open-gate';
+import * as sheet from '#server/sheet';
 
 vi.mock('#server/post');
 // A load outside NODE_ENV=test would start the backup timer
@@ -93,5 +94,95 @@ describe('the open flag during a load', () => {
     );
 
     expect(isBudgetOpen()).toBe(true);
+  });
+});
+
+// Fork-only (sc-5496): a native screen that read during a slow open re-reads
+// on this event, so it is sent once per successful open and never otherwise.
+describe('the budget-opened event', () => {
+  function openedCount(send: ReturnType<typeof vi.spyOn>) {
+    return send.mock.calls.filter(([name]) => name === 'budget-opened').length;
+  }
+
+  it('is sent with no payload once the budget is open, once per open', async () => {
+    const send = vi.spyOn(connection, 'send');
+    vi.spyOn(cloudStorage, 'possiblyUpload').mockResolvedValue(undefined);
+
+    await runHandler(handlers['load-budget'], { id: 'test-budget' });
+    expect(openedCount(send)).toBe(1);
+    expect(send).toHaveBeenCalledWith('budget-opened');
+    expect(send.mock.calls.find(([n]) => n === 'budget-opened')).toHaveLength(
+      1,
+    );
+
+    await runHandler(handlers['close-budget']);
+    await runHandler(handlers['load-budget'], { id: 'test-budget' });
+    expect(openedCount(send)).toBe(2);
+  });
+
+  it('is sent after the budget is marked open', async () => {
+    let openAtSend: boolean | undefined;
+    vi.spyOn(connection, 'send').mockImplementation(name => {
+      if (name === 'budget-opened') openAtSend = isBudgetOpen();
+    });
+    vi.spyOn(cloudStorage, 'possiblyUpload').mockResolvedValue(undefined);
+
+    await runHandler(handlers['load-budget'], { id: 'test-budget' });
+
+    expect(openAtSend).toBe(true);
+  });
+
+  it('is not sent when the open fails', async () => {
+    const send = vi.spyOn(connection, 'send');
+    vi.spyOn(sheet, 'loadSpreadsheet').mockRejectedValue(new Error('broken'));
+
+    const { error } = await runHandler(handlers['load-budget'], {
+      id: 'test-budget',
+    });
+
+    expect(error).toBe('opening-budget');
+    expect(openedCount(send)).toBe(0);
+  });
+});
+
+describe('the slow-open test hook', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete (globalThis as { __forkTestSlowOpen?: number }).__forkTestSlowOpen;
+  });
+
+  it('holds the open back by the build-time delay, then opens', async () => {
+    vi.stubGlobal('__FORK_TEST_HOOKS__', true);
+    vi.stubGlobal('__FORK_TEST_SLOW_OPEN_MS__', 300);
+    vi.spyOn(cloudStorage, 'possiblyUpload').mockResolvedValue(undefined);
+
+    const loading = runHandler(handlers['load-budget'], { id: 'test-budget' });
+    await vi.waitFor(() =>
+      expect(
+        (globalThis as { __forkTestSlowOpen?: number }).__forkTestSlowOpen,
+      ).toBe(300),
+    );
+    expect(isBudgetOpen()).toBe(false);
+
+    await loading;
+    expect(isBudgetOpen()).toBe(true);
+  });
+
+  it('does nothing at 0, or without the test-hooks constant', async () => {
+    vi.stubGlobal('__FORK_TEST_HOOKS__', true);
+    vi.stubGlobal('__FORK_TEST_SLOW_OPEN_MS__', 0);
+    vi.spyOn(cloudStorage, 'possiblyUpload').mockResolvedValue(undefined);
+    await runHandler(handlers['load-budget'], { id: 'test-budget' });
+    expect(
+      (globalThis as { __forkTestSlowOpen?: number }).__forkTestSlowOpen,
+    ).toBeUndefined();
+
+    await runHandler(handlers['close-budget']);
+    vi.stubGlobal('__FORK_TEST_HOOKS__', false);
+    vi.stubGlobal('__FORK_TEST_SLOW_OPEN_MS__', 300);
+    await runHandler(handlers['load-budget'], { id: 'test-budget' });
+    expect(
+      (globalThis as { __forkTestSlowOpen?: number }).__forkTestSlowOpen,
+    ).toBeUndefined();
   });
 });

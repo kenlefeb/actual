@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 
 import {
+  eventRoutingProblems,
   findNativeSources,
   missingFromProject,
   problems,
@@ -489,5 +490,20 @@ void test('Native Swift: the UI-test hook outside #if DEBUG fails', () => {
         'app.launchArguments = ["-UITestAccounts", "YES"]\n',
     }),
     [],
+  );
+});
+
+// sc-5496 (native-budget-opened-signal D2): both shells send events through
+// PageEventRouting.route, so budget-opened never reaches their change path
+void test('Native Swift: both shells route events through PageEventRouting', () => {
+  const routed = 'PageEventRouting.route(event, onBudgetOpened: x) { y() }';
+  assert.deepEqual(eventRoutingProblems(routed, routed), []);
+  assert.match(
+    eventRoutingProblems('onEvent?(event)', routed)[0],
+    /NativeBridgePlugin/,
+  );
+  assert.match(
+    eventRoutingProblems(routed, '// PageEventRouting.route( in a comment')[0],
+    /MacEngineHost/,
   );
 });

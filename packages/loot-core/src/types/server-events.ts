@@ -108,6 +108,8 @@ type ApiFetchRedirectedEvent = undefined;
 export type ServerEvents = {
   'backups-updated': BackupUpdatedEvent;
   'cells-changed': CellsChangedEvent;
+  // Fork (sc-5496): the budget is open and reads are served; no payload
+  'budget-opened': undefined;
   'fallback-write-error': FallbackWriteErrorEvent;
   // Fork (sc-5219): a write of the open budget failed to store; nothing more is stored
   'storage-failed': { lastStoredFlushAt: number | null; quota: boolean };

@@ -31,6 +31,9 @@ final class NativePaychecksViewController: UIHostingController<PaychecksScreen> 
         }
     }
 
+    // sc-5496: a slow open ended; a list still failed or loading re-reads once
+    func budgetOpened() { Task { await model.budgetOpened() } }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemGroupedBackground

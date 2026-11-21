@@ -119,6 +119,15 @@ public final class PaychecksViewModel: ObservableObject {
         await load()
     }
 
+    // sc-5496: loot-core finished opening a budget. A screen that read during a slow open
+    // (still loading, or failed) re-reads once, replacing a read in flight; one showing a
+    // value ignores it. Not while in the background: the read on returning covers it.
+    // A failed re-read stays failed until the next event, so it cannot loop.
+    public func budgetOpened() async {
+        guard isSceneActive, state.read == nil else { return }
+        await load()
+    }
+
     public func setSceneActive(_ active: Bool) async {
         guard active != isSceneActive else { return }
         isSceneActive = active

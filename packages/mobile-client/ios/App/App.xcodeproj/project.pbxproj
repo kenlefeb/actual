@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		FB5496000000000000000104 /* PageEventRouting.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5496000000000000000004 /* PageEventRouting.swift */; };
+		FB5496000000000000000103 /* SlowOpenUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5496000000000000000003 /* SlowOpenUITests.swift */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
@@ -90,6 +92,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		FB5496000000000000000004 /* PageEventRouting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PageEventRouting.swift; sourceTree = "<group>"; };
+		FB5496000000000000000003 /* SlowOpenUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlowOpenUITests.swift; sourceTree = "<group>"; };
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
 		50379B222058CBB4000EE86E /* capacitor.config.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = capacitor.config.json; sourceTree = "<group>"; };
 		504EC3041FED79650016851F /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -263,6 +267,7 @@
 				FB5247000000000000000001 /* PageRecovery.swift */,
 				FB5399000000000000000001 /* PageDialogs.swift */,
 				FB5296000000000000000001 /* WriteStorageLineFit.swift */,
+				FB5496000000000000000004 /* PageEventRouting.swift */,
 				FB5220000000000000000001 /* WindowNotices.swift */,
 				FB5219000000000000000002 /* StorageNotices.swift */,
 				FB4942000000000000000001 /* BudgetState.swift */,
@@ -305,6 +310,7 @@
 				FB5219E00000000000000006 /* SyncGateUITests.swift */,
 				FB5219E00000000000000005 /* UnguardedPageUITests.swift */,
 				FB5296000000000000000003 /* StorageLineUITests.swift */,
+				FB5496000000000000000003 /* SlowOpenUITests.swift */,
 			);
 			path = AppUITests;
 			sourceTree = "<group>";
@@ -479,6 +485,7 @@
 				FB5247000000000000000101 /* PageRecovery.swift in Sources */,
 				FB5399000000000000000101 /* PageDialogs.swift in Sources */,
 				FB5296000000000000000101 /* WriteStorageLineFit.swift in Sources */,
+				FB5496000000000000000104 /* PageEventRouting.swift in Sources */,
 				FB5220000000000000000101 /* WindowNotices.swift in Sources */,
 				FB5219000000000000000102 /* StorageNotices.swift in Sources */,
 				FB4942000000000000000101 /* BudgetState.swift in Sources */,
@@ -531,6 +538,7 @@
 				FB5219E00000000000000106 /* SyncGateUITests.swift in Sources */,
 				FB5219E00000000000000105 /* UnguardedPageUITests.swift in Sources */,
 				FB5296000000000000000103 /* StorageLineUITests.swift in Sources */,
+				FB5496000000000000000103 /* SlowOpenUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -24,6 +24,8 @@ public class NativeBridgePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
     var onPageUnguarded: ((String) -> Void)?
     // ...and one that has it, which clears that
     var onPageGuarded: (() -> Void)?
+    // sc-5496: the budget finished opening; only this gets it, never onEvent, onPaychecksEvent or onChange
+    var onBudgetOpened: (() -> Void)?
     var onChange: (() -> Void)?
     // sc-3611: the budget's sync outcome for the Accounts subtitle, kept while
     // the screen comes and goes; main queue
@@ -69,14 +71,16 @@ public class NativeBridgePlugin: CAPPlugin, CAPBridgedPlugin, WKScriptMessageHan
             if event == "storage-failed" { writeStorage.storageFailed() }
             if event == "storage-failed" || event == "storage-close-failed" { onStorageEvent?(message.body) }
         }
-        onEvent?(event)
-        onPaychecksEvent?(event, NativeBridgeEvent.tables(of: message.body))
-        let status = syncStatus.next(after: message.body, now: Date())
-        if status != syncStatus {
-            syncStatus = status
-            onSyncStatus?(status)
+        PageEventRouting.route(event, onBudgetOpened: onBudgetOpened) {
+            onEvent?(event)
+            onPaychecksEvent?(event, NativeBridgeEvent.tables(of: message.body))
+            let status = syncStatus.next(after: message.body, now: Date())
+            if status != syncStatus {
+                syncStatus = status
+                onSyncStatus?(status)
+            }
+            coalescer.notify()
         }
-        coalescer.notify()
     }
 
     // Only on the app's own page (PageCall, sc-3859)

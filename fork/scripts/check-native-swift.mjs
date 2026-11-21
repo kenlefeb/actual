@@ -211,6 +211,26 @@ export function storageGuardRolloutProblems(
   return found;
 }
 
+// sc-5496 (native-budget-opened-signal D2): both shells hand every page event to
+// PageEventRouting.route, which keeps `budget-opened` off the change path. A
+// shell that fans events out itself would re-read a loaded Budget screen.
+export function eventRoutingProblems(pluginSource, hostSource) {
+  const calls = source =>
+    source
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/.*$/gm, '')
+      .includes('PageEventRouting.route(');
+  return [
+    ['NativeBridgePlugin', pluginSource],
+    ['MacEngineHost', hostSource],
+  ]
+    .filter(([, source]) => !calls(source))
+    .map(
+      ([name]) =>
+        `${name} must send page events through PageEventRouting.route`,
+    );
+}
+
 export function missingFromProject(names, project) {
   const entries = appSourceEntries(project);
   return names.filter(name => !entries.has(name));
@@ -248,6 +268,18 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       `${join(core, name)}: not in the Xcode project's Sources, so the iPhone app build cannot see it`,
     );
   }
+  found.push(
+    ...eventRoutingProblems(
+      readFileSync(
+        join(SWIFT_ROOT, 'ios/App/App/NativeBridgePlugin.swift'),
+        'utf8',
+      ),
+      readFileSync(
+        join(SWIFT_ROOT, 'macos/HomeEconomicsMac/MacEngineHost.swift'),
+        'utf8',
+      ),
+    ),
+  );
   found.push(
     ...storageGuardRolloutProblems(
       readFileSync(

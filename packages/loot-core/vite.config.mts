@@ -90,6 +90,13 @@ export default defineConfig(({ mode }) => {
           ? Number(process.env.FORK_TEST_FAIL_STORAGE_AFTER_MS ?? 0)
           : 0,
       ),
+      // sc-5496: delays the open before the budget is marked open, so a test
+      // can show a read made during a slow open ending loaded. 0 unless asked
+      __FORK_TEST_SLOW_OPEN_MS__: JSON.stringify(
+        process.env.FORK_TEST_HOOKS === 'true'
+          ? Number(process.env.FORK_TEST_SLOW_OPEN_MS ?? 0)
+          : 0,
+      ),
       __FORK_TEST_FAIL_STORAGE_QUOTA__: JSON.stringify(
         process.env.FORK_TEST_HOOKS === 'true' &&
           process.env.FORK_TEST_FAIL_STORAGE_QUOTA === 'true',

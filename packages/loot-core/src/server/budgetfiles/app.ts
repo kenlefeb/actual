@@ -56,6 +56,9 @@ import {
   stopBackupService,
 } from './backups';
 
+declare const __FORK_TEST_HOOKS__: boolean | undefined;
+declare const __FORK_TEST_SLOW_OPEN_MS__: number | undefined;
+
 const DEMO_BUDGET_ID = '_demo-budget';
 const TEST_BUDGET_ID = '_test-budget';
 
@@ -727,8 +730,26 @@ async function _loadBudgetNow(id: Budget['id']): Promise<{
 
   clearUndo();
 
+  // Test-only (sc-5496): hold the open back so a native read made meanwhile is
+  // refused by the open gate and only the event below can load the screen.
+  // Build time only; Fork CI checks a production bundle lacks both markers.
+  if (
+    typeof __FORK_TEST_HOOKS__ !== 'undefined' &&
+    __FORK_TEST_HOOKS__ &&
+    typeof __FORK_TEST_SLOW_OPEN_MS__ !== 'undefined' &&
+    __FORK_TEST_SLOW_OPEN_MS__ > 0
+  ) {
+    (globalThis as { __forkTestSlowOpen?: number }).__forkTestSlowOpen =
+      __FORK_TEST_SLOW_OPEN_MS__;
+    await new Promise(resolve =>
+      setTimeout(resolve, __FORK_TEST_SLOW_OPEN_MS__),
+    );
+  }
+
   // Reads can be served from here on; the upload below is a network call
   markBudgetOpen();
+  // Fork (sc-5496): native screens that read during a slow open re-read on this
+  connection.send('budget-opened');
 
   // Ensure that syncing is enabled
   if (process.env.NODE_ENV !== 'test') {

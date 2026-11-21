@@ -43,6 +43,17 @@ describe('createNativeBridge', () => {
     expect(send).not.toHaveBeenCalled();
   });
 
+  it('forwards budget-opened, with no payload (sc-5496)', () => {
+    const { listeners, notify } = setup();
+
+    listeners.get('budget-opened')?.(undefined);
+
+    expect(notify).toHaveBeenCalledWith({
+      event: 'budget-opened',
+      payload: undefined,
+    });
+  });
+
   it('forwards cells-changed and sync-event to native code', () => {
     const { listeners, notify } = setup();
 

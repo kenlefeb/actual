@@ -230,6 +230,33 @@ const WRITES: Record<string, () => Promise<{ write_id: string }>> = {
       schedule_id,
     });
   },
+  write_create_paycheck: async () => {
+    const clearing = await api.createAccount({ name: 'Clearing' }, 0);
+    return call('write_create_paycheck', {
+      name: NAME,
+      clearing_account_id: clearing,
+      recurrence: {
+        frequency: 'monthly',
+        interval: 99999,
+        start: '2026-01-05',
+        end_mode: 'on_date',
+        end_date: '2100-12-31',
+      },
+      weekend_solve_mode: 'before',
+      gross_amount: 1e12,
+      deductions: [
+        { name: NAME, amount: 1e11 },
+        { name: `${NAME}2`, amount: 1e11 },
+      ],
+      deposits: [
+        {
+          account_id: h!.fixture.accountId,
+          kind: 'remainder',
+          post_automatically: true,
+        },
+      ],
+    });
+  },
 };
 
 describe('The undo-line estimate never undercounts', () => {

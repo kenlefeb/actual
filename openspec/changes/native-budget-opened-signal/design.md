@@ -12,7 +12,9 @@ No event on a failed open: `_loadBudget` returns before `markBudgetOpen()`.
 
 Each shared view model (`AccountsListViewModel`, `BudgetViewModel`, `PaychecksViewModel`) gets `budgetOpened()`, same guards as `pageReady()`: ignore while the scene is in the background (the read on returning covers it), then if the state is not `.loaded` call `load()`. A new `load()` supersedes one in flight (the `generation` counter already does this), so a read that timed out at the gate just before the event cannot leave the screen failed: its late failure is dropped. A screen showing a value (`.loaded`, `.stale`) ignores the event. One event causes at most one read; a failed re-read stays failed with Retry and waits for the next event, so there is no loop.
 
-The iPhone view controllers and the Mac host route the event name to the view models beside `ready`; the Mac host already passes every page event through `onEvent`.
+The shells route `budget-opened` only to `budgetOpened()` and return before everything else they do with an event. Neither shell filters event names today: the iPhone `NativeBridgePlugin` sends every event to `onEvent`, `onPaychecksEvent` and `coalescer.notify()`, and `MacEngineHost.receive` sends every event to `onEvent` and `coalescer.notify()`; `BudgetViewModel.changeEventReceived()` guards only on the scene being active. Unrouted, `budget-opened` would re-read a loaded Budget screen through that change path. So the shells return after `budgetOpened()`, before the coalescer, `onChange` and `onPaychecksEvent`.
+
+A loaded screen after a switch to a different budget is left alone: a follow-up only if a native screen ever outlives a switch.
 
 ## D3. Order and races
 
@@ -42,9 +44,9 @@ Fork CI refuses it in production: `check-test-hooks.mjs` gets the markers `__FOR
 - Page (`nativeBridge.test.ts`): `budget-opened` is forwarded as a notify event.
 - `check-test-hooks.test.mjs`: the new markers are caught.
 - Swift (`NativeBridgeCore` tests), for each of the three view models: failed then `budgetOpened()` reads once and ends loaded; loaded does not read; loading is superseded; a failed re-read stays failed after one read; background scene does not read. The shells' event routing: iPhone controllers and the Mac host pass `budget-opened` on.
-- UI/integration (slow-open page): iPhone `AppUITests` launches, opens Accounts, and sees the list with no tap on Retry; the Mac test in `HomeEconomicsMacTests` (beside the storage perf gate, which already runs the real hooks page) shows the Budget window loaded the same way.
+- UI/integration (slow-open page): iPhone `AppUITests` launches, opens Accounts, and sees the list with no tap on Retry; the Mac test in `HomeEconomicsMacTests` (beside the storage perf gate, which already runs the real hooks page) shows the Budget view model ends loaded through `MacEngineHost`'s real event path.
 
 ## Open questions
 
-1. Should a loaded screen also re-read on `budget-opened` after a budget switch (the new budget differs from the one shown)? Not needed for this story; the switch is the web UI's flow today. Recommendation: leave it, file a story if the native screens ever outlive a switch.
+1. Should a loaded screen also re-read after a switch? Settled: left alone (D2).
 2. Mac CI has no UI test target: the Mac proof is an XCTest in `HomeEconomicsMacTests` driving the real page. Architect to confirm that meets "on the Mac shell".

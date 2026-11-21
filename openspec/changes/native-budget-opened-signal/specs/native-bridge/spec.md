@@ -17,7 +17,7 @@ loot-core SHALL send a `budget-opened` event, with no payload, each time it mark
 - **THEN** `budget-opened` is sent again
 
 ### Requirement: A native screen that has not loaded re-reads when the budget opens
-On `budget-opened`, a native screen that is failed or still loading SHALL re-read once, replacing any read in flight. A screen showing a value SHALL ignore it. A screen in the background SHALL NOT read; its read on returning covers it. A failed re-read SHALL leave the screen failed with Retry until the next event. This holds on the iPhone and the Mac shell.
+On `budget-opened`, a native screen that is failed or still loading SHALL re-read once, replacing any read in flight. A screen showing a value SHALL ignore it. A screen in the background SHALL NOT read; its read on returning covers it. A failed re-read SHALL leave the screen failed with Retry until the next event. The shells SHALL route the event only to this re-read, never to the change path. This holds on the iPhone and the Mac shell.
 
 #### Scenario: Retry state clears itself
 - **GIVEN** a native screen showing Retry after a read refused during a slow open
@@ -25,14 +25,14 @@ On `budget-opened`, a native screen that is failed or still loading SHALL re-rea
 - **THEN** the screen re-reads once and shows its content with no tap on Retry
 
 #### Scenario: Already loaded
-- **GIVEN** a loaded native screen
-- **WHEN** `budget-opened` arrives
-- **THEN** it does not read
+- **GIVEN** a loaded native Budget screen
+- **WHEN** `budget-opened` arrives through the shell's real event path
+- **THEN** it does not read, by the re-read or by the change path
 
 #### Scenario: The event during a read
 - **GIVEN** a read in flight that then fails with `budget-not-open`
 - **WHEN** `budget-opened` arrives first
-- **THEN** a new read replaces it and the screen ends loaded
+- **THEN** a new read replaces it, the older refusal does not overwrite it, and the screen ends loaded
 
 #### Scenario: The re-read fails
 - **WHEN** the one re-read fails

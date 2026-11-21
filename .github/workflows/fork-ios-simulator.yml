@@ -71,11 +71,24 @@ jobs:
             const phones = Object.entries(d).filter(([k]) => k.includes("iOS")).flatMap(([, v]) => v);
             console.log(phones[phones.length - 1].udid)')"
           xcrun simctl boot "$UDID" || true
-          xcodebuild -workspace ios/App/App.xcworkspace -scheme App \
-            -configuration Debug -sdk iphonesimulator \
-            -destination "id=$UDID" \
-            -resultBundlePath "$RUNNER_TEMP/ui-tests.xcresult" \
-            CODE_SIGNING_ALLOWED=NO test
+          # Wait for the boot to finish: the first test's launch used to race it
+          xcrun simctl bootstatus "$UDID" -b > /dev/null
+          ARGS=(-workspace ios/App/App.xcworkspace -scheme App
+            -configuration Debug -sdk iphonesimulator
+            -destination "id=$UDID"
+            -derivedDataPath "$RUNNER_TEMP/dd"
+            CODE_SIGNING_ALLOWED=NO)
+          xcodebuild "${ARGS[@]}" build-for-testing
+          # sc-5540: the first launch of the app on a cold simulator is the slow
+          # one, and the test runner once gave up attaching to it ("Failed to get
+          # background assertion for target app", 36 s). Launch it once outside
+          # any test so the first test starts on a warm simulator. Not a retry: a
+          # test that fails still fails.
+          xcrun simctl install "$UDID" "$RUNNER_TEMP/dd/Build/Products/Debug-iphonesimulator/App.app"
+          xcrun simctl launch --terminate-running-process "$UDID" com.actualbudget.actual -UITestAccounts YES || true
+          sleep 5
+          xcrun simctl terminate "$UDID" com.actualbudget.actual || true
+          xcodebuild "${ARGS[@]}" -resultBundlePath "$RUNNER_TEMP/ui-tests.xcresult" test-without-building
 
       # The result bundle holds the failure screenshots and the UI hierarchy
       - name: Keep the test results on a failure

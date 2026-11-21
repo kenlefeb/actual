@@ -1,19 +1,24 @@
 #if DEBUG
 import UIKit
 import WebKit
+import notify
 
 // Test-only (sc-5399). `-UITestPageDialog alert|confirm|prompt` makes the app's
 // own page open that dialog once it has loaded, and writes on screen what the
 // page got back and whether the page still answers afterwards, for
 // PageDialogsUITests to read. `-UITestPageDialogCover YES` first presents a
 // full-screen native screen, as the native tabs and Reconcile do, so the page's
-// own view is not on screen. `-UITestPageDialogReloadAfter N` reloads the page
-// N seconds after the dialog opens, as the page going away would. Debug builds only.
+// own view is not on screen. `-UITestPageDialogReloadOnSignal YES` reloads the
+// page, as the page going away would, when the test posts the Darwin notification
+// `reloadSignal` (not after a delay: a slow runner's UI queries can miss any
+// window, sc-5540). Debug builds only.
 @MainActor
 enum UITestPageDialogs {
     private static var kind: String? { UserDefaults.standard.string(forKey: "UITestPageDialog") }
     private static var cover: Bool { UserDefaults.standard.bool(forKey: "UITestPageDialogCover") }
-    private static var reloadAfter: Double { UserDefaults.standard.double(forKey: "UITestPageDialogReloadAfter") }
+    private static var reloadOnSignal: Bool { UserDefaults.standard.bool(forKey: "UITestPageDialogReloadOnSignal") }
+    static let reloadSignal = "app.homeeconomics.uitest.reload-page"
+    private static var reloadToken: Int32 = 0
     private static var report: UILabel?
 
     static func startIfRequested(webView: WKWebView, serverURL: URL) {
@@ -28,11 +33,8 @@ enum UITestPageDialogs {
             case "prompt": script = "return String(prompt('Name the new category', 'Groceries'))"
             default: script = "alert('We had an unknown problem opening the budget.'); return 'closed'"
             }
-            if reloadAfter > 0 {
-                Task {
-                    try? await Task.sleep(nanoseconds: UInt64(reloadAfter * 1_000_000_000))
-                    webView.reload()
-                }
+            if reloadOnSignal {
+                notify_register_dispatch(reloadSignal, &reloadToken, .main) { _ in webView.reload() }
             }
             let answer = (try? await page.run(script)) as? String ?? "no answer"
             let after = (try? await page.run("return 'answers'")) as? String ?? "silent"

@@ -789,7 +789,7 @@ public struct NativeBridgeClient {
     // deadline only ends the wait; `settled` runs when the page call itself
     // returns or fails, which can be later, since a script call into a
     // suspended page ignores cancellation (sc-3884).
-    public func sync(settled: @escaping () -> Void = {}) async throws -> SyncResult {
+    public func sync(settled: @escaping @MainActor () -> Void = {}) async throws -> SyncResult {
         let json = try await withTimeout("sync", syncTimeout, settled: settled) { try await transport("sync", "{}") }
         guard let result = try? JSONDecoder().decode(SyncResult.self, from: Data(json.utf8)) else {
             throw NativeBridgeError.badResult
@@ -827,14 +827,17 @@ public struct NativeBridgeClient {
     // Not a task group: a group waits for every child, and a WebKit script call
     // into a suspended page ignores cancellation, so the deadline would never fire.
     private func withTimeout(
-        _ name: String, _ timeout: TimeInterval, settled: (() -> Void)? = nil, _ work: @escaping () async throws -> String
+        _ name: String, _ timeout: TimeInterval, settled: (@MainActor () -> Void)? = nil, _ work: @escaping () async throws -> String
     ) async throws -> String {
         let once = ResumeOnce<String>()
         return try await withCheckedThrowingContinuation { continuation in
             once.continuation = continuation
             let task = Task {
-                do { once.resume(.success(try await work())) } catch { once.resume(.failure(error)) }
-                settled?()
+                let outcome: Result<String, Error>
+                do { outcome = .success(try await work()) } catch { outcome = .failure(error) }
+                // Before the caller hears the result, so a next call sees the call as settled (sc-5540)
+                if let settled { await settled() }
+                once.resume(outcome)
             }
             let nanoseconds = UInt64(timeout * 1_000_000_000)
             Task {

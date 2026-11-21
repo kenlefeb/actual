@@ -91,7 +91,7 @@ jobs:
           xcodebuild "${ARGS[@]}" -resultBundlePath "$RUNNER_TEMP/ui-tests.xcresult" test-without-building
 
       # sc-5496: the same app on a page built with a slow open (above the engine's 4 s
-      # open wait): the Accounts list must load with no tap on Retry. A Debug simulator
+      # open wait): after the page is reopened, Retry shows and then goes with no tap. A Debug simulator
       # build only; check-release-page.sh refuses this page in a Release build.
       # Runs even when an earlier test step failed, so the evidence for this test is never
       # blocked by an unrelated flake (the PageDialogs tests, sc-5540). The job still fails
@@ -101,11 +101,13 @@ jobs:
         working-directory: packages/mobile-client
         env:
           FORK_TEST_HOOKS: 'true'
-          FORK_TEST_SLOW_OPEN_MS: '6000'
+          FORK_TEST_SLOW_OPEN_MS: '10000'
           TEST_RUNNER_SLOW_OPEN: '1'
         run: |
           (cd ../.. && yarn build:browser --skip-translations)
           yarn sync:ios
+          # The page must hold the hook, or the test would pass with no slow open to show
+          grep -rq __forkTestSlowOpen www
           UDID="$(xcrun simctl list devices available iPhone -j | node -e '
             const d = JSON.parse(require("fs").readFileSync(0, "utf8")).devices;
             const phones = Object.entries(d).filter(([k]) => k.includes("iOS")).flatMap(([, v]) => v);

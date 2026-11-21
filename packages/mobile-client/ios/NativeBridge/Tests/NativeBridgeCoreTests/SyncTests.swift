@@ -570,6 +570,25 @@ final class BudgetRefreshTests: XCTestCase {
         guard case .loaded = model.state else { return XCTFail("expected loaded, got \(model.state)") }
     }
 
+    // sc-5540: a pull right after a settled one is a new pull. The earlier one's
+    // "settled" used to land a moment after its result, so the second was ignored
+    // now and then (CI flaked on testNonEventReadsClearTheFailure)
+    func testAPullRightAfterAFailedPullIsNotIgnored() async throws {
+        let json = try fixtureJSON("budget-month-envelope")
+        let page = Page(month: json)
+        let model = model(page)
+        let failing = try syncFixture("network")
+        await model.load()
+        for round in 0..<300 {
+            page.syncReply = { failing }
+            await model.refresh()
+            guard model.refreshError == .offline else { return XCTFail("round \(round): the failing pull was ignored") }
+            page.syncReply = { #"{"ok":true}"# }
+            await model.refresh()
+            guard model.refreshError == nil else { return XCTFail("round \(round): the pull after it was ignored") }
+        }
+    }
+
     // A read that no change event caused clears a pull's failure (sc-4081)
     func testNonEventReadsClearTheFailure() async throws {
         let json = try fixtureJSON("budget-month-envelope")

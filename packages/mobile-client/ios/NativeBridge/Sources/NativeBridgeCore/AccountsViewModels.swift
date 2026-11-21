@@ -62,7 +62,7 @@ private let accountsWatchedTables: Set<String> = ["transactions", "accounts", "p
 
 // One server sync through the page: no bank sync (that is sc-3899). nil when it
 // worked; otherwise the fixed reason the Budget tab's pull shows.
-private func pullSync(_ client: NativeBridgeClient, settled: @escaping () -> Void) async -> BudgetRefreshError? {
+private func pullSync(_ client: NativeBridgeClient, settled: @escaping @MainActor () -> Void) async -> BudgetRefreshError? {
     do {
         switch try await client.sync(settled: settled) {
         case .ok: return nil
@@ -292,7 +292,7 @@ public final class AccountsListViewModel: ObservableObject {
         guard isSceneActive, !isSyncing else { return }
         isSyncing = true
         refreshError = nil
-        let failure = await pullSync(client, settled: { Task { @MainActor [weak self] in self?.isSyncing = false } })
+        let failure = await pullSync(client, settled: { [weak self] in self?.isSyncing = false })
         syncStatus = syncStatus.after(pull: failure, now: Date())
         if failure == .waitingForStorage { return }
         if let failure {
@@ -596,7 +596,7 @@ public final class AccountRegisterViewModel: ObservableObject {
         guard isSceneActive, !isSyncing else { return }
         isSyncing = true
         refreshError = nil
-        if let failure = await pullSync(client, settled: { Task { @MainActor [weak self] in self?.isSyncing = false } }) {
+        if let failure = await pullSync(client, settled: { [weak self] in self?.isSyncing = false }) {
             if failure == .waitingForStorage { return }
             refreshError = failure
             if let good = state.value { state = .stale(good, failure == .timedOut ? .timedOut : .other) }

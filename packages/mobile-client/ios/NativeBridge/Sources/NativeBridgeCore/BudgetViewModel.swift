@@ -230,7 +230,7 @@ public final class BudgetViewModel: ObservableObject {
         refreshError = nil
         let result: SyncResult
         do {
-            result = try await client.sync(settled: { Task { @MainActor [weak self] in self?.isSyncing = false } })
+            result = try await client.sync(settled: { [weak self] in self?.isSyncing = false })
         } catch {
             // Only the timeout has its own message; no error's text is kept
             if case NativeBridgeError.timedOut = error { failRefresh(.timedOut) } else { failRefresh(.failed) }

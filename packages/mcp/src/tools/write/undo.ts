@@ -15,6 +15,7 @@ import { budgeted } from './budget';
 import { groupOrder, load, nextOf } from './categories';
 import { NOT_UNDOABLE, UNDOABLE } from './declarations';
 import { checkRows, rowKey as stateKey } from './delete-snapshot';
+import { inputDefinition } from './paychecks';
 import {
   applyScheduleFields,
   sameValue,
@@ -609,6 +610,43 @@ async function planScheduleCreate(ctx: Ctx): Promise<Plan> {
   };
 }
 
+/** A created paycheck: deleted while it holds what was logged and none of its schedules has posted a transaction. */
+async function planPaycheckCreate(ctx: Ctx): Promise<Plan> {
+  const [rowId, ...rest] = strings(ctx.entry.outcome?.created);
+  if (!rowId || rest.length > 0) {
+    throw notUndoable('Its created row was not recorded.');
+  }
+  const found = (await api.getPaychecks()).find(p => p.id === rowId);
+  const logged = changesOf(ctx.entry);
+  const stale = found
+    ? (
+        [
+          ['name', found.name],
+          ['definition', inputDefinition(found.definition)],
+        ] as const
+      )
+        .filter(
+          ([f, now]) => !sameValue(now, logged.find(c => c.field === f)?.after),
+        )
+        .map(([f]) => `${rowId} (${f})`)
+    : [`${rowId} (missing)`];
+  if (stale.length > 0) throw conflict(stale);
+  const { paySchedule, deposits } = found!.definition;
+  for (const schedule of [paySchedule, ...deposits.map(d => d.schedule)]) {
+    if (!schedule) continue;
+    const posted = (await api.runQuery(
+      api.q('transactions').filter({ schedule }).select(['id']).limit(1),
+    )) as { data: unknown[] };
+    if (posted.data.length > 0) throw conflict([`${rowId} (in use)`]);
+  }
+  return {
+    ids: [rowId],
+    deletes: true,
+    changes: [{ id: rowId, field: 'name', before: found!.name, after: null }],
+    steps: [{ id: rowId, run: () => api.deletePaycheck(rowId) }],
+  };
+}
+
 /** An updated schedule: the logged before-values go back through the same engine update. */
 async function planScheduleUpdate(ctx: Ctx): Promise<Plan> {
   const applied = appliedOf(ctx.entry);
@@ -1143,6 +1181,7 @@ export const PLANNERS: Record<string, (ctx: Ctx) => Promise<Plan>> = {
   write_create_payee: planPayeeCreate,
   write_create_schedule: planScheduleCreate,
   write_update_schedule: planScheduleUpdate,
+  write_create_paycheck: planPaycheckCreate,
 };
 
 type RegisterRead = <S extends z.ZodRawShape>(
@@ -1193,7 +1232,7 @@ export function registerUndoTools(
 
   tool(
     'write_undo',
-    "Undo one of this identity's earlier writes by its write_id (from the write's result or list_writes): transaction creates and updates, budget amounts (also copy last month and set to average), category and group creates and updates, payee creates, deletes of transactions, categories and category groups (sync first; the deleted rows come back with their ids), schedule creates and updates, and category and group moves (sync first; the row goes back before its old next sibling, or is refused naming what changed). It restores the logged values and is refused, changing nothing, if any of them changed since or a created row is in use. A write can be undone once. Reversing a write needs the scopes that write needed. Paycheck skips and account tools are not undoable.",
+    "Undo one of this identity's earlier writes by its write_id (from the write's result or list_writes): transaction creates and updates, budget amounts (also copy last month and set to average), category and group creates and updates, payee creates, deletes of transactions, categories and category groups (sync first; the deleted rows come back with their ids), schedule creates and updates, paycheck creates, and category and group moves (sync first; the row goes back before its old next sibling, or is refused naming what changed). It restores the logged values and is refused, changing nothing, if any of them changed since or a created row is in use. A write can be undone once. Reversing a write needs the scopes that write needed. Paycheck creates are undone while no pay has posted. Paycheck skips, schedule and paycheck deletes and account tools are not undoable.",
     {
       write_id: id,
       allow_reconciled: z.boolean().optional(),

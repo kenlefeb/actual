@@ -1,4 +1,5 @@
 import XCTest
+import notify
 
 // Fork-only (sc-5399). A page's alert, confirm and prompt hold all of the page's
 // JavaScript until they are answered. The app shows them above any native
@@ -11,10 +12,10 @@ final class PageDialogsUITests: XCTestCase {
         continueAfterFailure = false
     }
 
-    private func launch(_ kind: String, cover: Bool = true, reloadAfter: Int? = nil) {
+    private func launch(_ kind: String, cover: Bool = true, reloadOnSignal: Bool = false) {
         app.launchArguments = ["-UITestPageDialog", kind, "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
         if cover { app.launchArguments += ["-UITestPageDialogCover", "YES"] }
-        if let reloadAfter { app.launchArguments += ["-UITestPageDialogReloadAfter", String(reloadAfter)] }
+        if reloadOnSignal { app.launchArguments += ["-UITestPageDialogReloadOnSignal", "YES"] }
         app.launch()
     }
 
@@ -81,11 +82,13 @@ final class PageDialogsUITests: XCTestCase {
 
     // The page going away takes its dialog with it: none is left over a dead page
     func testThePageReloadingTakesItsDialogAway() {
-        // The dialog is on screen this long before the reload takes it away; at 5 s a
-        // slow runner's UI queries missed it (CI, 2026-11-20: the recording shows it
-        // up, then gone, the app having answered correctly)
-        launch("alert", reloadAfter: 15)
+        // The reload waits for this test's signal, sent once it has seen the dialog: any
+        // delay the app picked was missed now and then by a slow runner's UI queries (CI,
+        // 2026-11-20: 5 s, then 15 s, each time the dialog was up and gone unseen, the app
+        // having answered correctly)
+        launch("alert", reloadOnSignal: true)
         let dialog = alert("We had an unknown problem opening the budget.")
+        XCTAssertEqual(notify_post("app.homeeconomics.uitest.reload-page"), UInt32(NOTIFY_STATUS_OK))
         let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: dialog)
         XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: 20), .completed, "the dialog stayed over the reloaded page")
     }

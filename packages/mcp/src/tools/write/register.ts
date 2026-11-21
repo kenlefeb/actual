@@ -19,7 +19,7 @@ import { registerTransactionWriteTools } from './transactions';
 export function registerWriteTools(tool: RegisterWriteTool, limits: Limits) {
   registerTransactionWriteTools(tool, limits);
   registerBudgetWriteTools(tool, limits);
-  registerPaycheckWriteTools(tool);
+  registerPaycheckWriteTools(tool, limits);
   registerScheduleWriteTools(tool);
   registerAccountWriteTools(tool);
   registerAccountCloseTools(tool);

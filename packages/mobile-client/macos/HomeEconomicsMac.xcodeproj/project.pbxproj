@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		FB5496000000000000000002 /* BudgetOpenedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5496000000000000000001 /* BudgetOpenedTests.swift */; };
 		0AE479F0C3B3CECFA0884FA3 /* NavigationPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = B93C4666FA76203E682E2997 /* NavigationPolicy.swift */; };
 		28EC592D58E47B867FCE83AB /* NativeBridgeCore in Frameworks */ = {isa = PBXBuildFile; productRef = ABB2EF3E62534EA3458FC777 /* NativeBridgeCore */; };
 		4D6B1D6CA58D0DA0283D6194 /* EngineSpikeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C2AD8712ED066882131A5FE /* EngineSpikeTests.swift */; };
@@ -37,6 +38,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		FB5496000000000000000001 /* BudgetOpenedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BudgetOpenedTests.swift; sourceTree = "<group>"; };
 		084B87B4A29BAEEF019D00E4 /* MacPageDialogsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacPageDialogsTests.swift; sourceTree = "<group>"; };
 		1E78C87304ED3D02413EBD56 /* StorageLossMonitorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageLossMonitorTests.swift; sourceTree = "<group>"; };
 		20D5FA73EC2BF679AC0CC233 /* HomeEconomicsMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeEconomicsMacApp.swift; sourceTree = "<group>"; };
@@ -132,6 +134,7 @@
 				F40D4FD748B9FD8E90F3DE74 /* PageRecoveryTests.swift */,
 				1E78C87304ED3D02413EBD56 /* StorageLossMonitorTests.swift */,
 				E25B877DB99F661948EE07DA /* StoragePerfGateTests.swift */,
+				FB5496000000000000000001 /* BudgetOpenedTests.swift */,
 				CE70CE285A9B6C939404F117 /* WWWSchemeHandlerTests.swift */,
 			);
 			path = HomeEconomicsMacTests;
@@ -252,6 +255,7 @@
 				A071576772926A277BC04DFD /* PageRecoveryTests.swift in Sources */,
 				D3C448290DA45717302FF5D8 /* StorageLossMonitorTests.swift in Sources */,
 				F61D612CD5B76B0191980DBE /* StoragePerfGateTests.swift in Sources */,
+				FB5496000000000000000002 /* BudgetOpenedTests.swift in Sources */,
 				E2ABA8D1A32401500743525F /* WWWSchemeHandlerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -47,6 +47,9 @@ jobs:
         run: yarn build:browser --skip-translations
         env:
           FORK_TEST_HOOKS: 'true'
+          # sc-5496: every open waits this long (above the engine's 4 s open wait), so
+          # BudgetOpenedTests can show a read made during a slow open ending loaded
+          FORK_TEST_SLOW_OPEN_MS: '6000'
       - name: Stage it for the Mac app
         run: yarn workspace mobile-client stage:www
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -79,6 +82,18 @@ jobs:
           -scheme HomeEconomicsMac
           -destination platform=macOS
           -only-testing:HomeEconomicsMacTests/StoragePerfGateTests
+          CODE_SIGNING_ALLOWED=NO
+      # sc-5496: the same staged page, a slow open (no Release or archive build bundles it)
+      - name: Show a read during a slow open ends loaded, through the real event path
+        working-directory: packages/mobile-client/macos
+        env:
+          TEST_RUNNER_HE_SLOW_OPEN: '1'
+        run: >-
+          xcodebuild test
+          -project HomeEconomicsMac.xcodeproj
+          -scheme HomeEconomicsMac
+          -destination platform=macOS
+          -only-testing:HomeEconomicsMacTests/BudgetOpenedTests
           CODE_SIGNING_ALLOWED=NO
 
   fork-mac-native:

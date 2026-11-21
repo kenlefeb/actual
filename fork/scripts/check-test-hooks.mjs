@@ -19,6 +19,9 @@ export const HOOK_MARKERS = [
   // A test page that loads without the storage guard (the Designer's ruling)
   '__forkTestPageUnguarded',
   '__FORK_TEST_PAGE_UNGUARDED__',
+  // sc-5496: the slow-open hook and the global it sets when the delay runs
+  '__FORK_TEST_SLOW_OPEN_MS__',
+  '__forkTestSlowOpen',
 ];
 
 const DEFAULT_BUILD = 'packages/desktop-client/build';

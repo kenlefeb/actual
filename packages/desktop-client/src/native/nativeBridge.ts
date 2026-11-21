@@ -35,7 +35,12 @@ declare global {
   }
 }
 
-const EVENTS = ['cells-changed', 'sync-event', 'storage-close-failed'];
+const EVENTS = [
+  'cells-changed',
+  'sync-event',
+  'storage-close-failed',
+  'budget-opened',
+];
 
 // sc-5219 (native-durable-writes D5): every allowlisted name not listed here
 // counts as a write, so a new handler is refused after a storage failure

@@ -27,6 +27,14 @@ final class NativeBudgetViewController: UIHostingController<BudgetTabView> {
     // The page's change events (NativeBridgePlugin.onEvent) end here
     func changeEventReceived() { model.changeEventReceived() }
 
+    // sc-5496: a slow open ended; the month and the paycheck row, if still failed or loading, re-read once
+    func budgetOpened() {
+        Task {
+            await model.budgetOpened()
+            await paychecks.budgetOpened()
+        }
+    }
+
     // The page bridge's "ready" message, after the inbound origin guard (sc-3859)
     func pageReady() {
         Task { await model.pageReady() }

@@ -21,6 +21,8 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
     let webView: WKWebView
     // Every forwarded event, then one coalesced call per burst
     var onEvent: ((String) -> Void)?
+    // sc-5496: the budget finished opening; only this gets it, never onEvent or onChange
+    var onBudgetOpened: (() -> Void)?
     var onChange: (() -> Void)?
     var onRefusedSignIn: (() -> Void)?
     var onBudgetState: ((BudgetState) -> Void)?
@@ -173,8 +175,10 @@ final class MacEngineHost: NSObject, WKScriptMessageHandler, WKNavigationDelegat
             if let epoch = NativeBridgeEvent.readyEpoch(of: body) { writeStorage.pageLoaded(epoch: epoch) }
             if let stored = NativeBridgeEvent.stored(of: body) { writeStorage.storedEvent(seq: stored.seq, epoch: stored.epoch) }
         }
-        onEvent?(event)
-        coalescer.notify()
+        PageEventRouting.route(event, onBudgetOpened: onBudgetOpened) {
+            onEvent?(event)
+            coalescer.notify()
+        }
     }
 
     // MARK: WKNavigationDelegate

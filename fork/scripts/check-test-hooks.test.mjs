@@ -48,6 +48,9 @@ for (const marker of [
   // A test page that loads without the storage guard (the Designer's ruling)
   '__forkTestPageUnguarded',
   '__FORK_TEST_PAGE_UNGUARDED__',
+  // sc-5496: the slow-open hook and the global it sets
+  '__FORK_TEST_SLOW_OPEN_MS__',
+  '__forkTestSlowOpen',
 ]) {
   void test(`Test hooks: finds ${marker}`, () => {
     const dir = build({

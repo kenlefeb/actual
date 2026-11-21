@@ -88,6 +88,12 @@ final class NativeTabBarController: UITabBarController, UITabBarControllerDelega
             self?.accountsOverlay?.eventReceived(event, tables: tables)
             self?.reconcileFlow?.eventReceived(event, tables: tables)
         }
+        // sc-5496: a screen that read during a slow open re-reads once the budget has opened
+        bridgeController.nativeBridge.onBudgetOpened = { [weak self] in
+            self?.budgetOverlay?.budgetOpened()
+            self?.paychecksOverlay?.screen.budgetOpened()
+            self?.accountsOverlay?.budgetOpened()
+        }
         bridgeController.nativeBridge.onSyncStatus = { [weak self] in self?.accountsOverlay?.syncStatusChanged($0) }
         chrome.onPresentReconcile = { [weak self] body in self?.presentReconcile(body) }
         // Hidden until a budget is open (sign-in and the budget list have none)

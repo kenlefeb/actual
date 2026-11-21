@@ -77,6 +77,28 @@ jobs:
             -resultBundlePath "$RUNNER_TEMP/ui-tests.xcresult" \
             CODE_SIGNING_ALLOWED=NO test
 
+      # sc-5496: the same app on a page built with a slow open (above the engine's 4 s
+      # open wait): the Accounts list must load with no tap on Retry. A Debug simulator
+      # build only; check-release-page.sh refuses this page in a Release build.
+      - name: Build the slow-open page and run its UI test
+        working-directory: packages/mobile-client
+        env:
+          FORK_TEST_HOOKS: 'true'
+          FORK_TEST_SLOW_OPEN_MS: '6000'
+          TEST_RUNNER_SLOW_OPEN: '1'
+        run: |
+          (cd ../.. && yarn build:browser --skip-translations)
+          yarn sync:ios
+          UDID="$(xcrun simctl list devices available iPhone -j | node -e '
+            const d = JSON.parse(require("fs").readFileSync(0, "utf8")).devices;
+            const phones = Object.entries(d).filter(([k]) => k.includes("iOS")).flatMap(([, v]) => v);
+            console.log(phones[phones.length - 1].udid)')"
+          xcodebuild -workspace ios/App/App.xcworkspace -scheme App \
+            -configuration Debug -sdk iphonesimulator \
+            -destination "id=$UDID" \
+            -only-testing:AppUITests/SlowOpenUITests \
+            CODE_SIGNING_ALLOWED=NO test
+
       # The result bundle holds the failure screenshots and the UI hierarchy
       - name: Keep the test results on a failure
         if: failure()

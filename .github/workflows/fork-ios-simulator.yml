@@ -93,7 +93,11 @@ jobs:
       # sc-5496: the same app on a page built with a slow open (above the engine's 4 s
       # open wait): the Accounts list must load with no tap on Retry. A Debug simulator
       # build only; check-release-page.sh refuses this page in a Release build.
+      # Runs even when an earlier test step failed, so the evidence for this test is never
+      # blocked by an unrelated flake (the PageDialogs tests, sc-5540). The job still fails
+      # overall if any step failed, so nothing is weakened.
       - name: Build the slow-open page and run its UI test
+        if: ${{ !cancelled() }}
         working-directory: packages/mobile-client
         env:
           FORK_TEST_HOOKS: 'true'

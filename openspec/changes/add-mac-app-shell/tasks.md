@@ -100,6 +100,11 @@ Test-first: write each test, run it and see it fail before writing the code. One
 
 - [x] 4.1 Open the default browser for a clicked link only when the page showing it is the app's own page; cancel a click on any other page to an unlisted host, open nothing and log no part of the address. Test failing first: a click on the provider's page, a click with no known source page, and a new-window request from the provider's page. Verify: the Mac tests pass.
 
+## 5. Notice on an automatic page reload (sc-5220)
+
+- [x] 5.1 Show a notice in a strip under the title bar on each automatic page reload (not on the user's Reload). It moves the page down, has a Dismiss button, waits for the page to load and the window to be key and visible, is announced to VoiceOver then, hides 15 seconds later but not within 2 seconds of input, and is removed when the sheet after three reloads appears. One notice slot: a persistent notice is never replaced by a timed one. Test failing first for each. Verify: the Mac tests pass.
+- [ ] 5.2 Hand checks in a real window (light and dark, narrow, full screen, a month-bar click while the strip shows, the page paints under the strip, VoiceOver), and the UX Designer approves placement and wording.
+
 ## Workflow follow-up
 
 - When sc-4952 merges, archive this change, and point sc-4942, sc-4951 and sc-4952 at the archive path.

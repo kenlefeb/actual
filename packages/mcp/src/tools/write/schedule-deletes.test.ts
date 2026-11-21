@@ -302,6 +302,9 @@ describe('write_create_paycheck (2.3)', () => {
     )!;
     expect(listed.description).toContain('schedules:write');
     expect(listed.description).toContain('write_undo reverses it');
+    expect(listed.description).toMatch(
+      /cannot see a pay posted by hand \(deleting a paycheck never deletes posted transactions\)/,
+    );
     const res = await h.call(
       'write_create_paycheck',
       await pay(await clearingAccount('Clear')),

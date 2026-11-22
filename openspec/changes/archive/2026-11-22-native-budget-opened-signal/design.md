@@ -14,7 +14,7 @@ Each shared view model (`AccountsListViewModel`, `BudgetViewModel`, `PaychecksVi
 
 The shells route `budget-opened` only to `budgetOpened()` and return before everything else they do with an event. Neither shell filters event names today: the iPhone `NativeBridgePlugin` sends every event to `onEvent`, `onPaychecksEvent` and `coalescer.notify()`, and `MacEngineHost.receive` sends every event to `onEvent` and `coalescer.notify()`; `BudgetViewModel.changeEventReceived()` guards only on the scene being active. Unrouted, `budget-opened` would re-read a loaded Budget screen through that change path. So the shells return after `budgetOpened()`, before the coalescer, `onChange` and `onPaychecksEvent`.
 
-A loaded screen after a switch to a different budget is left alone: a follow-up only if a native screen ever outlives a switch.
+A loaded screen after a switch to a different budget is left alone. Not planned: a follow-up only if a native screen ever outlives a switch.
 
 ## D3. Order and races
 
@@ -34,9 +34,9 @@ The gate and its wait are unchanged and still answer a read promptly (under the 
 
 ## D6. The slow-open test hook
 
-`__FORK_TEST_SLOW_OPEN_MS__`, a build constant defined in `packages/loot-core/vite.config.mts` from `FORK_TEST_SLOW_OPEN_MS` only when `FORK_TEST_HOOKS` is true (0 otherwise), like `__FORK_TEST_FAIL_STORAGE_AFTER_MS__`. In `_loadBudget`, under `typeof ... !== 'undefined' && __FORK_TEST_HOOKS__`, it awaits that many ms just before `markBudgetOpen()`, while the load still counts as pending. Tests set it above the open wait plus margin (6000 ms), so a read made during the open is refused by the gate and only the event can load the screen. It is build time only: it must act on the cold open, before any test call could arm it.
+`__FORK_TEST_SLOW_OPEN_MS__`, a build constant defined in `packages/loot-core/vite.config.mts` from `FORK_TEST_SLOW_OPEN_MS` only when `FORK_TEST_HOOKS` is true (0 otherwise), like `__FORK_TEST_FAIL_STORAGE_AFTER_MS__`. In `_loadBudget`, under `typeof ... !== 'undefined' && __FORK_TEST_HOOKS__`, it awaits that many ms just before `markBudgetOpen()`, while the load still counts as pending. Tests set it above the open wait plus margin (the iPhone UI test uses 10000 ms), so a read made during the open is refused by the gate. Where the screen has no numbers and is wired to the signal alone (the Mac pair), only the event can load it. It is build time only: it must act on the cold open, before any test call could arm it.
 
-Fork CI refuses it in production: `check-test-hooks.mjs` gets the markers `__FORK_TEST_SLOW_OPEN_MS__` and the runtime global it sets (`__forkTestSlowOpen`, set when the delay runs, so a bundle that kept the code is caught). The iPhone Release build phase (`check-release-page.sh`) uses the same script, so it is covered; the existing Release smoke exemption is unchanged. The iPhone UI test and the Mac test bundle a page built with `FORK_TEST_HOOKS=true FORK_TEST_SLOW_OPEN_MS=6000`.
+Fork CI refuses it in production: `check-test-hooks.mjs` gets the markers `__FORK_TEST_SLOW_OPEN_MS__` and the runtime global it sets (`__forkTestSlowOpen`, set when the delay runs, so a bundle that kept the code is caught). The iPhone Release build phase (`check-release-page.sh`) uses the same script, so it is covered; the existing Release smoke exemption is unchanged. The iPhone UI test and the Mac tests bundle a page built with `FORK_TEST_HOOKS=true` and a slow open.
 
 ## Tests
 
@@ -44,9 +44,9 @@ Fork CI refuses it in production: `check-test-hooks.mjs` gets the markers `__FOR
 - Page (`nativeBridge.test.ts`): `budget-opened` is forwarded as a notify event.
 - `check-test-hooks.test.mjs`: the new markers are caught.
 - Swift (`NativeBridgeCore` tests), for each of the three view models: failed then `budgetOpened()` reads once and ends loaded; loaded does not read; loading is superseded; a failed re-read stays failed after one read; background scene does not read. The shells' event routing: iPhone controllers and the Mac host pass `budget-opened` on.
-- UI/integration (slow-open page): iPhone `AppUITests` launches, opens Accounts, and sees the list with no tap on Retry; the Mac test in `HomeEconomicsMacTests` (beside the storage perf gate, which already runs the real hooks page) shows the Budget view model ends loaded through `MacEngineHost`'s real event path.
+- UI/integration (slow-open page): iPhone `SlowOpenUITests` drives the Budget screen at 10000 ms through a page death and shows Retry, then recovery with no tap; it shows the recovery sequence only, not that the signal caused it (a screen showing numbers ignores the signal and also re-reads on the open's change events). Causation is proved by the view-model unit tests and the Mac real/control pair in `HomeEconomicsMacTests/BudgetOpenedTests.swift` (the Budget view model ends loaded through `MacEngineHost`'s real event path with the signal wired, and stays failed with it not wired).
 
 ## Open questions
 
 1. Should a loaded screen also re-read after a switch? Settled: left alone (D2).
-2. Mac CI has no UI test target: the Mac proof is an XCTest in `HomeEconomicsMacTests` driving the real page. Architect to confirm that meets "on the Mac shell".
+2. Mac CI has no UI test target: the Mac proof is an XCTest in `HomeEconomicsMacTests` driving the real page. Settled: the Architect accepted it on PR 518.

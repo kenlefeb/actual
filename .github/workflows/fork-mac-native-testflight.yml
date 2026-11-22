@@ -12,9 +12,11 @@
 # the development branch, with the commit to build (default: its head). Nothing
 # else starts it. Three gates stand before the upload:
 #
-# - the run must be on development;
-# - fork/mac-testflight.json must say "held": false. It ships held; changing
-#   it to false in a reviewed PR is the approval for uploads;
+# - the run must be on development, and the commit (a full SHA) must be
+#   in development's history, so only reviewed code is built;
+# - fork/mac-testflight.json on development's head must say "held": false. It
+#   ships held; changing it to false in a reviewed PR is the approval for
+#   uploads, and setting it back to true there blocks them again;
 # - Fork CI must have passed on the commit.
 #
 # Before the first upload, Ken creates the App Store Connect app record: the
@@ -71,7 +73,9 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-          ref: ${{ inputs.revision || github.sha }}
+          # The selected branch (development) with all its history, not the
+          # revision: the checks below read development, never the revision.
+          fetch-depth: 0
       - name: Check the run may upload
         env:
           GH_TOKEN: ${{ github.token }}
@@ -82,7 +86,13 @@ jobs:
             echo "::error::Run this workflow on the development branch, not $RUN_REF"
             exit 1
           fi
-          HELD="$(jq -r '.held' fork/mac-testflight.json)"
+          # Only reviewed code reaches TestFlight: a full SHA that development
+          # already holds, not a branch or PR commit.
+          echo "$REVISION" | grep -Eq '^[0-9a-f]{40}$' || { echo '::error::revision must be a full 40-character commit SHA'; exit 1; }
+          git merge-base --is-ancestor "$REVISION" origin/development || { echo "::error::$REVISION is not on the development branch"; exit 1; }
+          # The switch is read from development's head, so putting held back to
+          # true there blocks every upload, whatever the revision holds.
+          HELD="$(git show origin/development:fork/mac-testflight.json | jq -r '.held')"
           case "$HELD" in true|false) ;; *) echo '::error::fork/mac-testflight.json held must be true or false'; exit 1 ;; esac
           if [ "$HELD" = true ]; then
             echo '::error::Mac TestFlight uploads are held. Set held to false in fork/mac-testflight.json (a reviewed PR) to allow them.'
@@ -209,10 +219,13 @@ jobs:
           COMMIT: ${{ steps.version.outputs.commit }}
         run: |
           export APP_STORE_CONNECT_PRIVATE_KEY="@file:$RUNNER_TEMP/AuthKey.p8"
+          # Its own statement: a failure inside $(...) of the command below
+          # would not stop the step and would upload with empty notes.
+          WHATS_NEW="$(node fork/scripts/mac-whats-new.mjs "$VERSION" "$COMMIT")"
           pipx run --spec "$CODEMAGIC" app-store-connect publish \
             --path 'packages/mobile-client/macos/build/export/*.pkg' --platform MAC_OS \
             --max-find-build-wait 45 --max-build-processing-wait 45 \
-            --whats-new "$(node fork/scripts/mac-whats-new.mjs "$VERSION" "$COMMIT")"
+            --whats-new "$WHATS_NEW"
 
       - name: Clean up signing material
         if: always()

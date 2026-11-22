@@ -100,3 +100,45 @@ void test('Mac TestFlight: every action is pinned to a commit', () => {
     assert.match(line, /uses: [\w./-]+@[0-9a-f]{40}/, line);
   }
 });
+
+// Security review of PR 523: `revision` must not let an unreviewed commit, or an
+// older commit that was not held, reach TestFlight.
+const GATE = CODE.slice(
+  CODE.indexOf('\n  gate:'),
+  CODE.indexOf('\n  testflight:'),
+);
+
+void test('Mac TestFlight gate: the revision is a full commit SHA', () => {
+  assert.match(GATE, /\^\[0-9a-f\]\{40\}\$/);
+});
+
+void test('Mac TestFlight gate: the revision must be on development', () => {
+  assert.match(
+    GATE,
+    /git merge-base --is-ancestor "\$REVISION" origin\/development/,
+  );
+  // Needs development's history, not just the revision
+  assert.match(GATE, /fetch-depth: 0/);
+  assert.doesNotMatch(GATE, /ref: \$\{\{ inputs\.revision/);
+});
+
+void test('Mac TestFlight gate: the hold switch is read from the head of development', () => {
+  assert.match(GATE, /git show origin\/development:fork\/mac-testflight\.json/);
+  assert.doesNotMatch(GATE, /jq [^\n]*fork\/mac-testflight\.json/);
+});
+
+void test('Mac TestFlight: a failing what-to-test script stops the step', () => {
+  assert.match(
+    CODE,
+    /\n\s+WHATS_NEW="\$\(node fork\/scripts\/mac-whats-new\.mjs "\$VERSION" "\$COMMIT"\)"\n/,
+  );
+  assert.doesNotMatch(CODE, /--whats-new "\$\(/);
+});
+
+void test('Mac TestFlight: the archive carries the mapped Apple version', () => {
+  assert.match(CODE, /marketing=\$\(node fork\/scripts\/apple-version\.mjs /);
+  assert.match(
+    CODE,
+    /MARKETING_VERSION: \$\{\{ steps\.version\.outputs\.marketing \}\}/,
+  );
+});

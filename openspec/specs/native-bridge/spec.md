@@ -621,5 +621,6 @@ A test build SHALL be able to delay the open before the budget is marked open, b
 
 #### Scenario: Slow open on the devices
 - **GIVEN** a page built with a slow open longer than the open wait
-- **WHEN** a native screen reads during the open on the iPhone or the Mac shell
-- **THEN** it ends loaded with no tap on Retry
+- **WHEN** a native screen with no numbers reads during the open on the Mac shell
+- **THEN** it ends loaded with no tap on Retry, and only because the signal arrived (shown by a real/control pair and the view-model unit tests)
+- **NOTE** the iPhone run shows a screen recovering from a slow open, not that the signal caused it

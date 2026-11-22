@@ -14,7 +14,7 @@ Each shared view model (`AccountsListViewModel`, `BudgetViewModel`, `PaychecksVi
 
 The shells route `budget-opened` only to `budgetOpened()` and return before everything else they do with an event. Neither shell filters event names today: the iPhone `NativeBridgePlugin` sends every event to `onEvent`, `onPaychecksEvent` and `coalescer.notify()`, and `MacEngineHost.receive` sends every event to `onEvent` and `coalescer.notify()`; `BudgetViewModel.changeEventReceived()` guards only on the scene being active. Unrouted, `budget-opened` would re-read a loaded Budget screen through that change path. So the shells return after `budgetOpened()`, before the coalescer, `onChange` and `onPaychecksEvent`.
 
-A loaded screen after a switch to a different budget is left alone: a follow-up only if a native screen ever outlives a switch.
+A loaded screen after a switch to a different budget is left alone. Not planned: a follow-up only if a native screen ever outlives a switch.
 
 ## D3. Order and races
 

@@ -89,8 +89,8 @@ jobs:
           fi
           # Only reviewed code reaches TestFlight: a full SHA that development
           # landed as a first-parent commit, not a branch, PR or intermediate PR commit.
-          echo "$REVISION" | grep -Eq '^[0-9a-f]{40}$' || { echo '::error::revision must be a full 40-character commit SHA'; exit 1; }
-          git rev-list --first-parent origin/development | grep -qx "$REVISION" || { echo "::error::$REVISION is not a first-parent commit of the development branch"; exit 1; }
+          [[ "$REVISION" =~ ^[0-9a-f]{40}$ ]] || { echo '::error::revision must be a full 40-character commit SHA'; exit 1; }
+          git rev-list --first-parent origin/development | grep -Fqx -- "$REVISION" || { echo "::error::$REVISION is not a first-parent commit of the development branch"; exit 1; }
           # The switch is read from development's head, so putting held back to
           # true there blocks every upload, whatever the revision holds.
           HELD="$(git show origin/development:fork/mac-testflight.json | jq -r '.held')"

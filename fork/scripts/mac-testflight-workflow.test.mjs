@@ -112,11 +112,14 @@ void test('Mac TestFlight gate: the revision is a full commit SHA', () => {
   assert.match(GATE, /\^\[0-9a-f\]\{40\}\$/);
 });
 
-void test('Mac TestFlight gate: the revision must be on development', () => {
+void test('Mac TestFlight gate: the revision must be a first-parent commit of development', () => {
+  // sc-5636: an intermediate commit of a merged PR is an ancestor too, so only
+  // landing points on development's first-parent line may be built
   assert.match(
     GATE,
-    /git merge-base --is-ancestor "\$REVISION" origin\/development/,
+    /git rev-list --first-parent origin\/development \| grep -qx "\$REVISION"/,
   );
+  assert.doesNotMatch(GATE, /--is-ancestor/);
   // Needs development's history, not just the revision
   assert.match(GATE, /fetch-depth: 0/);
   assert.doesNotMatch(GATE, /ref: \$\{\{ inputs\.revision/);

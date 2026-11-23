@@ -13,7 +13,8 @@
 # else starts it. Three gates stand before the upload:
 #
 # - the run must be on development, and the commit (a full SHA) must be
-#   in development's history, so only reviewed code is built;
+#   on development's first-parent history (a merge or landing point, never an
+#   intermediate commit of a merged PR), so only reviewed code is built;
 # - fork/mac-testflight.json on development's head must say "held": false. It
 #   ships held; changing it to false in a reviewed PR is the approval for
 #   uploads, and setting it back to true there blocks them again;
@@ -87,9 +88,9 @@ jobs:
             exit 1
           fi
           # Only reviewed code reaches TestFlight: a full SHA that development
-          # already holds, not a branch or PR commit.
-          echo "$REVISION" | grep -Eq '^[0-9a-f]{40}$' || { echo '::error::revision must be a full 40-character commit SHA'; exit 1; }
-          git merge-base --is-ancestor "$REVISION" origin/development || { echo "::error::$REVISION is not on the development branch"; exit 1; }
+          # landed as a first-parent commit, not a branch, PR or intermediate PR commit.
+          [[ "$REVISION" =~ ^[0-9a-f]{40}$ ]] || { echo '::error::revision must be a full 40-character commit SHA'; exit 1; }
+          git rev-list --first-parent origin/development | grep -Fqx -- "$REVISION" || { echo "::error::$REVISION is not a first-parent commit of the development branch"; exit 1; }
           # The switch is read from development's head, so putting held back to
           # true there blocks every upload, whatever the revision holds.
           HELD="$(git show origin/development:fork/mac-testflight.json | jq -r '.held')"

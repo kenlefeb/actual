@@ -2,6 +2,7 @@
 // sc-4953: the contract of the Mac TestFlight workflow, read as text so a
 // change that opens a trigger, leaks a secret or drops a gate fails Fork CI.
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 // oxlint-disable-next-line actual/no-extraneous-dependencies -- node:test is a builtin that exists only with the node: prefix, so Module.builtinModules omits it
 import { test } from 'node:test';
@@ -112,11 +113,28 @@ void test('Mac TestFlight gate: the revision is a full commit SHA', () => {
   assert.match(GATE, /\^\[0-9a-f\]\{40\}\$/);
 });
 
-void test('Mac TestFlight gate: the revision must be on development', () => {
+void test('Mac TestFlight gate: a multi-line revision cannot pass', () => {
+  // Security review of PR 524: grep checks each line on its own, so a value
+  // with a newline passed; match the whole string and match it as a fixed string
+  assert.match(GATE, /\[\[ "\$REVISION" =~ \^\[0-9a-f\]\{40\}\$ \]\]/);
+  assert.doesNotMatch(GATE, /echo "\$REVISION" \| grep/);
+  assert.match(GATE, /grep -Fqx -- "\$REVISION"/);
+  const sha = 'a'.repeat(40);
+  const check = `[[ "$1" =~ ^[0-9a-f]{40}$ ]]`;
+  const run = value => spawnSync('bash', ['-c', check, 'bash', value]).status;
+  assert.equal(run(sha), 0);
+  assert.notEqual(run(`${sha}\n${sha}`), 0);
+  assert.notEqual(run(`${sha}\nnot-a-sha`), 0);
+});
+
+void test('Mac TestFlight gate: the revision must be a first-parent commit of development', () => {
+  // sc-5636: an intermediate commit of a merged PR is an ancestor too, so only
+  // landing points on development's first-parent line may be built
   assert.match(
     GATE,
-    /git merge-base --is-ancestor "\$REVISION" origin\/development/,
+    /git rev-list --first-parent origin\/development \| grep -Fqx -- "\$REVISION"/,
   );
+  assert.doesNotMatch(GATE, /--is-ancestor/);
   // Needs development's history, not just the revision
   assert.match(GATE, /fetch-depth: 0/);
   assert.doesNotMatch(GATE, /ref: \$\{\{ inputs\.revision/);

@@ -121,8 +121,7 @@ void test('Mac TestFlight gate: a multi-line revision cannot pass', () => {
   assert.match(GATE, /grep -Fqx -- "\$REVISION"/);
   const sha = 'a'.repeat(40);
   const check = `[[ "$1" =~ ^[0-9a-f]{40}$ ]]`;
-  const run = value =>
-    spawnSync('bash', ['-c', check, 'bash', value]).status;
+  const run = value => spawnSync('bash', ['-c', check, 'bash', value]).status;
   assert.equal(run(sha), 0);
   assert.notEqual(run(`${sha}\n${sha}`), 0);
   assert.notEqual(run(`${sha}\nnot-a-sha`), 0);

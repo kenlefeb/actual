@@ -30,6 +30,10 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: app.homeeconomics.budget.mac
         PRODUCT_NAME: Home Economics
         PRODUCT_MODULE_NAME: HomeEconomicsMac
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # By default AppIcon.icns stops at 256px; Apple wants 512pt @2x in it
+        # (ITMS-90236).
+        ASSETCATALOG_COMPILER_STANDALONE_ICON_BEHAVIOR: all
         INFOPLIST_FILE: HomeEconomicsMac/Info.plist
         CODE_SIGN_ENTITLEMENTS: HomeEconomicsMac/HomeEconomicsMac.entitlements
         CODE_SIGN_STYLE: Automatic

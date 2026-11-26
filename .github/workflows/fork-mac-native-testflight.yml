@@ -184,8 +184,9 @@ jobs:
           API_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
         run: |
           # The secret may have lost its line breaks; rebuild a valid PEM.
-          umask 077
-          printf '%s' "$API_KEY_P8" | node ../../../fork/scripts/normalize-pem.mjs > "$RUNNER_TEMP/AuthKey.p8"
+          # The umask stays in the subshell: under it the exported package's
+          # files are readable only by root, which Apple rejects (ITMS-90255).
+          (umask 077 && printf '%s' "$API_KEY_P8" | node ../../../fork/scripts/normalize-pem.mjs > "$RUNNER_TEMP/AuthKey.p8")
           cp ExportOptions.plist "$RUNNER_TEMP/ExportOptions.plist"
           /usr/libexec/PlistBuddy -c "Set :teamID $APPLE_TEAM_ID" "$RUNNER_TEMP/ExportOptions.plist"
           xcodebuild -exportArchive -archivePath build/HomeEconomicsMac.xcarchive \
@@ -201,6 +202,16 @@ jobs:
           PKG="$(ls export/*.pkg)"
           pkgutil --check-signature "$PKG"
           pkgutil --expand-full "$PKG" expanded
+          # The Bom holds the modes the installer applies. Every file must be
+          # world-readable, every directory also world-executable (ITMS-90255).
+          BOMS="$(find expanded -name Bom)"
+          test -n "$BOMS" || { echo '::error::No Bom inside the package'; exit 1; }
+          while IFS= read -r BOM; do
+            LIST="$(lsbom -p mf "$BOM")"
+            # lsbom exits 0 and prints nothing for a corrupt or missing Bom
+            test -n "$LIST" || { echo "::error::lsbom listed nothing in $BOM"; exit 1; }
+            awk -F'\t' '($1 ~ /^4[0-7][0-7][0-7][0-7]$/ && $1 !~ /[57]$/) || ($1 ~ /^10[0-7][0-7][0-7][0-7]$/ && $1 !~ /[4-7]$/) { print "::error::Not world-readable in the package: " $1 " " $2; bad = 1 } END { exit bad }' <<< "$LIST"
+          done <<< "$BOMS"
           APP="$(find expanded -name '*.app' -maxdepth 3 | head -n 1)"
           test -n "$APP" || { echo '::error::No app inside the package'; exit 1; }
           codesign --verify --deep --strict "$APP"

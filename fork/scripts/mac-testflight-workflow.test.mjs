@@ -160,3 +160,61 @@ void test('Mac TestFlight: the archive carries the mapped Apple version', () => 
     /MARKETING_VERSION: \$\{\{ steps\.version\.outputs\.marketing \}\}/,
   );
 });
+
+// Run 45748941146: Apple rejected the first upload (ITMS-90255, ITMS-90236)
+void test('Mac TestFlight: the private umask covers only the API key', () => {
+  const umasks = CODE.split('\n').filter(l => l.includes('umask'));
+  assert.equal(umasks.length, 1);
+  // A subshell, so xcodebuild's package keeps world-readable files
+  assert.match(
+    umasks[0],
+    /^\s+\(umask 077 && printf .*\| node .*> "\$RUNNER_TEMP\/AuthKey\.p8"\)$/,
+  );
+});
+
+void test('Mac TestFlight: a package file that is not world-readable fails before upload', () => {
+  const program = CODE.match(/awk -F'\\t' '([^']+)'/)?.[1];
+  assert.ok(program, 'no awk permission check');
+  assert.match(CODE, /BOMS="\$\(find expanded -name Bom\)"/);
+  assert.match(CODE, /test -n "\$BOMS"/);
+  assert.match(CODE, /LIST="\$\(lsbom -p mf "\$BOM"\)"/);
+  assert.ok(CODE.indexOf('lsbom') < CODE.indexOf('app-store-connect publish'));
+  // Run the workflow's own program on `lsbom -p mf` lines (mode, path)
+  const run = lines =>
+    spawnSync('awk', ['-F', '\t', program], {
+      input: `${lines.join('\n')}\n`,
+    }).status;
+  const good = ['40755\t.', '100644\t./a b', '100755\t./x', '120755\t./l'];
+  assert.equal(run(good), 0);
+  for (const bad of [
+    '100600\t./f',
+    '100640\t./f',
+    '40700\t./d',
+    '40754\t./d',
+  ]) {
+    assert.notEqual(run([...good, bad]), 0, bad);
+  }
+});
+
+void test('Mac app: the Release build names an icon with every macOS size', () => {
+  const project = read('packages/mobile-client/macos/project.yml');
+  assert.match(project, /ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon\n/);
+  // Without it the built AppIcon.icns has no 1024px image
+  assert.match(
+    project,
+    /ASSETCATALOG_COMPILER_STANDALONE_ICON_BEHAVIOR: all\n/,
+  );
+  const dir =
+    'packages/mobile-client/macos/HomeEconomicsMac/Assets.xcassets/AppIcon.appiconset';
+  const { images } = JSON.parse(read(`${dir}/Contents.json`));
+  assert.equal(images.length, 10);
+  for (const { filename, size, scale } of images) {
+    const png = readFileSync(
+      new URL(`../../${dir}/${filename}`, import.meta.url),
+    );
+    // Width and height in the PNG header
+    const pixels = parseInt(size, 10) * parseInt(scale, 10);
+    assert.equal(png.readUInt32BE(16), pixels, filename);
+    assert.equal(png.readUInt32BE(20), pixels, filename);
+  }
+});

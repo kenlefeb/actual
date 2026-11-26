@@ -37,6 +37,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
         })
     private var running = false
+    private var notices: WindowNotices?
+    private var inputMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let www = Bundle.main.resourceURL!.appendingPathComponent("www")
@@ -47,7 +49,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         host.onChange = { [weak self] in self?.rereads?.notify() }
         // The page stays on its sign-in screen; nothing went to the browser
         host.onRefusedSignIn = { [weak self] in self?.showSignInNotSupported() }
-        host.onPageGone = { [weak self] in self?.showPageGone() }
+        host.onPageGone = { [weak self] in
+            self?.notices?.clear()
+            self?.showPageGone()
+        }
         host.presentDialog = { [weak self] request, answer in self?.showPageDialog(request, answer: answer) }
         let storage = StorageLossMonitor(defaults: UserDefaults.standard) { [weak self] in self?.showStorageLost() }
         host.onBudgetState = { storage.handle($0) }
@@ -60,11 +65,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.setFrameAutosaveName("MainWindow")
-        host.webView.autoresizingMask = [.width, .height]
-        let content = NSView(frame: window.contentRect(forFrameRect: window.frame))
-        host.webView.frame = content.bounds
-        content.addSubview(host.webView)
+        let content = NoticeContainer(frame: window.contentRect(forFrameRect: window.frame), content: host.webView)
         window.contentView = content
+        installNotices(in: content, host: host)
         window.center()
         window.makeKeyAndOrderFront(nil)
         self.window = window
@@ -95,6 +98,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc private func didWake() { lifecycle.didWake() }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool { lifecycle.windowShouldClose(sender) }
+
+    func windowDidBecomeKey(_ notification: Notification) { updateNoticeWindowState() }
+    func windowDidResignKey(_ notification: Notification) { updateNoticeWindowState() }
+    func windowDidChangeOcclusionState(_ notification: Notification) { updateNoticeWindowState() }
+
+    private func updateNoticeWindowState() {
+        guard let window else { return }
+        notices?.windowChanged(isActive: window.isKeyWindow && window.occlusionState.contains(.visible))
+    }
+
+    // Story 5220: the notice strip under the title bar
+    private func installNotices(in strip: NoticeContainer, host: MacEngineHost) {
+        let notices = WindowNotices(
+            schedule: { delay, work in DispatchQueue.main.asyncAfter(deadline: .now() + delay) { work() } },
+            announce: { text in
+                NSAccessibility.post(
+                    element: NSApp as Any, notification: .announcementRequested,
+                    userInfo: [.announcement: text, .priority: NSAccessibilityPriorityLevel.high.rawValue])
+            })
+        notices.onChange = { strip.show($0?.text) }
+        strip.onDismiss = { [weak notices] in notices?.clear() }
+        host.onAutomaticReload = { notices.show(.pageRestarted) }
+        host.onPageLoaded = { notices.pageDidLoad() }
+        // Tab from the page reaches Dismiss, and comes back
+        host.webView.nextKeyView = strip.dismissButton
+        strip.dismissButton.nextKeyView = host.webView
+        inputMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown, .keyDown, .scrollWheel]
+        ) { [weak notices] event in
+            notices?.noteInput()
+            return event
+        }
+        self.notices = notices
+    }
 
     // Task 1.4a: the web view's data was cleared while a budget was open
     // Story 5186: the page's process kept ending, so the app stopped reloading it

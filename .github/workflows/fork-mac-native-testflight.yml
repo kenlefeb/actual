@@ -208,7 +208,9 @@ jobs:
           test -n "$BOMS" || { echo '::error::No Bom inside the package'; exit 1; }
           while IFS= read -r BOM; do
             LIST="$(lsbom -p mf "$BOM")"
-            awk -F'\t' '($1 ~ /^40/ && $1 !~ /[57]$/) || ($1 ~ /^100/ && $1 !~ /[4-7]$/) { print "::error::Not world-readable in the package: " $1 " " $2; bad = 1 } END { exit bad }' <<< "$LIST"
+            # lsbom exits 0 and prints nothing for a corrupt or missing Bom
+            test -n "$LIST" || { echo "::error::lsbom listed nothing in $BOM"; exit 1; }
+            awk -F'\t' '($1 ~ /^4[0-7][0-7][0-7][0-7]$/ && $1 !~ /[57]$/) || ($1 ~ /^10[0-7][0-7][0-7][0-7]$/ && $1 !~ /[4-7]$/) { print "::error::Not world-readable in the package: " $1 " " $2; bad = 1 } END { exit bad }' <<< "$LIST"
           done <<< "$BOMS"
           APP="$(find expanded -name '*.app' -maxdepth 3 | head -n 1)"
           test -n "$APP" || { echo '::error::No app inside the package'; exit 1; }

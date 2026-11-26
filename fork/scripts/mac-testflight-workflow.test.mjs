@@ -186,14 +186,37 @@ void test('Mac TestFlight: a package file that is not world-readable fails befor
     }).status;
   const good = ['40755\t.', '100644\t./a b', '100755\t./x', '120755\t./l'];
   assert.equal(run(good), 0);
+  assert.equal(run([...good, '104755\t./s', '41755\t./t']), 0);
   for (const bad of [
     '100600\t./f',
     '100640\t./f',
     '40700\t./d',
     '40754\t./d',
+    '104750\t./s',
+    '102700\t./g',
+    '41750\t./t',
+    '42700\t./g',
   ]) {
     assert.notEqual(run([...good, bad]), 0, bad);
   }
+});
+
+void test('Mac TestFlight: an empty Bom listing fails the package check', () => {
+  // lsbom exits 0 and prints nothing for a corrupt or missing Bom
+  const loop = CODE.match(
+    /^ +while IFS= read -r BOM; do\n[\s\S]*?<<< "\$BOMS"$/m,
+  );
+  assert.ok(loop, 'no Bom loop');
+  const run = listing =>
+    spawnSync(
+      'bash',
+      ['-ec', `lsbom() { printf '%s' "$LISTING"; }\nBOMS=x\n${loop[0]}`],
+      { env: { ...process.env, LISTING: listing }, encoding: 'utf8' },
+    );
+  assert.equal(run('100644\t./f').status, 0);
+  const empty = run('');
+  assert.notEqual(empty.status, 0);
+  assert.match(empty.stdout, /::error::/);
 });
 
 void test('Mac app: the Release build names an icon with every macOS size', () => {
